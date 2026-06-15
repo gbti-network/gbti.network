@@ -33,7 +33,11 @@ export async function appInstallStatus({ token, login, appSlug, upstream, fetch 
   const insts = (data.installations || []).filter((i) => String(i.app_slug || '').toLowerCase() === appSlug.toLowerCase());
   const inst = insts.find((i) => String(i.account?.login || '').toLowerCase() === String(login).toLowerCase()) || insts[0];
   if (!inst) return { installed: false, allRepos: false };
-  if (inst.repository_selection === 'all') return { installed: true, allRepos: true }; // covers the fork, but over-granted
+  // An "All repositories" grant is REJECTED: it over-grants GBTI access to every repo the member owns. We do
+  // not accept it as ready (installed:false) so the wizard sends them back to switch to "Only select
+  // repositories" -> just their fork. allRepos:true tells the UI to show the corrective message, not the
+  // first-time install prompt. (The fork is technically covered, but least privilege is the whole point here.)
+  if (inst.repository_selection === 'all') return { installed: false, allRepos: true };
   const rres = await fetch(`${GH}/user/installations/${inst.id}/repositories?per_page=100`, { headers: ghHeaders(token) });
   if (!rres.ok) return { installed: false, allRepos: false };
   const rd = await rres.json();

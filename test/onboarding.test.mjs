@@ -25,7 +25,7 @@ test('deep links target the GitHub-hosted pages', () => {
   assert.equal(forkUrl(), 'https://github.com/gbti-network/gbti.network/fork');
   assert.equal(manageInstallsUrl(), 'https://github.com/settings/installations');
   assert.match(appInstallUrl(), /\/apps\/gbti-network\/installations\/new$/);
-  assert.match(appInstallUrl({ targetId: 4242 }), /installations\/new\/permissions\?suggested_target_id=4242$/);
+  assert.match(appInstallUrl({ targetId: 4242 }), /installations\/new\?suggested_target_id=4242$/);
 });
 
 test('forkFullName lowercases the login + uses the upstream repo name', () => {

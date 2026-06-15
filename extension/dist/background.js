@@ -17912,7 +17912,7 @@ async function appInstallStatus({ token, login, appSlug, upstream, fetch = globa
   const insts = (data.installations || []).filter((i) => String(i.app_slug || "").toLowerCase() === appSlug.toLowerCase());
   const inst = insts.find((i) => String(i.account?.login || "").toLowerCase() === String(login).toLowerCase()) || insts[0];
   if (!inst) return { installed: false, allRepos: false };
-  if (inst.repository_selection === "all") return { installed: true, allRepos: true };
+  if (inst.repository_selection === "all") return { installed: false, allRepos: true };
   const rres = await fetch(`${GH}/user/installations/${inst.id}/repositories?per_page=100`, { headers: ghHeaders(token) });
   if (!rres.ok) return { installed: false, allRepos: false };
   const rd = await rres.json();
@@ -17950,7 +17950,7 @@ var forkUrl = () => `https://github.com/${UPSTREAM_REPO}/fork`;
 var manageInstallsUrl = () => "https://github.com/settings/installations";
 function appInstallUrl({ targetId } = {}) {
   const base2 = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`;
-  return targetId ? `${base2}/permissions?suggested_target_id=${encodeURIComponent(targetId)}` : base2;
+  return targetId ? `${base2}?suggested_target_id=${encodeURIComponent(targetId)}` : base2;
 }
 var forkFullName = (login) => `${String(login || "").toLowerCase()}/${UPSTREAM_REPO.split("/")[1]}`;
 var STEPS = {
@@ -17958,7 +17958,7 @@ var STEPS = {
     id: "signin",
     title: "Sign in with GitHub",
     why: "This connects the extension to your GitHub account so your posts publish under your name. We never see your password.",
-    preview: "After you enter the code, GitHub asks you to authorize GBTI Network to act on your behalf. That is what lets us open pull requests for your drafts. It can only ever touch your own copy of the content.",
+    preview: "After you enter the code, GitHub shows an Authorize screen. The green Authorize button finishes sign-in.",
     button: "Sign in with GitHub",
     doneLabel: "Signed in"
   },

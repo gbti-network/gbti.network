@@ -6,6 +6,16 @@ import { isLockedMembership } from '../../client/src/membership.mjs';
 
 const SITE = 'https://gbti.network';
 
+// SOW: a one-way daily.dev switcher. Chrome gives no way to see another extension WITHOUT the heavyweight
+// "management" permission (a Web Store review + user-scare cost), and daily.dev's web-accessible resources +
+// install marker are scoped to daily.dev origins, not our chrome-extension page, so we cannot probe it from
+// here. So: if "management" is ever granted we TRULY detect daily.dev; otherwise we show the switch by default.
+// Clicking it switches the current tab to the daily.dev web app (their extension new-tab is not navigable
+// cross-extension). The reverse jump (a "back to GBTI" button inside daily.dev) is impossible: Chrome forbids
+// injecting into another extension's pages.
+const DAILYDEV_ID = 'jlmpjdjjbgclbocgajdjefcidcncaied';
+const DAILYDEV_APP_URL = 'https://app.daily.dev/';
+
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const authorName = (a) => (a === 'gbti' ? 'GBTI Network' : a);
@@ -104,6 +114,72 @@ function setTheme(t) {
   try { localStorage.setItem('gbti-theme', t); } catch (e) {}
 }
 
+/** Ask the background worker a GET /api/* and return its json (null on any failure). */
+async function api(pathname) {
+  try {
+    const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname, query: {} } });
+    return r?.json ?? null;
+  } catch { return null; }
+}
+
+// SOW-026: the new tab is onboarding-aware. Show who is signed in, and until the member is signed in AND set up
+// (fork + GBTI App install), show a setup banner that opens the onboarding tab. This keeps the new tab from
+// looking "done" while publishing is not yet wired up.
+async function loadAccountAndSetup() {
+  const [status, ob] = await Promise.all([api('/api/status'), api('/api/onboarding-status')]);
+  const signedIn = Boolean(status?.authenticated && status?.identity?.login);
+
+  const acct = $('[data-acct]');
+  if (acct) acct.innerHTML = signedIn ? `Signed in as <b>@${esc(status.identity.login)}</b>` : '';
+
+  const setup = $('[data-setup]');
+  if (!setup) return;
+  // Ready = the wizard says ready, or classic mode (no fork/install step) once signed in.
+  const ready = ob ? (ob.ready || (ob.appMode === false && signedIn)) : signedIn;
+  if (ready) { setup.classList.remove('show'); return; }
+
+  const txt = setup.querySelector('[data-setup-txt]');
+  const go = setup.querySelector('[data-setup-go]');
+  if (!signedIn) {
+    if (txt) txt.innerHTML = `<b>Sign in to publish</b><span>Connect GitHub to write and publish your work on GBTI Network.</span>`;
+    if (go) go.textContent = 'Get started';
+  } else {
+    const step = ob?.activeStep === 'fork' ? 2 : ob?.activeStep === 'install' ? 3 : 1;
+    if (txt) txt.innerHTML = `<b>Finish setting up publishing</b><span>Step ${step} of 3. Make your copy and give access to start publishing.</span>`;
+    if (go) go.textContent = 'Finish setup';
+  }
+  setup.classList.add('show');
+}
+
+/** True if daily.dev is installed + enabled, false if confirmed absent, null if we cannot tell (no permission). */
+async function dailydevInstalled() {
+  try {
+    if (chrome.management?.get) {
+      const info = await chrome.management.get(DAILYDEV_ID).catch(() => null);
+      return Boolean(info && info.enabled);
+    }
+  } catch { /* management present but threw */ }
+  return null; // unknown: no "management" permission, so Chrome will not reveal other extensions
+}
+
+async function setupAppSwitcher() {
+  const apps = $('[data-apps]');
+  if (!apps) return;
+  apps.querySelector('[data-open-dailydev]')?.addEventListener('click', () => { window.location.href = DAILYDEV_APP_URL; });
+  // The daily.dev favicon is remote; if it fails (offline / path change) swap in a small "dd" badge.
+  const img = apps.querySelector('[data-dd-img]');
+  img?.addEventListener('error', () => {
+    const b = document.createElement('span');
+    b.className = 'dd';
+    b.textContent = 'dd';
+    img.replaceWith(b);
+  }, { once: true });
+
+  const installed = await dailydevInstalled();
+  // Show when confirmed installed, or when we cannot tell (no management permission to check).
+  if (installed === true || installed === null) apps.classList.add('show');
+}
+
 // SOW-018: a lapsed (Locked) member's extension is locked behind a renew splash. Ask the background worker for
 // the cached membership; only a genuinely Locked status (expired/cancelled/banned/none) locks the page. A
 // signed-out visitor (unknown) or an active trial/paid member sees the normal new tab.
@@ -122,19 +198,19 @@ function init() {
   $('[data-greeting]').textContent = greeting();
   $('[data-date]').textContent = longDate();
   checkMembershipLock(); // async; sets data-locked if the member has lapsed
+  loadAccountAndSetup(); // async; shows the signed-in identity + the onboarding setup banner
+  setupAppSwitcher(); // async; the [G | daily.dev] switcher
+
+  // The setup banner opens the onboarding tab (sign in -> fork -> install).
+  $('[data-setup]')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.tabs?.create
+      ? chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') })
+      : window.open(chrome.runtime.getURL('onboarding.html'), '_blank');
+  });
 
   $('[data-theme-toggle]')?.addEventListener('click', () => {
     setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
-  });
-  $('[data-newtab-off]')?.addEventListener('click', () => {
-    try { localStorage.setItem('gbti-newtab-off', '1'); } catch (e) {}
-    document.documentElement.setAttribute('data-off', '1');
-  });
-  $('[data-newtab-on]')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    try { localStorage.removeItem('gbti-newtab-off'); } catch (err) {}
-    document.documentElement.removeAttribute('data-off');
-    if (!ENTRIES.length) loadActivity();
   });
   $('[data-filter]')?.addEventListener('input', (e) => renderFeed(e.target.value));
 
@@ -160,6 +236,9 @@ function init() {
   });
 
   if (document.documentElement.getAttribute('data-off') !== '1') loadActivity();
+
+  // Re-check setup state when the member returns to this tab (for example after forking in another tab).
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) loadAccountAndSetup(); });
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

@@ -69,15 +69,15 @@ test('App installed but the fork not selected -> installReady false', async () =
   assert.equal(r.installReady, false);
 });
 
-test('an all-repositories grant covers the fork (installed) but flags allReposGrant', async () => {
+test('an all-repositories grant is REJECTED: installReady false + allReposGrant true (must scope down)', async () => {
   const fetch = gh({
     '/repos/alice/gbti.network': okJson({ fork: true, parent: { full_name: 'gbti-network/gbti.network' } }),
     '/user/installations': okJson({ installations: [{ id: 77, app_slug: 'gbti-network', account: { login: 'alice' }, repository_selection: 'all' }] }),
     '/user': okJson({ login: 'alice', id: 1 }),
   });
   const r = await probeReadiness({ token: 't', appSlug: SLUG, upstream: UP, fetch });
-  assert.equal(r.installReady, true);
-  assert.equal(r.allReposGrant, true);
+  assert.equal(r.installReady, false, 'an all-repos grant must not count as ready');
+  assert.equal(r.allReposGrant, true, 'but it is flagged so the UI shows the corrective card');
 });
 
 test('a network error after sign-in fails closed (reachedGithub false, nothing advances)', async () => {

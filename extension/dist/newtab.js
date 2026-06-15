@@ -2375,6 +2375,8 @@
 
   // extension/src/newtab.mjs
   var SITE = "https://gbti.network";
+  var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
+  var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var $ = (sel) => document.querySelector(sel);
   var esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var authorName = (a) => a === "gbti" ? "GBTI Network" : a;
@@ -2459,6 +2461,64 @@
     } catch (e) {
     }
   }
+  async function api(pathname) {
+    try {
+      const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname, query: {} } });
+      return r?.json ?? null;
+    } catch {
+      return null;
+    }
+  }
+  async function loadAccountAndSetup() {
+    const [status, ob] = await Promise.all([api("/api/status"), api("/api/onboarding-status")]);
+    const signedIn = Boolean(status?.authenticated && status?.identity?.login);
+    const acct = $("[data-acct]");
+    if (acct) acct.innerHTML = signedIn ? `Signed in as <b>@${esc(status.identity.login)}</b>` : "";
+    const setup = $("[data-setup]");
+    if (!setup) return;
+    const ready = ob ? ob.ready || ob.appMode === false && signedIn : signedIn;
+    if (ready) {
+      setup.classList.remove("show");
+      return;
+    }
+    const txt = setup.querySelector("[data-setup-txt]");
+    const go = setup.querySelector("[data-setup-go]");
+    if (!signedIn) {
+      if (txt) txt.innerHTML = `<b>Sign in to publish</b><span>Connect GitHub to write and publish your work on GBTI Network.</span>`;
+      if (go) go.textContent = "Get started";
+    } else {
+      const step = ob?.activeStep === "fork" ? 2 : ob?.activeStep === "install" ? 3 : 1;
+      if (txt) txt.innerHTML = `<b>Finish setting up publishing</b><span>Step ${step} of 3. Make your copy and give access to start publishing.</span>`;
+      if (go) go.textContent = "Finish setup";
+    }
+    setup.classList.add("show");
+  }
+  async function dailydevInstalled() {
+    try {
+      if (chrome.management?.get) {
+        const info = await chrome.management.get(DAILYDEV_ID).catch(() => null);
+        return Boolean(info && info.enabled);
+      }
+    } catch {
+    }
+    return null;
+  }
+  async function setupAppSwitcher() {
+    const apps = $("[data-apps]");
+    if (!apps) return;
+    apps.querySelector("[data-open-dailydev]")?.addEventListener("click", () => {
+      window.location.href = DAILYDEV_APP_URL;
+    });
+    const img = apps.querySelector("[data-dd-img]");
+    img?.addEventListener("error", () => {
+      const b = document.createElement("span");
+      b.className = "dd";
+      b.textContent = "dd";
+      img.replaceWith(b);
+    }, { once: true });
+    const installed = await dailydevInstalled();
+    if (installed === true || installed === null) apps.classList.add("show");
+  }
   async function checkMembershipLock() {
     try {
       const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/status", query: {} } });
@@ -2474,24 +2534,14 @@
     $("[data-greeting]").textContent = greeting();
     $("[data-date]").textContent = longDate();
     checkMembershipLock();
+    loadAccountAndSetup();
+    setupAppSwitcher();
+    $("[data-setup]")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      chrome.tabs?.create ? chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }) : window.open(chrome.runtime.getURL("onboarding.html"), "_blank");
+    });
     $("[data-theme-toggle]")?.addEventListener("click", () => {
       setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
-    });
-    $("[data-newtab-off]")?.addEventListener("click", () => {
-      try {
-        localStorage.setItem("gbti-newtab-off", "1");
-      } catch (e) {
-      }
-      document.documentElement.setAttribute("data-off", "1");
-    });
-    $("[data-newtab-on]")?.addEventListener("click", (e) => {
-      e.preventDefault();
-      try {
-        localStorage.removeItem("gbti-newtab-off");
-      } catch (err) {
-      }
-      document.documentElement.removeAttribute("data-off");
-      if (!ENTRIES.length) loadActivity();
     });
     $("[data-filter]")?.addEventListener("input", (e) => renderFeed(e.target.value));
     document.querySelectorAll("[data-tab]").forEach((btn) => {
@@ -2514,6 +2564,9 @@
       });
     });
     if (document.documentElement.getAttribute("data-off") !== "1") loadActivity();
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) loadAccountAndSetup();
+    });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

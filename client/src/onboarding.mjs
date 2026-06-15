@@ -29,10 +29,12 @@ export function isReady(state) {
 export const deviceVerificationUrl = () => 'https://github.com/login/device';
 export const forkUrl = () => `https://github.com/${UPSTREAM_REPO}/fork`;
 export const manageInstallsUrl = () => 'https://github.com/settings/installations';
-/** The App install/permissions chooser. targetId (the member's numeric account id) preselects their account. */
+/** The App install page. targetId (the member's numeric account id) preselects their account via the
+ *  documented `suggested_target_id` QUERY param on `installations/new` (the older `/installations/new/permissions`
+ *  PATH 404s). NOTE: the App must be set PUBLIC ("Any account") in its settings, or a member install 404s. */
 export function appInstallUrl({ targetId } = {}) {
   const base = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`;
-  return targetId ? `${base}/permissions?suggested_target_id=${encodeURIComponent(targetId)}` : base;
+  return targetId ? `${base}?suggested_target_id=${encodeURIComponent(targetId)}` : base;
 }
 
 // The expected fork name for a member login (used by the probe + the UI mismatch hint).
@@ -44,7 +46,7 @@ export const STEPS = {
     id: 'signin',
     title: 'Sign in with GitHub',
     why: 'This connects the extension to your GitHub account so your posts publish under your name. We never see your password.',
-    preview: 'After you enter the code, GitHub asks you to authorize GBTI Network to act on your behalf. That is what lets us open pull requests for your drafts. It can only ever touch your own copy of the content.',
+    preview: 'After you enter the code, GitHub shows an Authorize screen. The green Authorize button finishes sign-in.',
     button: 'Sign in with GitHub',
     doneLabel: 'Signed in',
   },

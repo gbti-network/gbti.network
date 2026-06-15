@@ -50,6 +50,11 @@ const CSS = `
   .copy:hover { border-color:var(--accent); }
   .note { font-size:12px; color:var(--muted); margin:8px 0 0; }
   .note.warn { color:var(--danger); }
+  /* Decodes GitHub's scary-sounding "Act on your behalf" wording on the authorize screen. */
+  .reassure { display:flex; gap:8px; align-items:flex-start; margin:0 0 11px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:var(--hover); }
+  .reassure svg { flex:none; margin-top:1px; color:var(--accent); }
+  .reassure p { margin:0; font-size:12px; line-height:1.5; color:var(--fg); }
+  .reassure b { font-weight:700; }
   .ready { text-align:center; padding:6px 0 2px; }
   .ready .big { font-family:var(--font-display); font-size:17px; font-weight:700; margin:8px 0 4px; }
   .foot { margin-top:12px; font-size:11.5px; color:var(--muted); text-align:center; }
@@ -105,7 +110,7 @@ class GbtiOnboarding extends GbtiElement {
     if (s.ready) {
       this.set(this.css(CSS) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
         <p class="note">Your drafts save to your copy, and we open the review request for you.</p>
-        <button class="btn" data-start style="margin-top:12px">Start writing</button></div>`);
+        <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
       this.on('[data-start]', 'click', () => this.emit('gbti:onboarding-start'));
       return;
     }
@@ -146,19 +151,28 @@ class GbtiOnboarding extends GbtiElement {
     const again = `<button class="again" data-again type="button">Check again</button>`;
     if (id === 'signin') {
       const verifyUrl = this._code?.url || 'https://github.com/login/device';
+      // Plain-language decode of GitHub's "Act on your behalf" authorize line, which alarms members out of context.
+      const shield = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`;
+      const reassure = `<div class="reassure">${shield}<p><b>"Act on your behalf" is GitHub's standard wording for any app you connect, not full account access.</b> GBTI Network can only open pull requests and save drafts to the copy you choose. It cannot read your private code, change your account, or reach any other repository. You can remove it at any time in your GitHub settings.</p></div>`;
       const code = this._code
         ? `<div class="code"><span data-codeval>${esc(this._code.code)}</span><button class="copy" data-copy type="button" title="Copy the code">Copy</button></div>
            <a class="btn" href="${esc(verifyUrl)}" target="_blank" rel="noopener">${BTN_ICON.signin}<span>Open github.com/login/device</span></a>
            <p class="note">Copy the code, open the GitHub page, paste it there, and Authorize. Leave this tab open: it checks off on its own when you come back.</p>`
         : `<button class="btn" data-signin type="button">${BTN_ICON.signin}<span>${esc(meta.button || 'Sign in with GitHub')}</span></button>`;
-      return `<div class="card"><p class="title">${esc(meta.title || 'Sign in with GitHub')}</p>${why}${see}${code}${again}</div>`;
+      return `<div class="card"><p class="title">${esc(meta.title || 'Sign in with GitHub')}</p>${why}${see}${reassure}${code}${again}</div>`;
+    }
+    // REJECT an "All repositories" grant: send the member to the installation settings to switch to "Only
+    // select repositories" -> their fork. We do not accept it as done (the probe reports installReady:false),
+    // so this corrective card replaces the first-time install prompt until they scope it down.
+    if (id === 'install' && s.allReposGrant) {
+      return `<div class="card"><p class="title">Switch to just your copy</p>
+        <p class="why">You granted GBTI access to <b>all</b> your repositories. For your security we only want your one copy. Open the installation, choose <b>Only select repositories</b>, pick gbti.network, and save.</p>
+        <button class="btn" data-open="${esc(s.links?.manage || 'https://github.com/settings/installations')}" type="button">${BTN_ICON.install}<span>Fix access on GitHub</span></button>${again}
+        <p class="note warn">Access to all repositories is not accepted.</p></div>`;
     }
     const link = id === 'fork' ? s.links?.fork : s.links?.install;
-    // The install over-grant note (all-repositories chosen) is non-blocking; surfaced once installReady is true,
-    // which only happens at the ready state, so here we only warn if the App is installed-but-fork-not-selected.
-    const overGrant = id === 'install' && s.allReposGrant ? `<p class="note">Tip: choose Only select repositories so GBTI sees just your copy.</p>` : '';
     return `<div class="card"><p class="title">${esc(meta.title)}</p>${why}${see}
-      <button class="btn" data-open="${esc(link || '')}" type="button">${BTN_ICON[id] || ''}<span>${esc(meta.button)}</span></button>${again}${overGrant}</div>`;
+      <button class="btn" data-open="${esc(link || '')}" type="button">${BTN_ICON[id] || ''}<span>${esc(meta.button)}</span></button>${again}</div>`;
   }
 }
 

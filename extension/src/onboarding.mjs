@@ -87,8 +87,15 @@ function mount() {
   });
 
   el.addEventListener('gbti:onboarding-ready', () => refreshAccount());
-  // "Start writing" from the ready state: send the member to the site to edit in place.
-  el.addEventListener('gbti:onboarding-start', () => { window.location.href = `${SITE}/`; });
+  // "Complete Integration" (SOW-029): take over the page with the post-setup welcome view (membership phase +
+  // join-Discord + follow-members). When the member finishes, THEN open the extension's home (new tab).
+  el.addEventListener('gbti:onboarding-start', () => {
+    const w = document.createElement('gbti-welcome');
+    w.addEventListener('gbti:welcome-done', () => { window.location.href = chrome.runtime.getURL('newtab.html'); });
+    const shell = document.querySelector('main.shell');
+    if (shell) { shell.style.gridTemplateColumns = '1fr'; shell.replaceChildren(w); }
+    else { (document.getElementById('app') || document.body).replaceChildren(w); }
+  });
 }
 
 function init() {
