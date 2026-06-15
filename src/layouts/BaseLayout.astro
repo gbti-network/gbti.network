@@ -91,5 +91,16 @@ const ogImageUrl = new URL(ogImage || DEFAULT_OG_IMAGE, Astro.site).href;
     <SigninModal />
     <ReferralCapture />
     <CookieConsent />
+    {/* SOW-030: reflect the GBTI extension's page-safe identity signal onto <html> (is-gbti-member /
+        is-gbti-paid / data-gbti-role) so components + CSS can show a signed-in / member experience. Presentation
+        only and UNTRUSTED for security (see src/lib/member-signal.ts); the token never reaches the page.
+        Race note: this parse-time module runs BEFORE the extension content script stamps the signal (at
+        document_idle), so readMemberSignal() is usually null on first paint; onMemberSignal() then catches the
+        gbti:identity event and applies the classes. Keep this a parse-time module script (not async/defer). */}
+    <script>
+      import { readMemberSignal, onMemberSignal, applyMemberSignalClasses } from '../lib/member-signal';
+      applyMemberSignalClasses(readMemberSignal());
+      onMemberSignal(applyMemberSignalClasses);
+    </script>
   </body>
 </html>

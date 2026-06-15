@@ -6,6 +6,7 @@
 // the page's content (the client checks ownership).
 
 import { setClient, createHttpClient } from '../../client-ui/src/index.mjs';
+import { buildMemberSignal } from './identity-signal.mjs';
 
 /** Translate a /api/* request into a background-worker message (replaces the real network fetch). */
 async function messagingFetch(url, init = {}) {
@@ -66,3 +67,22 @@ try {
     document.dispatchEvent(new CustomEvent('gbti:open-auth'));
   });
 } catch { /* chrome runtime unavailable: no marker (treated as not installed by the site) */ }
+
+// SOW-030: publish a PAGE-SAFE identity signal so gbti.network can render a signed-in / member experience
+// (header avatar, owner-only edit chrome). The GitHub TOKEN never leaves the worker; this carries identity +
+// membership status only (built by buildMemberSignal's explicit allowlist). The site treats it as UNTRUSTED
+// presentation input; authoritative checks stay server-side (the SOW-005 gate, the Worker oracle). Re-stamped
+// whenever the worker broadcasts an auth change (sign-in/sign-out in any tab).
+async function stampMemberSignal() {
+  try {
+    const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/status', query: {} } });
+    const signal = buildMemberSignal(r?.json);
+    if (signal) document.documentElement.dataset.gbtiMember = JSON.stringify(signal);
+    else delete document.documentElement.dataset.gbtiMember;
+    document.dispatchEvent(new CustomEvent('gbti:identity', { detail: signal }));
+  } catch { /* worker unreachable: leave the page as a logged-out visitor */ }
+}
+try {
+  stampMemberSignal();
+  chrome.runtime.onMessage.addListener((m) => { if (m?.type === 'auth-changed') stampMemberSignal(); });
+} catch { /* no chrome runtime */ }

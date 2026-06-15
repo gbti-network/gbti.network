@@ -4537,6 +4537,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
   }
 
+  // extension/src/identity-signal.mjs
+  function buildMemberSignal(status) {
+    if (!status || typeof status !== "object") return null;
+    const id = status.identity;
+    if (!status.authenticated || !id) return null;
+    return {
+      authenticated: true,
+      login: typeof id.login === "string" ? id.login : null,
+      githubId: id.githubId != null ? String(id.githubId) : null,
+      username: typeof id.username === "string" ? id.username : null,
+      role: typeof status.role === "string" ? status.role : "member",
+      membership: typeof status.membership === "string" ? status.membership : "unknown",
+      canPublish: status.canPublish === true
+    };
+  }
+
   // extension/src/content.mjs
   async function messagingFetch(url, init = {}) {
     const u = new URL(url, "https://gbti.network");
@@ -4576,6 +4592,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     document.dispatchEvent(new CustomEvent("gbti:extension-ready", { detail: { version } }));
     document.addEventListener("gbti:request-signin", () => {
       document.dispatchEvent(new CustomEvent("gbti:open-auth"));
+    });
+  } catch {
+  }
+  async function stampMemberSignal() {
+    try {
+      const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/status", query: {} } });
+      const signal = buildMemberSignal(r?.json);
+      if (signal) document.documentElement.dataset.gbtiMember = JSON.stringify(signal);
+      else delete document.documentElement.dataset.gbtiMember;
+      document.dispatchEvent(new CustomEvent("gbti:identity", { detail: signal }));
+    } catch {
+    }
+  }
+  try {
+    stampMemberSignal();
+    chrome.runtime.onMessage.addListener((m) => {
+      if (m?.type === "auth-changed") stampMemberSignal();
     });
   } catch {
   }

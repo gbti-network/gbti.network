@@ -18728,6 +18728,14 @@ async function openOnboardingTab() {
 chrome.action?.onClicked?.addListener(() => {
   openOnboardingTab();
 });
+async function broadcastAuthChanged() {
+  try {
+    const tabs = await chrome.tabs.query({ url: "https://gbti.network/*" });
+    for (const t of tabs) if (t.id != null) chrome.tabs.sendMessage(t.id, { type: "auth-changed" }).catch(() => {
+    });
+  } catch {
+  }
+}
 async function focusTab(tabId, windowId) {
   if (tabId == null) return;
   try {
@@ -18744,10 +18752,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse(await dispatch(buildExtContext(store), msg.req || {}));
       } else if (msg?.type === "login") {
         const res = await handleLogin(store);
-        if (res?.ok) await focusTab(sender?.tab?.id, sender?.tab?.windowId);
+        if (res?.ok) {
+          broadcastAuthChanged();
+          await focusTab(sender?.tab?.id, sender?.tab?.windowId);
+        }
         sendResponse(res);
       } else if (msg?.type === "signout") {
         store.set({ githubToken: null, identity: null });
+        broadcastAuthChanged();
         sendResponse({ ok: true });
       } else {
         sendResponse({ error: "unknown_message" });

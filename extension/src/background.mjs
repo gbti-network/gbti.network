@@ -88,6 +88,17 @@ async function openOnboardingTab() {
 }
 chrome.action?.onClicked?.addListener(() => { openOnboardingTab(); });
 
+// SOW-030: tell gbti.network content scripts (in any tab) that auth changed, so they re-stamp the page-safe
+// identity signal. A service worker's chrome.runtime.sendMessage reaches extension pages, NOT content scripts,
+// so we must message each gbti.network tab via chrome.tabs.sendMessage. The url filter is permitted by our
+// https://gbti.network/* host permission (no "tabs" permission needed). Best-effort + carries NO data.
+async function broadcastAuthChanged() {
+  try {
+    const tabs = await chrome.tabs.query({ url: 'https://gbti.network/*' });
+    for (const t of tabs) if (t.id != null) chrome.tabs.sendMessage(t.id, { type: 'auth-changed' }).catch(() => {});
+  } catch { /* no tabs API / no matching tab */ }
+}
+
 /** Bring a tab (by id) to the foreground. Permission-free; reading the tab's url/title would need "tabs". */
 async function focusTab(tabId, windowId) {
   if (tabId == null) return;
@@ -107,10 +118,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const res = await handleLogin(store);
         // Device-flow sign-in ends on GitHub's "you're all set" page in a different tab. Route the member back
         // to the tab that started sign-in (the onboarding tab, or the gbti.network page) so they see step 2.
-        if (res?.ok) await focusTab(sender?.tab?.id, sender?.tab?.windowId);
+        if (res?.ok) { broadcastAuthChanged(); await focusTab(sender?.tab?.id, sender?.tab?.windowId); }
         sendResponse(res);
       } else if (msg?.type === 'signout') {
         store.set({ githubToken: null, identity: null });
+        broadcastAuthChanged();
         sendResponse({ ok: true });
       } else {
         sendResponse({ error: 'unknown_message' });
