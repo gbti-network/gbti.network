@@ -17166,6 +17166,8 @@ var shareSchema = external_exports.object({
   encryptedBody: external_exports.string().optional(),
   // SOW-016: set by the publish flow (encrypt-on-publish) for a members Share
   title: external_exports.string().optional(),
+  shortDescription: external_exports.string().max(200).optional(),
+  // SOW-032: optional one-line blurb (mirrors src/content.config.ts)
   url: external_exports.string().url().optional(),
   tags: external_exports.array(external_exports.string()).default([]),
   createdAt: external_exports.coerce.date(),
@@ -17268,6 +17270,8 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     id: fm.id ?? null,
     author: fm.author ?? null,
     title: fm.title ?? null,
+    shortDescription: fm.shortDescription ?? null,
+    // SOW-032
     url: fm.url ?? null,
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? "members",

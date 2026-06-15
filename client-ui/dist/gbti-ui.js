@@ -1195,6 +1195,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   textarea { width:100%; box-sizing:border-box; min-height:84px; resize:vertical; font:inherit; font-size:14px;
     padding:10px 12px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
   textarea:focus { outline:none; border-color:var(--brand); }
+  input.title, input.desc { width:100%; box-sizing:border-box; font:inherit; padding:9px 12px; margin-bottom:8px;
+    border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
+  input.title { font-size:15px; font-weight:700; }
+  input.desc { font-size:13px; }
+  input.title:focus, input.desc:focus { outline:none; border-color:var(--brand); }
   .row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
   input[type=url] { flex:1; min-width:160px; box-sizing:border-box; font:inherit; font-size:13px; padding:8px 10px;
     border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
@@ -1260,6 +1265,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="card">
         <h3>Share an update</h3>
         <p class="sub">A short note or an off-network link for the co-op. Members-only by default.</p>
+        <input class="title" type="text" placeholder="Title (optional)" maxlength="80" />
+        <input class="desc" type="text" placeholder="Short description (optional)" maxlength="200" />
         <textarea placeholder="What are you reading, building, or finding?" maxlength="4000"></textarea>
         <div class="row">
           <input type="url" placeholder="https://… (optional link)" />
@@ -1277,22 +1284,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     async _post() {
       const card = this.$(".card");
+      const title = (this.$("input.title")?.value || "").trim();
+      const shortDescription = (this.$("input.desc")?.value || "").trim();
       const body = (this.$("textarea")?.value || "").trim();
       const url = (this.$("input[type=url]")?.value || "").trim();
       const visibility = this.$("select")?.value || "members";
       const msg = this.$(".msg");
-      if (!body && !url) {
-        this._say(msg, "Add a note or a link first.", "err");
+      if (!body && !url && !title) {
+        this._say(msg, "Add a title, a note, or a link first.", "err");
         return;
       }
       card?.classList.add("busy");
       try {
         const input = { visibility };
+        if (title) input.title = title;
+        if (shortDescription) input.shortDescription = shortDescription;
         if (url) input.url = url;
         const res = await this.client.postShare({ input, body });
         this._say(msg, res?.encrypted ? "Posted (members-only)." : "Posted.", "ok");
-        if (this.$("textarea")) this.$("textarea").value = "";
-        if (this.$("input[type=url]")) this.$("input[type=url]").value = "";
+        for (const sel of ["input.title", "input.desc", "textarea", "input[type=url]"]) {
+          const el = this.$(sel);
+          if (el) el.value = "";
+        }
         this.emit("gbti-share-posted", res);
       } catch (err) {
         if (err?.code === "membership-required") {
@@ -1327,6 +1340,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .who .when { color:var(--muted); font-size:12px; }
   .badge { margin-left:auto; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
   .title { font-weight:700; margin-top:8px; }
+  .desc { color:var(--muted); font-size:13px; margin-top:2px; }
   .body { margin-top:6px; font-size:14px; line-height:1.55; }
   .body :is(h1,h2,h3,h4){ font-weight:700; margin:.8em 0 .3em; }
   .body p { margin:0 0 .7em; } .body ul,.body ol { margin:0 0 .7em 1.2em; }
@@ -1421,9 +1435,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const tags = (it.tags || []).length ? `<div class="tags">${it.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}</div>` : "";
         const badge = it.visibility === "members" ? `<span class="badge">Members</span>` : "";
         const title = it.title ? `<div class="title">${esc(it.title)}</div>` : "";
+        const desc = it.shortDescription ? `<div class="desc">${esc(it.shortDescription)}</div>` : "";
         return `<article class="share">
         <div class="who"><span class="name">${esc(authorName(it.author))}</span><span class="when">${esc(relTime(it.createdAt))}</span>${badge}</div>
-        ${title}${bodyHtml}${link}${tags}
+        ${title}${desc}${bodyHtml}${link}${tags}
       </article>`;
       }).join("");
       this.set(this.css(CSS5) + head + `<div class="feed">${cards}</div>`);

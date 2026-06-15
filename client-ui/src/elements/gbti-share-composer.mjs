@@ -19,6 +19,11 @@ const CSS = `
   textarea { width:100%; box-sizing:border-box; min-height:84px; resize:vertical; font:inherit; font-size:14px;
     padding:10px 12px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
   textarea:focus { outline:none; border-color:var(--brand); }
+  input.title, input.desc { width:100%; box-sizing:border-box; font:inherit; padding:9px 12px; margin-bottom:8px;
+    border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
+  input.title { font-size:15px; font-weight:700; }
+  input.desc { font-size:13px; }
+  input.title:focus, input.desc:focus { outline:none; border-color:var(--brand); }
   .row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
   input[type=url] { flex:1; min-width:160px; box-sizing:border-box; font:inherit; font-size:13px; padding:8px 10px;
     border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
@@ -87,6 +92,8 @@ class GbtiShareComposer extends GbtiElement {
       <div class="card">
         <h3>Share an update</h3>
         <p class="sub">A short note or an off-network link for the co-op. Members-only by default.</p>
+        <input class="title" type="text" placeholder="Title (optional)" maxlength="80" />
+        <input class="desc" type="text" placeholder="Short description (optional)" maxlength="200" />
         <textarea placeholder="What are you reading, building, or finding?" maxlength="4000"></textarea>
         <div class="row">
           <input type="url" placeholder="https://… (optional link)" />
@@ -105,19 +112,22 @@ class GbtiShareComposer extends GbtiElement {
 
   async _post() {
     const card = this.$('.card');
+    const title = (this.$('input.title')?.value || '').trim();
+    const shortDescription = (this.$('input.desc')?.value || '').trim();
     const body = (this.$('textarea')?.value || '').trim();
     const url = (this.$('input[type=url]')?.value || '').trim();
     const visibility = this.$('select')?.value || 'members';
     const msg = this.$('.msg');
-    if (!body && !url) { this._say(msg, 'Add a note or a link first.', 'err'); return; }
+    if (!body && !url && !title) { this._say(msg, 'Add a title, a note, or a link first.', 'err'); return; }
     card?.classList.add('busy');
     try {
       const input = { visibility };
+      if (title) input.title = title;
+      if (shortDescription) input.shortDescription = shortDescription;
       if (url) input.url = url;
       const res = await this.client.postShare({ input, body });
       this._say(msg, res?.encrypted ? 'Posted (members-only).' : 'Posted.', 'ok');
-      if (this.$('textarea')) this.$('textarea').value = '';
-      if (this.$('input[type=url]')) this.$('input[type=url]').value = '';
+      for (const sel of ['input.title', 'input.desc', 'textarea', 'input[type=url]']) { const el = this.$(sel); if (el) el.value = ''; }
       this.emit('gbti-share-posted', res);
     } catch (err) {
       if (err?.code === 'membership-required') {

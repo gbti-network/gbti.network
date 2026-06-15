@@ -21,6 +21,7 @@ const CSS = `
   .who .when { color:var(--muted); font-size:12px; }
   .badge { margin-left:auto; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
   .title { font-weight:700; margin-top:8px; }
+  .desc { color:var(--muted); font-size:13px; margin-top:2px; }
   .body { margin-top:6px; font-size:14px; line-height:1.55; }
   .body :is(h1,h2,h3,h4){ font-weight:700; margin:.8em 0 .3em; }
   .body p { margin:0 0 .7em; } .body ul,.body ol { margin:0 0 .7em 1.2em; }
@@ -114,9 +115,10 @@ class GbtiSharesFeed extends GbtiElement {
       const tags = (it.tags || []).length ? `<div class="tags">${it.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
       const badge = it.visibility === 'members' ? `<span class="badge">Members</span>` : '';
       const title = it.title ? `<div class="title">${esc(it.title)}</div>` : '';
+      const desc = it.shortDescription ? `<div class="desc">${esc(it.shortDescription)}</div>` : ''; // SOW-032
       return `<article class="share">
         <div class="who"><span class="name">${esc(authorName(it.author))}</span><span class="when">${esc(relTime(it.createdAt))}</span>${badge}</div>
-        ${title}${bodyHtml}${link}${tags}
+        ${title}${desc}${bodyHtml}${link}${tags}
       </article>`;
     }).join('');
     this.set(this.css(CSS) + head + `<div class="feed">${cards}</div>`);

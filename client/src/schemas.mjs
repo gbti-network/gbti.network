@@ -197,6 +197,7 @@ export const shareSchema = z.object({
   publicStub: z.boolean().default(false), // SOW-016 consistency
   encryptedBody: z.string().optional(), // SOW-016: set by the publish flow (encrypt-on-publish) for a members Share
   title: z.string().optional(),
+  shortDescription: z.string().max(200).optional(), // SOW-032: optional one-line blurb (mirrors src/content.config.ts)
   url: z.string().url().optional(),
   tags: z.array(z.string()).default([]),
   createdAt: z.coerce.date(),

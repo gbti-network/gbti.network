@@ -158,6 +158,7 @@ export function shareSummary(relPath, frontmatter = {}, body = '') {
     id: fm.id ?? null,
     author: fm.author ?? null,
     title: fm.title ?? null,
+    shortDescription: fm.shortDescription ?? null, // SOW-032
     url: fm.url ?? null,
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? 'members',

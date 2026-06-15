@@ -303,6 +303,7 @@ const share = defineCollection({
     publicStub: z.boolean().default(false), // SOW-016 consistency (rarely meaningful for a short status)
     encryptedBody: z.string().optional(), // SOW-016: a members Share encrypts its body to this .enc; renders locked
     title: z.string().optional(), // optional short headline; the body carries the note
+    shortDescription: z.string().max(200).optional(), // SOW-032: an optional one-line blurb shown under the title
     url: z.string().url().optional(), // the external content being shared (link, find)
     tags: z.array(z.string()).default([]),
     createdAt: z.coerce.date(),

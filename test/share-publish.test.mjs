@@ -12,6 +12,20 @@ test('shareId: derives a sortable, filesystem-safe timestamp-slug', () => {
   assert.match(shareId('2026-06-10T13:22:09Z', '../../etc/passwd'), /^20260610132209-[a-z0-9-]+$/); // no traversal
 });
 
+test('SOW-032: buildShareFile carries the optional title + shortDescription (and stays body-only-valid)', () => {
+  const withMeta = buildShareFile({
+    username: 'alice',
+    input: { id: '20260615000000-x', visibility: 'public', title: 'My title', shortDescription: 'A one-line blurb', createdAt: '2026-06-15T00:00:00Z' },
+    body: 'hello',
+  });
+  assert.equal(withMeta.frontmatter.title, 'My title');
+  assert.equal(withMeta.frontmatter.shortDescription, 'A one-line blurb');
+  // Both stay optional: a body-only Share (no title/desc) is still valid.
+  const bare = buildShareFile({ username: 'alice', input: { id: '20260615000001-y', visibility: 'public', createdAt: '2026-06-15T00:00:01Z' }, body: 'just a note' });
+  assert.equal(bare.frontmatter.title, undefined);
+  assert.equal(bare.frontmatter.shortDescription, undefined);
+});
+
 test('buildShareFile: forces author = owner and the flat shares/ path', () => {
   const built = buildShareFile({
     username: 'alice',
