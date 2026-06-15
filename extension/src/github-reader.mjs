@@ -6,6 +6,7 @@
 // (members/<u>/<sub>/<slug>/index.md) is the canonical on-disk layout reconciled in P5.
 
 import { parseContentFile, shareSummary, byShareNewest } from '../../client/src/content-ops.mjs';
+import { isReadablePath } from '../../src/lib/content-index.mjs';
 
 const SUBDIR = Object.freeze({ post: 'posts', product: 'products', prompt: 'prompts' });
 const TYPES = ['post', 'product', 'prompt', 'profile'];
@@ -110,6 +111,18 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
   return {
     readFile,
     get,
+    // SOW-031: read ANY member's or house's PUBLISHED content index.md for the in-extension reader. Unlike
+    // get() (own-folder-scoped for editing), this is read-only over the public repo, gated by a strict
+    // allowlist (only posts/products/prompts index.md, no traversal, no roles.yml / house/pages) so the member
+    // token cannot become a general file-exfil oracle. Member-only BODIES are not here: the public teaser comes
+    // back as `body`, and frontmatter.encryptedBody points at the .enc the reader decrypts via the Worker.
+    async read(relPath) {
+      if (!isReadablePath(relPath)) return null;
+      const text = await readFile(relPath);
+      if (text == null) return null;
+      const { frontmatter, body } = parseContentFile(text);
+      return { path: relPath, frontmatter, body };
+    },
     async list(username, type) {
       if (!username) return [];
       if (type) return listType(username, type);

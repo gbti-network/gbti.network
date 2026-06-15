@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- SOW-031: the GBTI extension's in-extension content Browser. Browse Blog / Products / Prompts / Shares and
+     open any item in the in-extension reader (no navigating to gbti.network). Mounts <gbti-auth> + <gbti-browse>
+     over the messaging bridge; the token stays in the background worker. Mirrors shares.html chrome. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Browse · GBTI Network</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('gbti-theme');
+        if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root { --paper-2: #faf9f8; --ink: #25232b; --green: #1f9e5f; }
+    [data-theme="dark"] { --paper-2: #1c1a21; --ink: #f3f2f0; }
+    body { margin: 0; background: var(--paper-2); color: var(--ink);
+      font-family: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
+    .top { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+    .g { width: 30px; height: 30px; border-radius: 8px; background: var(--green); color: #fff; display: grid; place-items: center; font-weight: 800; }
+    .top b { font-weight: 800; letter-spacing: -.01em; }
+    .top .t { margin-left: auto; font-size: 13px; opacity: .7; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top"><span class="g">G</span><b>Browse the co-op</b><span class="t">Read inside the extension</span></div>
+    <gbti-auth></gbti-auth>
+    <gbti-lock-gate>
+      <gbti-browse></gbti-browse>
+    </gbti-lock-gate>
+  </div>
+  <script src="dist/browse.js"></script>
+</body>
+</html>

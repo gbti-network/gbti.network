@@ -69,6 +69,11 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         if (!item) throw new OperationError('not-found', 'no such item in your folder');
         return ok(item);
       }
+      case '/api/read': { // SOW-031: read ANY published content index.md (allowlist-gated) for the in-extension reader
+        const item = await ctx.reader.read?.(query.path);
+        if (!item) throw new OperationError('not-found', 'no such readable content');
+        return ok(item);
+      }
       case '/api/members-content':
         return ok({ items: await ctx.reader.listMembersOnly() });
       case '/api/form-fields':

@@ -17282,6 +17282,12 @@ function parseContentFile(text) {
   return { frontmatter: index_vite_proxy_tmp_default.load(m[1]) ?? {}, body: (m[2] ?? "").replace(/^\n+/, "") };
 }
 
+// src/lib/content-index.mjs
+var READ_PATH_RE = /^(members\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
+function isReadablePath(path) {
+  return typeof path === "string" && !path.includes("..") && !path.includes("\\") && READ_PATH_RE.test(path);
+}
+
 // extension/src/github-reader.mjs
 var SUBDIR2 = Object.freeze({ post: "posts", product: "products", prompt: "prompts" });
 var TYPES = ["post", "product", "prompt", "profile"];
@@ -17358,6 +17364,18 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch = globalThis.
   return {
     readFile,
     get,
+    // SOW-031: read ANY member's or house's PUBLISHED content index.md for the in-extension reader. Unlike
+    // get() (own-folder-scoped for editing), this is read-only over the public repo, gated by a strict
+    // allowlist (only posts/products/prompts index.md, no traversal, no roles.yml / house/pages) so the member
+    // token cannot become a general file-exfil oracle. Member-only BODIES are not here: the public teaser comes
+    // back as `body`, and frontmatter.encryptedBody points at the .enc the reader decrypts via the Worker.
+    async read(relPath) {
+      if (!isReadablePath(relPath)) return null;
+      const text = await readFile(relPath);
+      if (text == null) return null;
+      const { frontmatter, body } = parseContentFile(text);
+      return { path: relPath, frontmatter, body };
+    },
     async list(username, type) {
       if (!username) return [];
       if (type) return listType(username, type);
@@ -18077,9 +18095,11 @@ async function planMemberFiles({ built, body, encrypt }) {
     assetId
   };
 }
+var ENC_PATH_RE = /^(members\/[a-z0-9][a-z0-9-]*|house)\/_enc\/[a-z0-9][a-z0-9._-]*\.enc$/;
 async function decryptMemberAsset(ctx, { encPath } = {}) {
   requireIdentity(ctx);
   if (!encPath || typeof encPath !== "string") throw new OperationError("bad-request", "encPath is required");
+  if (!ENC_PATH_RE.test(encPath)) throw new OperationError("bad-request", "invalid encrypted-asset path");
   let raw;
   try {
     raw = await ctx.reader.readFile(encPath);
@@ -18558,6 +18578,11 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       case "/api/content/item": {
         const item = await ctx.reader.get(username, query.path);
         if (!item) throw new OperationError("not-found", "no such item in your folder");
+        return ok(item);
+      }
+      case "/api/read": {
+        const item = await ctx.reader.read?.(query.path);
+        if (!item) throw new OperationError("not-found", "no such readable content");
         return ok(item);
       }
       case "/api/members-content":

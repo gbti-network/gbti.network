@@ -30,6 +30,7 @@ await build({ ...common, entryPoints: [src('onboarding.mjs')], format: 'iife', o
 await build({ ...common, entryPoints: [src('newtab.mjs')], format: 'iife', outfile: out('newtab.js') }); // SOW-017
 await build({ ...common, entryPoints: [src('shares.mjs')], format: 'iife', outfile: out('shares.js') }); // SOW-018 Shares page
 await build({ ...common, entryPoints: [src('workspace.mjs')], format: 'iife', outfile: out('workspace.js') }); // SOW-033 Workspace page
+await build({ ...common, entryPoints: [src('browse.mjs')], format: 'iife', outfile: out('browse.js') }); // SOW-031 Browse page
 
 // SOW-025: the GBTI MCP server ships INSIDE the extension folder as a self-contained, zero-install NODE bundle.
 // Chrome NEVER loads it (it is not in manifest.json / web_accessible_resources) — the files just ride along in
@@ -44,7 +45,7 @@ const clientSrc = (f) => path.join(dir, '..', 'client', 'src', f);
 const nodeBundle = { bundle: true, target: 'node18', platform: 'node', format: 'esm', charset: 'utf8', legalComments: 'none' };
 await build({ ...nodeBundle, entryPoints: [clientSrc('mcp-stdio.mjs')], outfile: mcp('gbti-network-mcp.mjs') });
 
-console.log('built extension/dist/{background,content,onboarding,newtab,shares,workspace}.js + extension/mcp/gbti-network-mcp.mjs');
+console.log('built extension/dist/{background,content,onboarding,newtab,shares,workspace,browse}.js + extension/mcp/gbti-network-mcp.mjs');
 if (mode === 'app') {
   console.log(`  (APP mode inlined: client id ${values.GBTI_GITHUB_APP_CLIENT_ID}, slug ${values.GBTI_GITHUB_APP_SLUG})`);
 }

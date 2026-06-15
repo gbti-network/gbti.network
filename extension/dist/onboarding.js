@@ -4562,8 +4562,186 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-workspace", GbtiWorkspace);
 
-  // client-ui/src/elements/gbti-app.mjs
+  // client-ui/src/elements/gbti-reader.mjs
+  var SITE2 = "https://gbti.network";
+  var authorName2 = (a) => a === "gbti" ? "GBTI Network" : a;
+  var TYPE_LABEL = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
+  var dateStr = (ms) => {
+    try {
+      return ms ? new Date(ms).toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" }) : "";
+    } catch {
+      return "";
+    }
+  };
+  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE2}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var CSS12 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  article { max-width:680px; margin:0 auto; }
+  h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
+  .meta { color:var(--muted); font-size:13px; margin:0 0 18px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); background:var(--hover); border-radius:999px; padding:2px 9px; }
+  .body { font-size:15.5px; line-height:1.7; }
+  .body h1,.body h2,.body h3 { font-family:var(--font-display); margin:1.4em 0 .5em; }
+  .body p { margin:0 0 1em; }
+  .body pre { background:var(--hover); padding:12px 14px; border-radius:10px; overflow:auto; }
+  .body code { font-family:ui-monospace,monospace; font-size:.92em; }
+  .body a { color:var(--accent); }
+  .body img { max-width:100%; height:auto; border-radius:10px; }
+  .locked { border:1px solid var(--line); background:var(--hover); border-radius:10px; padding:14px 16px; color:var(--fg); font-size:14px; margin:14px 0; }
+  .locked a { color:var(--accent); }
+  .muted { color:var(--muted); }
+  .view { display:inline-block; margin-top:22px; font-size:13px; font-weight:700; color:var(--accent); text-decoration:underline; }
+`;
+  var GbtiReader = class extends GbtiElement {
+    /** open(item): { type, path, title, author, publishedAt, url, visibility, body?, encryptedBody? }.
+     *  For share, body/encryptedBody come from the summary; for post/product/prompt they come from readItem(path). */
+    open(item) {
+      this._item = item;
+      this._html = null;
+      this.render();
+      this._resolve();
+    }
+    async _resolve() {
+      const it = this._item || {};
+      try {
+        if (it.type === "share") {
+          this._html = await this._body(it.visibility, it.body, it.encryptedBody);
+        } else {
+          const { frontmatter, body } = await this.client.readItem({ path: it.path });
+          this._html = await this._body(it.visibility, body, frontmatter?.encryptedBody);
+        }
+      } catch {
+        this._html = { error: true };
+      }
+      this.render();
+    }
+    // Render the public body via preview, then append the members part (decrypt -> preview) or a locked notice.
+    async _body(visibility, publicBody, encPath) {
+      let html = publicBody ? (await this.client.preview({ body: publicBody }))?.html ?? "" : "";
+      if (encPath) {
+        try {
+          const { text } = await this.client.decrypt({ encPath });
+          html += (await this.client.preview({ body: text }))?.html ?? "";
+        } catch (err) {
+          const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
+          html += locked ? lockNotice("This part") : `<p class="muted">Could not load the members-only part right now.</p>`;
+        }
+      }
+      if (!html && visibility === "members") html = lockNotice("This");
+      return html;
+    }
+    render() {
+      const it = this._item;
+      if (!it) {
+        this.set(this.css(CSS12));
+        return;
+      }
+      const t = TYPE_LABEL[it.type] || it.type || "";
+      const view = it.url ? `<a class="view" href="${esc(SITE2 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName2(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ""}</div>`;
+      let body;
+      if (this._html === null) body = `<p class="muted">Loading...</p>`;
+      else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
+      else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
+      this.set(this.css(CSS12) + `<article><h1>${esc(it.title || "")}</h1>${meta}${body}${view}</article>`);
+    }
+  };
+  define("gbti-reader", GbtiReader);
+
+  // client-ui/src/elements/gbti-browse.mjs
+  var SITE3 = "https://gbti.network";
   var TABS2 = [
+    { id: "post", label: "Blog", json: "blog-index.json" },
+    { id: "product", label: "Products", json: "products-index.json" },
+    { id: "prompt", label: "Prompts", json: "prompts-index.json" },
+    { id: "share", label: "Shares" }
+  ];
+  var authorName3 = (a) => a === "gbti" ? "GBTI Network" : a;
+  var CSS13 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
+  .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
+  .tab.on { background:var(--hover); color:var(--accent); }
+  ul.rows { list-style:none; margin:0; padding:0; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 2px; border-top:1px solid var(--line); cursor:pointer; }
+  .row:first-child { border-top:0; }
+  .row:hover { background:var(--hover); }
+  .row .t { min-width:0; }
+  .row .t b { display:block; font-size:15px; }
+  .row .t .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .t .meta { color:var(--muted); font-size:12px; margin-top:2px; }
+  .row .go { flex:none; color:var(--accent); font-size:13px; font-weight:700; }
+  .empty { color:var(--muted); padding:18px 2px; }
+  .btn { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; margin:0 0 14px; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); }
+`;
+  var GbtiBrowse = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback?.();
+      const m = (typeof location !== "undefined" ? location.hash : "").match(/tab=([a-z]+)/);
+      this._tab = m && TABS2.some((t) => t.id === m[1]) ? m[1] : "post";
+      this._cache = {};
+      this._reading = null;
+      this.render();
+      this._ensure(this._tab);
+    }
+    async _ensure(id) {
+      const tab = TABS2.find((t) => t.id === id);
+      if (!tab?.json || this._cache[id]) return;
+      try {
+        const res = await fetch(`${SITE3}/${tab.json}`, { cache: "no-cache" });
+        this._cache[id] = res.ok ? (await res.json()).items || [] : [];
+      } catch {
+        this._cache[id] = [];
+      }
+      if (this._tab === id && !this._reading) this.render();
+    }
+    render() {
+      if (this._reading) {
+        const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
+        this.set(this.css(CSS13) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.on("[data-back]", "click", () => {
+          this._reading = null;
+          this.render();
+          this._ensure(this._tab);
+        });
+        const host = this.$("[data-reader]");
+        const r = document.createElement("gbti-reader");
+        host.replaceChildren(r);
+        r.open(this._reading);
+        return;
+      }
+      const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
+      this.set(this.css(CSS13) + `<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+      this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+        this._tab = b.dataset.tab;
+        this.render();
+        this._ensure(this._tab);
+      }));
+      if (this._tab !== "share") {
+        this.$$("[data-open]").forEach((el) => el.addEventListener("click", () => {
+          const it = (this._cache[this._tab] || [])[Number(el.dataset.open)];
+          if (it) {
+            this._reading = it;
+            this.render();
+          }
+        }));
+      }
+    }
+    _body() {
+      if (this._tab === "share") return `<gbti-shares-feed></gbti-shares-feed>`;
+      const items = this._cache[this._tab];
+      if (!items) return `<p class="empty">Loading...</p>`;
+      if (!items.length) return `<p class="empty">Nothing here yet.</p>`;
+      return `<ul class="rows">${items.map((it, i) => `<li class="row" data-open="${i}">
+      <span class="t"><b>${esc(it.title)}</b>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}<span class="meta">${esc(authorName3(it.author))}${it.visibility === "members" ? " · members" : ""}</span></span>
+      <span class="go">Read &rarr;</span></li>`).join("")}</ul>`;
+    }
+  };
+  define("gbti-browse", GbtiBrowse);
+
+  // client-ui/src/elements/gbti-app.mjs
+  var TABS3 = [
     { id: "author", label: "Author", tag: "gbti-content-editor" },
     { id: "shares", label: "Shares", tag: "gbti-shares" },
     // SOW-018: composer + co-op reading feed (extension/client-only)
@@ -4590,7 +4768,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
         this.role = "member";
       }
-      const tabs = TABS2.filter((t) => !t.minRole || RANK3[this.role] >= RANK3[t.minRole]);
+      const tabs = TABS3.filter((t) => !t.minRole || RANK3[this.role] >= RANK3[t.minRole]);
       const active = tabs.find((t) => t.id === this.active) ? this.active : "author";
       this.set(
         this.css(`
@@ -4664,6 +4842,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       status: () => request("GET", "/api/status"),
       listContent: ({ type } = {}) => request("GET", `/api/content${qs({ type })}`),
       getContentItem: ({ path }) => request("GET", `/api/content/item${qs({ path })}`),
+      readItem: ({ path }) => request("GET", `/api/read${qs({ path })}`),
+      // SOW-031: read ANY published index.md for the in-extension reader -> { path, frontmatter, body }
       validateContent: (b) => request("POST", "/api/validate", b),
       publish: (b) => request("POST", "/api/publish", b),
       postShare: (b) => request("POST", "/api/share", b),
@@ -4743,7 +4923,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     });
   });
   setClient(client);
-  var SITE2 = "https://gbti.network";
+  var SITE4 = "https://gbti.network";
   var LOCKED4 = ["expired", "cancelled", "none", "banned"];
   async function status() {
     const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/status", query: {} } });
@@ -4765,11 +4945,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     const id = s?.identity;
     if (id && s.authenticated) {
-      const lapsed = LOCKED4.includes(s.membership) ? ` Your membership has lapsed. <a href="${SITE2}/membership/" target="_blank" rel="noopener">Renew</a> to publish again.` : "";
+      const lapsed = LOCKED4.includes(s.membership) ? ` Your membership has lapsed. <a href="${SITE4}/membership/" target="_blank" rel="noopener">Renew</a> to publish again.` : "";
       el.innerHTML = `Signed in as <strong>@${esc2(id.login)}</strong>. <button class="linkbtn" data-signout type="button">Sign out</button>${lapsed}`;
       el.querySelector("[data-signout]")?.addEventListener("click", signOut);
     } else {
-      el.innerHTML = `Not a member yet? <a href="${SITE2}/membership/" target="_blank" rel="noopener">Join GBTI Network</a> to publish.`;
+      el.innerHTML = `Not a member yet? <a href="${SITE4}/membership/" target="_blank" rel="noopener">Join GBTI Network</a> to publish.`;
     }
   }
   function mount() {

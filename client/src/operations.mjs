@@ -197,9 +197,15 @@ export async function planMemberFiles({ built, body, encrypt }) {
  * via its reader (fs / GitHub Contents API) and asks the Worker to decrypt it; the AES key never reaches the
  * client. Returns { text } (the plaintext markdown). A non-effective-paid member -> membership-required.
  */
+// A member-only asset path is ALWAYS members/<owner>/_enc/<name>.enc or house/_enc/<name>.enc (encAssetFor).
+// Validate it so the decrypt route cannot be pointed at an arbitrary repo file (a member can hand-edit their
+// frontmatter encryptedBody): only an .enc under an _enc/ dir, no traversal. SOW-031 hardening.
+const ENC_PATH_RE = /^(members\/[a-z0-9][a-z0-9-]*|house)\/_enc\/[a-z0-9][a-z0-9._-]*\.enc$/;
+
 export async function decryptMemberAsset(ctx, { encPath } = {}) {
   requireIdentity(ctx);
   if (!encPath || typeof encPath !== 'string') throw new OperationError('bad-request', 'encPath is required');
+  if (!ENC_PATH_RE.test(encPath)) throw new OperationError('bad-request', 'invalid encrypted-asset path');
   let raw;
   try {
     raw = await ctx.reader.readFile(encPath);
