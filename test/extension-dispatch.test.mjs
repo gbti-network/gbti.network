@@ -1,0 +1,113 @@
+// SOW-006 v2 P4: the extension's /api dispatcher (the background worker side of the messaging GbtiClient).
+// Verifies it answers the same routes as the npm host, async-reader-aware, with the same error codes.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { dispatch } from '../extension/src/ext-dispatch.mjs';
+import { esc } from '../extension/src/onboarding.mjs';
+
+const POST = '---\ntype: post\ntitle: Hello\nslug: hello\nauthor: alice\nstatus: published\n---\n\nBody\n';
+
+function ctxFor({ identity = { login: 'alice', githubId: '1', username: 'alice' }, token = 'tok', files = {}, repo } = {}) {
+  return {
+    identity: () => identity,
+    store: { get: (k) => ({ githubToken: token })[k] },
+    getRepoClient: () => repo ?? null,
+    reader: {
+      async readFile(p) { return files[p] ?? null; },
+      async get(u, p) { return p.startsWith(`members/${u}/`) && files[p] ? { path: p, frontmatter: { type: 'post', title: 'Hello' }, body: 'Body' } : null; },
+      async list(u, t) { return [{ path: `members/${u}/posts/hello/index.md`, type: 'post', title: 'Hello' }]; },
+      async listMembersOnly() { return []; },
+    },
+  };
+}
+
+test('status: returns identity + role resolved from house/roles.yml (async reader)', async () => {
+  const ctx = ctxFor({ files: { 'house/roles.yml': 'admins:\n  - github_id: "1"\n' } });
+  const r = await dispatch(ctx, { pathname: '/api/status' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.identity.login, 'alice');
+  assert.equal(r.json.role, 'admin');
+  assert.equal(r.json.authenticated, true);
+});
+
+test('content + item: lists + reads via the async reader, own-folder scoped', async () => {
+  const ctx = ctxFor({ files: { 'members/alice/posts/hello/index.md': POST } });
+  const list = await dispatch(ctx, { pathname: '/api/content' });
+  assert.equal(list.json.items.length, 1);
+  const item = await dispatch(ctx, { pathname: '/api/content/item', query: { path: 'members/alice/posts/hello/index.md' } });
+  assert.equal(item.json.frontmatter.title, 'Hello');
+  const other = await dispatch(ctx, { pathname: '/api/content/item', query: { path: 'members/bob/posts/x/index.md' } });
+  assert.equal(other.status, 404);
+});
+
+test('validate + preview + form-fields: reader-free routes work', async () => {
+  const ctx = ctxFor();
+  const good = await dispatch(ctx, { pathname: '/api/validate', body: { type: 'post', input: { title: 'T', slug: 'ok' } } });
+  assert.equal(good.json.valid, true);
+  const bad = await dispatch(ctx, { pathname: '/api/validate', body: { type: 'post', input: { title: 'T', slug: 'Bad Slug' } } });
+  assert.equal(bad.json.valid, false);
+  const prev = await dispatch(ctx, { pathname: '/api/preview', body: { body: '# Hi' } });
+  assert.match(prev.json.html, /<h1/);
+  const ff = await dispatch(ctx, { pathname: '/api/form-fields', query: { type: 'post' } });
+  assert.ok(ff.json.fields.some((f) => f.key === 'delegation'));
+});
+
+test('publish: builds + opens a PR via the repo client (nested path)', async () => {
+  const puts = [];
+  const repo = {
+    upstream: 'gbti-network/gbti.network',
+    async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
+    async getDefaultBranch() { return 'main'; },
+    async getBranchSha() { return 'sha'; },
+    async ensureBranch() {},
+    async getFileSha() { return null; },
+    async putFile(r, p) { puts.push(p); },
+    async findOpenPull() { return null; },
+    async openPull() { return { number: 7, html_url: 'u' }; },
+  };
+  const r = await dispatch(ctxFor({ repo }), { pathname: '/api/publish', body: { type: 'post', input: { title: 'T', slug: 'my-post' }, body: 'x' } });
+  assert.equal(r.json.prNumber, 7);
+  assert.deepEqual(puts, ['members/alice/posts/my-post/index.md']);
+});
+
+test('no identity -> 409; unknown route -> 404', async () => {
+  const noId = await dispatch(ctxFor({ identity: null }), { pathname: '/api/content' });
+  assert.equal(noId.status, 409);
+  const unknown = await dispatch(ctxFor(), { pathname: '/api/nope' });
+  assert.equal(unknown.status, 404);
+});
+
+test('onboarding-status: a PRE-AUTH route (works signed-out so it can drive the sign-in step, never a 409)', async () => {
+  // Regression for the bug that left the wizard at a "could not reach GitHub / 0 of 3" dead-end: the route sat
+  // behind the requires-identity gate, so a signed-out member got a 409 and onboardingStatus() threw. It must
+  // resolve 200 with signedIn:false (here classic mode, since no app-mode build define is applied in node).
+  const signedOut = await dispatch(ctxFor({ identity: null, token: null }), { pathname: '/api/onboarding-status' });
+  assert.equal(signedOut.status, 200);
+  assert.equal(signedOut.json.signedIn, false);
+  // And /api/status stays pre-auth too (sanity: the gate did not move onto it).
+  const st = await dispatch(ctxFor({ identity: null, token: null }), { pathname: '/api/status' });
+  assert.equal(st.status, 200);
+  assert.equal(st.json.authenticated, false);
+});
+
+test('onboarding esc: escapes HTML metacharacters before innerHTML (matches gbti-auth)', () => {
+  assert.equal(esc('alice'), 'alice');
+  assert.equal(esc('"><img src=x onerror=alert(1)>'), '&quot;&gt;&lt;img src=x onerror=alert(1)&gt;');
+  assert.equal(esc("a&b'c"), 'a&amp;b&#39;c');
+  assert.equal(esc(undefined), '');
+});
+
+test('pr-status: rejects non-positive-integer PR numbers before hitting GitHub (matches the npm guard)', async () => {
+  const calls = [];
+  const repo = { upstream: 'gbti-network/gbti.network', async gateStatus(n) { calls.push(n); return { state: 'success' }; } };
+  for (const number of ['abc', '0', '-1', '1.5', '', undefined]) {
+    const r = await dispatch(ctxFor({ repo }), { pathname: '/api/pr-status', query: { number } });
+    assert.equal(r.status, 400, `number=${JSON.stringify(number)} should be a bad-request`);
+  }
+  assert.deepEqual(calls, [], 'gateStatus must never be called with an invalid number');
+  const good = await dispatch(ctxFor({ repo }), { pathname: '/api/pr-status', query: { number: '7' } });
+  assert.equal(good.status, 200);
+  assert.deepEqual(calls, [7], 'a valid number reaches gateStatus coerced to an integer');
+});

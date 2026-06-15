@@ -1,0 +1,32 @@
+---
+// CommentBox (SOW-027): the INERT comment-authoring hook. The public static build ships <gbti-comment-box>
+// carrying ONLY the target metadata (+ a comment id/author for the per-comment edit affordance); NEVER a body.
+// The GBTI client/extension upgrades it: COMPOSE mode (no comment id) -> a "Write a comment" form for a paid
+// member; EDIT mode (a comment id) -> an "Edit" link shown ONLY to that comment's author. Inert + harmless in a
+// plain browser (same model as EditHooks/LockedBody). The SOW-005 gate + the paid-only publish rule are the real
+// boundary; this is just the authoring surface.
+interface Props {
+  targetType: 'post' | 'product' | 'prompt';
+  targetSlug: string;
+  commentId?: string; // present => the inline "Edit" affordance for that comment (author-only, client-gated)
+  commentAuthor?: string;
+}
+const { targetType, targetSlug, commentId, commentAuthor } = Astro.props;
+const isEdit = Boolean(commentId);
+const attrs: Record<string, string> = { 'data-gbti-target-type': targetType, 'data-gbti-target-slug': targetSlug };
+if (commentId) attrs['data-gbti-comment-id'] = commentId;
+if (commentAuthor) attrs['data-gbti-comment-author'] = commentAuthor;
+---
+<gbti-comment-box {...attrs}>
+  {!isEdit && (
+    <div class="cbox-fallback">
+      <p class="body-sm muted" style="margin:0">Members write comments from the GBTI client or browser extension. <a href="/membership/" class="link">Become a member</a> to join the conversation.</p>
+    </div>
+  )}
+</gbti-comment-box>
+<style>
+  gbti-comment-box { display: block; }
+  /* The edit affordance is inline and EMPTY until the client upgrades it (and only for the author). */
+  gbti-comment-box[data-gbti-comment-id] { display: inline-block; }
+  .cbox-fallback { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: var(--r); background: var(--green-tint); }
+</style>

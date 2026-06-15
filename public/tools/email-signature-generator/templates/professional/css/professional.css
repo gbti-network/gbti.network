@@ -1,0 +1,230 @@
+/* Professional Signature Style */
+
+:root {
+    --primary-color: #333333;
+    --secondary-color: #555555;
+    --accent-color: #0077B5;
+    --background-color: #ffffff;
+    --border-color: #eaeaea;
+    
+    /* Dark mode variables */
+    --dark-mode-primary-color: #ffffff;
+    --dark-mode-secondary-color: #cccccc;
+    --dark-mode-background-color: #2c2c2c;
+    --dark-mode-text-color: #f5f5f5;
+}
+
+/* Base Signature Styles */
+.signature-professional {
+    font-family: Arial, sans-serif;
+    color: var(--primary-color);
+}
+
+/* Main Table Structure */
+.signature-professional .signature-table {
+    width: 480px;
+    font-family: Arial, sans-serif;
+    border-collapse: collapse;
+    border-spacing: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+
+/* Profile Image Column */
+.signature-professional .profile-cell {
+    vertical-align: top;
+    padding-right: 20px;
+    width: 100px;
+}
+
+.signature-professional .profile-img {
+    width: 100px;
+    height: 100px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+/* Content Column */
+.signature-professional .content-cell {
+    vertical-align: top;
+    padding-left: 20px;
+}
+
+.signature-professional .accent-border {
+    border-left: 3px solid var(--accent-color);
+}
+
+/* Details Table */
+.signature-professional .details-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+
+/* Name Styles */
+.signature-professional .name-cell {
+    padding-bottom: 5px;
+}
+
+.signature-professional .name {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+/* Title Styles */
+.signature-professional .title-cell {
+    padding-bottom: 5px;
+}
+
+.signature-professional .title {
+    font-size: 14px;
+    color: var(--secondary-color);
+}
+
+/* Company Styles */
+.signature-professional .company-cell {
+    padding-bottom: 5px;
+}
+
+.signature-professional .company-table {
+    border-collapse: collapse;
+    border-spacing: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+
+.signature-professional .company-logo-cell {
+    padding-right: 5px;
+    vertical-align: middle;
+}
+
+.signature-professional .company-logo {
+    width: 18px;
+    height: 18px;
+}
+
+.signature-professional .company-name {
+    font-size: 14px;
+    color: var(--accent-color);
+    font-weight: bold;
+}
+
+/* Contact Information */
+.signature-professional .email-cell,
+.signature-professional .calendly-cell {
+    padding-bottom: 10px;
+}
+
+.signature-professional .contact-table {
+    border-collapse: collapse;
+    border-spacing: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+
+.signature-professional .icon-cell {
+    padding-right: 5px;
+    vertical-align: middle;
+}
+
+.signature-professional .icon-svg {
+    width: 12px;
+    height: 12px;
+    vertical-align: middle;
+    fill: var(--accent-color);
+}
+
+.signature-professional .email-icon,
+.signature-professional .calendar-icon {
+    fill: var(--accent-color);
+}
+
+.signature-professional .contact-text-cell {
+    vertical-align: middle;
+}
+
+.signature-professional .email,
+.signature-professional .calendly-link {
+    font-size: 13px;
+    color: var(--secondary-color);
+    text-decoration: none;
+}
+
+/* Social Icons */
+.signature-professional .social-cell {
+    vertical-align: top;
+}
+
+.signature-professional .sig-social-icons {
+    padding-top: 5px;
+}
+
+.signature-professional .social-link {
+    text-decoration: none;
+    margin-right: 8px;
+    display: inline-block;
+}
+
+.signature-professional .social-icon {
+    width: 19px;
+    height: 19px;
+}
+
+/* Dark Mode Styles */
+.dark-mode .signature-professional {
+    color: var(--dark-mode-text-color);
+    background-color: var(--dark-mode-background-color);
+}
+
+.dark-mode .signature-professional .name {
+    color: var(--dark-mode-primary-color);
+}
+
+.dark-mode .signature-professional .title {
+    color: var(--dark-mode-secondary-color);
+}
+
+.dark-mode .signature-professional .company-name {
+    color: var(--accent-color);
+}
+
+.dark-mode .signature-professional .email,
+.dark-mode .signature-professional .calendly-link {
+    color: var(--dark-mode-secondary-color);
+}
+
+.dark-mode .signature-professional .accent-border {
+    border-left-color: var(--accent-color);
+}
+
+/* Email Client Compatibility */
+.signature-professional table {
+    mso-table-lspace: 0pt;
+    mso-table-rspace: 0pt;
+}
+
+.signature-professional img {
+    -ms-interpolation-mode: bicubic;
+}
+
+/* SVG Styling */
+.signature-professional svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.sig-social-icons a {
+    padding-right: 10px;
+}
+
+/* Responsive Styles */
+@media screen and (max-width: 480px) {
+
+}

@@ -1,0 +1,124 @@
+# Cloudflare Worker config for the GBTI Network signup surface (SOW-002).
+# This is the only always-on surface: GitHub + Discord OAuth, Stripe Customer creation, the trial
+# Discord role, checkout, and the optional Stripe webhook. Deploy with `npx wrangler deploy`.
+#
+# Local dev: `npx wrangler dev` reads .dev.vars (copy .dev.vars.example to .dev.vars and fill it in).
+# Wrangler picks its own local port, so there is no bind port to free here.
+#
+# Secrets (Stripe key, OAuth client secrets, bot token, session secret, dispatch token, Turnstile
+# secret) are NEVER committed. Set them with `npx wrangler secret put <NAME>` for production and via
+# .dev.vars for local dev. The [vars] block below holds only non-secret configuration placeholders.
+
+name = "gbti-signup"
+main = "index.mjs"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Public origin of this Worker (no trailing slash). Used to build OAuth redirect URIs and the
+# checkout return URLs.
+PUBLIC_BASE_URL = "https://signup.gbti.network"
+
+# Discord guild + role ids (non-secret, but environment-specific).
+DISCORD_GUILD_ID = "1073029070411006053"
+DISCORD_TRIAL_ROLE_ID = "1511800465107583198"
+DISCORD_MEMBER_ROLE_ID = "1511810502970441900"
+
+# Stripe annual price id ($150/yr). Non-secret. SANDBOX price; override in [env.production] with the live price.
+STRIPE_PRICE_ID = "price_1TeI3RBUci7L4JnwPYzZfspC"
+
+# OAuth public client ids (the secrets are set via `wrangler secret put`).
+GITHUB_OAUTH_CLIENT_ID = "Ov23liG561w3RA8gPSJN"
+DISCORD_OAUTH_CLIENT_ID = "1511795875788357632"
+
+# Public content repo ("owner/name") for the re-gate / disable dispatch (SOW-005 signal).
+GITHUB_CONTENT_REPO = "gbti-network/gbti.network"
+
+# SOW-026 GitHub App PR-opener (non-secret). The canonical repo a member forks; the Worker opens the publish PR
+# into it with GBTI's App installation token. The App id + installation id + private key are SECRETS, set via
+# `wrangler secret put GITHUB_APP_ID` / `GITHUB_APP_INSTALLATION_ID` / `GITHUB_APP_PRIVATE_KEY` (see human-todo).
+# Until they are set, POST /membership/open-pr returns "misconfigured" and the client stays on classic OAuth.
+UPSTREAM_REPO = "gbti-network/gbti.network"
+
+# SOW-007 referral feature switch for the Worker. Mirror house/referral-config.yml `enabled` here: keep
+# "false" until referral payouts go live, which keeps the Connect onboarding routes dark (they return
+# referral_disabled). Attribution (capturing ?ref at signup) is always on and harmless from launch.
+REFERRAL_ENABLED = "false"
+
+# SOW-016 member-content encryption epoch id (non-secret). Identifies the current epoch key the server-side
+# POST /membership/decrypt + /membership/encrypt endpoints use (the SOW-015 GET /membership/key handout was
+# retired; the key never leaves the Worker). Bump it when rotating the key (set the matching MEMBER_CONTENT_KEY
+# secret in lockstep; see .data/ops/encryption-ops/rotation-runbook.md).
+MEMBER_CONTENT_KID = "1"
+
+# KV namespace: github_id -> customer_id index, per-IP rate-limit records, and webhook event dedupe.
+# Bind one namespace; the code namespaces keys by prefix (gh:, rl:signup:, evt:). Replace the id with
+# the real namespace id from `npx wrangler kv namespace create SIGNUP_KV`.
+[[kv_namespaces]]
+binding = "SIGNUP_KV"
+id = "49432379e11844ac81b6fdaf22d3937a"
+preview_id = "09ca7e156ea04e62b9f4c8716e2a83c9"
+
+# Secrets set out-of-band (wrangler secret put / .dev.vars), listed here for documentation only:
+#   STRIPE_SECRET_KEY            restricted: create-customer + checkout only (least privilege)
+#   STRIPE_WEBHOOK_SECRET        for the optional webhook signature verification
+#   GITHUB_OAUTH_CLIENT_SECRET
+#   DISCORD_OAUTH_CLIENT_SECRET
+#   DISCORD_BOT_TOKEN            bot with Manage Roles; its role must sit above Trial + Member
+#   SESSION_SECRET               HMAC key for the signed session + OAuth state
+#   TURNSTILE_SECRET_KEY         Cloudflare Turnstile siteverify secret
+#   REGATE_DISPATCH_TOKEN        GitHub token with repository_dispatch on the content repo
+#   MEMBER_CONTENT_KEY           SOW-016: base64 of the 32-byte AES-256-GCM epoch key for the current
+#                                MEMBER_CONTENT_KID. The key NEVER leaves the Worker: POST /membership/decrypt
+#                                + POST /membership/encrypt use it server-side for an effective-paid caller
+#                                (the SOW-015 GET /membership/key handout was retired). Mint with
+#                                generateEpochKey() or `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+#   MEMBER_CONTENT_KEY_NEW       SOW-016 rotation: the NEXT epoch key, pre-generated + set before running the
+#                                rotate-member-key workflow (so the new key is never echoed in CI logs).
+#   MEMBER_CONTENT_KEYS          SOW-016 (optional): JSON map { "<kid>": "<base64 key>" } of retired epochs
+#                                kept ONLY for the brief CDN-propagation overlap, then removed (the old key is
+#                                destroyed so the old git-history ciphertext becomes keyless).
+#
+# The reconcile (scripts/reconcile.mjs) writes the overrides:mirror KV key this endpoint reads. It needs
+# CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN in its OWN env (a GitHub Action secret, not a Worker
+# secret) to PUT into this same SIGNUP_KV namespace. See .data/sow/human-todo.md.
+
+# ===========================================================================
+# PRODUCTION ENVIRONMENT  (deploy: `npx wrangler deploy --env production`)
+# ---------------------------------------------------------------------------
+# Wrangler does NOT inherit [vars] or [[kv_namespaces]] into a named environment, so the full set is
+# redefined here. The values that differ from the sandbox default are the LIVE Stripe/Discord/OAuth ids:
+# fill each PLACEHOLDER_LIVE_* before the production deploy (see .data/sow/launch-runbook.md).
+#
+# Secrets are a SEPARATE per-environment store: set each with `npx wrangler secret put <NAME> --env production`
+# (so the live Stripe key, OAuth client secrets, bot token, SESSION_SECRET, TURNSTILE_SECRET_KEY,
+# REGATE_DISPATCH_TOKEN, and MEMBER_CONTENT_KEY for production never collide with the sandbox set).
+#
+# Worker name: with `--env production` and no `name` override here, this deploys as `gbti-signup-production`.
+# If production is meant to BE the canonical `gbti-signup` worker (and local dev uses `wrangler dev` rather
+# than a deployed sandbox), set `name = "gbti-signup"` in this block. Left unset on purpose so the decision
+# is explicit. The custom domain `signup.gbti.network` is attached to whichever worker is the production one.
+[env.production.vars]
+# Same in both environments (wrangler does NOT inherit top-level [vars] into named envs, so every var the
+# Worker reads in production must be listed here):
+PUBLIC_BASE_URL = "https://signup.gbti.network"
+GITHUB_CONTENT_REPO = "gbti-network/gbti.network"
+REFERRAL_ENABLED = "false"
+MEMBER_CONTENT_KID = "1"
+UPSTREAM_REPO = "gbti-network/gbti.network"   # SOW-026: canonical repo the App opens PRs into
+# LIVE-only values: fill before the production deploy.
+STRIPE_PRICE_ID = "price_1Tg5NHBFxyhSkuibXFrQyqaN"            # the live $150/yr recurring price (prod_UfQDvczTRPCOOq)
+GITHUB_OAUTH_CLIENT_ID = "Ov23li18yffp7NHSM6l6"
+DISCORD_OAUTH_CLIENT_ID = "1511795875788357632"
+DISCORD_GUILD_ID = "1073029070411006053"
+DISCORD_TRIAL_ROLE_ID = "1511800465107583198"
+DISCORD_MEMBER_ROLE_ID = "1511810502970441900"
+
+# Production KV. A DEDICATED production namespace is recommended so sandbox test data never mixes with live
+# (create it with `npx wrangler kv namespace create SIGNUP_KV --env production`, then paste its id here). The
+# id below is the existing namespace; confirm it lives under account d42b12e969229c5187ad0f7289536487. Whatever
+# id the production worker binds MUST equal the reconcile's CF_KV_NAMESPACE_ID (so the overrides:mirror lands
+# in the namespace the decrypt/status endpoints read).
+[[env.production.kv_namespaces]]
+binding = "SIGNUP_KV"
+id = "49432379e11844ac81b6fdaf22d3937a"

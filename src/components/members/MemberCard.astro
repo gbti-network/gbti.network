@@ -1,0 +1,43 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { ICON_PATHS } from '../../lib/social';
+
+interface Props {
+  profile: CollectionEntry<'profile'>;
+}
+const { profile } = Astro.props;
+const d = profile.data;
+
+const socials = Object.entries(d.links ?? {})
+  .filter(([k, v]) => ICON_PATHS[k] && typeof v === 'string' && /^https?:\/\//.test(v))
+  .slice(0, 4) as [string, string][];
+---
+<article data-name={d.displayName.toLowerCase()} class="member-card card card-hover group overflow-hidden">
+  <a href={`/members/${d.username}/`} class="relative block pb-[100%]" style="background:var(--tint)">
+    {d.avatar ? (
+      <img src={d.avatar} alt={d.displayName} loading="lazy" class="absolute inset-0 h-full w-full object-cover" />
+    ) : (
+      <div class="absolute inset-0 grid place-items-center" style="background:var(--green-tint);color:var(--green-700);font-family:var(--f-display);font-weight:800;font-size:48px">{d.displayName.charAt(0)}</div>
+    )}
+  </a>
+  <div class="p-6">
+    <h2 class="h4">
+      <a href={`/members/${d.username}/`} class="link" style="color:var(--fg);gap:0">{d.displayName}</a>
+    </h2>
+    {d.headline && <p class="eyebrow mt8" style="color:var(--fg-mute)">{d.headline}</p>}
+    <div class="mt12 flex flex-wrap gap-2">
+      <span class="chip chip-green">member</span>
+      {d.forHire && <span class="chip">for hire</span>}
+    </div>
+    {socials.length > 0 && (
+      <div class="mt16 flex gap-3" style="border-top:1.5px solid var(--line);padding-top:16px">
+        {socials.map(([k, v]) => (
+          <a href={v} target="_blank" rel="noopener noreferrer" data-tooltip={k} class="transition-colors" style="color:var(--fg-soft)">
+            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="currentColor" aria-hidden="true"><path d={ICON_PATHS[k]} /></svg>
+            <span class="sr-only">{k}</span>
+          </a>
+        ))}
+      </div>
+    )}
+  </div>
+</article>

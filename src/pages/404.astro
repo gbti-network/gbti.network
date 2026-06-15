@@ -1,0 +1,38 @@
+---
+// Branded 404 (SOW-001). Astro emits this as dist/404.html, which Cloudflare Pages serves for any unmatched
+// route. Kept link-only (no dynamic data) so it renders even when content is missing. A members-only item with
+// no public page (Mode A) is reached here too, so the copy nudges toward membership without implying the page
+// was deleted.
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const links = [
+  { href: '/', label: 'Home' },
+  { href: '/blog/', label: 'Blog' },
+  { href: '/products/', label: 'Products' },
+  { href: '/membership/', label: 'Membership' },
+];
+---
+<BaseLayout
+  title="Page not found"
+  description="That page could not be found. It may have moved, or it may be members-only content."
+>
+  <section class="band dark tcenter">
+    <div class="wrap">
+      <div class="chip" style="display:inline-flex"><span class="chip-dot"></span> 404</div>
+      <h1 class="h1 mt20" style="color:#fff">We could not find that page.</h1>
+      <p class="lead" style="max-width:600px;margin:18px auto 0">
+        The page may have moved, or it may be members-only content that does not have a public page. Try one of
+        these instead.
+      </p>
+      <nav class="hero-c-cta" aria-label="Helpful links" style="flex-wrap:wrap;justify-content:center;gap:12px">
+        {links.map((l) => (
+          <a href={l.href} class="btn btn-primary">{l.label}</a>
+        ))}
+      </nav>
+      <p class="body-sm mt16" style="color:var(--on-dark-mute)">
+        Looking for something a member published? It may live behind the GBTI client.
+        <a href="/membership/" style="color:#fff;text-decoration:underline">Become a member</a>.
+      </p>
+    </div>
+  </section>
+</BaseLayout>

@@ -1,0 +1,56 @@
+---
+// A "Subscribe to activity" button (SOW-023). The INERT control: it ships in the public static build as
+// `<gbti-subscribe data-gbti-username=..>` wrapping a button + a membership-gated dialog (the visitor path).
+// On the static site there is no auth context, so a click opens the dialog with a join CTA. When a member's
+// client/extension loads @gbti/client-ui, <gbti-subscribe> upgrades into a real follow toggle for effective-paid
+// members (its Shadow DOM covers this light-DOM fallback); a trial/visitor falls back to the membership route.
+// The followed `username` may be omitted at build (the prompts directory sets data-gbti-username from JS).
+interface Props {
+  name?: string; // who you would be subscribing to, for the dialog copy
+  username?: string; // the followee's member username (the follow target); set dynamically when absent
+  variant?: 'primary' | 'ghost' | 'white';
+}
+const { name = 'this member', username, variant = 'primary' } = Astro.props;
+---
+<gbti-subscribe class="subscribe-wrap" data-gbti-region="subscribe" data-gbti-username={username} style="display:inline-flex">
+  <button type="button" class={`btn btn-${variant} subscribe-btn`} data-subscribe>
+    <svg viewBox="0 0 24 24" width="16" height="16" style="margin-right:6px"><use href="#ico-mega"/></svg>
+    Subscribe to activity
+  </button>
+  <dialog class="subscribe-modal" data-subscribe-modal aria-label="Subscribe to member activity">
+    <div class="sm-card">
+      <p class="eyebrow" style="color:var(--green-700)">Member feature</p>
+      <h3 class="h3 mt8" data-subscribe-title>Subscribe to {name}</h3>
+      <p class="body mt12" style="color:var(--fg-soft)">
+        Activity subscriptions are available to GBTI Network members. Join to follow members and get
+        their latest posts, products, prompts, and shares in your feed.
+      </p>
+      <div class="sm-actions mt24">
+        <a href="/membership/" class="btn btn-primary">Become a member</a>
+        <button type="button" class="btn btn-ghost" data-subscribe-close>Maybe later</button>
+      </div>
+    </div>
+  </dialog>
+</gbti-subscribe>
+
+<style>
+  /* margin:auto + fit-content height re-centers the modal: Tailwind preflight resets margin:0 on every
+     element, which clobbers the UA dialog centering and pins it top-left. */
+  .subscribe-modal { border: 0; padding: 0; border-radius: var(--r-lg); max-width: 440px; width: calc(100vw - 32px); background: transparent; margin: auto; height: fit-content; max-height: calc(100dvh - 32px); }
+  .subscribe-modal::backdrop { background: rgba(15, 14, 18, .55); backdrop-filter: blur(2px); }
+  .subscribe-modal .sm-card { background: var(--paper); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 28px; box-shadow: var(--sh-lg); }
+  .subscribe-modal .sm-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+</style>
+
+<script>
+  // One handler set, shared across every SubscribeButton instance on the page.
+  document.querySelectorAll('.subscribe-wrap').forEach((wrap) => {
+    const btn = wrap.querySelector('[data-subscribe]');
+    const dlg = wrap.querySelector('[data-subscribe-modal]') as HTMLDialogElement | null;
+    if (!btn || !dlg) return;
+    btn.addEventListener('click', () => dlg.showModal());
+    wrap.querySelector('[data-subscribe-close]')?.addEventListener('click', () => dlg.close());
+    // Click on the backdrop (outside the card) closes the dialog.
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+  });
+</script>

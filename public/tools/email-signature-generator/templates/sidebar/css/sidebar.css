@@ -1,0 +1,222 @@
+/* Sidebar Signature Style */
+
+:root {
+    --primary-color: #333333;
+    --secondary-color: #666666;
+    --accent-color: #0068B4;  /* Matched to screenshot blue */
+    --background-color: #ffffff;
+    --border-color: #e5e7eb;
+    
+    /* Dark mode variables */
+    --dark-mode-primary-color: #f0f0f0;
+    --dark-mode-secondary-color: #b0b0b0;
+    --dark-mode-accent-color: #3b82f6;
+    --dark-mode-background-color: #111827;
+    --dark-mode-text-color: #f5f5f5;
+}
+
+.signature-sidebar {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    color: var(--primary-color);
+    background-color: var(--background-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.signature-sidebar table {
+    width: 480px;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    border-collapse: collapse;
+}
+
+.signature-sidebar .accent-background {
+    vertical-align: top;
+    padding: 0;
+    width: 120px;
+    padding-right: 12px;
+}
+
+.signature-sidebar .accent-background table {
+    width: 100%;
+}
+
+.signature-sidebar .accent-background td:first-child {
+    padding: 0px 10px 15px;
+    text-align: center;
+}
+
+.signature-sidebar .accent-background td:nth-child(2) {
+    padding: 0 10px 15px;
+    text-align: center;
+}
+
+.signature-sidebar .accent-background td:nth-child(3) {
+    text-align: center;
+    border-top: 1px solid rgba(255,255,255,0.3);
+}
+
+.signature-sidebar .profile-img {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    object-fit: cover;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.signature-sidebar .name {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 5px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.signature-sidebar .title {
+    font-size: 13px;
+    color: #ffffff;
+    opacity: 0.9;
+}
+
+.signature-sidebar > table > tr > td:nth-child(2) {
+    vertical-align: top;
+    padding: 20px 20px 20px 30px;
+    background-color: #ffffff;
+}
+
+.signature-sidebar > table > tr > td:nth-child(2) > table {
+    width: 100%;
+}
+
+.signature-sidebar .company-name {
+    font-size: 16px;
+    color: var(--accent-color);
+    font-weight: bold;
+}
+
+.signature-sidebar > table > tr > td:nth-child(2) > table > tr:first-child > td {
+    padding-bottom: 15px;
+}
+
+.signature-sidebar > table > tr > td:nth-child(2) > table > tr > td > table td:first-child {
+    vertical-align: middle;
+    padding-right: 10px;
+}
+
+.signature-sidebar .company-logo {
+    width: 22px;
+    height: 22px;
+}
+
+.signature-sidebar > table > tr > td:nth-child(2) > table > tr:nth-child(2) > td {
+    padding-bottom: 14px;
+}
+
+.signature-sidebar .right {
+    vertical-align: top;
+    padding-top: 17px;
+}
+
+.signature-sidebar  .right-top td:first-child {
+    width:30px;
+}
+
+
+.signature-sidebar .icon-svg {
+    fill: var(--accent-color);
+    width: 19px;
+    height: 19px;
+    display: inline-block;
+    vertical-align: middle;
+    padding-left:4px;
+    padding-right: 4px;
+    background-color: unset;
+}
+
+.signature-sidebar .email {
+    font-size: 14px;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.signature-sidebar .calendly td {
+    padding-bottom: 14px;
+}
+
+.signature-sidebar .calendly-link {
+    font-size: 14px;
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+    
+    text-transform: uppercase;
+}
+
+.signature-sidebar .address-row td {
+    padding-bottom: 14px;
+}
+
+.signature-sidebar .address {
+    font-size: 14px;
+    color: var(--secondary-color);
+}
+
+.signature-sidebar .accent-divider {
+    height: 1px;
+    background-color: var(--accent-color);
+    opacity: 0.3;
+    margin: 5px 0 10px;
+    max-width: 300px;
+}
+
+.signature-sidebar .quote {
+    font-size: 12px;
+    color: var(--secondary-color);
+    font-style: italic;
+}
+
+.signature-sidebar .sig-social-icons {
+    margin: 0 auto;
+}
+
+.signature-sidebar .sig-social-icons a {
+    text-decoration: none;
+    margin: 0 4px;
+    display: inline-block;
+}
+
+.signature-sidebar .social-icon {
+    width: 18px;
+    height: 18px;
+}
+
+.signature-sidebar .social-icon:hover {
+    opacity: 1;
+}
+
+/* Dark Mode Styles */
+.dark-mode .signature-sidebar {
+    color: var(--dark-mode-text-color);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dark-mode .signature-sidebar .email,
+.dark-mode .signature-sidebar .calendly-link {
+    color: var(--dark-mode-primary-color);
+}
+
+.dark-mode .signature-sidebar td[style*="color: var(--secondary-color)"] {
+    color: var(--dark-mode-secondary-color) !important;
+}
+
+.dark-mode .signature-sidebar .company-name {
+    color: var(--dark-mode-accent-color);
+}
+
+.dark-mode .signature-sidebar .accent-divider {
+    background-color: var(--dark-mode-accent-color);
+}
+
+.dark-mode .signature-sidebar svg.icon-svg {
+    fill: var(--dark-mode-primary-color);
+}

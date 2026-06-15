@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Signature Generator</title>
+    <link rel="stylesheet" href="css/common.css">
+    <link rel="stylesheet" href="css/form.css">
+    <link rel="stylesheet" href="css/icons.css">
+    <script>window.EmailSignatureGeneratorConfig = { toolBaseUrl: "" };</script>
+    <!-- gbti-wired -->
+</head>
+<body>
+    <div class="container">        
+        <!-- Form Controls -->
+        <div class="form-container">
+            <div class="form-title">
+                Customize Your Email Signature
+                <div class="refresh-container" title="Reset to defaults">
+                    <svg class="refresh-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+                        <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+                    </svg>
+                </div>
+            </div>
+            
+            <div class="tabs">
+                <div class="tab active" data-tab="personal-info">Personal Info</div>
+                <div class="tab" data-tab="social-media">Social Media</div>
+                <div class="tab" data-tab="colors">Colors</div>
+                <div class="tab" data-tab="images">Images</div>
+            </div>
+            
+            <!-- Personal Info Tab -->
+            <div id="personal-info" class="tab-content active">
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-name" class="form-label">Name</label>
+                            <input type="text" id="input-name" class="form-control" placeholder="Email Signature Generator">
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-title" class="form-label">Title</label>
+                            <input type="text" id="input-title" class="form-control" placeholder="Curator">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-company" class="form-label">Company</label>
+                            <input type="text" id="input-company" class="form-control" placeholder="GBTI Network">
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-email" class="form-label">Email</label>
+                            <input type="email" id="input-email" class="form-control" placeholder="opportunities+esg@gbti.network">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-calendly" class="form-label">Calendly Link</label>
+                            <input type="url" id="input-calendly" class="form-control" placeholder="https://calendly.com/gbti_network/15min">
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-calendly-text" class="form-label">Calendly Link Text</label>
+                            <input type="text" id="input-calendly-text" class="form-control" placeholder="Schedule a 15min call">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Additional fields for Sidebar template -->
+                <div class="form-row sidebar-template-fields" style="display: none;">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-address" class="form-label">Address</label>
+                            <input type="text" id="input-address" class="form-control" placeholder="123 Business Street, City, State 12345">
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-quote" class="form-label">Quote/Tagline</label>
+                            <input type="text" id="input-quote" class="form-control" placeholder="Building better digital experiences">
+                        </div>
+                    </div>
+                </div>
+                
+                <input type="hidden" id="input-company-logo" value="assets/company-logo.png">
+                <!-- Template Selector -->
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group template-selector-container">
+                            <label class="form-label">Email Template</label>
+                            <div class="template-selector">
+                                <div class="current-template">
+                                    <img id="current-template-thumb" src="" alt="Current template">
+                                    <span id="current-template-name">Loading...</span>
+                                </div>
+                                <button type="button" id="change-template-btn" class="btn-change-template">Change Template</button>
+                            </div>
+                            <div id="template-options" class="template-options">
+                                <!-- Template options will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Social Media Tab -->
+            <div id="social-media" class="tab-content">
+                <div class="social-media-repeater-container">
+                    <div class="repeater-header">
+                        <h3>Social Media Icons</h3>
+                        <button type="button" id="add-social-media" class="btn-add-icon">+ Add Icon</button>
+                    </div>
+                    
+                    <div id="social-media-repeater">
+                        <!-- Dynamic social icons will be added here -->
+                    </div>
+                </div>
+                
+                <template id="social-media-item-template">
+                    <div class="social-media-item">
+                        <div class="drag-handle">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M8 18H4V14H8V18ZM14 18H10V14H14V18ZM20 18H16V14H20V18ZM8 12H4V8H8V12ZM14 12H10V8H14V12ZM20 12H16V8H20V12ZM8 6H4V2H8V6ZM14 6H10V2H14V6ZM20 6H16V2H20V6Z" fill="#666"/>
+                            </svg>
+                        </div>
+                        <div class="social-icon-controls">
+                            <select class="social-media-platform">
+                                <option value="">Select Platform</option>
+                            </select>
+                            <input type="url" class="social-media-url" placeholder="https://...">
+                            <button type="button" class="remove-social-media">×</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- Colors Tab -->
+            <div id="colors" class="tab-content">
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label class="form-label">Theme Mode</label>
+                            <div class="toggle-container">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="dark-mode-toggle">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                                <span class="toggle-label">Switch to Dark Mode</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-primary-color" class="form-label">Primary Color</label>
+                            <small class="form-text">Used for name and main text</small>
+                            <div class="color-preview">
+                                <input type="color" id="input-primary-color" class="color-picker" value="#333333">
+                                <div class="color-preview-box"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-secondary-color" class="form-label">Secondary Color</label>
+                            <small class="form-text">Used for title, contact info, and gradients</small>
+                            <div class="color-preview">
+                                <input type="color" id="input-secondary-color" class="color-picker" value="#666666">
+                                <div class="color-preview-box"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-accent-color" class="form-label">Accent Color</label>
+                            <small class="form-text">Used for links and highlights</small>
+                            <div class="color-preview">
+                                <input type="color" id="input-accent-color" class="color-picker" value="#0077B5">
+                                <div class="color-preview-box"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="input-background-color" class="form-label">Signature Background</label>
+                            <small class="form-text">Background color for signatures</small>
+                            <div class="color-preview">
+                                <input type="color" id="input-background-color" class="color-picker" value="#ffffff">
+                                <div class="color-preview-box"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Images Tab -->
+            <div id="images" class="tab-content">
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="profile-image-upload" class="form-label">Profile Picture</label>
+                            <small class="form-text">Square image recommended (1:1 ratio)</small>
+                            <div class="image-upload-container">
+                                <input type="file" id="profile-image-upload" class="image-upload" accept="image/*">
+                                <div class="image-preview" id="profile-image-preview">
+                                    <img src="assets/logo-image.png" alt="Profile Preview" id="profile-image-preview-img">
+                                </div>
+                                <label for="profile-image-upload" class="upload-button">Choose Image</label>
+                            </div>
+                            <div class="radius-control-container">
+                                <label for="profile-radius-slider" class="radius-label">Border Radius: <span id="profile-radius-value">0</span>px</label>
+                                <input type="range" id="profile-radius-slider" class="radius-slider" min="0" max="50" value="0">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="logo-image-upload" class="form-label">Logo</label>
+                            <small class="form-text">Company logo</small>
+                            <div class="image-upload-container">
+                                <input type="file" id="logo-image-upload" class="image-upload" accept="image/*">
+                                <div class="image-preview" id="logo-image-preview">
+                                    <img src="assets/logo-image.png" alt="Logo Preview" id="logo-image-preview-img">
+                                </div>
+                                <label for="logo-image-upload" class="upload-button">Choose Image</label>
+                            </div>
+                            <div class="radius-control-container">
+                                <label for="logo-radius-slider" class="radius-label">Border Radius: <span id="logo-radius-value">0</span>px</label>
+                                <input type="range" id="logo-radius-slider" class="radius-slider" min="0" max="50" value="0">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="banner-image-upload" class="form-label">Banner</label>
+                            <small class="form-text">Used in animated template (16:9 ratio recommended)</small>
+                            <div class="image-upload-container">
+                                <input type="file" id="banner-image-upload" class="image-upload" accept="image/*">
+                                <div class="image-preview banner-preview" id="banner-image-preview">
+                                    <img src="assets/banner-image.png" alt="Banner Preview" id="banner-image-preview-img">
+                                </div>
+                                <label for="banner-image-upload" class="upload-button">Choose Image</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        
+        <div class="signature-container">
+            <!-- Classic Signature - Loaded from template -->
+            <div id="classic-signature-container"></div>
+            
+            <!-- Modern Signature - Loaded from template -->
+            <div id="modern-signature-container"></div>
+            
+            <!-- Minimalist Signature - Loaded from template -->
+            <div id="minimalist-signature-container"></div>
+            
+            <!-- Banner-Top Signature - Loaded from template -->
+            <div id="banner-top-signature-container"></div>
+            
+            <!-- Professional Signature - Loaded from template -->
+            <div id="professional-signature-container"></div>
+
+            <!-- Sidebar Signature - Loaded from template -->
+            <div id="sidebar-signature-container"></div>
+            
+            
+        </div>
+
+    </div>
+
+    <script src="js/debug.js"></script>
+    <script src="js/svg-utils.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/template-selector.js"></script>
+    <script src="js/social-media-repeater.js"></script>
+    <script src="js/social-icons.js"></script>
+    <script src="js/dark-mode.js"></script>
+    <script src="js/image-handlers.js"></script>
+    <script src="js/exporting/image-processing.js"></script>
+    <script src="js/exporting/social-media-handlers.js"></script>
+    <script src="js/exporting/download-buttons.js"></script>
+    <script src="js/exporting/export-file-html.js"></script>
+    <script src="js/exporting/preview-export.js"></script>
+    <script src="js/jzip.min.js"></script>
+    <script src="js/download-utils.js"></script>
+    <script src="js/reset-handler.js"></script>
+    <script src="js/controls.js"></script>
+    <script src="templates/classic/register.js"></script>
+    <script src="templates/modern/register.js"></script>
+    <script src="templates/minimalist/register.js"></script>
+    <script src="templates/banner-top/register.js"></script>
+    <script src="templates/professional/register.js"></script>
+    <script src="templates/sidebar/register.js"></script>
+</body>
+</html>

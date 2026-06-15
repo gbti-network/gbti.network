@@ -1,0 +1,64 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CommunityInvite from '../../components/CommunityInvite.astro';
+import LatestContent from '../../components/LatestContent.astro';
+---
+<BaseLayout title="JS Animate Hue" description="Create colorful hue-shift animations from any image.">
+  <section class="band">
+    <div class="wrap">
+      <a href="/utilities/" class="link" style="margin-bottom:20px">Back to utilities</a>
+      <p class="eyebrow mt16">Free developer tools</p>
+      <h1 class="h1 mt12">JS Animate Hue</h1>
+      <p class="lead mt16" style="max-width:640px">Create colorful hue-shift animations from any image, then export the result.</p>
+      <CommunityInvite author="gbti" via="applet:js-animate-hue" />
+      <iframe
+        src="/tools/js-animate-hue/index.html"
+        title="JS Animate Hue"
+        class="card"
+        style="width:100%;height:640px;margin-top:32px;border:0"
+        data-autoresize
+      ></iframe>
+    </div>
+  </section>
+  <LatestContent featurePost="now-make-it-psychedelic-using-hue-to-create-colorful-animations" />
+  <script>
+    // Continuously size the same-origin tool iframe to its content height so the tool's own
+    // gray background never shows as whitespace and the page grows/shrinks with the tool state.
+    const f = document.querySelector<HTMLIFrameElement>('iframe[data-autoresize]');
+    if (f) {
+      let last = 0;
+      const fit = () => {
+        try {
+          const doc = f.contentWindow?.document;
+          if (!doc) return;
+          const h = Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight);
+          if (h > 0 && Math.abs(h - last) > 1) {
+            last = h;
+            f.style.height = `${h}px`;
+          }
+        } catch {
+          /* same-origin only; ignore */
+        }
+      };
+      f.addEventListener('load', () => {
+        fit();
+        try {
+          const doc = f.contentWindow!.document;
+          // Body size changes (canvas redraw, preview render) and DOM additions both trigger a re-fit.
+          new ResizeObserver(fit).observe(doc.documentElement);
+          new ResizeObserver(fit).observe(doc.body);
+          new MutationObserver(fit).observe(doc.body, { childList: true, subtree: true, attributes: true });
+          // Capture-phase load catches every <img>/media finishing inside the tool (the moment the
+          // dropped image renders and the content gets taller).
+          doc.addEventListener('load', fit, true);
+          doc.addEventListener('transitionend', fit, true);
+          f.contentWindow!.addEventListener('resize', fit);
+        } catch {
+          /* same-origin only; ignore */
+        }
+        // Poll fallback guarantees the frame tracks any late/async tool change the observers miss.
+        setInterval(fit, 250);
+      });
+    }
+  </script>
+</BaseLayout>

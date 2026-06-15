@@ -1,0 +1,26 @@
+# GBTI Network roles (git-native). Effective status precedence: ban > staff > grandfather > Stripe.
+# SUPERADMIN-owned (see CODEOWNERS): only a superadmin PR may change this file.
+# Keys are immutable GitHub `github_id` values (resolved for the superadmins below). The email -> id
+# mapping is kept only in the private planning docs, never in this public repo.
+#
+# Role ladder: member < moderator < admin < superadmin
+#   member      authors content inside their own members/<username>/ folder (auto-merges when paid)
+#   moderator   + deplatform or remove any member's content
+#   admin       + ban and grandfather members (membership and content ops, no role assignment)
+#   superadmin  + assign or revoke any role; owns roles.yml, CODEOWNERS, .github, and root config
+
+# Fixed root of trust (two superadmin GitHub accounts, keyed by immutable github_id).
+superadmins:
+  - github_id: "2002207"         # github.com/atwellpub
+    login: atwellpub
+  - github_id: "125175036"       # github.com/gbtilabs
+    login: gbtilabs
+
+# Automation (the reconcile + award jobs) runs as the gbtilabs superadmin listed above, so the gate
+# exempts its PRs by role. There is NO separate bot account, and BOT_GITHUB_ID is left unset (it is only
+# for a possible future dedicated admin-only bot; in the gate isBot is a floor that promotes to admin, so
+# it must never be set to a superadmin id). Trade-off: the automation token carries superadmin reach, so
+# use a FINE-GRAINED PAT for gbtilabs scoped to the content repo only (contents + pull-requests + statuses),
+# stored as GITHUB_BOT_TOKEN. A leaked token is then bounded to this one repo.
+admins: []
+moderators: []

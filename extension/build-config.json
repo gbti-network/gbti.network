@@ -1,0 +1,6 @@
+{
+  "_comment": "SOW-026: committed source of truth for the extension's bundled auth mode (read by extension/build.mjs). 'app' = the GitHub-App device flow (per-repo least privilege); set authMode to 'classic' (or delete this file) to revert. appClientId/appSlug are PUBLIC. Provisioned 2026-06-15.",
+  "authMode": "app",
+  "appClientId": "Iv23lis8jbx62zI7cwE8",
+  "appSlug": "gbti-network-publisher"
+}

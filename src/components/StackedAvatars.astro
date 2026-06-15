@@ -1,0 +1,38 @@
+---
+// Overlapping circular avatars crediting the people behind a piece of content: the author plus
+// accepted contributors plus commenters. Capped with a +N overflow chip. Size class strings are
+// literal so Tailwind keeps them.
+import type { AvatarItem } from '../lib/avatars';
+
+interface Props {
+  items: AvatarItem[];
+  max?: number;
+  size?: 'sm' | 'md' | 'lg';
+}
+const { items, max = 5, size = 'md' } = Astro.props;
+
+const SIZES = { sm: 'h-5 w-5 text-[9px]', md: 'h-8 w-8 text-xs', lg: 'h-10 w-10 text-sm' } as const;
+const dim = SIZES[size];
+
+const shown = items.slice(0, max);
+const overflow = items.length - shown.length;
+const initial = (name: string) => (name?.trim()?.charAt(0) || '?').toUpperCase();
+---
+{items.length > 0 && (
+  <div class="flex items-center" aria-label={`${items.length} ${items.length === 1 ? 'person' : 'people'} credited`}>
+    <div class="flex -space-x-2">
+      {shown.map((it) => (
+        <a href={it.href} data-tooltip={it.name} aria-label={it.name} class="relative inline-block transition-transform hover:z-10 hover:-translate-y-0.5">
+          {it.avatar ? (
+            <img src={it.avatar} alt={it.name} loading="lazy" class={`${dim} rounded-full object-cover`} style="border:2px solid var(--paper);box-shadow:0 1px 4px rgba(0,0,0,.12)" />
+          ) : (
+            <span class={`${dim} grid place-items-center rounded-full font-bold`} style="background:var(--ink);color:#fff;border:2px solid var(--paper);box-shadow:0 1px 4px rgba(0,0,0,.12)">{initial(it.name)}</span>
+          )}
+        </a>
+      ))}
+      {overflow > 0 && (
+        <span class={`${dim} grid place-items-center rounded-full font-semibold`} style="background:var(--tint);color:var(--fg-soft);border:2px solid var(--paper)">+{overflow}</span>
+      )}
+    </div>
+  </div>
+)}

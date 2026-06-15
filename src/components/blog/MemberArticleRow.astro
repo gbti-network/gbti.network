@@ -1,0 +1,50 @@
+---
+import { Image } from 'astro:assets';
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+import { authorDisplay, authorHref, formatDate } from '../../lib/authors';
+import { buildAvatarIndex, avatarStack } from '../../lib/avatars';
+import StackedAvatars from '../StackedAvatars.astro';
+
+// Horizontal article card (image left 240px, content right) used in the home "Member Articles"
+// section, matching the legacy member-articles component.
+interface Props {
+  post: CollectionEntry<'post'>;
+}
+const { post } = Astro.props;
+const d = post.data;
+const category = d.categories?.[0];
+const index = buildAvatarIndex(await getCollection('profile'));
+const comments = await getCollection('comment');
+const stack = avatarStack({ author: d.author, contributors: d.contributors, comments, targetType: 'post', targetSlug: d.slug, index });
+---
+<article class="row-card group card card-hover flex flex-col gap-4 overflow-hidden p-4 sm:flex-row">
+  <a href={`/blog/${d.slug}/`} class="block shrink-0 overflow-hidden rounded-[8px] sm:w-[240px]" style="background:var(--tint)">
+    {d.coverImage ? (
+      <Image src={d.coverImage} alt="" width={240} height={204} class="h-[150px] w-full object-cover transition-transform duration-300 group-hover:scale-105 sm:h-[204px]" />
+    ) : (
+      <div class="h-[150px] w-full sm:h-[204px]" style="background:linear-gradient(135deg, var(--green-tint), var(--tint-warm))"></div>
+    )}
+  </a>
+  <div class="flex flex-col gap-2 py-1 pr-1">
+    {category && <span class="chip chip-green" style="align-self:flex-start;text-transform:capitalize">{category}</span>}
+    <h3 class="row-title mt8">
+      <a href={`/blog/${d.slug}/`}>{d.title}</a>
+    </h3>
+    {d.excerpt && <p class="line-clamp-3 body-sm muted">{d.excerpt}</p>}
+    <div class="mt-auto flex flex-wrap items-center gap-2 pt-2 body-sm muted">
+      {d.publishedAt && <time datetime={d.publishedAt.toISOString()} class="mono">{formatDate(d.publishedAt)}</time>}
+      <span aria-hidden="true">·</span>
+      <span class="flex items-center gap-1.5">
+        <StackedAvatars items={stack} size="sm" max={4} />
+        <a href={authorHref(d.author)} class="link" style="font-weight:600">{authorDisplay(d.author)}</a>
+      </span>
+    </div>
+  </div>
+</article>
+
+<style>
+  .row-title { font-family: var(--f-display); font-weight: 700; font-size: 18px; line-height: 1.25; letter-spacing: -0.005em; }
+  .row-title a { color: var(--fg); transition: color .15s ease; }
+  .group:hover .row-title a { color: var(--green-700); }
+</style>

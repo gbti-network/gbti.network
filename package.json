@@ -1,0 +1,58 @@
+{
+  "name": "gbti-network-site",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The GBTI Network static Astro site plus the membership controller (SOW-001, SOW-002, SOW-005). Kills the WordPress bill.",
+  "workspaces": [
+    "client"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs dev",
+    "build": "astro build",
+    "preview": "node scripts/dev-server.mjs preview",
+    "check": "astro check",
+    "check:media": "node scripts/check-media.mjs",
+    "check:content": "node scripts/validate-content.mjs",
+    "check:secrets": "node scripts/check-no-secrets.mjs",
+    "check:build-secrets": "node scripts/check-build-secrets.mjs",
+    "check:redirects": "node scripts/check-redirects.mjs",
+    "check:overflow": "node scripts/check-overflow.mjs",
+    "check:extension": "node scripts/check-extension.mjs",
+    "build:extension": "node extension/package.mjs",
+    "build:pages": "npm run build:extension && astro build && npm run verify:dist",
+    "verify:dist": "node scripts/check-build-secrets.mjs && node scripts/check-redirects.mjs && node scripts/check-extension.mjs",
+    "test": "node --test 'test/**/*.test.mjs'",
+    "reconcile": "node --env-file-if-exists=.env scripts/reconcile.mjs",
+    "erase-member": "node --env-file-if-exists=.env scripts/erase-member.mjs",
+    "backup-kv": "node --env-file-if-exists=.env scripts/backup-kv.mjs",
+    "payout": "node --env-file-if-exists=.env scripts/payout-referrals.mjs",
+    "syndicate-shares": "node --env-file-if-exists=.env scripts/syndicate-shares.mjs",
+    "gbti-network": "node client/src/index.mjs",
+    "peg-startup": "node client/src/autostart.mjs install",
+    "unpeg-startup": "node client/src/autostart.mjs remove",
+    "port": "node scripts/dev-server.mjs dev --print",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^4.3.14",
+    "@astrojs/rss": "^4.0.18",
+    "@astrojs/sitemap": "^3.7.3",
+    "@fontsource-variable/baloo-da-2": "^5.2.8",
+    "@fontsource-variable/hanken-grotesk": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource-variable/open-sans": "^5.2.7",
+    "@tailwindcss/vite": "^4.3.0",
+    "astro": "^5.18.2",
+    "js-yaml": "^4.1.0",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4.3.0"
+  },
+  "devDependencies": {
+    "cheerio": "^1.2.0",
+    "playwright": "^1.60.0",
+    "simple-icons": "^16.22.0",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2"
+  }
+}

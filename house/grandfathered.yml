@@ -1,0 +1,8 @@
+# Grandfathered github_ids (ADMIN-owned; see CODEOWNERS). A grandfather grant makes a github_id
+# count as PAID with no Stripe subscription. Permanent by default; set `until` for a time-boxed
+# grant. Precedence: ban > staff > grandfather > Stripe.
+grandfathered: []
+# - github_id: "..."
+#   login: founder
+#   reason: founding member
+#   until: null   # null = permanent; otherwise an ISO date

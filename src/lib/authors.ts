@@ -1,0 +1,30 @@
+/** Display name + profile link for a content author username. */
+export function authorDisplay(username: string): string {
+  return username === 'gbti' ? 'GBTI Network' : username;
+}
+
+export function authorHref(username: string): string {
+  return username === 'gbti' ? '/' : `/members/${username}/`;
+}
+
+/** House (GBTI Network) avatar: the Gravatar for the gbti.labs account. Only the Gravatar HASH (a
+ *  one-way digest) is stored, never the email, since the content repo is public. The Avatar component
+ *  rewrites `d=` to 404, so the brand letter disc shows if the Gravatar is ever removed. */
+export const GBTI_AVATAR = 'https://secure.gravatar.com/avatar/061a44e977c1338f8b6d2e0e36b36f1a?s=512&d=mm';
+
+/** Avatar URL for a content author: the member's profile avatar if provided, else the house Gravatar
+ *  for `gbti`, else undefined (the Avatar component then renders a letter disc). */
+export function authorAvatar(username: string, profileAvatar?: string): string | undefined {
+  return profileAvatar ?? (username === 'gbti' ? GBTI_AVATAR : undefined);
+}
+
+/** Format a date the way the legacy site did: ordinal day + short month + year ("13th Oct 2025"). */
+export function formatDate(d?: Date): string {
+  if (!d) return '';
+  const day = d.getDate();
+  const j = day % 10;
+  const k = day % 100;
+  const suffix = j === 1 && k !== 11 ? 'st' : j === 2 && k !== 12 ? 'nd' : j === 3 && k !== 13 ? 'rd' : 'th';
+  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  return `${day}${suffix} ${month} ${d.getFullYear()}`;
+}

@@ -1,0 +1,56 @@
+# Local dev env for the signup Worker. Copy this file to `.dev.vars` and fill in real values.
+# `.dev.vars` is read automatically by `npx wrangler dev`. NEVER commit `.dev.vars` with real values.
+# Every name below is read by the Worker (secrets + non-secret config). Placeholder values only here.
+
+# --- Public config (also lives in wrangler.toml [vars]; .dev.vars overrides for local dev) ---
+PUBLIC_BASE_URL="http://localhost:8787"
+DISCORD_GUILD_ID="000000000000000000"
+DISCORD_TRIAL_ROLE_ID="000000000000000000"
+DISCORD_MEMBER_ROLE_ID="000000000000000000"
+STRIPE_PRICE_ID="price_xxxxxxxxxxxxxxxx"
+GITHUB_OAUTH_CLIENT_ID="Iv1.xxxxxxxxxxxxxxxx"
+DISCORD_OAUTH_CLIENT_ID="000000000000000000"
+GITHUB_CONTENT_REPO="gbti-network/content"
+
+# --- Secrets (never commit real values) ---
+
+# Stripe restricted key: scoped to create-customer + checkout only (least privilege).
+STRIPE_SECRET_KEY="rk_test_xxxxxxxxxxxxxxxx"
+
+# Stripe webhook signing secret (only needed if the optional webhook is enabled).
+STRIPE_WEBHOOK_SECRET="whsec_xxxxxxxxxxxxxxxx"
+
+# GitHub OAuth app client secret (scope read:user).
+GITHUB_OAUTH_CLIENT_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Discord OAuth app client secret (scopes identify, guilds.join, email).
+DISCORD_OAUTH_CLIENT_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Discord bot token (Manage Roles; the bot role must sit ABOVE Trial + Member).
+DISCORD_BOT_TOKEN="xxxxxxxxxxxxxxxxxxxxxxxx.xxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# HMAC key for signing the session cookie + the OAuth state blob. Use a long random string.
+SESSION_SECRET="replace-with-a-long-random-string"
+
+# Cloudflare Turnstile siteverify secret key (abuse / bot defense at signup).
+TURNSTILE_SECRET_KEY="0x4xxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# GitHub token with repository_dispatch permission on the content repo (post-checkout re-gate nudge
+# and the subscription.deleted disable signal to SOW-005).
+REGATE_DISPATCH_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# SOW-016 member-content encryption. MEMBER_CONTENT_KEY is the base64 of the 32-byte AES-256-GCM epoch key.
+# The key NEVER leaves the Worker: POST /membership/decrypt + POST /membership/encrypt use it server-side for
+# an effective-paid caller. Mint one with: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))".
+# MEMBER_CONTENT_KID is non-secret (wrangler.toml [vars]); bump it on rotation. MEMBER_CONTENT_KEY_NEW is the
+# next epoch key, pre-set before the rotate-member-key workflow. MEMBER_CONTENT_KEYS is the optional JSON map
+# of retired epochs kept only for the brief CDN-propagation overlap, then removed (old key destroyed).
+MEMBER_CONTENT_KEY="replace-with-base64-of-32-random-bytes"
+# MEMBER_CONTENT_KEY_NEW="replace-on-rotation-with-the-next-epoch-key"
+# MEMBER_CONTENT_KEYS='{"1":"<old base64 key>"}'
+
+# SOW-026 GitHub App PR-opener (the App key NEVER leaves the Worker). Set these once the App is provisioned;
+# until then POST /membership/open-pr returns "misconfigured" and the client stays on classic OAuth.
+# GITHUB_APP_ID="123456"
+# GITHUB_APP_INSTALLATION_ID="98765432"
+# GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...PEM (PKCS8 or RSA)...\n-----END RSA PRIVATE KEY-----"

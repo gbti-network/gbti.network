@@ -1,0 +1,49 @@
+---
+// Footnote crediting members whose suggested edits the author accepted, each linked to the merge
+// commit (the git-native record). Populated by the contribution merge automation (SOW-008) into the
+// content `contributors` frontmatter. Rendered between related posts and comments on the post detail.
+import { getCollection } from 'astro:content';
+import { buildAvatarIndex } from '../../lib/avatars';
+
+interface Contributor {
+  login: string;
+  commit?: string;
+  url?: string;
+  class?: string;
+}
+interface Props {
+  contributors?: Contributor[];
+}
+const { contributors = [] } = Astro.props;
+
+const index = buildAvatarIndex(await getCollection('profile'));
+const CLASS_LABEL: Record<string, string> = { grammar: 'grammar', correction: 'correction', addition: 'addition' };
+
+function resolve(login: string) {
+  return index.byLogin.get(login.toLowerCase()) ?? { name: login, href: `https://github.com/${login}` };
+}
+---
+{contributors.length > 0 && (
+  <section id="contributions" class="mx-auto" style="max-width:800px;margin-top:48px">
+    <h2 class="h3">Contributions</h2>
+    <p class="body-sm muted mt-8">Thanks to the members whose accepted edits improved this post.</p>
+    <ul class="mt-24" style="list-style:none;padding:0;display:flex;flex-direction:column;gap:12px">
+      {contributors.map((c) => {
+        const who = resolve(c.login);
+        return (
+          <li class="flex wrap-w items-center g8 body-sm">
+            <a href={who.href} class="link" style="font-size:15px">{who.name}</a>
+            {c.class && (
+              <span class="chip">
+                {CLASS_LABEL[c.class] ?? c.class}
+              </span>
+            )}
+            {c.url && c.commit && (
+              <a href={c.url} rel="noopener" class="mono muted" style="font-size:13px">commit {c.commit.slice(0, 7)}</a>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+)}

@@ -1,0 +1,121 @@
+---
+import { getCollection } from 'astro:content';
+import { authorDisplay, authorHref, authorAvatar, formatDate } from '../../lib/authors';
+import { commitHistoryHref } from '../../lib/comments';
+import Avatar from '../Avatar.astro';
+import LockedBody from '../LockedBody.astro';
+import CommentBox from './CommentBox.astro';
+
+interface Props {
+  targetType: 'post' | 'product' | 'prompt';
+  targetSlug: string;
+  author?: string; // content owner; their earliest comment renders as the pinned "From the author" block (SOW-014)
+  wide?: boolean; // when true, span the full content width (prompt detail) instead of the 800px reading column
+}
+const { targetType, targetSlug, author, wide = false } = Astro.props;
+
+// Comments are authored by members via the local client -> PR (auto-merged for paid members);
+// rendered here read-only. See .data/specs/comments.md.
+const published = (await getCollection('comment'))
+  .filter((c) => c.data.status === 'published') // SOW-016: drop drafts only; member-only comments render locked
+  .filter((c) => c.data.targetType === targetType && c.data.targetSlug === targetSlug)
+  .sort((a, b) => a.data.createdAt.valueOf() - b.data.createdAt.valueOf());
+
+// SOW-014: the content author's deliberate note (flagged `authorNote`) is the required "from the author"
+// introduction, lifted out and pinned REGARDLESS of when it was written, so an author may post it after a
+// discussion has begun and it still reads as the headline (a casual conversational comment is never pinned).
+// The intro is PUBLIC by convention (it is the teaser), so select the owner's public, authorNote comment.
+const introIdx = author ? published.findIndex((c) => c.data.author === author && c.data.visibility === 'public' && c.data.authorNote) : -1;
+const intro = introIdx >= 0 ? published[introIdx] : null;
+// Thread = the rest. A member-only comment (SOW-016) renders as a locked placeholder via its encryptedBody;
+// a legacy member-only comment with no encrypted body stays excluded (matches the prior soft-gate behavior).
+const thread = (intro ? published.filter((_, i) => i !== introIdx) : published)
+  .filter((c) => c.data.visibility !== 'members' || c.data.encryptedBody);
+const introName = intro ? authorDisplay(intro.data.author) : '';
+
+// Resolve each comment author's avatar from their member profile (else the house Gravatar for `gbti`,
+// else the letter disc). authorAvatar needs the profile avatar passed in, so build a username -> url map.
+const profiles = await getCollection('profile');
+const profileAvatar = new Map(profiles.map((p) => [p.data.username, p.data.avatar]));
+const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(username));
+---
+<section id="comments" class:list={[!wide && 'mx-auto']} style={`margin-top:48px${wide ? '' : ';max-width:800px'}`}>
+  {intro && (
+    <article class="card" style="padding:24px;border-color:var(--green);background:var(--green-tint)">
+      <div class="flex items-center g12">
+        <a href={authorHref(intro.data.author)} class="shrink-0"><Avatar item={{ name: introName, avatar: avatarOf(intro.data.author) }} size={44} class="rounded-full" /></a>
+        <div>
+          <p class="eyebrow" style="color:var(--green-700)">From the author</p>
+          <a href={authorHref(intro.data.author)} class="link" style="font-weight:700;display:inline-flex">{introName}</a>
+        </div>
+      </div>
+      <div class="cmt-rich" style="margin-top:14px;color:var(--fg)" set:html={intro.rendered?.html ?? ''} />
+      <div class="flex items-center g12" style="margin-top:8px">
+        {intro.data.updatedAt && commitHistoryHref(intro.filePath) && (
+          <a href={commitHistoryHref(intro.filePath)} rel="noopener" class="cmt-edited">edited &middot; view history</a>
+        )}
+        <CommentBox targetType={targetType} targetSlug={targetSlug} commentId={intro.data.id} commentAuthor={intro.data.author} />
+      </div>
+    </article>
+  )}
+
+  <h2 class="h3" style={intro ? 'margin-top:40px' : ''}>
+    {thread.length} {thread.length === 1 ? 'Comment' : 'Comments'}
+  </h2>
+
+  {thread.length === 0 ? (
+    <div class="card" style="padding:24px;background:var(--tint-warm);margin-top:16px;display:flex;flex-direction:column;align-items:flex-start;gap:12px">
+      <p class="body-sm muted" style="margin:0">
+        No comments yet. Be the first. Members comment from the GBTI local client, where comments are
+        submitted as pull requests and auto-published for paid members.
+      </p>
+      <a href="/membership/" class="link">Become a member <svg class="ar" viewBox="0 0 24 24" width="16" height="16"><use href="#ico-arrow"/></svg></a>
+    </div>
+  ) : (
+    <ul style="list-style:none;padding:0;margin-top:24px;display:flex;flex-direction:column;gap:24px">
+      {thread.map((c) => (
+        <li class="card" style="padding:20px;display:flex;gap:14px;align-items:flex-start">
+          <a href={authorHref(c.data.author)} class="shrink-0"><Avatar item={{ name: authorDisplay(c.data.author), avatar: avatarOf(c.data.author) }} size={44} class="rounded-full" /></a>
+          <div style="flex:1;min-width:0">
+            <div class="flex items-center g8 body-sm muted">
+              <a href={authorHref(c.data.author)} class="link" style="font-size:15px">{authorDisplay(c.data.author)}</a>
+              <span aria-hidden="true">·</span>
+              <time datetime={c.data.createdAt.toISOString()}>{formatDate(c.data.createdAt)}</time>
+            </div>
+            {c.data.visibility === 'members'
+              ? <div style="margin-top:8px"><LockedBody encPath={c.data.encryptedBody} kind="comment" /></div>
+              : <div class="cmt-rich" style="margin-top:8px;color:var(--fg-soft)" set:html={c.rendered?.html ?? ''} />}
+            <div class="flex items-center g12" style="margin-top:10px">
+              {c.data.updatedAt && commitHistoryHref(c.filePath) && (
+                <a href={commitHistoryHref(c.filePath)} rel="noopener" class="cmt-edited">edited &middot; view history</a>
+              )}
+              {/* SOW-027: inert edit affordance; the client shows "Edit" only to this comment's author. */}
+              <CommentBox targetType={targetType} targetSlug={targetSlug} commentId={c.data.id} commentAuthor={c.data.author} />
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )}
+
+  {/* SOW-027: the inert comment composer; the GBTI client upgrades it for a paid member, inert otherwise. */}
+  <CommentBox targetType={targetType} targetSlug={targetSlug} />
+</section>
+
+<style is:global>
+  /* Rendered comment / author-note markdown: give paragraphs real spacing and make links read as links. */
+  .cmt-rich > :first-child { margin-top: 0; }
+  .cmt-rich > :last-child { margin-bottom: 0; }
+  .cmt-rich p { margin: 0.7em 0; }
+  .cmt-rich a { color: var(--green-700); text-decoration: underline; text-underline-offset: 2px; }
+  .cmt-rich a:hover { color: var(--green-600); }
+  .cmt-rich ul, .cmt-rich ol { margin: 0.7em 0; padding-left: 1.4em; }
+  .cmt-rich li { margin: 0.3em 0; }
+  .cmt-rich ul li { list-style: disc; }
+  .cmt-rich ol li { list-style: decimal; }
+  .cmt-rich blockquote { border-left: 4px solid var(--green); margin: 0.8em 0; padding: 0.1em 0 0.1em 14px; color: var(--fg); font-style: italic; }
+  .cmt-rich :not(pre) > code { background: var(--tint); color: var(--fg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; }
+  /* "edited" affordance: a quiet link to the comment file's git commit history (the public repo is the database). */
+  .cmt-edited { display: inline-block; font-size: 12px; color: var(--fg-mute); text-decoration: none; }
+  .cmt-edited:hover { color: var(--green-700); text-decoration: underline; text-underline-offset: 2px; }
+</style>

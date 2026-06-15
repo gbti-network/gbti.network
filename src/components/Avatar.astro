@@ -1,0 +1,54 @@
+---
+// A single member avatar. The on-brand letter disc is ALWAYS rendered as the base; the profile
+// image is layered on top and removed if it fails to load, so the disc shows through. Member avatars
+// are external (Gravatar/GitHub) URLs, so this uses a plain <img> (not astro:assets). For Gravatar we
+// force the default to `404` (instead of the generic "mystery person" silhouette) so a member with no
+// real avatar yields a failed image and the brand disc shows instead.
+interface Props {
+  item: { name: string; avatar?: string };
+  class?: string;
+  size?: number;
+}
+const { item, class: cls = '', size } = Astro.props;
+const name = (item?.name || '?').trim();
+const initial = name.charAt(0).toUpperCase() || '?';
+
+// Deterministic on-brand disc colour from the name (matches the .lav-c* palette), so fallback discs
+// vary pleasantly instead of all being the same flat ink.
+const PALETTE = ['#1f9e5f', '#178a82', '#3f74c9', '#c9683b', '#c6892b', '#7a5cc0'];
+let h = 0;
+for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+const bg = PALETTE[h % PALETTE.length];
+
+// Force Gravatar (and any avatar URL carrying a `d=` default) to 404 when there is no real image, so
+// the disc underneath shows through. Other absolute image URLs (e.g. GitHub) are left untouched.
+function withFallback404(url?: string): string | undefined {
+  if (!url) return undefined;
+  try {
+    const u = new URL(url);
+    if (/(^|\.)gravatar\.com$/i.test(u.hostname) || u.searchParams.has('d')) u.searchParams.set('d', '404');
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+const src = withFallback404(item?.avatar);
+const dim = size ? `width:${size}px;height:${size}px;` : '';
+const fontSize = size ? `font-size:${Math.round(size * 0.42)}px;` : '';
+---
+<span
+  class:list={[cls]}
+  style={`position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;background:${bg};color:#fff;font-family:var(--f-display);font-weight:700;${dim}${fontSize}`}
+>
+  <span aria-hidden="true">{initial}</span>
+  {src && (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onerror="this.remove()"
+      style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;border:0"
+    />
+  )}
+</span>

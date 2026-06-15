@@ -1,0 +1,57 @@
+---
+// SOW-022: a reusable "latest from the co-op" discovery block for the tool/applet pages (and reusable
+// elsewhere). Shows the newest published blog posts, products, and prompts using the same cards as the
+// indexes, so a free-tool visitor is funneled into the community's content. Each section omits itself when
+// empty, and the whole block omits when there is nothing to show.
+import { getCollection } from 'astro:content';
+import { isListed, byNewest } from '../lib/content';
+import ArticleCard from './blog/ArticleCard.astro';
+import ProductCard from './products/ProductCard.astro';
+import PromptCard from './prompts/PromptCard.astro';
+
+interface Props {
+  count?: number; // items per section
+  featurePost?: string; // a post slug to pin first in the blog section (e.g. the applet's own write-up)
+}
+const { count = 3, featurePost } = Astro.props;
+
+const allPosts = (await getCollection('post')).filter(isListed).sort(byNewest);
+// Pin the featured post to the front, then fill the rest with the newest (deduped).
+const pinned = featurePost ? allPosts.filter((p) => p.data.slug === featurePost) : [];
+const posts = [...pinned, ...allPosts.filter((p) => !pinned.includes(p))].slice(0, count);
+const products = (await getCollection('product')).filter(isListed).sort(byNewest).slice(0, count);
+const prompts = (await getCollection('prompt')).filter(isListed).sort(byNewest).slice(0, count);
+const any = posts.length + products.length + prompts.length;
+---
+{any > 0 && (
+  <section class="band tint latest-band">
+    <div class="wrap">
+      {posts.length > 0 && (
+        <div class="latest-sec">
+          <div class="latest-head"><h2 class="h3">Latest from the blog</h2><a class="link" href="/blog/">All posts</a></div>
+          <div class="latest-grid">{posts.map((p) => <ArticleCard post={p} />)}</div>
+        </div>
+      )}
+      {products.length > 0 && (
+        <div class="latest-sec">
+          <div class="latest-head"><h2 class="h3">Latest products</h2><a class="link" href="/products/">All products</a></div>
+          <div class="latest-grid">{products.map((p) => <ProductCard product={p} />)}</div>
+        </div>
+      )}
+      {prompts.length > 0 && (
+        <div class="latest-sec">
+          <div class="latest-head"><h2 class="h3">Latest AI Prompts</h2><a class="link" href="/prompts/">All prompts</a></div>
+          <div class="latest-grid">{prompts.map((p) => <PromptCard prompt={p} />)}</div>
+        </div>
+      )}
+    </div>
+  </section>
+)}
+<style>
+  .latest-band { padding: 56px 0; }
+  .latest-sec + .latest-sec { margin-top: 52px; }
+  .latest-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+  .latest-head .h3 { margin: 0; }
+  .latest-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; align-items: stretch; }
+  @media (max-width: 640px) { .latest-grid { grid-template-columns: 1fr; } }
+</style>

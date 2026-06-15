@@ -1,0 +1,156 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { getCollection } from 'astro:content';
+import { Image } from 'astro:assets';
+import { authorDisplay, authorAvatar, formatDate } from '../../lib/authors';
+import { leafLabel, topKey } from '../../lib/taxonomy';
+import { isStub } from '../../lib/content';
+import { commentThreadCount } from '../../lib/comments';
+import Avatar from '../Avatar.astro';
+import FavoriteButton from '../FavoriteButton.astro';
+import { favoriteCount } from '../../lib/favorites';
+
+// "GBTI AI Prompts" design (handoff bundle): a unified prompt card that renders as a vertical card by default
+// (homepage / member / Latest / grid view) and as a single-row layout in the directory's Compact view.
+interface Props {
+  prompt: CollectionEntry<'prompt'>;
+}
+const { prompt } = Astro.props;
+const d = prompt.data;
+const stub = isStub(prompt); // SOW-016: a listed members prompt is a Mode B stub
+const topSeg = topKey(d.categories); // top-level segment -> category accent + chip deep link
+
+// Category accent (k-* class drives --ka/--kt/--kl below) + glyph used when there is no result image.
+const CAT_GLYPH: Record<string, string> = {
+  ai: 'ico-spark', devops: 'ico-terminal', design: 'ico-pencil', blockchain: 'ico-coin',
+  business: 'ico-chart', writing: 'ico-pencil', minecraft: 'ico-box', entertainment: 'ico-heart',
+  generators: 'ico-spark', 'member-tutorials': 'ico-users', gbti: 'ico-spark',
+};
+const catGlyph = CAT_GLYPH[topSeg] ?? 'ico-puzzle';
+const kcls = `k-${topSeg || 'other'}`;
+
+// Author identity (gravatar avatar + display name) resolved from the profile collection.
+const profile = (await getCollection('profile')).find((p) => p.data.username === d.author)?.data;
+const authorName = profile?.displayName ?? authorDisplay(d.author);
+const avatar = authorAvatar(d.author, profile?.avatar);
+const commentCount = commentThreadCount(await getCollection('comment'), 'prompt', d.slug, d.author);
+const date = formatDate(d.publishedAt);
+const model = (d.targets ?? [])[0];
+const tags = d.tags ?? [];
+const shownTags = tags.slice(0, 2);
+const moreTags = tags.length - shownTags.length;
+
+// Lowercased haystack so the sidebar search can match title, summary, tags, targets, and author.
+const search = [d.title, d.shortDescription, d.exampleOutput, ...tags, ...(d.targets ?? []), d.author]
+  .filter(Boolean)
+  .join(' ')
+  .toLowerCase();
+---
+<article
+  data-category={topSeg}
+  data-cats={d.categories.join(' ')}
+  data-tags={`|${d.tags.join('|')}|`}
+  data-targets={`|${(d.targets ?? []).join('|')}|`}
+  data-visibility={d.visibility}
+  data-author={d.author}
+  data-search={search}
+  class:list={['card card-hover rwork va-card', kcls, d.image && 'has-img']}
+>
+  <a href={`/prompts/${d.slug}/`} class="va-lead" aria-hidden="true" tabindex="-1">
+    {d.image
+      ? <Image class="va-lead-img" src={d.image} width={620} alt="" />
+      : <span class="kglyph"><svg viewBox="0 0 24 24"><use href={`#${catGlyph}`}/></svg></span>}
+  </a>
+
+  <div class="va-mid">
+    <h2 class="va-title"><a href={`/prompts/${d.slug}/`} class="link-title">{d.title}</a></h2>
+    <div class="va-sub">
+      <a href={`/prompts/?cat=${topSeg}`} class="kbadge"><span class="dot"></span>{leafLabel(d.categories)}</a>
+      {model && <a href={`/prompts/?target=${encodeURIComponent(model)}`} class="mchip"><span class="md"></span>{model}</a>}
+      {shownTags.length > 0 && (
+        <span class="tagrow">
+          {shownTags.map((t) => <a href={`/prompts/?tag=${encodeURIComponent(t)}`} class="ptag">{t}</a>)}
+          {moreTags > 0 && <span class="moretag">+{moreTags}</span>}
+        </span>
+      )}
+      {stub && (
+        <span class="kbadge kbadge-lock"><svg viewBox="0 0 24 24" width="11" height="11"><use href="#ico-lock"/></svg>Members only</span>
+      )}
+    </div>
+  </div>
+
+  <div class="va-right">
+    <a href={`/prompts/?author=${encodeURIComponent(d.author)}`} class="pmeta" data-tooltip={`See all prompts by ${authorName}`}>
+      <Avatar item={{ name: authorName, avatar }} class="lav" size={24} />
+      <span class="who">{authorName}</span>
+      {date && <><span class="dot-sep"></span><span class="when">{date}</span></>}
+    </a>
+    <span class="mstat" data-tooltip={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}>
+      <svg viewBox="0 0 24 24" width="14" height="14"><use href="#ico-chat"/></svg>{commentCount}
+    </span>
+    {!stub && <FavoriteButton targetType="prompt" targetSlug={d.slug} count={favoriteCount('prompt', d.slug)} size="sm" />}
+  </div>
+</article>
+
+<style>
+  /* ---- category accents (design k-* system, extended to the real taxonomy top levels) ---- */
+  .k-ai     { --ka:#6b4fb0; --kt:#f2eefb; --kl:#d6c9ee; }
+  .k-devops { --ka:#2f63c0; --kt:#eef3fc; --kl:#bcd0f0; }
+  .k-design { --ka:#c0392f; --kt:#fbeeec; --kl:#f0ccc4; }
+  .k-blockchain { --ka:#b3791f; --kt:#fbf3e3; --kl:#ecd9ad; }
+  .k-business { --ka:#138178; --kt:#e7f5f3; --kl:#b6e0da; }
+  .k-writing { --ka:#555a66; --kt:#eef0f3; --kl:#d3d8e0; }
+  .k-minecraft { --ka:#3a7d2c; --kt:#eaf5e6; --kl:#c4e3b8; }
+  .k-entertainment { --ka:#c0392b; --kt:#fbece9; --kl:#f0c8c2; }
+  .k-generators { --ka:#138178; --kt:#e7f5f3; --kl:#b6e0da; }
+  .k-member-tutorials { --ka:#2f63c0; --kt:#eef3fc; --kl:#bcd0f0; }
+  .k-gbti   { --ka:#1f9e5f; --kt:#e6f6ee; --kl:#b9e3cc; }
+  .k-other  { --ka:#5b6472; --kt:#eef0f3; --kl:#d3d8e0; }
+  [data-theme="dark"] .va-card { --kt: color-mix(in srgb, var(--ka) 20%, transparent); }
+
+  /* ---- card (default: vertical) ---- */
+  /* min-width:0 so the card can shrink inside a `1fr` (minmax(auto,1fr)) grid track instead of letting the
+     author-meta row blow the column out past the viewport on narrow screens. */
+  .va-card { display: flex; flex-direction: column; align-items: stretch; gap: 14px; padding: 16px; min-width: 0; }
+  .va-card .va-right { min-width: 0; flex-wrap: wrap; }
+  /* Grid lead media: a 4:3 box (the recommended prompt-image ratio) so result images read taller and a
+     portrait headshot keeps more of its frame. The compact view overrides this to a small 56px square. */
+  .va-lead { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; flex: none; background: var(--tint); }
+  .va-lead-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .25s ease; }
+  .va-card:hover .va-lead-img { transform: scale(1.03); }
+  .kglyph { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #fff;
+    background: linear-gradient(145deg, color-mix(in srgb, var(--ka) 68%, white), var(--ka)); }
+  .kglyph svg { width: 38%; height: 38%; max-width: 56px; max-height: 56px; }
+
+  .va-mid { display: flex; flex-direction: column; gap: 9px; min-width: 0; flex: 1; }
+  .va-title { font-family: var(--f-display); font-weight: 700; font-size: 17px; line-height: 1.25; color: var(--fg); min-width: 0; text-wrap: pretty; }
+  .va-title a.link-title { color: var(--fg); transition: color .15s ease; }
+  .va-card:hover .link-title, .link-title:hover { color: var(--green-700); }
+  .va-sub { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; min-width: 0; }
+
+  /* category badge + model chip + tags */
+  .kbadge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: 11px; font-weight: 600; letter-spacing: .02em;
+    padding: 4px 9px; border-radius: 5px; border: 1.5px solid var(--kl); color: var(--ka); background: var(--kt); white-space: nowrap; text-decoration: none; }
+  .kbadge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ka); }
+  .kbadge.kbadge-lock { --ka: var(--green-700); --kt: var(--green-tint); --kl: var(--green); }
+  a.kbadge:hover { filter: brightness(0.97); }
+  .mchip { display: inline-flex; align-items: center; gap: 5px; font-family: var(--f-mono); font-size: 11px; font-weight: 500;
+    padding: 3px 8px; border-radius: 4px; border: 1.5px solid var(--line-2); color: var(--fg-soft); background: var(--paper); white-space: nowrap; text-decoration: none; }
+  .mchip .md { width: 5px; height: 5px; border-radius: 50%; background: var(--fg-mute); }
+  a.mchip:hover { border-color: var(--ink); color: var(--ink); }
+  .tagrow { display: inline-flex; align-items: center; gap: 9px; min-width: 0; overflow: hidden; }
+  .ptag { font-family: var(--f-mono); font-size: 11px; color: var(--fg-mute); white-space: nowrap; text-decoration: none; }
+  .ptag::before { content: '#'; opacity: .5; }
+  a.ptag:hover { color: var(--green-700); }
+  .moretag { font-family: var(--f-mono); font-size: 11px; color: var(--fg-mute); background: var(--tint); border: 1.5px solid var(--line); border-radius: 4px; padding: 2px 7px; }
+
+  /* author meta + stats */
+  .va-right { display: flex; align-items: center; gap: 14px; justify-content: space-between; }
+  .pmeta { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--fg-mute); text-decoration: none; min-width: 0; }
+  .pmeta :global(.lav) { width: 24px; height: 24px; border-radius: 50%; flex: none; }
+  .pmeta .who { color: var(--fg-soft); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .pmeta:hover .who { color: var(--green-700); }
+  .pmeta .dot-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--line-2); flex: none; }
+  .pmeta .when { font-family: var(--f-mono); font-size: 12px; white-space: nowrap; flex: none; }
+  .mstat { display: inline-flex; align-items: center; gap: 5px; font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); flex: none; }
+</style>

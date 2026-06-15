@@ -1,0 +1,94 @@
+---
+// SOW-019: install-aware sign-in. Any [data-signin] control opens this dialog, which detects the GBTI
+// extension (via the content-script marker document.documentElement.dataset.gbtiExtension) and shows the
+// right path: install + member benefits when absent, or "open the extension" guidance when present. No-JS
+// falls back to the control's own href (the /membership/ benefits + registration page). Rendered once per
+// page via BaseLayout.
+import { extensionInstallUrl, extensionIsListed } from '../lib/extension';
+const benefitsUrl = '/membership/';
+---
+<dialog id="gbti-signin-dialog" class="signin-dialog" data-install={extensionInstallUrl} data-listed={String(extensionIsListed)} aria-labelledby="signin-title">
+  <div class="signin-card">
+    <button type="button" class="signin-x" data-close aria-label="Close">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    </button>
+
+    {/* Extension NOT installed: prompt to install + read benefits (which doubles as registration). */}
+    <div data-state="absent">
+      <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-puzzle"/></svg></span>
+      <h2 class="h3 mt12" id="signin-title">Sign in with the GBTI extension</h2>
+      <p class="body-sm muted mt8">
+        Signing in and publishing happen through the free GBTI browser extension. It keeps your GitHub sign-in
+        on your own machine and lets you edit and publish in place.
+      </p>
+      <div class="signin-actions mt20">
+        <a class="btn btn-primary" href={extensionInstallUrl} data-install-link rel={extensionIsListed ? null : 'nofollow'}>Get the extension</a>
+        <a class="btn btn-ghost" href={benefitsUrl}>Read about member benefits</a>
+      </div>
+      {!extensionIsListed && (
+        <p class="body-sm muted mt12" style="font-size:12.5px">The Chrome Web Store listing is coming soon. For now, the download page walks you through loading it as an unpacked extension.</p>
+      )}
+    </div>
+
+    {/* Extension installed: a page cannot open the extension popup, so guide the user to the toolbar. */}
+    <div data-state="present" hidden>
+      <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-check"/></svg></span>
+      <h2 class="h3 mt12">The extension is installed</h2>
+      <p class="body-sm muted mt8">Click the GBTI icon in your browser toolbar to sign in, then edit and publish your work in place.</p>
+      <div class="signin-actions mt20">
+        <a class="btn btn-ghost" href={benefitsUrl}>Member benefits</a>
+        <button type="button" class="btn btn-primary" data-close>Got it</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  (() => {
+    const dialog = document.getElementById('gbti-signin-dialog') as HTMLDialogElement | null;
+    if (!dialog) return;
+    const absent = dialog.querySelector('[data-state="absent"]') as HTMLElement;
+    const present = dialog.querySelector('[data-state="present"]') as HTMLElement;
+
+    let installed = !!document.documentElement.dataset.gbtiExtension;
+    const sync = () => {
+      installed = !!document.documentElement.dataset.gbtiExtension;
+      if (installed) document.documentElement.classList.add('has-gbti-ext');
+      if (absent) absent.hidden = installed;
+      if (present) present.hidden = !installed;
+    };
+    sync();
+    // The content script sets the marker at document_idle; catch it if it lands after this runs.
+    document.addEventListener('gbti:extension-ready', sync);
+
+    document.addEventListener('click', (e) => {
+      const trigger = (e.target as HTMLElement)?.closest('[data-signin]');
+      if (trigger) {
+        if (typeof dialog.showModal !== 'function') return; // no <dialog> support: follow the href fallback
+        e.preventDefault();
+        sync();
+        dialog.showModal();
+        if (installed) document.dispatchEvent(new CustomEvent('gbti:request-signin'));
+        return;
+      }
+      if ((e.target as HTMLElement)?.closest('[data-close]')) { dialog.close(); return; }
+      if (e.target === dialog) dialog.close(); // backdrop click
+    });
+  })();
+</script>
+
+<style>
+  .signin-dialog { border: none; border-radius: var(--r-lg); padding: 0; max-width: 440px; width: calc(100% - 32px);
+    background: var(--paper); color: var(--fg); box-shadow: var(--sh-lg);
+    /* margin:auto + fit-content height re-centers the modal (Tailwind preflight resets margin:0 on every
+       element, clobbering the UA dialog centering and pinning it top-left). */
+    margin: auto; height: fit-content; max-height: calc(100dvh - 32px); }
+  .signin-dialog::backdrop { background: rgba(37, 35, 43, .55); backdrop-filter: blur(2px); }
+  [data-theme="dark"] .signin-dialog { background: var(--ink-2); border: 1px solid var(--line-dark); }
+  .signin-card { padding: 32px; position: relative; }
+  .signin-x { position: absolute; top: 14px; right: 14px; display: inline-flex; padding: 6px; border: none;
+    background: transparent; color: var(--fg-mute); cursor: pointer; border-radius: var(--r); }
+  .signin-x:hover { background: var(--tint); color: var(--fg); }
+  .signin-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+  .signin-actions .btn { flex: 1 1 auto; }
+</style>

@@ -1,0 +1,23 @@
+---
+// ReferralCapture (SOW-024 / SOW-007): site-wide first-touch referral attribution. ANY landing with ?ref sets
+// the referral cookie (first-touch wins), for ALL visitors, on ANY page (a member's posts/products link with
+// ?ref, not only /membership/). It is intentionally NOT gated by the cookie-consent banner: the owner decided
+// referral attribution is always on (data-protection.md section 6 records the honest ePrivacy residual note).
+// The signup flow reads this cookie to seed ?ref at /signup/start. Rendered once in BaseLayout.
+import { REF_COOKIE, REF_VIA_COOKIE, REF_COOKIE_DAYS } from '../lib/referral';
+---
+<script is:inline define:vars={{ cookie: REF_COOKIE, viaCookie: REF_VIA_COOKIE, days: REF_COOKIE_DAYS }}>
+  (function () {
+    try {
+      var p = new URLSearchParams(location.search);
+      var ref = p.get('ref');
+      if (!ref) return;
+      var has = document.cookie.split('; ').some(function (c) { return c.indexOf(cookie + '=') === 0; });
+      if (has) return; // first-touch wins
+      var maxAge = 60 * 60 * 24 * days;
+      document.cookie = cookie + '=' + encodeURIComponent(ref) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+      var via = p.get('via');
+      if (via) document.cookie = viaCookie + '=' + encodeURIComponent(via) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+    } catch (e) { /* cookies disabled: no attribution persisted */ }
+  })();
+</script>

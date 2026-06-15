@@ -1,0 +1,79 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Container from '../../components/Container.astro';
+import ProfileHeader from '../../components/members/ProfileHeader.astro';
+import ArticleCard from '../../components/blog/ArticleCard.astro';
+import ProductCard from '../../components/products/ProductCard.astro';
+import PromptCard from '../../components/prompts/PromptCard.astro';
+import SubscribeButton from '../../components/SubscribeButton.astro';
+import { isPublic, isListed, byNewest } from '../../lib/content';
+
+export async function getStaticPaths() {
+  const profiles = (await getCollection('profile')).filter(isPublic);
+  return profiles.map((profile) => ({ params: { username: profile.data.username }, props: { profile } }));
+}
+
+const { profile } = Astro.props;
+const d = profile.data;
+const { Content } = await render(profile);
+
+const posts = (await getCollection('post')).filter(isListed).filter((p) => p.data.author === d.username).sort(byNewest);
+const products = (await getCollection('product')).filter(isListed).filter((p) => p.data.author === d.username).sort(byNewest);
+const prompts = (await getCollection('prompt')).filter(isListed).filter((p) => p.data.author === d.username).sort(byNewest);
+const isOrg = d.username === 'gbti';
+const total = posts.length + products.length + prompts.length;
+---
+<BaseLayout title={`${d.displayName}, Member`} description={`${d.displayName} on the GBTI Network.`}>
+  <ProfileHeader profile={profile}>
+    <div class="mx-auto max-w-xl sm:mx-0 lead">
+      <Content />
+    </div>
+    {!isOrg && (
+      <div class="mt-4 flex flex-wrap justify-center gap-3 sm:justify-start">
+        <SubscribeButton name={d.displayName} username={d.username} variant="white" />
+      </div>
+    )}
+  </ProfileHeader>
+
+  <section class="band tint">
+    <Container>
+      {total === 0 && (
+        <p class="muted">No public content yet.</p>
+      )}
+
+      {posts.length > 0 && (
+        <div id="articles" style="scroll-margin-top:90px">
+          <div class="sec-head">
+            <h2 class="h2">{isOrg ? 'Articles' : `Articles by ${d.displayName}`}</h2>
+          </div>
+          <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            {posts.map((p) => <ArticleCard post={p} />)}
+          </div>
+        </div>
+      )}
+
+      {products.length > 0 && (
+        <div id="products" class={posts.length > 0 ? 'mt32' : ''} style="scroll-margin-top:90px">
+          <div class="sec-head">
+            <h2 class="h2">{isOrg ? 'Products' : `Products by ${d.displayName}`}</h2>
+          </div>
+          <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {products.map((p) => <ProductCard product={p} />)}
+          </div>
+        </div>
+      )}
+
+      {prompts.length > 0 && (
+        <div id="prompts" class={posts.length > 0 || products.length > 0 ? 'mt32' : ''} style="scroll-margin-top:90px">
+          <div class="sec-head">
+            <h2 class="h2">{isOrg ? 'AI Prompts' : `AI Prompts by ${d.displayName}`}</h2>
+          </div>
+          <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {prompts.map((p) => <PromptCard prompt={p} />)}
+          </div>
+        </div>
+      )}
+    </Container>
+  </section>
+</BaseLayout>

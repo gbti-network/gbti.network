@@ -1,0 +1,75 @@
+name: Rotate member-content key
+
+# SOW-016 key-destroying rotation. Re-encrypts every published .enc member-content asset under a NEW epoch key,
+# then opens a PR (the .enc files + the bumped MEMBER_CONTENT_KID in wrangler.toml) for human review. After the
+# PR merges and the CDN propagates, the operator swaps the Worker secret MEMBER_CONTENT_KEY to the new key and
+# DESTROYS the old one (do not keep it in MEMBER_CONTENT_KEYS beyond a brief overlap), so the old git-history
+# ciphertext becomes keyless. Honest limit: rotation protects only FUTURE content + bounds a key compromise to
+# the window; it cannot retract plaintext already saved by a member.
+#
+# Manual-only by design: rotating a security key is human-gated (a botched swap locks every member out). The
+# NEW key is supplied as a pre-generated secret (MEMBER_CONTENT_KEY_NEW), never minted/echoed in CI logs.
+# A monthly cron is provided but commented; enable it only once the manual flow is proven.
+
+on:
+  workflow_dispatch:
+    inputs:
+      new_kid:
+        description: 'The new epoch id (bump from the current MEMBER_CONTENT_KID, e.g. 2)'
+        required: true
+        type: string
+  # schedule:
+  #   - cron: '0 6 1 * *'   # 06:00 UTC on the 1st of each month (enable after the manual flow is proven)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rotate-member-key
+  cancel-in-progress: false
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+
+      # Re-encrypt all .enc under the NEW key. Two-phase + atomic: if any asset fails to re-encrypt (a wrong
+      # old key), nothing is written and the job fails. --no-print-key keeps the key out of the logs.
+      - name: Re-encrypt member content to the new epoch
+        run: node scripts/rotate-member-key.mjs --new-kid "${{ inputs.new_kid }}" --apply --no-print-key
+        env:
+          MEMBER_CONTENT_KEY: ${{ secrets.MEMBER_CONTENT_KEY }}          # the CURRENT (old) epoch key
+          MEMBER_CONTENT_KEY_NEW: ${{ secrets.MEMBER_CONTENT_KEY_NEW }}  # the NEW epoch key (pre-generated)
+
+      - name: Bump MEMBER_CONTENT_KID in wrangler.toml
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "workers/signup/wrangler.toml";
+            const kid = process.argv[1];
+            let t = fs.readFileSync(p, "utf8");
+            t = t.replace(/^MEMBER_CONTENT_KID = ".*"$/m, `MEMBER_CONTENT_KID = "${kid}"`);
+            fs.writeFileSync(p, t);
+          ' "${{ inputs.new_kid }}"
+
+      # Open a PR for review (NOT auto-merge): a human verifies the rotation before the Worker secret is swapped.
+      # gbtilabs is a superadmin, so the gate accepts this PR even though it touches Tier S wrangler.toml.
+      - name: Open the rotation PR
+        env:
+          GH_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+        run: |
+          set -e
+          BRANCH="rotate-member-key-${{ inputs.new_kid }}"
+          git config user.name "gbtilabs"
+          git config user.email "gbtilabs@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "SOW-016: rotate member-content to epoch ${{ inputs.new_kid }}"
+          git push -u origin "$BRANCH"
+          gh pr create --fill --title "Rotate member-content key to epoch ${{ inputs.new_kid }}" \
+            --body "Automated SOW-016 re-encryption to epoch ${{ inputs.new_kid }}. After merge + CDN propagation, set the Worker secret MEMBER_CONTENT_KEY to the new key and destroy the old one (remove it from MEMBER_CONTENT_KEYS after the overlap). See .data/ops/member-ops/runbook-client-install.md."

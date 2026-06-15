@@ -1,0 +1,43 @@
+---
+// FavoriteButton (SOW-013, store updated by SOW-024): the INERT favorite control. Ships in the public static
+// build carrying only public data-gbti-* hooks (target type/slug + the build-time count, read from
+// house/favorite-counts.yml). A plain visitor sees a heart + count; the light-DOM button is [data-signin], so
+// clicking opens the sign-in modal (SOW-019) — favoriting requires a GitHub identity, so there is no anonymous
+// public path, by design. When a member's client/extension loads @gbti/client-ui, <gbti-favorite> upgrades into
+// a working toggle that writes the DELETABLE edge store (KV), NOT git (SOW-024). The displayed count refreshes
+// on the next reconcile + batched build (two-tier model, like comments).
+interface Props {
+  targetType: 'post' | 'product' | 'prompt';
+  targetSlug: string;
+  count?: number;
+  size?: 'sm' | 'md';
+}
+const { targetType, targetSlug, count = 0, size = 'md' } = Astro.props;
+---
+<gbti-favorite
+  data-gbti-target-type={targetType}
+  data-gbti-target-slug={targetSlug}
+  data-gbti-count={count}
+  data-gbti-region="favorite"
+  class:list={['gbti-favorite', size === 'sm' && 'fav-sm']}
+>
+  <button type="button" class="fav-pill" data-signin aria-label={`Favorite this ${targetType}${count > 0 ? `, ${count} so far` : ''}`}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-heart" /></svg>
+    {count > 0 && <span class="fav-count">{count}</span>}
+  </button>
+</gbti-favorite>
+<style is:global>
+  /* The light-DOM pill is the public (inert) display; when <gbti-favorite> upgrades, its Shadow DOM covers it. */
+  gbti-favorite { display: inline-flex; }
+  .fav-pill {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    font-family: var(--f-mono); font-size: 12.5px; font-weight: 600; color: var(--fg-mute);
+    background: var(--paper); border: 1.5px solid var(--line-2); border-radius: var(--r-pill);
+    padding: 5px 11px; transition: color .15s ease, border-color .15s ease;
+  }
+  .fav-pill:hover { color: var(--green-700); border-color: var(--green); }
+  .fav-pill svg { flex: none; }
+  .fav-sm .fav-pill { padding: 4px 9px; font-size: 12px; }
+  [data-theme="dark"] .fav-pill { background: transparent; border-color: var(--line-dark-2); color: var(--on-dark-soft); }
+  [data-theme="dark"] .fav-pill:hover { color: var(--green-mint); border-color: var(--green); }
+</style>

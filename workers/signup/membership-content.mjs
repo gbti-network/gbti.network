@@ -1,0 +1,172 @@
+// SOW-016: server-side member-content crypto. The AES-256-GCM epoch key NEVER leaves the Worker (this
+// SUPERSEDES SOW-015's GET /membership/key handout). Two endpoints, both gated to an EFFECTIVE-PAID caller:
+//   POST /membership/decrypt  body: a .enc envelope          -> { ok, text } (the plaintext markdown)
+//   POST /membership/encrypt  body: { plaintext, assetId }   -> { ok, envelope } to commit as <assetId>.enc
+//
+// authorizePaid() applies ban > staff > grandfather > Stripe SERVER-SIDE from the reconcile-written SIGNUP_KV
+// overrides mirror, FAIL CLOSED: missing/unverifiable token, Stripe error, missing/stale/incomplete mirror,
+// a ban, or anything other than effective 'paid' -> 4xx, never a decrypt/encrypt.
+//
+// HONEST CAVEAT: obfuscation for perks, not absolute secrecy. An authorized member can still copy the
+// plaintext they open; the public ciphertext is permanent (bounded by key-destroying rotation). See SOW-016.
+
+import { githubFetchUser } from './oauth.mjs';
+import { deriveStatus } from '../../membership/derive-status.mjs';
+import { effectiveStatus, bansFromParsed, rolesFromParsed, grandfathersFromParsed } from '../../membership/overrides-core.mjs';
+import { createStripeClient } from '../../clients/stripe.mjs';
+import { decryptAssetText, encryptAsset } from '../../client/src/crypto-assets.mjs';
+
+export const OVERRIDES_KV_KEY = 'overrides:mirror';
+// The mirror must be fresher than this or we fail closed (a stale mirror could serve a since-banned member).
+export const MAX_OVERRIDES_AGE_MS = 48 * 60 * 60 * 1000;
+
+const deny = (message) => ({ ok: false, status: 403, body: { error: 'forbidden', message } });
+
+/**
+ * Resolve the caller's EFFECTIVE membership status from their GitHub bearer token, fail-closed. Returns
+ * { ok: true, githubId, status, source } (status is 'paid'|'trialing'|'expired'|'cancelled'|'none'|'banned')
+ * or { ok: false, status, body }. Pure over injected deps (no network/secrets in tests). Identity comes ONLY
+ * from the verified token; ban > staff > grandfather > Stripe is applied here. The caller decides which
+ * statuses it accepts (decrypt allows an active trial to read a Share; encrypt + everything else is paid-only).
+ */
+export async function resolveEffective(request, env, { fetchImpl = globalThis.fetch, makeStripe = createStripeClient, fetchUser = githubFetchUser, now = new Date() } = {}) {
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!token) return { ok: false, status: 401, body: { error: 'unauthorized', message: 'a GitHub bearer token is required' } };
+
+  let user;
+  try {
+    user = await fetchUser(token, fetchImpl);
+  } catch {
+    return { ok: false, status: 401, body: { error: 'unauthorized', message: 'could not verify the GitHub token' } };
+  }
+  if (!user?.githubId) return { ok: false, status: 401, body: { error: 'unauthorized', message: 'the GitHub token has no user id' } };
+  const githubId = String(user.githubId);
+
+  if (!env?.STRIPE_SECRET_KEY) return { ok: false, status: 500, body: { error: 'misconfigured', message: 'Stripe is not configured' } };
+  const stripe = makeStripe({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
+  const derived = await deriveStatus(githubId, stripe, now); // fails closed to 'none'; share the injected clock
+
+  let mirror = null;
+  try {
+    mirror = await env.SIGNUP_KV.get(OVERRIDES_KV_KEY, 'json');
+  } catch {
+    mirror = null;
+  }
+  if (!mirror || !mirror.generatedAt) return deny('member overrides are unavailable right now');
+  const ageMs = now.getTime() - new Date(mirror.generatedAt).getTime();
+  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_OVERRIDES_AGE_MS) return deny('member overrides are stale right now');
+  // Each section must be a non-array object ({ bans: [...] } etc). A malformed/wrong-shaped section (e.g. bans
+  // written as a bare array) would silently parse to ZERO bans, dropping the ban tier, so it must fail closed.
+  const isSection = (x) => x != null && typeof x === 'object' && !Array.isArray(x);
+  if (!isSection(mirror.bans) || !isSection(mirror.roles) || !isSection(mirror.grandfathered)) return deny('member overrides are incomplete right now');
+
+  const overrides = {
+    bans: bansFromParsed(mirror.bans),
+    roles: rolesFromParsed(mirror.roles),
+    grandfathers: grandfathersFromParsed(mirror.grandfathered),
+  };
+  const effective = effectiveStatus(githubId, derived, overrides, now);
+  return { ok: true, githubId, status: effective.status, source: effective.source };
+}
+
+/**
+ * Authorize an EFFECTIVE-PAID caller (encrypt, and any non-Share decrypt). Thin wrapper over resolveEffective:
+ * anything other than effective 'paid' is denied (banned -> a distinct message). Returns { ok, githubId, source }.
+ */
+export async function authorizePaid(request, env, deps = {}) {
+  const r = await resolveEffective(request, env, deps);
+  if (!r.ok) return r;
+  if (r.status !== 'paid') {
+    return deny(r.status === 'banned' ? 'this account is not permitted' : 'an active paid membership is required');
+  }
+  return { ok: true, githubId: r.githubId, source: r.source };
+}
+
+// SOW-018: a Share's encrypted body carries the AAD `share:<id>:body` (encAssetFor('share', ...)). The AAD is
+// bound into the GCM ciphertext, so it cannot be forged onto another asset's envelope (decryption would fail),
+// making it a safe authorization signal. Shares grant LIMITED TRIAL ACCESS: an active trial may READ (decrypt)
+// the community Shares stream, but posting (encrypt) stays paid-only. A lapsed/cancelled/expired/banned account
+// is NOT trialing, so it cannot read (the extension shows its lock splash). Everything else stays paid-only.
+const SHARE_AAD = /^share:/;
+const READ_TRIAL_OK = new Set(['paid', 'trialing']);
+
+/**
+ * Resolve the base64 key for an epoch id (prototype-safe). The current epoch is the MEMBER_CONTENT_KEY secret;
+ * retired epochs (during a rotation overlap) live in the optional MEMBER_CONTENT_KEYS JSON map. Returns null
+ * for an unknown epoch so the caller fails with a 500 (never a 200 carrying a junk key).
+ */
+export function resolveEpochKey(env, kid) {
+  const currentKid = String(env.MEMBER_CONTENT_KID || '1');
+  if (kid === currentKid && env.MEMBER_CONTENT_KEY) return String(env.MEMBER_CONTENT_KEY);
+  if (env.MEMBER_CONTENT_KEYS) {
+    try {
+      const keys = Object.assign(Object.create(null), JSON.parse(env.MEMBER_CONTENT_KEYS));
+      if (Object.prototype.hasOwnProperty.call(keys, kid) && typeof keys[kid] === 'string') return keys[kid];
+    } catch { /* fall through */ }
+  }
+  return null;
+}
+
+async function readJson(request) {
+  try { return await request.json(); } catch { return null; }
+}
+
+/**
+ * POST /membership/decrypt — body is a v1 .enc envelope. Returns { ok, text } (plaintext markdown) to an
+ * effective-paid caller, decrypted with the Worker-held key for the envelope's epoch. The key never leaves.
+ */
+export async function membershipDecrypt(request, env, deps = {}) {
+  // Identity first (a missing/unverifiable token -> 401), then validate the envelope (400), then the
+  // authorization decision (403), which depends on the asset type (its AAD).
+  const r = await resolveEffective(request, env, deps);
+  if (!r.ok) return { status: r.status, body: r.body };
+
+  const envelope = await readJson(request);
+  if (!envelope || typeof envelope !== 'object' || typeof envelope.ct !== 'string' || typeof envelope.iv !== 'string') {
+    return { status: 400, body: { error: 'bad_request', message: 'a v1 .enc envelope JSON body is required' } };
+  }
+
+  // SOW-018: a Share asset (AAD `share:...`) is readable by an active trial OR a paid member; every other
+  // member-only asset stays paid-only. The AAD is GCM-authenticated, so it cannot be forged onto a non-Share.
+  const isShare = SHARE_AAD.test(String(envelope.aad ?? ''));
+  const allowed = isShare ? READ_TRIAL_OK.has(r.status) : r.status === 'paid';
+  if (!allowed) {
+    const msg = r.status === 'banned'
+      ? 'this account is not permitted'
+      : isShare
+        ? 'an active membership is required to read Shares'
+        : 'an active paid membership is required';
+    return { status: 403, body: { error: 'forbidden', message: msg } };
+  }
+  const key = resolveEpochKey(env, String(envelope.kid ?? env.MEMBER_CONTENT_KID ?? '1'));
+  if (!key) return { status: 500, body: { error: 'misconfigured', message: 'no member-content key for this epoch' } };
+  try {
+    const text = await decryptAssetText({ envelope, key });
+    return { status: 200, body: { ok: true, text } };
+  } catch {
+    // AssetAccessError (tamper / wrong key / bad envelope) -> 422, never leak internals or partial data.
+    return { status: 422, body: { error: 'undecryptable', message: 'the asset could not be decrypted' } };
+  }
+}
+
+/**
+ * POST /membership/encrypt — body { plaintext, assetId }. Returns { ok, envelope } for an effective-paid
+ * author to commit as <assetId>.enc, encrypted under the CURRENT epoch with the Worker-held key.
+ */
+export async function membershipEncrypt(request, env, deps = {}) {
+  const auth = await authorizePaid(request, env, deps);
+  if (!auth.ok) return { status: auth.status, body: auth.body };
+
+  const body = await readJson(request);
+  const plaintext = body?.plaintext;
+  const assetId = body?.assetId;
+  if (typeof plaintext !== 'string' || !assetId || typeof assetId !== 'string') {
+    return { status: 400, body: { error: 'bad_request', message: 'plaintext (string) and assetId (string) are required' } };
+  }
+  const kid = String(env.MEMBER_CONTENT_KID || '1');
+  const key = resolveEpochKey(env, kid);
+  if (!key) return { status: 500, body: { error: 'misconfigured', message: 'no member-content key is configured' } };
+  const envelope = await encryptAsset({ plaintext, key, assetId, kid });
+  return { status: 200, body: { ok: true, envelope } };
+}

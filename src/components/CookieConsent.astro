@@ -1,0 +1,101 @@
+---
+// CookieConsent (SOW-024): a GEOFENCED cookie-consent banner. EU/EEA/UK visitors are asked to consent before
+// any non-essential (analytics) cookie loads; everyone else gets analytics with no prompt. Essential cookies
+// (sign-in session, referral attribution) are always on and NOT gated here. Region is detected client-side via
+// Cloudflare's /cdn-cgi/trace (no Worker needed on the static site); an unknown region fails CLOSED (prompt +
+// hold analytics). The consent choice is stored in localStorage (strictly necessary). Rendered once in BaseLayout.
+//
+// Analytics wiring (when a provider is chosen): define `window.gbtiLoadAnalytics` (e.g. in a small head script)
+// OR listen for the `gbti:analytics-consent` event; this banner calls/dispatches both only when analytics is
+// allowed (consent granted, or a non-EU visitor). Do NOT load the analytics snippet unconditionally.
+---
+<div class="cookie-consent" data-cookie-consent hidden role="dialog" aria-label="Cookie consent" aria-live="polite">
+  <div class="cc-card">
+    <p class="cc-text">
+      We use privacy-friendly analytics to see what is useful and improve the co-op. You can accept or decline.
+      Essential cookies (sign-in and referral credit) are always on. See our <a class="cc-link" href="/privacy/">privacy policy</a>.
+    </p>
+    <div class="cc-actions">
+      <button type="button" class="cc-btn cc-accept" data-cc-accept>Accept analytics</button>
+      <button type="button" class="cc-btn cc-ghost" data-cc-decline>Decline</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .cookie-consent {
+    position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 70;
+    display: flex; justify-content: center; pointer-events: none;
+  }
+  .cookie-consent[hidden] { display: none; }
+  .cc-card {
+    pointer-events: auto; max-width: 760px; width: 100%;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px;
+    background: var(--paper); color: var(--fg);
+    border: 1px solid var(--line-2); border-radius: var(--r-lg);
+    box-shadow: var(--sh-lg); padding: 16px 20px;
+  }
+  .cc-text { flex: 1; min-width: 240px; margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--fg-soft); }
+  .cc-link { color: var(--green-700); text-decoration: underline; text-underline-offset: 2px; }
+  .cc-actions { display: flex; gap: 10px; flex: none; }
+  .cc-btn {
+    font-family: var(--f-sans); font-weight: 600; font-size: 14px; line-height: 1;
+    padding: 10px 16px; border-radius: var(--r); border: 1.5px solid transparent; cursor: pointer; white-space: nowrap;
+  }
+  .cc-accept { background: var(--green); color: #fff; }
+  .cc-accept:hover { background: var(--green-600); }
+  .cc-ghost { background: transparent; color: var(--fg); border-color: var(--line-2); }
+  .cc-ghost:hover { border-color: var(--fg-mute); }
+  [data-theme="dark"] .cc-card { background: var(--ink-2); border-color: var(--line-dark-2); }
+  [data-theme="dark"] .cc-ghost { color: var(--on-dark); border-color: var(--line-dark-2); }
+</style>
+
+<script>
+  import { CONSENT_KEY, ANALYTICS_EVENT, OPEN_PREFS_EVENT, parseLoc, decide } from '../lib/consent.mjs';
+
+  const el = document.querySelector('[data-cookie-consent]');
+  let fired = false;
+
+  const read = () => { try { return localStorage.getItem(CONSENT_KEY); } catch { return null; } };
+  const store = (v) => { try { localStorage.setItem(CONSENT_KEY, v); } catch { /* storage blocked */ } };
+  const show = () => { if (el) el.hidden = false; };
+  const hide = () => { if (el) el.hidden = true; };
+
+  function fireAnalytics() {
+    if (fired) return;
+    fired = true;
+    document.dispatchEvent(new CustomEvent(ANALYTICS_EVENT)); // analytics snippet can listen for this
+    if (typeof window.gbtiLoadAnalytics === 'function') window.gbtiLoadAnalytics(); // ...or be loaded by this hook
+  }
+
+  function apply(d) {
+    if (d.analyticsAllowed) { hide(); fireAnalytics(); }
+    else if (d.showBanner) show();
+    else hide();
+  }
+
+  async function loc() {
+    try { const r = await fetch('/cdn-cgi/trace', { cache: 'no-store' }); return r.ok ? parseLoc(await r.text()) : null; }
+    catch { return null; }
+  }
+
+  async function init() {
+    const stored = read();
+    if (stored) { apply(decide({ stored, loc: null })); return; } // already decided: no geo lookup needed
+    const region = await loc();
+    // The visitor may have clicked Accept/Decline during the in-flight geo lookup; honor that choice (so the
+    // banner does not flicker back) rather than the stale pre-fetch read.
+    const after = read();
+    if (after) { apply(decide({ stored: after, loc: null })); return; }
+    const d = decide({ stored: null, loc: region });
+    if (d.analyticsAllowed && !d.needsConsent) store('granted'); // outside the EU/UK: persist the implicit allow so we skip future lookups
+    apply(d);
+  }
+
+  el?.querySelector('[data-cc-accept]')?.addEventListener('click', () => { store('granted'); hide(); fireAnalytics(); });
+  el?.querySelector('[data-cc-decline]')?.addEventListener('click', () => { store('denied'); hide(); });
+  // The footer "Cookie preferences" control re-opens the banner (direct click + an event other code can dispatch).
+  document.querySelector('[data-cookie-prefs]')?.addEventListener('click', show);
+  document.addEventListener(OPEN_PREFS_EVENT, show);
+  init();
+</script>

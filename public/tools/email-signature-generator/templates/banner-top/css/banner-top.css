@@ -1,0 +1,133 @@
+/* Banner-Top signature styles */
+.signature-banner-top {
+    border-radius: 12px;
+    width: 100%;
+    font-family: 'Inter', Arial, sans-serif;
+    overflow: hidden;
+}
+
+.banner-header {
+    border-radius: 12px 12px 0 0;
+    overflow: hidden;
+    margin-bottom: 15px;
+    height: 82px;
+}
+
+.banner-header img {
+    width: 100%;
+    display: block;
+    border-radius: 12px 12px 0 0;
+    height: 82px;
+    object-fit: cover;
+    margin-bottom: 17px;
+}
+
+.banner-profile {
+    width: 90px;
+    height: 90px;
+    border: 4px solid var(--light-color);
+    border-radius: 50%;
+    box-shadow: 0 4px 10px rgba(var(--dark-color-rgb, 0, 0, 0), 0.1);
+    object-fit: cover;
+    background-color: var(--light-color);
+    display: block;
+    margin: 0 auto;
+}
+
+.signature-banner-top .profile-cell {
+    width: 90px;
+    padding-right: 15px;
+    vertical-align: top;
+}
+
+.signature-banner-top .profile-img {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.banner-element {
+    margin-bottom: 10px;
+}
+
+.signature-banner-top .name {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    color: var(--primary-color);
+}
+
+.signature-banner-top .title {
+    font-size: 15px;
+    color: var(--text-color);
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.signature-banner-top .contact {
+    display: table;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: var(--text-color);
+}
+
+.signature-banner-top .bullet {
+    display: inline-block;
+    color: var(--accent-color);
+    margin-right: 8px;
+    font-size: 18px;
+    line-height: 14px;
+    vertical-align: middle;
+}
+
+.signature-banner-top .contact a {
+    color: var(--accent-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.signature-banner-top .contact a:hover {
+    color: var(--secondary-color);
+}
+
+.signature-banner-top .contact a.pulse {
+    color: var(--accent-color);
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 4px;
+    background-color: rgba(var(--accent-color-rgb, 0, 119, 181), 0.1);
+    display: inline-block;
+}
+
+.banner-social {
+    margin-top: 15px;
+    padding-top: 15px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: center;
+    border-top: 1px solid rgba(var(--dark-color-rgb, 0, 0, 0), 0.1);
+}
+
+.banner-social a {
+    display: inline-block;
+    margin-right: 15px;
+}
+
+.banner-social a:last-child {
+    margin-right: 0;
+}
+
+.banner-social .social-icon {
+    background-color: var(--light-color);
+    border-radius: 50%;
+    padding: 6px;
+    box-shadow: 0 2px 5px rgba(var(--dark-color-rgb, 0, 0, 0), 0.1);
+    width: 19px;
+    height: 19px;
+}
+
+.sig-social-icons a {
+    padding-right: 10px;
+}

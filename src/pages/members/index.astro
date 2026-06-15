@@ -1,0 +1,60 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import MemberCard from '../../components/members/MemberCard.astro';
+import { isPublic } from '../../lib/content';
+
+// Member directory. The org account 'gbti' has a profile page (redirect target) but is not a
+// network member, so it's excluded from the grid.
+// Show members who opted into the directory (WP include_directory), like the live site.
+const members = (await getCollection('profile'))
+  .filter(isPublic)
+  .filter((p) => p.data.directory)
+  .sort((a, b) => a.data.displayName.localeCompare(b.data.displayName));
+---
+<BaseLayout title="Members" description="Members of the GBTI Network creator co-op.">
+  <section class="band tint">
+    <div class="wrap">
+      <div class="sec-head center">
+        <p class="eyebrow">The co-op</p>
+        <h1 class="h1 mt12">Members</h1>
+        <p class="lead">The creators building the GBTI Network co-op.</p>
+        <div class="mx-auto mt24" style="width:100%;max-width:440px">
+          <input
+            type="search"
+            data-member-search
+            placeholder="Search the member directory"
+            aria-label="Search the member directory"
+            class="mono"
+            style="width:100%;border:1.5px solid var(--line-2);background:var(--paper);color:var(--fg);border-radius:var(--r-pill);padding:12px 20px;font-size:14px;outline:none"
+          />
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt40">
+        {members.map((p) => <MemberCard profile={p} />)}
+        <a
+          href="/membership/"
+          class="card card-hover group grid place-items-center p-8 text-center"
+          style="background:var(--ink);color:#fff;border-color:var(--ink)"
+        >
+          <div>
+            <h2 class="h3" style="color:#fff">Join the Network</h2>
+            <p class="body-sm mt12" style="color:var(--on-dark-soft)">Become a member and get your profile, blog, products, and prompts published.</p>
+            <span class="btn btn-primary mt16">Become a Member <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const input = document.querySelector<HTMLInputElement>('[data-member-search]');
+    const cards = document.querySelectorAll<HTMLElement>('.member-card');
+    input?.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      cards.forEach((card) => {
+        card.style.display = !q || (card.dataset.name ?? '').includes(q) ? '' : 'none';
+      });
+    });
+  </script>
+</BaseLayout>

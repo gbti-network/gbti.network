@@ -1,0 +1,23 @@
+{
+  "name": "gbti-network",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "GBTI Network local client: a member's local authoring node (CMS + MCP server) over the Stripe-gated public-repo PR flow. SOW-006.",
+  "bin": {
+    "gbti-network": "./src/index.mjs",
+    "gbti-network-mcp": "./src/mcp-stdio.mjs",
+    "gbti": "./src/cli.mjs"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.mjs"
+  },
+  "license": "UNLICENSED",
+  "private": false
+}

@@ -1,0 +1,22 @@
+# Split ownership for anti-PR-escalation (see .data/specs/roles-and-capabilities.md).
+# Replace the placeholder handles with real GitHub usernames or teams at M0.
+#
+# Superadmin-owned (admins cannot self-promote): roles, CODEOWNERS, CI, and root config.
+/CODEOWNERS              @atwellpub @gbtilabs
+/.github/                @atwellpub @gbtilabs
+/house/roles.yml         @atwellpub @gbtilabs
+/astro.config.mjs        @atwellpub @gbtilabs
+/package.json            @atwellpub @gbtilabs
+/src/                    @atwellpub @gbtilabs
+/scripts/                @atwellpub @gbtilabs
+
+# Admin-owned: bans, grandfather, and the rest of house/. The two superadmins own both tiers
+# until a separate admin team exists (swap an @org/admins team in here later without touching
+# the superadmin-owned paths above).
+/house/                  @atwellpub @gbtilabs
+# SOW-022: applets are a SUPERADMIN-only content type (GBTI does not host member code). Explicit so the rule
+# holds even if /house/ is later delegated to an admin team. The collection glob also excludes member folders,
+# and validate-content rejects any members/*/applets/.
+/house/applets/          @atwellpub @gbtilabs
+
+# members/<username>/ is author-scoped by the gate + scripts/validate-content.mjs, not by CODEOWNERS.

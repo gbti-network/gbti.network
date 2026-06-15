@@ -1,0 +1,68 @@
+// Minimal, dependency-free Markdown renderer for the CMS LOCAL PREVIEW (SOW-006). This is an approximate
+// preview for authoring convenience; the authoritative render is the Astro site build. It escapes HTML
+// first (the preview is shown in the local CMS, but we still never inject raw input), then handles the
+// common blocks (headings, lists, blockquotes, fenced code, hr, paragraphs) and inline (code, links, bold,
+// italic). Pure + unit-testable.
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// Inline formatting. Input is ALREADY HTML-escaped, so only markdown punctuation remains to transform.
+function inline(escaped) {
+  let t = escaped;
+  t = t.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`);
+  t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  return t;
+}
+
+export function renderMarkdown(md) {
+  const lines = String(md ?? '').replace(/\r\n/g, '\n').split('\n');
+  const out = [];
+  let inCode = false;
+  let codeBuf = [];
+  let listType = null;
+  let listBuf = [];
+  const flushList = () => {
+    if (listType) {
+      out.push(`<${listType}>${listBuf.join('')}</${listType}>`);
+      listType = null;
+      listBuf = [];
+    }
+  };
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^```/.test(line)) {
+      if (!inCode) { inCode = true; codeBuf = []; }
+      else { inCode = false; flushList(); out.push(`<pre><code>${escapeHtml(codeBuf.join('\n'))}</code></pre>`); }
+      i++; continue;
+    }
+    if (inCode) { codeBuf.push(line); i++; continue; }
+
+    const esc = escapeHtml(line);
+    let m;
+    if ((m = /^(#{1,6})\s+(.*)$/.exec(esc))) { flushList(); out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); i++; continue; }
+    if (/^\s*[-*]\s+/.test(line)) { if (listType !== 'ul') { flushList(); listType = 'ul'; } listBuf.push(`<li>${inline(escapeHtml(line.replace(/^\s*[-*]\s+/, '')))}</li>`); i++; continue; }
+    if (/^\s*\d+\.\s+/.test(line)) { if (listType !== 'ol') { flushList(); listType = 'ol'; } listBuf.push(`<li>${inline(escapeHtml(line.replace(/^\s*\d+\.\s+/, '')))}</li>`); i++; continue; }
+    if (/^\s*>\s?/.test(line)) { flushList(); out.push(`<blockquote>${inline(escapeHtml(line.replace(/^\s*>\s?/, '')))}</blockquote>`); i++; continue; }
+    if (/^\s*(---|\*\*\*)\s*$/.test(line)) { flushList(); out.push('<hr/>'); i++; continue; }
+    if (/^\s*$/.test(line)) { flushList(); i++; continue; }
+
+    // paragraph: gather consecutive plain lines
+    flushList();
+    const para = [esc];
+    i++;
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,6})\s|^\s*[-*]\s|^\s*\d+\.\s|^```|^\s*>/.test(lines[i])) {
+      para.push(escapeHtml(lines[i]));
+      i++;
+    }
+    out.push(`<p>${inline(para.join(' '))}</p>`);
+  }
+  flushList();
+  if (inCode) out.push(`<pre><code>${escapeHtml(codeBuf.join('\n'))}</code></pre>`);
+  return out.join('\n');
+}

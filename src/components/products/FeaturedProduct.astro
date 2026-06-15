@@ -1,0 +1,183 @@
+---
+// Shared "Editor's pick" spotlight (ported from the /products/ page). Accepts one or more products:
+// a single product renders one spotlight; multiple render a slider you can page through. Relies on the
+// glyph defs (#g-arrow, #g-wp ...) emitted by <ProductDirectory>, so render this AFTER a
+// ProductDirectory on the same page. Used by /products/ (newest, one) and the home page (3 at random).
+import { getCollection } from 'astro:content';
+import { Image } from 'astro:assets';
+import Avatar from '../Avatar.astro';
+import { leafLabel } from '../../lib/taxonomy';
+import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
+
+interface Props {
+  products?: any[];
+  product?: any; // back-compat: single product
+  eyebrow?: string;
+  heading?: string;
+}
+const { products, product, eyebrow = "Editor's pick", heading = 'Featured products' } = Astro.props;
+const items = (products ?? (product ? [product] : [])).filter(Boolean);
+const profileByUser = new Map((await getCollection('profile')).map((p) => [p.data.username, p.data]));
+
+const DESIGN_CAT: Record<string, { label: string; cls: string }> = {
+  wordpress: { label: 'WordPress', cls: 'c-wp' },
+  'ide-plugins': { label: 'IDE Plugins', cls: 'c-ide' },
+  mods: { label: 'Mods', cls: 'c-mod' },
+  utilities: { label: 'Utilities', cls: 'c-util' },
+};
+const leafKeyOf = (p: any) => p.data.categories?.[p.data.categories.length - 1] ?? '';
+const catOf = (p: any) => DESIGN_CAT[leafKeyOf(p)] ?? { label: leafLabel(p.data.categories) || 'Product', cls: 'c-util' };
+const isSlider = items.length > 1;
+---
+{items.length > 0 && (
+<section class="spot-band">
+  <div class="wrap">
+    <div class="slider-head">
+      <div><p class="eyebrow">{eyebrow}</p><h2 class="h2 mt8">{isSlider ? heading : 'Featured product'}</h2></div>
+      {isSlider && (
+        <div class="slider-nav">
+          <button class="snav" data-fplay aria-label="Pause autoplay" aria-pressed="true">
+            <svg class="ico-pause" viewBox="0 0 24 24"><rect x="7" y="6" width="3.4" height="12" rx="1" fill="currentColor"/><rect x="13.6" y="6" width="3.4" height="12" rx="1" fill="currentColor"/></svg>
+            <svg class="ico-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
+          </button>
+          <button class="snav" data-fnav="-1" aria-label="Previous"><svg viewBox="0 0 24 24"><use href="#g-arrow"/></svg></button>
+          <button class="snav" data-fnav="1" aria-label="Next"><svg viewBox="0 0 24 24"><use href="#g-arrow"/></svg></button>
+        </div>
+      )}
+    </div>
+
+    <div class:list={['pfeat-slider', isSlider && 'is-slider']} data-fslider>
+      <div class="pfeat-track" data-ftrack>
+        {items.map((p) => {
+          const c = catOf(p);
+          const cover = p.data.featuredImage ?? p.data.banner;
+          const author = p.data.author;
+          return (
+            <div class="pfeat-slide">
+              <article class:list={['pfeat', 'card', c.cls]}>
+                <div class="pfeat-media">
+                  <span class="pfeat-flag"><span class="chip-dot" style="background:#fff"></span> Featured</span>
+                  {cover
+                    ? <Image class="pfeat-bg" src={cover} width={1280} height={800} alt="" />
+                    : <Image class="pfeat-icon" src={p.data.icon} width={120} height={120} alt={`${p.data.title} icon`} />}
+                </div>
+                <div class="pfeat-body">
+                  <span class:list={['pchip', c.cls]}>{c.label}</span>
+                  <h2 class="h2">{p.data.title}</h2>
+                  <p class="lead">{p.data.shortDescription ?? ''}</p>
+                  <div class="pfeat-cta">
+                    <a class="btn btn-primary" href={`/products/${p.data.slug}/`}>View details <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#g-arrow"/></svg></a>
+                    <span class="prow-author"><Avatar item={{ name: authorDisplay(author), avatar: authorAvatar(author, profileByUser.get(author)?.avatar) }} class="shrink-0" size={22} />{profileByUser.has(author) ? <a href={authorHref(author)}>{authorDisplay(author)}</a> : <span>{authorDisplay(author)}</span>}</span>
+                  </div>
+                </div>
+              </article>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    {isSlider && (
+      <div class="pfeat-dots" data-fdots>
+        {items.map((_, i) => <button class:list={['pfeat-dot', i === 0 && 'on']} data-fdot={i} aria-label={`Go to slide ${i + 1}`}></button>)}
+      </div>
+    )}
+  </div>
+</section>
+)}
+
+<style>
+  .c-wp   { --ca:#2f63c0; --cb:#5a8de0; --ct:#eef3fc; --cl:#bcd0f0; }
+  .c-ide  { --ca:#6b4fb0; --cb:#9277d4; --ct:#f2eefb; --cl:#d6c9ee; }
+  .c-mod  { --ca:#b3791f; --cb:#d8a847; --ct:#fbf3e3; --cl:#ecd9ad; }
+  .c-util { --ca:#138178; --cb:#3bb0a4; --ct:#e7f5f3; --cl:#b6e0da; }
+  .pchip { display: inline-flex; align-items: center; font-family: var(--f-mono); font-size: 11px; font-weight: 500; letter-spacing: .02em;
+    padding: 4px 9px; border-radius: 4px; border: 1.5px solid var(--cl); color: var(--ca); background: var(--ct); white-space: nowrap; }
+  .prow-author { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--fg-mute); white-space: nowrap; }
+  .prow-author a { color: var(--fg-soft); font-weight: 600; }
+
+  /* extra breathing room above the spotlight, separating it from the compact directory above */
+  .spot-band { padding: 48px 0 64px; }
+  .slider-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+  .slider-nav { display: flex; gap: 10px; }
+  .snav { width: 42px; height: 42px; border-radius: 50%; border: 1.5px solid var(--line-2); background: var(--paper); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--fg); transition: all .15s; box-shadow: var(--sh-sm); }
+  .snav:hover { border-color: var(--ink); transform: translateY(-1px); box-shadow: var(--sh); }
+  .snav[data-fnav="-1"] svg { transform: rotate(180deg); }
+  .snav svg { width: 18px; height: 18px; }
+
+  /* slider mechanics: each slide is full width; track shifts by 100% per step */
+  .pfeat-slider { overflow: hidden; }
+  .pfeat-track { display: flex; transition: transform .42s cubic-bezier(.4,0,.2,1); will-change: transform; }
+  .pfeat-slide { flex: 0 0 100%; min-width: 0; padding: 4px; }
+
+  .pfeat { display: grid; grid-template-columns: 0.9fr 1.1fr; overflow: hidden; padding: 0; }
+  .pfeat-media { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; background: linear-gradient(150deg, var(--cb), var(--ca)); }
+  .pfeat-icon { width: 120px; height: 120px; border-radius: 26px; object-fit: contain; background: rgba(255,255,255,.92); padding: 16px; }
+  /* stretch the featured image to fill the whole media panel (no gradient margins above/below). It
+     covers the panel; the 16:10 source keeps cropping minimal. */
+  .pfeat-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pfeat-flag { position: absolute; top: 18px; left: 18px; z-index: 2; display: inline-flex; align-items: center; gap: 7px; background: rgba(0,0,0,.32); color: #fff; font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 6px 11px; border-radius: 999px; }
+  .pfeat-body { padding: 38px 40px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; }
+  .pfeat-body .h2 { margin: 14px 0 12px; }
+  .pfeat-cta { display: flex; align-items: center; gap: 14px; margin-top: 26px; flex-wrap: wrap; }
+  :global(.pfeat-cta .prow-author .shrink-0) { border-radius: 50%; flex: none; }
+
+  /* autoplay toggle: shows the pause glyph while playing, the play glyph while paused */
+  .snav[data-fplay] .ico-play { display: none; }
+  .snav[data-fplay].is-paused .ico-pause { display: none; }
+  .snav[data-fplay].is-paused .ico-play { display: block; }
+
+  .pfeat-dots { display: flex; justify-content: center; gap: 9px; margin-top: 22px; }
+  .pfeat-dot { width: 9px; height: 9px; border-radius: 50%; border: 0; cursor: pointer; background: var(--line-2); transition: all .15s; padding: 0; }
+  .pfeat-dot.on { background: var(--green); transform: scale(1.25); }
+
+  @media (max-width: 1080px) {
+    .pfeat { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+  // Featured-products slider: page through full-width spotlights with arrows + dots (wrap-around).
+  document.querySelectorAll<HTMLElement>('[data-fslider].is-slider').forEach((slider) => {
+    const track = slider.querySelector<HTMLElement>('[data-ftrack]');
+    if (!track) return;
+    const slides = track.children.length;
+    if (slides <= 1) return;
+    const head = slider.previousElementSibling; // .slider-head
+    const prev = head?.querySelector<HTMLButtonElement>('[data-fnav="-1"]');
+    const next = head?.querySelector<HTMLButtonElement>('[data-fnav="1"]');
+    const dotsWrap = slider.nextElementSibling; // .pfeat-dots
+    const dots = dotsWrap ? Array.from(dotsWrap.querySelectorAll<HTMLButtonElement>('[data-fdot]')) : [];
+    let index = 0;
+    const render = () => {
+      track.style.transform = `translateX(${-index * 100}%)`;
+      dots.forEach((d, i) => d.classList.toggle('on', i === index));
+    };
+    const go = (d: number) => { index = (index + d + slides) % slides; render(); };
+
+    // Autoplay (6s) with a pause/play toggle to the left of the arrows. Pauses on hover and respects
+    // prefers-reduced-motion (starts paused). Manual nav restarts the timer so the current slide is held.
+    const playBtn = head?.querySelector<HTMLButtonElement>('[data-fplay]');
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let playing = !reduce;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+    const start = () => { stop(); if (playing) timer = setInterval(() => go(1), 6000); };
+    const setPlaying = (v: boolean) => {
+      playing = v;
+      playBtn?.classList.toggle('is-paused', !v);
+      playBtn?.setAttribute('aria-pressed', String(v));
+      playBtn?.setAttribute('aria-label', v ? 'Pause autoplay' : 'Play autoplay');
+      start();
+    };
+    playBtn?.addEventListener('click', () => setPlaying(!playing));
+    slider.addEventListener('mouseenter', stop);
+    slider.addEventListener('mouseleave', () => { if (playing) start(); });
+
+    next?.addEventListener('click', () => { go(1); start(); });
+    prev?.addEventListener('click', () => { go(-1); start(); });
+    dots.forEach((d, i) => d.addEventListener('click', () => { index = i; render(); start(); }));
+    render();
+    setPlaying(playing);
+  });
+</script>

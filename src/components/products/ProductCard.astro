@@ -1,0 +1,57 @@
+---
+import { Image } from 'astro:assets';
+import { getCollection } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+import { leafLabel, topKey } from '../../lib/taxonomy';
+import { authorDisplay, authorHref } from '../../lib/authors';
+import { buildAvatarIndex, avatarStack } from '../../lib/avatars';
+import { isStub } from '../../lib/content';
+import StackedAvatars from '../StackedAvatars.astro';
+
+interface Props {
+  product: CollectionEntry<'product'>;
+}
+const { product } = Astro.props;
+const d = product.data;
+const stub = isStub(product); // SOW-016: a listed members item is a Mode B stub (the body is gated)
+const paid = d.pricing && d.pricing !== 'free'; // SOW-014
+const memberOnly = (d.links ?? []).some((l) => l.visibility === 'members'); // SOW-014
+const repo = (d.links ?? []).find((l) => l.type === 'repository' && l.visibility !== 'members')?.url; // SOW-014
+const index = buildAvatarIndex(await getCollection('profile'));
+const comments = await getCollection('comment');
+const stack = avatarStack({ author: d.author, contributors: d.contributors, comments, targetType: 'product', targetSlug: d.slug, index });
+---
+<article
+  data-category={topKey(d.categories)}
+  class="card card-hover"
+  style="padding:22px;display:flex;flex-direction:column"
+>
+  <a href={`/products/${d.slug}/`} class="flex items-center g14" style="margin-bottom:16px">
+    <Image src={d.icon} alt={`${d.title} icon`} width={64} height={64} style="width:56px;height:56px;flex:none;border-radius:var(--r);object-fit:contain;background:var(--tint);border:1.5px solid var(--line)" />
+    <div>
+      <h2 class="h4">{d.title}</h2>
+      <div class="flex items-center g8 wrap-w" style="margin-top:6px">
+        <span class="chip">{leafLabel(d.categories)}</span>
+        {paid && <span class="chip chip-green">Paid</span>}
+        {stub ? (
+          <span class="chip chip-green" style="display:inline-flex;align-items:center;gap:4px">
+            <svg viewBox="0 0 24 24" width="12" height="12"><use href="#ico-lock"/></svg>Members only
+          </span>
+        ) : memberOnly && (
+          <span class="chip" data-tooltip="Has member-only resources" style="display:inline-flex;align-items:center;gap:4px">
+            <svg viewBox="0 0 24 24" width="12" height="12"><use href="#ico-lock"/></svg>Members
+          </span>
+        )}
+      </div>
+    </div>
+  </a>
+  <p class="body-sm muted" style="flex:1;margin-bottom:16px">{d.shortDescription}</p>
+  <div class="flex items-center g12" style="margin-bottom:14px">
+    <StackedAvatars items={stack} size="sm" max={4} />
+    <a href={authorHref(d.author)} class="body-sm" style="color:var(--fg-soft);font-weight:500">{authorDisplay(d.author)}</a>
+  </div>
+  <div class="flex items-center g16">
+    <a href={`/products/${d.slug}/`} class="link" style="font-size:14px">View details <svg class="ar" viewBox="0 0 24 24" width="16" height="16"><use href="#ico-arrow"/></svg></a>
+    {repo && <a href={repo} rel="noopener" class="body-sm muted" style="font-weight:600">Repo</a>}
+  </div>
+</article>

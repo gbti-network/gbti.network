@@ -1,0 +1,41 @@
+# build output
+dist/
+.astro/
+# ...but the shipped client-ui bundle (the npm host serves it + the extension loads it) IS tracked.
+!client-ui/dist/
+!client-ui/dist/gbti-ui.js
+# ...and the built MV3 extension bundles (loaded unpacked / packed for the Chrome Web Store) ARE tracked.
+!extension/dist/
+!extension/dist/*.js
+
+# dependencies
+node_modules/
+
+# wrangler build scratch (never commit; the Worker is deployed from source)
+.wrangler/
+
+# env / secrets (never commit, see specs/membership-and-access.md)
+.env
+.env.*
+!.env.example
+# Worker local-dev secrets (wrangler reads .dev.vars). Keep the .example tracked, never the real file.
+.dev.vars
+**/.dev.vars
+# Production Worker secrets holding file (deploy-day source for `wrangler secret put --env production`). NEVER commit.
+.prod.vars
+**/.prod.vars
+
+# planning artifacts — NEVER ship to the public site repo.
+# .data/legacy/_videos holds ~120 MB of mp4s that would violate the no-video-in-git rule.
+.data/
+.snapshots/
+
+# Internal project guide (architecture + the email -> github_id mapping). Stays local, never in the repo.
+CLAUDE.md
+
+# transient award payload written by the award-contribution workflow (never committed)
+payload.json
+
+# os / editor
+.DS_Store
+Thumbs.db

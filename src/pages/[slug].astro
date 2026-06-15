@@ -1,0 +1,36 @@
+---
+import { getCollection, render } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Container from '../components/Container.astro';
+import Prose from '../components/blog/Prose.astro';
+import { isPublic } from '../lib/content';
+import { formatDate } from '../lib/authors';
+
+// Static info/legal pages from the `page` collection (house/pages/*.md).
+// getStaticPaths only emits these slugs, so this does not collide with /blog, /products, etc.
+export async function getStaticPaths() {
+  const pages = (await getCollection('page')).filter(isPublic);
+  return pages.map((page) => ({ params: { slug: page.data.slug }, props: { page } }));
+}
+
+const { page } = Astro.props;
+const d = page.data;
+const { Content } = await render(page);
+---
+<BaseLayout title={d.title} description={d.description}>
+  <section class="band">
+    <Container>
+      {/* Explicit reading-measure cap (~80 chars). Container's base max-width is wider and would win a
+          Tailwind class conflict, so cap here to keep legal/info prose comfortable to read. */}
+      <div style="max-width:760px">
+        <h1 class="h1">{d.title}</h1>
+        {d.updatedAt && <p class="mono muted mt12" style="font-size:13px">Updated {formatDate(d.updatedAt)}</p>}
+        <div class="mt32">
+          <Prose>
+            <Content />
+          </Prose>
+        </div>
+      </div>
+    </Container>
+  </section>
+</BaseLayout>

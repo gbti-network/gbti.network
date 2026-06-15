@@ -1,0 +1,43 @@
+name: Extension build drift
+
+# SOW-019: the site serves committed build artifacts (client-ui/dist/gbti-ui.js, extension/dist/*.js,
+# extension/mcp/*.mjs, public/extension/{zip,latest.json}). They are reproducible esbuild + deterministic-zip
+# outputs, so a stale commit (source changed without re-running the build) is a drift bug the site would ship.
+# This secret-free job rebuilds them from source and fails if the committed copies differ, plus runs the
+# read-only consistency guard. Triggers only on changes to the relevant source so unrelated PRs skip it.
+
+on:
+  pull_request:
+    paths:
+      - 'extension/**'
+      - 'client-ui/**'
+      - 'client/src/**'
+      - 'scripts/check-extension.mjs'
+  push:
+    branches: [main]
+    paths:
+      - 'extension/**'
+      - 'client-ui/**'
+      - 'client/src/**'
+      - 'scripts/check-extension.mjs'
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # NOTE: no --omit=optional here. esbuild ships its platform binary (@esbuild/linux-x64) as an OPTIONAL
+      # dependency, and the rebuild steps below need it; --ignore-scripts still keeps the job secret-free.
+      - run: npm ci --ignore-scripts
+      # Rebuild the shared UI bundle + the extension (build:extension bundles then repackages the zip + latest.json).
+      - run: node client-ui/build.mjs
+      - run: npm run build:extension
+      # The committed build artifacts must match a fresh build. A non-empty diff means a source change was not
+      # rebuilt + committed; the contributor should run `node client-ui/build.mjs && npm run build:extension`.
+      - name: Assert committed build artifacts are fresh
+        run: git diff --exit-code -- client-ui/dist extension/dist extension/mcp public/extension
+      - run: npm run check:extension
+      - run: node --test test/extension-package.test.mjs test/extension-dispatch.test.mjs test/extension-reader.test.mjs

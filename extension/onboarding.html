@@ -1,0 +1,86 @@
+<!doctype html>
+<!-- SOW-026: the extension's first-run onboarding page, opened in a NEW TAB straight from the toolbar icon
+     (the action has no popup; a popup closes the instant it loses focus, which broke the device-flow code;
+     a tab persists while the member reads the code and visits GitHub). Light mode by design, two columns: a
+     brand panel on the left, the
+     shared <gbti-onboarding> wizard (sign in -> make your copy -> give access) on the right. No data-theme is
+     set, so the wizard's V3 tokens render in their light palette. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Set up publishing · GBTI Network</title>
+  <style>
+    :root {
+      --paper: #ffffff; --paper-2: #faf9f8; --ink: #25232b; --fg: #24222a; --fg-soft: #57545e; --fg-mute: #84818c;
+      --line: #e7e4e0; --line-2: #d8d4cf; --green: #1f9e5f; --green-700: #0f6f40; --green-tint: #e9f6ef;
+      --r: 12px; --r-lg: 18px;
+      --sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --display: 'Baloo Da 2', 'Hanken Grotesk', system-ui, sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--paper-2); color: var(--fg); font-family: var(--sans);
+      -webkit-font-smoothing: antialiased; display: grid; place-items: center; padding: 32px 20px; }
+    .shell { width: 100%; max-width: 920px; display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+      background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden;
+      box-shadow: 0 18px 48px rgba(37, 35, 43, .08); }
+
+    /* Left: the brand panel. */
+    .brand { background: linear-gradient(160deg, #f3fbf6 0%, #ffffff 70%); border-right: 1px solid var(--line);
+      padding: 40px 36px; display: flex; flex-direction: column; }
+    .brand .logo { width: 72px; height: 72px; border-radius: 18px; display: block; }
+    .brand h1 { font-family: var(--display); font-size: 27px; line-height: 1.15; letter-spacing: -.01em;
+      margin: 26px 0 10px; color: var(--ink); }
+    .brand .lede { font-size: 15px; line-height: 1.6; color: var(--fg-soft); margin: 0 0 26px; max-width: 34ch; }
+    .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+    .steps li { display: flex; gap: 12px; align-items: flex-start; }
+    .steps .n { flex: none; width: 26px; height: 26px; border-radius: 999px; background: var(--green-tint);
+      color: var(--green-700); font-weight: 800; font-size: 13px; display: grid; place-items: center; }
+    .steps .tx b { display: block; font-size: 14px; color: var(--ink); }
+    .steps .tx span { font-size: 13px; color: var(--fg-mute); line-height: 1.5; }
+    .brand .foot { margin-top: auto; padding-top: 28px; font-size: 12.5px; color: var(--fg-mute); line-height: 1.6; }
+    .brand .foot a { color: var(--green-700); font-weight: 600; }
+    .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--green-700); font-weight: 600;
+      cursor: pointer; text-decoration: underline; }
+    .linkbtn:hover { color: var(--ink); }
+
+    /* Right: the wizard mount. */
+    .panel { padding: 40px 36px; display: flex; flex-direction: column; justify-content: center; }
+    #app { min-height: 220px; }
+    .loading { color: var(--fg-mute); font-size: 14px; }
+    .done { text-align: center; }
+    .done h2 { font-family: var(--display); font-size: 22px; color: var(--ink); margin: 14px 0 8px; }
+    .done p { color: var(--fg-soft); font-size: 14.5px; line-height: 1.6; margin: 0 0 22px; }
+    .done .cta { display: inline-block; background: var(--green); color: #fff; font-weight: 800; text-decoration: none;
+      padding: 12px 26px; border-radius: var(--r); }
+    .done .cta:hover { background: var(--green-700); }
+    .done .tick { width: 56px; height: 56px; }
+
+    @media (max-width: 720px) {
+      .shell { grid-template-columns: 1fr; max-width: 460px; }
+      .brand { border-right: 0; border-bottom: 1px solid var(--line); }
+      .brand .foot { padding-top: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="brand">
+      <img class="logo" src="icons/icon-128.png" alt="GBTI Network" />
+      <h1>Set up publishing on GBTI Network</h1>
+      <p class="lede">Connect your GitHub account once, and you can write, edit, and publish to the co-op straight from your browser.</p>
+      <ol class="steps">
+        <li><span class="n">1</span><span class="tx"><b>Sign in with GitHub</b><span>We use a one-time code, no password leaves GitHub.</span></span></li>
+        <li><span class="n">2</span><span class="tx"><b>Make your copy</b><span>A fork of the content repository holds your drafts.</span></span></li>
+        <li><span class="n">3</span><span class="tx"><b>Give access</b><span>Install the GBTI app so we can open your pull requests.</span></span></li>
+      </ol>
+      <p class="foot" data-account>Not a member yet? <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Join GBTI Network</a> to publish.</p>
+    </section>
+    <section class="panel">
+      <div id="app"><p class="loading">Checking your setup...</p></div>
+    </section>
+  </main>
+  <script src="dist/onboarding.js"></script>
+</body>
+</html>

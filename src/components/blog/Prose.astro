@@ -1,0 +1,51 @@
+---
+// Article body styling — reproduces the legacy blog post-content look
+// (source: .data/ops/design-ops/legacy-css/portfolio-lite-child__post.css):
+// ~1.2em body, deep-green blockquotes, monospace figcaptions, rounded media.
+---
+<div class="prose-gbti">
+  <slot />
+</div>
+
+<style is:global>
+  .prose-gbti {
+    color: var(--fg-soft);
+    font-size: 1.15rem;
+    line-height: 1.75;
+  }
+  .prose-gbti > :first-child { margin-top: 0; }
+  .prose-gbti p { margin: 1.1em 0; }
+  .prose-gbti h2,
+  .prose-gbti h3,
+  .prose-gbti h4 {
+    font-family: var(--f-display);
+    font-weight: 800;
+    color: var(--fg);
+    line-height: 1.25;
+    margin: 1.6em 0 0.5em;
+  }
+  .prose-gbti h2 { font-size: 1.9rem; }
+  .prose-gbti h3 { font-size: 1.5rem; }
+  .prose-gbti h4 { font-size: 1.2rem; }
+  .prose-gbti a { color: var(--green-700); text-decoration: underline; text-underline-offset: 2px; }
+  .prose-gbti a:hover { color: var(--green-600); }
+  .prose-gbti ul, .prose-gbti ol { margin: 1.25em 0; padding-left: 1.5em; }
+  .prose-gbti li { margin: 0.4em 0; }
+  .prose-gbti ul li { list-style: disc; }
+  .prose-gbti ol li { list-style: decimal; }
+  .prose-gbti blockquote {
+    border-left: 9px solid var(--green);
+    margin: 1.5em 0;
+    padding: 0.2em 0 0.2em 20px;
+  }
+  .prose-gbti blockquote p { color: var(--fg); font-style: italic; }
+  .prose-gbti blockquote cite { display: block; margin-top: 0.5em; color: var(--green-700); font-style: normal; font-size: 0.95rem; }
+  .prose-gbti img { border-radius: 10px; margin: 1.5em auto; max-width: 100%; height: auto; }
+  .prose-gbti figure { margin: 1.5em auto; text-align: center; }
+  .prose-gbti figcaption { font-family: var(--f-mono); background: var(--tint); color: var(--fg-mute); font-size: 0.85rem; padding: 4px 8px; text-align: left; }
+  .prose-gbti :not(pre) > code { background: var(--tint); color: var(--fg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; }
+  .prose-gbti pre { background: var(--ink-2); color: var(--on-dark); padding: 1em; border-radius: 8px; overflow-x: auto; margin: 1.5em 0; }
+  .prose-gbti pre code { background: none; padding: 0; }
+  .prose-gbti hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+  .prose-gbti iframe { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; margin: 1.5em 0; border-radius: 10px; }
+</style>

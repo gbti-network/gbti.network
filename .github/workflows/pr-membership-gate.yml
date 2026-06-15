@@ -1,0 +1,65 @@
+name: PR membership gate
+
+# SOW-005 PR-gate: the required status check that decides whether a content PR may merge.
+#
+# THE ONE RULE THAT MUST NEVER BE BROKEN:
+#   Never check out or execute untrusted PR code in this workflow.
+# This workflow runs on `pull_request_target`, so it executes the BASE branch's workflow (a PR
+# cannot alter the gate that judges it) and it holds secrets (Stripe read-only key, GitHub
+# content-write token). The gate reads ONLY PR metadata (author github_id, changed file paths via
+# the API). actions/checkout below has NO `ref:` override, so it checks out the BASE branch, never
+# `github.event.pull_request.head`. Do not add a ref that points at the PR head, and do not run any
+# script, build step, or install hook from the PR's tree. Violating this leaks every secret and
+# defeats every other access-control layer. See .data/specs/roles-and-capabilities.md.
+#
+# Trigger split (review hardening #4): the secret-free content/media validation runs on
+# `pull_request` (see content-check.yml, media-check.yml); ONLY this metadata gate runs on
+# `pull_request_target` with secrets. "Require approval to run workflows on fork PRs" applies to
+# this workflow alone.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+  # An owner accepts a contribution by submitting an approving review. Re-run the gate on review
+  # events so the contribution check flips green once the owner has approved on the current head.
+  pull_request_review:
+    types: [submitted, dismissed]
+
+# The gate (using the bot token) writes the commit status + label and auto-closes non-member PRs.
+# These permissions cover the workflow GITHUB_TOKEN as a floor; the bot PAT does the actual writes.
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+jobs:
+  membership-gate:
+    runs-on: ubuntu-latest
+    steps:
+      # Checks out the BASE branch (no ref override = the base of the pull_request_target event).
+      # We need the base branch's scripts and the base copy of house/*.yml (the overrides), never
+      # the PR head.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # This job holds Stripe + GitHub secrets, and the gate code imports only membership/*, clients/*,
+      # and js-yaml. Install with no lifecycle scripts and no optional native deps (sharp) to keep the
+      # supply-chain surface next to the secrets as small as possible.
+      - run: npm ci --ignore-scripts --omit=optional
+
+      - name: Run the membership gate (metadata only)
+        run: node scripts/pr-gate.mjs
+        env:
+          # The content-write token is a fine-grained PAT for the gbtilabs superadmin (automation runs as
+          # gbtilabs), passed under its own name, never aliased onto the conventional GITHUB_TOKEN. The Actions
+          # SECRET is named GH_BOT_TOKEN because GitHub forbids any secret/variable name starting with GITHUB_;
+          # it is injected into the unrestricted env var GITHUB_BOT_TOKEN that the scripts read.
+          GITHUB_BOT_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          # GITHUB_CONTENT_REPO is a non-secret constant (and could not be a GITHUB_-prefixed secret anyway):
+          GITHUB_CONTENT_REPO: gbti-network/gbti.network
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          # BOT_GITHUB_ID is intentionally unset: gbtilabs is exempt by its superadmin role, and isBot
+          # must never be pointed at a superadmin id. Set this only for a future dedicated admin-only bot.

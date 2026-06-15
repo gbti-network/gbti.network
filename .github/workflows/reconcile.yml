@@ -1,0 +1,69 @@
+name: Reconcile membership
+
+# SOW-005 reconciliation. Brings published content + Discord roles in line with the Stripe registry
+# plus git-native overrides (bans, grandfather). Runs daily on a schedule and on demand.
+#
+# The owner runs it LOCALLY FIRST with a dry run to review the plan before any scheduled apply:
+#   node scripts/reconcile.mjs --dry-run   # prints the plan, changes nothing
+#   node scripts/reconcile.mjs --apply     # enacts it
+# This workflow runs the apply path. The reconcile is idempotent: a no-op run yields an empty plan.
+
+on:
+  schedule:
+    - cron: '17 7 * * *'   # daily at 07:17 UTC (off the hour to avoid the cron rush)
+  workflow_dispatch: {}
+  # The checkout-success return URL (SOW-002 Worker) fires repository_dispatch type 'regate' with
+  # client_payload.github_id after a payment, so a just-paid member is reconciled immediately (held
+  # PRs released, Discord role upgraded, content published) instead of waiting for the daily run.
+  repository_dispatch:
+    types: [regate]
+
+# Least privilege: the reconcile authenticates to GitHub with GITHUB_BOT_TOKEN (a content-write PAT),
+# not the default workflow token, so the bot identity (admin in roles.yml) is the PR author the gate sees.
+permissions:
+  contents: read
+
+concurrency:
+  group: reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Reconcile (apply)
+        run: node scripts/reconcile.mjs --apply
+        env:
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          # GH_BOT_TOKEN: GitHub forbids a GITHUB_-prefixed secret name, so the gbtilabs PAT is stored as
+          # GH_BOT_TOKEN and injected into the GITHUB_BOT_TOKEN env var the script reads. The repo is a constant.
+          GITHUB_BOT_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          GITHUB_CONTENT_REPO: gbti-network/gbti.network
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          # Discord guild + role ids are non-secret production constants (acting on them needs the bot
+          # token), so they are inlined here rather than stored as Actions secrets. The Locked role is
+          # assigned to lapsed/banned accounts so they are locked out via the role's channel overwrites
+          # while staying in the guild; the reconcile only assigns it.
+          DISCORD_GUILD_ID: "1073029070411006053"
+          DISCORD_MEMBER_ROLE_ID: "1511810502970441900"
+          DISCORD_TRIAL_ROLE_ID: "1511800465107583198"
+          DISCORD_LOCKED_ROLE_ID: "1512558475341987990"
+          # Day-87 trial reminder: email (Resend) is the PRIMARY channel, the Discord DM is secondary.
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          # Non-secret sender address (must be on the Resend-verified gbti.network domain). Change here if desired.
+          RESEND_FROM: "GBTI Network <noreply@gbti.network>"
+          # SOW-016: mirror the effective overrides (ban > staff > grandfather) into the Worker's SIGNUP_KV
+          # so POST /membership/decrypt + GET /membership/status read a fresh blob. Without these three,
+          # scripts/lib/kv-mirror.mjs no-ops silently and the Worker fails closed once the mirror ages past
+          # MAX_OVERRIDES_AGE_MS (48h), denying effective-paid members. CF_KV_NAMESPACE_ID must equal the
+          # Worker's SIGNUP_KV id; CF_API_TOKEN is scoped to Workers KV Storage Edit on that one namespace.
+          # CF_ACCOUNT_ID + CF_KV_NAMESPACE_ID are non-secret identifiers, inlined like the rest; only
+          # CF_API_TOKEN (scoped to Workers KV Storage Edit on this namespace) is a real secret to set.
+          CF_ACCOUNT_ID: "d42b12e969229c5187ad0f7289536487"
+          CF_KV_NAMESPACE_ID: "49432379e11844ac81b6fdaf22d3937a"
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}

@@ -1,0 +1,34 @@
+@import "tailwindcss";
+/* The GBTI V3 design system (tokens + components + light/dark theme). Loaded globally so every page
+   shares the homepage's design language. SOW-010 site redesign v2. */
+@import "./gbti-v3.css";
+
+/* Tailwind v4 CSS-first tokens, mapped to the V3 brand so any Tailwind utility (bg-brand, text-ink,
+   font-sans, ...) resolves to a V3 value. The V3 custom properties in gbti-v3.css (--green, --fg,
+   --paper, ...) are the primary system; these mirror the brand for the Tailwind-built pages until they
+   are re-skinned onto the V3 tokens. Theme-aware fg/surface utilities below flip with light/dark. */
+@theme {
+  --color-brand: #1f9e5f;
+  --color-brand-light: #5fd49a;
+  --color-brand-dark: #178a51;
+  --color-ink: #25232b;
+  --color-slate: #57545e;
+
+  --font-display: "Baloo Da 2 Variable", ui-rounded, system-ui, sans-serif;
+  --font-sans: "Hanken Grotesk Variable", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+}
+
+/* The body is token-driven (gbti-v3.css sets background:var(--paper-2); color:var(--fg)), so it flips
+   between light + dark via [data-theme]. Headlines use the display family. */
+h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); }
+
+/* Theme-aware helpers for the Tailwind-built pages (so they read from the V3 tokens and support dark):
+   use surface/ink utilities instead of hardcoded grays/whites. */
+.bg-paper { background-color: var(--paper); }
+.bg-page { background-color: var(--paper-2); }
+.bg-tint { background-color: var(--tint-warm); }
+.text-fg { color: var(--fg); }
+.text-fg-soft { color: var(--fg-soft); }
+.text-fg-mute { color: var(--fg-mute); }
+.border-line { border-color: var(--line); }

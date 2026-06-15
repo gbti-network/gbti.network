@@ -1,0 +1,32 @@
+---
+// EditHooks (SOW-006 v2): emits the INERT in-place editing hook for a content page. This ships in the public
+// static build but does NOTHING for a visitor: <gbti-edit-panel> is an undefined custom element (hidden via
+// the :not(:defined) rule), so it carries only the editing metadata. Only when a member's client (the Chrome
+// extension or the npm host) loads the @gbti/client-ui bundle does the element upgrade, read these
+// data-gbti-* hooks + the page's data-gbti-region="title|body" markers, and offer in-place editing IF the
+// member owns the folder. "The code is there but does nothing without the client."
+//
+// Rendered only for member-owned content (house content is not member-inline-editable). The data exposed
+// (path/type/slug/owner) is already public (the content repo is public), so no new information leaks.
+import { contentRepoPath } from '../lib/content';
+
+interface Props {
+  type: 'post' | 'product' | 'prompt' | 'profile';
+  owner: string;
+  slug?: string;
+}
+const { type, owner, slug } = Astro.props;
+const path = contentRepoPath(type, owner, slug);
+---
+{path && (
+  <gbti-edit-panel
+    data-gbti-path={path}
+    data-gbti-type={type}
+    data-gbti-slug={slug ?? ''}
+    data-gbti-owner={owner}
+  ></gbti-edit-panel>
+)}
+<style is:global>
+  /* Inert in public: the editing element is undefined until a client loads @gbti/client-ui. */
+  gbti-edit-panel:not(:defined) { display: none; }
+</style>

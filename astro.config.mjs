@@ -1,0 +1,51 @@
+// @ts-check
+import { defineConfig } from 'astro/config';
+import tailwindcss from '@tailwindcss/vite';
+import sitemap from '@astrojs/sitemap';
+import mdx from '@astrojs/mdx';
+
+// SOW-001: static site for gbti.network, deployed on Cloudflare Pages.
+// Output is the default `static` — Pages serves `dist/` directly; no adapter needed.
+
+// Each content page's .astro template owns the single page <h1> (the title). Some migrated Markdown bodies
+// also open with a `# ` heading, which would emit a SECOND h1 and break the document outline (WCAG 1.3.1).
+// This rehype pass demotes any body h1 to h2 so the page keeps exactly one h1. Manual tree walk, no new dep.
+function rehypeDemoteBodyH1() {
+  return (tree) => {
+    const walk = (node) => {
+      if (node && node.type === 'element' && node.tagName === 'h1') node.tagName = 'h2';
+      if (node && Array.isArray(node.children)) for (const c of node.children) walk(c);
+    };
+    walk(tree);
+  };
+}
+
+export default defineConfig({
+  site: 'https://gbti.network',
+  // The Model page was merged into About; keep old links working. One key only: with trailingSlash:'ignore'
+  // it serves both /model and /model/, and two keys collide ("route defined more than once" build warning).
+  redirects: { '/model': '/about' },
+  markdown: { rehypePlugins: [rehypeDemoteBodyH1] },
+  // Dev-only Astro toolbar — hidden so local testing matches the published view.
+  devToolbar: { enabled: false },
+  integrations: [
+    mdx(),
+    // Keep the auth shell / noindex stub out of the sitemap so crawl budget goes to public content.
+    sitemap({ filter: (page) => !/\/account\/?$/.test(page) }),
+  ],
+  image: {
+    // The legacy archive includes oversized animated GIFs (~40 MB across 12 files). Don't let
+    // sharp's pixel guard fail the build. Proper handling — convert to YouTube/Vimeo embeds or
+    // optimized loops + a CI size cap — is SOW-001 Phase 5 (media pipeline) per content-schemas.md.
+    service: { entrypoint: 'astro/assets/services/sharp', config: { limitInputPixels: false } },
+    // Responsive images: emit srcset + sizes for <Image>/<Picture> AND Markdown content images, so a heavy
+    // full-resolution content image (some legacy posts shipped multi-MB pages) serves a right-sized variant
+    // per viewport instead of the full original. Astro generates the smaller widths already; this makes the
+    // rendered <img> actually reference them.
+    layout: 'constrained',
+    responsiveStyles: true,
+  },
+  vite: {
+    plugins: [tailwindcss()],
+  },
+});

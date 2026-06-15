@@ -1,0 +1,133 @@
+<!doctype html>
+<!-- SOW-017: the GBTI Network new-tab "Latest Activity" landing page. Styled with the V3 tokens (light + dark)
+     so it reads like the site. Fetches /activity-index.json from gbti.network (covered by the extension host
+     permission) and renders the newest co-op activity. The takeover is optional: a member can turn it off. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GBTI Network</title>
+  <script>
+    // No-flash theme: set data-theme before paint, from the persisted choice or the OS preference.
+    (function () {
+      try {
+        var t = localStorage.getItem('gbti-theme');
+        if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+        if (localStorage.getItem('gbti-newtab-off') === '1') document.documentElement.setAttribute('data-off', '1');
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root {
+      --paper: #ffffff; --paper-2: #faf9f8; --ink: #25232b; --fg: #24222a; --fg-soft: #57545e; --fg-mute: #84818c;
+      --line: #e7e4e0; --line-2: #d8d4cf; --green: #1f9e5f; --green-700: #0f6f40; --green-tint: #e9f6ef;
+      --r: 10px; --r-lg: 16px; --r-pill: 999px;
+      --sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+    }
+    [data-theme="dark"] {
+      --paper: #2d2a34; --paper-2: #1c1a21; --fg: #f3f2f0; --fg-soft: rgba(243,242,240,.72); --fg-mute: rgba(243,242,240,.5);
+      --line: rgba(255,255,255,.12); --line-2: rgba(255,255,255,.2); --green-700: #5fd49a; --green-tint: rgba(31,158,95,.13);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper-2); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+    a { color: inherit; }
+    .wrap { max-width: 940px; margin: 0 auto; padding: 56px 24px 80px; }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.01em; }
+    .brand .g { width: 30px; height: 30px; border-radius: 8px; background: var(--green); color: #fff; display: grid; place-items: center; font-weight: 800; }
+    .iconbtn { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: var(--r); border: 1px solid var(--line); background: var(--paper); color: var(--fg-soft); cursor: pointer; }
+    .iconbtn:hover { color: var(--fg); border-color: var(--line-2); }
+    .greet { margin-top: 44px; }
+    .greet h1 { margin: 0; font-size: clamp(28px, 5vw, 44px); letter-spacing: -.02em; }
+    .greet .date { margin-top: 6px; color: var(--fg-mute); font-family: var(--mono); font-size: 13px; letter-spacing: .02em; }
+    .search { margin-top: 26px; position: relative; max-width: 560px; }
+    .search input { width: 100%; padding: 14px 18px; border: 1.5px solid var(--line-2); border-radius: var(--r-pill); background: var(--paper); color: var(--fg); font-size: 15px; font-family: var(--mono); }
+    .search input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-tint); }
+    .tiles { margin-top: 22px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .tile { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); text-decoration: none; transition: border-color .15s ease, transform .15s ease; }
+    .tile:hover { border-color: var(--green); transform: translateY(-2px); }
+    .tile .t { font-weight: 700; }
+    .tile .d { font-size: 12.5px; color: var(--fg-mute); }
+    .tile[aria-disabled="true"] { opacity: .55; pointer-events: none; }
+    .feed-head { margin: 44px 0 16px; display: flex; align-items: center; justify-content: space-between; }
+    .feed-head h2 { margin: 0; font-size: 18px; }
+    .feed-head a { color: var(--green-700); text-decoration: none; font-size: 13px; font-weight: 600; }
+    /* SOW-023: Latest / Following segmented control. */
+    .tabs { display: inline-flex; gap: 4px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px; }
+    .tab { border: 0; background: transparent; color: var(--fg-mute); font-family: var(--sans); font-size: 13px; font-weight: 700; padding: 6px 15px; border-radius: var(--r-pill); cursor: pointer; }
+    .tab.on { background: var(--green-tint); color: var(--green-700); }
+    .row .mlock { font-size: 12px; }
+    .feed { display: flex; flex-direction: column; gap: 8px; }
+    .row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); text-decoration: none; }
+    .row:hover { border-color: var(--line-2); }
+    .badge { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--green-700); background: var(--green-tint); border-radius: var(--r-pill); padding: 3px 9px; }
+    .row .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .row .meta { color: var(--fg-mute); font-size: 12.5px; font-family: var(--mono); white-space: nowrap; }
+    .muted { color: var(--fg-mute); font-size: 14px; }
+    /* Off state: minimal page with a way back on (a new-tab override cannot restore the browser default). */
+    html[data-off] .wrap > *:not(.off) { display: none; }
+    .off { display: none; }
+    html[data-off] .off { display: block; margin-top: 120px; text-align: center; }
+    .off a { color: var(--green-700); }
+    /* SOW-018 lock state: a lapsed (Locked) member's extension is locked behind a renew splash. */
+    html[data-locked] .wrap > *:not(.lock) { display: none; }
+    .lock { display: none; }
+    html[data-locked] .lock { display: block; margin-top: 120px; text-align: center; }
+    .lock .ico { font-size: 38px; }
+    .lock h1 { font-size: clamp(24px, 4vw, 34px); margin: 12px 0 6px; }
+    .lock a.cta { display: inline-block; margin-top: 18px; background: var(--green); color: #fff; font-weight: 800; text-decoration: none; padding: 11px 22px; border-radius: 12px; }
+    @media (max-width: 640px) { .tiles { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <span class="brand"><span class="g">G</span> GBTI Network</span>
+      <div style="display:flex;gap:8px">
+        <button class="iconbtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme">◐</button>
+        <button class="iconbtn" data-newtab-off title="Turn off this new-tab page" aria-label="Turn off this new-tab page">✕</button>
+      </div>
+    </div>
+
+    <div class="greet">
+      <h1 data-greeting>Welcome back</h1>
+      <p class="date" data-date></p>
+    </div>
+
+    <div class="search">
+      <input type="search" data-filter placeholder="Filter activity" autocomplete="off" aria-label="Filter activity" />
+    </div>
+
+    <div class="tiles">
+      <a class="tile" href="https://gbti.network/blog/"><span class="t">Blog</span><span class="d">Articles</span></a>
+      <a class="tile" href="https://gbti.network/products/"><span class="t">Products</span><span class="d">Plugins and tools</span></a>
+      <a class="tile" href="https://gbti.network/prompts/"><span class="t">AI Prompts</span><span class="d">Reusable prompts</span></a>
+      <a class="tile" href="shares.html"><span class="t">Shares</span><span class="d">The co-op stream</span></a>
+    </div>
+
+    <div class="feed-head">
+      <div class="tabs" role="tablist" aria-label="Activity view">
+        <button class="tab on" type="button" data-tab="latest" role="tab" aria-selected="true">Latest</button>
+        <button class="tab" type="button" data-tab="following" role="tab" aria-selected="false">Following</button>
+      </div>
+      <a href="https://gbti.network/">View the co-op</a>
+    </div>
+    <div class="feed" data-feed><p class="muted" data-feed-status>Loading the latest from the co-op...</p></div>
+
+    <div class="off">
+      <h1>The GBTI new tab is off.</h1>
+      <p class="muted">You can <a href="#" data-newtab-on>turn it back on</a>, or remove the extension to restore your browser default new tab.</p>
+    </div>
+
+    <div class="lock">
+      <div class="ico">🔒</div>
+      <h1>Your access is locked</h1>
+      <p class="muted">Your GBTI membership has lapsed. Renew to rejoin the co-op, read the community stream, and publish again.</p>
+      <a class="cta" href="https://gbti.network/membership/">Renew membership</a>
+    </div>
+  </div>
+  <script src="dist/newtab.js"></script>
+</body>
+</html>

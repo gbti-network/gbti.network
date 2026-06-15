@@ -1,0 +1,43 @@
+---
+// LockedBody (SOW-016): the INERT gated-content placeholder. It ships in the public static build carrying ONLY
+// the repo-relative path to the AES-256-GCM .enc body envelope (data-gbti-enc) — never the key, never the
+// plaintext. A plain visitor sees the locked notice below. When a member's client (the Chrome extension or the
+// npm host) loads @gbti/client-ui, the <gbti-locked-content> custom element upgrades, fetches the .enc, POSTs it
+// to the Worker /membership/decrypt (the key never leaves the Worker), renders the returned markdown, and
+// replaces this notice. "The code is there but does nothing without the client." Obfuscation for perks, not
+// absolute secrecy (see SOW-016).
+interface Props {
+  encPath?: string; // repo-relative path to the .enc envelope (same convention as EditHooks data-gbti-path)
+  kind?: 'body' | 'section' | 'comment' | 'share';
+  label?: string;
+}
+const { encPath, kind = 'body', label } = Astro.props;
+const HEADINGS = { comment: 'Members-only comment', section: 'Members-only section', share: 'Members-only Share', body: 'Members-only content' } as const;
+const heading = label ?? HEADINGS[kind];
+const noun = kind === 'comment' ? 'comment' : kind === 'share' ? 'Share' : 'content';
+---
+{encPath && (
+  <gbti-locked-content data-gbti-enc={encPath} data-gbti-kind={kind} data-gbti-region="locked">
+    <div class="locked-notice">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><use href="#ico-lock" /></svg>
+      <div>
+        <p class="locked-title">{heading}</p>
+        <p class="locked-sub">This {noun} is for members. <a href="/membership/">Become a member</a>, then open it in the GBTI client to unlock.</p>
+      </div>
+    </div>
+  </gbti-locked-content>
+)}
+<style>
+  /* The notice is the default visible child for a plain visitor. The client upgrades the element and replaces
+     its contents with the decrypted, rendered markdown, so no display toggle is needed. */
+  gbti-locked-content { display: block; }
+  .locked-notice {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 18px 20px; border: 1.5px dashed var(--line); border-radius: var(--r);
+    background: var(--green-tint);
+  }
+  .locked-notice > svg { flex: none; margin-top: 2px; color: var(--green-700); }
+  .locked-title { font-family: var(--f-display); font-weight: 700; }
+  .locked-sub { font-size: 14px; color: var(--fg-soft); margin-top: 2px; }
+  .locked-sub a { color: var(--green-700); font-weight: 600; }
+</style>

@@ -1,0 +1,95 @@
+---
+// The shared site layout (SOW-010 V3). Loads the V3 fonts + design system (global.css imports
+// gbti-v3.css), renders the shared icon sprite + V3 header/footer, and sets the light/dark theme before
+// paint (no flash). Every page uses this; the homepage included.
+import '@fontsource-variable/baloo-da-2';
+import '@fontsource-variable/hanken-grotesk';
+import '@fontsource-variable/jetbrains-mono';
+import '../styles/global.css';
+import IconSprite from '../components/IconSprite.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import SigninModal from '../components/SigninModal.astro';
+import ReferralCapture from '../components/ReferralCapture.astro';
+import CookieConsent from '../components/CookieConsent.astro';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Absolute or root-relative OG image URL. */
+  ogImage?: string;
+  /** Open Graph type, e.g. 'website' (default) or 'article' for posts. */
+  ogType?: string;
+  /** When true, emit <meta name="robots" content="noindex"> (auth shells, stubs). */
+  noindex?: boolean;
+}
+
+const {
+  title = 'The GBTI Network',
+  description = 'A creator co-op community: plugins, prompts, and people building the open internet together.',
+  ogImage,
+  ogType = 'website',
+  noindex = false,
+} = Astro.props;
+
+const siteName = 'The GBTI Network';
+const fullTitle = title === siteName ? title : `${title} | ${siteName}`;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+// Every page gets an OG image so a shared link never previews blank. A page-specific image (a post cover, a
+// product banner) wins and renders as a large card; otherwise the brand logo is the default (a small card).
+const DEFAULT_OG_IMAGE = '/gbti-logo.png';
+const ogImageUrl = new URL(ogImage || DEFAULT_OG_IMAGE, Astro.site).href;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    {/* Set the light/dark theme before paint to avoid a flash of the wrong theme. */}
+    <script is:inline>
+      (function () {
+        try {
+          var t = localStorage.getItem('gbti-theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex" />}
+    <link rel="canonical" href={canonical} />
+
+    <meta property="og:site_name" content={siteName} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonical} />
+    {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+    <meta name="twitter:card" content={ogImageUrl ? 'summary_large_image' : 'summary'} />
+
+    <meta name="generator" content={Astro.generator} />
+  </head>
+  <body class="flex min-h-screen flex-col">
+    <a
+      href="#main"
+      class="sr-only rounded bg-brand px-4 py-2 font-semibold text-white focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[100]"
+      >Skip to content</a
+    >
+    <IconSprite />
+    <Header />
+    <main id="main" class="flex-1">
+      <slot />
+    </main>
+    <Footer />
+    <SigninModal />
+    <ReferralCapture />
+    <CookieConsent />
+  </body>
+</html>

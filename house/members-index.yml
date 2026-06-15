@@ -1,0 +1,23 @@
+# Authoritative github_id -> username map (ADMIN-owned; reconcile-maintained).
+# The PR-gate and the scoping CI resolve a PR author's immutable github_id to the folder they own
+# through this map, NOT through "folder name == current login" (which breaks on a GitHub rename).
+# On a rename the reconcile migrates the folder, adds a redirect, and updates this entry, so a member
+# is never locked out of their own folder. Each members/<username>/profile.md also carries its
+# links.github; this file is the fast index resolved from those (see scripts/resolve-member-ids.mjs).
+#
+# Keys are immutable github_id values (strings). Values are the lowercase folder/username.
+members:
+  "132623795": aliayashi517
+  "3306507": andrija-naglic
+  "6953730": bomsn
+  "6268698": daprela
+  "89241634": eyesandnose
+  "90683647": giles-beckley
+  "2002207": atwellpub
+  "4948323": leogopal
+  "18620454": mattbissett
+  "7998393": nareshdevineni
+  "225425": rfilipo
+  "8797609": shaneedwardtaylor
+  "97899242": srikanthkoneru
+  "7199469": thivieira

@@ -1,0 +1,24 @@
+# GBTI Network referral revenue-share configuration (SOW-007). ADMIN-owned (see CODEOWNERS): only an
+# admin or superadmin PR may change this file, since it controls real money movement. Every referral
+# code path (the signup Worker, the reconcile, and the payout job) reads this file, so the feature can
+# accrue commissions from launch while payouts stay OFF, then go live with one auditable admin commit.
+#
+# Switches are checked independently and conservatively (fail closed): a missing file or a missing key
+# falls back to the safe default below, and `enabled: false` disables the whole feature regardless of
+# the finer switches.
+referral:
+  enabled:             false   # master switch for the whole referral feature. false = fully off.
+  attribution_enabled: true    # capture referred_by at signup. Turn on EARLY so attribution is not lost.
+  accrual_enabled:     true    # compute the commission ledger from day one (no payout, just the record).
+  payouts_enabled:     false   # actually transfer via Stripe Connect. Flip ON only once Connect is live.
+  rate:                0.30    # referrer's share of each referred member's paid invoice (gross), 0..1.
+  hold_days:           90      # days a commission is held (settlement) before it becomes payable.
+
+# Activation sequence (each step is one admin commit):
+#   1. Launch with the defaults above: attribution + accrual ON, payouts OFF. Commissions accrue and are
+#      auditable, but nothing is transferred. `enabled` stays false so no referral UI/CTA is advertised.
+#   2. Register the Stripe Connect platform and onboard referrers (human-todo).
+#   3. Flip `enabled: true` to advertise the feature, then `payouts_enabled: true` to start transfers.
+# Because the ledger is computed from Stripe on every run (no stored balances), the CURRENT rate and
+# hold_days apply to all historical invoices whenever it is recomputed. Changing either retroactively
+# reprices past commissions, so treat both as stable once payouts are live and announce any change first.

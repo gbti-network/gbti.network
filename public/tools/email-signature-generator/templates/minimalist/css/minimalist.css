@@ -1,0 +1,59 @@
+/* Minimalist signature specific styles */
+.signature-minimalist .profile-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.signature-minimalist .profile-img {
+    width: 70px;
+    height: 70px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.signature-minimalist .info {
+    margin-left: 15px;
+}
+
+.signature-minimalist .name {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.signature-minimalist .title {
+    color: var(--secondary-color);
+}
+
+.signature-minimalist .company-container {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.signature-minimalist .company-logo {
+    height: 20px;
+    margin-right: 10px;
+}
+
+.signature-minimalist .contact {
+    font-size: 13px;
+    color: var(--secondary-color);
+    margin-bottom: 5px;
+}
+
+.signature-minimalist a {
+    color: var(--accent-color);
+    text-decoration: none;
+    padding-right: 10px;
+}
+
+.signature-minimalist a:hover {
+    text-decoration: underline;
+}
+
+/* Add a subtle border with the secondary color */
+.signature-minimalist {
+    border-left: 3px solid var(--secondary-color);
+    padding-left: 15px;
+}

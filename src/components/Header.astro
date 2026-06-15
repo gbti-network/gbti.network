@@ -1,0 +1,79 @@
+---
+// Shared site header (SOW-010 V3). Brand + flat nav + light/dark toggle + sign-in, in the V3 design
+// language (classes from gbti-v3.css). Token-driven, so it works in both themes. Replaces the legacy
+// dark mega-menu. The icon sprite is rendered once in BaseLayout.
+const nav = [
+  { label: 'Products', href: '/products/' },
+  { label: 'AI Prompts', href: '/prompts/' },
+  { label: 'Members', href: '/members/' },
+  { label: 'Blog', href: '/blog/' },
+  { label: 'About', href: '/about/' },
+];
+---
+<header class="site-head" id="top">
+  <div class="wrap head-inner">
+    <a class="brand" href="/" aria-label="GBTI Network home">
+      <span class="brand-mark">G</span>
+      <span class="brand-word">GBTI</span>
+    </a>
+
+    <nav class="nav" aria-label="Primary">
+      {nav.map((i) => <a href={i.href}>{i.label}</a>)}
+    </nav>
+
+    <div class="head-cta">
+      <button type="button" class="theme-toggle" data-theme-toggle aria-label="Toggle dark mode" data-tooltip="Toggle dark mode" data-tooltip-pos="below">
+        <svg class="ico-moon" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-moon" /></svg>
+        <svg class="ico-sun" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-sun" /></svg>
+      </button>
+      <a href="/membership/" class="btn-gh" data-signin><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-github" /></svg> Sign in</a>
+      <button type="button" class="head-burger" data-mobile-toggle aria-label="Open menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+
+  <nav class="head-mobile" data-mobile-menu hidden aria-label="Mobile">
+    <div class="wrap">
+      {nav.map((i) => <a href={i.href}>{i.label}</a>)}
+      <a href="/membership/" class="m-join">Sign in / Join</a>
+    </div>
+  </nav>
+</header>
+
+<style>
+  /* Mobile menu + burger. The full nav scales to fit down to 650px (gbti-v3.css); the burger + mobile
+     menu only take over below 650px. */
+  .head-burger { display: none; flex-direction: column; gap: 5px; width: 40px; height: 38px;
+    align-items: center; justify-content: center; background: transparent; border: 0; cursor: pointer; }
+  .head-burger span { display: block; width: 22px; height: 2px; background: var(--fg-soft); border-radius: 2px; }
+  .head-mobile { border-top: 1px solid var(--line); background: var(--paper); }
+  .head-mobile .wrap { display: flex; flex-direction: column; padding-top: 10px; padding-bottom: 14px; }
+  .head-mobile a { padding: 11px 0; font-weight: 500; color: var(--fg-soft); border-bottom: 1px solid var(--line); }
+  .head-mobile a:last-child { border-bottom: 0; }
+  .head-mobile .m-join { color: var(--green-700); font-weight: 600; }
+  @media (max-width: 650px) {
+    .head-cta .btn-gh { display: none; }
+    .head-burger { display: flex; }
+  }
+  @media (min-width: 651px) { .head-mobile { display: none; } }
+</style>
+
+<script>
+  // Light/dark toggle: flip data-theme on <html>, persist to localStorage. The no-FOUC initial theme is
+  // set in BaseLayout's <head> before paint; this only handles the click + persistence.
+  const root = document.documentElement;
+  document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('gbti-theme', next); } catch {}
+  });
+
+  // Mobile menu.
+  const burger = document.querySelector('[data-mobile-toggle]');
+  const menu = document.querySelector('[data-mobile-menu]');
+  burger?.addEventListener('click', () => {
+    const open = menu?.toggleAttribute('hidden');
+    burger.setAttribute('aria-expanded', String(open === false));
+  });
+</script>

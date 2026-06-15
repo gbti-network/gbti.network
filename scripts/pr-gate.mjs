@@ -1,0 +1,250 @@
+#!/usr/bin/env node
+// SOW-005 PR-gate: the merge gate that decides whether a content PR may merge.
+//
+// Runs from a `pull_request_target` workflow on the BASE branch (see
+// .github/workflows/pr-membership-gate.yml). It reads ONLY PR metadata (author github_id,
+// changed file paths via the GitHub API) and NEVER checks out or executes the PR's code. That
+// one rule is the whole security model: violating it would leak the Stripe and GitHub secrets
+// this script holds. See .data/specs/roles-and-capabilities.md "The one rule that must never
+// be broken".
+//
+// Flow per PR:
+//   1. Resolve the author github_id -> effective membership status (Stripe + git-native
+//      overrides: ban > grandfather > stripe; the staff tier of the full ban > staff >
+//      grandfather > stripe precedence is applied in step 2 by role, not here). Fail closed:
+//      any lookup error is NOT paid.
+//   2. Classify the changed paths against the author's role and owned folder, then apply the
+//      shared decide() merge rules (the SAME module the SOW-003 scoping CI imports, so the two
+//      can never diverge).
+//   3. Publish the verdict as the required status check `membership-gate` (success | failure)
+//      plus a single label.
+// Any thrown error sets a FAILING status (fail closed), so an outage can never default-open a
+// content PR.
+
+import path from 'node:path';
+import fs from 'node:fs';
+
+import { deriveStatus } from '../membership/derive-status.mjs';
+import { loadOverrides, roleOf, effectiveStatus } from '../membership/overrides.mjs';
+import { ownedFolderFor, decide, contributionTarget } from '../membership/classify-pr.mjs';
+
+import { createStripeClient } from '../clients/stripe.mjs';
+import { createGitHubClient } from '../clients/github.mjs';
+
+export const STATUS_CONTEXT = 'membership-gate';
+
+/** Labels the gate auto-closes (a content PR that may never merge as-is): a non-member, or a non-paid
+ * (trial) member whose content or contribution is paid-only. Both carry a sign-up / upgrade nudge. */
+export const CLOSE_LABELS = Object.freeze(['rejected-not-a-member', 'rejected-not-paid']);
+
+/** The close comment per auto-close label. A non-member is nudged to sign up; a trial member is nudged
+ * to upgrade and reassured their work is safe on their own fork (nothing is lost by the close). */
+export const CLOSE_NUDGE = Object.freeze({
+  'rejected-not-a-member':
+    'Thanks for your interest. The GBTI Network content repo only merges pull requests from members. ' +
+    'Please sign up (a free 90-day trial, no card required) at https://gbti.network and reopen your ' +
+    'pull request. See CONTRIBUTING.md for how content authoring works.',
+  'rejected-not-paid':
+    'Thanks for your work. Publishing on gbti.network is a paid-member feature, so this pull request ' +
+    'cannot merge during your trial. Nothing is lost: your draft stays on your own fork. Upgrade to a ' +
+    'paid membership at https://gbti.network, then your client will publish your staged drafts. See ' +
+    'CONTRIBUTING.md for how trial authoring works.',
+});
+
+/**
+ * Whether to auto-close a PR. We close non-member and non-paid (trial) content PRs as a courtesy, but
+ * ONLY when the membership lookup was healthy: deriveStatus folds a transient Stripe error into 'none',
+ * which would otherwise make a real member look like a non-member during an outage. Closing is
+ * destructive, so we never close on an unhealthy lookup; the red required check already blocks the merge.
+ */
+export function shouldAutoClose(label, stripeHealthy) {
+  return CLOSE_LABELS.includes(label) && stripeHealthy === true;
+}
+
+/**
+ * Pure core: decide the gate verdict for one PR from already-resolved inputs.
+ * No GitHub, no environment, no I/O. The runnable wrapper below feeds it real clients; the test
+ * feeds it fakes.
+ *
+ * @param {object} a
+ * @param {string|number} a.author    PR author github_id (pull_request.user.id).
+ * @param {string[]}      a.paths     changed file paths (repo-relative, forward slashes).
+ * @param {object}        a.overrides { roles, bans, grandfathers, membersIndex } from loadOverrides().
+ * @param {object}        a.stripe    a client with findCustomerByGithubId(githubId) (may throw).
+ * @param {string|number|null} [a.botId]  the reconcile bot's github_id (treated as admin).
+ * @param {Date}          [a.now]     clock injection for trial/grandfather windows.
+ * @returns {Promise<{check:'pass'|'fail', autoMerge:boolean, label:string, reasons:string[], status:string, role:string, ownedFolder:(string|null)}>}
+ */
+export async function evaluatePR({ author, paths, overrides, stripe, botId = null, now = new Date(), resolveOwner = null }) {
+  const { roles, bans, grandfathers, membersIndex } = overrides;
+  const authorId = String(author);
+
+  const role = roleOf(authorId, roles);
+  const ownedFolder = ownedFolderFor(authorId, membersIndex);
+  const isBot = botId != null && authorId === String(botId);
+
+  // deriveStatus already fails closed to 'none' on any lookup error, so the gate never throws
+  // on a Stripe outage: an unresolvable author is simply treated as unpaid.
+  const derived = await deriveStatus(authorId, stripe, now);
+  const effective = effectiveStatus(authorId, derived, { bans, grandfathers }, now);
+
+  // If this is a contribution to exactly one other member's folder, resolve that owner's acceptance
+  // (an APPROVED review on the head SHA) and paid status. resolveOwner is injected so the core stays
+  // testable with a fake. Fail closed: no resolver or unknown owner -> not approved, not paid.
+  let ownerApproved = false;
+  let ownerPaid = false;
+  const target = contributionTarget(paths, ownedFolder);
+  if (target && resolveOwner) {
+    const r = await resolveOwner(target);
+    ownerApproved = !!r?.ownerApproved;
+    ownerPaid = !!r?.ownerPaid;
+  }
+
+  const d = decide({ paths, role, effective, ownedFolder, isBot, ownerApproved, ownerPaid });
+  return { ...d, status: effective.status, role, ownedFolder, contributionTarget: target };
+}
+
+/** Read and parse the GitHub event payload (the pull_request_target event). */
+export function readEvent(eventPath, botId = null) {
+  if (!eventPath) throw new Error('GITHUB_EVENT_PATH is not set');
+  const raw = fs.readFileSync(eventPath, 'utf8');
+  const event = JSON.parse(raw);
+  return parseEvent(event, botId);
+}
+
+/** Pure event parser (unit-testable). SOW-026: when GBTI's App bot opens the publish PR on a member's behalf
+ *  (the member's fork-scoped token cannot open it), the trust anchor is the PR HEAD (the fork owner), NOT the
+ *  opener (now the bot). A member can only open a PR whose head is their own fork, so the head-repo owner is the
+ *  real author. For any non-bot opener (a member opening their own PR directly), the opener stays the author. If
+ *  a bot-opened PR has no resolvable head owner, author is null -> the gate fails closed. */
+export function parseEvent(event, botId = null) {
+  const pr = event.pull_request;
+  if (!pr) throw new Error('event payload has no pull_request');
+  const opener = pr.user?.id;
+  const botOpened = botId != null && String(opener) === String(botId);
+  const headOwner = pr.head?.repo?.owner?.id ?? pr.head?.user?.id ?? null;
+  return {
+    number: event.number ?? pr.number,
+    author: botOpened ? headOwner : opener,
+    headSha: pr.head?.sha,
+    botOpened,
+  };
+}
+
+/** Runnable entry point: wire real clients, evaluate, publish the status check + label. */
+async function main() {
+  const repoRoot = process.cwd();
+
+  // Prefer the content-write bot PAT (it does the status + label writes). Fall back to GITHUB_TOKEN
+  // only if a bot token is not provided.
+  const token = process.env.GITHUB_BOT_TOKEN || process.env.GITHUB_TOKEN;
+  const repo = process.env.GITHUB_CONTENT_REPO;
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  const botId = process.env.BOT_GITHUB_ID || null;
+
+  if (!token) throw new Error('GITHUB_BOT_TOKEN (or GITHUB_TOKEN) is required');
+  if (!repo) throw new Error('GITHUB_CONTENT_REPO is required');
+
+  const gh = createGitHubClient({ token, repo });
+
+  // Resolve PR metadata first so that even an early failure can be reported against the head sha. SOW-026:
+  // botId lets the gate resolve the member from the PR head when GBTI's App opens the PR on their behalf.
+  const { number, author, headSha } = readEvent(process.env.GITHUB_EVENT_PATH, botId);
+  if (!headSha) throw new Error('could not resolve pull_request.head.sha from the event');
+
+  try {
+    if (!stripeKey) throw new Error('STRIPE_SECRET_KEY is required');
+    if (author == null) throw new Error('could not resolve the PR author (pull_request.user.id, or pull_request.head owner when the App bot opened it)');
+
+    const stripe = createStripeClient({ apiKey: stripeKey });
+    const overrides = loadOverrides(repoRoot);
+
+    // METADATA ONLY: changed file paths via the API. We never check out or run PR code.
+    const paths = await gh.listPullFilePaths(number);
+
+    // Reverse the members-index (github_id -> username) so a contribution target username resolves to
+    // the owner's immutable github_id. For a contribution, the owner accepts by submitting an APPROVED
+    // review; we only honor an approval whose commit_id is the current head SHA, so a later malicious
+    // push invalidates a stale approval. Owner identity is read by github_id, never trusted from a label.
+    const usernameToGithubId = new Map([...overrides.membersIndex].map(([id, name]) => [name, id]));
+    const resolveOwner = async (ownerUsername) => {
+      const ownerId = usernameToGithubId.get(ownerUsername);
+      if (!ownerId) return { ownerApproved: false, ownerPaid: false }; // unknown owner -> fail closed
+      const ownerDerived = await deriveStatus(ownerId, stripe);
+      const ownerEff = effectiveStatus(ownerId, ownerDerived, {
+        bans: overrides.bans,
+        grandfathers: overrides.grandfathers,
+        roles: overrides.roles, // staff owners are paid-equivalent: a contribution to their folder must not hold on Stripe
+      });
+      let ownerApproved = false;
+      try {
+        const reviews = await gh.listReviews(number);
+        ownerApproved = reviews.some(
+          (r) => String(r.user?.id) === String(ownerId) && r.state === 'APPROVED' && r.commit_id === headSha,
+        );
+      } catch {
+        ownerApproved = false; // cannot read reviews -> not approved (fail closed)
+      }
+      return { ownerApproved, ownerPaid: ownerEff.status === 'paid' };
+    };
+
+    const d = await evaluatePR({ author, paths, overrides, stripe, botId, resolveOwner });
+
+    await gh.setStatus(headSha, {
+      state: d.check === 'pass' ? 'success' : 'failure',
+      context: STATUS_CONTEXT,
+      description: d.reasons[0],
+    });
+    await gh.setLabels(number, [d.label]);
+
+    // Members only, and publishing is paid-only: auto-close a non-member PR (sign-up nudge) or a non-paid
+    // trial member's content/contribution PR (upgrade nudge), but ONLY when the Stripe lookup was healthy,
+    // so a transient outage never closes a real member's PR (the red check still blocks the merge regardless).
+    if (CLOSE_LABELS.includes(d.label)) {
+      let stripeHealthy = true;
+      try {
+        await stripe.findCustomerByGithubId(String(author));
+      } catch {
+        stripeHealthy = false;
+      }
+      if (shouldAutoClose(d.label, stripeHealthy)) {
+        try {
+          await gh.closePull(number, { comment: CLOSE_NUDGE[d.label] });
+        } catch (closeErr) {
+          console.error(`[pr-gate] could not auto-close PR #${number} (${d.label}): ${closeErr?.message ?? closeErr}`);
+        }
+      } else {
+        console.error(`[pr-gate] membership lookup unavailable; leaving PR #${number} red but NOT auto-closing`);
+      }
+    }
+
+    console.log(
+      `[pr-gate] PR #${number} author=${author} role=${d.role} status=${d.status} ` +
+        `-> ${d.check} (${d.label}); autoMerge=${d.autoMerge}; ${d.reasons[0]}`,
+    );
+    // The check itself carries the verdict; the workflow step always succeeds so the status
+    // check (not the job result) is what branch protection evaluates.
+  } catch (err) {
+    // Fail closed: ANY error publishes a failing required check so the PR cannot merge.
+    const description = `gate error: ${err?.message ?? err}`;
+    console.error(`[pr-gate] ${description}`);
+    try {
+      await gh.setStatus(headSha, { state: 'failure', context: STATUS_CONTEXT, description });
+      await gh.setLabels(number, ['gate-error']);
+    } catch (reportErr) {
+      // If we cannot even publish the failing status, surface the original error and exit non-zero
+      // so the workflow run is visibly red.
+      console.error(`[pr-gate] could not publish failing status: ${reportErr?.message ?? reportErr}`);
+      process.exitCode = 1;
+    }
+  }
+}
+
+// Only run main() when invoked directly, not when imported by the test.
+const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error(`[pr-gate] fatal: ${err?.message ?? err}`);
+    process.exitCode = 1;
+  });
+}

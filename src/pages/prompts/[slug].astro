@@ -1,0 +1,302 @@
+---
+import { getCollection, render } from 'astro:content';
+import { Image } from 'astro:assets';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Prose from '../../components/blog/Prose.astro';
+import Comments from '../../components/blog/Comments.astro';
+import EditHooks from '../../components/EditHooks.astro';
+import LockedBody from '../../components/LockedBody.astro';
+import Avatar from '../../components/Avatar.astro';
+import { hasPublicPage, isStub } from '../../lib/content';
+import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
+import { breadcrumb, categoryLabel } from '../../lib/taxonomy';
+import { buildShare } from '../../lib/share';
+import FavoriteButton from '../../components/FavoriteButton.astro';
+import CollectionButton from '../../components/CollectionButton.astro';
+import { favoriteCount } from '../../lib/favorites';
+
+export async function getStaticPaths() {
+  const prompts = (await getCollection('prompt')).filter(hasPublicPage);
+  return prompts.map((prompt) => ({ params: { slug: prompt.data.slug }, props: { prompt } }));
+}
+
+const { prompt } = Astro.props;
+const d = prompt.data;
+const { Content } = await render(prompt);
+const rawBody = (prompt.body ?? '').trim(); // raw markdown source for the "Markdown" view + Copy
+
+// Author meta: profile (avatar + headline) and how many prompts they have shared (for the "see more" link).
+const allPrompts = (await getCollection('prompt')).filter(hasPublicPage);
+const profile = (await getCollection('profile')).find((p) => p.data.username === d.author)?.data;
+const authorName = profile?.displayName ?? authorDisplay(d.author);
+const authorCount = allPrompts.filter((p) => p.data.author === d.author).length;
+const crumbs = breadcrumb(d.categories);
+
+// SOW-014: pricing badge + Resources links (public live, member-only inert/locked).
+const paid = d.pricing && d.pricing !== 'free';
+const links = d.links ?? [];
+const LINK_LABELS: Record<string, string> = {
+  homepage: 'Homepage', repository: 'Repository', mirror: 'Mirror',
+  download: 'Download', documentation: 'Documentation', support: 'Support',
+};
+const linkLabel = (l: { type: string; label?: string }) => l.label ?? LINK_LABELS[l.type] ?? l.type;
+
+// Social share targets (see .data/ops/share-ops). The text + hashtags are built by the central share
+// schema (src/lib/share.ts): a conversational lead, the type's base tags, and the content's category
+// tag, shaped per platform. X / WhatsApp / SMS use documented intent URLs; Copy and Substack are
+// JS-driven (Substack has no public prefill intent, so we copy the payload + open the composer).
+const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.network').href;
+const share = buildShare({ type: 'prompt', title: d.title, url: shareUrl, categories: d.categories });
+const xHref = share.x;
+const waHref = share.whatsapp;
+const smsHref = share.sms;
+---
+<BaseLayout title={d.title} description={d.exampleOutput}>
+  <section class="band tint">
+    <div class="wrap">
+      <!-- HEADER (full width): breadcrumb, title, author, then the description above the prompt -->
+      <header class="detail-head">
+        <nav class="eyebrow detail-crumbs" aria-label="Breadcrumb">
+          <a href="/prompts/" style="color:var(--green-700)">AI Prompts</a>
+          {d.categories.map((key) => (
+            <>
+              <span aria-hidden="true" style="opacity:.5"> › </span>
+              <a href={`/prompts/?cat=${key}`} style="color:inherit">{categoryLabel(key)}</a>
+            </>
+          ))}
+        </nav>
+        <h1 data-gbti-region="title" class="h1 mt12">{d.title}</h1>
+        <p class="body-sm mt16" style="color:var(--fg-soft)">by <a href={authorHref(d.author)} class="link" style="display:inline-flex">{authorName}</a>{paid && <span class="chip chip-green" style="margin-left:10px">Paid</span>}</p>
+        {(d.shortDescription || d.exampleOutput) && <p class="lead mt20" style="max-width:70ch">{d.shortDescription || d.exampleOutput}</p>}
+        <div class="mt20 flex items-center g12">
+          <FavoriteButton targetType="prompt" targetSlug={d.slug} count={favoriteCount('prompt', d.slug)} />
+          <CollectionButton targetType="prompt" targetSlug={d.slug} />
+        </div>
+      </header>
+
+      <div class="detail-grid mt32">
+        <!-- MAIN: an optional result image, then the prompt enclosed in its own code-style block -->
+        <div class="detail-main">
+          {d.image && (
+            <figure class="prompt-result">
+              <Image src={d.image} width={920} alt={`${d.title} — example result${d.targets?.length ? ` generated with ${d.targets[0]}` : ''}`} />
+              <figcaption>Example result{d.targets?.length ? ` · ${d.targets[0]}` : ''}</figcaption>
+            </figure>
+          )}
+          <div class="prompt-block" data-mode="visual">
+            <div class="prompt-block-bar">
+              <span class="prompt-block-label"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-terminal"/></svg>Prompt</span>
+              <div class="prompt-actions">
+                {!isStub(prompt) && (
+                  <div class="prompt-modes" role="group" aria-label="Prompt format">
+                    <button type="button" class="on" data-mode-btn="visual">Visual</button>
+                    <button type="button" data-mode-btn="markdown">Markdown</button>
+                  </div>
+                )}
+                {!isStub(prompt) && <button type="button" data-copy class="btn btn-primary prompt-copy">Copy</button>}
+              </div>
+            </div>
+            <div class="prompt-body" data-gbti-region="body">
+              {isStub(prompt) ? <LockedBody encPath={d.encryptedBody} kind="body" /> : (
+                <>
+                  <div class="prompt-view" data-view="visual"><Prose><Content /></Prose></div>
+                  <pre class="prompt-view prompt-raw" data-view="markdown" data-prompt-raw hidden>{rawBody}</pre>
+                </>
+              )}
+              {!isStub(prompt) && d.encryptedBody && <LockedBody encPath={d.encryptedBody} kind="section" />}
+            </div>
+          </div>
+        </div>
+
+        <!-- SIDEBAR: meta — summary, author + see-more, categories, tags, targets -->
+        <aside class="detail-aside flex col g20">
+          <div class="card" style="padding:22px">
+            <p class="eyebrow">Author</p>
+            <div class="flex items-center g12 mt16">
+              <a href={authorHref(d.author)} class="shrink-0"><Avatar item={{ name: authorName, avatar: authorAvatar(d.author, profile?.avatar) }} size={46} /></a>
+              <div class="min-w-0">
+                <a href={authorHref(d.author)} class="link" style="font-weight:700;display:inline-flex">{authorName}</a>
+                {profile?.headline && <p class="body-sm muted line-clamp-2" style="margin-top:2px">{profile.headline}</p>}
+              </div>
+            </div>
+            <a href={`/prompts/?author=${d.author}`} class="link mt16" style="display:flex;flex-wrap:wrap;align-items:center;white-space:normal;font-size:13px;line-height:1.4">
+              <span style="min-width:0">See all {authorCount} prompt{authorCount === 1 ? '' : 's'} by {authorName}</span>
+              <svg class="ar" viewBox="0 0 24 24" width="15" height="15"><use href="#ico-arrow"/></svg>
+            </a>
+          </div>
+
+          {crumbs.length > 0 && (
+            <div class="card" style="padding:22px">
+              <p class="eyebrow">Categories</p>
+              <div class="flex wrap-w g8 mt16">
+                {d.categories.map((key) => (
+                  <a href={`/prompts/?cat=${key}`} class="chip chip-green">{categoryLabel(key)}</a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {d.tags?.length > 0 && (
+            <div class="card" style="padding:22px">
+              <p class="eyebrow">Tags</p>
+              <div class="flex wrap-w g8 mt16">
+                {d.tags.map((t) => (
+                  <a href={`/prompts/?tag=${encodeURIComponent(t)}`} class="chip chip-green">#{t}</a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {d.targets?.length > 0 && (
+            <div class="card" style="padding:22px">
+              <p class="eyebrow">Works with</p>
+              <div class="flex wrap-w g8 mt16">
+                {d.targets.map((t) => <a href={`/prompts/?target=${encodeURIComponent(t)}`} class="chip">{t}</a>)}
+              </div>
+            </div>
+          )}
+
+          <!-- SHARE (see .data/ops/share-ops) -->
+          <div class="card" style="padding:22px">
+            <p class="eyebrow">Share</p>
+            <div class="share-row mt16">
+              <a class="share-btn" href={xHref} target="_blank" rel="noopener" aria-label="Share on X" data-tooltip="Share on X">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              </a>
+              <button type="button" class="share-btn" data-substack data-share-text={share.substackText} aria-label="Share on Substack (copies the link)" data-tooltip="Copies the link, opens Notes">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"/></svg>
+              </button>
+              <a class="share-btn" href={waHref} target="_blank" rel="noopener" aria-label="Share on WhatsApp" data-tooltip="Share on WhatsApp">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              </a>
+              <a class="share-btn" href={smsHref} aria-label="Share via SMS" data-tooltip="Share via SMS">
+                <svg viewBox="0 0 24 24"><use href="#ico-chat"/></svg>
+              </a>
+              <button type="button" class="share-btn" data-copy-link data-url={shareUrl} aria-label="Copy link" data-tooltip="Copy link">
+                <svg viewBox="0 0 24 24"><use href="#ico-link"/></svg>
+              </button>
+            </div>
+          </div>
+
+          {links.length > 0 && (
+            <div class="card" style="padding:22px">
+              <p class="eyebrow">Resources</p>
+              <div class="flex col g10 mt16">
+                {links.map((l) => (
+                  l.visibility === 'members' ? (
+                    <span class="link" style="font-size:14px;cursor:not-allowed;opacity:.75;display:inline-flex;align-items:center;gap:6px" data-tooltip={l.encrypted ? 'Encrypted member content. Open in the GBTI client to unlock.' : 'Members only. Open in the GBTI client to unlock.'}>
+                      <svg viewBox="0 0 24 24" width="14" height="14"><use href="#ico-lock"/></svg>{linkLabel(l)} <span class="mono" style="font-size:11px">{l.encrypted ? 'encrypted' : 'members'}</span>
+                    </span>
+                  ) : (
+                    <a href={l.url} rel="noopener" class="link" style="font-size:14px">{linkLabel(l)} <svg class="ar" viewBox="0 0 24 24" width="14" height="14"><use href="#ico-arrow"/></svg></a>
+                  )
+                ))}
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
+
+      <Comments targetType="prompt" targetSlug={d.slug} author={d.author} wide />
+    </div>
+  </section>
+  <EditHooks type="prompt" owner={d.author} slug={d.slug} />
+
+  <style>
+    /* Two columns scale down (sidebar shrinks via clamp) and only collapse to one column below 600px. */
+    .detail-grid { display: grid; gap: clamp(20px, 3vw, 32px); grid-template-columns: minmax(0, 1fr) clamp(220px, 26vw, 320px); align-items: start; }
+    .detail-main { min-width: 0; }
+    /* Result image (image-gen prompts): a full figure above the prompt block, stretched to the column
+       width and centered. height:auto so the full image shows and is never cropped. */
+    .prompt-result { margin: 0 0 22px; }
+    .prompt-result img { width: 100%; height: auto; border-radius: var(--r-lg); border: 1.5px solid var(--line); display: block; background: var(--tint); }
+    .prompt-result figcaption { margin-top: 8px; font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); }
+
+    /* The prompt itself, enclosed like a code/markdown block (header bar + tinted body) so it reads as a
+       copyable artifact, not blog prose. The Copy button lives in the bar, so it never overlaps the image. */
+    /* The prompt well sits lighter than the tinted page band (so it reads as a distinct surface) but not as
+       light as the white header/sidebar cards: --paper-2 is the off-white intermediate. */
+    .prompt-block { border: 1.5px solid var(--line-2); border-radius: var(--r-lg); overflow: hidden; background: var(--paper-2); }
+    .prompt-block-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 9px 12px 9px 16px; background: var(--paper); border-bottom: 1.5px solid var(--line); }
+    .prompt-block-label { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-soft); }
+    .prompt-block-label svg { color: var(--green-700); }
+    .prompt-actions { display: flex; align-items: center; gap: 10px; }
+    /* Visual <-> Markdown view switch for the prompt body. */
+    .prompt-modes { display: inline-flex; border: 1.5px solid var(--line-2); border-radius: var(--r); overflow: hidden; background: var(--paper); }
+    .prompt-modes button { font-family: var(--f-mono); font-size: 12px; padding: 6px 11px; border: 0; background: transparent; color: var(--fg-mute); cursor: pointer; transition: background .15s, color .15s; }
+    .prompt-modes button:hover { color: var(--ink); }
+    .prompt-modes button.on { background: var(--ink); color: var(--paper); }
+    .prompt-copy { padding: 7px 16px; font-size: 13px; }
+    /* The prompt reads as a copyable artifact, so render it monospace in BOTH views (the raw markdown
+       view already is; this applies the same to the rendered Visual view). */
+    .prompt-body { padding: 22px 24px; font-family: var(--f-mono); }
+    .prompt-body :global(p), .prompt-body :global(li), .prompt-body :global(h1),
+    .prompt-body :global(h2), .prompt-body :global(h3), .prompt-body :global(strong) { font-family: var(--f-mono); }
+    .prompt-view[data-view="visual"] { font-size: 13.5px; line-height: 1.7; }
+    /* Raw markdown view: preformatted but wrapping, so long prompt lines never force horizontal scroll. */
+    .prompt-raw { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--f-mono); font-size: 13px; line-height: 1.65; color: var(--fg); background: transparent; }
+    .prompt-view[hidden] { display: none; }
+    /* share buttons */
+    .share-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .share-btn { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+      border: 1.5px solid var(--line-2); border-radius: var(--r-sm); background: var(--paper); color: var(--fg-soft);
+      cursor: pointer; transition: border-color .15s, color .15s, transform .15s; }
+    .share-btn:hover { border-color: var(--ink); color: var(--ink); transform: translateY(-1px); }
+    .share-btn.copied { border-color: var(--green); color: var(--green-700); }
+    .share-btn svg { width: 18px; height: 18px; }
+    .detail-aside .chip { text-decoration: none; }
+    .detail-aside a.chip { transition: border-color .15s ease, color .15s ease; }
+    .detail-aside a.chip:hover { border-color: var(--green); color: var(--green-700); }
+    @media (max-width: 600px) {
+      /* minmax(0,1fr), not 1fr (=minmax(auto,1fr)), so a long prompt/code line scrolls inside the card
+         instead of flooring the track and overflowing the page on mobile. */
+      .detail-grid { grid-template-columns: minmax(0, 1fr); }
+      /* On mobile the meta reads better above the long prompt body. */
+      .detail-aside { order: -1; }
+    }
+  </style>
+
+  <script>
+    // Copy always yields the raw markdown source (the canonical prompt), regardless of the active view.
+    const btn = document.querySelector<HTMLButtonElement>('[data-copy]');
+    btn?.addEventListener('click', async () => {
+      const raw = document.querySelector('[data-prompt-raw]') as HTMLElement | null;
+      const text = (raw?.textContent ?? document.querySelector('.prompt-body')?.textContent ?? '').trim();
+      try {
+        await navigator.clipboard.writeText(text);
+        btn.textContent = 'Copied';
+        setTimeout(() => (btn.textContent = 'Copy'), 1500);
+      } catch {
+        btn.textContent = 'Copy failed';
+      }
+    });
+
+    // Share: Copy link (clipboard + a brief "copied" state) and Substack (no public prefill intent, so we
+    // copy the title+link to the clipboard, then open the Notes composer for the reader to paste).
+    document.querySelectorAll<HTMLButtonElement>('[data-copy-link]').forEach((b) => b.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(b.dataset.url ?? '');
+        b.classList.add('copied');
+        const prev = b.dataset.tooltip; // flip the custom tooltip to a brief confirmation
+        b.dataset.tooltip = 'Copied!';
+        setTimeout(() => { b.classList.remove('copied'); if (prev) b.dataset.tooltip = prev; }, 1500);
+      } catch {}
+    }));
+    document.querySelectorAll<HTMLButtonElement>('[data-substack]').forEach((b) => b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(b.dataset.shareText ?? ''); b.classList.add('copied'); setTimeout(() => b.classList.remove('copied'), 1500); } catch {}
+      window.open('https://substack.com/notes', '_blank', 'noopener');
+    }));
+
+    // Visual <-> Markdown toggle for the prompt body.
+    document.querySelectorAll<HTMLElement>('.prompt-block').forEach((block) => {
+      const btns = Array.from(block.querySelectorAll<HTMLButtonElement>('[data-mode-btn]'));
+      const views = Array.from(block.querySelectorAll<HTMLElement>('.prompt-view'));
+      btns.forEach((b) => b.addEventListener('click', () => {
+        const mode = b.dataset.modeBtn;
+        block.dataset.mode = mode;
+        btns.forEach((x) => x.classList.toggle('on', x === b));
+        views.forEach((v) => { v.hidden = v.dataset.view !== mode; });
+      }));
+    });
+  </script>
+</BaseLayout>

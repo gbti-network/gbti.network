@@ -1,0 +1,5 @@
+#!/bin/sh
+# Blocks a commit if a credential pattern is found in any committable file. Enable once per clone with:
+#   git config core.hooksPath .githooks
+# The scanner uses Node builtins only. See scripts/check-no-secrets.mjs.
+exec node scripts/check-no-secrets.mjs

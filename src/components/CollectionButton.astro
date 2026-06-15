@@ -1,0 +1,40 @@
+---
+// CollectionButton (SOW-024): the INERT "Save to collection" control, sibling to FavoriteButton. Ships in the
+// public static build carrying only public data-gbti-* hooks (target type/slug). A plain visitor sees a folder
+// pill; the light-DOM button is [data-signin], so clicking opens the sign-in modal (SOW-019) — collections are
+// a member feature. When a member's client/extension loads @gbti/client-ui, <gbti-collection> upgrades into a
+// working picker (it reads/writes the deletable edge store via /membership/activity, member-activity-client.mjs).
+// Collections are private + erasable (SOW-024), NOT in the public git repo, unlike SOW-013 favorites.yml.
+interface Props {
+  targetType: 'post' | 'product' | 'prompt';
+  targetSlug: string;
+  size?: 'sm' | 'md';
+}
+const { targetType, targetSlug, size = 'md' } = Astro.props;
+---
+<gbti-collection
+  data-gbti-target-type={targetType}
+  data-gbti-target-slug={targetSlug}
+  data-gbti-region="collection"
+  class:list={['gbti-collection', size === 'sm' && 'col-sm']}
+>
+  <button type="button" class="col-pill" data-signin aria-label={`Save this ${targetType} to a collection`}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-folder" /></svg>
+    <span class="col-label">Save</span>
+  </button>
+</gbti-collection>
+<style is:global>
+  /* The light-DOM pill is the public (inert) display; when <gbti-collection> upgrades, its Shadow DOM covers it. */
+  gbti-collection { display: inline-flex; }
+  .col-pill {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    font-family: var(--f-mono); font-size: 12.5px; font-weight: 600; color: var(--fg-mute);
+    background: var(--paper); border: 1.5px solid var(--line-2); border-radius: var(--r-pill);
+    padding: 5px 11px; transition: color .15s ease, border-color .15s ease;
+  }
+  .col-pill:hover { color: var(--green-700); border-color: var(--green); }
+  .col-pill svg { flex: none; }
+  .col-sm .col-pill { padding: 4px 9px; font-size: 12px; }
+  [data-theme="dark"] .col-pill { background: transparent; border-color: var(--line-dark-2); color: var(--on-dark-soft); }
+  [data-theme="dark"] .col-pill:hover { color: var(--green-mint); border-color: var(--green); }
+</style>

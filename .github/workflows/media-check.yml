@@ -1,0 +1,24 @@
+name: Media check
+
+# Enforce the content media policy (content-schemas.md): no committed video, web image formats
+# only, and a per-image size cap. Runs on content PRs and on pushes to main.
+on:
+  pull_request:
+    paths:
+      - 'house/**'
+      - 'members/**'
+  push:
+    branches: [main]
+    paths:
+      - 'house/**'
+      - 'members/**'
+
+jobs:
+  media-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-media.mjs

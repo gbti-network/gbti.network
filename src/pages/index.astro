@@ -1,0 +1,480 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+import { Image } from 'astro:assets';
+import Avatar from '../components/Avatar.astro';
+import { isPublic, byNewest } from '../lib/content';
+import { authorDisplay, authorHref, formatDate } from '../lib/authors';
+import { buildAvatarIndex, authorItem } from '../lib/avatars';
+import { TRIAL_DAYS_SITE, REFERRAL_PCT } from '../lib/membership';
+import TierTable from '../components/TierTable.astro';
+import { extensionInstallUrl } from '../lib/extension';
+import ampPublishOnce from '../assets/amp-publish-once.webp';
+
+// Real content drives the dynamic sections (hero members, activity, what-members-ship).
+const posts = (await getCollection('post')).filter(isPublic).sort(byNewest);
+// SOW-022: applets list among products (their cards link via catalogHref to the running tool).
+const products = [...(await getCollection('product')), ...(await getCollection('applet'))].filter(isPublic).sort(byNewest);
+const prompts = (await getCollection('prompt')).filter(isPublic).sort(byNewest);
+const members = (await getCollection('profile')).filter(isPublic).filter((p) => p.data.username !== 'gbti');
+const avatarIndex = buildAvatarIndex(members);
+
+// Hero: real member count + member avatars (up to 50, the rest are summed in "& growing").
+const memberCount = members.length;
+const heroMembers = members.slice(0, 50);
+
+// "What members ship": a featured post (left), two products stacked (right column), and recent
+// prompts + articles as minis. Prompts come first, then articles (each article mini shows its cover).
+const featured = posts[0];
+const featuredProducts = products.slice(0, 2);
+const promptMinis = prompts.map((p) => ({ kind: 'Prompt', title: p.data.title, href: `/prompts/${p.data.slug}/`, img: undefined, desc: p.data.shortDescription, author: p.data.author, date: p.data.publishedAt }));
+const articleMinis = posts.slice(1).map((p) => ({ kind: 'Article', title: p.data.title, href: `/blog/${p.data.slug}/`, img: p.data.coverImage, desc: undefined as string | undefined, author: p.data.author, date: p.data.publishedAt }));
+const minis = [...promptMinis, ...articleMinis].slice(0, 6);
+
+// Activity feed: the latest content across types, newest first.
+const feed = [
+  ...posts.map((p) => ({ kind: 'Article', title: p.data.title, href: `/blog/${p.data.slug}/`, author: p.data.author, date: p.data.publishedAt })),
+  ...products.map((p) => ({ kind: 'Product', title: p.data.title, href: `/products/${p.data.slug}/`, author: p.data.author, date: p.data.publishedAt })),
+]
+  .sort((a, b) => Number(b.date ?? 0) - Number(a.date ?? 0))
+  .slice(0, 5);
+
+// Short relative time for the activity feed (build-time).
+const NOW = Date.now();
+function relTime(d?: Date): string {
+  if (!d) return '';
+  const days = Math.max(0, Math.floor((NOW - d.valueOf()) / 86400000));
+  if (days < 1) return 'today';
+  if (days < 30) return `${days}d`;
+  if (days < 365) return `${Math.round(days / 30)}mo`;
+  return `${Math.round(days / 365)}y`;
+}
+
+const stats = [
+  { n: posts.length, l: posts.length === 1 ? 'article' : 'articles' },
+  { n: products.length, l: products.length === 1 ? 'product' : 'products' },
+  { n: memberCount, l: memberCount === 1 ? 'member' : 'members' },
+];
+
+// Contribution heatmap from REAL publishing activity: bucket every content publish date across the
+// project's history into 126 cells (7 rows x 18 cols), coloured by volume (level 0..4).
+const stamps = [...posts, ...products, ...prompts]
+  .map((c) => c.data.publishedAt)
+  .filter((d): d is Date => !!d)
+  .map((d) => Number(d))
+  .sort((a, b) => a - b);
+let heat: number[] = new Array(126).fill(0);
+if (stamps.length) {
+  const min = stamps[0];
+  const span = Math.max(1, stamps[stamps.length - 1] - min);
+  const counts = new Array(126).fill(0);
+  for (const t of stamps) counts[Math.min(125, Math.floor(((t - min) / span) * 126))]++;
+  heat = counts.map((n) => (n === 0 ? 0 : Math.min(4, n)));
+}
+
+---
+<BaseLayout title="Publish your work. Build with peers. Share the revenue." description={`A creator co-op powered by Git. Publish articles, products, and prompts, build with peers, and earn ${REFERRAL_PCT} of every member your work brings in. Start a ${TRIAL_DAYS_SITE}-day limited-access trial, no card required.`}>
+
+<!-- ============ HERO (centered) ============ -->
+<section class="hero hero-centered">
+  <div class="wrap hero-c">
+    <div class="chip"><span class="chip-dot"></span> A creator co-op, powered by Git</div>
+    <h1 class="h-hero mt20">Publish your work. Build with peers. <span class="grn">Share the revenue.</span></h1>
+    <p class="lead">The work you publish can earn you {REFERRAL_PCT} of every member it brings in, for the life of their membership.</p>
+    <div class="hero-c-cta">
+      <a href="/membership/" class="btn btn-primary btn-lg">Start your {TRIAL_DAYS_SITE}-day limited-access trial</a>
+      <span class="mono muted" style="font-size:13px">No card required</span>
+    </div>
+    <div class="hero-c-members">
+      <div class="lav-row">
+        {heroMembers.map((m) => (
+          <a href={authorHref(m.data.username)} data-tooltip={m.data.displayName} aria-label={m.data.displayName}>
+            <Avatar item={{ name: m.data.displayName, avatar: m.data.avatar }} class="lav" size={42} />
+          </a>
+        ))}
+      </div>
+      <span class="body-sm muted"><strong style="color:var(--fg)">{memberCount} member{memberCount === 1 ? '' : 's'}</strong> &amp; growing</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ACTIVITY ============ -->
+<section class="band tint" id="activity">
+  <div class="wrap">
+    <div class="sec-head">
+      <div>
+        <p class="eyebrow">All network activity powered through Git</p>
+      </div>
+      <a href="https://github.com/gbti-network/gbti.network" class="link">View the public repo <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
+    </div>
+    <div class="act-grid">
+      <!-- heatmap + stats -->
+      <div class="card act-card">
+        <p class="mono" style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--fg-mute);margin-bottom:16px">Publishing activity</p>
+        <div class="heat" aria-hidden="true">{heat.map((lv) => <span class={lv ? `l${lv}` : undefined}></span>)}</div>
+        <div class="heat-legend">
+          <span>Less</span>
+          <i style="background:var(--tint)"></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i>
+          <span>More</span>
+        </div>
+        <div class="act-stats">
+          {stats.map((s) => <div class="stat"><div class="n">{s.n}</div><div class="l">{s.l}</div></div>)}
+        </div>
+      </div>
+      <!-- recent published content -->
+      <div class="card pr-card">
+        <p class="pr-head">Latest published</p>
+        {feed.map((it) => (
+          <a class="pr-row" href={it.href}>
+            <span class="pr-status"><span class="pr-dot merged"></span><span class="chip chip-green" style="padding:2px 9px">published</span></span>
+            <span class="pr-num">{it.kind}</span>
+            <span class="pr-title">{it.title}</span>
+            <Avatar item={authorItem(it.author, avatarIndex)} class="pr-av av" size={26} />
+            <span class="pr-when">{formatDate(it.date)}</span>
+          </a>
+        ))}
+        {feed.length === 0 && <div class="pr-row"><span class="pr-title muted">No published content yet.</span></div>}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHAT MEMBERSHIP LETS YOU DO ============ -->
+<section class="band" id="capability">
+  <div class="wrap">
+    <div class="sec-head">
+      <div>
+        <h2 class="h2">What network membership includes</h2>
+        <p class="lead">One membership gives you a place to publish, build, and earn.</p>
+      </div>
+    </div>
+    <div class="cap-grid">
+      <div class="card cap-card">
+        <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-pencil"/></svg></span>
+        <h3 class="h3">Publish articles</h3>
+        <p class="body-sm muted mt12">Share tutorials, essays, and field notes under your own name.</p>
+      </div>
+      <div class="card cap-card">
+        <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-box"/></svg></span>
+        <h3 class="h3">List your work</h3>
+        <p class="body-sm muted mt12">Promote products, plugins, tools, and creative work in the directory.</p>
+      </div>
+      <div class="card cap-card">
+        <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-users"/></svg></span>
+        <h3 class="h3">Join builders</h3>
+        <p class="body-sm muted mt12">Private Discord, weekly build sessions, and hands-on coaching.</p>
+      </div>
+      <div class="card cap-card">
+        <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-chart"/></svg></span>
+        <h3 class="h3">Grow visibly</h3>
+        <p class="body-sm muted mt12">A public profile, real feedback, and proof of what you ship.</p>
+      </div>
+      <div class="card cap-card">
+        <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-coin"/></svg></span>
+        <h3 class="h3">Share revenue</h3>
+        <p class="body-sm muted mt12">Earn when the work you publish brings new members in.</p>
+      </div>
+      <div class="card cap-cta">
+        <svg class="cap-cta-bg" viewBox="0 0 640 512" aria-hidden="true" fill="currentColor"><path d="M72 88a56 56 0 1 1 112 0a56 56 0 1 1-112 0m-8 157.7c-10 11.2-16 26.1-16 42.3s6 31.1 16 42.3v-84.7zm144.4-49.3C178.7 222.7 160 261.2 160 304c0 34.3 12 65.8 32 90.5V416c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32v-26.8C26.2 371.2 0 332.7 0 288c0-61.9 50.1-112 112-112h32c24 0 46.2 7.5 64.4 20.3zM448 416v-21.5c20-24.7 32-56.2 32-90.5c0-42.8-18.7-81.3-48.4-107.7C449.8 183.5 472 176 496 176h32c61.9 0 112 50.1 112 112c0 44.7-26.2 83.2-64 101.2V416c0 17.7-14.3 32-32 32h-64c-17.7 0-32-14.3-32-32m8-328a56 56 0 1 1 112 0a56 56 0 1 1-112 0m120 157.7v84.7c10-11.3 16-26.1 16-42.3s-6-31.1-16-42.3zM320 32a64 64 0 1 1 0 128a64 64 0 1 1 0-128m-80 272c0 16.2 6 31 16 42.3v-84.7c-10 11.3-16 26.1-16 42.3zm144-42.3v84.7c10-11.3 16-26.1 16-42.3s-6-31.1-16-42.3zm64 42.3c0 44.7-26.2 83.2-64 101.2V448c0 17.7-14.3 32-32 32h-64c-17.7 0-32-14.3-32-32v-42.8c-37.8-18-64-56.5-64-101.2c0-61.9 50.1-112 112-112h32c61.9 0 112 50.1 112 112"/></svg>
+        <div class="cap-cta-content">
+          <h3 class="h3">One membership.<br/>Powerful community.</h3>
+          <a href="/membership/" class="btn btn-primary" style="align-self:flex-start">Start your limited-access trial <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ POWERED THROUGH GIT ============ -->
+<section class="band gtint" id="git">
+  <div class="wrap">
+    <div class="git-grid">
+      <div class="git-left">
+        <p class="eyebrow">Built on Git</p>
+        <h2 class="h2 mt12">The entire ecosystem is powered through Git.</h2>
+        <p class="lead mt16">Every post, product, prompt, profile, and comment is a file in a public Git repository, but you never touch Git directly. All content management happens through a Chrome extension, MCP servers, or agent-ready publishing.</p>
+        <div class="git-logo" aria-hidden="true">
+          <svg viewBox="0 0 496 512" role="img" aria-label="GitHub"><path fill="currentColor" d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg>
+        </div>
+      </div>
+      <div>
+        <p class="git-stack-label">Three ways to manage your content</p>
+        <div class="card git-card">
+          <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-puzzle"/></svg></span>
+          <div>
+            <div class="flex items-center g12"><span class="num">01</span><h3 class="h3">Chrome extension</h3></div>
+            <p class="body-sm muted mt8">Manage all your content right in the browser: draft, edit, and submit articles, products, and prompts. No Git knowledge required.</p>
+          </div>
+        </div>
+        <div class="card git-card">
+          <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-terminal"/></svg></span>
+          <div>
+            <div class="flex items-center g12"><span class="num">02</span><h3 class="h3">MCP servers</h3></div>
+            <p class="body-sm muted mt8">Connect your own tools and AI agents through Model Context Protocol endpoints to manage content programmatically.</p>
+          </div>
+        </div>
+        <div class="card git-card">
+          <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-bot"/></svg></span>
+          <div>
+            <div class="flex items-center g12"><span class="num">03</span><h3 class="h3">Agent-ready publishing</h3></div>
+            <p class="body-sm muted mt8">Hand the workflow to your AI agents, and they open pull requests and publish on your behalf, end to end.</p>
+          </div>
+        </div>
+        <a href="/membership/" class="link mt24">See the authoring model <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ NEW TAB EXTENSION ============ -->
+<section class="band" id="newtab">
+  <div class="wrap">
+    <div class="newtab-grid">
+      <div>
+        <p class="eyebrow">Chrome extension</p>
+        <h2 class="h2 mt12">Open a tab. Open the co-op.</h2>
+        <p class="lead mt16">The GBTI Network extension brings the community straight into your daily browser. Optionally, it takes over your new tab page, so every time you open a tab you land on what members are shipping, writing, and discussing right now.</p>
+        <div class="newtab-feats">
+          <div class="newtab-feat">
+            <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-globe"/></svg></span>
+            <div><h3 class="h4">New-tab takeover</h3><p class="body-sm muted mt8">Replace the default new tab with your co-op home: live activity, members, and quick links.</p></div>
+          </div>
+          <div class="newtab-feat">
+            <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-check"/></svg></span>
+            <div><h3 class="h4">Always optional</h3><p class="body-sm muted mt8">Toggle it on or off anytime. The extension never gets in your way.</p></div>
+          </div>
+          <div class="newtab-feat">
+            <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-spark"/></svg></span>
+            <div><h3 class="h4">Right where you work</h3><p class="body-sm muted mt8">Pick up drafts, open pull requests, and unread discussion the moment you open your browser.</p></div>
+          </div>
+        </div>
+        <a href={extensionInstallUrl} class="btn btn-primary">Add the extension <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
+      </div>
+
+      <!-- browser / new-tab mock -->
+      <div class="nt-browser">
+        <div class="nt-bar">
+          <div class="nt-lights"><i></i><i></i><i></i></div>
+          <div class="nt-tabs"><span class="nt-tab on">New Tab</span><span class="nt-tab">Docs</span></div>
+          <div class="nt-omni">gbti.network</div>
+        </div>
+        <div class="nt-page">
+          <div class="nt-top">
+            <div class="flex items-center g10"><span class="brand-mark" style="width:28px;height:28px;font-size:17px;box-shadow:none">G</span><span style="font-family:var(--f-display);font-weight:700;font-size:17px">GBTI</span></div>
+            <span class="mono muted" style="font-size:11.5px">Thursday · 9:24</span>
+          </div>
+          <h3 class="nt-greet">Good morning. Here is what is new in the co-op.</h3>
+          <div class="nt-search"><svg viewBox="0 0 24 24" width="16" height="16" style="opacity:.5"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Search the co-op…</div>
+          <div class="nt-tiles">
+            <div class="nt-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-pencil"/></svg></span>Blog</div>
+            <div class="nt-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-box"/></svg></span>Products</div>
+            <div class="nt-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-spark"/></svg></span>Prompts</div>
+            <div class="nt-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-mega"/></svg></span>Shares</div>
+          </div>
+          <div class="nt-feed">
+            <div class="nt-feed-head">Latest activity</div>
+            {feed.slice(0, 3).map((it) => {
+              const a = authorItem(it.author, avatarIndex);
+              return (
+                <div class="nt-fr">
+                  <Avatar item={a} class="av" size={26} />
+                  <span class="t">{a.name} {it.kind === 'Article' ? 'published' : 'shipped'} “{it.title}”</span>
+                  <span class="w">{relTime(it.date)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHAT MEMBERS SHIP ============ -->
+<section class="band tint" id="works">
+  <div class="wrap">
+    <div class="sec-head">
+      <div>
+        <h2 class="h2">Recent Activity</h2>
+        <p class="lead">Articles, products, plugins, and prompts from across the membership.</p>
+      </div>
+      <a href="/blog/" class="link">Browse everything <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
+    </div>
+    <div class="filter-row">
+      <button type="button" class="chip filter on" aria-pressed="true">All</button>
+      <button type="button" class="chip filter" aria-pressed="false">Articles</button>
+      <button type="button" class="chip filter" aria-pressed="false">Products</button>
+      <button type="button" class="chip filter" aria-pressed="false">Prompts</button>
+    </div>
+    <div class="works-grid">
+      {featured && (
+        <article class="card card-hover work-feat">
+          <a href={`/blog/${featured.data.slug}/`} class="cover" aria-label={featured.data.title}>
+            {featured.data.coverImage
+              ? <Image src={featured.data.coverImage} width={620} height={420} alt="" />
+              : <span class="cover-fallback"></span>}
+          </a>
+          <div class="body">
+            <span class="chip chip-green" style="align-self:flex-start">Article{featured.data.categories?.[0] ? ` · ${featured.data.categories[0]}` : ''}</span>
+            <h3 class="h3 mt16"><a href={`/blog/${featured.data.slug}/`}>{featured.data.title}</a></h3>
+            {featured.data.excerpt && <p class="body-sm muted mt12" style="flex:1">{featured.data.excerpt}</p>}
+            <div class="byline mt20">
+              <Avatar item={authorItem(featured.data.author, avatarIndex)} class="av" size={32} />
+              <span class="body-sm"><strong>{authorDisplay(featured.data.author)}</strong> <span class="muted">· {formatDate(featured.data.publishedAt)}</span></span>
+            </div>
+          </div>
+        </article>
+      )}
+      {featuredProducts.length > 0 && (
+        <div class="work-col">
+          {featuredProducts.map((fp) => (
+            <article class="card card-hover work-card">
+              <Image src={fp.data.icon} width={152} height={152} alt="" class="work-icon" style="object-fit:cover;border-radius:8px" />
+              <span class="chip" style="align-self:flex-start">Product</span>
+              <h3 class="h4 mt12"><a href={`/products/${fp.data.slug}/`} style="color:var(--fg)">{fp.data.title}</a></h3>
+              <p class="body-sm muted mt8" style="flex:1">{fp.data.shortDescription}</p>
+              <div class="byline mt16">
+                <Avatar item={authorItem(fp.data.author, avatarIndex)} class="av" size={28} />
+                <span class="body-sm"><strong>{authorDisplay(fp.data.author)}</strong></span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+      {minis.map((m) => (
+        m.kind === 'Article' ? (
+          <a class="card card-hover work-mini work-mini-img" href={m.href}>
+            {m.img ? (
+              <Image src={m.img} width={400} height={220} alt="" class="work-mini-cover" />
+            ) : (
+              <div class="work-mini-cover" style="background:linear-gradient(140deg,var(--green-tint),var(--tint))"></div>
+            )}
+            <div class="work-mini-meta"><span class="chip" style="padding:3px 9px">{m.kind}</span><p class="body-sm mt8" style="font-weight:600;color:var(--fg)">{m.title}</p><div class="mini-byline"><Avatar item={authorItem(m.author, avatarIndex)} class="mini-av" size={22} /><span><strong>{authorDisplay(m.author)}</strong> · {formatDate(m.date)}</span></div></div>
+          </a>
+        ) : (
+          <a class="card card-hover work-mini work-mini-img" href={m.href}>
+            <div class="work-mini-splash"><svg viewBox="0 0 640 512" aria-hidden="true"><path fill="currentColor" d="M320 0c17.7 0 32 14.3 32 32v64h120c39.8 0 72 32.2 72 72v272c0 39.8-32.2 72-72 72H168c-39.8 0-72-32.2-72-72V168c0-39.8 32.2-72 72-72h120V32c0-17.7 14.3-32 32-32M208 384c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16s-7.2-16-16-16zm96 0c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16s-7.2-16-16-16zm96 0c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16s-7.2-16-16-16zM264 256a40 40 0 1 0-80 0a40 40 0 1 0 80 0m152 40a40 40 0 1 0 0-80a40 40 0 1 0 0 80M48 224h16v192H48c-26.5 0-48-21.5-48-48v-96c0-26.5 21.5-48 48-48m544 0c26.5 0 48 21.5 48 48v96c0 26.5-21.5 48-48 48h-16V224z"/></svg></div>
+            <div class="work-mini-meta"><span class="chip" style="padding:3px 9px">{m.kind === 'Prompt' ? 'AI Prompt' : m.kind}</span><p class="body-sm mt8" style="font-weight:600;color:var(--fg)">{m.title}</p>{m.desc && <p class="body-sm muted mt8" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{m.desc}</p>}<div class="mini-byline"><Avatar item={authorItem(m.author, avatarIndex)} class="mini-av" size={22} /><span><strong>{authorDisplay(m.author)}</strong> · {formatDate(m.date)}</span></div></div>
+          </a>
+        )
+      ))}
+    </div>
+  </div>
+</section>
+
+<!-- ============ CURATED AMPLIFICATION ============ -->
+<section class="band" id="amplify">
+  <div class="wrap">
+    <div class="sec-head center">
+      <p class="eyebrow">Curated amplification</p>
+      <h2 class="h2 mt12">Publish once. The network amplifies it.</h2>
+      <p class="lead">Rather than blast everything everywhere, we curate, putting the weight of the whole network behind member work. Some channels auto-reshare; others get hand-picked boosts where they count.</p>
+    </div>
+    <div class="amp-flow">
+      <div class="card amp-src">
+        <Image src={ampPublishOnce} width={640} height={640} alt="A member's work, ready to publish" class="amp-src-img" />
+        <h3 class="h4">You publish once</h3>
+        <p class="mono muted mt8" style="font-size:11px">1 pull request</p>
+      </div>
+      <div class="amp-mid">
+        <svg viewBox="0 0 24 24"><path d="M4 12h14M13 7l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="amp-curate">we curate<br/>&amp; boost</span>
+      </div>
+      <div class="amp-channels">
+        <div class="amp-ch"><span class="ico" style="color:var(--fg)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></span><div class="name">GitHub</div><div class="mode auto">auto-reshared</div></div>
+        <div class="amp-ch"><span class="ico" style="color:var(--fg)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></span><div class="name">X</div><div class="mode auto">auto-reshared</div></div>
+        <div class="amp-ch"><span class="ico" style="color:#1185FE"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.022-.276.04-.415.056-3.912.58-7.387 2.005-2.83 7.078 5.013 5.19 6.87-1.113 7.823-4.308.953 3.195 2.05 9.271 7.733 4.308 4.267-4.308 1.172-6.498-2.74-7.078a8.741 8.741 0 0 1-.415-.056c.14.017.279.036.415.056 2.67.297 5.568-.628 6.383-3.364.246-.828.624-5.79.624-6.478 0-.69-.139-1.861-.902-2.206-.659-.298-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8z"/></svg></span><div class="name">Bluesky</div><div class="mode auto">auto-reshared</div></div>
+        <div class="amp-ch"><span class="ico" style="color:#6364FF"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.268 5.313c-.35-2.578-2.617-4.61-5.304-5.004C17.51.242 15.792 0 11.813 0h-.03c-3.98 0-4.835.242-5.288.309C3.882.692 1.496 2.518.917 5.127.64 6.412.61 7.837.661 9.143c.074 1.874.088 3.745.26 5.611.118 1.24.325 2.47.62 3.68.55 2.237 2.777 4.098 4.96 4.857 2.336.792 4.849.923 7.256.38.265-.061.527-.132.786-.213.585-.184 1.27-.39 1.774-.753a.057.057 0 0 0 .023-.043v-1.809a.052.052 0 0 0-.02-.041.053.053 0 0 0-.046-.01 20.282 20.282 0 0 1-4.709.545c-2.73 0-3.463-1.284-3.674-1.818a5.593 5.593 0 0 1-.319-1.433.053.053 0 0 1 .066-.054c1.517.366 3.072.55 4.632.546.376 0 .75 0 1.125-.01 1.57-.044 3.224-.124 4.768-.422.038-.008.077-.015.11-.024 2.435-.464 4.753-1.92 4.989-5.604.008-.145.03-1.52.03-1.67.002-.512.167-3.63-.024-5.545zm-3.748 9.195h-2.561V8.29c0-1.309-.55-1.976-1.67-1.976-1.23 0-1.846.79-1.846 2.35v3.403h-2.546V8.663c0-1.56-.617-2.35-1.848-2.35-1.112 0-1.668.668-1.67 1.977v6.218H4.822V8.102c0-1.31.337-2.35 1.011-3.12.696-.77 1.608-1.164 2.74-1.164 1.311 0 2.302.5 2.962 1.498l.638 1.06.638-1.06c.66-.999 1.65-1.498 2.96-1.498 1.13 0 2.043.395 2.74 1.164.675.77 1.012 1.81 1.012 3.12z"/></svg></span><div class="name">Mastodon</div><div class="mode auto">auto-reshared</div></div>
+        <div class="amp-ch"><span class="ico" style="color:var(--green)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span><div class="name">gbti.network</div><div class="mode auto">auto-reshared</div></div>
+        <div class="amp-ch"><span class="ico" style="color:#FF0000"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></span><div class="name">YouTube</div><div class="mode cur">curated boost</div></div>
+        <div class="amp-ch"><span class="ico" style="color:var(--fg)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.42 10.05c-.18-.16-.46-.23-.84-.23H6l.02 2.44.04 2.45.56-.02c.41 0 .63-.07.83-.26.24-.24.26-.36.26-2.2 0-1.91-.02-1.96-.29-2.18zM0 4.94v14.12h24V4.94H0zM8.56 15.3c-.44.58-1.06.77-2.53.77H4.71V8.53h1.4c1.67 0 2.16.18 2.6.9.27.43.29.6.32 2.57.05 2.23-.02 2.73-.47 3.3zm5.09-5.47h-2.47v1.77h1.52v1.28l-.72.04-.75.03v1.77l1.22.03 1.2.04v1.28h-1.6c-1.53 0-1.6-.01-1.87-.3l-.3-.28v-3.16c0-3.02.01-3.18.25-3.48.23-.31.25-.31 1.88-.31h1.64v1.3zm4.68 5.45c-.17.43-.64.79-1 .79-.18 0-.45-.15-.67-.39-.32-.32-.45-.63-.82-2.08l-.9-3.39-.45-1.67h.76c.4 0 .75.02.75.05 0 .06 1.16 4.54 1.26 4.83.04.15.32-.7.73-2.3l.66-2.52.74-.04c.4-.02.73 0 .73.04 0 .14-1.67 6.38-1.8 6.68z"/></svg></span><div class="name">Dev.to</div><div class="mode cur">curated boost</div></div>
+        <div class="amp-ch"><span class="ico" style="color:#FF4500"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 11.779c0-1.459-1.192-2.645-2.657-2.645-.715 0-1.363.286-1.84.746-1.81-1.191-4.259-1.949-6.971-2.046l1.483-4.669 4.016.941-.006.058c0 1.193.975 2.163 2.174 2.163 1.198 0 2.172-.97 2.172-2.163s-.975-2.164-2.172-2.164c-.92 0-1.704.574-2.021 1.379l-4.329-1.015c-.189-.046-.381.063-.44.249l-1.654 5.207c-2.838.034-5.409.798-7.3 2.025-.474-.438-1.103-.712-1.799-.712-1.465 0-2.656 1.187-2.656 2.646 0 .97.533 1.811 1.317 2.271-.052.282-.086.567-.086.857 0 3.911 4.808 7.093 10.719 7.093s10.72-3.182 10.72-7.093c0-.288-.033-.571-.084-.852.79-.458 1.327-1.302 1.327-2.276zM7.276 14.521c0-.93.747-1.685 1.668-1.685.92 0 1.667.755 1.667 1.685s-.747 1.686-1.667 1.686c-.92 0-1.668-.755-1.668-1.686zm9.157 4.992c-1.155 1.16-2.973 1.564-4.43 1.564-1.456 0-3.273-.405-4.43-1.564-.108-.108-.108-.282 0-.39.105-.108.281-.108.385 0 .728.731 2.283 1.071 4.045 1.071 1.762 0 3.317-.34 4.045-1.071.104-.108.28-.108.385 0 .106.108.106.282 0 .39zm-.27-3.306c-.92 0-1.667-.755-1.667-1.686 0-.93.747-1.685 1.667-1.685.92 0 1.668.755 1.668 1.685s-.747 1.686-1.668 1.686z"/></svg></span><div class="name">Reddit</div><div class="mode cur">curated boost</div></div>
+        <div class="amp-ch"><span class="ico" style="color:#0A66C2"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z"/></svg></span><div class="name">LinkedIn</div><div class="mode cur">curated boost</div></div>
+        <div class="amp-ch"><span class="ico" style="color:#5865F2"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.3698a19.7913 19.7913 0 0 0-4.8851-1.5152.0741.0741 0 0 0-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 0 0-.0785-.037 19.7363 19.7363 0 0 0-4.8852 1.515.0699.0699 0 0 0-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 0 0 .0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 0 0 .0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 0 0-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 0 1-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 0 1 .0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 0 1 .0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 0 1-.0066.1276 12.2986 12.2986 0 0 1-1.873.8914.0766.0766 0 0 0-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 0 0 .0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 0 0 .0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 0 0-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg></span><div class="name">Discord</div><div class="mode cur">curated boost</div></div>
+      </div>
+    </div>
+    <div class="amp-legend">
+      <span class="flex items-center g8"><i style="background:var(--green)"></i> auto-reshared, always</span>
+      <span class="flex items-center g8"><i style="border:2px solid var(--fg-mute)"></i> hand-picked, when it counts</span>
+    </div>
+    <div class="amp-payoff">
+      <b>Every landing can become a member referral</b>
+      <svg viewBox="0 0 24 24" width="22" height="22" style="color:var(--green-700)"><use href="#ico-arrow"/></svg>
+      <b style="color:var(--green-700)">which is what you earn from</b>
+    </div>
+  </div>
+</section>
+
+<!-- ============ REVENUE & REWARDS ============ -->
+<section class="band-lg dark" id="revenue">
+  <div class="wrap">
+    <div class="sec-head center" style="margin-bottom:52px">
+      <h2 class="h2" style="font-size:clamp(52px,6.5vw,84px);line-height:1.02;letter-spacing:-0.02em;color:var(--green-mint)">Share Revenue</h2>
+      <h3 class="h2 mt12">Your work can earn for life.</h3>
+      <p class="lead" style="max-width:640px">How the earning is triggered, and exactly what you keep.</p>
+    </div>
+    <div class="led">
+      <div class="led-head"><span class="t">Your earnings, explained</span><span class="chip" style="background:rgba(31,158,95,.16);border-color:var(--green);color:var(--green-mint)">for life</span></div>
+      <div class="led-sec">
+        <div class="led-sech">How it is triggered</div>
+        <div class="led-row"><span class="n">01</span><span class="v">A member candidate lands on your work</span><span class="s">anywhere amplified</span></div>
+        <div class="led-row"><span class="n">02</span><span class="v">They join GBTI Network</span><span class="s">you are the first touch</span></div>
+        <div class="led-row"><span class="n">03</span><span class="v">You earn, every month they stay</span><span class="s">recurring</span></div>
+      </div>
+      <div class="led-sec" style="padding-bottom:18px">
+        <div class="led-sech">Your split</div>
+        <div class="led-row"><span class="v">Your share of their membership</span><span class="amt">{REFERRAL_PCT}</span></div>
+        <div class="led-row"><span class="v">You keep, by default</span><span class="amt" style="color:var(--green-mint)">100%</span></div>
+        <div class="led-row"><span class="v">Shared with other members who contribute or comment</span><span class="amt" style="color:var(--on-dark-soft)">optional</span></div>
+      </div>
+      <div class="led-total"><span class="l">To you, by default</span><span class="r">100% of {REFERRAL_PCT}, for life</span></div>
+    </div>
+
+    <div class="tcenter mt40"><a href="/membership/" class="btn btn-primary btn-lg">Learn how the model works <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a></div>
+  </div>
+</section>
+
+<!-- ============ MEMBERSHIP ============ -->
+<section class="band tint" id="membership">
+  <div class="wrap">
+    <div class="sec-head center">
+      <h2 class="h2">One membership.</h2>
+      <p class="lead">Start with a {TRIAL_DAYS_SITE}-day limited-access trial, no card required. Publish when you become a paid member.</p>
+    </div>
+    <div class="inc-grid">
+      <div class="card inc-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-id"/></svg></span><h3 class="h4">Public profile</h3><p class="body-sm muted mt8">Your member page, links, skills, work.</p></div>
+      <div class="card inc-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-pencil"/></svg></span><h3 class="h4">Blog publishing</h3><p class="body-sm muted mt8">Publish under your own name.</p></div>
+      <div class="card inc-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-folder"/></svg></span><h3 class="h4">Work directory</h3><p class="body-sm muted mt8">List plugins, tools, music, writing, art.</p></div>
+      <div class="card inc-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-spark"/></svg></span><h3 class="h4">Prompt library</h3><p class="body-sm muted mt8">Share reusable AI prompts.</p></div>
+      <div class="card inc-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-chat"/></svg></span><h3 class="h4">Private Discord</h3><p class="body-sm muted mt8">Meet and collaborate with builders.</p></div>
+      <div class="card inc-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-calendar"/></svg></span><h3 class="h4">Weekly build calls</h3><p class="body-sm muted mt8">Two-hour sessions and coaching.</p></div>
+      <div class="card inc-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-puzzle"/></svg></span><h3 class="h4">Local authoring</h3><p class="body-sm muted mt8">Chrome extension, MCP, and agents.</p></div>
+      <div class="card inc-tile"><span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-coin"/></svg></span><h3 class="h4">Revenue share</h3><p class="body-sm muted mt8">Earn from members your work brings in.</p></div>
+    </div>
+
+    <div class="tbl">
+      <TierTable />
+    </div>
+  </div>
+</section>
+
+
+<script is:inline>
+  // The contribution heatmap is server-rendered from real publish dates. The filter chips below need
+  // client behavior, scoped per section so the directories and the "Recent Activity" row do not clash.
+  (function () {
+    // "Recent Activity" chips are visual only (that section shows a curated mix, not a filtered grid).
+    var row = document.querySelector('.filter-row');
+    if (row) {
+      var rowChips = row.querySelectorAll('.filter');
+      rowChips.forEach(function (f) {
+        f.addEventListener('click', function () {
+          rowChips.forEach(function (x) { x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); });
+          f.classList.add('on');
+          f.setAttribute('aria-pressed', 'true');
+        });
+      });
+    }
+  })();
+</script>
+</BaseLayout>

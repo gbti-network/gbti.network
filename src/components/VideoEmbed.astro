@@ -1,0 +1,33 @@
+---
+// Renders a responsive YouTube/Vimeo embed from a URL or bare ID (the `video` content field).
+// Video is embed-only on this site (never self-hosted); see content-schemas.md media handling.
+interface Props {
+  video: string;
+  title?: string;
+}
+const { video, title = 'Embedded video' } = Astro.props;
+
+function embedUrl(v: string): string | null {
+  const s = v.trim();
+  let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (m) return `https://player.vimeo.com/video/${m[1]}`;
+  if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
+  if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
+  return null;
+}
+const src = embedUrl(video);
+---
+{src && (
+  <div class="aspect-video w-full overflow-hidden" style="border-radius:var(--r-lg);background:var(--ink)">
+    <iframe
+      src={src}
+      title={title}
+      loading="lazy"
+      class="h-full w-full"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      allowfullscreen
+    ></iframe>
+  </div>
+)}

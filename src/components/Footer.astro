@@ -1,0 +1,54 @@
+---
+// Shared site footer (SOW-010 V3). The V3 dark footer (dark in both light + dark mode, by design), with
+// the brand, real social links, and link columns. Classes from gbti-v3.css.
+import { SOCIAL_LINKS } from '../lib/social';
+
+const year = new Date().getFullYear();
+const columns = [
+  {
+    title: 'Pages',
+    links: [['Blog', '/blog/'], ['Products', '/products/'], ['AI Prompts', '/prompts/'], ['Members', '/members/'], ['About', '/about/']],
+  },
+  {
+    title: 'Community',
+    links: [['Become a Member', '/membership/'], ['How the co-op works', '/co-op/'], ['Member Directory', '/members/'], ['My Account', '/account/'], ['Contact', '/contact/'], ['Terms', '/terms/']],
+  },
+];
+---
+<footer class="dark foot">
+  <div class="wrap">
+    <div class="foot-top">
+      <div>
+        <a class="brand" href="/" aria-label="GBTI Network home"><span class="brand-mark">G</span><span class="brand-word">GBTI Network</span></a>
+        <div class="foot-social">
+          {SOCIAL_LINKS.map((s) => (
+            <a href={s.href} target="_blank" rel="noopener noreferrer" data-tooltip={s.label} aria-label={s.label}>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d={s.path} /></svg>
+            </a>
+          ))}
+        </div>
+      </div>
+      <div class="foot-cols">
+        {columns.map((col) => (
+          <div class="foot-col">
+            <h5>{col.title}</h5>
+            {col.links.map(([label, href]) => <a href={href}>{label}</a>)}
+          </div>
+        ))}
+      </div>
+    </div>
+    <div class="foot-sign">
+      <span class="god">GOD BLESS THE INTERNET</span>
+      <span class="cr">© {year} GBTI Network <span class="cr-sep">·</span> <button type="button" class="cr-link" data-cookie-prefs>Cookie preferences</button></span>
+    </div>
+  </div>
+</footer>
+
+<style>
+  /* The social links are icon boxes (the V3 .foot-social a). Center the SVG inside. */
+  .foot-social a svg { display: block; }
+  /* SOW-024: the "Cookie preferences" re-open trigger, styled as a quiet inline link in the sign-off bar. */
+  .cr-link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; opacity: .85; }
+  .cr-link:hover { opacity: 1; }
+  .cr-sep { opacity: .5; }
+</style>

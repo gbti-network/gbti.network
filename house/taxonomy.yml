@@ -1,0 +1,84 @@
+# Canonical content taxonomy for gbti.network (SOW-012).
+#
+# ONE hierarchy, shared by every content type: posts, products, and prompts. A content item's
+# `categories` frontmatter is an ORDERED PATH into this tree, for example ["devops", "accessibility"]
+# or ["devops", "frameworks", "wordpress"]. Free-form `tags` live on each item separately, for
+# cross-cutting topics that are not part of the tree (for example "pikepdf", "veraPDF").
+#
+# This file is the single source of truth:
+#   - scripts/validate-content.mjs rejects any `categories` path not defined here (canonical).
+#   - src/lib/taxonomy.ts builds the directory filters, card labels, and breadcrumbs from it.
+#   - It is admin-owned (house/), edited via pull request, like roles.yml and the other house files.
+#
+# Shape: each node is `key: { label, children? }`. The key is the URL/data slug (kebab-case) and the
+# label is the display name. A path may stop at any node (["devops"] and ["devops","frameworks"] are
+# both valid).
+
+tree:
+  devops:
+    label: DevOps
+    children:
+      frameworks:
+        label: Frameworks
+        children:
+          wordpress: { label: WordPress }
+          react: { label: React }
+          python: { label: Python }
+          javascript: { label: JavaScript }
+          git: { label: Git }
+          chrome-extensions: { label: Chrome Extensions }
+      accessibility: { label: Accessibility }
+      open-source:
+        label: Open Source
+        children:
+          free-open-source: { label: Free and Open Source }
+      ide-plugins: { label: IDE Plugins }
+      utilities: { label: Utilities }
+      tooling: { label: Tooling }
+  ai:
+    label: AI
+    children:
+      llms: { label: LLMs }
+      mcp: { label: MCP }
+      agents: { label: Agents }
+      image-generation: { label: Image Generation }
+  imagegen:
+    label: ImageGen
+  blockchain:
+    label: Blockchain
+    children:
+      solana: { label: Solana }
+      web3: { label: Web3 }
+  entertainment:
+    label: Entertainment
+    children:
+      gaming: { label: Gaming }
+  minecraft:
+    label: Minecraft
+    children:
+      mods: { label: Mods }
+  business:
+    label: Business
+    children:
+      finance: { label: Finance }
+  writing:
+    label: Writing
+  design:
+    label: Design
+    children:
+      responsive: { label: Responsive }
+      ui-ux: { label: UI/UX }
+  generators:
+    label: Generators
+  member-tutorials:
+    label: Member Tutorials
+  gbti:
+    label: GBTI Network
+    children:
+      products:
+        label: Products
+        children:
+          andshare: { label: AndShare }
+      tutorials: { label: Tutorials }
+  blog:
+    label: Blog

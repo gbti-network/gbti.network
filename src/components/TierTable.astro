@@ -1,0 +1,40 @@
+---
+// Visitor / Trial / Paid capability comparison. Single source for the tier matrix, used on the homepage
+// flywheel and the /membership/ conversion page so the two never drift. Rows mirror the canonical three-tier
+// table in CLAUDE.md (browse / community / author drafts / public presence / revenue share).
+import { TRIAL_DAYS_SITE } from '../lib/membership';
+
+const check = '<svg viewBox="0 0 24 24" width="20" height="20" class="yes" role="img" aria-label="Included"><use href="#ico-check"/></svg>';
+const no = '<span class="no" role="img" aria-label="Not included">·</span>';
+---
+<div class="tbl-grid">
+  <div class="th"></div>
+  <div class="th center">Visitor</div>
+  <div class="th center">{TRIAL_DAYS_SITE}-day limited-access trial</div>
+  <div class="th center col-hi">Paid member</div>
+
+  <div class="td rowname">Browse the public site</div>
+  <div class="td center" set:html={check} />
+  <div class="td center" set:html={check} />
+  <div class="td center col-hi" set:html={check} />
+
+  <div class="td rowname">Discord &amp; weekly sessions</div>
+  <div class="td center" set:html={no} />
+  <div class="td center soft">trial access</div>
+  <div class="td center col-hi soft">full access</div>
+
+  <div class="td rowname">Author drafts (on your own fork)</div>
+  <div class="td center" set:html={no} />
+  <div class="td center" set:html={check} />
+  <div class="td center col-hi" set:html={check} />
+
+  <div class="td rowname">Profile &amp; work go public</div>
+  <div class="td center" set:html={no} />
+  <div class="td center soft">on your fork</div>
+  <div class="td center col-hi" set:html={check} />
+
+  <div class="td rowname">Revenue-share eligibility</div>
+  <div class="td center" set:html={no} />
+  <div class="td center" set:html={no} />
+  <div class="td center col-hi" set:html={check} />
+</div>

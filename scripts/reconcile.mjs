@@ -1,0 +1,446 @@
+#!/usr/bin/env node
+// SOW-005 reconciliation script. Brings the published-content state + Discord roles in line with the
+// Stripe registry plus git-native overrides (bans, grandfather). Runs locally (owner runs --dry-run
+// first, then --apply) and on a daily schedule (.github/workflows/reconcile.yml runs it with --apply).
+//
+//   node scripts/reconcile.mjs            # DRY RUN by default: prints the plan, changes nothing
+//   node scripts/reconcile.mjs --apply    # enacts the plan via the GitHub / Discord clients
+//   node scripts/reconcile.mjs --dry-run  # explicit dry run
+//
+// Design: all decision logic is the PURE planReconcile (scripts/lib/reconcile-plan.mjs). This file is
+// the thin I/O shell: build clients, gather inputs (Stripe customers + local content index +
+// overrides), call the planner, then (unless dry-run) enact each action. Idempotent: re-running after
+// a successful apply yields an empty plan.
+//
+// Fail closed: deriveStatusFromCustomer + effectiveStatus already treat any missing or error state as
+// NOT paid, so a customer we cannot classify has their content drafted, never default-published.
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
+
+import { createStripeClient } from '../clients/stripe.mjs';
+import { createGitHubClient } from '../clients/github.mjs';
+import { createDiscordClient } from '../clients/discord.mjs';
+import { createResendClient } from '../clients/resend.mjs';
+import { deriveStatusFromCustomer, STATUS } from '../membership/derive-status.mjs';
+import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '../membership/overrides.mjs';
+import { buildRepoIndex } from './lib/repo-content.mjs';
+import { planReconcile } from './lib/reconcile-plan.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv } from './lib/kv-mirror.mjs';
+import { syncFavoriteCounts, readCountsFromDisk } from './lib/favorite-counts.mjs';
+
+const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
+
+/** Parse argv into { apply } where dry-run is the default unless --apply is given. */
+export function parseArgs(argv) {
+  const apply = argv.includes('--apply');
+  const dryRun = argv.includes('--dry-run') || !apply; // default to dry-run
+  return { apply: apply && !argv.includes('--dry-run'), dryRun };
+}
+
+/** Has this customer converted to a paid (active/past_due) subscription? Used to skip the day-87 reminder. */
+function isConverted(customer) {
+  const derived = deriveStatusFromCustomer(customer);
+  return derived === STATUS.paid;
+}
+
+/**
+ * Resolve the on-disk folder (username) a Stripe customer owns. Authoritative and fail-closed.
+ * Resolution order:
+ *   1. overrides.membersIndex.get(githubId)         (the M0 authoritative github_id -> folder map)
+ *   2. repoIndex.byGithubId.get(githubId)           (profile.md carries a github_id, when present)
+ *   3. repoIndex.byGithubLogin.get(login.toLowerCase()) (profile links.github URL trailing segment)
+ *   4. a case-insensitive match of github_login against the folder (byUsername) keys
+ * Returns the username string, or null when nothing resolves.
+ *
+ * This exists because a Stripe metadata.github_login does NOT always equal the on-disk folder name.
+ * Confirmed in real data: folder 'hudson' has links.github https://github.com/atwellpub, so the login
+ * is 'atwellpub' and a plain login -> folder lookup misses, leaving the lapsed member published (a
+ * fail-OPEN bug). Steps 1 to 3 close that hole.
+ */
+export function resolveUsername(githubId, githubLogin, overrides, repoIndex) {
+  const id = String(githubId ?? '');
+  const fromIndex = overrides?.membersIndex?.get(id);
+  if (fromIndex) return fromIndex;
+
+  const byGithubId = repoIndex?.byGithubId;
+  if (byGithubId && byGithubId.get(id)) return byGithubId.get(id);
+
+  const login = githubLogin ? String(githubLogin).toLowerCase() : null;
+  const byGithubLogin = repoIndex?.byGithubLogin;
+  if (login && byGithubLogin && byGithubLogin.get(login)) return byGithubLogin.get(login);
+
+  const byUsername = repoIndex?.byUsername;
+  if (login && byUsername) {
+    for (const folder of Object.keys(byUsername)) {
+      if (folder.toLowerCase() === login) return folder;
+    }
+  }
+  return null;
+}
+
+/**
+ * Turn one Stripe Customer plus overrides into a member entry for the planner. Pure given `now`.
+ * `repoIndex` (from buildRepoIndex) is used to resolve the owned folder authoritatively. discordRoles is
+ * passed in by gatherMembers (the set of managed roles the member currently holds, from Discord
+ * getMember); it defaults to empty so the planner stays idempotent when the Discord client is absent.
+ */
+export function memberEntryFor(customer, overrides, now, { repoIndex = null, discordRoles = [] } = {}) {
+  const meta = customer.metadata ?? {};
+  const githubId = String(meta.github_id ?? '');
+  const githubLogin = meta.github_login ?? null;
+  const derived = deriveStatusFromCustomer(customer, now);
+  const effective = effectiveStatus(githubId, derived, overrides, now);
+  const username = resolveUsername(githubId, githubLogin, overrides, repoIndex);
+  return {
+    githubId,
+    githubLogin,
+    discordUserId: meta.discord_user_id ?? null,
+    email: customer.email ?? null,
+    username,
+    derived,
+    effective,
+    role: roleOf(githubId, overrides.roles),
+    trialStartedAt: meta.trial_started_at ?? null,
+    converted: isConverted(customer),
+    discordRoles,
+  };
+}
+
+/** Base64 a string for the GitHub Contents API putContent({ content }). */
+function toBase64(str) {
+  return Buffer.from(str, 'utf8').toString('base64');
+}
+
+/**
+ * Flip the `status:` frontmatter line of a content file between published and draft, returning the new
+ * text. Reuses the same line shape as scripts/validate-content.mjs. If the line is missing we leave the
+ * file untouched (the planner should not have selected it, but we stay safe).
+ */
+export function flipStatus(text, to) {
+  // [ \t]* (not \s*) so the trailing newline is preserved; \s would eat the line break.
+  return text.replace(/^(status:[ \t]*)"?(published|draft)"?[ \t]*$/m, `$1${to}`);
+}
+
+/**
+ * A branch name for a content flip PR (one per member per run kind). The timestamp has 1-second
+ * resolution, so a same-second re-run would collide and createRef would 422. A short random suffix
+ * keeps the branch unique across re-runs.
+ */
+function flipBranch(kind, githubId) {
+  const stamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+  const suffix = crypto.randomUUID().slice(0, 8);
+  return `reconcile/${kind}-${githubId}-${stamp}-${suffix}`;
+}
+
+/**
+ * Enact a single content action (draft or publish) as ONE auto-merged PR that flips every selected
+ * file's `status`. The bot is listed as admin in roles.yml, so the PR-gate passes it (it never runs PR
+ * code; this is a base-branch metadata-only gate). We open the PR off a fresh branch, commit each file
+ * flip, then squash-merge.
+ */
+async function enactContent(github, action, { base = 'main' } = {}) {
+  const to = action.type === 'draft' ? 'draft' : 'published';
+  const branch = flipBranch(action.type, action.githubId);
+
+  // 1. Branch off the base head.
+  const baseRef = await github.getRef(`heads/${base}`);
+  const baseSha = baseRef?.object?.sha;
+  if (!baseSha) throw new Error(`reconcile: cannot resolve base head sha for ${base}`);
+  await github.createRef(branch, baseSha);
+
+  // 2. Flip each file on the new branch.
+  for (const filePath of action.files) {
+    const existing = await github.getContent(filePath, branch);
+    const sha = existing?.sha;
+    const current = existing?.content ? Buffer.from(existing.content, 'base64').toString('utf8') : '';
+    const next = flipStatus(current, to);
+    if (next === current) continue; // already in the desired state: skip (idempotent)
+    await github.putContent(filePath, {
+      message: `reconcile: ${action.type} ${filePath} (membership state)`,
+      content: toBase64(next),
+      branch,
+      sha,
+    });
+  }
+
+  // 3. Open + squash-merge the PR. The gate passes the admin bot, so this auto-merges.
+  const verb = action.type === 'draft' ? 'Disable' : 'Re-enable';
+  const pull = await github.createPull({
+    title: `reconcile: ${verb} ${action.username ?? action.githubId} content`,
+    head: branch,
+    base,
+    body:
+      `Automated membership reconcile. Flips status -> ${to} for ${action.files.length} file(s) ` +
+      `owned by github_id ${action.githubId}. Never deletes content; resubscribe reverses it.`,
+  });
+  await github.mergePull(pull.number, { method: 'squash' });
+  return pull.number;
+}
+
+/** Discord role id lookup from env for a planner role name. */
+function discordRoleId(role, env) {
+  if (role === 'member') return env.DISCORD_MEMBER_ROLE_ID;
+  if (role === 'trial') return env.DISCORD_TRIAL_ROLE_ID;
+  if (role === 'locked') return env.DISCORD_LOCKED_ROLE_ID;
+  return null;
+}
+
+/** Enact a single Discord role action. */
+async function enactDiscord(discord, action, env) {
+  const guildId = env.DISCORD_GUILD_ID;
+  const roleId = discordRoleId(action.role, env);
+  if (!guildId || !roleId) return; // missing config: skip rather than throw on a partial run
+  if (action.type === 'add-role') await discord.addRole(guildId, action.discordUserId, roleId);
+  else await discord.removeRole(guildId, action.discordUserId, roleId);
+}
+
+/**
+ * Enact a day-87 reminder. Email (Resend) is the PRIMARY channel because Discord server-member DMs
+ * are widely disabled by default and would silently vanish (see membership-and-access.md section 0).
+ * The Discord DM is an optional secondary nudge. Email is attempted first when a Resend client and a
+ * recipient address exist.
+ */
+async function enactReminder(action, { resend, discord, env = {} } = {}) {
+  const body =
+    'Your GBTI Network trial ends in a few days. Add a membership to keep your profile, posts, ' +
+    'products, and prompts published. Visit your account to add a membership before day 90.';
+
+  // PRIMARY: email via Resend when configured and the action carries a recipient address.
+  if (resend && env.RESEND_FROM && action.email) {
+    await resend.sendEmail({
+      from: env.RESEND_FROM,
+      to: action.email,
+      subject: 'Your GBTI Network trial ends soon: add a membership to stay published',
+      text: body,
+    });
+  }
+
+  // SECONDARY (optional): a Discord DM nudge when we have a Discord user id.
+  if (discord && action.discordUserId) {
+    await discord.sendDirectMessage(action.discordUserId, body);
+  }
+}
+
+/** Human-readable one-liner per action for the printed summary. */
+function describe(action) {
+  switch (action.kind) {
+    case 'content':
+      return `content  ${action.type.padEnd(8)} ${action.username ?? action.githubId}  (${action.files.length} file(s))`;
+    case 'discord':
+      return `discord  ${action.type.padEnd(8)} ${action.githubId}  role=${action.role}`;
+    case 'reminder':
+      return `reminder day-87    ${action.githubId}  email=${action.email ?? 'none'}`;
+    case 'block':
+      return `block    banned     ${action.username ?? action.githubId}`;
+    case 'unresolved':
+      return `UNRESOLVED ${String(action.status).padEnd(8)} ${action.githubId}  ${action.reason}`;
+    default:
+      return `unknown  ${JSON.stringify(action)}`;
+  }
+}
+
+/** Build the clients from env. Returns { stripe, github, discord, resend }. */
+export function buildClients(env, fetchImpl = globalThis.fetch) {
+  const stripe = createStripeClient({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
+  const github = createGitHubClient({ token: env.GITHUB_BOT_TOKEN, repo: env.GITHUB_CONTENT_REPO, fetch: fetchImpl });
+  const discord = env.DISCORD_BOT_TOKEN ? createDiscordClient({ botToken: env.DISCORD_BOT_TOKEN, fetch: fetchImpl }) : null;
+  const resend = env.RESEND_API_KEY ? createResendClient({ apiKey: env.RESEND_API_KEY, fetch: fetchImpl }) : null;
+  return { stripe, github, discord, resend };
+}
+
+/**
+ * Resolve the SET of managed Discord roles a member CURRENTLY holds (a subset of 'member' | 'trial' |
+ * 'locked') from their live guild member record. The planner reconciles this set to exactly the one
+ * target role, removing any stray. Best-effort: any getMember error (including a missing member)
+ * returns [] so the planner treats the member as holding no managed role and simply adds the target.
+ */
+export async function resolveDiscordRoles(discord, guildId, discordUserId, env) {
+  if (!discord || !guildId || !discordUserId) return [];
+  let member;
+  try {
+    member = await discord.getMember(guildId, discordUserId);
+  } catch {
+    return []; // best-effort: unknown roles
+  }
+  if (!member) return [];
+  const roleIds = new Set((member.roles ?? []).map(String));
+  const held = [];
+  if (env.DISCORD_MEMBER_ROLE_ID && roleIds.has(String(env.DISCORD_MEMBER_ROLE_ID))) held.push('member');
+  if (env.DISCORD_TRIAL_ROLE_ID && roleIds.has(String(env.DISCORD_TRIAL_ROLE_ID))) held.push('trial');
+  if (env.DISCORD_LOCKED_ROLE_ID && roleIds.has(String(env.DISCORD_LOCKED_ROLE_ID))) held.push('locked');
+  return held;
+}
+
+/**
+ * Gather every member entry by iterating the CONSISTENT Stripe customer list (not Search). Threads
+ * the repoIndex (authoritative folder resolution) and the Discord client + env (the set of managed
+ * roles each member currently holds) into each entry. A non-paid/non-grandfathered member whose
+ * folder does NOT resolve is logged as a WARNING so the owner can add them to members-index.yml (we
+ * never silently skip a lapse).
+ */
+export async function gatherMembers(stripe, overrides, now, { repoIndex = null, discord = null, env = {} } = {}) {
+  const members = [];
+  const guildId = env.DISCORD_GUILD_ID ?? null;
+  for await (const customer of stripe.listCustomers()) {
+    const meta = customer.metadata ?? {};
+    if (!meta.github_id) continue; // not a membership customer
+    const githubId = String(meta.github_id);
+    const discordRoles = await resolveDiscordRoles(discord, guildId, meta.discord_user_id ?? null, env);
+    const entry = memberEntryFor(customer, overrides, now, { repoIndex, discordRoles });
+
+    // Fail-closed warning: a member who is NOT effectively paid/grandfathered but has no resolvable
+    // folder cannot have their content drafted on lapse. Name them so the owner can fix the index.
+    if (!entry.username && entry.effective?.status !== 'paid') {
+      console.warn(
+        `reconcile: WARNING no folder resolved for github_id ${githubId} (login ${meta.github_login ?? 'unknown'}, ` +
+          `status ${entry.effective?.status ?? 'unknown'}). Their content cannot be reconciled. ` +
+          'Add a members-index.yml entry mapping this github_id to their folder.',
+      );
+    }
+    members.push(entry);
+  }
+  return members;
+}
+
+/** Enact the full plan via the clients. Returns counts per kind. */
+export async function enactPlan(actions, { github, discord, resend }, env) {
+  const counts = {};
+  for (const action of actions) {
+    counts[action.kind] = (counts[action.kind] ?? 0) + 1;
+    if (action.kind === 'content') await enactContent(github, action);
+    else if (action.kind === 'discord' && discord) await enactDiscord(discord, action, env);
+    else if (action.kind === 'reminder') await enactReminder(action, { resend, discord, env });
+    // 'block' is enacted by re-running the gate / branch protection; the reconcile logs it. The
+    // content draft + role removal for a banned member are emitted as their own actions above.
+  }
+  return counts;
+}
+
+/**
+ * Parse the targeted github_id from a repository_dispatch event payload (FIX 4). The signup Worker
+ * fires repository_dispatch type 'regate' with client_payload.github_id after a payment so a single
+ * member is reconciled immediately instead of waiting for the daily run. Returns the github_id string
+ * or null when the event is not a usable regate dispatch.
+ */
+export function targetedGithubId(env = process.env) {
+  if (env.GITHUB_EVENT_NAME !== 'repository_dispatch') return null;
+  const eventPath = env.GITHUB_EVENT_PATH;
+  if (!eventPath || !fs.existsSync(eventPath)) return null;
+  let payload;
+  try {
+    payload = JSON.parse(fs.readFileSync(eventPath, 'utf8'));
+  } catch {
+    return null;
+  }
+  const id = payload?.client_payload?.github_id;
+  return id != null ? String(id) : null;
+}
+
+/**
+ * Gather only the single targeted member (FIX 4). In repository_dispatch 'regate' mode we fetch ONLY
+ * that customer via Stripe Search (instead of iterating every customer) and build one member entry, so
+ * a just-paid member's Discord role is upgraded and content published right away. Returns an array of
+ * zero or one member entries.
+ */
+export async function gatherTargetedMember(stripe, overrides, now, githubId, { repoIndex = null, discord = null, env = {} } = {}) {
+  const customer = await stripe.searchCustomerByGithubId(githubId);
+  if (!customer) {
+    console.warn(`reconcile: targeted github_id ${githubId} has no Stripe customer (Search lag or no signup). Nothing to do.`);
+    return [];
+  }
+  const discordRoles = await resolveDiscordRoles(discord, env.DISCORD_GUILD_ID ?? null, customer.metadata?.discord_user_id ?? null, env);
+  return [memberEntryFor(customer, overrides, now, { repoIndex, discordRoles })];
+}
+
+async function main() {
+  const { dryRun } = parseArgs(process.argv.slice(2));
+  const now = new Date();
+  const env = process.env;
+
+  const overrides = loadOverrides(ROOT);
+  const repoIndex = buildRepoIndex(ROOT);
+
+  const { stripe, github, discord, resend } = buildClients(env);
+
+  const targetId = targetedGithubId(env);
+  let members;
+  if (targetId) {
+    console.log(`reconcile: TARGETED mode (repository_dispatch regate) for github_id ${targetId}.`);
+    members = await gatherTargetedMember(stripe, overrides, now, targetId, { repoIndex, discord, env });
+  } else {
+    members = await gatherMembers(stripe, overrides, now, { repoIndex, discord, env });
+  }
+
+  const actions = planReconcile({ members, repoIndex: repoIndex.byUsername, now });
+
+  console.log(`reconcile: ${members.length} membership customer(s), ${actions.length} action(s) planned.`);
+  for (const action of actions) console.log('  ' + describe(action));
+
+  // FAIL CLOSED: a banned member whose folder could not be resolved cannot be deplatformed by this run.
+  // Surface it loudly and set a non-zero exit so CI/the operator must fix the members-index, even though
+  // the rest of the plan still applies.
+  const unresolved = actions.filter((a) => a.kind === 'unresolved');
+  const bannedUnresolved = unresolved.filter((a) => a.status === 'banned');
+  for (const a of unresolved) {
+    console.error(`reconcile: ${a.status === 'banned' ? 'CRITICAL' : 'WARNING'} unresolvable github_id ${a.githubId} — ${a.reason}. Add a house/members-index.yml entry.`);
+  }
+  if (bannedUnresolved.length) process.exitCode = 1;
+
+  // SOW-015: mirror the override files (bans/roles/grandfathered) into SIGNUP_KV so the Worker's
+  // GET /membership/key can apply ban > staff > grandfather server-side. This is a sync of the override
+  // files, not a member action, so a dry run only reports what it would write.
+  const rawOverrides = loadOverridesRaw(ROOT);
+  if (dryRun) {
+    const blob = buildOverridesMirror(rawOverrides, now);
+    console.log(`reconcile: DRY RUN would mirror overrides to KV (${JSON.stringify(blob).length} bytes, key overrides:mirror).`);
+  } else {
+    try {
+      const r = await mirrorOverridesToKv({ raw: rawOverrides, env, now });
+      console.log(r.written ? `reconcile: mirrored overrides to KV (${r.bytes} bytes).` : `reconcile: overrides KV mirror SKIPPED (${r.reason}).`);
+    } catch (e) {
+      console.error('reconcile: overrides KV mirror FAILED:', e?.message ?? e);
+      process.exitCode = 1;
+    }
+  }
+
+  // SOW-024: sync the member-identity-free favorite counts (house/favorite-counts.yml) from the deletable edge
+  // store (KV) into git, so the static build shows aggregate favorite counts without committing any
+  // who-favorited-what data. A dry run only reports intent; an apply lists KV + opens an auto-merged PR when
+  // the counts changed (no-op when unchanged, or skipped when CF creds / a GitHub client are absent).
+  if (dryRun) {
+    console.log('reconcile: DRY RUN would sync favorite counts from KV -> house/favorite-counts.yml (requires CF creds + a GitHub PR).');
+  } else {
+    try {
+      const r = await syncFavoriteCounts({ env, github, now, readCurrentCounts: () => readCountsFromDisk(ROOT) });
+      console.log(
+        r.synced
+          ? `reconcile: synced favorite counts (PR #${r.prNumber}, ${r.total} target(s)).`
+          : `reconcile: favorite-counts sync SKIPPED (${r.reason}).`,
+      );
+    } catch (e) {
+      console.error('reconcile: favorite-counts sync FAILED:', e?.message ?? e);
+      process.exitCode = 1;
+    }
+  }
+
+  if (dryRun) {
+    console.log('reconcile: DRY RUN (no changes). Re-run with --apply to enact.');
+    return;
+  }
+
+  const counts = await enactPlan(actions, { github, discord, resend }, env);
+  console.log('reconcile: applied. ' + JSON.stringify(counts));
+}
+
+// Only run the CLI when invoked directly (so the test can import the helpers without side effects).
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error('reconcile: failed:', err?.message ?? err);
+    process.exit(1);
+  });
+}
+
+export { ROLE, STATUS };

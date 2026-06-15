@@ -1,0 +1,302 @@
+---
+// Contribution history (design: "GBTI Contribution History", claude.ai/design handoff). The public
+// content repo is the database, so this reads the file's git log at build (src/lib/git-history): the
+// commits and merged PRs that shaped the post, who made each, and the +/- diff. Collapsed by default
+// behind a Show/Hide toggle, between the join CTA and the comments. The one-time legacy import is hidden
+// and summarized as a note. Fields with no real source yet (PR number, Merged badge, reviewer) appear
+// only when the data exists — we never fabricate them. Renders nothing when there is no committed history.
+import { getCollection } from 'astro:content';
+import { fileCommits, fileHistoryHref, prUrl } from '../../lib/git-history';
+import { buildAvatarIndex, githubAvatarUrl, githubLogin } from '../../lib/avatars';
+import { GBTI_AVATAR } from '../../lib/authors';
+import Avatar from '../Avatar.astro';
+
+interface Props {
+  filePath?: string;
+  author?: string; // the content author (frontmatter), so their own commits read as history, not a paid contribution
+  contributors?: { login: string; commit?: string; class?: string }[]; // SOW-008 accepted contributions (revenue-eligible)
+}
+const { filePath, author, contributors = [] } = Astro.props;
+const all = fileCommits(filePath);
+const imported = all.some((c) => c.isImport);
+const commits = all.filter((c) => !c.isImport); // hide the legacy import; show the git history
+const historyHref = fileHistoryHref(filePath);
+const show = commits.length > 0 || imported;
+
+const profiles = await getCollection('profile');
+const index = buildAvatarIndex(profiles);
+
+// HONESTY (Option A): the contribution-history list is the git log (every commit), but the REVENUE claim
+// only belongs to ACCEPTED member contributions — the `contributors[]` written by the SOW-009 owner-approval
+// flow. So we tag each commit by role and only attach revenue language when there is a real accepted
+// contribution. A maintainer/automation direct commit (e.g. gbtilabs) or the author's own commit is history,
+// not a paid contribution. `contributors[]` is system-managed and empty until a member PR is accepted.
+const acceptedLogins = new Set((contributors ?? []).map((c) => (c.login || '').toLowerCase()).filter(Boolean));
+const acceptedCount = acceptedLogins.size;
+const hasAccepted = acceptedCount > 0;
+const authorProfile = author ? profiles.find((p) => p.data.username === author)?.data : null;
+const authorLogin = (githubLogin(authorProfile?.links?.github) || author || '').toLowerCase();
+function roleOf(login: string | null): 'author' | 'contributor' | 'maintainer' {
+  const l = (login || '').toLowerCase();
+  if (l && l === authorLogin) return 'author';
+  if (l && acceptedLogins.has(l)) return 'contributor';
+  return 'maintainer';
+}
+const ROLE_LABEL: Record<string, string> = { author: 'author', contributor: 'accepted contribution', maintainer: 'maintainer' };
+
+// Correct avatar for a committer: a network member's profile avatar (gravatar) when their GitHub login
+// maps to a member, otherwise the committer's canonical GitHub avatar (github.com/<login>.png). Every
+// avatar renders round, including the house/automation accounts.
+function who(login: string | null, name: string) {
+  const member = login ? index.byLogin.get(login.toLowerCase()) : null;
+  return { name: member?.name ?? name, avatar: member?.avatar ?? githubAvatarUrl(login) };
+}
+
+// Distinct ACCEPTED contributors (for the summary stack), in commit order. Only real contributions.
+const distinct: { name: string; avatar?: string }[] = [];
+const seenWho = new Set<string>();
+for (const c of commits) {
+  if (roleOf(c.authorLogin) !== 'contributor') continue;
+  const key = (c.authorLogin || c.authorName).toLowerCase();
+  if (seenWho.has(key)) continue;
+  seenWho.add(key);
+  distinct.push(who(c.authorLogin, c.authorName));
+}
+
+// Friendly relative-ish date (computed at build). Recent -> "N days ago", older -> "Mon D[, YYYY]".
+const NOW = new Date();
+function friendlyDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.valueOf())) return iso;
+  const days = Math.floor((NOW.getTime() - d.getTime()) / 86400000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days} days ago`;
+  const sameYear = d.getFullYear() === NOW.getFullYear();
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
+}
+
+// 5-cell add/del gauge (ported from the design): proportion of the change that was additions vs deletions.
+function gauge(add: number, del: number): ('g-add' | 'g-del' | '')[] {
+  const n = 5;
+  const total = add + del || 1;
+  const a = Math.max(add > 0 ? 1 : 0, Math.round((add / total) * n));
+  const dd = Math.min(n - a, Math.max(del > 0 ? 1 : 0, n - a));
+  return Array.from({ length: n }, (_, i) => (i < a ? 'g-add' : i < a + dd ? 'g-del' : ''));
+}
+
+const memberCount = distinct.length;
+const acceptedRecentCommit = commits.find((c) => roleOf(c.authorLogin) === 'contributor');
+const recent = acceptedRecentCommit ? friendlyDate(acceptedRecentCommit.date) : '';
+const plur = (n: number, s: string) => `${n} ${s}${n === 1 ? '' : 's'}`;
+const houseItem = { name: 'GBTI Network', avatar: GBTI_AVATAR };
+const n = commits.length; // commits shown as history
+---
+{show && (
+  <section id="contribution-history" class="mx-auto">
+    <details class="ch" open={hasAccepted}>
+      <summary class="ch-head">
+        <span class="h-l">
+          <span class="ch-title">Contribution history</span>
+          {hasAccepted && <span class="ch-count">{plur(acceptedCount, 'contribution')}</span>}
+        </span>
+        <span class="ch-toggle">
+          <span class="ch-tlabel" data-open="Hide" data-closed="Show Contribution History"></span>
+          <svg class="ch-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </summary>
+
+      <div class="ch-body">
+        {n === 0 && (
+          <div class="ch-empty">
+            <Avatar item={houseItem} size={34} class="rounded-full" />
+            <span>No tracked contributions yet. A member who improves this article through an accepted pull request earns a <a class="rev-link" href="/co-op/"><b>share of the revenue</b></a> it generates.</span>
+          </div>
+        )}
+
+        {/* Revenue language belongs ONLY to accepted member contributions (contributors[]). */}
+        {n > 0 && hasAccepted && acceptedCount === 1 && (
+          <div class="cl-note">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-coin"/></svg>
+            <span>This article has <b>1 accepted contribution</b>. Its author earns a <a class="rev-link" href="/co-op/"><b>share of the revenue</b></a> it generates.</span>
+          </div>
+        )}
+
+        {n > 0 && hasAccepted && acceptedCount >= 2 && (
+          <div class="cl-summary">
+            <div class="cl-avs">
+              {distinct.slice(0, 8).map((p) => <Avatar item={p} size={34} class="cl-stack-av rounded-full" />)}
+            </div>
+            <div class="cl-sum-txt">
+              <b>{plur(memberCount, 'member')}</b>{' '}{memberCount === 1 ? 'has' : 'have'} shaped this article across <b>{plur(acceptedCount, 'accepted contribution')}</b>.{recent ? ` The most recent landed ${recent}.` : ''}
+            </div>
+            <div class="cl-reward">
+              <svg class="cl-reward-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-coin"/></svg>
+              <span>Every accepted contribution earns its author a <a class="rev-link" href="/co-op/"><b>share of the revenue</b></a> this article generates.</span>
+            </div>
+          </div>
+        )}
+
+        {n > 0 && !hasAccepted && (
+          <div class="cl-note cl-note--neutral">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-coin"/></svg>
+            <span>The changes below are the change history of this article. A member who improves it through an accepted pull request earns a <a class="rev-link" href="/co-op/"><b>share of the revenue</b></a> it generates.</span>
+          </div>
+        )}
+
+        {n > 0 && (
+          <div class="cl-list">
+            {commits.map((c) => {
+              const p = who(c.authorLogin, c.authorName);
+              const cells = gauge(c.add, c.del);
+              const role = roleOf(c.authorLogin);
+              return (
+                <a class={`cl-item role-${role}`} href={c.commitUrl} rel="noopener">
+                  <Avatar item={p} size={34} class="cl-row-av rounded-full" />
+                  <div class="cl-mid">
+                    <div class="msg">{c.subject}</div>
+                    <div class="sub">
+                      <span class="nm">{p.name}</span>
+                      <span class={`role-tag role-tag--${role}`}>{ROLE_LABEL[role]}</span>
+                      {c.pr != null && <span class="pr-no">#{c.pr}</span>}
+                      <span class="sep" aria-hidden="true"></span>
+                      <span class="when">{friendlyDate(c.date)}</span>
+                    </div>
+                  </div>
+                  <div class="cl-right">
+                    <div class="topline">
+                      <span class="dstat">
+                        <span class="add">+{c.add}</span>
+                        <span class="del">&minus;{c.del}</span>
+                        <span class="gauge">{cells.map((g) => <i class={g}></i>)}</span>
+                      </span>
+                      {role === 'contributor' && c.pr != null && (
+                        <span class="merged"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-merge"/></svg> Merged</span>
+                      )}
+                    </div>
+                    <span class="hash">{c.hash.slice(0, 7)}</span>
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        )}
+
+        {imported && (
+          <p class="ch-sub">Imported from the legacy WordPress site, so the earliest edits live there. Everything since is tracked here as member contributions.</p>
+        )}
+
+        <div class="ch-foot">
+          <a class="ghlink" href={historyHref} rel="noopener">
+            <svg class="gh" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-github"/></svg>
+            Full history on GitHub
+            <span class="ar"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-arrow"/></svg></span>
+          </a>
+          <span class="contrib-cta">Spotted something? <a href="/membership/">Become a member</a> to contribute.</span>
+        </div>
+      </div>
+    </details>
+  </section>
+)}
+
+<style>
+  #contribution-history { max-width: 820px; }
+  /* ===== history shell ===== */
+  .ch { margin-top: 40px; border-top: 1.5px solid var(--line); padding-top: 22px; }
+  .ch-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; cursor: pointer; list-style: none; }
+  .ch-head::-webkit-details-marker { display: none; }
+  /* When collapsed, the toggle ("Show Contribution History") is the whole affordance; reveal the title
+     + count only once it is open, so there is no redundant heading next to the toggle. */
+  details:not([open]) .h-l { display: none; }
+  .h-l { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .ch-title { font-family: var(--f-display); font-weight: 700; font-size: 21px; letter-spacing: -0.01em; white-space: nowrap; }
+  .ch-count { font-family: var(--f-mono); font-size: 11px; font-weight: 600; color: var(--green-700); background: var(--green-tint); border: 1.5px solid var(--green-tint-2); padding: 3px 9px; border-radius: var(--r-pill); white-space: nowrap; }
+  .ch-toggle { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-mute); }
+  .ch-head:hover .ch-toggle { color: var(--fg); }
+  .ch-tlabel::after { content: attr(data-closed); }
+  details[open] .ch-tlabel::after { content: attr(data-open); }
+  .ch-chev { width: 14px; height: 14px; transition: transform .25s ease; }
+  details[open] .ch-chev { transform: rotate(180deg); }
+  .ch-body { margin-top: 24px; }
+
+  /* ===== summary card ===== */
+  .cl-summary { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 18px 22px; padding: 22px 24px; border: 1.5px solid var(--line); border-radius: var(--r-lg); background: var(--paper); box-shadow: var(--sh-sm); }
+  .cl-avs { display: flex; }
+  .cl-avs :global(.cl-stack-av) { margin-left: -10px; box-shadow: 0 0 0 3px var(--paper); }
+  .cl-avs :global(.cl-stack-av):first-child { margin-left: 0; }
+  .cl-sum-txt { font-size: 15px; line-height: 1.5; color: var(--fg-soft); }
+  .cl-sum-txt b { color: var(--fg); font-weight: 700; }
+  /* revenue banner — green, per the mockup; the green tokens auto-adapt in dark mode. */
+  .cl-reward { grid-column: 1 / -1; display: flex; align-items: center; gap: 11px; font-size: 13.5px; line-height: 1.45; color: var(--green-700); background: var(--green-tint); border: 1.5px solid var(--green-tint-2); border-radius: var(--r); padding: 12px 15px; }
+  .cl-reward-ico { width: 20px; height: 20px; flex: none; }
+  .cl-reward b { font-weight: 700; }
+
+  /* slim revenue note (single-contribution state, in place of the summary card) */
+  .cl-note { display: flex; align-items: center; gap: 10px; font-size: 13.5px; line-height: 1.45; color: var(--green-700); }
+  .cl-note svg { width: 18px; height: 18px; flex: none; opacity: .9; }
+  .cl-note b { font-weight: 700; }
+  /* neutral note: no accepted contributions yet, so the history makes no revenue claim (muted, not a banner) */
+  .cl-note--neutral { color: var(--fg-mute); }
+  .cl-note--neutral b { color: var(--green-700); }
+  /* "share of the revenue" links to the co-op explainer; green + bold, no underline */
+  .rev-link { color: var(--green-700); text-decoration: none; }
+  .rev-link b { color: inherit; }
+  .rev-link:hover { color: var(--green-600); }
+
+  /* per-row role tag: author / maintainer are plain history (muted); a contributor row is a revenue-eligible accepted contribution (green) */
+  .role-tag { font-family: var(--f-mono); font-size: 10px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 1px 6px; border-radius: var(--r-xs); white-space: nowrap; }
+  .role-tag--author, .role-tag--maintainer { color: var(--fg-mute); background: var(--tint); border: 1px solid var(--line); }
+  .role-tag--contributor { color: var(--green-700); background: var(--green-tint); border: 1px solid var(--green-tint-2); }
+
+  /* empty state (no tracked contributions yet) */
+  .ch-empty { display: flex; align-items: center; gap: 14px; padding: 20px 22px; border: 1.5px dashed var(--line-2); border-radius: var(--r-lg); background: var(--paper); color: var(--fg-soft); font-size: 14.5px; line-height: 1.5; }
+  .ch-empty :global(.rounded-full) { opacity: .9; }
+  .ch-empty b { color: var(--fg); font-weight: 700; }
+
+  /* ===== contribution list ===== */
+  .cl-list { margin-top: 10px; }
+  .cl-item { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: start; padding: 16px 12px 16px 10px; border-radius: var(--r); border-bottom: 1.5px solid var(--line); transition: background .12s; color: inherit; }
+  .cl-item:last-child { border-bottom: 0; }
+  .cl-item:hover { background: var(--paper); }
+  .cl-item :global(.cl-row-av) { margin-top: 1px; }
+  .cl-mid { min-width: 0; }
+  .cl-mid .msg { font-weight: 600; font-size: 15px; line-height: 1.4; color: var(--fg); }
+  .cl-item:hover .cl-mid .msg { color: var(--green-700); }
+  .cl-mid .sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--fg-mute); }
+  .cl-mid .sub .nm { color: var(--fg-soft); font-weight: 600; white-space: nowrap; }
+  .cl-mid .sub .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--line-2); }
+  .pr-no { font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); }
+  .cl-right { display: flex; flex-direction: column; align-items: flex-end; gap: 9px; white-space: nowrap; }
+  .cl-right .topline { display: flex; align-items: center; gap: 11px; }
+
+  .merged { display: inline-flex; align-items: center; gap: 5px; font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .03em; color: var(--green-700); background: var(--green-tint); border: 1.5px solid var(--green-tint-2); border-radius: var(--r-pill); padding: 2px 9px 2px 7px; }
+  .merged svg { width: 12px; height: 12px; }
+  .hash { font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); background: var(--paper-2); border: 1.5px solid var(--line); border-radius: var(--r-xs); padding: 1px 7px; }
+  .cl-item:hover .hash { border-color: var(--line-2); }
+  .dstat { display: inline-flex; align-items: center; gap: 9px; }
+  .dstat .add { color: var(--green-600); font-family: var(--f-mono); font-size: 12.5px; font-weight: 600; }
+  .dstat .del { color: #c0473a; font-family: var(--f-mono); font-size: 12.5px; font-weight: 600; }
+  .gauge { display: inline-flex; gap: 2px; }
+  .gauge i { width: 7px; height: 7px; border-radius: 1.5px; background: var(--line-2); }
+  .gauge i.g-add { background: var(--green); }
+  .gauge i.g-del { background: #c0473a; }
+
+  /* ===== footer note + cta ===== */
+  .ch-sub { font-style: italic; color: var(--fg-mute); font-size: 14px; line-height: 1.5; margin: 18px 2px 0; }
+  .ch-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 22px; padding-top: 20px; border-top: 1.5px solid var(--line); }
+  .ghlink { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; color: var(--green-700); }
+  .ghlink .gh { width: 17px; height: 17px; }
+  .ghlink:hover { color: var(--green-600); }
+  .ghlink .ar { display: inline-flex; transition: transform .2s ease; }
+  .ghlink .ar svg { width: 17px; height: 17px; }
+  .ghlink:hover .ar { transform: translateX(3px); }
+  .contrib-cta { font-family: var(--f-sans); font-weight: 600; font-size: 14px; color: var(--fg-soft); }
+  .contrib-cta a { color: var(--green-700); font-weight: 700; }
+  .contrib-cta a:hover { color: var(--green-600); }
+
+  @media (max-width: 620px) {
+    .cl-item { grid-template-columns: auto 1fr; }
+    .cl-right { grid-column: 2; flex-direction: row; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 10px; margin-top: 2px; }
+    .cl-summary { grid-template-columns: 1fr; }
+  }
+</style>

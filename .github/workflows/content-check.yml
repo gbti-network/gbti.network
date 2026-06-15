@@ -1,0 +1,42 @@
+name: Content check
+
+# SOW-003 CI validation: per-author scoping, unique slugs, valid status/visibility on content PRs.
+# (The Astro build separately validates frontmatter against the Zod schemas.)
+#
+# Trigger split (roles-and-capabilities.md review hardening #4): this is the SECRET-FREE validation.
+# It runs on `pull_request`, so it is safe to run against untrusted fork code (no secrets are
+# exposed, no fork-approval gate needed). The membership MERGE gate is separate: it holds secrets
+# and therefore runs on `pull_request_target`, metadata-only, in .github/workflows/pr-membership-gate.yml.
+# Do not add secrets to this workflow, and do not move this validation onto `pull_request_target`.
+on:
+  pull_request:
+    paths:
+      - 'house/**'
+      - 'members/**'
+  push:
+    branches: [main]
+    paths:
+      - 'house/**'
+      - 'members/**'
+
+jobs:
+  content-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need history to diff the PR for the SOW-014 from-the-author intro check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      # SOW-014: pass the PR's changed files so validate-content.mjs enforces the from-the-author intro
+      # only on added/edited content (grandfathering everything already published). Push runs skip it.
+      - name: Compute changed files (pull requests only)
+        if: github.event_name == 'pull_request'
+        run: echo "CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }} | tr '\n' ' ')" >> "$GITHUB_ENV"
+      - run: node scripts/validate-content.mjs
+      # SOW-015: fail the PR if a plaintext is committed beside a .enc, or a .enc is not a valid v1 envelope.
+      # Secret-free (the repo-hygiene + envelope checks need no key); safe on pull_request. The dist key-scan
+      # portion runs in the Cloudflare Pages build env with MEMBER_CONTENT_KEY set (see .data/sow/human-todo.md).
+      - run: node scripts/check-build-secrets.mjs

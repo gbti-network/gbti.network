@@ -1,0 +1,152 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { EXTENSION, extensionZipUrl, extensionIsListed } from '../../lib/extension';
+
+// SOW-019: the extension install/download page. The "Get the extension" CTAs across the site point here.
+// The header carries the download button; the body walks through loading it as an unpacked extension until
+// the Chrome Web Store listing lands. Design language mirrors the about / co-op / membership pages.
+const browsers = [
+  { name: 'Chrome', url: 'chrome://extensions' },
+  { name: 'Edge', url: 'edge://extensions' },
+  { name: 'Brave', url: 'brave://extensions' },
+];
+
+const steps = [
+  { n: '01', icon: 'box', title: 'Download and unzip', body: 'Use the download button above, then unzip it into a folder you will keep (the browser loads the extension from this folder).' },
+  { n: '02', icon: 'globe', title: 'Open your extensions page', body: 'Go to chrome://extensions in Chrome (edge://extensions on Edge, brave://extensions on Brave). Paste the address into the URL bar.' },
+  { n: '03', icon: 'terminal', title: 'Turn on Developer mode', body: 'Flip the Developer mode toggle, usually in the top-right corner of the extensions page.' },
+  { n: '04', icon: 'puzzle', title: 'Load unpacked', body: 'Click Load unpacked and select the unzipped folder. The GBTI extension appears in your list.' },
+  { n: '05', icon: 'github', title: 'Pin it and sign in', body: 'Pin the GBTI icon to your toolbar, click it, and sign in with GitHub. You can now edit and publish your work in place.' },
+];
+---
+<BaseLayout
+  title="Install the GBTI extension"
+  description="Download the GBTI Network browser extension and load it as an unpacked extension to edit and publish your work in place."
+>
+  <!-- ============ HEADER (with download button) ============ -->
+  <section class="band tcenter">
+    <div class="wrap">
+      <div class="chip" style="display:inline-flex"><span class="chip-dot"></span> Browser extension</div>
+      <h1 class="h1 mt20">Install the GBTI extension</h1>
+      <p class="lead" style="max-width:640px;margin:18px auto 0">
+        The free GBTI extension lets you edit and publish your work in place, and keeps your GitHub sign-in on
+        your own machine. {extensionIsListed ? 'Install it in one click from the Chrome Web Store.' : 'While the Chrome Web Store listing is on the way, install it as an unpacked extension below.'}
+      </p>
+      <div class="ext-dl mt24">
+        <a href={extensionZipUrl} class="btn btn-primary btn-lg" download>
+          <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Download the extension
+        </a>
+        <span class="mono muted" style="font-size:13px">v{EXTENSION.version} · ZIP · load unpacked</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HOW TO INSTALL (unpacked) ============ -->
+  <section class="band tint">
+    <div class="wrap">
+      <div class="sec-head center">
+        <p class="eyebrow">Five steps</p>
+        <h2 class="h2 mt12">Load it as an unpacked extension</h2>
+        <p class="lead mt16" style="max-width:600px;margin-left:auto;margin-right:auto">It takes a minute. You only do this once; the extension keeps working after that.</p>
+      </div>
+
+      {/* A mockup of what the chrome://extensions page looks like, with callouts matching the steps below. */}
+      <div class="xt-mock mt32" role="img" aria-label="The chrome://extensions page with Developer mode on, the Load unpacked button, and the loaded GBTI Network extension">
+        <div class="xt-bar">
+          <span class="xt-dot"></span><span class="xt-dot"></span><span class="xt-dot"></span>
+          <span class="xt-url"><span class="cn">2</span> chrome://extensions</span>
+        </div>
+        <div class="xt-page">
+          <div class="xt-head">
+            <span class="xt-title">Extensions</span>
+            <span class="xt-dev"><span class="cn">3</span> Developer mode <span class="xt-toggle on"></span></span>
+          </div>
+          <div class="xt-tools">
+            <span class="xt-btn primary"><span class="cn">4</span> Load unpacked</span>
+            <span class="xt-btn">Pack extension</span>
+            <span class="xt-btn">Update</span>
+          </div>
+          <div class="xt-card">
+            <span class="cn cn-card">5</span>
+            <span class="xt-ico"><svg viewBox="0 0 24 24" width="22" height="22"><use href="#ico-puzzle"/></svg></span>
+            <span class="xt-meta">
+              <span class="xt-name">GBTI Network</span>
+              <span class="xt-desc">Edit and publish your work in place</span>
+              <span class="xt-ver mono">v{EXTENSION.version}</span>
+            </span>
+            <span class="xt-toggle on"></span>
+          </div>
+        </div>
+      </div>
+
+      <ol class="ext-steps mt32">
+        {steps.map((s) => (
+          <li class="card ext-step">
+            <span class="itile"><svg viewBox="0 0 24 24"><use href={`#ico-${s.icon}`}/></svg></span>
+            <span class="ext-num">{s.n}</span>
+            <h3 class="h4 mt8">{s.title}</h3>
+            <p class="body-sm muted mt8">{s.body}</p>
+          </li>
+        ))}
+      </ol>
+      <div class="ext-browsers mt24">
+        {browsers.map((b) => <span class="ext-browser mono">{b.name}: <b>{b.url}</b></span>)}
+      </div>
+      <p class="body-sm muted tcenter mt16" style="max-width:640px;margin-left:auto;margin-right:auto">
+        To update, download the latest ZIP and use Reload on the extensions page. Once the Chrome Web Store
+        listing is live, updates become automatic and the steps above are no longer needed.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section class="band dark tcenter">
+    <div class="wrap">
+      <h2 class="h2" style="color:#fff">Edit and publish your work in place.</h2>
+      <p class="lead" style="max-width:560px;margin:16px auto 0">The extension is how members sign in, draft, and publish through the GBTI co-op.</p>
+      <div class="hero-c-cta">
+        <a href={extensionZipUrl} class="btn btn-primary btn-lg" download>Download the extension</a>
+        <a href="/membership/" class="btn btn-ghost btn-lg">See membership</a>
+      </div>
+    </div>
+  </section>
+
+  <style>
+    .ext-dl { display: inline-flex; flex-direction: column; align-items: center; gap: 10px; }
+    .ext-steps { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
+    .ext-step { flex: 1 1 210px; max-width: 244px; padding: 26px 22px; position: relative; }
+    .ext-num { font-family: var(--f-mono); font-size: 12px; font-weight: 700; color: var(--green-600); position: absolute; top: 20px; right: 22px; }
+    .dark .ext-num { color: var(--green-mint); }
+    @media (max-width: 760px) { .ext-step { flex-basis: 100%; max-width: none; } }
+
+    .ext-browsers { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 22px; }
+    .ext-browser { font-size: 13px; color: var(--fg-mute); }
+    .ext-browser b { color: var(--fg-soft); }
+
+    /* ===== chrome://extensions mockup (kept light + Chrome-styled in both themes for recognizability) ===== */
+    .xt-mock { max-width: 720px; margin-left: auto; margin-right: auto; border: 1.5px solid #dadce0; border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--sh-lg); background: #fff; text-align: left; color: #202124; }
+    .xt-bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: #f1f3f4; border-bottom: 1px solid #e3e5e8; }
+    .xt-dot { width: 10px; height: 10px; border-radius: 50%; background: #dadce0; flex: none; }
+    .xt-url { margin-left: 10px; flex: 1 1 auto; min-width: 0; background: #fff; border: 1px solid #e3e5e8; border-radius: 999px; padding: 6px 14px; font-family: var(--f-mono); font-size: 12.5px; color: #3c4043; display: inline-flex; align-items: center; gap: 9px; }
+    .xt-page { padding: 18px 20px 22px; }
+    .xt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid #ebedf0; }
+    .xt-title { font-family: var(--f-sans); font-size: 17px; font-weight: 600; color: #202124; }
+    .xt-dev { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: #5f6368; }
+    .xt-toggle { width: 34px; height: 18px; border-radius: 999px; background: #1a73e8; position: relative; flex: none; }
+    .xt-toggle::after { content: ''; position: absolute; top: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+    .xt-tools { display: flex; gap: 10px; padding: 14px 0; flex-wrap: wrap; }
+    .xt-btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #1a73e8; border: 1px solid #dadce0; border-radius: 7px; padding: 6px 14px; background: #fff; }
+    .xt-btn.primary { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,.12); }
+    .xt-card { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid #e8eaed; border-radius: 10px; margin-top: 6px; position: relative; box-shadow: 0 1px 3px rgba(60,64,67,.12); }
+    .xt-ico { width: 40px; height: 40px; border-radius: 8px; background: var(--green); color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+    .xt-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .xt-name { font-family: var(--f-sans); font-weight: 600; font-size: 14px; color: #202124; }
+    .xt-desc { font-size: 12.5px; color: #5f6368; }
+    .xt-ver { font-size: 11px; color: #80868b; }
+    /* green callout numbers tying the mock to the steps */
+    .cn { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; font-family: var(--f-mono); font-size: 10px; font-weight: 700; flex: none; }
+    .cn-card { position: absolute; top: -9px; left: -9px; box-shadow: 0 0 0 3px #fff; }
+    @media (max-width: 540px) { .xt-tools .xt-btn:not(.primary) { display: none; } }
+  </style>
+</BaseLayout>

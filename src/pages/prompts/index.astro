@@ -1,0 +1,431 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PromptCard from '../../components/prompts/PromptCard.astro';
+import { isListed } from '../../lib/content';
+import { topLevelCategories, categoryLabel } from '../../lib/taxonomy';
+import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
+import SubscribeButton from '../../components/SubscribeButton.astro';
+
+const prompts = (await getCollection('prompt')).filter(isListed).sort((a, b) => a.data.title.localeCompare(b.data.title));
+const categories = topLevelCategories(prompts.map((p) => p.data.categories));
+const targets = [...new Set(prompts.flatMap((p) => p.data.targets ?? []))].sort((a, b) => a.localeCompare(b));
+
+// Label lookups for the deep-link filter banner (?cat= / ?tag= / ?author=), so the banner reads nicely.
+const profiles = await getCollection('profile');
+const profByUser = new Map(profiles.map((p) => [p.data.username, p.data]));
+const profileName = new Map(profiles.map((p) => [p.data.username, p.data.displayName]));
+const catLabels = Object.fromEntries([...new Set(prompts.flatMap((p) => p.data.categories))].map((k) => [k, categoryLabel(k)]));
+const authorNames = Object.fromEntries(prompts.map((p) => [p.data.author, profileName.get(p.data.author) ?? authorDisplay(p.data.author)]));
+// Per-author meta for the featured header shown when ?author= is active (filled client-side from this map).
+const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.author))].map((u) => {
+  const pr = profByUser.get(u);
+  return [u, { name: pr?.displayName ?? authorDisplay(u), avatar: authorAvatar(u, pr?.avatar) ?? '', headline: pr?.headline ?? '', href: authorHref(u) }];
+}));
+---
+<BaseLayout title="AI Prompts" description="A directory of AI prompts shared by the GBTI Network co-op.">
+  <section class="band prompts-page">
+    <div class="wrap">
+      <div id="default-hero" class="sec-head center">
+        <p class="eyebrow">AI prompt directory</p>
+        <h1 class="h1 mt12">AI Prompts</h1>
+        <p class="lead">Reusable AI prompts shared by the co-op for tools like Claude, GPT, Gemini, Midjourney, Nano Banana, and many others.</p>
+      </div>
+
+      {/* Author hero: replaces the default hero when the directory is filtered to one member (?author=).
+          Full-width and member-featuring (not tucked beside the sidebar). Filled by JS from authorsMeta. */}
+      <div id="author-hero" class="author-hero" hidden>
+        <img id="ah-avatar" class="ah-avatar" alt="" hidden />
+        <p class="eyebrow" style="color:var(--green-700)">Member · AI Prompts</p>
+        <h1 id="ah-name" class="h1 mt8"></h1>
+        <p id="ah-headline" class="lead mt12" hidden></p>
+        <div class="ah-actions mt24">
+          <a id="ah-profile" class="btn btn-primary" href="#">View profile</a>
+          <SubscribeButton variant="ghost" />
+          <a class="btn btn-ghost ah-back" href="/prompts/"><svg viewBox="0 0 24 24" width="18" height="18" style="transform:rotate(180deg)"><use href="#ico-arrow"/></svg> Back to prompt directory</a>
+        </div>
+      </div>
+
+      {prompts.length > 0 ? (
+        <>
+        <div class="prompts-layout">
+          <aside class="prompts-sidebar" aria-label="Filter prompts">
+            <div class="ps-group ps-group--search">
+              <label class="ps-label" for="prompt-search">Search</label>
+              <div class="ps-search-wrap">
+                <svg class="ps-search-ico" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-search"/></svg>
+                <input id="prompt-search" type="search" class="ps-search" placeholder="Search prompts" autocomplete="off" />
+              </div>
+            </div>
+
+            <div class="ps-group">
+              <p class="ps-label">Categories</p>
+              <ul class="ps-list" aria-label="Filter by category (select any number)">
+                <li><button type="button" class="ps-item on" aria-pressed="true" data-filter="cat" data-val="all">All categories</button></li>
+                {categories.map((c) => <li><button type="button" class="ps-item" aria-pressed="false" data-filter="cat" data-val={c.key}>{c.label}</button></li>)}
+              </ul>
+            </div>
+
+            {targets.length > 0 && (
+              <div class="ps-group">
+                <p class="ps-label">Models</p>
+                <ul class="ps-list" aria-label="Filter by model (select any number)">
+                  <li><button type="button" class="ps-item on" aria-pressed="true" data-filter="target" data-val="all">All models</button></li>
+                  {targets.map((t) => <li><button type="button" class="ps-item" aria-pressed="false" data-filter="target" data-val={t}>{t}</button></li>)}
+                </ul>
+              </div>
+            )}
+
+            <div class="ps-group">
+              <p class="ps-label">Visibility</p>
+              <ul class="ps-list" aria-label="Filter by visibility (select any number)">
+                <li><button type="button" class="ps-item on" aria-pressed="true" data-filter="vis" data-val="all">All</button></li>
+                <li><button type="button" class="ps-item" aria-pressed="false" data-filter="vis" data-val="public">Public</button></li>
+                <li><button type="button" class="ps-item" aria-pressed="false" data-filter="vis" data-val="members">Members Only</button></li>
+              </ul>
+            </div>
+          </aside>
+
+          <div class="prompts-main">
+            <div class="prompts-toolbar">
+              <div class="ptb-left">
+                <span class="body-sm muted" id="prompt-count"></span>
+                <label class="pp-select body-sm muted">Show
+                  <select id="prompt-pagesize" aria-label="Prompts per page">
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                  per page
+                </label>
+              </div>
+              <div class="view-toggle" role="group" aria-label="Card view">
+                <button type="button" class="vt-btn" data-view="grid" aria-label="Grid view" data-tooltip="Grid view">
+                  <svg viewBox="0 0 24 24" width="16" height="16"><use href="#ico-grid"/></svg><span>Grid</span>
+                </button>
+                <button type="button" class="vt-btn on" data-view="compact" aria-label="Compact view" data-tooltip="Compact view">
+                  <svg viewBox="0 0 24 24" width="16" height="16"><use href="#ico-list"/></svg><span>Compact</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="prompt-grid" class="rworks-grid" data-view="compact">
+              {prompts.map((p) => <PromptCard prompt={p} />)}
+            </div>
+            <nav id="prompt-pages" class="ppage" aria-label="Prompt directory pages" hidden></nav>
+            <p id="prompt-empty" class="body muted tcenter" hidden style="margin-top:24px">No prompts match this filter yet.</p>
+          </div>
+        </div>
+
+        {/* Full-width Contribute CTA below the directory (moved out of the grid). */}
+        <a href="/membership/" class="card card-hover contribute-cta">
+          <div class="cc-text">
+            <span class="chip chip-green">Contribute</span>
+            <h3 class="h3 mt12">Add your prompt</h3>
+            <p class="body-sm mt8">Members publish reusable prompts here for tools like Claude, GPT, Gemini, Midjourney, Nano Banana, and many others. Become a member to share yours.</p>
+          </div>
+          <span class="btn btn-primary cc-btn">Become a member <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></span>
+        </a>
+        </>
+      ) : (
+        <div class="card cta-card tcenter" style="max-width:680px;margin:0 auto">
+          <h2 class="h2">The AI prompt directory is opening soon</h2>
+          <p class="lead mt16" style="margin-left:auto;margin-right:auto">
+            Members publish reusable AI prompts here for tools like Claude, GPT, Gemini, Midjourney, Nano Banana, and many others.
+            Become a member to add yours.
+          </p>
+          <a href="/membership/" class="btn btn-primary mt24" style="margin-left:auto;margin-right:auto">Become a member <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
+        </div>
+      )}
+    </div>
+  </section>
+
+  {/* The AI Prompts page uses a blue accent instead of the site green. Everything on the page is
+      driven by the --green* custom properties (chips, sidebar highlight, view toggle, search focus,
+      contribute CTA, card hovers), so remapping those variables on .prompts-page recolors the whole
+      page in both themes. Global so it reaches the PromptCard chips, which render in their own scope. */}
+  <style is:global>
+    .prompts-page {
+      --green:       #2563eb;
+      --green-600:   #1d4ed8;
+      --green-700:   #1b54c9;
+      --green-mint:  #8fb4ff;
+      --green-tint:  #e8f0fe;
+      --green-tint-2:#d4e3fd;
+    }
+    [data-theme="dark"] .prompts-page {
+      --green:       #4f86f7;
+      --green-600:   #6f9dfb;
+      --green-700:   #9cc0ff;
+      --green-mint:  #9cc0ff;
+      --green-tint:  rgba(79,134,247,.14);
+      --green-tint-2:rgba(124,170,255,.24);
+    }
+    [data-theme="dark"] .prompts-page .chip-green {
+      background: rgba(79,134,247,.16);
+      border-color: var(--green);
+      color: var(--green-mint);
+    }
+  </style>
+
+  {/* Global so the #prompt-grid layout/compact rules reach PromptCard's elements (.rwork*), which render
+      in their own component scope. Every selector here is page-specific or gated by #prompt-grid, so it
+      cannot affect other pages (the member page renders PromptCards outside #prompt-grid). */}
+  <style is:global>
+    /* Two-column directory: sticky filter rail + results. Collapses to a stacked layout on small screens. */
+    .prompts-layout { display: grid; grid-template-columns: clamp(152px, 20vw, 240px) 1fr; gap: clamp(16px, 2.4vw, 32px); align-items: start; margin-top: 8px; }
+    /* min-width:0 on both grid items so neither track is floored by its content min-size (which let the
+       sidebar overflow the viewport on small phones). */
+    .prompts-main { min-width: 0; }
+    .prompts-sidebar { position: sticky; top: 90px; display: flex; flex-direction: column; gap: 26px; min-width: 0; }
+    .ps-group { display: flex; flex-direction: column; gap: 10px; }
+    .ps-label { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-mute); margin: 0; }
+    .ps-search-wrap { position: relative; display: flex; align-items: center; }
+    .ps-search-ico { position: absolute; left: 12px; color: var(--fg-mute); pointer-events: none; }
+    .ps-search { width: 100%; min-width: 0; padding: 10px 12px 10px 36px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); font-size: 14px; }
+    .ps-search:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-tint); }
+    .ps-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .ps-item { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; background: none; border: 0; cursor: pointer; padding: 8px 12px; border-radius: var(--r-sm); font-size: 14px; font-weight: 600; color: var(--fg-soft); transition: background .15s ease, color .15s ease; }
+    .ps-item:hover { background: var(--tint); color: var(--fg); }
+    .ps-item.on { background: var(--green-tint); color: var(--green-700); }
+    /* Checkmark on selected facet values signals these are multi-select (choose any number). */
+    .ps-item[data-val]:not([data-val="all"]).on::after { content: "✓"; font-size: 12px; line-height: 1; color: var(--green-700); }
+
+    .prompts-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+    .ptb-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .pp-select { display: inline-flex; align-items: center; gap: 6px; }
+    .pp-select select { font-family: var(--f-mono); font-size: 13px; padding: 5px 8px; border: 1.5px solid var(--line-2); border-radius: var(--r-sm); background: var(--paper); color: var(--fg); cursor: pointer; }
+    .pp-select select:focus { outline: none; border-color: var(--green); }
+    /* pagination */
+    .ppage { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 30px; flex-wrap: wrap; }
+    .ppage[hidden] { display: none; }
+    .ppage button { min-width: 38px; height: 38px; padding: 0 12px; border-radius: var(--r); border: 1.5px solid var(--line-2);
+      background: var(--paper); color: var(--fg-soft); font-family: var(--f-mono); font-size: 13px; cursor: pointer; transition: all .15s; }
+    .ppage button:hover:not(:disabled):not(.on) { border-color: var(--ink); color: var(--ink); }
+    .ppage button.on { border-color: var(--green); color: var(--green-700); background: var(--green-tint); }
+    .ppage button:disabled { opacity: .4; cursor: default; }
+    .view-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+    .vt-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; background: var(--paper); border: 0; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--fg-soft); }
+    .vt-btn + .vt-btn { border-left: 1px solid var(--line); }
+    .vt-btn:hover { color: var(--fg); }
+    .vt-btn.on { background: var(--green); color: #fff; }
+
+    /* Grid view: two columns of vertical cards. */
+    #prompt-grid[data-view="grid"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+
+    /* Full-width Contribute CTA beneath the directory: text left, button right, brand green-tint. */
+    .contribute-cta { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 26px 32px; margin-top: 36px; background: var(--green-tint); border: 1px solid var(--green-tint-2); }
+    .contribute-cta:hover { border-color: var(--green); }
+    .contribute-cta .cc-text { max-width: 640px; }
+    .contribute-cta .body-sm { color: var(--fg-soft); }
+    .contribute-cta .chip-green { display: inline-flex; }
+    .contribute-cta .cc-btn { flex: none; }
+
+    /* Author hero (replaces the default hero when ?author= filters the directory to one member). */
+    .author-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 8px 0 4px; margin-bottom: 44px; }
+    .author-hero .ah-back svg { vertical-align: -3px; }
+    .author-hero .ah-avatar { width: 104px; height: 104px; border-radius: 50%; object-fit: cover; margin-bottom: 18px; box-shadow: var(--sh-md); }
+    .author-hero .ah-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
+
+    /* Compact view (default): the "GBTI AI Prompts" design row — lead | mid (title + chip sub-row) | author
+       meta, ALL on one centered row. .va-mid is flex:1 1 auto / min-width:0 so the title WRAPS inside the
+       left column (never clipped, never full-width), and .va-right is flex:none so the author/date/likes/
+       favorite stay inline on the right. Only below 600px does the author meta drop to its own line. */
+    #prompt-grid[data-view="compact"] { display: flex; flex-direction: column; gap: 14px; }
+    #prompt-grid[data-view="compact"] .va-card { flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 16px; padding: 16px 18px; }
+    #prompt-grid[data-view="compact"] .va-lead { width: 56px; height: 56px; border-radius: 9px; flex: none; align-self: center; }
+    #prompt-grid[data-view="compact"] .kglyph svg { width: 50%; height: 50%; }
+    #prompt-grid[data-view="compact"] .va-mid { flex: 1 1 auto; min-width: 0; gap: 8px; }
+    #prompt-grid[data-view="compact"] .va-title { white-space: normal; text-wrap: pretty; line-height: 1.25; }
+    #prompt-grid[data-view="compact"] .va-sub { flex-wrap: wrap; }
+    #prompt-grid[data-view="compact"] .va-right { flex: none; gap: 16px; align-self: center; }
+    /* 650-860px: keep the inline row, but shrink every element (lead, title, avatar, gaps) and drop the
+       date so the title never collapses to one word per line. The mobile-stacked shape only kicks in <650px. */
+    @media (max-width: 860px) {
+      #prompt-grid[data-view="compact"] .va-card { gap: 12px; padding: 14px; }
+      #prompt-grid[data-view="compact"] .va-lead { width: 46px; height: 46px; }
+      #prompt-grid[data-view="compact"] .va-title { font-size: 15px; }
+      #prompt-grid[data-view="compact"] .va-sub { gap: 6px; }
+      #prompt-grid[data-view="compact"] .va-right { gap: 10px; }
+      #prompt-grid[data-view="compact"] .pmeta { font-size: 12px; gap: 7px; }
+      #prompt-grid[data-view="compact"] .pmeta .lav { width: 20px; height: 20px; }
+      #prompt-grid[data-view="compact"] .pmeta .when,
+      #prompt-grid[data-view="compact"] .pmeta .dot-sep { display: none; }
+    }
+    @media (max-width: 650px) {
+      /* On phones the author meta drops to its own full-width row; the lead + title/chips take the row above. */
+      #prompt-grid[data-view="compact"] .va-card { flex-wrap: wrap; }
+      #prompt-grid[data-view="compact"] .va-right { width: 100%; justify-content: space-between; margin-top: 2px; padding-top: 10px; border-top: 1.5px solid var(--line); }
+      #prompt-grid[data-view="compact"] .pmeta .when,
+      #prompt-grid[data-view="compact"] .pmeta .dot-sep { display: inline; } /* room returns once the meta is on its own row */
+    }
+
+    @media (max-width: 650px) {
+      .prompts-layout { grid-template-columns: 1fr; gap: 20px; }
+      /* Sidebar reflows: full-width search on its own row, then Categories + Tools as two columns. */
+      .prompts-sidebar { position: static; display: flex; flex-direction: row; flex-wrap: wrap; gap: 20px 24px; }
+      .prompts-sidebar .ps-group--search { flex-basis: 100%; }
+      /* min-width:0 lets the two facet columns shrink with the viewport instead of forcing a width
+         wider than the padded content area (which caused horizontal overflow on small phones). */
+      .prompts-sidebar .ps-group { flex: 1 1 calc(50% - 12px); min-width: 0; }
+      .ps-item { width: 100%; }
+      #prompt-grid[data-view="grid"] { grid-template-columns: 1fr; }
+      .contribute-cta { flex-direction: column; align-items: flex-start; gap: 18px; }
+    }
+  </style>
+
+  <script is:inline define:vars={{ catLabels, authorNames, authorsMeta }}>
+    (function () {
+      var grid = document.getElementById('prompt-grid');
+      var cards = Array.prototype.slice.call(grid.querySelectorAll('[data-category]'));
+      var searchEl = document.getElementById('prompt-search');
+      var countEl = document.getElementById('prompt-count');
+      var emptyEl = document.getElementById('prompt-empty');
+      var catItems = Array.prototype.slice.call(document.querySelectorAll('.ps-item[data-filter="cat"]'));
+      var targetItems = Array.prototype.slice.call(document.querySelectorAll('.ps-item[data-filter="target"]'));
+      var visItems = Array.prototype.slice.call(document.querySelectorAll('.ps-item[data-filter="vis"]'));
+      var viewBtns = Array.prototype.slice.call(document.querySelectorAll('.vt-btn'));
+      var pageSizeEl = document.getElementById('prompt-pagesize');
+      var pagesEl = document.getElementById('prompt-pages');
+
+      // Multi-select facets: an object used as a set of chosen values. Empty = no restriction (all).
+      var cats = {}, targets = {}, vis = {}, search = '', authorFilter = '';
+      var pageSize = 25, page = 0; // directory pagination: 25 default, up to 100
+      function keys(o) { return Object.keys(o).filter(function (k) { return o[k]; }); }
+
+      function apply() {
+        var selCats = keys(cats), selTargets = keys(targets), selVis = keys(vis);
+        // 1) filter -> the matched set (order preserved)
+        var matched = [];
+        cards.forEach(function (c) {
+          var show = true;
+          if (authorFilter) show = c.getAttribute('data-author') === authorFilter; // exact author match
+          if (show && selCats.length) {
+            var dc = (c.getAttribute('data-cats') || '').split(' ');
+            show = selCats.some(function (k) { return dc.indexOf(k) !== -1; }); // OR within the facet
+          }
+          if (show && selTargets.length) {
+            var dt = c.getAttribute('data-targets') || '';
+            show = selTargets.some(function (k) { return dt.indexOf('|' + k + '|') !== -1; });
+          }
+          if (show && selVis.length) show = selVis.indexOf(c.getAttribute('data-visibility')) !== -1;
+          if (show && search) show = (c.getAttribute('data-search') || '').indexOf(search) !== -1;
+          if (show) matched.push(c);
+        });
+        // 2) paginate the matched set to the current page (25/50/100 per page)
+        var pages = Math.max(1, Math.ceil(matched.length / pageSize));
+        if (page > pages - 1) page = pages - 1;
+        if (page < 0) page = 0;
+        var start = page * pageSize, end = start + pageSize;
+        cards.forEach(function (c) { c.style.display = 'none'; });
+        matched.forEach(function (c, i) { if (i >= start && i < end) c.style.display = ''; });
+        if (countEl) countEl.textContent = matched.length + (matched.length === 1 ? ' prompt' : ' prompts');
+        if (emptyEl) emptyEl.hidden = matched.length !== 0;
+        renderPages(pages);
+      }
+
+      // Pagination controls: prev / numbered pages / next. Hidden when everything fits on one page.
+      function renderPages(pages) {
+        if (!pagesEl) return;
+        if (pages <= 1) { pagesEl.hidden = true; pagesEl.innerHTML = ''; return; }
+        pagesEl.hidden = false;
+        function btn(label, target, disabled, on, aria) {
+          return '<button type="button" data-page="' + target + '"' + (disabled ? ' disabled' : '') +
+            (on ? ' class="on" aria-current="page"' : '') + ' aria-label="' + aria + '">' + label + '</button>';
+        }
+        var html = btn('‹', page - 1, page <= 0, false, 'Previous page');
+        for (var i = 0; i < pages; i++) html += btn(String(i + 1), i, false, i === page, 'Page ' + (i + 1));
+        html += btn('›', page + 1, page >= pages - 1, false, 'Next page');
+        pagesEl.innerHTML = html;
+        pagesEl.querySelectorAll('[data-page]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            if (b.disabled) return;
+            page = parseInt(b.getAttribute('data-page'), 10) || 0;
+            apply();
+            var tb = document.querySelector('.prompts-toolbar'); if (tb) tb.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        });
+      }
+
+      // Reflect a facet's set onto its buttons. "All" lights up only when nothing else is chosen.
+      function refresh(items, store) {
+        var any = keys(store).length > 0;
+        items.forEach(function (b) {
+          var val = b.getAttribute('data-val');
+          var on = val === 'all' ? !any : !!store[val];
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+      }
+      function wire(items, store) {
+        items.forEach(function (b) {
+          b.addEventListener('click', function () {
+            var val = b.getAttribute('data-val');
+            if (val === 'all') { Object.keys(store).forEach(function (k) { delete store[k]; }); }
+            else if (store[val]) { delete store[val]; }
+            else { store[val] = true; }
+            refresh(items, store);
+            page = 0; apply(); // a filter change resets to the first page
+          });
+        });
+      }
+      wire(catItems, cats);
+      wire(targetItems, targets);
+      wire(visItems, vis);
+
+      if (searchEl) {
+        searchEl.addEventListener('input', function () {
+          search = searchEl.value.trim().toLowerCase();
+          page = 0; apply(); // a search change resets to the first page
+        });
+      }
+
+      // Per-page selector (25 / 50 / 100).
+      if (pageSizeEl) {
+        pageSizeEl.addEventListener('change', function () {
+          pageSize = parseInt(pageSizeEl.value, 10) || 25;
+          page = 0; apply();
+        });
+      }
+
+      // View toggle, persisted so a member's choice sticks across visits.
+      function setView(v) {
+        grid.setAttribute('data-view', v);
+        viewBtns.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-view') === v); });
+        try { localStorage.setItem('gbti-prompt-view', v); } catch (e) {}
+      }
+      viewBtns.forEach(function (b) { b.addEventListener('click', function () { setView(b.getAttribute('data-view')); }); });
+      // Compact is the default view; only an explicit saved 'grid' choice overrides it.
+      try { var saved = localStorage.getItem('gbti-prompt-view'); setView(saved === 'grid' ? 'grid' : 'compact'); } catch (e) {}
+
+      // Swap the default hero for a full author hero (filled from the build-time authorsMeta map).
+      function showAuthorFeature(u) {
+        var m = authorsMeta[u];
+        var hero = document.getElementById('author-hero');
+        if (!m || !hero) return;
+        var def = document.getElementById('default-hero'); if (def) def.hidden = true;
+        var name = document.getElementById('ah-name'); if (name) name.textContent = m.name;
+        var hl = document.getElementById('ah-headline'); if (hl && m.headline) { hl.textContent = m.headline; hl.hidden = false; }
+        var av = document.getElementById('ah-avatar'); if (av && m.avatar) { av.src = m.avatar; av.alt = m.name; av.hidden = false; }
+        var prof = document.getElementById('ah-profile'); if (prof) prof.href = m.href;
+        var title = hero.querySelector('[data-subscribe-title]'); if (title) title.textContent = 'Subscribe to ' + m.name;
+        // SOW-023: point the (possibly client-upgraded) subscribe control at this author so a paid member can follow them.
+        var sub = hero.querySelector('gbti-subscribe'); if (sub) sub.setAttribute('data-gbti-username', u);
+        hero.hidden = false;
+      }
+
+      // Deep links applied on load. ?cat= (from a card's category chip) preselects that sidebar category;
+      // ?author= filters to that member exactly and reveals the featured author header; ?tag= prefills search.
+      var params = new URLSearchParams(location.search);
+      var cat = params.get('cat'), tag = params.get('tag'), author = params.get('author'), target = params.get('target');
+      if (cat && catItems.some(function (b) { return b.getAttribute('data-val') === cat; })) cats[cat] = true;
+      if (target && targetItems.some(function (b) { return b.getAttribute('data-val') === target; })) targets[target] = true;
+      if (tag && searchEl) { searchEl.value = tag; search = tag.trim().toLowerCase(); }
+      if (author) { authorFilter = author; showAuthorFeature(author); }
+      refresh(catItems, cats);
+      refresh(targetItems, targets);
+      refresh(visItems, vis);
+      apply();
+    })();
+  </script>
+</BaseLayout>

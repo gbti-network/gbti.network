@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animate Hue - Browser Edition</title>
+    <link rel="stylesheet" href="styles/main.css">
+
+    <!-- gbti-wired -->
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Animate Hue</h1>
+            <p>Create beautiful color animations from your images - 100% private, runs in your browser</p>
+        </header>
+
+        <main>
+            <!-- Image Upload Section -->
+            <section class="upload-section">
+                <div id="dropZone" class="drop-zone">
+                    <input type="file" id="fileInput" accept="image/*" hidden>
+                    <div class="drop-zone-content">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <p>Drop an image here or click to browse</p>
+                        <small>Supports PNG, JPG, JPEG, WebP</small>
+                    </div>
+                    <div id="imagePreview" class="image-preview" style="display: none;">
+                        <img id="previewImg" alt="Preview">
+                        <div class="image-info">
+                            <span id="imageName"></span>
+                            <span id="imageDimensions"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Visual Effects Section -->
+            <section class="visual-effects-section" id="visualEffectsSection" style="display: none;">
+                <h3>Visual Effects</h3>
+                
+                <!-- Tabbed Visual Controls -->
+                <div class="tabs-container">
+                    <!-- Tab Navigation -->
+                    <div class="tab-nav">
+                        <button class="tab-btn active" data-tab="hue">Hue</button>
+                        <button class="tab-btn" data-tab="brightness">Brightness</button>
+                        <button class="tab-btn" data-tab="contrast">Contrast</button>
+                    </div>
+
+                    <!-- Tab Content -->
+                    <div class="tab-content">
+                        <!-- Hue Tab -->
+                        <div class="tab-panel active" id="hue-tab">
+                            <!-- Hue Range Selector -->
+                            <div class="control-group">
+                                <label>Hue Range - Color Transition</label>
+                                <div class="hue-selector-container">
+                                    <svg id="hueSelector" width="300" height="150" viewBox="0 0 300 150">
+                                        <!-- Half circle will be drawn here -->
+                                    </svg>
+                                    <div class="hue-values">
+                                        <span>Start: <span id="startHueValue">-180°</span></span>
+                                        <span>End: <span id="endHueValue">180°</span></span>
+                                    </div>
+                                </div>
+                                <!-- Gradient Preview -->
+                                <div class="gradient-preview" id="gradientPreview"></div>
+                                <small>Drag the handles to select which colors your animation will transition through.</small>
+                            </div>
+
+                            <!-- Disable Hue Effects -->
+                            <div class="disable-hue-container">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="disableHue" onchange="toggleHueEffects()">
+                                    <span>Disable hue effects</span>
+                                </label>
+                            </div>
+
+                            <!-- Generate Button (removed duplicate - see animation controls section) -->
+                        </div>
+
+                        <!-- Brightness Tab -->
+                        <div class="tab-panel" id="brightness-tab">
+                            <div class="control-group">
+                                <label>
+                                    Brightness Range - From Dark to Light
+                                    <button type="button" class="reset-btn" onclick="resetBrightness()">Reset</button>
+                                </label>
+                                <div class="range-slider-container">
+                                    <input type="range" id="brightnessStart" min="-100" max="100" value="0" class="slider">
+                                    <input type="range" id="brightnessEnd" min="-100" max="100" value="0" class="slider">
+                                    <div class="range-values">
+                                        <span>Start: <span id="brightnessStartValue">0</span></span>
+                                        <span>End: <span id="brightnessEndValue">0</span></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Brightness Presets -->
+                            <div class="presets-section" id="brightnessPresets">
+                                <h4>Presets <button type="button" class="preset-toggle" onclick="togglePresets('brightness')" aria-label="Toggle brightness presets">+</button></h4>
+                                <p class="presets-help">Click any preset below to instantly apply those settings</p>
+                                <div class="presets-grid">
+                                    <div class="preset-item clickable-preset" data-start="-60" data-end="20">
+                                        <strong>🌅 Sunrise/Dawn Effect:</strong> Start -60, End +20<br>
+                                        <small>Perfect for landscape photos - simulates the sun coming up and illuminating the scene</small>
+                                    </div>
+                                    <div class="preset-item clickable-preset" data-start="0" data-end="-90">
+                                        <strong>🌙 Fade to Black:</strong> Start 0, End -90<br>
+                                        <small>Dramatic darkening effect - great for mysterious or cinematic feels</small>
+                                    </div>
+                                    <div class="preset-item clickable-preset" data-start="0" data-end="80">
+                                        <strong>✨ Flash/Glow Effect:</strong> Start 0, End +80<br>
+                                        <small>Creates a bright flash or magical glow - ideal for highlight effects</small>
+                                    </div>
+                                    <div class="preset-item clickable-preset" data-start="-30" data-end="30">
+                                        <strong>🔄 Breathing Light:</strong> Start -30, End +30<br>
+                                        <small>Gentle pulsing effect that makes the image "breathe" with light</small>
+                                    </div>
+                                    <div class="preset-item clickable-preset" data-start="-100" data-end="0">
+                                        <strong>💡 Reveal Effect:</strong> Start -100, End 0<br>
+                                        <small>Starts completely black and gradually reveals the full image</small>
+                                    </div>
+                                    <div class="preset-item clickable-preset" data-start="20" data-end="100">
+                                        <strong>🔥 Intense Highlight:</strong> Start +20, End +100<br>
+                                        <small>Goes from slightly bright to extremely bright - creates intense drama</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Contrast Tab -->
+                        <div class="tab-panel" id="contrast-tab">
+                            <div class="control-group">
+                                <label>
+                                    Contrast Range - From Flat to Sharp
+                                    <button type="button" class="reset-btn" onclick="resetContrast()">Reset</button>
+                                </label>
+                                <div class="range-slider-container">
+                                    <input type="range" id="contrastStart" min="-100" max="100" value="0" class="slider">
+                                    <input type="range" id="contrastEnd" min="-100" max="100" value="0" class="slider">
+                                    <div class="range-values">
+                                        <span>Start: <span id="contrastStartValue">0</span></span>
+                                        <span>End: <span id="contrastEndValue">0</span></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Contrast Presets -->
+                            <div class="presets-section" id="contrastPresets">
+                                <h4>Presets <button type="button" class="preset-toggle" onclick="togglePresets('contrast')" aria-label="Toggle contrast presets">+</button></h4>
+                                <p class="presets-help">Click any preset below to instantly apply those settings</p>
+                                <div class="presets-grid">
+                                    <div class="preset-item clickable-preset" data-start="-60" data-end="80">
+                                        <strong>🎭 Dramatic Reveal:</strong> Start -60, End +80<br>
+                                        <small>Perfect for portraits - goes from soft/dreamy to sharp/dramatic</small>
+                                    </div>
+                                    <div class="preset-item clickable-preset" data-start="-40" data-end="60">
+                                        <strong>💫 Dreamy to Vivid:</strong> Start -40, End +60<br>
+                                        <small>Creates a vintage-to-modern transition effect</small>
+                                    </div>
+                                    <div class="preset-item clickable-preset" data-start="0" data-end="100">
+                                        <strong>⚡ Pop Effect:</strong> Start 0, End +100<br>
+                                        <small>Makes colors extremely vivid and punchy - great for landscapes</small>
+                                    </div>
+                                    <div class="preset-item clickable-preset" data-start="60" data-end="-20">
+                                        <strong>🌙 Sharp to Soft:</strong> Start +60, End -20<br>
+                                        <small>Goes from crisp details to soft, romantic mood</small>
+                                    </div>
+                                    <div class="preset-item clickable-preset" data-start="0" data-end="-50">
+                                        <strong>📺 Vintage Film:</strong> Start 0, End -50<br>
+                                        <small>Creates an old film or vintage photograph effect</small>
+                                    </div>
+                                    <div class="preset-item clickable-preset" data-start="20" data-end="100">
+                                        <strong>🔥 High Impact:</strong> Start +20, End +100<br>
+                                        <small>For maximum drama and impact - makes everything super sharp</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Animation Settings Section -->
+            <section class="animation-settings-section" id="animationSettingsSection" style="display: none;">
+                    <h3>Animation Settings</h3>
+                    
+                    <!-- Frame Count Control -->
+                    <div class="control-group">
+                        <label for="frameCount">Number of Frames: <span id="frameCountValue">60</span></label>
+                        <input type="range" id="frameCount" min="1" max="360" value="60" class="slider">
+                        <small id="fileSizeEstimate">More frames = smoother animation but larger file size. Estimated size: ~2MB</small>
+                    </div>
+
+                    <!-- Animation Speed Control -->
+                    <div class="control-group">
+                        <label for="animationSpeed">Animation Speed: <span id="animationSpeedValue">60 FPS</span></label>
+                        <input type="range" id="animationSpeed" min="1" max="60" value="60" step="1" class="slider">
+                        <small>Higher values = faster animation. Range: 1-60 FPS</small>
+                    </div>
+
+                    <!-- Loop Animation Control -->
+                    <div class="control-group">
+                        <label>
+                            <input type="checkbox" id="loopAnimation">
+                            Create Seamless Loop Animation
+                        </label>
+                        <small>When enabled, creates a forward-then-backward sequence for seamless looping. This will double your frame count for smoother transitions.</small>
+                    </div>
+
+                    <!-- Animation Length Display -->
+                    <div class="control-group">
+                        <div class="animation-duration">
+                            <strong id="animationDuration">Animation Length: 2.0 seconds</strong>
+                        </div>
+                    </div>
+
+                    <!-- Resolution Scaling -->
+                    <div class="control-group">
+                        <label for="resolutionScale">Output Resolution Scale: <span id="resolutionScaleValue">100%</span></label>
+                        <div class="resolution-controls">
+                            <div class="resolution-info">
+                                <span id="currentResolution">1920 × 1080</span>
+                            </div>
+                            <input type="range" id="resolutionScale" min="50" max="150" value="100" step="5" class="slider">
+                            <div class="scale-markers">
+                                <span>50%</span>
+                                <span>100%</span>
+                                <span>150%</span>
+                            </div>
+                            <small id="resolutionNote">Adjust scale from 50% (smaller files) to 150% (higher quality). Affects file size and quality.</small>
+                        </div>
+                    </div>
+
+                    <!-- Output Format -->
+                    <div class="control-group">
+                        <label>Output Format</label>
+                        <div class="radio-group">
+                            <label><input type="radio" name="format" value="gif"> GIF Animation</label>
+                            <label><input type="radio" name="format" value="webm"> WebM Video</label>
+                            <label><input type="radio" name="format" value="mp4" checked> MP4 Video</label>
+                        </div>
+                        <small>Choose between GIF (universal support), WebM (modern browsers), or MP4 (best compatibility).</small>
+                    </div>
+
+                    <!-- Video Quality (only for WebM/MP4) -->
+                    <div class="control-group" id="videoQualityGroup" style="display: none;">
+                        <label>Video Quality</label>
+                        <div class="radio-group">
+                            <label><input type="radio" name="videoQuality" value="low"> Low (5 Mbps - Smaller files)</label>
+                            <label><input type="radio" name="videoQuality" value="medium" checked> Medium (10 Mbps - Balanced)</label>
+                            <label><input type="radio" name="videoQuality" value="high"> High (20 Mbps - Best quality)</label>
+                            <label><input type="radio" name="videoQuality" value="lossless"> Highest (50+ Mbps - Lossless*)</label>
+                        </div>
+                        <small>Higher quality produces larger file sizes but better visual fidelity. *Lossless quality depends on browser codec support.</small>
+                    </div>
+
+                    <!-- Generate Button -->
+                    <button id="generateBtn" class="generate-btn">Generate Animation</button>
+            </section>
+
+            <!-- Progress Section -->
+            <section class="progress-section" id="progressSection" style="display: none;">
+                <h3>Generating Animation...</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p id="progressText">Processing frame 0 of 0</p>
+
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section" id="resultsSection" style="display: none;">
+                <h3>Animation Preview</h3>
+                <div class="preview-container">
+                    <img id="resultPreview" alt="Animation preview">
+                </div>
+                <div class="result-actions">
+                    <div class="download-buttons">
+                        <button id="downloadGif" class="download-btn">Download GIF</button>
+                        <button id="downloadWebm" class="download-btn">Download WebM</button>
+                        <button id="downloadMp4" class="download-btn">Download MP4</button>
+                    </div>
+                    <div class="control-buttons">
+                        <button id="createNewBtn" class="secondary-btn">Start Over</button>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- No sponsor banner: the GBTI tool page leads with the community CTA and latest content. -->
+        </main>
+
+        <footer>
+            <p>Your images are processed entirely in your browser. No data is uploaded to any server.</p>
+        </footer>
+    </div>
+
+    <!-- Canvas for processing (hidden) -->
+    <canvas id="processingCanvas" style="display: none;"></canvas>
+
+
+    <!-- Scripts -->
+    <script src="lib/gif.js"></script>
+    <script src="lib/gifenc-wrapped.js"></script>
+    
+    <!-- Protocol-aware loading -->
+    <script>
+        // ASCII Art for GBTI
+        console.log(`
+ ██████╗ ██████╗ ████████╗██╗
+██╔════╝ ██╔══██╗╚══██╔══╝██║
+██║  ███╗██████╔╝   ██║   ██║
+██║   ██║██╔══██╗   ██║   ██║
+╚██████╔╝██████╔╝   ██║   ██║
+ ╚═════╝ ╚═════╝    ╚═╝   ╚═╝
+                              
+🎨 Animate Hue - Image Animation Tool
+🚀 Powered by gifenc & WebM
+        `);
+
+        // Reset brightness values to default (0, 0)
+        function resetBrightness() {
+            document.getElementById('brightnessStart').value = 0;
+            document.getElementById('brightnessEnd').value = 0;
+            document.getElementById('brightnessStartValue').textContent = 0;
+            document.getElementById('brightnessEndValue').textContent = 0;
+            
+            // Update app settings if available
+            if (window.app) {
+                window.app.settings.startBrightness = 0;
+                window.app.settings.endBrightness = 0;
+            }
+        }
+
+        // Reset contrast values to default (0, 0)
+        function resetContrast() {
+            document.getElementById('contrastStart').value = 0;
+            document.getElementById('contrastEnd').value = 0;
+            document.getElementById('contrastStartValue').textContent = 0;
+            document.getElementById('contrastEndValue').textContent = 0;
+            
+            // Update app settings if available
+            if (window.app) {
+                window.app.settings.startContrast = 0;
+                window.app.settings.endContrast = 0;
+            }
+        }
+
+        // Toggle preset visibility
+        function togglePresets(section) {
+            const presetsSection = document.getElementById(section + 'Presets');
+            const presetsGrid = presetsSection.querySelector('.presets-grid');
+            const presetsHelp = presetsSection.querySelector('.presets-help');
+            const toggleBtn = presetsSection.querySelector('.preset-toggle');
+            
+            const isHidden = presetsGrid.classList.contains('hidden');
+            
+            if (isHidden) {
+                presetsGrid.classList.remove('hidden');
+                presetsHelp.classList.remove('hidden');
+                toggleBtn.textContent = '-';
+                localStorage.setItem(section + 'PresetsVisible', 'true');
+            } else {
+                presetsGrid.classList.add('hidden');
+                presetsHelp.classList.add('hidden');
+                toggleBtn.textContent = '+';
+                localStorage.setItem(section + 'PresetsVisible', 'false');
+            }
+        }
+
+        // Toggle hue effects
+        function toggleHueEffects() {
+            const disableHue = document.getElementById('disableHue').checked;
+            const hueSelector = document.getElementById('hueSelector');
+            const gradientPreview = document.getElementById('gradientPreview');
+            const hueValues = document.querySelector('.hue-values');
+            
+            if (disableHue) {
+                hueSelector.style.opacity = '0.5';
+                hueSelector.style.pointerEvents = 'none';
+                gradientPreview.style.opacity = '0.5';
+                hueValues.style.opacity = '0.5';
+                
+                // Update app settings if available
+                if (window.app) {
+                    window.app.settings.hueDisabled = true;
+                }
+            } else {
+                hueSelector.style.opacity = '1';
+                hueSelector.style.pointerEvents = 'auto';
+                gradientPreview.style.opacity = '1';
+                hueValues.style.opacity = '1';
+                
+                // Update app settings if available
+                if (window.app) {
+                    window.app.settings.hueDisabled = false;
+                }
+            }
+        }
+
+        // Resolution scaling functionality
+        let originalImageWidth = 0;
+        let originalImageHeight = 0;
+        let currentScale = 1;
+        let maxAllowedScale = 1.5; // Default to 150%
+        let wasAutoScaled = false;
+
+        // Maximum safe dimensions for MP4 encoding (conservative to work across browsers)
+        const MAX_SAFE_DIMENSION = 2048;
+        const MAX_SAFE_PIXELS = 2048 * 2048; // 4 megapixels
+
+        function updateResolutionDisplay() {
+            const scaledWidth = Math.round(originalImageWidth * currentScale);
+            const scaledHeight = Math.round(originalImageHeight * currentScale);
+            
+            let displayPercentage;
+            if (wasAutoScaled) {
+                // Show the slider percentage (10-100), not the actual scale
+                const slider = document.getElementById('resolutionScale');
+                displayPercentage = slider.value;
+            } else {
+                // Normal behavior - show actual percentage
+                displayPercentage = Math.round(currentScale * 100);
+            }
+            
+            document.getElementById('currentResolution').textContent = `${scaledWidth} × ${scaledHeight}`;
+            document.getElementById('resolutionScaleValue').textContent = `${displayPercentage}%`;
+            
+            // Update app settings if available
+            if (window.app) {
+                window.app.settings.outputScale = currentScale;
+                window.app.settings.outputWidth = scaledWidth;
+                window.app.settings.outputHeight = scaledHeight;
+                // Update file size estimate with new resolution
+                window.app.updateFileSizeEstimate();
+            }
+        }
+
+        function setResolutionScale(scale) {
+            currentScale = parseFloat(scale) / 100; // Convert percentage to decimal
+            updateResolutionDisplay();
+        }
+
+        function calculateAutoScale(width, height) {
+            // Calculate scale needed to fit within safe limits
+            let scale = 1;
+            
+            // Check if either dimension exceeds the max
+            if (width > MAX_SAFE_DIMENSION || height > MAX_SAFE_DIMENSION) {
+                scale = Math.min(scale, MAX_SAFE_DIMENSION / Math.max(width, height));
+            }
+            
+            // Check total pixel count
+            const totalPixels = width * height;
+            if (totalPixels > MAX_SAFE_PIXELS) {
+                scale = Math.min(scale, Math.sqrt(MAX_SAFE_PIXELS / totalPixels));
+            }
+            
+            // Round to nearest 5% for cleaner UI
+            scale = Math.round(scale * 20) / 20;
+            
+            // Ensure minimum 50% scale
+            return Math.max(scale, 0.5);
+        }
+
+        function initializeResolutionControls(imageWidth, imageHeight) {
+            originalImageWidth = imageWidth;
+            originalImageHeight = imageHeight;
+            
+            // Calculate if auto-scaling is needed
+            const autoScale = calculateAutoScale(imageWidth, imageHeight);
+            wasAutoScaled = autoScale < 1;
+            
+            const slider = document.getElementById('resolutionScale');
+            const scaleMarkers = document.querySelector('.scale-markers');
+            const resolutionNote = document.getElementById('resolutionNote');
+            
+            if (wasAutoScaled) {
+                maxAllowedScale = autoScale;
+                
+                // Set current scale to the maximum allowed (far right of slider)
+                currentScale = autoScale;
+                
+                // Slider always goes from 10 to 100, but we'll interpret these values differently
+                slider.min = 10;
+                slider.max = 100;
+                slider.value = 100; // Start at far right (maximum safe scale)
+                
+                // Update the scale markers to show new interpretation
+                scaleMarkers.innerHTML = '';
+                scaleMarkers.appendChild(document.createElement('span')).textContent = '10%';
+                scaleMarkers.appendChild(document.createElement('span')).textContent = '55%';
+                scaleMarkers.appendChild(document.createElement('span')).textContent = '100%';
+                
+                // Show auto-scale message
+                const actualPercentage = Math.round(autoScale * 100);
+                resolutionNote.innerHTML = `<strong>⚠️ Image automatically scaled to ${actualPercentage}% of original to prevent encoding errors.</strong><br>Original resolution (${imageWidth} × ${imageHeight}) exceeds safe limits. Slider now shows 10-100% of the safe maximum.`;
+                resolutionNote.style.color = '#ff6b6b';
+            } else {
+                maxAllowedScale = 1.5;
+                currentScale = 1;
+                
+                // Reset slider to normal behavior
+                slider.min = 50;
+                slider.max = 150;
+                slider.value = 100;
+                
+                // Reset scale markers
+                scaleMarkers.innerHTML = '';
+                scaleMarkers.appendChild(document.createElement('span')).textContent = '50%';
+                scaleMarkers.appendChild(document.createElement('span')).textContent = '100%';
+                scaleMarkers.appendChild(document.createElement('span')).textContent = '150%';
+                
+                // Reset note
+                resolutionNote.innerHTML = 'Adjust scale from 50% (smaller files) to 150% (higher quality). Affects file size and quality.';
+                resolutionNote.style.color = '';
+            }
+            
+            updateResolutionDisplay();
+            
+            // Add slider event listener
+            slider.removeEventListener('input', handleSliderInput); // Remove any existing listener
+            slider.addEventListener('input', handleSliderInput);
+        }
+        
+        function handleSliderInput() {
+            const slider = document.getElementById('resolutionScale');
+            
+            if (wasAutoScaled) {
+                // Map 10-100 range to 0.1-1.0 of the maxAllowedScale
+                const normalizedValue = this.value / 100;
+                currentScale = normalizedValue * maxAllowedScale;
+                updateResolutionDisplay();
+            } else {
+                // Normal behavior
+                setResolutionScale(this.value);
+            }
+        }
+        
+        // Make initializeResolutionControls globally accessible
+        window.initializeResolutionControls = initializeResolutionControls;
+
+        // Initialize preset visibility from localStorage
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check brightness presets visibility
+            const brightnessVisible = localStorage.getItem('brightnessPresetsVisible');
+            if (brightnessVisible === 'false') {
+                togglePresets('brightness');
+            }
+            
+            // Check contrast presets visibility
+            const contrastVisible = localStorage.getItem('contrastPresetsVisible');
+            if (contrastVisible === 'false') {
+                togglePresets('contrast');
+            }
+        });
+
+
+        // Handle preset clicks
+        function setupPresetHandlers() {
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.clickable-preset')) {
+                    const preset = e.target.closest('.clickable-preset');
+                    const startValue = parseInt(preset.dataset.start);
+                    const endValue = parseInt(preset.dataset.end);
+                    
+                    // Determine if this is a brightness or contrast preset
+                    const isBrightness = preset.closest('#brightness-tab');
+                    const isContrast = preset.closest('#contrast-tab');
+                    
+                    if (isBrightness) {
+                        // Set brightness values
+                        document.getElementById('brightnessStart').value = startValue;
+                        document.getElementById('brightnessEnd').value = endValue;
+                        document.getElementById('brightnessStartValue').textContent = startValue;
+                        document.getElementById('brightnessEndValue').textContent = endValue;
+                        
+                        // Update app settings if available
+                        if (window.app) {
+                            window.app.settings.startBrightness = startValue;
+                            window.app.settings.endBrightness = endValue;
+                        }
+                    } else if (isContrast) {
+                        // Set contrast values
+                        document.getElementById('contrastStart').value = startValue;
+                        document.getElementById('contrastEnd').value = endValue;
+                        document.getElementById('contrastStartValue').textContent = startValue;
+                        document.getElementById('contrastEndValue').textContent = endValue;
+                        
+                        // Update app settings if available
+                        if (window.app) {
+                            window.app.settings.startContrast = startValue;
+                            window.app.settings.endContrast = endValue;
+                        }
+                    }
+                    
+                    // Visual feedback
+                    preset.style.backgroundColor = '#e3f2fd';
+                    setTimeout(() => {
+                        preset.style.backgroundColor = '';
+                    }, 200);
+                }
+            });
+        }
+
+        // Load inline modules system for all protocols
+        function loadAppScript() {
+            const script = document.createElement('script');
+            script.src = 'loader.js';
+            document.head.appendChild(script);
+        }
+        
+        // Video Quality Control
+        function setupVideoQualityControl() {
+            const formatRadios = document.querySelectorAll('input[name="format"]');
+            const videoQualityGroup = document.getElementById('videoQualityGroup');
+            
+            function toggleVideoQuality() {
+                const selectedFormat = document.querySelector('input[name="format"]:checked')?.value;
+                if (selectedFormat === 'webm' || selectedFormat === 'mp4') {
+                    videoQualityGroup.style.display = 'block';
+                } else {
+                    videoQualityGroup.style.display = 'none';
+                }
+                
+                // Update file size estimate when quality changes
+                if (window.app && window.app.updateFileSizeEstimate) {
+                    window.app.updateFileSizeEstimate();
+                }
+            }
+            
+            formatRadios.forEach(radio => {
+                radio.addEventListener('change', toggleVideoQuality);
+            });
+            
+            // Add listeners for quality changes
+            const qualityRadios = document.querySelectorAll('input[name="videoQuality"]');
+            qualityRadios.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (window.app && window.app.updateFileSizeEstimate) {
+                        window.app.updateFileSizeEstimate();
+                    }
+                });
+            });
+            
+            // Initialize on page load
+            toggleVideoQuality();
+        }
+
+        // Initialize everything after DOM is ready
+        function initializeUI() {
+            loadAppScript();
+            setupPresetHandlers();
+            setupVideoQualityControl();
+        }
+        
+        // Load script after DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeUI);
+        } else {
+            initializeUI();
+        }
+    </script>
+    <!-- loader.js (injected once by loadAppScript above) loads the inline-modules in order, then boots the app.
+         The redundant static <script> tags for the modules + loader were removed: they double-loaded every
+         module and re-declared ModuleLoader (a WordPress-to-static port artifact). -->
+</body>
+</html>
