@@ -4714,7 +4714,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
   }
 
-  // extension/src/shares.mjs
+  // extension/src/workspace.mjs
   async function messagingFetch(url, init = {}) {
     const u = new URL(url, "https://gbti.network");
     const req = {
