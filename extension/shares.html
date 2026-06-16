@@ -7,15 +7,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Shares · GBTI Network</title>
-  <script>
-    (function () {
-      try {
-        var t = localStorage.getItem('gbti-theme');
-        if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        document.documentElement.setAttribute('data-theme', t);
-      } catch (e) {}
-    })();
-  </script>
+  <!-- No-flash theme: external (not inline) because MV3 extension_pages CSP forbids inline scripts. -->
+  <script src="dist/theme-init.js"></script>
   <style>
     :root { --paper-2: #faf9f8; --ink: #25232b; --green: #1f9e5f; }
     [data-theme="dark"] { --paper-2: #1c1a21; --ink: #f3f2f0; }

@@ -24,6 +24,8 @@ const { define, mode, values } = resolveExtensionDefine({ config: readBuildConfi
 
 const common = { bundle: true, target: 'es2022', platform: 'browser', charset: 'utf8', legalComments: 'none', define };
 
+// The no-flash theme setter, loaded in every page <head> via <script src> (MV3 CSP forbids inline scripts).
+await build({ ...common, entryPoints: [src('theme-init.mjs')], format: 'iife', outfile: out('theme-init.js') });
 await build({ ...common, entryPoints: [src('background.mjs')], format: 'esm', outfile: out('background.js') });
 await build({ ...common, entryPoints: [src('content.mjs')], format: 'iife', outfile: out('content.js') });
 await build({ ...common, entryPoints: [src('onboarding.mjs')], format: 'iife', outfile: out('onboarding.js') }); // SOW-026 first-run tab (replaces the popup)
@@ -45,7 +47,7 @@ const clientSrc = (f) => path.join(dir, '..', 'client', 'src', f);
 const nodeBundle = { bundle: true, target: 'node18', platform: 'node', format: 'esm', charset: 'utf8', legalComments: 'none' };
 await build({ ...nodeBundle, entryPoints: [clientSrc('mcp-stdio.mjs')], outfile: mcp('gbti-network-mcp.mjs') });
 
-console.log('built extension/dist/{background,content,onboarding,newtab,shares,workspace,browse}.js + extension/mcp/gbti-network-mcp.mjs');
+console.log('built extension/dist/{theme-init,background,content,onboarding,newtab,shares,workspace,browse}.js + extension/mcp/gbti-network-mcp.mjs');
 if (mode === 'app') {
   console.log(`  (APP mode inlined: client id ${values.GBTI_GITHUB_APP_CLIENT_ID}, slug ${values.GBTI_GITHUB_APP_SLUG})`);
 }

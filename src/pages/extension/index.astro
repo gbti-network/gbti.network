@@ -1,152 +1,296 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { EXTENSION, extensionZipUrl, extensionIsListed } from '../../lib/extension';
+import { EXTENSION, extensionZipUrl } from '../../lib/extension';
 
-// SOW-019: the extension install/download page. The "Get the extension" CTAs across the site point here.
-// The header carries the download button; the body walks through loading it as an unpacked extension until
-// the Chrome Web Store listing lands. Design language mirrors the about / co-op / membership pages.
-const browsers = [
-  { name: 'Chrome', url: 'chrome://extensions' },
-  { name: 'Edge', url: 'edge://extensions' },
-  { name: 'Brave', url: 'brave://extensions' },
+// SOW-019: the extension install/download page (design "GBTI Extension Install — Guided", claude.ai/design
+// handoff). A guided walkthrough: hero + download, a what-it-does trio, the five unpacked-install steps as a
+// vertical timeline each paired with a faithful chrome://extensions mockup, a trust note, and an FAQ. Numbers
+// single-sourced from lib/extension. Reuses the V3 globals (band/wrap/eyebrow/card/itile); the chrome mockups
+// are pinned light in both themes for recognizability. The "Get the extension" CTAs site-wide point here.
+const feats = [
+  { icon: 'i-gh', title: 'Sign in with GitHub', body: 'Click the GBTI icon in your toolbar and sign in. Your GitHub credentials stay on your own machine, not on our servers.' },
+  { icon: 'i-pencil', title: 'Edit in place', body: 'Open any page you can edit and change it where it lives. No separate dashboard, no copy-paste between tabs.' },
+  { icon: 'i-publish', title: 'Publish through the co-op', body: 'Save a draft or publish straight to the network. Your changes go through the same review flow as everyone else.' },
 ];
-
-const steps = [
-  { n: '01', icon: 'box', title: 'Download and unzip', body: 'Use the download button above, then unzip it into a folder you will keep (the browser loads the extension from this folder).' },
-  { n: '02', icon: 'globe', title: 'Open your extensions page', body: 'Go to chrome://extensions in Chrome (edge://extensions on Edge, brave://extensions on Brave). Paste the address into the URL bar.' },
-  { n: '03', icon: 'terminal', title: 'Turn on Developer mode', body: 'Flip the Developer mode toggle, usually in the top-right corner of the extensions page.' },
-  { n: '04', icon: 'puzzle', title: 'Load unpacked', body: 'Click Load unpacked and select the unzipped folder. The GBTI extension appears in your list.' },
-  { n: '05', icon: 'github', title: 'Pin it and sign in', body: 'Pin the GBTI icon to your toolbar, click it, and sign in with GitHub. You can now edit and publish your work in place.' },
+const faqs = [
+  { q: 'How do I update it?', a: 'While it is an unpacked extension, download the latest ZIP, unzip it over the old folder, and click Reload on the extensions page. Once the Chrome Web Store listing is live, updates happen on their own.' },
+  { q: 'Is my GitHub sign-in safe?', a: 'Yes. Sign-in happens between your browser and GitHub. Your token is stored locally by the extension and never sent to GBTI servers.' },
+  { q: 'It did not load, what went wrong?', a: 'Two things to check: Developer mode needs to be on, and you need to select the unzipped folder, not the ZIP file itself. If the folder has a manifest.json at its top level, you picked the right one.' },
+  { q: 'Do I need to be a member?', a: 'The extension is free to install and use. Publishing to the network goes through co-op membership, which is where the review and revenue-share flow lives.' },
 ];
 ---
 <BaseLayout
   title="Install the GBTI extension"
-  description="Download the GBTI Network browser extension and load it as an unpacked extension to edit and publish your work in place."
+  description="Download the GBTI Network browser extension and load it as an unpacked extension to sign in, edit your work in place, and publish through the co-op."
 >
-  <!-- ============ HEADER (with download button) ============ -->
-  <section class="band tcenter">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <g id="i-dl"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-lock"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></g>
+    <g id="i-gh"><path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M12 1.6a10.4 10.4 0 0 0-3.29 20.27c.52.1.71-.22.71-.5l-.01-1.75c-2.9.63-3.51-1.4-3.51-1.4-.47-1.2-1.16-1.52-1.16-1.52-.95-.65.07-.64.07-.64 1.05.08 1.6 1.08 1.6 1.08.93 1.6 2.44 1.13 3.04.87.09-.68.36-1.13.66-1.39-2.31-.26-4.74-1.16-4.74-5.14 0-1.14.4-2.06 1.07-2.79-.11-.27-.46-1.32.1-2.76 0 0 .87-.28 2.85 1.06a9.8 9.8 0 0 1 5.19 0c1.98-1.34 2.85-1.06 2.85-1.06.57 1.44.21 2.49.1 2.76.67.73 1.07 1.65 1.07 2.79 0 3.99-2.43 4.87-4.75 5.13.38.32.71.95.71 1.92l-.01 2.85c0 .28.19.61.72.5A10.4 10.4 0 0 0 12 1.6Z"/></g>
+    <g id="i-pencil"><path d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.8"/></g>
+    <g id="i-publish"><path d="M12 19V8m0 0l-4 4m4-4l4 4M5 5h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-plus"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></g>
+  </defs></svg>
+
+  <!-- ============ HERO (download in the header) ============ -->
+  <section class="ext-hero">
     <div class="wrap">
-      <div class="chip" style="display:inline-flex"><span class="chip-dot"></span> Browser extension</div>
+      <span class="chip chip-green"><span class="chip-dot"></span> Free · v{EXTENSION.version}</span>
       <h1 class="h1 mt20">Install the GBTI extension</h1>
-      <p class="lead" style="max-width:640px;margin:18px auto 0">
-        The free GBTI extension lets you edit and publish your work in place, and keeps your GitHub sign-in on
-        your own machine. {extensionIsListed ? 'Install it in one click from the Chrome Web Store.' : 'While the Chrome Web Store listing is on the way, install it as an unpacked extension below.'}
-      </p>
-      <div class="ext-dl mt24">
-        <a href={extensionZipUrl} class="btn btn-primary btn-lg" download>
-          <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Download the extension
-        </a>
-        <span class="mono muted" style="font-size:13px">v{EXTENSION.version} · ZIP · load unpacked</span>
+      <p class="lead">The extension is how you sign in, edit your work in place, and publish through the co-op. It runs in your browser and keeps your GitHub sign-in on your own machine.</p>
+      <div class="dl-row">
+        <a class="btn btn-primary btn-lg" href={extensionZipUrl} download><svg viewBox="0 0 24 24" width="19" height="19"><use href="#i-dl"/></svg> Download the extension</a>
+        <span class="dl-sub">ZIP · load unpacked</span>
+      </div>
+      <div class="browsers hero-browsers">
+        <span class="bchip"><span class="d"></span> Chrome</span>
+        <span class="bchip"><span class="d"></span> Edge</span>
+        <span class="bchip"><span class="d"></span> Brave</span>
+        <span class="bchip soon"><span class="d"></span> Chrome Web Store soon</span>
       </div>
     </div>
   </section>
 
-  <!-- ============ HOW TO INSTALL (unpacked) ============ -->
-  <section class="band tint">
+  <!-- ============ WHAT IT DOES ============ -->
+  <section class="band-sm">
     <div class="wrap">
       <div class="sec-head center">
-        <p class="eyebrow">Five steps</p>
-        <h2 class="h2 mt12">Load it as an unpacked extension</h2>
-        <p class="lead mt16" style="max-width:600px;margin-left:auto;margin-right:auto">It takes a minute. You only do this once; the extension keeps working after that.</p>
+        <p class="eyebrow">What it does</p>
+        <h2 class="h2 mt12">Three things, once it is installed</h2>
       </div>
-
-      {/* A mockup of what the chrome://extensions page looks like, with callouts matching the steps below. */}
-      <div class="xt-mock mt32" role="img" aria-label="The chrome://extensions page with Developer mode on, the Load unpacked button, and the loaded GBTI Network extension">
-        <div class="xt-bar">
-          <span class="xt-dot"></span><span class="xt-dot"></span><span class="xt-dot"></span>
-          <span class="xt-url"><span class="cn">2</span> chrome://extensions</span>
-        </div>
-        <div class="xt-page">
-          <div class="xt-head">
-            <span class="xt-title">Extensions</span>
-            <span class="xt-dev"><span class="cn">3</span> Developer mode <span class="xt-toggle on"></span></span>
+      <div class="feat-grid mt32">
+        {feats.map((f) => (
+          <div class="card feat-card">
+            <span class="itile"><svg viewBox="0 0 24 24"><use href={`#${f.icon}`}/></svg></span>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
           </div>
-          <div class="xt-tools">
-            <span class="xt-btn primary"><span class="cn">4</span> Load unpacked</span>
-            <span class="xt-btn">Pack extension</span>
-            <span class="xt-btn">Update</span>
-          </div>
-          <div class="xt-card">
-            <span class="cn cn-card">5</span>
-            <span class="xt-ico"><svg viewBox="0 0 24 24" width="22" height="22"><use href="#ico-puzzle"/></svg></span>
-            <span class="xt-meta">
-              <span class="xt-name">GBTI Network</span>
-              <span class="xt-desc">Edit and publish your work in place</span>
-              <span class="xt-ver mono">v{EXTENSION.version}</span>
-            </span>
-            <span class="xt-toggle on"></span>
-          </div>
-        </div>
-      </div>
-
-      <ol class="ext-steps mt32">
-        {steps.map((s) => (
-          <li class="card ext-step">
-            <span class="itile"><svg viewBox="0 0 24 24"><use href={`#ico-${s.icon}`}/></svg></span>
-            <span class="ext-num">{s.n}</span>
-            <h3 class="h4 mt8">{s.title}</h3>
-            <p class="body-sm muted mt8">{s.body}</p>
-          </li>
         ))}
-      </ol>
-      <div class="ext-browsers mt24">
-        {browsers.map((b) => <span class="ext-browser mono">{b.name}: <b>{b.url}</b></span>)}
       </div>
-      <p class="body-sm muted tcenter mt16" style="max-width:640px;margin-left:auto;margin-right:auto">
-        To update, download the latest ZIP and use Reload on the extensions page. Once the Chrome Web Store
-        listing is live, updates become automatic and the steps above are no longer needed.
-      </p>
+    </div>
+  </section>
+
+  <!-- ============ INSTALL WALKTHROUGH ============ -->
+  <section class="band tint" id="install">
+    <div class="wrap">
+      <div class="sec-head center">
+        <p class="eyebrow">Install · about a minute</p>
+        <h2 class="h2 mt12">Load it as an unpacked extension</h2>
+        <p class="lead">You do this once. The extension keeps working after that. When the Chrome Web Store listing is live, updates become automatic and these steps go away.</p>
+      </div>
+
+      <div class="steps mt40">
+        <!-- step 1 -->
+        <div class="step">
+          <div class="step-rail"><span class="step-num">1</span><span class="step-line"></span></div>
+          <div class="step-body">
+            <h3>Download and unzip</h3>
+            <p>Download the ZIP, then unzip it. Keep the unzipped folder somewhere you will not delete it. The browser loads the extension from that folder.</p>
+            <div class="step-shot">
+              <a class="btn btn-primary" href={extensionZipUrl} download><svg viewBox="0 0 24 24" width="18" height="18"><use href="#i-dl"/></svg> Download the extension</a>
+            </div>
+          </div>
+        </div>
+        <!-- step 2 -->
+        <div class="step">
+          <div class="step-rail"><span class="step-num">2</span><span class="step-line"></span></div>
+          <div class="step-body">
+            <h3>Open the extensions page</h3>
+            <p>In the address bar, type <span class="kbd">chrome://extensions</span> and press Enter. On Edge it is <span class="kbd">edge://extensions</span>; on Brave, <span class="kbd">brave://extensions</span>.</p>
+            <div class="step-shot bw">
+              <div class="bw-bar">
+                <span class="bw-dots"><i></i><i></i><i></i></span>
+                <span class="bw-url"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg> chrome://extensions</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- step 3 -->
+        <div class="step">
+          <div class="step-rail"><span class="step-num">3</span><span class="step-line"></span></div>
+          <div class="step-body">
+            <h3>Turn on Developer mode</h3>
+            <p>Flip the <b>Developer mode</b> toggle in the top-right corner. This is what lets you load an extension from a folder.</p>
+            <div class="step-shot bw">
+              <div class="bw-page">
+                <div class="xp-head">
+                  <span class="xp-title"><span class="xp-burger"><i></i><i></i><i></i></span> Extensions</span>
+                  <span class="xp-dev">Developer mode <span class="xp-toggle"></span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- step 4 -->
+        <div class="step">
+          <div class="step-rail"><span class="step-num">4</span><span class="step-line"></span></div>
+          <div class="step-body">
+            <h3>Click Load unpacked</h3>
+            <p>A row of buttons appears under the header. Click <b>Load unpacked</b>.</p>
+            <div class="step-shot bw">
+              <div class="bw-page">
+                <div class="xp-head">
+                  <span class="xp-title"><span class="xp-burger"><i></i><i></i><i></i></span> Extensions</span>
+                  <span class="xp-dev">Developer mode <span class="xp-toggle"></span></span>
+                </div>
+                <div class="xp-tools">
+                  <span class="xp-btn primary"><svg viewBox="0 0 24 24" style="width:14px;height:14px"><use href="#i-plus"/></svg> Load unpacked</span>
+                  <span class="xp-btn">Pack extension</span>
+                  <span class="xp-btn">Update</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- step 5 -->
+        <div class="step">
+          <div class="step-rail"><span class="step-num">5</span><span class="step-line"></span></div>
+          <div class="step-body">
+            <h3>Select the unzipped folder</h3>
+            <p>Pick the folder you unzipped in step 1. The GBTI Network extension shows up in your list and its icon appears in the toolbar. That is it.</p>
+            <div class="step-shot bw">
+              <div class="bw-page">
+                <div class="xp-card">
+                  <span class="xp-ico">G</span>
+                  <span class="xp-meta">
+                    <span class="xp-name">GBTI Network</span>
+                    <span class="xp-desc">Edit and publish your work in place.</span>
+                    <span class="xp-ver">v{EXTENSION.version}</span>
+                  </span>
+                  <span class="xp-on">● On</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- trust -->
+      <div class="trust mt40">
+        <span class="itile"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg></span>
+        <div class="t">
+          <h3>Your GitHub sign-in stays on your machine</h3>
+          <p>The extension talks to GitHub directly from your browser. We never see or store your token, and you can sign out or remove the extension at any time.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section class="band-sm">
+    <div class="wrap">
+      <div class="sec-head center">
+        <p class="eyebrow">Questions</p>
+        <h2 class="h2 mt12">Good to know</h2>
+      </div>
+      <div class="faq mt24">
+        {faqs.map((f, i) => (
+          <details class="faq-item" open={i === 0}>
+            <summary class="faq-q">{f.q}<svg class="pm" viewBox="0 0 24 24"><use href="#i-plus"/></svg></summary>
+            <div class="faq-a"><div>{f.a}</div></div>
+          </details>
+        ))}
+      </div>
     </div>
   </section>
 
   <!-- ============ CTA ============ -->
   <section class="band dark tcenter">
     <div class="wrap">
-      <h2 class="h2" style="color:#fff">Edit and publish your work in place.</h2>
-      <p class="lead" style="max-width:560px;margin:16px auto 0">The extension is how members sign in, draft, and publish through the GBTI co-op.</p>
+      <h2 class="h2" style="color:#fff">Edit and publish your work in place</h2>
+      <p class="lead" style="max-width:560px;margin:16px auto 0">Install the free extension, then sign in to start drafting and publishing through the GBTI co-op.</p>
       <div class="hero-c-cta">
-        <a href={extensionZipUrl} class="btn btn-primary btn-lg" download>Download the extension</a>
-        <a href="/membership/" class="btn btn-ghost btn-lg">See membership</a>
+        <a class="btn btn-primary btn-lg" href={extensionZipUrl} download>Download the extension</a>
+        <a class="btn btn-ghost btn-lg" href="/membership/">See membership</a>
       </div>
     </div>
   </section>
 
   <style>
-    .ext-dl { display: inline-flex; flex-direction: column; align-items: center; gap: 10px; }
-    .ext-steps { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; }
-    .ext-step { flex: 1 1 210px; max-width: 244px; padding: 26px 22px; position: relative; }
-    .ext-num { font-family: var(--f-mono); font-size: 12px; font-weight: 700; color: var(--green-600); position: absolute; top: 20px; right: 22px; }
-    .dark .ext-num { color: var(--green-mint); }
-    @media (max-width: 760px) { .ext-step { flex-basis: 100%; max-width: none; } }
+    /* ---- hero ---- */
+    .ext-hero { padding: 72px 0 80px; text-align: center; background: radial-gradient(120% 120% at 50% -20%, var(--paper) 0%, var(--paper-2) 70%); border-bottom: 1px solid var(--line); }
+    .ext-hero .wrap { max-width: 880px; }
+    .ext-hero .lead { max-width: 600px; margin: 18px auto 0; }
+    .dl-row { display: inline-flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 32px; }
+    .dl-sub { font-family: var(--f-mono); font-size: 13px; color: var(--fg-mute); }
+    .hero-browsers { margin-top: 40px; justify-content: center; }
 
-    .ext-browsers { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 22px; }
-    .ext-browser { font-size: 13px; color: var(--fg-mute); }
-    .ext-browser b { color: var(--fg-soft); }
+    /* ---- browser support chips ---- */
+    .browsers { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+    .bchip { display: inline-flex; align-items: center; gap: 9px; padding: 9px 15px; border-radius: var(--r-pill); border: 1.5px solid var(--line-2); background: var(--paper); font-size: 14px; font-weight: 600; color: var(--fg-soft); }
+    .bchip .d { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+    .bchip.soon { color: var(--fg-mute); }
+    .bchip.soon .d { background: var(--line-2); }
 
-    /* ===== chrome://extensions mockup (kept light + Chrome-styled in both themes for recognizability) ===== */
-    .xt-mock { max-width: 720px; margin-left: auto; margin-right: auto; border: 1.5px solid #dadce0; border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--sh-lg); background: #fff; text-align: left; color: #202124; }
-    .xt-bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: #f1f3f4; border-bottom: 1px solid #e3e5e8; }
-    .xt-dot { width: 10px; height: 10px; border-radius: 50%; background: #dadce0; flex: none; }
-    .xt-url { margin-left: 10px; flex: 1 1 auto; min-width: 0; background: #fff; border: 1px solid #e3e5e8; border-radius: 999px; padding: 6px 14px; font-family: var(--f-mono); font-size: 12.5px; color: #3c4043; display: inline-flex; align-items: center; gap: 9px; }
-    .xt-page { padding: 18px 20px 22px; }
-    .xt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid #ebedf0; }
-    .xt-title { font-family: var(--f-sans); font-size: 17px; font-weight: 600; color: #202124; }
-    .xt-dev { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: #5f6368; }
-    .xt-toggle { width: 34px; height: 18px; border-radius: 999px; background: #1a73e8; position: relative; flex: none; }
-    .xt-toggle::after { content: ''; position: absolute; top: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
-    .xt-tools { display: flex; gap: 10px; padding: 14px 0; flex-wrap: wrap; }
-    .xt-btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: #1a73e8; border: 1px solid #dadce0; border-radius: 7px; padding: 6px 14px; background: #fff; }
-    .xt-btn.primary { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,.12); }
-    .xt-card { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px solid #e8eaed; border-radius: 10px; margin-top: 6px; position: relative; box-shadow: 0 1px 3px rgba(60,64,67,.12); }
-    .xt-ico { width: 40px; height: 40px; border-radius: 8px; background: var(--green); color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }
-    .xt-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .xt-name { font-family: var(--f-sans); font-weight: 600; font-size: 14px; color: #202124; }
-    .xt-desc { font-size: 12.5px; color: #5f6368; }
-    .xt-ver { font-size: 11px; color: #80868b; }
-    /* green callout numbers tying the mock to the steps */
-    .cn { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--green); color: #fff; font-family: var(--f-mono); font-size: 10px; font-weight: 700; flex: none; }
-    .cn-card { position: absolute; top: -9px; left: -9px; box-shadow: 0 0 0 3px #fff; }
-    @media (max-width: 540px) { .xt-tools .xt-btn:not(.primary) { display: none; } }
+    /* ---- what it does ---- */
+    .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+    .feat-card { padding: 28px; }
+    .feat-card .itile { margin-bottom: 18px; }
+    .feat-card h3 { font-family: var(--f-display); font-weight: 700; font-size: 19px; }
+    .feat-card p { color: var(--fg-soft); margin-top: 9px; font-size: 15.5px; line-height: 1.55; }
+
+    /* ---- vertical step walkthrough ---- */
+    .steps { max-width: 920px; margin-left: auto; margin-right: auto; }
+    .step { display: grid; grid-template-columns: 56px 1fr; gap: 24px; position: relative; padding-bottom: 40px; }
+    .step:last-child { padding-bottom: 0; }
+    .step-rail { display: flex; flex-direction: column; align-items: center; }
+    .step-num { width: 46px; height: 46px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; background: var(--paper); border: 1.5px solid var(--line-2); font-family: var(--f-display); font-weight: 800; font-size: 19px; color: var(--green-700); box-shadow: var(--sh-sm); position: relative; z-index: 2; }
+    .step-line { flex: 1; width: 2px; background: var(--line); margin-top: 6px; }
+    .step:last-child .step-line { display: none; }
+    .step-body { padding-top: 6px; min-width: 0; }
+    .step-body h3 { font-family: var(--f-display); font-weight: 700; font-size: 20px; }
+    .step-body p { color: var(--fg-soft); margin-top: 8px; font-size: 16px; line-height: 1.55; }
+    .kbd { font-family: var(--f-mono); font-size: 13.5px; background: var(--tint); border: 1.5px solid var(--line-2); border-radius: var(--r-xs); padding: 2px 8px; color: var(--fg); white-space: nowrap; }
+    .step-shot { margin-top: 18px; }
+
+    /* ---- realistic browser/chrome mockup (pinned light in both themes) ---- */
+    .bw { border-radius: var(--r-lg); overflow: hidden; border: 1.5px solid #dadce0; box-shadow: var(--sh-lg); background: #fff; color: #202124; text-align: left; }
+    .bw-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: #f1f3f4; border-bottom: 1px solid #e3e5e8; }
+    .bw-dots { display: flex; gap: 7px; flex: none; }
+    .bw-dots i { width: 11px; height: 11px; border-radius: 50%; background: #dadce0; display: block; }
+    .bw-dots i:nth-child(1) { background: #ed6a5e; } .bw-dots i:nth-child(2) { background: #f4be4f; } .bw-dots i:nth-child(3) { background: #61c454; }
+    .bw-url { margin-left: 8px; flex: 1 1 auto; min-width: 0; background: #fff; border: 1px solid #e3e5e8; border-radius: 999px; padding: 6px 14px; font-family: var(--f-mono); font-size: 12.5px; color: #3c4043; display: inline-flex; align-items: center; gap: 9px; }
+    .bw-url svg { width: 13px; height: 13px; flex: none; color: #5f6368; }
+    .bw-page { padding: 18px 20px 22px; background: #fff; }
+    .xp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid #e8eaed; }
+    .xp-title { font-size: 17px; font-weight: 600; color: #202124; display: flex; align-items: center; gap: 12px; }
+    .xp-burger { display: inline-flex; flex-direction: column; gap: 3px; }
+    .xp-burger i { width: 15px; height: 2px; background: #5f6368; border-radius: 2px; display: block; }
+    .xp-dev { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; color: #3c4043; }
+    .xp-toggle { width: 34px; height: 18px; border-radius: 999px; background: #1a73e8; position: relative; flex: none; }
+    .xp-toggle::after { content: ""; position: absolute; top: 2px; right: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; }
+    .xp-tools { display: flex; gap: 10px; padding: 14px 0 4px; flex-wrap: wrap; }
+    .xp-btn { font-size: 13px; font-weight: 600; color: #1a73e8; border: 1px solid #dadce0; border-radius: 999px; padding: 7px 16px; background: #fff; display: inline-flex; align-items: center; gap: 8px; }
+    .xp-btn.primary { background: #e8f0fe; border-color: #d2e3fc; }
+    .xp-card { display: flex; align-items: center; gap: 16px; border: 1px solid #e8eaed; border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(60,64,67,.1); }
+    .xp-ico { width: 44px; height: 44px; border-radius: 9px; background: var(--green); color: #fff; flex: none; display: flex; align-items: center; justify-content: center; font-family: var(--f-display); font-weight: 800; font-size: 24px; }
+    .xp-meta { flex: 1; min-width: 0; }
+    .xp-name { font-size: 15px; font-weight: 600; color: #202124; display: block; }
+    .xp-desc { font-size: 12.5px; color: #5f6368; margin-top: 2px; display: block; }
+    .xp-ver { font-family: var(--f-mono); font-size: 11px; color: #80868b; margin-top: 4px; display: block; }
+    .xp-on { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: #1e8e3e; font-weight: 600; flex: none; }
+
+    /* ---- trust callout (tokens adapt to dark theme) ---- */
+    .trust { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; max-width: 920px; margin-left: auto; margin-right: auto; padding: 26px 30px; border-radius: var(--r-lg); background: var(--green-tint); border: 1.5px solid var(--green-tint-2); }
+    .trust .itile { background: var(--paper); border-color: var(--green-tint-2); width: 52px; height: 52px; flex: none; }
+    .trust .t { flex: 1; min-width: 240px; }
+    .trust .t h3 { font-family: var(--f-display); font-weight: 700; font-size: 19px; color: var(--green-700); }
+    .trust .t p { color: var(--fg-soft); margin-top: 6px; font-size: 15px; }
+
+    /* ---- FAQ (native <details>, no JS) ---- */
+    .faq { max-width: 760px; margin-left: auto; margin-right: auto; }
+    .faq-item { border-bottom: 1.5px solid var(--line); }
+    .faq-q { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 22px 4px; font-family: var(--f-display); font-weight: 700; font-size: 18px; color: var(--fg); }
+    .faq-q::-webkit-details-marker { display: none; }
+    .faq-q .pm { width: 20px; height: 20px; flex: none; color: var(--green-700); transition: transform .25s ease; }
+    details[open] .faq-q .pm { transform: rotate(45deg); }
+    .faq-a > div { padding: 0 4px 22px; color: var(--fg-soft); font-size: 16px; line-height: 1.6; }
+
+    @media (max-width: 1080px) { .feat-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 760px) {
+      .feat-grid { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 42px 1fr; gap: 16px; }
+      .step-num { width: 38px; height: 38px; font-size: 16px; }
+    }
   </style>
 </BaseLayout>
