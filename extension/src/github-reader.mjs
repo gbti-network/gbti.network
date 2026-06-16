@@ -5,12 +5,13 @@
 // Pure + injectable-fetch (no chrome APIs here), so it is unit-tested in node. The NESTED content layout
 // (members/<u>/<sub>/<slug>/index.md) is the canonical on-disk layout reconciled in P5.
 
-import { parseContentFile, shareSummary, byShareNewest } from '../../client/src/content-ops.mjs';
+import { parseContentFile, shareSummary, byShareNewest, commentSummary, byCommentOldest } from '../../client/src/content-ops.mjs';
 import { isReadablePath } from '../../src/lib/content-index.mjs';
 
 const SUBDIR = Object.freeze({ post: 'posts', product: 'products', prompt: 'prompts' });
 const TYPES = ['post', 'product', 'prompt', 'profile'];
 const SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
+const COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 const basename = (p) => p.slice(p.lastIndexOf('/') + 1);
 
 /** Decode GitHub's base64 (which contains newlines) into a UTF-8 string. */
@@ -168,6 +169,36 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
         out.push(shareSummary(rel, frontmatter, body));
       }
       out.sort(byShareNewest);
+      return out.slice(0, cap);
+    },
+
+    /**
+     * SOW-032: list PUBLISHED comments for a Share's discussion. ONE recursive Git Trees call enumerates every
+     * members/<u>/comments/<id>.md + house/comments/<id>.md; we read the newest `limit` by filename (timestamp
+     * stem -> newest first), keep published `targetType:'share'` comments whose targetSlug matches, and return
+     * them OLDEST-first (a conversation reads top-down). A members comment's plaintext is NOT read here; its .enc
+     * is decrypted client-side via the Worker, exactly like a members Share body.
+     */
+    async listShareComments(targetSlug, limit = 100) {
+      if (!owner || !repo || !targetSlug) return [];
+      const t = await tree();
+      if (!t || !Array.isArray(t.tree)) return [];
+      const paths = t.tree
+        .filter((e) => e && e.type === 'blob' && typeof e.path === 'string' && COMMENT_PATH.test(e.path))
+        .map((e) => e.path)
+        .sort((a, b) => basename(b).localeCompare(basename(a)));
+      const cap = Math.max(0, limit);
+      const out = [];
+      for (const rel of paths) {
+        if (out.length >= cap) break;
+        const text = await readFile(rel);
+        if (text == null) continue;
+        const { frontmatter, body } = parseContentFile(text);
+        if (frontmatter?.status !== 'published') continue;
+        if (frontmatter?.targetType !== 'share' || frontmatter?.targetSlug !== targetSlug) continue;
+        out.push(commentSummary(rel, frontmatter, body));
+      }
+      out.sort(byCommentOldest);
       return out.slice(0, cap);
     },
   };

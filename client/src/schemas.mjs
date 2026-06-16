@@ -213,8 +213,8 @@ export const commentSchema = z.object({
   type: z.literal('comment').default('comment'),
   id: z.string().min(1),
   author: z.string(),
-  targetType: z.enum(['post', 'product', 'prompt']),
-  targetSlug: z.string(),
+  targetType: z.enum(['post', 'product', 'prompt', 'share']), // SOW-032: 'share' enables the extension Shares discussion
+  targetSlug: z.string(), // a share comment targets the composite "<author>/<shareId>"
   status: STATUS.default('published'),
   visibility: VISIBILITY.default('public'),
   authorNote: z.boolean().default(false), // the deliberate "From the author" note (pinned), vs an ordinary comment

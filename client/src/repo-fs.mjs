@@ -7,7 +7,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseContentFile, shareSummary, byShareNewest } from './content-ops.mjs';
+import { parseContentFile, shareSummary, byShareNewest, commentSummary, byCommentOldest } from './content-ops.mjs';
 import { rolesFromText } from './roles.mjs';
 
 const SUBDIR = Object.freeze({ post: 'posts', product: 'products', prompt: 'prompts' });
@@ -143,6 +143,46 @@ export function createReader(repoPath) {
       }
       out.sort(byShareNewest);
       return out.slice(0, Math.max(0, limit));
+    },
+
+    /**
+     * SOW-032: list PUBLISHED comments for a Share's discussion across ALL member folders + house
+     * (members/<u>/comments/<id>.md, house/comments/<id>.md). Filters to published `targetType:'share'`
+     * comments whose targetSlug matches the composite "<author>/<shareId>", and returns them OLDEST-first (a
+     * conversation reads top-down). Returns the PUBLIC body only; a members comment's body stays in its .enc,
+     * decrypted client-side via the Worker. The npm host walks the local working copy.
+     */
+    listShareComments(targetSlug, limit = 100) {
+      if (!repoPath || !targetSlug) return [];
+      const roots = [path.join(repoPath, 'members'), path.join(repoPath, 'house')];
+      const out = [];
+      const readCommentsDir = (commentsDir, relPrefix) => {
+        let files;
+        try { files = fs.readdirSync(commentsDir); } catch { return; } // no comments/ folder here
+        for (const f of files) {
+          if (!/\.(md|mdx)$/.test(f)) continue;
+          let parsed;
+          try { parsed = parseContentFile(fs.readFileSync(path.join(commentsDir, f), 'utf8')); } catch { continue; }
+          const fm = parsed.frontmatter || {};
+          if (fm.status !== 'published') continue; // drafts never surface
+          if (fm.targetType !== 'share' || fm.targetSlug !== targetSlug) continue;
+          out.push(commentSummary(`${relPrefix}/comments/${f}`, fm, parsed.body));
+        }
+      };
+      // house/comments/ (the non-member root) + every members/<u>/comments/.
+      readCommentsDir(path.join(repoPath, 'house', 'comments'), 'house');
+      let users;
+      try { users = fs.readdirSync(roots[0], { withFileTypes: true }); } catch { users = []; }
+      for (const u of users) {
+        if (!u.isDirectory()) continue;
+        readCommentsDir(path.join(roots[0], u.name, 'comments'), `members/${u.name}`);
+      }
+      out.sort(byCommentOldest);
+      // When a thread exceeds the cap, keep the NEWEST `cap` (most recent conversation), still shown oldest-first
+      // — matching the extension github-reader, which reads newest-by-filename until the cap. Slicing the tail of
+      // an oldest-first array yields the newest `cap` in oldest-first order, so both hosts return the same set.
+      const cap = Math.max(0, limit);
+      return out.slice(Math.max(0, out.length - cap));
     },
 
     /** Read one item (frontmatter + body), scoped to the member's own folder. Returns null if out of scope/missing. */

@@ -17177,8 +17177,10 @@ var commentSchema = external_exports.object({
   type: external_exports.literal("comment").default("comment"),
   id: external_exports.string().min(1),
   author: external_exports.string(),
-  targetType: external_exports.enum(["post", "product", "prompt"]),
+  targetType: external_exports.enum(["post", "product", "prompt", "share"]),
+  // SOW-032: 'share' enables the extension Shares discussion
   targetSlug: external_exports.string(),
+  // a share comment targets the composite "<author>/<shareId>"
   status: STATUS.default("published"),
   visibility: VISIBILITY.default("public"),
   authorNote: external_exports.boolean().default(false),
@@ -17281,6 +17283,35 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     body: isPublic ? String(body ?? "") : ""
     // members body is gated; never surfaced here
   };
+}
+function commentSummary(relPath, frontmatter = {}, body = "") {
+  const fm = frontmatter || {};
+  const isPublic = fm.visibility !== "members";
+  let createdAt = null;
+  if (fm.createdAt != null) {
+    const d = fm.createdAt instanceof Date ? fm.createdAt : new Date(fm.createdAt);
+    createdAt = Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  return {
+    path: relPath,
+    id: fm.id ?? null,
+    author: fm.author ?? null,
+    targetType: fm.targetType ?? null,
+    targetSlug: fm.targetSlug ?? null,
+    parentId: fm.parentId ?? null,
+    authorNote: fm.authorNote === true,
+    visibility: fm.visibility ?? "public",
+    status: fm.status ?? null,
+    encryptedBody: typeof fm.encryptedBody === "string" ? fm.encryptedBody : null,
+    createdAt,
+    body: isPublic ? String(body ?? "") : ""
+    // members body is gated; decrypted client-side via the Worker
+  };
+}
+function byCommentOldest(a, b) {
+  const t = String(a?.createdAt ?? "").localeCompare(String(b?.createdAt ?? ""));
+  if (t !== 0) return t;
+  return String(a?.id ?? a?.path ?? "").localeCompare(String(b?.id ?? b?.path ?? ""));
 }
 function byShareNewest(a, b) {
   const t = String(b?.createdAt ?? "").localeCompare(String(a?.createdAt ?? ""));
@@ -17461,6 +17492,53 @@ function createReader(repoPath) {
       }
       out.sort(byShareNewest);
       return out.slice(0, Math.max(0, limit));
+    },
+    /**
+     * SOW-032: list PUBLISHED comments for a Share's discussion across ALL member folders + house
+     * (members/<u>/comments/<id>.md, house/comments/<id>.md). Filters to published `targetType:'share'`
+     * comments whose targetSlug matches the composite "<author>/<shareId>", and returns them OLDEST-first (a
+     * conversation reads top-down). Returns the PUBLIC body only; a members comment's body stays in its .enc,
+     * decrypted client-side via the Worker. The npm host walks the local working copy.
+     */
+    listShareComments(targetSlug, limit = 100) {
+      if (!repoPath || !targetSlug) return [];
+      const roots = [path2.join(repoPath, "members"), path2.join(repoPath, "house")];
+      const out = [];
+      const readCommentsDir = (commentsDir, relPrefix) => {
+        let files;
+        try {
+          files = fs2.readdirSync(commentsDir);
+        } catch {
+          return;
+        }
+        for (const f of files) {
+          if (!/\.(md|mdx)$/.test(f)) continue;
+          let parsed;
+          try {
+            parsed = parseContentFile(fs2.readFileSync(path2.join(commentsDir, f), "utf8"));
+          } catch {
+            continue;
+          }
+          const fm = parsed.frontmatter || {};
+          if (fm.status !== "published") continue;
+          if (fm.targetType !== "share" || fm.targetSlug !== targetSlug) continue;
+          out.push(commentSummary(`${relPrefix}/comments/${f}`, fm, parsed.body));
+        }
+      };
+      readCommentsDir(path2.join(repoPath, "house", "comments"), "house");
+      let users;
+      try {
+        users = fs2.readdirSync(roots[0], { withFileTypes: true });
+      } catch {
+        users = [];
+      }
+      for (const u of users) {
+        if (!u.isDirectory()) continue;
+        readCommentsDir(path2.join(roots[0], u.name, "comments"), `members/${u.name}`);
+      }
+      out.sort(byCommentOldest);
+      const cap = Math.max(0, limit);
+      return out.slice(Math.max(0, out.length - cap));
     },
     /** Read one item (frontmatter + body), scoped to the member's own folder. Returns null if out of scope/missing. */
     get(username, relPath) {

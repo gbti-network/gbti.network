@@ -88,6 +88,20 @@ export async function listShares(ctx, { limit } = {}) {
   return { items: (await ctx.reader.listShares(n)) ?? [] };
 }
 
+/**
+ * SOW-032: list PUBLISHED comments for one Share's discussion thread (oldest-first). targetSlug is the composite
+ * "<author>/<shareId>" the share carries. Like listShares, this returns public-repo stub metadata + the PUBLIC
+ * body only; a members comment's body is decrypted client-side via decryptMemberAsset (Worker-gated). Async so
+ * the SAME op serves the sync npm reader and the async extension (GitHub) reader. requireIdentity only.
+ */
+export async function listShareComments(ctx, { targetSlug, limit } = {}) {
+  requireIdentity(ctx);
+  if (!targetSlug || typeof targetSlug !== 'string') throw new OperationError('bad-request', 'targetSlug is required');
+  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
+  if (typeof ctx.reader?.listShareComments !== 'function') return { items: [] };
+  return { items: (await ctx.reader.listShareComments(targetSlug, n)) ?? [] };
+}
+
 export function getContentItem(ctx, { path } = {}) {
   const id = requireIdentity(ctx);
   if (!path) throw new OperationError('bad-request', 'path is required');
@@ -382,7 +396,9 @@ export async function editComment(ctx, { id, body, authorNote } = {}) {
     title: `Edit comment on ${fm.targetType}: ${fm.targetSlug}`,
     prBody: undefined,
   });
-  return { ...r, edited: true };
+  // Carry the target back (mirrors publishComment) so the gbti-comment-edited event can refresh the right open
+  // thread (e.g. the SOW-032 Shares discussion, keyed on the composite targetSlug).
+  return { ...r, edited: true, targetType: fm.targetType, targetSlug: fm.targetSlug };
 }
 
 // SOW-024: member activity (favorites + collections) in the deletable edge store, via the signup Worker.

@@ -13,6 +13,7 @@ import {
   publish,
   publishShare,
   listShares,
+  listShareComments,
   publishComment,
   editComment,
   getComment,
@@ -81,6 +82,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/publish') return run(() => publish(ctx, body ?? {}));
   if (method === 'POST' && pathname === '/api/share') return run(() => publishShare(ctx, body ?? {})); // SOW-018
   if (method === 'GET' && pathname === '/api/shares') return run(() => listShares(ctx, { limit: Number(query.limit) || undefined })); // SOW-018 feed
+  if (method === 'GET' && pathname === '/api/share-comments') return run(() => listShareComments(ctx, { targetSlug: query.targetSlug, limit: Number(query.limit) || undefined })); // SOW-032 discussion
   if (method === 'POST' && pathname === '/api/comment') return run(() => publishComment(ctx, body ?? {})); // SOW-027
   if (method === 'POST' && pathname === '/api/comment/edit') return run(() => editComment(ctx, body ?? {})); // SOW-027
   if (method === 'GET' && pathname === '/api/comment') return run(() => getComment(ctx, { id: query.id })); // SOW-027 edit prefill

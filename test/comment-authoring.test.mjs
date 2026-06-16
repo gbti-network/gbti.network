@@ -47,6 +47,17 @@ test('buildCommentFile: forces author=owner + the flat comments/ path, validates
   assert.throws(() => buildCommentFile({ username: 'alice', input: { id: 'x', createdAt: '2026-06-10T12:00:00Z' }, body: 'hi' }), /invalid comment/);
 });
 
+test('buildCommentFile: SOW-032 accepts targetType "share" with a composite "<author>/<shareId>" targetSlug', () => {
+  const built = buildCommentFile({
+    username: 'bob',
+    input: { id: '20260611000000-c', author: 'bob', targetType: 'share', targetSlug: 'alice/20260610120000-astro-tips', createdAt: '2026-06-11T00:00:00Z' },
+    body: 'great share',
+  });
+  assert.equal(built.frontmatter.targetType, 'share'); // the enum now permits 'share' in the client mirror
+  assert.equal(built.frontmatter.targetSlug, 'alice/20260610120000-astro-tips');
+  assert.equal(built.path, 'members/bob/comments/20260611000000-c.md'); // still the commenter's OWN folder
+});
+
 test('publishComment: paid member opens an own-folder PR; the file lands under comments/', async () => {
   const puts = [];
   const r = await publishComment(ctxFor({ repo: fakeRepo(puts) }), { targetType: 'post', targetSlug: 'hello', body: 'great read' });
@@ -68,6 +79,10 @@ test('editComment: preserves createdAt + target, sets updatedAt, re-publishes th
   const r = await editComment(ctxFor({ repo: fakeRepo(puts), comment: existing }), { id: '20260101000000-old', body: 'edited version' });
   assert.equal(r.edited, true);
   assert.equal(r.id, '20260101000000-old');
+  // SOW-032: editComment carries the target back (like publishComment) so the gbti-comment-edited event can
+  // refresh the right open discussion thread.
+  assert.equal(r.targetType, 'post');
+  assert.equal(r.targetSlug, 'hello');
   // the re-published file carries the original createdAt + a new updatedAt + the new body
   const file = Buffer.from(puts.find((p) => /comments\/20260101000000-old\.md$/.test(p.path)).content, 'base64').toString('utf8');
   assert.match(file, /createdAt: '?2026-01-01/); // original createdAt preserved (js-yaml quotes the ISO string)

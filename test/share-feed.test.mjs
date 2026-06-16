@@ -7,8 +7,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { shareSummary, byShareNewest } from '../client/src/content-ops.mjs';
-import { listShares, OperationError } from '../client/src/operations.mjs';
+import { shareSummary, byShareNewest, commentSummary, byCommentOldest } from '../client/src/content-ops.mjs';
+import { listShares, listShareComments, OperationError } from '../client/src/operations.mjs';
 import { createReader } from '../client/src/repo-fs.mjs';
 import { createGithubReader } from '../extension/src/github-reader.mjs';
 
@@ -101,4 +101,116 @@ test('github-reader listShares: one recursive tree call, newest-first by filenam
   const items = await reader.listShares();
   assert.equal(treeCalls, 1, 'exactly one recursive tree call');
   assert.deepEqual(items.map((i) => i.id), ['20260610000000-new', '20260101000000-old'], 'newest-first, draft excluded');
+});
+
+// ---- SOW-032: Shares discussion (threaded comments) ----
+
+test('commentSummary: public carries the body, members excludes it; byCommentOldest sorts oldest-first', () => {
+  const pub = commentSummary('members/b/comments/20260611000000-c.md', { id: '20260611000000-c', author: 'b', targetType: 'share', targetSlug: 'alice/20260610000000-new', visibility: 'public', createdAt: new Date('2026-06-11T00:00:00Z') }, 'nice');
+  assert.equal(pub.body, 'nice');
+  assert.equal(pub.targetType, 'share');
+  assert.equal(pub.targetSlug, 'alice/20260610000000-new');
+  assert.equal(pub.createdAt, '2026-06-11T00:00:00.000Z');
+
+  const mem = commentSummary('members/b/comments/m.md', { id: 'm', author: 'b', targetType: 'share', targetSlug: 'alice/20260610000000-new', visibility: 'members', encryptedBody: 'members/b/_enc/comment-m.enc' }, 'SECRET');
+  assert.equal(mem.body, '', 'a members comment body is never surfaced in the summary');
+  assert.equal(mem.encryptedBody, 'members/b/_enc/comment-m.enc');
+
+  const rows = [{ createdAt: '2026-06-11T00:00:00Z' }, { createdAt: '2026-06-09T00:00:00Z' }, { createdAt: null }];
+  rows.sort(byCommentOldest);
+  assert.deepEqual(rows.map((r) => r.createdAt), [null, '2026-06-09T00:00:00Z', '2026-06-11T00:00:00Z'], 'oldest-first, undated first (empty string sorts low)');
+});
+
+test('listShareComments: requires identity and a targetSlug', async () => {
+  await assert.rejects(() => listShareComments({ identity: () => null, reader: {} }), (e) => e instanceof OperationError && e.code === 'no-identity');
+  await assert.rejects(() => listShareComments(ctxWith({ listShareComments: async () => [] }), {}), (e) => e instanceof OperationError && e.code === 'bad-request');
+});
+
+test('listShareComments: delegates to the reader, awaits async, caps the limit', async () => {
+  const made = Array.from({ length: 5 }, (_, i) => ({ id: `c${i}` }));
+  const asyncReader = { listShareComments: async (_slug, n) => made.slice(0, n) };
+  const r = await listShareComments(ctxWith(asyncReader), { targetSlug: 'a/20260101000000-x', limit: 3 });
+  assert.equal(r.items.length, 3);
+  // a reader without the method -> empty, no throw
+  assert.deepEqual((await listShareComments(ctxWith({}), { targetSlug: 'a/20260101000000-x' })).items, []);
+});
+
+test('repo-fs listShareComments: walks members/* + house comments, published share-target match only, oldest-first', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-comments-'));
+  const write = (rel, txt) => { fs.mkdirSync(path.dirname(path.join(repo, rel)), { recursive: true }); fs.writeFileSync(path.join(repo, rel), txt); };
+  const SLUG = 'alice/20260610000000-new';
+  const C = (id, { author = 'bob', target = SLUG, type = 'share', status = 'published', vis = 'public', created, enc } = {}, body = 'hi') =>
+    `---\ntype: comment\nid: ${id}\nauthor: ${author}\ntargetType: ${type}\ntargetSlug: ${target}\nstatus: ${status}\nvisibility: ${vis}\ncreatedAt: ${created}\n${enc ? `encryptedBody: ${enc}\n` : ''}---\n\n${body}\n`;
+  write('members/bob/comments/20260611000000-a.md', C('20260611000000-a', { created: '2026-06-11T00:00:00Z' }, 'second'));
+  write('house/comments/20260610120000-b.md', C('20260610120000-b', { author: 'gbti', created: '2026-06-10T12:00:00Z' }, 'first'));
+  write('members/carol/comments/20260612000000-mem.md', C('20260612000000-mem', { author: 'carol', vis: 'members', created: '2026-06-12T00:00:00Z', enc: 'members/carol/_enc/comment-20260612000000-mem.enc' }, 'SECRET'));
+  write('members/bob/comments/20260613000000-draft.md', C('20260613000000-draft', { status: 'draft', created: '2026-06-13T00:00:00Z' }, 'draft hidden'));
+  write('members/bob/comments/20260614000000-other.md', C('20260614000000-other', { target: 'alice/20260101000000-old', created: '2026-06-14T00:00:00Z' }, 'other share'));
+  write('members/bob/comments/20260615000000-post.md', C('20260615000000-post', { type: 'post', target: 'some-post', created: '2026-06-15T00:00:00Z' }, 'a post comment'));
+
+  const reader = createReader(repo);
+  const items = reader.listShareComments(SLUG);
+  assert.deepEqual(items.map((i) => i.id), ['20260610120000-b', '20260611000000-a', '20260612000000-mem'], 'only this share, published, oldest-first');
+  const mem = items.find((i) => i.visibility === 'members');
+  assert.equal(mem.body, '', 'members comment carries no plaintext');
+  assert.equal(mem.encryptedBody, 'members/carol/_enc/comment-20260612000000-mem.enc');
+  fs.rmSync(repo, { recursive: true, force: true });
+});
+
+const COMMENT = (id, author, slug, vis, created, body = 'hi', status = 'published') =>
+  `---\ntype: comment\nid: ${id}\nauthor: ${author}\ntargetType: share\ntargetSlug: ${slug}\nstatus: ${status}\nvisibility: ${vis}\ncreatedAt: ${created}\n---\n\n${body}\n`;
+
+test('github-reader listShareComments: one tree call, filters to the share target, oldest-first', async () => {
+  const SLUG = 'alice/20260610000000-new';
+  const tree = {
+    tree: [
+      { type: 'blob', path: 'members/a/posts/x/index.md' }, // not a comment -> ignored
+      { type: 'blob', path: 'members/bob/comments/20260611000000-a.md' },
+      { type: 'blob', path: 'house/comments/20260610120000-b.md' },
+      { type: 'blob', path: 'members/bob/comments/20260612000000-other.md' }, // different share -> filtered
+      { type: 'blob', path: 'members/bob/comments/20260613000000-draft.md' }, // draft -> filtered
+      { type: 'tree', path: 'members/bob/comments' }, // a tree node -> ignored
+    ],
+  };
+  const routes = [
+    ['/git/trees/', { ok: true, json: async () => tree }],
+    ['contents/members/bob/comments/20260611000000-a.md', { ok: true, json: async () => ({ type: 'file', content: b64(COMMENT('20260611000000-a', 'bob', SLUG, 'public', '2026-06-11T00:00:00Z', 'second')) }) }],
+    ['contents/house/comments/20260610120000-b.md', { ok: true, json: async () => ({ type: 'file', content: b64(COMMENT('20260610120000-b', 'gbti', SLUG, 'public', '2026-06-10T12:00:00Z', 'first')) }) }],
+    ['contents/members/bob/comments/20260612000000-other.md', { ok: true, json: async () => ({ type: 'file', content: b64(COMMENT('20260612000000-other', 'bob', 'alice/20260101000000-old', 'public', '2026-06-12T00:00:00Z', 'other')) }) }],
+    ['contents/members/bob/comments/20260613000000-draft.md', { ok: true, json: async () => ({ type: 'file', content: b64(COMMENT('20260613000000-draft', 'bob', SLUG, 'public', '2026-06-13T00:00:00Z', 'draft', 'draft')) }) }],
+  ];
+  let treeCalls = 0;
+  const fetch = async (url) => {
+    if (url.includes('/git/trees/')) treeCalls++;
+    for (const [m, res] of routes) if (url.includes(m)) return res;
+    return { ok: false, status: 404, json: async () => ({}) };
+  };
+  const reader = createGithubReader({ upstream: 'gbti-network/gbti.network', token: 'tok', fetch });
+  const items = await reader.listShareComments(SLUG);
+  assert.equal(treeCalls, 1, 'exactly one recursive tree call');
+  assert.deepEqual(items.map((i) => i.id), ['20260610120000-b', '20260611000000-a'], 'only this share, published, oldest-first');
+});
+
+test('listShareComments cap parity: both readers keep the NEWEST `limit`, shown oldest-first', async () => {
+  // Three published share comments; ask for only 2. Both hosts must return the SAME set (the newest two),
+  // oldest-first — so a member sees the same conversation tail regardless of which client they use.
+  const SLUG = 'alice/20260610000000-new';
+  const ids = ['20260101000000-a', '20260201000000-b', '20260301000000-c'];
+  const created = { '20260101000000-a': '2026-01-01T00:00:00Z', '20260201000000-b': '2026-02-01T00:00:00Z', '20260301000000-c': '2026-03-01T00:00:00Z' };
+
+  // npm host (local working copy)
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-cap-'));
+  const write = (rel, txt) => { fs.mkdirSync(path.dirname(path.join(repo, rel)), { recursive: true }); fs.writeFileSync(path.join(repo, rel), txt); };
+  for (const id of ids) write(`members/bob/comments/${id}.md`, COMMENT(id, 'bob', SLUG, 'public', created[id], `body ${id}`));
+  const npm = createReader(repo).listShareComments(SLUG, 2);
+  assert.deepEqual(npm.map((i) => i.id), ['20260201000000-b', '20260301000000-c'], 'npm host keeps the newest two, oldest-first');
+
+  // extension host (Git Trees)
+  const tree = { tree: ids.map((id) => ({ type: 'blob', path: `members/bob/comments/${id}.md` })) };
+  const routes = [['/git/trees/', { ok: true, json: async () => tree }]];
+  for (const id of ids) routes.push([`contents/members/bob/comments/${id}.md`, { ok: true, json: async () => ({ type: 'file', content: b64(COMMENT(id, 'bob', SLUG, 'public', created[id], `body ${id}`)) }) }]);
+  const fetch = async (url) => { for (const [m, res] of routes) if (url.includes(m)) return res; return { ok: false, status: 404, json: async () => ({}) }; };
+  const ext = await createGithubReader({ upstream: 'gbti-network/gbti.network', token: 'tok', fetch }).listShareComments(SLUG, 2);
+  assert.deepEqual(ext.map((i) => i.id), npm.map((i) => i.id), 'extension host returns the SAME set as the npm host');
+  fs.rmSync(repo, { recursive: true, force: true });
 });

@@ -169,6 +169,41 @@ export function shareSummary(relPath, frontmatter = {}, body = '') {
   };
 }
 
+/** SOW-032: a comment summary for the in-extension discussion (the Shares discussion thread). Like shareSummary,
+ *  a members comment's plaintext is NOT surfaced here (the .enc is decrypted client-side via the Worker); only a
+ *  public comment carries its body. The from-the-author authorNote flag is passed through so a thread can style
+ *  it if needed (not used for Shares, which have no intro requirement). */
+export function commentSummary(relPath, frontmatter = {}, body = '') {
+  const fm = frontmatter || {};
+  const isPublic = fm.visibility !== 'members';
+  let createdAt = null;
+  if (fm.createdAt != null) {
+    const d = fm.createdAt instanceof Date ? fm.createdAt : new Date(fm.createdAt);
+    createdAt = Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  return {
+    path: relPath,
+    id: fm.id ?? null,
+    author: fm.author ?? null,
+    targetType: fm.targetType ?? null,
+    targetSlug: fm.targetSlug ?? null,
+    parentId: fm.parentId ?? null,
+    authorNote: fm.authorNote === true,
+    visibility: fm.visibility ?? 'public',
+    status: fm.status ?? null,
+    encryptedBody: typeof fm.encryptedBody === 'string' ? fm.encryptedBody : null,
+    createdAt,
+    body: isPublic ? String(body ?? '') : '', // members body is gated; decrypted client-side via the Worker
+  };
+}
+
+/** Oldest-first for a discussion thread (conversations read top-down). Deterministic id/path tie-break. */
+export function byCommentOldest(a, b) {
+  const t = String(a?.createdAt ?? '').localeCompare(String(b?.createdAt ?? ''));
+  if (t !== 0) return t;
+  return String(a?.id ?? a?.path ?? '').localeCompare(String(b?.id ?? b?.path ?? ''));
+}
+
 /** Sort Share summaries newest-first by createdAt (ISO strings compare lexically), undated last. A deterministic
  *  id/path tie-break keeps BOTH hosts (npm fs order vs extension tree order) ordering identical-timestamp shares
  *  the same way (stable-sort input order would otherwise differ between hosts). */

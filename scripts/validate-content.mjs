@@ -168,7 +168,14 @@ function checkContent(file, owner, type) {
     // SOW-016: encryptedBody resolves to a real v1 envelope + no members-only marker leaks into the body.
     // SOW-018: a Share is gated the same way (a members Share encrypts its body); author scoping above
     // already enforces author === folder owner.
-    checkMemberGating(frontmatter(txt), rel, bodyOf(txt));
+    const fmc = frontmatter(txt) || {};
+    checkMemberGating(fmc, rel, bodyOf(txt));
+    // SOW-032: a share comment is identified by the composite "<author>/<shareId>" targetSlug (a Share id is a
+    // member-scoped timestamp-slug, not globally unique), so it stays unambiguous across members. The
+    // from-the-author intro requirement (SOW-014) only targets products/prompts, so a share never demands one.
+    if (type === 'comment' && fmc.targetType === 'share' && !/^[a-z0-9][a-z0-9-]*\/[0-9]{14}-[a-z0-9-]+$/.test(String(fmc.targetSlug || ''))) {
+      errors.push(`${rel}: a share comment targetSlug must be "<author>/<shareId>" (e.g. alice/20260615120000-x). See SOW-032.`);
+    }
   }
 }
 

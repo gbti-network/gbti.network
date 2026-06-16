@@ -267,8 +267,8 @@ const comment = defineCollection({
     type: z.literal('comment').default('comment'),
     id: z.string(),
     author: z.string(),
-    targetType: z.enum(['post', 'product', 'prompt']),
-    targetSlug: z.string(),
+    targetType: z.enum(['post', 'product', 'prompt', 'share']), // SOW-032: 'share' enables the extension Shares discussion
+    targetSlug: z.string(), // for a share comment this is the composite "<author>/<shareId>" (member-unambiguous)
     status: STATUS.default('published'),
     visibility: VISIBILITY.default('public'),
     authorNote: z.boolean().default(false), // SOW-014: the author's deliberate "From the author" note (pinned regardless of date), vs an ordinary conversational comment. Exactly one per target by the content owner.

@@ -17122,8 +17122,10 @@ var commentSchema = external_exports.object({
   type: external_exports.literal("comment").default("comment"),
   id: external_exports.string().min(1),
   author: external_exports.string(),
-  targetType: external_exports.enum(["post", "product", "prompt"]),
+  targetType: external_exports.enum(["post", "product", "prompt", "share"]),
+  // SOW-032: 'share' enables the extension Shares discussion
   targetSlug: external_exports.string(),
+  // a share comment targets the composite "<author>/<shareId>"
   status: STATUS.default("published"),
   visibility: VISIBILITY.default("public"),
   authorNote: external_exports.boolean().default(false),
@@ -17247,6 +17249,35 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     // members body is gated; never surfaced here
   };
 }
+function commentSummary(relPath, frontmatter = {}, body = "") {
+  const fm = frontmatter || {};
+  const isPublic = fm.visibility !== "members";
+  let createdAt = null;
+  if (fm.createdAt != null) {
+    const d = fm.createdAt instanceof Date ? fm.createdAt : new Date(fm.createdAt);
+    createdAt = Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  return {
+    path: relPath,
+    id: fm.id ?? null,
+    author: fm.author ?? null,
+    targetType: fm.targetType ?? null,
+    targetSlug: fm.targetSlug ?? null,
+    parentId: fm.parentId ?? null,
+    authorNote: fm.authorNote === true,
+    visibility: fm.visibility ?? "public",
+    status: fm.status ?? null,
+    encryptedBody: typeof fm.encryptedBody === "string" ? fm.encryptedBody : null,
+    createdAt,
+    body: isPublic ? String(body ?? "") : ""
+    // members body is gated; decrypted client-side via the Worker
+  };
+}
+function byCommentOldest(a, b) {
+  const t = String(a?.createdAt ?? "").localeCompare(String(b?.createdAt ?? ""));
+  if (t !== 0) return t;
+  return String(a?.id ?? a?.path ?? "").localeCompare(String(b?.id ?? b?.path ?? ""));
+}
 function byShareNewest(a, b) {
   const t = String(b?.createdAt ?? "").localeCompare(String(a?.createdAt ?? ""));
   if (t !== 0) return t;
@@ -17296,6 +17327,7 @@ function isReadablePath(path) {
 var SUBDIR2 = Object.freeze({ post: "posts", product: "products", prompt: "prompts" });
 var TYPES = ["post", "product", "prompt", "profile"];
 var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
+var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
 function decodeBase64Utf8(b64) {
   const clean = String(b64 || "").replace(/\s/g, "");
@@ -17415,6 +17447,32 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch = globalThis.
         out.push(shareSummary(rel, frontmatter, body));
       }
       out.sort(byShareNewest);
+      return out.slice(0, cap);
+    },
+    /**
+     * SOW-032: list PUBLISHED comments for a Share's discussion. ONE recursive Git Trees call enumerates every
+     * members/<u>/comments/<id>.md + house/comments/<id>.md; we read the newest `limit` by filename (timestamp
+     * stem -> newest first), keep published `targetType:'share'` comments whose targetSlug matches, and return
+     * them OLDEST-first (a conversation reads top-down). A members comment's plaintext is NOT read here; its .enc
+     * is decrypted client-side via the Worker, exactly like a members Share body.
+     */
+    async listShareComments(targetSlug, limit = 100) {
+      if (!owner || !repo || !targetSlug) return [];
+      const t = await tree();
+      if (!t || !Array.isArray(t.tree)) return [];
+      const paths = t.tree.filter((e) => e && e.type === "blob" && typeof e.path === "string" && COMMENT_PATH.test(e.path)).map((e) => e.path).sort((a, b) => basename(b).localeCompare(basename(a)));
+      const cap = Math.max(0, limit);
+      const out = [];
+      for (const rel of paths) {
+        if (out.length >= cap) break;
+        const text = await readFile(rel);
+        if (text == null) continue;
+        const { frontmatter, body } = parseContentFile(text);
+        if (frontmatter?.status !== "published") continue;
+        if (frontmatter?.targetType !== "share" || frontmatter?.targetSlug !== targetSlug) continue;
+        out.push(commentSummary(rel, frontmatter, body));
+      }
+      out.sort(byCommentOldest);
       return out.slice(0, cap);
     }
   };
@@ -18027,6 +18085,13 @@ async function listShares(ctx, { limit } = {}) {
   if (typeof ctx.reader?.listShares !== "function") return { items: [] };
   return { items: await ctx.reader.listShares(n) ?? [] };
 }
+async function listShareComments(ctx, { targetSlug, limit } = {}) {
+  requireIdentity(ctx);
+  if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
+  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
+  if (typeof ctx.reader?.listShareComments !== "function") return { items: [] };
+  return { items: await ctx.reader.listShareComments(targetSlug, n) ?? [] };
+}
 function validateContent(ctx, { type, input, body } = {}) {
   const id = requireIdentity(ctx);
   try {
@@ -18257,7 +18322,7 @@ async function editComment(ctx, { id, body, authorNote } = {}) {
     title: `Edit comment on ${fm.targetType}: ${fm.targetSlug}`,
     prBody: void 0
   });
-  return { ...r, edited: true };
+  return { ...r, edited: true, targetType: fm.targetType, targetSlug: fm.targetSlug };
 }
 function mapActivityError(err) {
   if (err instanceof ActivityClientError && /not signed in/i.test(err.message)) {
@@ -18607,6 +18672,9 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       case "/api/shares":
         return ok(await listShares(ctx, { limit: Number(query.limit) || void 0 }));
       // SOW-018 feed (Git Trees enumerate)
+      case "/api/share-comments":
+        return ok(await listShareComments(ctx, { targetSlug: query.targetSlug, limit: Number(query.limit) || void 0 }));
+      // SOW-032 discussion (Git Trees enumerate)
       case "/api/comment":
         return ok(method === "POST" ? await publishComment(ctx, body) : await getComment(ctx, { id: query.id }));
       case "/api/comment/edit":
