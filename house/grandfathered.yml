@@ -20,6 +20,10 @@ grandfathered:
     login: daprela
     reason: complimentary access (grandfathered co-op member)
     until: null
+  - github_id: "4893879"     # github.com/elsonponte (Elson Ponte)
+    login: elsonponte
+    reason: complimentary access (grandfathered co-op member)
+    until: null
   - github_id: "89241634"    # github.com/Eyesandnose (Ayodeji Adekore)
     login: eyesandnose
     reason: complimentary access (grandfathered co-op member)
