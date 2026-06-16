@@ -82,6 +82,40 @@ export function reverseMembersIndex(membersIndex) {
   return out;
 }
 
+/**
+ * Consistency errors between override grants (bans / grandfathered / roles) and the github_id -> username
+ * members-index. For each entry that carries BOTH a github_id and a login:
+ *   - if the github_id is known in the index, its login must match the index username;
+ *   - if the login is a known index username, its github_id must match the index id for that login.
+ * A grant for an id/login NOT in the index (e.g. the gbtilabs bot, or a comp grant before the member has a
+ * folder) is allowed and skipped (no contradiction). This catches a typo'd or swapped github_id<->login that
+ * would otherwise FAIL CLOSED silently (the wrong id never matches the real member, so they get no access and
+ * no error surfaces). Pure; the CI validator + a tripwire test feed it the parsed override files.
+ * @param {Map<string,string>} membersIndex  github_id -> username
+ * @param {Array<{github_id?:string|number, login?:string, _src?:string}>} entries
+ * @returns {string[]} error strings (empty = consistent)
+ */
+export function overrideConsistencyErrors(membersIndex = new Map(), entries = []) {
+  const reverse = reverseMembersIndex(membersIndex); // username(lower) -> id
+  const errors = [];
+  for (const e of entries ?? []) {
+    const id = e?.github_id != null && e.github_id !== '' ? String(e.github_id) : null;
+    const login = e?.login != null && e.login !== '' ? String(e.login).toLowerCase() : null;
+    const src = e?._src ? `${e._src}: ` : '';
+    if (!id || !login) continue;
+    const idUser = membersIndex.get(id);
+    if (idUser && idUser.toLowerCase() !== login) {
+      errors.push(`${src}github_id ${id} is "${idUser}" in members-index.yml but the grant lists login "${e.login}"`);
+      continue;
+    }
+    const loginId = reverse.get(login);
+    if (loginId && loginId !== id) {
+      errors.push(`${src}login "${e.login}" is github_id ${loginId} in members-index.yml but the grant lists github_id ${id}`);
+    }
+  }
+  return errors;
+}
+
 export function roleOf(githubId, roles) {
   return roles.get(String(githubId)) ?? ROLE.member;
 }

@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { isImageGenTarget } from '../client/src/image-models.mjs';
+import { membersIndexFromParsed, overrideConsistencyErrors } from '../membership/overrides-core.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const errors = [];
@@ -318,6 +319,30 @@ function validateAuthorIntro() {
   }
 }
 validateAuthorIntro();
+
+// Override grants (bans / grandfathered / roles) must reference github_ids consistent with members-index.yml.
+// A typo'd or swapped github_id<->login otherwise FAILS CLOSED silently (the wrong id never matches the member,
+// so a comp/ban grant just does nothing). Skips ids/logins not in the index (folderless grants + the bot).
+function validateOverrideConsistency() {
+  const load = (rel) => {
+    try { return yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')) ?? {}; } catch { return {}; }
+  };
+  const idx = membersIndexFromParsed(load('house/members-index.yml'));
+  if (!idx.size) return; // no members-index yet (pre-M0) -> nothing to check against
+  const gf = load('house/grandfathered.yml');
+  const bn = load('house/bans.yml');
+  const rl = load('house/roles.yml');
+  const tag = (list, src) => (Array.isArray(list) ? list : []).map((e) => ({ ...e, _src: src }));
+  const entries = [
+    ...tag(gf.grandfathered, 'grandfathered.yml'),
+    ...tag(bn.bans, 'bans.yml'),
+    ...tag(rl.superadmins, 'roles.yml superadmins'),
+    ...tag(rl.admins, 'roles.yml admins'),
+    ...tag(rl.moderators, 'roles.yml moderators'),
+  ];
+  for (const err of overrideConsistencyErrors(idx, entries)) errors.push(err);
+}
+validateOverrideConsistency();
 
 if (errors.length) {
   console.error(`✗ content validation failed (${errors.length} issue${errors.length === 1 ? '' : 's'}):`);
