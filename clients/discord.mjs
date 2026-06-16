@@ -54,9 +54,12 @@ export function createDiscordClient({ botToken, fetch = globalThis.fetch, baseUr
       return req('POST', `/channels/${channel.id}/messages`, { content });
     },
 
-    /** Post a message to a channel (SOW-018: syndicate a PUBLIC Share to the co-op Shares channel). */
-    async postChannelMessage(channelId, content) {
-      return req('POST', `/channels/${channelId}/messages`, { content });
+    /** Post a message to a channel (SOW-018/034: syndicate content to a co-op channel). SAFE BY DEFAULT: the
+     *  message content can carry member-authored text (titles), so allowed_mentions defaults to `{ parse: [] }`
+     *  -- NO @everyone/@here/role/user pings fire from raw text. A caller opts into a specific ping (e.g. the
+     *  resolved author) by passing allowedMentions: { parse: [], users: ['<id>'] }. */
+    async postChannelMessage(channelId, content, { allowedMentions = { parse: [] } } = {}) {
+      return req('POST', `/channels/${channelId}/messages`, { content, allowed_mentions: allowedMentions });
     },
 
     /**

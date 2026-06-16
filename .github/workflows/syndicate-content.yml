@@ -1,0 +1,86 @@
+name: Syndicate content to Discord
+
+# SOW-034. When a member's content merges to main, announce it in the matching Discord channel
+# (articles / products / prompts / shares), each with a "New {type} published by {member} 🎉" message and the
+# canonical link (Discord unfurls our OG tags into a rich card). Driven off the MERGE DIFF (files ADDED in the
+# push), so the backlog is never re-posted and no dedup state is needed. Metadata only: a members-only / Mode A
+# item posts its title only; the encrypted body is never read. Best-effort; re-run a batch via workflow_dispatch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'members/**'
+      - 'house/**'
+  workflow_dispatch:
+    inputs:
+      added:
+        description: 'Space-separated content paths to (re)announce (e.g. members/alice/posts/x/index.md)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: syndicate-content
+  cancel-in-progress: false
+
+jobs:
+  syndicate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the previous main HEAD to diff the merge
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --omit=optional
+
+      # The files ADDED in this push that are publishable content (posts/products/prompts index.md + shares).
+      # A reconcile draft<->published flip or an edit is a MODIFY, not an ADD, so it never re-announces.
+      - name: Compute added content paths
+        id: diff
+        # All event-controlled values flow through env (never interpolated into the script) so neither the
+        # dispatch input nor the commit refs can be a shell-injection sink.
+        env:
+          DISPATCH_ADDED: ${{ github.event.inputs.added }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "$DISPATCH_ADDED" ]; then
+            ADDED="$DISPATCH_ADDED"
+          else
+            BEFORE="$EVENT_BEFORE"
+            AFTER="$EVENT_SHA"
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              FILES=$(git show --diff-filter=A --name-only --format= "$AFTER")
+            else
+              FILES=$(git diff --diff-filter=A --name-only "$BEFORE" "$AFTER")
+            fi
+            # Strict charset (lowercase kebab owner/slug, no metacharacters) so a path can never carry a shell
+            # injection even though it is passed via an env var below.
+            ADDED=$(printf '%s\n' "$FILES" | grep -E '^(members/[a-z0-9][a-z0-9-]*|house)/(posts|products|prompts)/[a-z0-9][a-z0-9-]*/index\.md$|^members/[a-z0-9][a-z0-9-]*/shares/[a-z0-9][a-z0-9._-]*\.(md|mdx)$' | tr '\n' ' ' || true)
+          fi
+          echo "added=$ADDED" >> "$GITHUB_OUTPUT"
+          echo "Added content paths: ${ADDED:-<none>}"
+
+      - name: Syndicate (apply)
+        if: steps.diff.outputs.added != ''
+        # Paths flow through SYNDICATE_ADDED (env), never interpolated into the shell command -> no injection.
+        run: node scripts/syndicate-content.mjs --apply
+        env:
+          SYNDICATE_ADDED: ${{ steps.diff.outputs.added }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          # Per-type Discord channel ids (non-secret production constants; acting on them needs the bot token).
+          DISCORD_CHANNEL_POSTS: "1074035424625954877"
+          DISCORD_CHANNEL_PRODUCTS: "1516431096789733456"
+          DISCORD_CHANNEL_PROMPTS: "1516430200940789842"
+          DISCORD_CHANNEL_SHARES: "1084632127657746452"
+          # Enables real @mentions: resolve author -> github_id (members-index) -> Stripe customer.discord_user_id.
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          SITE_ORIGIN: "https://gbti.network"
+          # Optional JSON { "github_login": "discord_user_id" } for staff/grandfathered members not in Stripe.
+          DISCORD_MENTION_OVERRIDES: ${{ secrets.DISCORD_MENTION_OVERRIDES }}
