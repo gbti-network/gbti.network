@@ -6,7 +6,7 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getOnboardingStatus } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getOnboardingStatus } from '../../client/src/operations.mjs';
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText } from '../../client/src/roles.mjs';
@@ -69,11 +69,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         if (!item) throw new OperationError('not-found', 'no such item in your folder');
         return ok(item);
       }
-      case '/api/read': { // SOW-031: read ANY published content index.md (allowlist-gated) for the in-extension reader
-        const item = await ctx.reader.read?.(query.path);
-        if (!item) throw new OperationError('not-found', 'no such readable content');
-        return ok(item);
-      }
+      case '/api/read': // SOW-031: read ANY published content index.md (allowlist-gated) for the in-extension reader
+        return ok(await readContent(ctx, { path: query.path })); // shared op (parity with the npm host /api/read)
       case '/api/members-content':
         return ok({ items: await ctx.reader.listMembersOnly() });
       case '/api/form-fields':

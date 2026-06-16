@@ -14,6 +14,7 @@ import {
   publishShare,
   listShares,
   listShareComments,
+  readContent,
   publishComment,
   editComment,
   getComment,
@@ -78,6 +79,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/status') return { status: 200, json: getStatus(ctx) };
   if (method === 'GET' && pathname === '/api/content') return run(() => listContent(ctx, { type: query.type }));
   if (method === 'GET' && pathname === '/api/content/item') return run(() => getContentItem(ctx, { path: query.path }));
+  if (method === 'GET' && pathname === '/api/read') return run(() => readContent(ctx, { path: query.path })); // SOW-031: cross-member published-content read for the reader
   if (method === 'POST' && pathname === '/api/validate') return run(() => validateContent(ctx, body ?? {}));
   if (method === 'POST' && pathname === '/api/publish') return run(() => publish(ctx, body ?? {}));
   if (method === 'POST' && pathname === '/api/share') return run(() => publishShare(ctx, body ?? {})); // SOW-018

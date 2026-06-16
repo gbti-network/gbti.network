@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parseContentFile, shareSummary, byShareNewest, commentSummary, byCommentOldest } from './content-ops.mjs';
 import { rolesFromText } from './roles.mjs';
+import { isReadablePath } from '../../src/lib/content-index.mjs';
 
 const SUBDIR = Object.freeze({ post: 'posts', product: 'products', prompt: 'prompts' });
 const TYPES = ['post', 'product', 'prompt', 'profile'];
@@ -183,6 +184,21 @@ export function createReader(repoPath) {
       // an oldest-first array yields the newest `cap` in oldest-first order, so both hosts return the same set.
       const cap = Math.max(0, limit);
       return out.slice(Math.max(0, out.length - cap));
+    },
+
+    /**
+     * SOW-031: read ANY published content index.md for the in-extension reader (parity with the extension
+     * github-reader.read). Unlike get() (own-folder-scoped for editing), this is a cross-member READ over the
+     * local clone, gated by the SAME isReadablePath allowlist the extension uses (only posts/products/prompts
+     * index.md, no traversal, no roles.yml / house/pages) so the npm host is not a broader file oracle than the
+     * extension. Synchronous (local fs); returns { path, frontmatter, body } or null.
+     */
+    read(relPath) {
+      if (!repoPath || !isReadablePath(relPath)) return null;
+      const abs = path.join(repoPath, relPath);
+      if (!fs.existsSync(abs)) return null;
+      const { frontmatter, body } = parseContentFile(fs.readFileSync(abs, 'utf8'));
+      return { path: relPath, frontmatter, body };
     },
 
     /** Read one item (frontmatter + body), scoped to the member's own folder. Returns null if out of scope/missing. */

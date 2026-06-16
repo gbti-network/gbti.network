@@ -17361,6 +17361,12 @@ function rolesFromText(text) {
   }
 }
 
+// src/lib/content-index.mjs
+var READ_PATH_RE = /^(members\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
+function isReadablePath(path4) {
+  return typeof path4 === "string" && !path4.includes("..") && !path4.includes("\\") && READ_PATH_RE.test(path4);
+}
+
 // client/src/repo-fs.mjs
 var SUBDIR2 = Object.freeze({ post: "posts", product: "products", prompt: "prompts" });
 var TYPES = ["post", "product", "prompt", "profile"];
@@ -17539,6 +17545,20 @@ function createReader(repoPath) {
       out.sort(byCommentOldest);
       const cap = Math.max(0, limit);
       return out.slice(Math.max(0, out.length - cap));
+    },
+    /**
+     * SOW-031: read ANY published content index.md for the in-extension reader (parity with the extension
+     * github-reader.read). Unlike get() (own-folder-scoped for editing), this is a cross-member READ over the
+     * local clone, gated by the SAME isReadablePath allowlist the extension uses (only posts/products/prompts
+     * index.md, no traversal, no roles.yml / house/pages) so the npm host is not a broader file oracle than the
+     * extension. Synchronous (local fs); returns { path, frontmatter, body } or null.
+     */
+    read(relPath) {
+      if (!repoPath || !isReadablePath(relPath)) return null;
+      const abs = path2.join(repoPath, relPath);
+      if (!fs2.existsSync(abs)) return null;
+      const { frontmatter, body } = parseContentFile(fs2.readFileSync(abs, "utf8"));
+      return { path: relPath, frontmatter, body };
     },
     /** Read one item (frontmatter + body), scoped to the member's own folder. Returns null if out of scope/missing. */
     get(username, relPath) {

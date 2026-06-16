@@ -3,6 +3,7 @@
 // search filter, the theme toggle (persisted, no-flash on next load), and the on/off takeover toggle.
 
 import { isLockedMembership } from '../../client/src/membership.mjs';
+import { buildReadHash } from '../../client-ui/src/browse-hash.mjs';
 
 const SITE = 'https://gbti.network';
 
@@ -74,13 +75,16 @@ function renderFeed(filter = '') {
     return;
   }
   feed.innerHTML = rows
-    .map(
-      (e) => `<a class="row" href="${SITE}${esc(e.url)}">
+    .map((e) => {
+      // SOW-031: open the item IN the extension reader (browse.html deep-link) instead of navigating out to
+      // gbti.network. Fall back to the site URL only if the entry carries no repo path (older index, defensive).
+      const href = e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url}`;
+      return `<a class="row" href="${esc(href)}">
         <span class="badge">${esc(TYPE_LABEL[e.type] || e.type)}</span>
         <span class="title">${e.visibility === 'members' ? '<span class="mlock" title="Members only">🔒 </span>' : ''}${esc(e.title)}</span>
         <span class="meta">${esc(authorName(e.author))}${e.publishedAt ? ` · ${esc(relTime(e.publishedAt))}` : ''}</span>
-      </a>`,
-    )
+      </a>`;
+    })
     .join('');
 }
 

@@ -44,12 +44,14 @@ const CSS = `
 
 class GbtiWorkspace extends GbtiElement {
   connectedCallback() {
-    super.connectedCallback?.();
+    // Initialize state BEFORE super.connectedCallback(), which synchronously calls render() (base.mjs) -> _body()
+    // dereferences this._cache/_tab, so they must exist first; otherwise a TypeError aborts the whole mount and
+    // the workspace renders nothing. (Same fix as gbti-browse.)
     this._tab = 'post';
     this._cache = {};   // type -> items[]
     this._prs = null;   // { prs }
     this._editing = null;
-    this.render();
+    super.connectedCallback?.(); // base now renders the initial view with fields in place
     this._loadProfile();
     this._ensureTab('post');
   }
@@ -134,7 +136,7 @@ class GbtiWorkspace extends GbtiElement {
         <span class="t"><b>${esc(pr.title || ('PR #' + pr.number))}</b><span class="meta"><a href="${esc(pr.html_url || '#')}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span></span>
         <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join('')}</ul>`;
     }
-    const items = this._cache[tab.type];
+    const items = this._cache?.[tab?.type]; // optional chain: never throw if render runs before init
     if (!items) return `<p class="empty">Loading...</p>`;
     if (items.length === 0) return `<p class="empty">No ${esc(tab.label.toLowerCase())} yet.</p>`;
     return `<ul class="rows">${items.map((it, i) => {

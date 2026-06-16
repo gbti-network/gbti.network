@@ -3,6 +3,8 @@
 // existing authenticated <gbti-shares-feed>). A row opens <gbti-reader> in a detail pane IN the extension,
 // never navigating to gbti.network. Host-agnostic. Fail-soft: an unreachable index renders an empty state.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { parseBrowseHash } from '../browse-hash.mjs';
+import { resolveAsset } from '../assets.mjs';
 import './gbti-reader.mjs';
 import './gbti-shares-feed.mjs';
 
@@ -24,7 +26,8 @@ const CSS = `
   .row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 2px; border-top:1px solid var(--line); cursor:pointer; }
   .row:first-child { border-top:0; }
   .row:hover { background:var(--hover); }
-  .row .t { min-width:0; }
+  .row .thumb { flex:none; width:46px; height:46px; object-fit:cover; border-radius:8px; background:var(--hover); border:1px solid var(--line); }
+  .row .t { min-width:0; flex:1; }
   .row .t b { display:block; font-size:15px; }
   .row .t .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row .t .meta { color:var(--muted); font-size:12px; margin-top:2px; }
@@ -36,13 +39,30 @@ const CSS = `
 
 class GbtiBrowse extends GbtiElement {
   connectedCallback() {
-    super.connectedCallback?.();
-    const m = (typeof location !== 'undefined' ? location.hash : '').match(/tab=([a-z]+)/);
-    this._tab = m && TABS.some((t) => t.id === m[1]) ? m[1] : 'post';
+    // Initialize state BEFORE super.connectedCallback(), which synchronously calls render() (base.mjs) -> _body()
+    // dereferences this._cache/_tab, so they must exist first; otherwise a TypeError aborts the whole mount
+    // (including _init below) and the page renders nothing.
+    // SOW-031: the hash carries tab + an optional read=<repo path> deep-link (set by the new-tab feed rows), so a
+    // click on a Latest/Following row lands here and auto-opens that item in the reader instead of gbti.network.
+    const { tab, read } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
+    this._tab = tab && TABS.some((t) => t.id === tab) ? tab : 'post';
+    this._openPath = this._tab !== 'share' ? read : null; // shares have no path-addressed reader item
     this._cache = {};
     this._reading = null;
-    this.render();
-    this._ensure(this._tab);
+    super.connectedCallback?.(); // base now renders the initial list with fields in place
+    this._init();
+  }
+
+  // Load the active tab's index, then (if deep-linked via read=<path>) open that item in the reader.
+  async _init() {
+    await this._ensure(this._tab);
+    if (this._openPath) {
+      const found = (this._cache[this._tab] || []).find((x) => x.path === this._openPath);
+      // Found -> open the rich index item; not found (race / pruned) -> a minimal item the reader fetches by path.
+      this._reading = found || { type: this._tab, path: this._openPath };
+      this._openPath = null;
+      this.render();
+    }
   }
 
   async _ensure(id) {
@@ -52,7 +72,8 @@ class GbtiBrowse extends GbtiElement {
       const res = await fetch(`${SITE}/${tab.json}`, { cache: 'no-cache' });
       this._cache[id] = res.ok ? ((await res.json()).items || []) : [];
     } catch { this._cache[id] = []; }
-    if (this._tab === id && !this._reading) this.render();
+    // Do not flash the list when a deep-link open is pending (_init will render the reader next).
+    if (this._tab === id && !this._reading && !this._openPath) this.render();
   }
 
   render() {
@@ -79,12 +100,16 @@ class GbtiBrowse extends GbtiElement {
 
   _body() {
     if (this._tab === 'share') return `<gbti-shares-feed></gbti-shares-feed>`;
-    const items = this._cache[this._tab];
+    const items = this._cache?.[this._tab]; // optional chain: never throw if render runs before init
     if (!items) return `<p class="empty">Loading...</p>`;
     if (!items.length) return `<p class="empty">Nothing here yet.</p>`;
-    return `<ul class="rows">${items.map((it, i) => `<li class="row" data-open="${i}">
+    return `<ul class="rows">${items.map((it, i) => {
+      const thumb = resolveAsset(it.thumb);
+      const img = thumb ? `<img class="thumb" src="${esc(thumb)}" alt="" loading="lazy">` : '';
+      return `<li class="row" data-open="${i}">${img}
       <span class="t"><b>${esc(it.title)}</b>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ''}<span class="meta">${esc(authorName(it.author))}${it.visibility === 'members' ? ' · members' : ''}</span></span>
-      <span class="go">Read &rarr;</span></li>`).join('')}</ul>`;
+      <span class="go">Read &rarr;</span></li>`;
+    }).join('')}</ul>`;
   }
 }
 

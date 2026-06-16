@@ -17,6 +17,32 @@ export function contentItemPath(type, owner, slug) {
   return `members/${o}/${sub}/${slug}/index.md`;
 }
 
+// The image field(s) that supply a card thumbnail per type, in preference order. A product prefers its square
+// `icon` for a list-row thumb (then the 16:10 featuredImage, then banner); posts use coverImage; prompts use image.
+const THUMB_FIELDS = { post: ['coverImage'], product: ['icon', 'featuredImage', 'banner'], prompt: ['image'] };
+
+/** Resolve one image field value to a URL string the in-extension UI can render. An Astro `image()` field is an
+ *  ImageMetadata object ({ src, width, height }), so we emit its build-optimized `.src` (a SITE-relative
+ *  `/_astro/...` path the UI prefixes with the gbti.network origin); a plain string (tests / a raw path) passes
+ *  through. Returns null for anything else. NOT the Astro build hash leaking out: the index JSON is rebuilt every
+ *  deploy in lockstep with `/_astro`, so the `.src` it carries always matches the live optimized asset. */
+function imageSrc(v) {
+  if (!v) return null;
+  if (typeof v === 'string') return v || null;
+  if (typeof v === 'object' && typeof v.src === 'string') return v.src || null;
+  return null;
+}
+
+/** The thumbnail URL (SITE-relative or absolute) for a content item, or null when it has no usable image. */
+export function thumbOf(data, type) {
+  const d = data || {};
+  for (const f of THUMB_FIELDS[type] || []) {
+    const src = imageSrc(d[f]);
+    if (src) return src;
+  }
+  return null;
+}
+
 /** Map a content collection entry to a metadata index item (no body). The caller filters (isListed) + sorts. */
 export function toIndexItem(entry, type) {
   const d = (entry && entry.data) || {};
@@ -30,6 +56,7 @@ export function toIndexItem(entry, type) {
     excerpt: d.excerpt || d.shortDescription || '',
     url: `${URLBASE[type] || ''}/${slug}/`,
     path: contentItemPath(type, author, slug),
+    thumb: thumbOf(d, type), // SOW-031: a card thumbnail URL (SITE-relative `/_astro/...` or null), resolved in the UI
     publishedAt: d.publishedAt ? Number(d.publishedAt) : null,
     visibility: d.visibility || 'public',
   };

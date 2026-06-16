@@ -4567,12 +4567,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 `;
   var GbtiWorkspace = class extends GbtiElement {
     connectedCallback() {
-      super.connectedCallback?.();
       this._tab = "post";
       this._cache = {};
       this._prs = null;
       this._editing = null;
-      this.render();
+      super.connectedCallback?.();
       this._loadProfile();
       this._ensureTab("post");
     }
@@ -4666,7 +4665,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <span class="t"><b>${esc(pr.title || "PR #" + pr.number)}</b><span class="meta"><a href="${esc(pr.html_url || "#")}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span></span>
         <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join("")}</ul>`;
       }
-      const items = this._cache[tab.type];
+      const items = this._cache?.[tab?.type];
       if (!items) return `<p class="empty">Loading...</p>`;
       if (items.length === 0) return `<p class="empty">No ${esc(tab.label.toLowerCase())} yet.</p>`;
       return `<ul class="rows">${items.map((it, i) => {
@@ -4698,8 +4697,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-workspace", GbtiWorkspace);
 
-  // client-ui/src/elements/gbti-reader.mjs
+  // client-ui/src/assets.mjs
   var SITE2 = "https://gbti.network";
+  function resolveAsset(thumb, site = SITE2) {
+    if (!thumb || typeof thumb !== "string") return null;
+    if (/^https?:\/\//.test(thumb)) return thumb;
+    if (/^\/\//.test(thumb)) return `https:${thumb}`;
+    return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
+  }
+
+  // client-ui/src/elements/gbti-reader.mjs
+  var SITE3 = "https://gbti.network";
   var authorName2 = (a) => a === "gbti" ? "GBTI Network" : a;
   var TYPE_LABEL = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
@@ -4709,12 +4717,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE2}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE3}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
   var CSS12 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   article { max-width:680px; margin:0 auto; }
   h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
   .meta { color:var(--muted); font-size:13px; margin:0 0 18px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .cover { display:block; width:100%; max-height:340px; object-fit:cover; border-radius:12px; border:1px solid var(--line); margin:0 0 20px; }
   .badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); background:var(--hover); border-radius:999px; padding:2px 9px; }
   .body { font-size:15.5px; line-height:1.7; }
   .body h1,.body h2,.body h3 { font-family:var(--font-display); margin:1.4em 0 .5em; }
@@ -4773,19 +4782,39 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const t = TYPE_LABEL[it.type] || it.type || "";
-      const view = it.url ? `<a class="view" href="${esc(SITE2 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it.url ? `<a class="view" href="${esc(SITE3 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName2(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ""}</div>`;
+      const coverUrl = resolveAsset(it.thumb);
+      const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
       else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
-      this.set(this.css(CSS12) + `<article><h1>${esc(it.title || "")}</h1>${meta}${body}${view}</article>`);
+      this.set(this.css(CSS12) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>`);
     }
   };
   define("gbti-reader", GbtiReader);
 
+  // client-ui/src/browse-hash.mjs
+  var TAB_IDS = /* @__PURE__ */ new Set(["post", "product", "prompt", "share"]);
+  function parseBrowseHash(hash) {
+    const s = String(hash || "").replace(/^#/, "");
+    const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+    const readM = s.match(/(?:^|&)read=([^&]+)/);
+    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
+    let read = null;
+    if (readM) {
+      try {
+        read = decodeURIComponent(readM[1]);
+      } catch {
+        read = readM[1];
+      }
+    }
+    return { tab, read };
+  }
+
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE3 = "https://gbti.network";
+  var SITE4 = "https://gbti.network";
   var TABS2 = [
     { id: "post", label: "Blog", json: "blog-index.json" },
     { id: "product", label: "Products", json: "products-index.json" },
@@ -4802,7 +4831,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 2px; border-top:1px solid var(--line); cursor:pointer; }
   .row:first-child { border-top:0; }
   .row:hover { background:var(--hover); }
-  .row .t { min-width:0; }
+  .row .thumb { flex:none; width:46px; height:46px; object-fit:cover; border-radius:8px; background:var(--hover); border:1px solid var(--line); }
+  .row .t { min-width:0; flex:1; }
   .row .t b { display:block; font-size:15px; }
   .row .t .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row .t .meta { color:var(--muted); font-size:12px; margin-top:2px; }
@@ -4813,24 +4843,34 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 `;
   var GbtiBrowse = class extends GbtiElement {
     connectedCallback() {
-      super.connectedCallback?.();
-      const m = (typeof location !== "undefined" ? location.hash : "").match(/tab=([a-z]+)/);
-      this._tab = m && TABS2.some((t) => t.id === m[1]) ? m[1] : "post";
+      const { tab, read } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
+      this._tab = tab && TABS2.some((t) => t.id === tab) ? tab : "post";
+      this._openPath = this._tab !== "share" ? read : null;
       this._cache = {};
       this._reading = null;
-      this.render();
-      this._ensure(this._tab);
+      super.connectedCallback?.();
+      this._init();
+    }
+    // Load the active tab's index, then (if deep-linked via read=<path>) open that item in the reader.
+    async _init() {
+      await this._ensure(this._tab);
+      if (this._openPath) {
+        const found = (this._cache[this._tab] || []).find((x) => x.path === this._openPath);
+        this._reading = found || { type: this._tab, path: this._openPath };
+        this._openPath = null;
+        this.render();
+      }
     }
     async _ensure(id) {
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE3}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE4}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
       }
-      if (this._tab === id && !this._reading) this.render();
+      if (this._tab === id && !this._reading && !this._openPath) this.render();
     }
     render() {
       if (this._reading) {
@@ -4866,12 +4906,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _body() {
       if (this._tab === "share") return `<gbti-shares-feed></gbti-shares-feed>`;
-      const items = this._cache[this._tab];
+      const items = this._cache?.[this._tab];
       if (!items) return `<p class="empty">Loading...</p>`;
       if (!items.length) return `<p class="empty">Nothing here yet.</p>`;
-      return `<ul class="rows">${items.map((it, i) => `<li class="row" data-open="${i}">
+      return `<ul class="rows">${items.map((it, i) => {
+        const thumb = resolveAsset(it.thumb);
+        const img = thumb ? `<img class="thumb" src="${esc(thumb)}" alt="" loading="lazy">` : "";
+        return `<li class="row" data-open="${i}">${img}
       <span class="t"><b>${esc(it.title)}</b>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}<span class="meta">${esc(authorName3(it.author))}${it.visibility === "members" ? " · members" : ""}</span></span>
-      <span class="go">Read &rarr;</span></li>`).join("")}</ul>`;
+      <span class="go">Read &rarr;</span></li>`;
+      }).join("")}</ul>`;
     }
   };
   define("gbti-browse", GbtiBrowse);

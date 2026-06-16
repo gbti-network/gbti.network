@@ -6,6 +6,7 @@
 // (consumes only the injected client). Honest limit: this is the CMS markdown renderer, not the full Astro
 // pipeline, so "View on gbti.network" stays in the header for pixel-perfect / interactive parity.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { resolveAsset } from '../assets.mjs';
 
 const SITE = 'https://gbti.network';
 const authorName = (a) => (a === 'gbti' ? 'GBTI Network' : a);
@@ -18,6 +19,7 @@ const CSS = `
   article { max-width:680px; margin:0 auto; }
   h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
   .meta { color:var(--muted); font-size:13px; margin:0 0 18px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .cover { display:block; width:100%; max-height:340px; object-fit:cover; border-radius:12px; border:1px solid var(--line); margin:0 0 20px; }
   .badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); background:var(--hover); border-radius:999px; padding:2px 9px; }
   .body { font-size:15.5px; line-height:1.7; }
   .body h1,.body h2,.body h3 { font-family:var(--font-display); margin:1.4em 0 .5em; }
@@ -74,11 +76,13 @@ class GbtiReader extends GbtiElement {
     const t = TYPE_LABEL[it.type] || it.type || '';
     const view = it.url ? `<a class="view" href="${esc(SITE + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : '';
     const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ''}</div>`;
+    const coverUrl = resolveAsset(it.thumb); // SOW-031: the index item's thumbnail, shown as a cover above the body
+    const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : '';
     let body;
     if (this._html === null) body = `<p class="muted">Loading...</p>`;
     else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
     else body = `<div class="body">${typeof this._html === 'string' ? this._html : ''}</div>`;
-    this.set(this.css(CSS) + `<article><h1>${esc(it.title || '')}</h1>${meta}${body}${view}</article>`);
+    this.set(this.css(CSS) + `<article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}</article>`);
   }
 }
 

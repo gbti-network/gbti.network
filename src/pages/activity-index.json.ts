@@ -6,10 +6,13 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { isListed } from '../lib/content';
 import { buildActivityIndex } from '../lib/activity.mjs';
+import { contentItemPath } from '../lib/content-index.mjs';
 
 // SOW-023: `visibility` lets the extension "Following" feed know which entries are member-only (a Mode B stub)
 // so it renders them locked until decrypted via the SOW-016 Worker. Mode A items are already excluded (isListed).
-type ActivityEntry = { type: 'post' | 'product' | 'prompt'; slug: string; title: string; author: string; url: string; publishedAt: number | null; visibility: 'public' | 'members' };
+// SOW-031: `path` is the repo-relative index.md path so a feed-row click can deep-link into the in-extension
+// reader (browse.html#tab=<type>&read=<path>) instead of navigating out to gbti.network.
+type ActivityEntry = { type: 'post' | 'product' | 'prompt'; slug: string; title: string; author: string; url: string; path: string | null; publishedAt: number | null; visibility: 'public' | 'members' };
 
 export const prerender = true;
 
@@ -17,13 +20,13 @@ const ms = (d: Date | undefined) => (d ? Number(d) : null);
 
 export const GET: APIRoute = async () => {
   const posts = (await getCollection('post')).filter(isListed).map((p): ActivityEntry => ({
-    type: 'post', slug: p.data.slug, title: p.data.title, author: p.data.author, url: `/blog/${p.data.slug}/`, publishedAt: ms(p.data.publishedAt), visibility: p.data.visibility,
+    type: 'post', slug: p.data.slug, title: p.data.title, author: p.data.author, url: `/blog/${p.data.slug}/`, path: contentItemPath('post', p.data.author, p.data.slug), publishedAt: ms(p.data.publishedAt), visibility: p.data.visibility,
   }));
   const products = (await getCollection('product')).filter(isListed).map((p): ActivityEntry => ({
-    type: 'product', slug: p.data.slug, title: p.data.title, author: p.data.author, url: `/products/${p.data.slug}/`, publishedAt: ms(p.data.publishedAt), visibility: p.data.visibility,
+    type: 'product', slug: p.data.slug, title: p.data.title, author: p.data.author, url: `/products/${p.data.slug}/`, path: contentItemPath('product', p.data.author, p.data.slug), publishedAt: ms(p.data.publishedAt), visibility: p.data.visibility,
   }));
   const prompts = (await getCollection('prompt')).filter(isListed).map((p): ActivityEntry => ({
-    type: 'prompt', slug: p.data.slug, title: p.data.title, author: p.data.author, url: `/prompts/${p.data.slug}/`, publishedAt: ms(p.data.publishedAt), visibility: p.data.visibility,
+    type: 'prompt', slug: p.data.slug, title: p.data.title, author: p.data.author, url: `/prompts/${p.data.slug}/`, path: contentItemPath('prompt', p.data.author, p.data.slug), publishedAt: ms(p.data.publishedAt), visibility: p.data.visibility,
   }));
   // SOW-018: Shares are deliberately EXCLUDED here. Shares are an extension-only experience (no public website
   // surface), so they never appear in this public activity index; the extension reads them directly (authenticated).

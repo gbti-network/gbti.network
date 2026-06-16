@@ -18102,6 +18102,14 @@ async function listShareComments(ctx, { targetSlug, limit } = {}) {
   if (typeof ctx.reader?.listShareComments !== "function") return { items: [] };
   return { items: await ctx.reader.listShareComments(targetSlug, n) ?? [] };
 }
+async function readContent(ctx, { path } = {}) {
+  requireIdentity(ctx);
+  if (!path || typeof path !== "string") throw new OperationError("bad-request", "path is required");
+  if (typeof ctx.reader?.read !== "function") throw new OperationError("not-found", "no such readable content");
+  const item = await ctx.reader.read(path);
+  if (!item) throw new OperationError("not-found", "no such readable content");
+  return item;
+}
 function validateContent(ctx, { type, input, body } = {}) {
   const id = requireIdentity(ctx);
   try {
@@ -18659,11 +18667,9 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         if (!item) throw new OperationError("not-found", "no such item in your folder");
         return ok(item);
       }
-      case "/api/read": {
-        const item = await ctx.reader.read?.(query.path);
-        if (!item) throw new OperationError("not-found", "no such readable content");
-        return ok(item);
-      }
+      case "/api/read":
+        return ok(await readContent(ctx, { path: query.path }));
+      // shared op (parity with the npm host /api/read)
       case "/api/members-content":
         return ok({ items: await ctx.reader.listMembersOnly() });
       case "/api/form-fields":

@@ -2373,6 +2373,13 @@
     return LOCKED_MEMBERSHIP.has(membership);
   }
 
+  // client-ui/src/browse-hash.mjs
+  var TAB_IDS = /* @__PURE__ */ new Set(["post", "product", "prompt", "share"]);
+  function buildReadHash(type, path) {
+    const t = TAB_IDS.has(type) ? type : "post";
+    return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
+  }
+
   // extension/src/newtab.mjs
   var SITE = "https://gbti.network";
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
@@ -2424,13 +2431,14 @@
       feed.innerHTML = `<p class="muted">${empty}</p>`;
       return;
     }
-    feed.innerHTML = rows.map(
-      (e) => `<a class="row" href="${SITE}${esc(e.url)}">
+    feed.innerHTML = rows.map((e) => {
+      const href = e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url}`;
+      return `<a class="row" href="${esc(href)}">
         <span class="badge">${esc(TYPE_LABEL[e.type] || e.type)}</span>
         <span class="title">${e.visibility === "members" ? '<span class="mlock" title="Members only">🔒 </span>' : ""}${esc(e.title)}</span>
         <span class="meta">${esc(authorName(e.author))}${e.publishedAt ? ` · ${esc(relTime(e.publishedAt))}` : ""}</span>
-      </a>`
-    ).join("");
+      </a>`;
+    }).join("");
   }
   async function loadFollows() {
     FOLLOWS_LOADED = true;

@@ -1,7 +1,7 @@
 // SOW-031: the per-type content index path derivation + the reader read-route allowlist. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { contentItemPath, toIndexItem, isReadablePath, READ_PATH_RE } from '../src/lib/content-index.mjs';
+import { contentItemPath, toIndexItem, thumbOf, isReadablePath, READ_PATH_RE } from '../src/lib/content-index.mjs';
 
 test('contentItemPath: member owner -> members/<owner>/<sub>/<slug>/index.md', () => {
   assert.equal(contentItemPath('post', 'hudson', 'my-post'), 'members/hudson/posts/my-post/index.md');
@@ -28,6 +28,30 @@ test('toIndexItem: metadata only, derives url + path, never a body', () => {
   assert.equal(it.excerpt, 'hi');
   assert.ok(!('body' in it) && !('encryptedBody' in it), 'no body / no enc path in the public index');
   assert.equal(it.author, 'hudson');
+});
+
+test('thumbOf: per-type field + Astro image()/string normalization, null fallback (SOW-031)', () => {
+  // post -> coverImage; an Astro image() field is an ImageMetadata object, so emit its build-optimized .src
+  assert.equal(thumbOf({ coverImage: { src: '/_astro/cover.abc.webp', width: 1200 } }, 'post'), '/_astro/cover.abc.webp');
+  // product -> icon preferred, then featuredImage, then banner
+  assert.equal(thumbOf({ icon: { src: '/_astro/i.webp' }, featuredImage: { src: '/_astro/f.webp' } }, 'product'), '/_astro/i.webp');
+  assert.equal(thumbOf({ featuredImage: { src: '/_astro/f.webp' } }, 'product'), '/_astro/f.webp');
+  assert.equal(thumbOf({ banner: { src: '/_astro/b.webp' } }, 'product'), '/_astro/b.webp');
+  // prompt -> image; a plain string passes through (tests / a raw path)
+  assert.equal(thumbOf({ image: '/_astro/p.webp' }, 'prompt'), '/_astro/p.webp');
+  // no image -> null (graceful: the UI renders no <img>)
+  assert.equal(thumbOf({}, 'post'), null);
+  assert.equal(thumbOf({ coverImage: null }, 'post'), null);
+  assert.equal(thumbOf({ coverImage: {} }, 'post'), null); // object without .src
+  assert.equal(thumbOf({ image: { src: '/_astro/x.webp' } }, 'share'), null); // unsupported type
+});
+
+test('toIndexItem: carries the thumb (SOW-031), still no body', () => {
+  const it = toIndexItem({ data: { slug: 'p', title: 'P', author: 'gbti', coverImage: { src: '/_astro/c.webp' } } }, 'post');
+  assert.equal(it.thumb, '/_astro/c.webp');
+  const none = toIndexItem({ data: { slug: 'q', title: 'Q', author: 'gbti' } }, 'post');
+  assert.equal(none.thumb, null);
+  assert.ok(!('body' in it), 'no body in the public index');
 });
 
 test('isReadablePath: only published content index.md in the three subtrees, no traversal / no oracle', () => {

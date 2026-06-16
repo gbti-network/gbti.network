@@ -102,6 +102,23 @@ export async function listShareComments(ctx, { targetSlug, limit } = {}) {
   return { items: (await ctx.reader.listShareComments(targetSlug, n)) ?? [] };
 }
 
+/**
+ * SOW-031: read ANY published content index.md for the in-extension reader (cross-member, allowlist-gated),
+ * unlike getContentItem which is own-folder-scoped for editing. The reader's `read` enforces isReadablePath
+ * (only posts/products/prompts index.md, no traversal), so the member token / local clone cannot become a
+ * general file-exfil oracle. Async so the SAME op serves the sync npm reader (repo-fs) and the async extension
+ * (github) reader. requireIdentity only: the body is public-repo content (a members body comes back gated, its
+ * .enc decrypted client-side via the Worker), but gating on a signed-in identity matches the extension dispatch.
+ */
+export async function readContent(ctx, { path } = {}) {
+  requireIdentity(ctx);
+  if (!path || typeof path !== 'string') throw new OperationError('bad-request', 'path is required');
+  if (typeof ctx.reader?.read !== 'function') throw new OperationError('not-found', 'no such readable content');
+  const item = await ctx.reader.read(path);
+  if (!item) throw new OperationError('not-found', 'no such readable content');
+  return item;
+}
+
 export function getContentItem(ctx, { path } = {}) {
   const id = requireIdentity(ctx);
   if (!path) throw new OperationError('bad-request', 'path is required');
