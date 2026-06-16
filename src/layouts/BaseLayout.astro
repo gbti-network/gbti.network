@@ -12,6 +12,7 @@ import Footer from '../components/Footer.astro';
 import SigninModal from '../components/SigninModal.astro';
 import ReferralCapture from '../components/ReferralCapture.astro';
 import CookieConsent from '../components/CookieConsent.astro';
+import Analytics from '../components/Analytics.astro';
 
 interface Props {
   title?: string;
@@ -75,6 +76,9 @@ const ogImageUrl = new URL(ogImage || DEFAULT_OG_IMAGE, Astro.site).href;
     <meta name="twitter:card" content={ogImageUrl ? 'summary_large_image' : 'summary'} />
 
     <meta name="generator" content={Astro.generator} />
+
+    {/* SOW-024: GA4 loader, defined here but fired only by the CookieConsent hook (consent-gated). */}
+    <Analytics />
   </head>
   <body class="flex min-h-screen flex-col">
     <a
