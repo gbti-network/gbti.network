@@ -18,5 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci --ignore-scripts --omit=optional
+      # Keep --ignore-scripts (no lifecycle scripts run in CI), but do NOT omit optional deps: esbuild ships
+      # its platform binary (@esbuild/linux-x64) as an optionalDependency, and test/extension-build-define.test.mjs
+      # invokes esbuild. --omit=optional made that binary absent, failing the build-define guards in CI only.
+      - run: npm ci --ignore-scripts
       - run: npm test
