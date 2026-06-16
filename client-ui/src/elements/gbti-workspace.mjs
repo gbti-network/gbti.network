@@ -78,14 +78,23 @@ class GbtiWorkspace extends GbtiElement {
   }
 
   _loadPrStatuses() {
-    for (const pr of this._prs || []) this._loadPrStatus(pr.number);
+    for (const pr of this._prs || []) {
+      // SOW-033 P4: a merged/closed PR is already terminal (classifyPull decides Accepted/Declined from
+      // pr.state/merged, ignoring the gate), so label it immediately and skip the per-PR gate fetch — one fewer
+      // API call per terminal PR, and the label shows instantly instead of waiting on the network.
+      if (pr.merged === true || pr.state === 'closed' || pr.state === 'merged') this._renderPrLabel(pr, null);
+      else this._loadPrStatus(pr.number);
+    }
   }
   async _loadPrStatus(number) {
     let status = null;
     try { status = await this.client?.prStatus?.({ number }); } catch { /* leave null */ }
     const pr = (this._prs || []).find((p) => p.number === number);
-    const tag = this.$(`.gate[data-n="${number}"]`);
-    if (!pr || !tag) return;
+    if (pr) this._renderPrLabel(pr, status);
+  }
+  _renderPrLabel(pr, status) {
+    const tag = this.$(`.gate[data-n="${pr.number}"]`);
+    if (!tag) return;
     const { label, tone } = classifyPull(pr, status);
     tag.className = `gate tag ${tone}`;
     tag.textContent = label;

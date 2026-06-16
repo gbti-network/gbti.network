@@ -95,7 +95,10 @@ export async function openPullForMember(request, env, deps = {}) {
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   let user;
   try { user = await fetchUser(token, fetchImpl); } catch { return { status: 401, body: { error: 'unauthorized' } }; }
-  const login = String(user?.login || '').toLowerCase();
+  // githubFetchUser returns { githubId, githubLogin } (oauth.mjs); read githubLogin (the `login` fallback keeps
+  // any other-shaped caller working). Reading the wrong key silently emptied the login and 401'd every app-mode
+  // publish/read in production while test stubs that used `login` masked it.
+  const login = String(user?.githubLogin || user?.login || '').toLowerCase();
   if (!login || String(user?.githubId) !== String(paid.githubId)) return { status: 401, body: { error: 'unauthorized', message: 'could not verify the member identity' } };
 
   let payload;
@@ -131,7 +134,9 @@ async function authMemberLogin(request, { fetchImpl, fetchUser }) {
   if (!token) return { ok: false, status: 401, body: { error: 'unauthorized', message: 'a GitHub bearer token is required' } };
   let user;
   try { user = await fetchUser(token, fetchImpl); } catch { return { ok: false, status: 401, body: { error: 'unauthorized', message: 'could not verify the GitHub token' } }; }
-  const login = String(user?.login || '').toLowerCase();
+  // githubFetchUser returns { githubId, githubLogin }; read githubLogin (with a `login` fallback). See the same
+  // note in openPullForMember: the prior user?.login read 401'd every app-mode my-pulls/pr-status in production.
+  const login = String(user?.githubLogin || user?.login || '').toLowerCase();
   if (!login) return { ok: false, status: 401, body: { error: 'unauthorized', message: 'the token has no user login' } };
   return { ok: true, login };
 }
@@ -148,12 +153,15 @@ export async function listMemberPulls(request, env, deps = {}) {
   if (!who.ok) return { status: who.status, body: who.body };
   let instToken;
   try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
-  const res = await fetchImpl(`${GH}/repos/${upstream}/pulls?state=open&per_page=100`, { headers: GH_HEADERS(instToken) });
+  // SOW-033 P4: state=all (open + closed + merged) sorted by recent activity, capped, so the workspace can show
+  // Accepted (merged) and Declined (closed). The headOwnerOf == who.login filter is UNCHANGED, so a member still
+  // only ever sees PRs opened from their own fork. The pulls-list object carries merged_at (set only when merged).
+  const res = await fetchImpl(`${GH}/repos/${upstream}/pulls?state=all&sort=updated&direction=desc&per_page=100`, { headers: GH_HEADERS(instToken) });
   if (!res || !res.ok) return { status: 502, body: { error: 'list_failed', message: `GitHub returned ${res ? res.status : 'no response'}` } };
   const list = await res.json().catch(() => []);
   const items = (Array.isArray(list) ? list : [])
     .filter((pr) => headOwnerOf(pr) === who.login)
-    .map((pr) => ({ number: pr.number, title: pr.title, html_url: pr.html_url }));
+    .map((pr) => ({ number: pr.number, title: pr.title, html_url: pr.html_url, state: pr.state, merged: Boolean(pr.merged_at) }));
   return { status: 200, body: { ok: true, items } };
 }
 

@@ -184,16 +184,28 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
       return p ? { number: p.number, html_url: p.html_url } : null;
     },
 
-    /** A member's open PRs upstream, with title + number + url. App mode (SOW-026): the fork-scoped token cannot
-     *  read the upstream + the PRs are opened by GBTI's App, so the Worker lists them scoped to the member's fork. */
+    /** A member's PRs upstream, with title + number + url + state + merged. SOW-033 P4: returns OPEN *and*
+     *  recently-updated CLOSED/MERGED PRs (newest activity first, capped) so the workspace can show Accepted
+     *  (merged) and Declined (closed) in addition to Proposed/Needs-changes. App mode (SOW-026): the fork-scoped
+     *  token cannot read the upstream + the PRs are opened by GBTI's App, so the Worker lists them scoped to the
+     *  member's fork (and likewise returns state + merged). The `author:`/head-owner scoping is unchanged: a
+     *  member only ever sees their own PRs. */
     async listMyPulls(login) {
       if (appMode) {
         const p = await callWorker('GET', '/membership/my-pulls');
         return p.items ?? [];
       }
-      const q = encodeURIComponent(`repo:${upstream} type:pr state:open author:${login}`);
-      const r = await req('GET', `/search/issues?q=${q}&per_page=100`);
-      return (r.items ?? []).map((i) => ({ number: i.number, title: i.title, html_url: i.html_url }));
+      // Drop `state:open` so merged/closed PRs are included; sort by recent activity and cap so an old PR history
+      // stays bounded. A search-issue result for a PR carries pull_request.merged_at (set only when merged).
+      const q = encodeURIComponent(`repo:${upstream} type:pr author:${login}`);
+      const r = await req('GET', `/search/issues?q=${q}&sort=updated&order=desc&per_page=100`);
+      return (r.items ?? []).map((i) => ({
+        number: i.number,
+        title: i.title,
+        html_url: i.html_url,
+        state: i.state ?? 'open',
+        merged: Boolean(i.pull_request?.merged_at),
+      }));
     },
 
     /** The gate status for a PR: { state, meaning, sha }. App mode (SOW-026): the Worker reads the upstream PR +

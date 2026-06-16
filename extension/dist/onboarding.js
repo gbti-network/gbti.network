@@ -4606,7 +4606,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (id === "prs") this._loadPrStatuses();
     }
     _loadPrStatuses() {
-      for (const pr of this._prs || []) this._loadPrStatus(pr.number);
+      for (const pr of this._prs || []) {
+        if (pr.merged === true || pr.state === "closed" || pr.state === "merged") this._renderPrLabel(pr, null);
+        else this._loadPrStatus(pr.number);
+      }
     }
     async _loadPrStatus(number) {
       let status2 = null;
@@ -4615,8 +4618,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
       }
       const pr = (this._prs || []).find((p) => p.number === number);
-      const tag = this.$(`.gate[data-n="${number}"]`);
-      if (!pr || !tag) return;
+      if (pr) this._renderPrLabel(pr, status2);
+    }
+    _renderPrLabel(pr, status2) {
+      const tag = this.$(`.gate[data-n="${pr.number}"]`);
+      if (!tag) return;
       const { label, tone } = classifyPull(pr, status2);
       tag.className = `gate tag ${tone}`;
       tag.textContent = label;

@@ -66,9 +66,10 @@ test('app mode findOpenPull is a no-op (no upstream read)', async () => {
 });
 
 test('app mode listMyPulls proxies to the Worker /membership/my-pulls (no upstream search)', async () => {
-  const { fetch, calls } = recorder({ '/membership/my-pulls': ghOk({ ok: true, items: [{ number: 7, title: 'Mine', html_url: 'u7' }] }) });
+  // SOW-033 P4: the Worker returns state + merged; the client passes its items through verbatim.
+  const { fetch, calls } = recorder({ '/membership/my-pulls': ghOk({ ok: true, items: [{ number: 7, title: 'Mine', html_url: 'u7', state: 'closed', merged: true }] }) });
   const r = await appClient(fetch).listMyPulls('alice');
-  assert.deepEqual(r, [{ number: 7, title: 'Mine', html_url: 'u7' }]);
+  assert.deepEqual(r, [{ number: 7, title: 'Mine', html_url: 'u7', state: 'closed', merged: true }]);
   const c = calls.find((c) => c.url.includes('/membership/my-pulls'));
   assert.equal(c.method, 'GET');
   assert.equal(c.auth, 'Bearer tok');
@@ -87,12 +88,24 @@ test('app mode gateStatus proxies to the Worker /membership/pr-status with the P
 
 test('classic mode listMyPulls + gateStatus still read the upstream directly (unchanged)', async () => {
   const { fetch, calls } = recorder({
-    '/search/issues': ghOk({ items: [{ number: 3, title: 'C', html_url: 'u3' }] }),
+    // SOW-033 P4: open + merged + closed PRs are returned, each with state + a merged flag (from pull_request.merged_at).
+    '/search/issues': ghOk({ items: [
+      { number: 3, title: 'C', html_url: 'u3', state: 'open' },
+      { number: 4, title: 'M', html_url: 'u4', state: 'closed', pull_request: { merged_at: '2026-06-01T00:00:00Z' } },
+      { number: 5, title: 'X', html_url: 'u5', state: 'closed', pull_request: { merged_at: null } },
+    ] }),
     '/pulls/3': ghOk({ head: { sha: 'sha3' } }),
     '/commits/sha3/status': ghOk({ state: 'success', statuses: [{ context: 'membership-gate', state: 'success' }] }),
   });
   const c = createRepoClient({ token: 'tok', upstream: UP, fetch, appMode: false, signupBase: SB });
-  assert.deepEqual(await c.listMyPulls('alice'), [{ number: 3, title: 'C', html_url: 'u3' }]);
+  assert.deepEqual(await c.listMyPulls('alice'), [
+    { number: 3, title: 'C', html_url: 'u3', state: 'open', merged: false },
+    { number: 4, title: 'M', html_url: 'u4', state: 'closed', merged: true },
+    { number: 5, title: 'X', html_url: 'u5', state: 'closed', merged: false },
+  ]);
+  // the search query no longer pins state:open (so closed/merged are returned), still scoped to author + repo
+  const search = calls.find((x) => x.url.includes('/search/issues'));
+  assert.ok(/author%3Aalice/.test(search.url) && !/state%3Aopen/.test(search.url), 'author-scoped, no state:open pin');
   const gs = await c.gateStatus(3);
   assert.equal(gs.meaning, 'mergeable');
   assert.ok(!calls.some((x) => x.url.includes('/membership/')), 'classic mode never hits the Worker');

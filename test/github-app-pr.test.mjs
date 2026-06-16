@@ -32,7 +32,9 @@ test('getInstallationToken reuses a fresh cached token (no mint)', async () => {
 
 // ---- openPullForMember ----
 const paidOk = async () => ({ ok: true, githubId: '1' });
-const userAlice = async () => ({ login: 'Alice', githubId: '1' });
+// Mirrors the REAL githubFetchUser shape { githubId, githubLogin } (oauth.mjs) so this stub can never again mask
+// a wrong-key read in authMemberLogin / openPullForMember (which previously read user.login and 401'd in prod).
+const userAlice = async () => ({ githubLogin: 'Alice', githubId: '1' });
 const req = (body) => ({ headers: { get: () => 'Bearer tok' }, json: async () => body });
 
 function prFetch(record) {
@@ -97,6 +99,28 @@ test('listMemberPulls returns ONLY the caller own-fork PRs (filtered by head own
   const r = await listMemberPulls(getReq(), env, { kv: fakeKv(), fetchImpl, signJwt, fetchUser: userAlice });
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.items.map((i) => i.number).sort(), [7, 9]);
+});
+
+test('listMemberPulls (SOW-033 P4): closed/merged included with state + merged, queries state=all, still head-owner scoped', async () => {
+  const pulls = [
+    { number: 7, title: 'Open', html_url: 'u7', state: 'open', head: { repo: { owner: { login: 'alice' } } } },
+    { number: 8, title: 'Merged', html_url: 'u8', state: 'closed', merged_at: '2026-06-01T00:00:00Z', head: { repo: { owner: { login: 'alice' } } } },
+    { number: 9, title: 'Declined', html_url: 'u9', state: 'closed', merged_at: null, head: { repo: { owner: { login: 'alice' } } } },
+    { number: 10, title: 'Theirs', html_url: 'u10', state: 'closed', merged_at: '2026-06-02T00:00:00Z', head: { repo: { owner: { login: 'bob' } } } }, // another member: excluded
+  ];
+  let pullsUrl = '';
+  const fetchImpl = async (url) => {
+    if (!/access_tokens$/.test(url)) pullsUrl = url;
+    return instOk(url) || { ok: true, async json() { return pulls; } };
+  };
+  const r = await listMemberPulls(getReq(), env, { kv: fakeKv(), fetchImpl, signJwt, fetchUser: userAlice });
+  assert.equal(r.status, 200);
+  assert.ok(pullsUrl.includes('state=all'), 'queries state=all so closed/merged PRs are returned');
+  assert.deepEqual(r.body.items, [
+    { number: 7, title: 'Open', html_url: 'u7', state: 'open', merged: false },
+    { number: 8, title: 'Merged', html_url: 'u8', state: 'closed', merged: true },
+    { number: 9, title: 'Declined', html_url: 'u9', state: 'closed', merged: false },
+  ], 'bob PR #10 excluded by head-owner scope; merged derived from merged_at');
 });
 
 test('listMemberPulls is unauthorized when the token does not resolve to a user', async () => {
