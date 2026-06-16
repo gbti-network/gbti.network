@@ -8,12 +8,14 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { classifyPull } from '../workspace-core.mjs';
 import './gbti-content-editor.mjs';
+import './gbti-contrib-inbox.mjs';
 
 const TABS = [
   { id: 'post', label: 'Articles', type: 'post' },
   { id: 'prompt', label: 'Prompts', type: 'prompt' },
   { id: 'product', label: 'Products', type: 'product' },
   { id: 'prs', label: 'Pull requests' },
+  { id: 'inbox', label: 'Inbox' },
 ];
 
 const CSS = `
@@ -68,6 +70,9 @@ class GbtiWorkspace extends GbtiElement {
   async _ensureTab(id) {
     const tab = TABS.find((t) => t.id === id);
     if (!tab) return;
+    // The Inbox tab is a self-loading <gbti-contrib-inbox> (it fetches its own data on connect), so there is
+    // nothing to preload here; render() already mounted it. Returning avoids a redundant second render/fetch.
+    if (id === 'inbox') return;
     if (tab.type && !this._cache[tab.type]) {
       try { this._cache[tab.type] = (await this.client?.listContent?.({ type: tab.type }))?.items ?? []; }
       catch { this._cache[tab.type] = []; }
@@ -128,6 +133,9 @@ class GbtiWorkspace extends GbtiElement {
 
   _body() {
     const tab = TABS.find((t) => t.id === this._tab);
+    // SOW-028: the incoming-contribution review inbox is its own self-loading element. It fetches + renders
+    // independently (and is inert with no client), so the workspace just mounts the tag.
+    if (this._tab === 'inbox') return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
     if (this._tab === 'prs') {
       const prs = this._prs;
       if (prs === null) return `<p class="empty">Loading your pull requests...</p>`;

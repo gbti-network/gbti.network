@@ -9,7 +9,9 @@
 //                              house content, members-index.yml).
 //   Member content:            members/**.
 
-import { ROLE } from './overrides.mjs';
+// ROLE comes from the node-free overrides-core (not overrides.mjs, which adds node:fs loaders): this module is
+// bundled into the browser client + MV3 extension (SOW-028 inbox), so it must not transitively pull in node:fs.
+import { ROLE } from './overrides-core.mjs';
 
 const CONTENT_DIRS = ['posts', 'products', 'prompts', 'comments'];
 const ROLE_RANK = { [ROLE.member]: 0, [ROLE.moderator]: 1, [ROLE.admin]: 2, [ROLE.superadmin]: 3 };
@@ -101,6 +103,20 @@ export function contributionTarget(paths, ownedFolder) {
   if (c.unclean.length || c.tierS.length || c.tierA.length || c.ownPaths.length) return null;
   if (c.otherOwners.length !== 1) return null;
   return c.otherOwners[0];
+}
+
+/**
+ * The OWNER-side mirror of contributionTarget (SOW-028, the in-client review inbox). True when a PR is an
+ * incoming contribution to `ownerFolder`: every changed path is canonical AND sits entirely inside
+ * members/<ownerFolder>/, with at least one path. Because every path is under the owner's own prefix, no
+ * other-member folder and no house/infra (Tier A/S) path can be present, so this exactly identifies the set
+ * the gate would classify as a contribution awaiting THIS owner's approval (the caller still excludes PRs the
+ * owner authored). Fail closed: no folder, a non-array, an empty list, or any unclean/out-of-folder path -> false.
+ */
+export function isContributionToFolder(paths, ownerFolder) {
+  if (!ownerFolder || !Array.isArray(paths) || paths.length === 0) return false;
+  const prefix = `members/${ownerFolder}/`;
+  return paths.every((p) => isCleanPath(p) && p.startsWith(prefix));
 }
 
 /** Which content types an own-folder PR publishes (for labelling/notification). */

@@ -208,6 +208,44 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
       }));
     },
 
+    /** Open upstream PRs ({ number, title, html_url, author:{login,id}, headSha, createdAt, updatedAt }), newest
+     *  first. SOW-028: the owner's contribution inbox lists these and keeps only the PRs whose files fall
+     *  entirely inside the owner's folder. App mode (SOW-026): the fork-scoped token cannot read the upstream, so
+     *  the Worker lists them (GBTI's App installation); classic reads the upstream directly. */
+    async listOpenPulls() {
+      if (appMode) {
+        const p = await callWorker('GET', '/membership/open-pulls');
+        return p.items ?? [];
+      }
+      const list = await req('GET', `/repos/${upstream}/pulls?state=open&sort=created&direction=desc&per_page=100`);
+      return (list ?? []).map((p) => ({
+        number: p.number,
+        title: p.title,
+        html_url: p.html_url,
+        author: { login: p.user?.login ?? null, id: p.user?.id != null ? String(p.user.id) : null },
+        headSha: p.head?.sha ?? null,
+        createdAt: p.created_at ?? null,
+        updatedAt: p.updated_at ?? null,
+      }));
+    },
+
+    /** The changed files of a PR ([{ filename, status, additions, deletions }]). SOW-028: used to scope an open
+     *  PR to the owner's folder (the inbox filter) and to render the diff. App mode (SOW-026): the Worker reads
+     *  the upstream files; classic reads them directly. */
+    async listPullFiles(prNumber) {
+      if (appMode) {
+        const p = await callWorker('GET', `/membership/pr-files?number=${encodeURIComponent(prNumber)}`);
+        return p.files ?? [];
+      }
+      const files = await req('GET', `/repos/${upstream}/pulls/${prNumber}/files?per_page=100`);
+      return (files ?? []).map((f) => ({
+        filename: f.filename,
+        status: f.status,
+        additions: f.additions ?? 0,
+        deletions: f.deletions ?? 0,
+      }));
+    },
+
     /** The gate status for a PR: { state, meaning, sha }. App mode (SOW-026): the Worker reads the upstream PR +
      *  combined status with GBTI's App installation, scoped to the member's own PR. Classic reads it directly. */
     async gateStatus(prNumber) {

@@ -23,6 +23,7 @@ import {
   deviceVerificationUrl, forkUrl, appInstallUrl, manageInstallsUrl,
 } from './onboarding.mjs';
 import { SIGNUP_BASE, GITHUB_APP_SLUG, UPSTREAM_REPO, isAppMode } from './signup-base.mjs';
+import { isContributionToFolder } from '../../membership/classify-pr.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
 
@@ -551,6 +552,51 @@ export async function prStatus(ctx, { number } = {}) {
   const n = Number(number);
   if (!Number.isInteger(n) || n <= 0) throw new OperationError('bad-request', 'a positive PR number is required');
   return repo.gateStatus(n);
+}
+
+/**
+ * SOW-028 P1: the signed-in member's contribution inbox. Returns the OPEN upstream PRs that another member
+ * opened against THIS member's folder (the gate's `contribution-pending-owner` set), awaiting this owner's
+ * review. It reuses the gate's own owner-side classifier (isContributionToFolder), so the inbox shows exactly
+ * the PRs the gate treats as a contribution to this folder, never a mixed or privilege-escalating PR. The
+ * owner's own PRs are excluded (those are the workspace "Pull requests" tab). Fail-soft per PR: a PR whose
+ * files cannot be read is skipped, not fatal. Read-only; approve/request-changes/decline is P3.
+ */
+export async function listIncomingContributions(ctx) {
+  const id = requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  const open = await repo.listOpenPulls();
+  const myId = id.githubId != null ? String(id.githubId) : null;
+  const myLogin = String(id.login || '').toLowerCase();
+  const out = [];
+  for (const pr of open) {
+    // Exclude the owner's own PRs (own-folder edits live in the workspace PR tab, not the review inbox).
+    const aId = pr.author?.id != null ? String(pr.author.id) : null;
+    const aLogin = String(pr.author?.login || '').toLowerCase();
+    if ((myId && aId && aId === myId) || (myLogin && aLogin && aLogin === myLogin)) continue;
+    let files;
+    try {
+      files = await repo.listPullFiles(pr.number);
+    } catch {
+      continue; // cannot read this PR's files -> skip it rather than fail the whole inbox
+    }
+    const paths = files.map((f) => f.filename);
+    if (!isContributionToFolder(paths, id.username)) continue;
+    out.push({
+      number: pr.number,
+      title: pr.title,
+      html_url: pr.html_url,
+      author: pr.author ?? null,
+      headSha: pr.headSha ?? null,
+      createdAt: pr.createdAt ?? null,
+      updatedAt: pr.updatedAt ?? null,
+      files,
+      fileCount: files.length,
+      additions: files.reduce((s, f) => s + (f.additions || 0), 0),
+      deletions: files.reduce((s, f) => s + (f.deletions || 0), 0),
+    });
+  }
+  return { contributions: out };
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;

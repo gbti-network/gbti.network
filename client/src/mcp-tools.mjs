@@ -16,6 +16,7 @@ import {
   publish,
   listPRs,
   prStatus,
+  listIncomingContributions,
 } from './operations.mjs';
 import { startDeviceLogin, confirmDeviceLogin, logout } from './mcp-auth.mjs';
 
@@ -110,6 +111,12 @@ export const TOOLS = [
     description: 'Read the gate status (held vs mergeable) for one of the member PRs by `number`.',
     inputSchema: obj({ number: { type: 'integer' } }, ['number']),
     handler: (ctx, args) => prStatus(ctx, { number: args?.number }),
+  },
+  {
+    name: 'list_contributions',
+    description: "List incoming contributions to review: open pull requests another member opened against the signed-in member's own folder, awaiting their approval (SOW-028).",
+    inputSchema: obj({}),
+    handler: (ctx) => listIncomingContributions(ctx),
   },
 ];
 

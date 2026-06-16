@@ -23,7 +23,7 @@ import {
   effectiveStatus,
   ROLE,
 } from '../membership/overrides.mjs';
-import { decide, classifyPaths, ownedFolderFor, contentTypesTouched, contributionTarget } from '../membership/classify-pr.mjs';
+import { decide, classifyPaths, ownedFolderFor, contentTypesTouched, contributionTarget, isContributionToFolder } from '../membership/classify-pr.mjs';
 
 const NOW = new Date('2026-06-02T00:00:00Z');
 const daysAgo = (n) => new Date(NOW.getTime() - n * 24 * 60 * 60 * 1000).toISOString();
@@ -277,6 +277,19 @@ test('contributionTarget resolves a single other owner, else null', () => {
   assert.equal(contributionTarget(['members/bob/posts/x/index.md', 'members/carol/p/y/index.md'], 'octocat'), null); // two owners
   assert.equal(contributionTarget(['members/bob/posts/x/index.md', 'house/roles.yml'], 'octocat'), null); // protected
   assert.equal(contributionTarget(['members/octocat/../bob/x.md'], 'octocat'), null); // non-canonical
+});
+
+test('isContributionToFolder is the owner-side mirror of contributionTarget (SOW-028)', () => {
+  // True only when every path sits cleanly inside members/<owner>/.
+  assert.equal(isContributionToFolder(['members/bob/posts/x/index.md'], 'bob'), true);
+  assert.equal(isContributionToFolder(['members/bob/posts/x/index.md', 'members/bob/products/y/index.md'], 'bob'), true);
+  assert.equal(isContributionToFolder(['members/carol/posts/z/index.md'], 'bob'), false); // another folder
+  assert.equal(isContributionToFolder(['members/bob/posts/x/index.md', 'house/roles.yml'], 'bob'), false); // mixed w/ infra
+  assert.equal(isContributionToFolder(['members/bob/posts/x/index.md', 'members/carol/p/y/index.md'], 'bob'), false); // two owners
+  assert.equal(isContributionToFolder(['members/bob/../carol/x.md'], 'bob'), false); // non-canonical
+  assert.equal(isContributionToFolder(['members/bobby/posts/x/index.md'], 'bob'), false); // prefix is not a path boundary
+  assert.equal(isContributionToFolder([], 'bob'), false); // empty
+  assert.equal(isContributionToFolder(['members/bob/posts/x/index.md'], null), false); // no owner folder
 });
 
 test('member editing house/bans.yml => rejected escalation', () => {

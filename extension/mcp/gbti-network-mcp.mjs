@@ -17039,7 +17039,7 @@ var socialLinks = external_exports.object({
 var postSchema = external_exports.object({
   type: external_exports.literal("post").default("post"),
   title: external_exports.string(),
-  slug: external_exports.string().regex(/^[a-z0-9-]+$/, "kebab-case, globally unique -> /blog/<slug>/"),
+  slug: external_exports.string().regex(/^[a-z0-9-]+$/, "kebab-case, globally unique -> /articles/<slug>/"),
   author: external_exports.string(),
   contributors,
   delegation,
@@ -17778,6 +17778,42 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
         merged: Boolean(i.pull_request?.merged_at)
       }));
     },
+    /** Open upstream PRs ({ number, title, html_url, author:{login,id}, headSha, createdAt, updatedAt }), newest
+     *  first. SOW-028: the owner's contribution inbox lists these and keeps only the PRs whose files fall
+     *  entirely inside the owner's folder. App mode (SOW-026): the fork-scoped token cannot read the upstream, so
+     *  the Worker lists them (GBTI's App installation); classic reads the upstream directly. */
+    async listOpenPulls() {
+      if (appMode) {
+        const p = await callWorker("GET", "/membership/open-pulls");
+        return p.items ?? [];
+      }
+      const list = await req("GET", `/repos/${upstream}/pulls?state=open&sort=created&direction=desc&per_page=100`);
+      return (list ?? []).map((p) => ({
+        number: p.number,
+        title: p.title,
+        html_url: p.html_url,
+        author: { login: p.user?.login ?? null, id: p.user?.id != null ? String(p.user.id) : null },
+        headSha: p.head?.sha ?? null,
+        createdAt: p.created_at ?? null,
+        updatedAt: p.updated_at ?? null
+      }));
+    },
+    /** The changed files of a PR ([{ filename, status, additions, deletions }]). SOW-028: used to scope an open
+     *  PR to the owner's folder (the inbox filter) and to render the diff. App mode (SOW-026): the Worker reads
+     *  the upstream files; classic reads them directly. */
+    async listPullFiles(prNumber) {
+      if (appMode) {
+        const p = await callWorker("GET", `/membership/pr-files?number=${encodeURIComponent(prNumber)}`);
+        return p.files ?? [];
+      }
+      const files = await req("GET", `/repos/${upstream}/pulls/${prNumber}/files?per_page=100`);
+      return (files ?? []).map((f) => ({
+        filename: f.filename,
+        status: f.status,
+        additions: f.additions ?? 0,
+        deletions: f.deletions ?? 0
+      }));
+    },
     /** The gate status for a PR: { state, meaning, sha }. App mode (SOW-026): the Worker reads the upstream PR +
      *  combined status with GBTI's App installation, scoped to the member's own PR. Classic reads it directly. */
     async gateStatus(prNumber) {
@@ -18000,6 +18036,31 @@ function encAssetFor(type, username, slug) {
   return { assetId, path: path4 };
 }
 
+// membership/overrides-core.mjs
+var ROLE2 = Object.freeze({
+  member: "member",
+  moderator: "moderator",
+  admin: "admin",
+  superadmin: "superadmin"
+});
+var PRIVILEGED_ROLES = /* @__PURE__ */ new Set([ROLE2.moderator, ROLE2.admin, ROLE2.superadmin]);
+var ADMIN_ROLES = /* @__PURE__ */ new Set([ROLE2.admin, ROLE2.superadmin]);
+
+// membership/classify-pr.mjs
+var ROLE_RANK = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
+function isCleanPath(p) {
+  if (typeof p !== "string" || p.length === 0) return false;
+  if (p.startsWith("/")) return false;
+  if (p.includes("\\")) return false;
+  if (p.includes("\0")) return false;
+  return p.split("/").every((seg) => seg !== "" && seg !== "." && seg !== "..");
+}
+function isContributionToFolder(paths, ownerFolder) {
+  if (!ownerFolder || !Array.isArray(paths) || paths.length === 0) return false;
+  const prefix = `members/${ownerFolder}/`;
+  return paths.every((p) => isCleanPath(p) && p.startsWith(prefix));
+}
+
 // client/src/operations.mjs
 var CLIENT_VERSION = "0.1.0";
 var OperationError = class extends Error {
@@ -18128,6 +18189,41 @@ async function prStatus(ctx2, { number: number4 } = {}) {
   const n = Number(number4);
   if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");
   return repo.gateStatus(n);
+}
+async function listIncomingContributions(ctx2) {
+  const id = requireIdentity(ctx2);
+  const repo = requireRepo(ctx2);
+  const open = await repo.listOpenPulls();
+  const myId = id.githubId != null ? String(id.githubId) : null;
+  const myLogin = String(id.login || "").toLowerCase();
+  const out = [];
+  for (const pr of open) {
+    const aId = pr.author?.id != null ? String(pr.author.id) : null;
+    const aLogin = String(pr.author?.login || "").toLowerCase();
+    if (myId && aId && aId === myId || myLogin && aLogin && aLogin === myLogin) continue;
+    let files;
+    try {
+      files = await repo.listPullFiles(pr.number);
+    } catch {
+      continue;
+    }
+    const paths = files.map((f) => f.filename);
+    if (!isContributionToFolder(paths, id.username)) continue;
+    out.push({
+      number: pr.number,
+      title: pr.title,
+      html_url: pr.html_url,
+      author: pr.author ?? null,
+      headSha: pr.headSha ?? null,
+      createdAt: pr.createdAt ?? null,
+      updatedAt: pr.updatedAt ?? null,
+      files,
+      fileCount: files.length,
+      additions: files.reduce((s, f) => s + (f.additions || 0), 0),
+      deletions: files.reduce((s, f) => s + (f.deletions || 0), 0)
+    });
+  }
+  return { contributions: out };
 }
 
 // client/src/mcp-auth.mjs
@@ -18336,6 +18432,12 @@ var TOOLS = [
     description: "Read the gate status (held vs mergeable) for one of the member PRs by `number`.",
     inputSchema: obj({ number: { type: "integer" } }, ["number"]),
     handler: (ctx2, args) => prStatus(ctx2, { number: args?.number })
+  },
+  {
+    name: "list_contributions",
+    description: "List incoming contributions to review: open pull requests another member opened against the signed-in member's own folder, awaiting their approval (SOW-028).",
+    inputSchema: obj({}),
+    handler: (ctx2) => listIncomingContributions(ctx2)
   }
 ];
 var TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));

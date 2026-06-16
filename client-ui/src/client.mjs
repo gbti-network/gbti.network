@@ -72,6 +72,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     getComment: ({ id }) => request('GET', `/api/comment${qs({ id })}`), // SOW-027: edit prefill -> { path, frontmatter, body }
     listPRs: () => request('GET', '/api/prs'),
     prStatus: ({ number }) => request('GET', `/api/pr-status${qs({ number })}`),
+    listContributions: () => request('GET', '/api/contributions'), // SOW-028: incoming contributions to review -> { contributions: [...] }
     formFields: ({ type }) => request('GET', `/api/form-fields${qs({ type })}`),
     preview: ({ body }) => request('POST', '/api/preview', { body }),
     stageImage: (b) => request('POST', '/api/image', b),
