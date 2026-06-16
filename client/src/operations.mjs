@@ -6,7 +6,7 @@
 // Errors are typed OperationError(code, ...) so each transport can map a code to its own shape (HTTP status
 // or MCP isError). Codes: no-identity | not-authenticated | not-found | bad-request | invalid-content.
 
-import { buildContentFile, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, ContentValidationError } from './content-ops.mjs';
+import { buildContentFile, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, parseContentFile, ContentValidationError } from './content-ops.mjs';
 import { publishContent, publishFiles, branchName } from './publish.mjs';
 import { canPublish, isBlockedFromPublishing } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, decryptViaWorker, MemberContentLockedError } from './member-content.mjs';
@@ -597,6 +597,91 @@ export async function listIncomingContributions(ctx) {
     });
   }
   return { contributions: out };
+}
+
+/**
+ * SOW-028 P2/P3: load ONE incoming contribution, fail-closed. Resolves the PR by number and confirms it is a
+ * reviewable contribution to the signed-in owner: another member opened it (not the owner) AND every changed
+ * path sits inside members/<owner>/ (isContributionToFolder, the gate's own classifier). Anything else throws
+ * `forbidden`, so the client review/decide path can only ever touch the owner's legitimate inbox items, never
+ * an arbitrary PR. Returns { id, repo, n, pr, files } (files carry the unified patch).
+ */
+async function loadOwnContribution(ctx, number) {
+  const id = requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  const n = Number(number);
+  if (!Number.isInteger(n) || n <= 0) throw new OperationError('bad-request', 'a positive PR number is required');
+  const pr = await repo.getPull(n);
+  const aId = pr.author?.id != null ? String(pr.author.id) : null;
+  const aLogin = String(pr.author?.login || '').toLowerCase();
+  const myId = id.githubId != null ? String(id.githubId) : null;
+  const myLogin = String(id.login || '').toLowerCase();
+  if ((myId && aId && aId === myId) || (myLogin && aLogin && aLogin === myLogin)) {
+    throw new OperationError('forbidden', 'this is your own pull request, not an incoming contribution');
+  }
+  const files = await repo.getPullDiffFiles(n);
+  if (!isContributionToFolder(files.map((f) => f.filename), id.username)) {
+    throw new OperationError('forbidden', 'this pull request is not a contribution to your folder');
+  }
+  return { id, repo, n, pr, files };
+}
+
+/**
+ * SOW-028 P2: the full review payload for one incoming contribution: its metadata, the per-file unified diff,
+ * and the proposed NEW body of each changed markdown file at the PR head (so the owner can "preview as merged"
+ * by passing `proposed[].body` to client.preview(), the same renderer the editor uses). Fail-closed via
+ * loadOwnContribution.
+ */
+export async function getContributionReview(ctx, { number } = {}) {
+  const { repo, n, pr, files } = await loadOwnContribution(ctx, number);
+  const proposed = [];
+  for (const f of files) {
+    if (!/\.md$/i.test(f.filename) || f.status === 'removed') continue;
+    let text = null;
+    try { text = await repo.getFileContent(f.filename, pr.headSha); } catch { text = null; }
+    if (text == null) continue;
+    const { body } = parseContentFile(text);
+    proposed.push({ filename: f.filename, body });
+  }
+  return {
+    number: n,
+    title: pr.title,
+    html_url: pr.html_url,
+    headSha: pr.headSha,
+    author: pr.author,
+    files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
+    proposed,
+  };
+}
+
+const DECLINE_NOTE =
+  'Thank you for the contribution. The folder owner has decided not to merge this change right now. You are welcome to discuss it here or open a revised proposal.';
+
+/**
+ * SOW-028 P3: the owner's decision on an incoming contribution. The client NEVER merges directly: an APPROVE is
+ * a GitHub PR review on the current head SHA, which the SOW-005 gate reads (by the owner's github_id) and then
+ * auto-merges + runs the SOW-008 award. `request-changes` is a REQUEST_CHANGES review with a message. `decline`
+ * posts a note and closes the PR (the draft stays on the contributor's fork). Fail-closed via loadOwnContribution.
+ */
+export async function reviewContribution(ctx, { number, decision, message } = {}) {
+  const { repo, n, pr } = await loadOwnContribution(ctx, number);
+  const msg = typeof message === 'string' ? message.trim() : '';
+  switch (decision) {
+    case 'approve':
+      // The gate only honors an approval whose commit_id is the CURRENT head SHA, so use the freshly-read head.
+      await repo.submitReview(n, { event: 'APPROVE', body: msg, commitId: pr.headSha });
+      return { ok: true, decision, number: n };
+    case 'request-changes':
+      if (!msg) throw new OperationError('bad-request', 'request-changes needs a message describing what to change');
+      await repo.submitReview(n, { event: 'REQUEST_CHANGES', body: msg, commitId: pr.headSha });
+      return { ok: true, decision, number: n };
+    case 'decline':
+      await repo.commentOnPull(n, msg || DECLINE_NOTE);
+      await repo.closePull(n);
+      return { ok: true, decision, number: n };
+    default:
+      throw new OperationError('bad-request', `unknown decision "${decision}" (approve | request-changes | decline)`);
+  }
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;

@@ -34,6 +34,18 @@ export function toBase64(text) {
   return btoa(bin);
 }
 
+/** Decode base64 (the Contents API returns file content base64-encoded, possibly newline-wrapped) to a UTF-8
+ *  string. Cross-environment mirror of toBase64: node has Buffer, the MV3 service worker uses atob + TextDecoder
+ *  (atob alone mangles multibyte characters). */
+export function fromBase64(b64) {
+  const clean = String(b64 || '').replace(/\s+/g, '');
+  if (typeof Buffer !== 'undefined') return Buffer.from(clean, 'base64').toString('utf8');
+  const bin = atob(clean);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
 /** Map the gate's combined-status state to a member-facing meaning. */
 export function interpretGateState(state) {
   switch (state) {
@@ -260,6 +272,77 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
       const gate = (status.statuses ?? []).find((s) => s.context === GATE_CONTEXT);
       const state = gate?.state ?? status.state ?? 'unknown';
       return { state, meaning: interpretGateState(state), sha, description: gate?.description };
+    },
+
+    // ----- SOW-028 P2/P3: the owner-side contribution review (read one PR, render its diff, decide) -----
+
+    /** One PR's review metadata: { number, title, body, html_url, state, headSha, author:{login,id} }. App mode
+     *  (SOW-026): the Worker reads it with GBTI's installation; classic reads the upstream directly. */
+    async getPull(prNumber) {
+      if (appMode) return callWorker('GET', `/membership/pr?number=${encodeURIComponent(prNumber)}`);
+      const p = await req('GET', `/repos/${upstream}/pulls/${prNumber}`);
+      return {
+        number: p.number,
+        title: p.title,
+        body: p.body ?? '',
+        html_url: p.html_url,
+        state: p.state,
+        headSha: p.head?.sha ?? null,
+        author: { login: p.user?.login ?? null, id: p.user?.id != null ? String(p.user.id) : null },
+      };
+    },
+
+    /** A PR's changed files WITH the unified `patch` for the diff view ([{ filename, status, additions,
+     *  deletions, patch }]). Heavier than listPullFiles (which omits patch for the inbox list). */
+    async getPullDiffFiles(prNumber) {
+      if (appMode) {
+        const p = await callWorker('GET', `/membership/pr-files?number=${encodeURIComponent(prNumber)}&patch=1`);
+        return p.files ?? [];
+      }
+      const files = await req('GET', `/repos/${upstream}/pulls/${prNumber}/files?per_page=100`);
+      return (files ?? []).map((f) => ({
+        filename: f.filename,
+        status: f.status,
+        additions: f.additions ?? 0,
+        deletions: f.deletions ?? 0,
+        patch: f.patch ?? null,
+      }));
+    },
+
+    /** The decoded text of a file at a ref (the PR head SHA), or null if it does not exist there (a removed file).
+     *  Used to render the "preview as merged" view of the proposed content. */
+    async getFileContent(path, ref) {
+      if (appMode) {
+        const p = await callWorker('GET', `/membership/file?path=${encodeURIComponent(path)}&ref=${encodeURIComponent(ref)}`);
+        return p.text ?? null;
+      }
+      try {
+        const r = await req('GET', `/repos/${upstream}/contents/${path}?ref=${encodeURIComponent(ref)}`);
+        if (Array.isArray(r) || !r?.content) return null;
+        return fromBase64(r.content);
+      } catch (err) {
+        if (err instanceof GitHubError && err.status === 404) return null;
+        throw err;
+      }
+    },
+
+    /** Submit a PR review as the signed-in owner. The gate honors an APPROVE only when commit_id is the current
+     *  head SHA (a later push invalidates a stale approval), so the caller passes the freshly-read headSha. */
+    async submitReview(prNumber, { event, body = '', commitId } = {}) {
+      if (appMode) return callWorker('POST', '/membership/pr-review', { number: prNumber, event, body, commit_id: commitId });
+      return req('POST', `/repos/${upstream}/pulls/${prNumber}/reviews`, { event, body, ...(commitId ? { commit_id: commitId } : {}) });
+    },
+
+    /** Post an issue comment on a PR (the decline note / a discussion message). */
+    async commentOnPull(prNumber, body) {
+      if (appMode) return callWorker('POST', '/membership/pr-comment', { number: prNumber, body });
+      return req('POST', `/repos/${upstream}/issues/${prNumber}/comments`, { body });
+    },
+
+    /** Close a PR without merging (a declined contribution; the draft stays on the contributor's fork). */
+    async closePull(prNumber) {
+      if (appMode) return callWorker('POST', '/membership/pr-close', { number: prNumber });
+      return req('PATCH', `/repos/${upstream}/pulls/${prNumber}`, { state: 'closed' });
     },
   };
 }

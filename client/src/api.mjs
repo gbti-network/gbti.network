@@ -21,6 +21,8 @@ import {
   listPRs,
   prStatus,
   listIncomingContributions,
+  getContributionReview,
+  reviewContribution,
   stageImage,
   decryptMemberAsset,
   getMemberActivity,
@@ -99,6 +101,8 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/prs') return run(() => listPRs(ctx));
   if (method === 'GET' && pathname === '/api/pr-status') return run(() => prStatus(ctx, { number: query.number }));
   if (method === 'GET' && pathname === '/api/contributions') return run(() => listIncomingContributions(ctx)); // SOW-028: the owner's incoming-contribution review inbox
+  if (method === 'GET' && pathname === '/api/contribution') return run(() => getContributionReview(ctx, { number: query.number })); // SOW-028: one contribution's diff + proposed body
+  if (method === 'POST' && pathname === '/api/contribution-review') return run(() => reviewContribution(ctx, body ?? {})); // SOW-028: approve | request-changes | decline
 
   if (method === 'GET' && pathname === '/api/form-fields') {
     const fields = fieldsFor(query.type);

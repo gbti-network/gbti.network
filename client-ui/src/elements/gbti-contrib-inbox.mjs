@@ -43,10 +43,12 @@ const CSS = `
     background:var(--hover); color:var(--fg); }
   .file.added { background:rgba(31,158,95,.14); color:var(--accent); }
   .file.removed { background:rgba(224,108,108,.16); color:var(--danger); }
-  .act { margin-top:9px; }
+  .act { margin-top:9px; display:flex; gap:8px; }
   .btn { display:inline-block; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px;
     font:inherit; font-weight:600; font-size:13px; padding:6px 13px; text-decoration:none; cursor:pointer; }
   .btn:hover { border-color:var(--accent); color:var(--accent); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.primary:hover { color:#fff; opacity:.92; }
   .muted { color:var(--muted); }
   h2 { font-size:17px; margin:0 0 12px; }
 `;
@@ -62,6 +64,12 @@ class GbtiContribInbox extends GbtiElement {
       errored = true; // unauthenticated or a read failure -> a calm empty state, never a thrown render
     }
     this.set(this.css(CSS) + this._html(list, errored));
+    // A Review button opens the in-client review (P2/P3). The inbox stays decoupled from the review element:
+    // it emits `contrib-open` (composed, so it crosses the shadow boundary) and the host (the workspace) swaps
+    // in <gbti-contrib-review>.
+    this.$$('[data-review]').forEach((b) => b.addEventListener('click', () => {
+      this.dispatchEvent(new CustomEvent('contrib-open', { detail: { number: Number(b.dataset.review) }, bubbles: true, composed: true }));
+    }));
   }
 
   _html(list, errored) {
@@ -90,7 +98,10 @@ class GbtiContribInbox extends GbtiElement {
         <span class="size"><span class="add">+${c.additions | 0}</span> <span class="del">&minus;${c.deletions | 0}</span></span></div>
       <div class="meta">${who} &middot; ${esc(n)} file${n === 1 ? '' : 's'} &middot; ${esc(whenAgo(c.createdAt))}</div>
       <div class="files">${files}</div>
-      <div class="act"><a class="btn" href="${esc(c.html_url || '#')}" target="_blank" rel="noopener">Review on GitHub</a></div>
+      <div class="act">
+        <button class="btn primary" data-review="${esc(c.number)}" type="button">Review</button>
+        <a class="btn" href="${esc(c.html_url || '#')}" target="_blank" rel="noopener">On GitHub</a>
+      </div>
     </li>`;
   }
 }

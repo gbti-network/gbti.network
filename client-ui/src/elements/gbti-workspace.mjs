@@ -9,6 +9,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { classifyPull } from '../workspace-core.mjs';
 import './gbti-content-editor.mjs';
 import './gbti-contrib-inbox.mjs';
+import './gbti-contrib-review.mjs';
 
 const TABS = [
   { id: 'post', label: 'Articles', type: 'post' },
@@ -53,6 +54,7 @@ class GbtiWorkspace extends GbtiElement {
     this._cache = {};   // type -> items[]
     this._prs = null;   // { prs }
     this._editing = null;
+    this._reviewing = null; // SOW-028: the PR number being reviewed in the drill-in, or null
     super.connectedCallback?.(); // base now renders the initial view with fields in place
     this._loadProfile();
     this._ensureTab('post');
@@ -118,6 +120,15 @@ class GbtiWorkspace extends GbtiElement {
       if (ed?.load) ed.load(e.type, e.frontmatter, e.body);
       return;
     }
+    if (this._reviewing != null) {
+      // SOW-028 drill-in: review one incoming contribution. On a decision the review element emits
+      // `contrib-decided`; we return to the Inbox, which remounts <gbti-contrib-inbox> and refetches, so the
+      // decided PR drops off the list.
+      this.set(this.css(CSS) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+      this.on('[data-back]', 'click', () => { this._reviewing = null; this.render(); });
+      this.$('gbti-contrib-review')?.addEventListener('contrib-decided', () => { this._reviewing = null; this.render(); });
+      return;
+    }
     const tabs = TABS.map((t) => `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}</button>`).join('');
     this.set(this.css(CSS) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
     this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this.render(); this._ensureTab(this._tab); }));
@@ -157,6 +168,11 @@ class GbtiWorkspace extends GbtiElement {
 
   _wireBody() {
     this.on('[data-profile]', 'click', () => this._openItem(this._profile?.path, 'profile'));
+    // SOW-028: the Inbox tab's <gbti-contrib-inbox> emits `contrib-open` (composed) when a Review button is
+    // clicked; open the review drill-in. The listener sits on the element node the bubbling event passes through.
+    if (this._tab === 'inbox') {
+      this.$('gbti-contrib-inbox')?.addEventListener('contrib-open', (e) => { this._reviewing = e.detail?.number ?? null; this.render(); });
+    }
     const tab = TABS.find((t) => t.id === this._tab);
     if (tab?.type) {
       this.$$('[data-edit]').forEach((b) => b.addEventListener('click', () => {

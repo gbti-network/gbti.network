@@ -569,10 +569,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     background:var(--hover); color:var(--fg); }
   .file.added { background:rgba(31,158,95,.14); color:var(--accent); }
   .file.removed { background:rgba(224,108,108,.16); color:var(--danger); }
-  .act { margin-top:9px; }
+  .act { margin-top:9px; display:flex; gap:8px; }
   .btn { display:inline-block; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px;
     font:inherit; font-weight:600; font-size:13px; padding:6px 13px; text-decoration:none; cursor:pointer; }
   .btn:hover { border-color:var(--accent); color:var(--accent); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.primary:hover { color:#fff; opacity:.92; }
   .muted { color:var(--muted); }
   h2 { font-size:17px; margin:0 0 12px; }
 `;
@@ -587,6 +589,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         errored = true;
       }
       this.set(this.css(CSS) + this._html(list, errored));
+      this.$$("[data-review]").forEach((b) => b.addEventListener("click", () => {
+        this.dispatchEvent(new CustomEvent("contrib-open", { detail: { number: Number(b.dataset.review) }, bubbles: true, composed: true }));
+      }));
     }
     _html(list, errored) {
       if (errored) {
@@ -611,11 +616,181 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <span class="size"><span class="add">+${c.additions | 0}</span> <span class="del">&minus;${c.deletions | 0}</span></span></div>
       <div class="meta">${who} &middot; ${esc(n)} file${n === 1 ? "" : "s"} &middot; ${esc(whenAgo(c.createdAt))}</div>
       <div class="files">${files}</div>
-      <div class="act"><a class="btn" href="${esc(c.html_url || "#")}" target="_blank" rel="noopener">Review on GitHub</a></div>
+      <div class="act">
+        <button class="btn primary" data-review="${esc(c.number)}" type="button">Review</button>
+        <a class="btn" href="${esc(c.html_url || "#")}" target="_blank" rel="noopener">On GitHub</a>
+      </div>
     </li>`;
     }
   };
   define("gbti-contrib-inbox", GbtiContribInbox);
+
+  // client-ui/src/contrib-diff.mjs
+  function diffRows(patch) {
+    if (!patch || typeof patch !== "string") return [];
+    return patch.split("\n").map((line) => {
+      if (line.startsWith("@@") || line.startsWith("+++") || line.startsWith("---")) return { cls: "hunk", text: line };
+      if (line.startsWith("+")) return { cls: "add", text: line };
+      if (line.startsWith("-")) return { cls: "del", text: line };
+      return { cls: "ctx", text: line };
+    });
+  }
+
+  // client-ui/src/elements/gbti-contrib-review.mjs
+  var CSS2 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  h2 { font-size:18px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 14px; }
+  .sub a { color:var(--accent); }
+  .tabs { display:inline-flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:3px; margin:0 0 12px; }
+  .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:12.5px; padding:6px 14px; border-radius:999px; cursor:pointer; }
+  .tab.on { background:var(--hover); color:var(--accent); }
+  .file { margin:0 0 14px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .file > .fh { background:var(--panel); padding:8px 12px; font-family:var(--font-mono,ui-monospace,monospace); font-size:12px; display:flex; justify-content:space-between; gap:10px; }
+  .fh .sz .add { color:var(--accent); font-weight:700; } .fh .sz .del { color:var(--danger); font-weight:700; }
+  pre.diff { margin:0; overflow:auto; font-family:var(--font-mono,ui-monospace,monospace); font-size:12px; line-height:1.5; }
+  .dl { display:block; padding:0 12px; white-space:pre-wrap; word-break:break-word; }
+  .dl.add { background:rgba(31,158,95,.12); }
+  .dl.del { background:rgba(224,108,108,.14); }
+  .dl.hunk { background:var(--hover); color:var(--muted); }
+  .preview { border:1px solid var(--line); border-radius:10px; padding:16px 18px; background:var(--panel); }
+  .preview + .preview { margin-top:12px; }
+  .pmeta { color:var(--muted); font-size:12px; font-family:var(--font-mono,ui-monospace,monospace); margin:0 0 8px; }
+  .decide { margin-top:18px; border-top:1px solid var(--line); padding-top:16px; }
+  textarea { width:100%; box-sizing:border-box; min-height:74px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:9px 11px; font:inherit; background:var(--panel); color:var(--fg); }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:11px; }
+  .btn { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:700; font-size:13px; padding:8px 16px; cursor:pointer; }
+  .btn:hover { border-color:var(--accent); }
+  .btn.approve { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.decline { color:var(--danger); }
+  .btn[disabled] { opacity:.55; cursor:default; }
+  .err { color:var(--danger); font-size:13px; margin-top:9px; }
+  .muted { color:var(--muted); }
+  .hint { color:var(--muted); font-size:12.5px; margin:10px 0 0; }
+`;
+  var GbtiContribReview = class extends GbtiElement {
+    static get observedAttributes() {
+      return ["number"];
+    }
+    connectedCallback() {
+      this._data = null;
+      this._previews = {};
+      this._tab = "diff";
+      this._busy = false;
+      this._error = "";
+      super.connectedCallback?.();
+      this._load();
+    }
+    attributeChangedCallback(name, oldV, newV) {
+      if (name === "number" && oldV !== newV && this.isConnected) this._load();
+    }
+    get _number() {
+      const n = Number(this.getAttribute("number"));
+      return Number.isInteger(n) && n > 0 ? n : null;
+    }
+    async _load() {
+      if (!this.client || this._number == null) {
+        this.render();
+        return;
+      }
+      this._data = null;
+      this._error = "";
+      this._previews = {};
+      this.render();
+      try {
+        this._data = await this.client.getContribution({ number: this._number });
+        for (const p of this._data.proposed || []) {
+          try {
+            this._previews[p.filename] = (await this.client.preview({ body: p.body }))?.html || "";
+          } catch {
+          }
+        }
+      } catch (e) {
+        this._error = e?.code === "forbidden" ? "This contribution is no longer available to review (it may have been merged, closed, or changed)." : "Could not load this contribution.";
+      }
+      this.render();
+    }
+    async _decide(decision) {
+      if (this._busy || this._number == null) return;
+      const msg = (this.$("[data-msg]")?.value || "").trim();
+      if (decision === "request-changes" && !msg) {
+        this._error = "Add a note describing the changes you would like before requesting changes.";
+        this.render();
+        return;
+      }
+      this._busy = true;
+      this._error = "";
+      this.render();
+      try {
+        await this.client.reviewContribution({ number: this._number, decision, message: msg });
+        this.dispatchEvent(new CustomEvent("contrib-decided", { detail: { number: this._number, decision }, bubbles: true, composed: true }));
+      } catch {
+        this._error = "Could not submit your decision. Try again, or review it on GitHub.";
+        this._busy = false;
+        this.render();
+      }
+    }
+    render() {
+      if (!this.client) return;
+      if (this._error && !this._data) {
+        this.set(this.css(CSS2) + `<p class="err">${esc(this._error)}</p>`);
+        return;
+      }
+      if (!this._data) {
+        this.set(this.css(CSS2) + `<p class="muted">Loading the contribution...</p>`);
+        return;
+      }
+      const d = this._data;
+      const body = this._tab === "preview" ? this._previewHtml() : this._diffHtml();
+      this.set(
+        this.css(CSS2) + `<h2>${esc(d.title || "Contribution #" + d.number)}</h2>
+         <p class="sub">From ${d.author?.login ? "@" + esc(d.author.login) : "a member"} &middot;
+           <a href="${esc(d.html_url || "#")}" target="_blank" rel="noopener">#${esc(d.number)} on GitHub</a></p>
+         <div class="tabs" role="tablist">
+           <button class="tab ${this._tab === "diff" ? "on" : ""}" data-tab="diff" type="button">Changes</button>
+           <button class="tab ${this._tab === "preview" ? "on" : ""}" data-tab="preview" type="button">Preview as merged</button>
+         </div>
+         <div>${body}</div>
+         ${this._decideHtml()}`
+      );
+      this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+        this._tab = b.dataset.tab;
+        this.render();
+      }));
+      this.$$("[data-decide]").forEach((b) => b.addEventListener("click", () => this._decide(b.dataset.decide)));
+    }
+    _diffHtml() {
+      const files = this._data.files || [];
+      if (files.length === 0) return `<p class="muted">No file changes.</p>`;
+      return files.map((f) => {
+        const rows = diffRows(f.patch).map((r) => `<span class="dl ${r.cls}">${esc(r.text) || "&nbsp;"}</span>`).join("");
+        const diff = f.patch ? `<pre class="diff">${rows}</pre>` : `<p class="dl ctx muted" style="padding:10px 12px">Binary or large file (no inline diff). View it on GitHub.</p>`;
+        return `<div class="file"><div class="fh"><span>${esc(shortPath(f.filename))} <span class="muted">(${esc(f.status)})</span></span>
+        <span class="sz"><span class="add">+${f.additions | 0}</span> <span class="del">&minus;${f.deletions | 0}</span></span></div>${diff}</div>`;
+      }).join("");
+    }
+    _previewHtml() {
+      const proposed = this._data.proposed || [];
+      if (proposed.length === 0) return `<p class="muted">No readable content to preview (the change touches non-article files only).</p>`;
+      return proposed.map((p) => {
+        const html = this._previews[p.filename];
+        return `<div class="preview"><p class="pmeta">${esc(shortPath(p.filename))}</p>${html || '<p class="muted">Preview unavailable.</p>'}</div>`;
+      }).join("");
+    }
+    _decideHtml() {
+      return `<div class="decide">
+      <textarea data-msg placeholder="Optional note to the contributor (required when requesting changes)"></textarea>
+      <div class="actions">
+        <button class="btn approve" data-decide="approve" type="button" ${this._busy ? "disabled" : ""}>Approve &amp; merge</button>
+        <button class="btn" data-decide="request-changes" type="button" ${this._busy ? "disabled" : ""}>Request changes</button>
+        <button class="btn decline" data-decide="decline" type="button" ${this._busy ? "disabled" : ""}>Decline</button>
+      </div>
+      ${this._error ? `<p class="err">${esc(this._error)}</p>` : ""}
+      <p class="hint">Approving submits an approval the membership gate reads, then merges the change and credits the contributor with a share of this content's revenue.</p>
+    </div>`;
+    }
+  };
+  define("gbti-contrib-review", GbtiContribReview);
 
   // client-ui/src/elements/gbti-members-portal.mjs
   var GbtiMembersPortal = class extends GbtiElement {
@@ -988,7 +1163,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS2 = `
+  var CSS3 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -1009,7 +1184,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const c = Math.max(0, this._count);
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       this.set(
-        this.css(CSS2) + `<button class="pill ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS3) + `<button class="pill ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -1044,7 +1219,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS3 = `
+  var CSS4 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -1070,7 +1245,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const open = this._open ? this._renderPop() : "";
       const label = !this.client ? "Sign in to save to a collection" : "Save to a collection";
-      this.set(this.css(CSS3) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}">${folder}<span>Save</span></button>${open}`);
+      this.set(this.css(CSS4) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}">${folder}<span>Save</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -1190,7 +1365,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-subscribe.mjs
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
-  var CSS4 = `
+  var CSS5 = `
   .btn { display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font-body);
     font-size:14px; font-weight:600; border-radius:10px; padding:9px 16px;
     border:1.5px solid var(--brand); background:var(--brand); color:#08231a;
@@ -1222,7 +1397,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const label = !known ? "Subscribe to activity" : following ? "Following" : "Subscribe to activity";
       const onCls = following ? "on" : "";
       this.set(
-        this.css(CSS4) + `<button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>`
+        this.css(CSS5) + `<button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>`
       );
       this.on(".btn", "click", () => this._onClick());
       if (this.client && username && !this._loaded) this._loadState(username);
@@ -1270,7 +1445,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-share-composer.mjs
   var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS5 = `
+  var CSS6 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
   h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -1320,8 +1495,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       const m = this._membership;
-      if (!this.client) return this.set(this.css(CSS5) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
-      if (m === void 0) return this.set(this.css(CSS5) + `<div class="card"><p class="sub">Loading…</p></div>`);
+      if (!this.client) return this.set(this.css(CSS6) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
+      if (m === void 0) return this.set(this.css(CSS6) + `<div class="card"><p class="sub">Loading…</p></div>`);
       if (LOCKED.has(m)) return this._renderLocked();
       if (m === "trialing") return this._renderTrial();
       return this._renderComposer();
@@ -1330,21 +1505,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<div class="notice"><span class="lock">${glyph}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
     }
     _renderLocked() {
-      this.set(this.css(CSS5) + this._noticeHtml(
+      this.set(this.css(CSS6) + this._noticeHtml(
         "Your access is locked",
         'Your membership has lapsed, so Shares are locked. <a href="https://gbti.network/membership/">Renew your membership</a> to read and post in the community stream again.',
         "🔒"
       ));
     }
     _renderTrial() {
-      this.set(this.css(CSS5) + this._noticeHtml(
+      this.set(this.css(CSS6) + this._noticeHtml(
         "Reading only on the free trial",
         'On the trial you can READ the community Shares stream. Posting Shares is a paid feature. <a href="https://gbti.network/membership/">Upgrade your membership</a> to post.',
         "👀"
       ));
     }
     _renderComposer() {
-      this.set(this.css(CSS5) + `
+      this.set(this.css(CSS6) + `
       <div class="card">
         <h3>Share an update</h3>
         <p class="sub">A short note or an off-network link for the co-op. Members-only by default.</p>
@@ -1410,7 +1585,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS6 = `
+  var CSS7 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -1490,10 +1665,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     async reload() {
       if (!this.client) {
-        this.set(this.css(CSS6) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        this.set(this.css(CSS7) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      this.set(this.css(CSS6) + `<p class="muted">Loading the co-op stream…</p>`);
+      this.set(this.css(CSS7) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         membership = (await this.client.status())?.membership ?? "unknown";
@@ -1505,7 +1680,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         items = (await this.client.listShares())?.items ?? [];
       } catch {
-        this.set(this.css(CSS6) + `<p class="muted">Could not load Shares right now.</p>`);
+        this.set(this.css(CSS7) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (!items.length) {
@@ -1529,13 +1704,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     }
     _splash() {
-      this.set(this.css(CSS6) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS7) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
     _render(rows) {
       const head = `<div class="head"><h3>Co-op stream</h3><button class="refresh" type="button">Refresh</button></div>`;
       if (!rows.length) {
-        this.set(this.css(CSS6) + head + `<p class="muted">No Shares yet. Post the first one above.</p>`);
+        this.set(this.css(CSS7) + head + `<p class="muted">No Shares yet. Post the first one above.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
@@ -1554,7 +1729,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ${title}${desc}${bodyHtml}${link}${tags}${foot}
       </article>`;
       }).join("");
-      this.set(this.css(CSS6) + head + `<div class="feed">${cards}</div>`);
+      this.set(this.css(CSS7) + head + `<div class="feed">${cards}</div>`);
       this.on(".refresh", "click", () => this.reload());
       for (const btn of this.$$(".discuss")) {
         btn.addEventListener("click", () => this._toggleDiscussion(btn));
@@ -1653,14 +1828,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS7 = `
+  var CSS8 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS7) + `<div class="stack">
+      this.set(this.css(CSS8) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -4043,7 +4218,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS8 = `
+  var CSS9 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -4059,7 +4234,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS8) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS9) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -4067,7 +4242,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         membership = "unknown";
       }
       if (isLockedMembership(membership)) {
-        this.set(this.css(CSS8) + `<div class="splash">
+        this.set(this.css(CSS9) + `<div class="splash">
         <div class="lock">🔒</div>
         <h2>Your access is locked</h2>
         <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
@@ -4076,14 +4251,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>`);
         return;
       }
-      this.set(this.css(CSS8) + `<slot></slot>`);
+      this.set(this.css(CSS9) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
 
   // client-ui/src/elements/gbti-comment-box.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS9 = `
+  var CSS10 = `
   :host { display: block; font-family: var(--font-body); color: var(--fg); }
   .nudge { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--panel); font-size: 13.5px; color: var(--muted); }
   .nudge a { color: var(--brand); font-weight: 600; }
@@ -4132,19 +4307,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // ---- EDIT mode: only the comment's author sees an Edit link ----
     _renderEditAffordance() {
       if (!this._identity || this._identity.username !== this._editAuthor) {
-        this.set(this.css(CSS9) + "");
+        this.set(this.css(CSS10) + "");
         return;
       }
-      this.set(this.css(CSS9) + `<button class="edit" type="button">Edit</button>`);
+      this.set(this.css(CSS10) + `<button class="edit" type="button">Edit</button>`);
       this.on(".edit", "click", () => this._openEdit());
     }
     async _openEdit() {
-      this.set(this.css(CSS9) + `<p class="msg">Loading…</p>`);
+      this.set(this.css(CSS10) + `<p class="msg">Loading…</p>`);
       let body = "";
       try {
         body = (await this.client.getComment({ id: this._editId }))?.body ?? "";
       } catch {
-        this.set(this.css(CSS9) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
+        this.set(this.css(CSS10) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
         this.on(".edit", "click", () => this._openEdit());
         return;
       }
@@ -4153,23 +4328,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // ---- COMPOSE mode ----
     _renderCompose() {
       if (LOCKED3.has(this._membership)) {
-        this.set(this.css(CSS9) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
+        this.set(this.css(CSS10) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
         return;
       }
       if (this._membership === "trialing") {
-        this.set(this.css(CSS9) + `<div class="nudge">Commenting is a paid feature. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
+        this.set(this.css(CSS10) + `<div class="nudge">Commenting is a paid feature. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
         return;
       }
       if (!this._identity) {
-        this.set(this.css(CSS9) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS10) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
         return;
       }
-      this.set(this.css(CSS9) + `<button class="open" type="button">Write a comment</button>`);
+      this.set(this.css(CSS10) + `<button class="open" type="button">Write a comment</button>`);
       this.on(".open", "click", () => this._form({ body: "", edit: false }));
     }
     _form({ body, edit }) {
       const visibilityRow = edit ? "" : `<select aria-label="Visibility"><option value="public">Public</option><option value="members">Members only</option></select>`;
-      this.set(this.css(CSS9) + `
+      this.set(this.css(CSS10) + `
       <div class="form">
         <textarea placeholder="Write your comment (markdown supported)…" maxlength="8000">${esc(body)}</textarea>
         <div class="row">
@@ -4249,7 +4424,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
     install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
   };
-  var CSS10 = `
+  var CSS11 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
@@ -4346,11 +4521,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const s = this._status;
       if (!s) {
-        this.set(this.css(CSS10) + `<p class="note">Checking your setup...</p>`);
+        this.set(this.css(CSS11) + `<p class="note">Checking your setup...</p>`);
         return;
       }
       if (s.ready) {
-        this.set(this.css(CSS10) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
+        this.set(this.css(CSS11) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
         <p class="note">Your drafts save to your copy, and we open the review request for you.</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
@@ -4366,7 +4541,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return `<li class="row"><span class="ic">${check(false)}</span>${this._card(id, meta, s)}</li>`;
       }).filter(Boolean).join("");
       const reached = s.reachedGithub !== false;
-      this.set(this.css(CSS10) + `
+      this.set(this.css(CSS11) + `
       <div class="head"><h2>Set up publishing</h2><span class="count">${nDone} of 3</span></div>
       <div class="bar"><i style="width:${Math.round(nDone / 3 * 100)}%"></i></div>
       <ul>${rows}</ul>
@@ -4456,7 +4631,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
   var megaIco = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4z" fill="currentColor"/></svg>`;
-  var CSS11 = `
+  var CSS12 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); padding:32px 28px; max-width:680px; margin:0 auto; }
   .head { text-align:center; margin-bottom:22px; }
   .head .ic { display:inline-grid; place-items:center; }
@@ -4540,12 +4715,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this._loaded) {
-        this.set(this.css(CSS11) + `<p class="loading">Setting up your welcome...</p>`);
+        this.set(this.css(CSS12) + `<p class="loading">Setting up your welcome...</p>`);
         return;
       }
       const ph = phaseLabel(this._membership);
       const up = ph.upgrade ? `<a class="up" href="${SITE}/membership/" target="_blank" rel="noopener">Upgrade to publish</a>` : "";
-      this.set(this.css(CSS11) + `
+      this.set(this.css(CSS12) + `
       <div class="head">
         <span class="ic">${check2}</span>
         <div class="phase">${esc(ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "Welcome")}</div>
@@ -4665,7 +4840,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "prs", label: "Pull requests" },
     { id: "inbox", label: "Inbox" }
   ];
-  var CSS12 = `
+  var CSS13 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -4696,6 +4871,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._cache = {};
       this._prs = null;
       this._editing = null;
+      this._reviewing = null;
       super.connectedCallback?.();
       this._loadProfile();
       this._ensureTab("post");
@@ -4756,7 +4932,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // ----- rendering -----
     render() {
       if (this._editing) {
-        this.set(this.css(CSS12) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS13) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this.render();
@@ -4766,8 +4942,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (ed?.load) ed.load(e.type, e.frontmatter, e.body);
         return;
       }
+      if (this._reviewing != null) {
+        this.set(this.css(CSS13) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+        this.on("[data-back]", "click", () => {
+          this._reviewing = null;
+          this.render();
+        });
+        this.$("gbti-contrib-review")?.addEventListener("contrib-decided", () => {
+          this._reviewing = null;
+          this.render();
+        });
+        return;
+      }
       const tabs = TABS.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS12) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+      this.set(this.css(CSS13) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();
@@ -4804,6 +4992,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _wireBody() {
       this.on("[data-profile]", "click", () => this._openItem(this._profile?.path, "profile"));
+      if (this._tab === "inbox") {
+        this.$("gbti-contrib-inbox")?.addEventListener("contrib-open", (e) => {
+          this._reviewing = e.detail?.number ?? null;
+          this.render();
+        });
+      }
       const tab = TABS.find((t) => t.id === this._tab);
       if (tab?.type) {
         this.$$("[data-edit]").forEach((b) => b.addEventListener("click", () => {
@@ -4845,7 +5039,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE3}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
-  var CSS13 = `
+  var CSS14 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   article { max-width:680px; margin:0 auto; }
   h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
@@ -4905,7 +5099,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS13));
+        this.set(this.css(CSS14));
         return;
       }
       const t = TYPE_LABEL[it.type] || it.type || "";
@@ -4917,7 +5111,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
       else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
-      this.set(this.css(CSS13) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>`);
+      this.set(this.css(CSS14) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>`);
     }
   };
   define("gbti-reader", GbtiReader);
@@ -4949,7 +5143,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "share", label: "Shares" }
   ];
   var authorName3 = (a) => a === "gbti" ? "GBTI Network" : a;
-  var CSS14 = `
+  var CSS15 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -5002,7 +5196,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS14) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS15) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -5015,7 +5209,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS14) + `<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+      this.set(this.css(CSS15) + `<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();
@@ -5171,6 +5365,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       prStatus: ({ number }) => request("GET", `/api/pr-status${qs({ number })}`),
       listContributions: () => request("GET", "/api/contributions"),
       // SOW-028: incoming contributions to review -> { contributions: [...] }
+      getContribution: ({ number }) => request("GET", `/api/contribution${qs({ number })}`),
+      // SOW-028: one contribution's diff + proposed body
+      reviewContribution: (b) => request("POST", "/api/contribution-review", b),
+      // SOW-028: { number, decision: approve|request-changes|decline, message? }
       formFields: ({ type }) => request("GET", `/api/form-fields${qs({ type })}`),
       preview: ({ body }) => request("POST", "/api/preview", { body }),
       stageImage: (b) => request("POST", "/api/image", b),

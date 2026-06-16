@@ -17621,6 +17621,14 @@ function toBase64(text) {
   for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
   return btoa(bin);
 }
+function fromBase64(b64) {
+  const clean = String(b64 || "").replace(/\s+/g, "");
+  if (typeof Buffer !== "undefined") return Buffer.from(clean, "base64").toString("utf8");
+  const bin = atob(clean);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
 function interpretGateState(state) {
   switch (state) {
     case "success":
@@ -17828,6 +17836,70 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
       const gate = (status.statuses ?? []).find((s) => s.context === GATE_CONTEXT);
       const state = gate?.state ?? status.state ?? "unknown";
       return { state, meaning: interpretGateState(state), sha, description: gate?.description };
+    },
+    // ----- SOW-028 P2/P3: the owner-side contribution review (read one PR, render its diff, decide) -----
+    /** One PR's review metadata: { number, title, body, html_url, state, headSha, author:{login,id} }. App mode
+     *  (SOW-026): the Worker reads it with GBTI's installation; classic reads the upstream directly. */
+    async getPull(prNumber) {
+      if (appMode) return callWorker("GET", `/membership/pr?number=${encodeURIComponent(prNumber)}`);
+      const p = await req("GET", `/repos/${upstream}/pulls/${prNumber}`);
+      return {
+        number: p.number,
+        title: p.title,
+        body: p.body ?? "",
+        html_url: p.html_url,
+        state: p.state,
+        headSha: p.head?.sha ?? null,
+        author: { login: p.user?.login ?? null, id: p.user?.id != null ? String(p.user.id) : null }
+      };
+    },
+    /** A PR's changed files WITH the unified `patch` for the diff view ([{ filename, status, additions,
+     *  deletions, patch }]). Heavier than listPullFiles (which omits patch for the inbox list). */
+    async getPullDiffFiles(prNumber) {
+      if (appMode) {
+        const p = await callWorker("GET", `/membership/pr-files?number=${encodeURIComponent(prNumber)}&patch=1`);
+        return p.files ?? [];
+      }
+      const files = await req("GET", `/repos/${upstream}/pulls/${prNumber}/files?per_page=100`);
+      return (files ?? []).map((f) => ({
+        filename: f.filename,
+        status: f.status,
+        additions: f.additions ?? 0,
+        deletions: f.deletions ?? 0,
+        patch: f.patch ?? null
+      }));
+    },
+    /** The decoded text of a file at a ref (the PR head SHA), or null if it does not exist there (a removed file).
+     *  Used to render the "preview as merged" view of the proposed content. */
+    async getFileContent(path4, ref) {
+      if (appMode) {
+        const p = await callWorker("GET", `/membership/file?path=${encodeURIComponent(path4)}&ref=${encodeURIComponent(ref)}`);
+        return p.text ?? null;
+      }
+      try {
+        const r = await req("GET", `/repos/${upstream}/contents/${path4}?ref=${encodeURIComponent(ref)}`);
+        if (Array.isArray(r) || !r?.content) return null;
+        return fromBase64(r.content);
+      } catch (err) {
+        if (err instanceof GitHubError && err.status === 404) return null;
+        throw err;
+      }
+    },
+    /** Submit a PR review as the signed-in owner. The gate honors an APPROVE only when commit_id is the current
+     *  head SHA (a later push invalidates a stale approval), so the caller passes the freshly-read headSha. */
+    async submitReview(prNumber, { event, body = "", commitId } = {}) {
+      if (appMode) return callWorker("POST", "/membership/pr-review", { number: prNumber, event, body, commit_id: commitId });
+      return req("POST", `/repos/${upstream}/pulls/${prNumber}/reviews`, { event, body, ...commitId ? { commit_id: commitId } : {} });
+    },
+    /** Post an issue comment on a PR (the decline note / a discussion message). */
+    async commentOnPull(prNumber, body) {
+      if (appMode) return callWorker("POST", "/membership/pr-comment", { number: prNumber, body });
+      return req("POST", `/repos/${upstream}/issues/${prNumber}/comments`, { body });
+    },
+    /** Close a PR without merging (a declined contribution; the draft stays on the contributor's fork). */
+    async closePull(prNumber) {
+      if (appMode) return callWorker("POST", "/membership/pr-close", { number: prNumber });
+      return req("PATCH", `/repos/${upstream}/pulls/${prNumber}`, { state: "closed" });
     }
   };
 }
@@ -18225,6 +18297,70 @@ async function listIncomingContributions(ctx2) {
   }
   return { contributions: out };
 }
+async function loadOwnContribution(ctx2, number4) {
+  const id = requireIdentity(ctx2);
+  const repo = requireRepo(ctx2);
+  const n = Number(number4);
+  if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");
+  const pr = await repo.getPull(n);
+  const aId = pr.author?.id != null ? String(pr.author.id) : null;
+  const aLogin = String(pr.author?.login || "").toLowerCase();
+  const myId = id.githubId != null ? String(id.githubId) : null;
+  const myLogin = String(id.login || "").toLowerCase();
+  if (myId && aId && aId === myId || myLogin && aLogin && aLogin === myLogin) {
+    throw new OperationError("forbidden", "this is your own pull request, not an incoming contribution");
+  }
+  const files = await repo.getPullDiffFiles(n);
+  if (!isContributionToFolder(files.map((f) => f.filename), id.username)) {
+    throw new OperationError("forbidden", "this pull request is not a contribution to your folder");
+  }
+  return { id, repo, n, pr, files };
+}
+async function getContributionReview(ctx2, { number: number4 } = {}) {
+  const { repo, n, pr, files } = await loadOwnContribution(ctx2, number4);
+  const proposed = [];
+  for (const f of files) {
+    if (!/\.md$/i.test(f.filename) || f.status === "removed") continue;
+    let text = null;
+    try {
+      text = await repo.getFileContent(f.filename, pr.headSha);
+    } catch {
+      text = null;
+    }
+    if (text == null) continue;
+    const { body } = parseContentFile(text);
+    proposed.push({ filename: f.filename, body });
+  }
+  return {
+    number: n,
+    title: pr.title,
+    html_url: pr.html_url,
+    headSha: pr.headSha,
+    author: pr.author,
+    files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
+    proposed
+  };
+}
+var DECLINE_NOTE = "Thank you for the contribution. The folder owner has decided not to merge this change right now. You are welcome to discuss it here or open a revised proposal.";
+async function reviewContribution(ctx2, { number: number4, decision, message } = {}) {
+  const { repo, n, pr } = await loadOwnContribution(ctx2, number4);
+  const msg = typeof message === "string" ? message.trim() : "";
+  switch (decision) {
+    case "approve":
+      await repo.submitReview(n, { event: "APPROVE", body: msg, commitId: pr.headSha });
+      return { ok: true, decision, number: n };
+    case "request-changes":
+      if (!msg) throw new OperationError("bad-request", "request-changes needs a message describing what to change");
+      await repo.submitReview(n, { event: "REQUEST_CHANGES", body: msg, commitId: pr.headSha });
+      return { ok: true, decision, number: n };
+    case "decline":
+      await repo.commentOnPull(n, msg || DECLINE_NOTE);
+      await repo.closePull(n);
+      return { ok: true, decision, number: n };
+    default:
+      throw new OperationError("bad-request", `unknown decision "${decision}" (approve | request-changes | decline)`);
+  }
+}
 
 // client/src/mcp-auth.mjs
 import fs3 from "node:fs";
@@ -18438,6 +18574,21 @@ var TOOLS = [
     description: "List incoming contributions to review: open pull requests another member opened against the signed-in member's own folder, awaiting their approval (SOW-028).",
     inputSchema: obj({}),
     handler: (ctx2) => listIncomingContributions(ctx2)
+  },
+  {
+    name: "get_contribution",
+    description: "Read one incoming contribution by PR `number`: its per-file unified diff and the proposed new body of each changed markdown file (SOW-028).",
+    inputSchema: obj({ number: { type: "integer" } }, ["number"]),
+    handler: (ctx2, args) => getContributionReview(ctx2, { number: args?.number })
+  },
+  {
+    name: "review_contribution",
+    description: "Decide an incoming contribution to your folder: approve (merges + awards), request-changes, or decline (closes it). The client never merges directly; approve submits a GitHub review the gate reads. Args: number, decision ('approve'|'request-changes'|'decline'), optional message (SOW-028).",
+    inputSchema: obj(
+      { number: { type: "integer" }, decision: { type: "string", enum: ["approve", "request-changes", "decline"] }, message: { type: "string" } },
+      ["number", "decision"]
+    ),
+    handler: (ctx2, args) => reviewContribution(ctx2, { number: args?.number, decision: args?.decision, message: args?.message })
   }
 ];
 var TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
