@@ -657,6 +657,9 @@ export async function getContributionReview(ctx, { number } = {}) {
     files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
     proposed,
     delegation, // { contributions, comments } as it will be after merge, or null when the content sets none
+    // SOW-028: in app mode (SOW-026) the member's fork-scoped token cannot post a review the gate would honor by
+    // their github_id, so the decision is taken on github.com. The UI shows decide buttons only when this is true.
+    canActInClient: !isAppMode(),
   };
 }
 
@@ -670,6 +673,12 @@ const DECLINE_NOTE =
  * posts a note and closes the PR (the draft stays on the contributor's fork). Fail-closed via loadOwnContribution.
  */
 export async function reviewContribution(ctx, { number, decision, message } = {}) {
+  // App mode (SOW-026): a fork-scoped token cannot post a review the gate would honor by the owner's github_id,
+  // and the installation token must not act as a universal approver, so the decision is taken on github.com.
+  // Fail fast with a clear message (the UI hides the decide buttons in app mode; this guards the MCP/agent path).
+  if (isAppMode()) {
+    throw new OperationError('forbidden', 'in app mode, approve or decline this contribution on github.com (the gate records your GitHub identity as the reviewer)');
+  }
   const { repo, n, pr } = await loadOwnContribution(ctx, number);
   const msg = typeof message === 'string' ? message.trim() : '';
   switch (decision) {
@@ -682,8 +691,12 @@ export async function reviewContribution(ctx, { number, decision, message } = {}
       await repo.submitReview(n, { event: 'REQUEST_CHANGES', body: msg, commitId: pr.headSha });
       return { ok: true, decision, number: n };
     case 'decline':
-      await repo.commentOnPull(n, msg || DECLINE_NOTE);
-      await repo.closePull(n);
+      // The owner cannot merge-close another member's PR (they are not a collaborator), so decline is a
+      // REQUEST_CHANGES review carrying the decline note (authored by the owner, which the contributor sees), plus
+      // a best-effort close. A close failure is non-fatal: the declining review stands and the contributor can
+      // close their own PR or revise it.
+      await repo.submitReview(n, { event: 'REQUEST_CHANGES', body: msg || DECLINE_NOTE, commitId: pr.headSha });
+      try { await repo.closePull(n); } catch { /* owner lacks permission to close a non-own PR; the review stands */ }
       return { ok: true, decision, number: n };
     default:
       throw new OperationError('bad-request', `unknown decision "${decision}" (approve | request-changes | decline)`);

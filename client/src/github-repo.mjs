@@ -326,22 +326,18 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
       }
     },
 
-    /** Submit a PR review as the signed-in owner. The gate honors an APPROVE only when commit_id is the current
-     *  head SHA (a later push invalidates a stale approval), so the caller passes the freshly-read headSha. */
+    /** Submit a PR review as the signed-in owner (CLASSIC mode only). The gate honors an APPROVE only when
+     *  commit_id is the current head SHA (a later push invalidates a stale approval), so the caller passes the
+     *  freshly-read headSha. There is deliberately no app-mode proxy: a fork-scoped token cannot post to the
+     *  upstream, and the installation token would author as GBTI's app (which the gate must not trust as a
+     *  universal approver), so in app mode the owner approves on github.com (operations guards this). */
     async submitReview(prNumber, { event, body = '', commitId } = {}) {
-      if (appMode) return callWorker('POST', '/membership/pr-review', { number: prNumber, event, body, commit_id: commitId });
       return req('POST', `/repos/${upstream}/pulls/${prNumber}/reviews`, { event, body, ...(commitId ? { commit_id: commitId } : {}) });
     },
 
-    /** Post an issue comment on a PR (the decline note / a discussion message). */
-    async commentOnPull(prNumber, body) {
-      if (appMode) return callWorker('POST', '/membership/pr-comment', { number: prNumber, body });
-      return req('POST', `/repos/${upstream}/issues/${prNumber}/comments`, { body });
-    },
-
-    /** Close a PR without merging (a declined contribution; the draft stays on the contributor's fork). */
+    /** Close a PR without merging. Best-effort: a non-collaborator owner cannot close another member's PR, so the
+     *  caller treats a failure as non-fatal (the declining review still stands). Classic mode only. */
     async closePull(prNumber) {
-      if (appMode) return callWorker('POST', '/membership/pr-close', { number: prNumber });
       return req('PATCH', `/repos/${upstream}/pulls/${prNumber}`, { state: 'closed' });
     },
   };

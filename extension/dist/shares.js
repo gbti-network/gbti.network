@@ -759,6 +759,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<div class="award"><b>If you approve</b>${reward}</div>`;
     }
     _decideHtml() {
+      if (this._data && this._data.canActInClient === false) {
+        return `<div class="decide">
+        <p class="hint">Approving records your GitHub identity as the reviewer, which the membership gate reads. In this mode, approve or decline on GitHub.</p>
+        <div class="actions"><a class="btn approve" href="${esc(this._data.html_url || "#")}" target="_blank" rel="noopener">Open on GitHub to decide</a></div>
+      </div>`;
+      }
       return `<div class="decide">
       <textarea data-msg placeholder="Optional note to the contributor (required when requesting changes)"></textarea>
       <div class="actions">

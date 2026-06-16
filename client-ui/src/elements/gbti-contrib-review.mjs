@@ -172,6 +172,14 @@ class GbtiContribReview extends GbtiElement {
   }
 
   _decideHtml() {
+    // App mode (SOW-026): the gate records the reviewer's GitHub identity, which a fork-scoped token cannot
+    // provide, so the decision is taken on github.com. Show a deep link instead of the in-client buttons.
+    if (this._data && this._data.canActInClient === false) {
+      return `<div class="decide">
+        <p class="hint">Approving records your GitHub identity as the reviewer, which the membership gate reads. In this mode, approve or decline on GitHub.</p>
+        <div class="actions"><a class="btn approve" href="${esc(this._data.html_url || '#')}" target="_blank" rel="noopener">Open on GitHub to decide</a></div>
+      </div>`;
+    }
     return `<div class="decide">
       <textarea data-msg placeholder="Optional note to the contributor (required when requesting changes)"></textarea>
       <div class="actions">

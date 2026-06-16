@@ -17885,20 +17885,17 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
         throw err;
       }
     },
-    /** Submit a PR review as the signed-in owner. The gate honors an APPROVE only when commit_id is the current
-     *  head SHA (a later push invalidates a stale approval), so the caller passes the freshly-read headSha. */
+    /** Submit a PR review as the signed-in owner (CLASSIC mode only). The gate honors an APPROVE only when
+     *  commit_id is the current head SHA (a later push invalidates a stale approval), so the caller passes the
+     *  freshly-read headSha. There is deliberately no app-mode proxy: a fork-scoped token cannot post to the
+     *  upstream, and the installation token would author as GBTI's app (which the gate must not trust as a
+     *  universal approver), so in app mode the owner approves on github.com (operations guards this). */
     async submitReview(prNumber, { event, body = "", commitId } = {}) {
-      if (appMode) return callWorker("POST", "/membership/pr-review", { number: prNumber, event, body, commit_id: commitId });
       return req("POST", `/repos/${upstream}/pulls/${prNumber}/reviews`, { event, body, ...commitId ? { commit_id: commitId } : {} });
     },
-    /** Post an issue comment on a PR (the decline note / a discussion message). */
-    async commentOnPull(prNumber, body) {
-      if (appMode) return callWorker("POST", "/membership/pr-comment", { number: prNumber, body });
-      return req("POST", `/repos/${upstream}/issues/${prNumber}/comments`, { body });
-    },
-    /** Close a PR without merging (a declined contribution; the draft stays on the contributor's fork). */
+    /** Close a PR without merging. Best-effort: a non-collaborator owner cannot close another member's PR, so the
+     *  caller treats a failure as non-fatal (the declining review still stands). Classic mode only. */
     async closePull(prNumber) {
-      if (appMode) return callWorker("POST", "/membership/pr-close", { number: prNumber });
       return req("PATCH", `/repos/${upstream}/pulls/${prNumber}`, { state: "closed" });
     }
   };
@@ -18344,12 +18341,18 @@ async function getContributionReview(ctx2, { number: number4 } = {}) {
     author: pr.author,
     files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
     proposed,
-    delegation: delegation2
+    delegation: delegation2,
     // { contributions, comments } as it will be after merge, or null when the content sets none
+    // SOW-028: in app mode (SOW-026) the member's fork-scoped token cannot post a review the gate would honor by
+    // their github_id, so the decision is taken on github.com. The UI shows decide buttons only when this is true.
+    canActInClient: !isAppMode()
   };
 }
 var DECLINE_NOTE = "Thank you for the contribution. The folder owner has decided not to merge this change right now. You are welcome to discuss it here or open a revised proposal.";
 async function reviewContribution(ctx2, { number: number4, decision, message } = {}) {
+  if (isAppMode()) {
+    throw new OperationError("forbidden", "in app mode, approve or decline this contribution on github.com (the gate records your GitHub identity as the reviewer)");
+  }
   const { repo, n, pr } = await loadOwnContribution(ctx2, number4);
   const msg = typeof message === "string" ? message.trim() : "";
   switch (decision) {
@@ -18361,8 +18364,11 @@ async function reviewContribution(ctx2, { number: number4, decision, message } =
       await repo.submitReview(n, { event: "REQUEST_CHANGES", body: msg, commitId: pr.headSha });
       return { ok: true, decision, number: n };
     case "decline":
-      await repo.commentOnPull(n, msg || DECLINE_NOTE);
-      await repo.closePull(n);
+      await repo.submitReview(n, { event: "REQUEST_CHANGES", body: msg || DECLINE_NOTE, commitId: pr.headSha });
+      try {
+        await repo.closePull(n);
+      } catch {
+      }
       return { ok: true, decision, number: n };
     default:
       throw new OperationError("bad-request", `unknown decision "${decision}" (approve | request-changes | decline)`);

@@ -52,7 +52,7 @@ import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { handleActivity } from './membership-activity.mjs';
 import { handleFollows } from './membership-follows.mjs';
 import { handleDiscordInvite } from './discord-invite.mjs';
-import { openPullForMember, listMemberPulls, memberPrStatus } from './github-app.mjs';
+import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewPrDetail, reviewPrFiles, reviewFileContent } from './github-app.mjs';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 // CORS for the membership endpoints (token-authenticated, no cookies). Covers BOTH the GET reads (status oracle,
@@ -425,6 +425,40 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET') {
           const r = await memberPrStatus(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-028: read proxies for the in-client contribution review INBOX in app mode. A fork-scoped member token
+      // cannot read the upstream, so the Worker reads it with GBTI's installation token. Unlike my-pulls/pr-status
+      // these are NOT head-owner-scoped (the inbox is about OTHER members' PRs against the caller's folder), which
+      // is safe because the canonical repo is public; the client filters to the caller's folder. Reads only;
+      // approving still happens on github.com in app mode (the gate needs the owner's own github_id as author).
+      if (pathname === '/membership/open-pulls') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = await listOpenPullsForReview(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+      if (pathname === '/membership/pr') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = await reviewPrDetail(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+      if (pathname === '/membership/pr-files') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = await reviewPrFiles(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+      if (pathname === '/membership/file') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = await reviewFileContent(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

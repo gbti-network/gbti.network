@@ -77,12 +77,21 @@ test('request-changes needs a message; with one it submits REQUEST_CHANGES', asy
   assert.equal(repo.calls.reviews[0].body, 'tighten the intro');
 });
 
-test('decline posts a note then closes the PR (never merges)', async () => {
+test('decline submits a REQUEST_CHANGES review with the note + best-effort close (never merges)', async () => {
   const repo = fakeRepo({ pull: bobPull(), files: [f('members/alice/posts/x/index.md')] });
   await reviewContribution(ctx({ repo }), { number: 7, decision: 'decline', message: 'not now' });
-  assert.deepEqual(repo.calls.comments, [{ number: 7, body: 'not now' }]);
-  assert.deepEqual(repo.calls.closed, [7]);
-  assert.equal(repo.calls.reviews.length, 0); // a decline is never a review
+  assert.equal(repo.calls.reviews.length, 1);
+  assert.equal(repo.calls.reviews[0].event, 'REQUEST_CHANGES');
+  assert.equal(repo.calls.reviews[0].body, 'not now');
+  assert.deepEqual(repo.calls.closed, [7]); // best-effort close attempted
+});
+
+test('decline survives a close that the owner is not permitted to make', async () => {
+  const repo = fakeRepo({ pull: bobPull(), files: [f('members/alice/posts/x/index.md')] });
+  repo.closePull = async () => { throw new Error('403 not a collaborator'); };
+  const out = await reviewContribution(ctx({ repo }), { number: 7, decision: 'decline' });
+  assert.deepEqual(out, { ok: true, decision: 'decline', number: 7 });
+  assert.equal(repo.calls.reviews[0].event, 'REQUEST_CHANGES'); // the declining review still stands
 });
 
 test('an unknown decision is a bad-request', async () => {

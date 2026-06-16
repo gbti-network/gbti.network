@@ -198,3 +198,105 @@ export async function memberPrStatus(request, env, deps = {}) {
   const state = gate?.state ?? status.state ?? 'unknown';
   return { status: 200, body: { ok: true, state, meaning: interpretGateState(state), sha, description: gate?.description ?? null } };
 }
+
+// ----- SOW-028: read proxies for the in-client contribution review INBOX (app mode) -----
+//
+// Unlike my-pulls / pr-status (which scope to the caller's OWN fork), the contribution inbox is about OTHER
+// members' PRs opened against the caller's folder, so the contributor's fork (not the caller's) owns the head.
+// These endpoints therefore CANNOT scope by head owner. That is safe: the canonical repo is PUBLIC, so every PR,
+// diff, and file these return is already world-readable on github.com. The installation token only stands in for
+// the fork-scoped member token's inability to reach the upstream; it surfaces nothing private. The CLIENT filters
+// the list to the caller's own folder (isContributionToFolder). A valid member token is required (no paid gate;
+// reads only). NOTE: there is deliberately no app-mode WRITE proxy. An approval must be authored by the owner's
+// github_id for the SOW-005 gate to honor it; a fork-scoped token cannot post to the upstream and the
+// installation token would author as GBTI's app (which the gate must never trust as a universal approver), so in
+// app mode the owner approves on github.com. Classic mode posts the review directly with the member's
+// account-wide token.
+
+const authorOf = (pr) => ({ login: pr?.user?.login ?? null, id: pr?.user?.id != null ? String(pr.user.id) : null });
+
+/** GET /membership/open-pulls -> { ok, items }: ALL open PRs on the canonical repo (public), newest first. */
+export async function listOpenPullsForReview(request, env, deps = {}) {
+  const { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network' } = deps;
+  const who = await authMemberLogin(request, { fetchImpl, fetchUser });
+  if (!who.ok) return { status: who.status, body: who.body };
+  let instToken;
+  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
+  const res = await fetchImpl(`${GH}/repos/${upstream}/pulls?state=open&sort=created&direction=desc&per_page=100`, { headers: GH_HEADERS(instToken) });
+  if (!res || !res.ok) return { status: 502, body: { error: 'list_failed', message: `GitHub returned ${res ? res.status : 'no response'}` } };
+  const list = await res.json().catch(() => []);
+  const items = (Array.isArray(list) ? list : []).map((pr) => ({
+    number: pr.number, title: pr.title, html_url: pr.html_url, author: authorOf(pr),
+    headSha: pr.head?.sha ?? null, createdAt: pr.created_at ?? null, updatedAt: pr.updated_at ?? null,
+  }));
+  return { status: 200, body: { ok: true, items } };
+}
+
+/** GET /membership/pr?number=N -> the PR ({ number, title, body, html_url, state, headSha, author }). */
+export async function reviewPrDetail(request, env, deps = {}) {
+  const { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network' } = deps;
+  const who = await authMemberLogin(request, { fetchImpl, fetchUser });
+  if (!who.ok) return { status: who.status, body: who.body };
+  const number = Number(new URL(request.url).searchParams.get('number'));
+  if (!Number.isInteger(number) || number <= 0) return { status: 400, body: { error: 'bad_request', message: 'a positive PR number is required' } };
+  let instToken;
+  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
+  const res = await fetchImpl(`${GH}/repos/${upstream}/pulls/${number}`, { headers: GH_HEADERS(instToken) });
+  if (res && res.status === 404) return { status: 404, body: { error: 'not_found', message: 'no such pull request' } };
+  if (!res || !res.ok) return { status: 502, body: { error: 'pr_failed', message: `GitHub returned ${res ? res.status : 'no response'}` } };
+  const pr = await res.json().catch(() => ({}));
+  return { status: 200, body: { ok: true, number: pr.number, title: pr.title, body: pr.body ?? '', html_url: pr.html_url, state: pr.state, headSha: pr.head?.sha ?? null, author: authorOf(pr) } };
+}
+
+/** GET /membership/pr-files?number=N[&patch=1] -> { ok, files }: a PR's changed files (with patch when asked). */
+export async function reviewPrFiles(request, env, deps = {}) {
+  const { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network' } = deps;
+  const who = await authMemberLogin(request, { fetchImpl, fetchUser });
+  if (!who.ok) return { status: who.status, body: who.body };
+  const url = new URL(request.url);
+  const number = Number(url.searchParams.get('number'));
+  if (!Number.isInteger(number) || number <= 0) return { status: 400, body: { error: 'bad_request', message: 'a positive PR number is required' } };
+  const wantPatch = url.searchParams.get('patch') === '1';
+  let instToken;
+  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
+  const res = await fetchImpl(`${GH}/repos/${upstream}/pulls/${number}/files?per_page=100`, { headers: GH_HEADERS(instToken) });
+  if (res && res.status === 404) return { status: 404, body: { error: 'not_found', message: 'no such pull request' } };
+  if (!res || !res.ok) return { status: 502, body: { error: 'files_failed', message: `GitHub returned ${res ? res.status : 'no response'}` } };
+  const list = await res.json().catch(() => []);
+  const files = (Array.isArray(list) ? list : []).map((f) => ({
+    filename: f.filename, status: f.status, additions: f.additions ?? 0, deletions: f.deletions ?? 0,
+    ...(wantPatch ? { patch: f.patch ?? null } : {}),
+  }));
+  return { status: 200, body: { ok: true, files } };
+}
+
+/** GET /membership/file?path=P&ref=R -> { ok, text }: a content file at a ref (the PR head), for preview-as-merged.
+ *  Restricted to clean members/** paths so it can never be a general repo-file oracle (even though the repo is
+ *  public). Returns text:null for a missing file. */
+export async function reviewFileContent(request, env, deps = {}) {
+  const { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network' } = deps;
+  const who = await authMemberLogin(request, { fetchImpl, fetchUser });
+  if (!who.ok) return { status: who.status, body: who.body };
+  const url = new URL(request.url);
+  const path = String(url.searchParams.get('path') || '');
+  const ref = String(url.searchParams.get('ref') || '');
+  const clean = path.length > 0 && !path.startsWith('/') && !path.includes('\\') && !path.includes('\0') &&
+    path.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..');
+  if (!clean || !path.startsWith('members/')) return { status: 400, body: { error: 'bad_request', message: 'path must be a clean members/ content path' } };
+  if (!ref) return { status: 400, body: { error: 'bad_request', message: 'a ref is required' } };
+  let instToken;
+  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
+  const res = await fetchImpl(`${GH}/repos/${upstream}/contents/${path}?ref=${encodeURIComponent(ref)}`, { headers: GH_HEADERS(instToken) });
+  if (res && res.status === 404) return { status: 200, body: { ok: true, text: null } };
+  if (!res || !res.ok) return { status: 502, body: { error: 'file_failed', message: `GitHub returned ${res ? res.status : 'no response'}` } };
+  const data = await res.json().catch(() => ({}));
+  if (Array.isArray(data) || !data?.content) return { status: 200, body: { ok: true, text: null } };
+  let text = null;
+  try {
+    const bin = atob(String(data.content).replace(/\s+/g, ''));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    text = new TextDecoder().decode(bytes);
+  } catch { text = null; }
+  return { status: 200, body: { ok: true, text } };
+}
