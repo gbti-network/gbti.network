@@ -23,6 +23,11 @@ PUBLIC_BASE_URL = "https://signup.gbti.network"
 DISCORD_GUILD_ID = "1073029070411006053"
 DISCORD_TRIAL_ROLE_ID = "1511800465107583198"
 DISCORD_MEMBER_ROLE_ID = "1511810502970441900"
+# SOW-011 lockout role: a lapsed/banned account is moved here (its channel overwrites deny the community
+# channels; reconcile never kicks). The bot role must sit ABOVE this role.
+DISCORD_LOCKED_ROLE_ID = "1512558475341987990"
+# On-demand invite: the channel the bot mints an invite to (#welcome). The bot needs CREATE_INSTANT_INVITE on it.
+DISCORD_INVITE_CHANNEL_ID = "1073029071602204804"
 
 # Stripe annual price id ($150/yr). Non-secret. SANDBOX price; override in [env.production] with the live price.
 STRIPE_PRICE_ID = "price_1TeI3RBUci7L4JnwPYzZfspC"
@@ -113,6 +118,8 @@ DISCORD_OAUTH_CLIENT_ID = "1511795875788357632"
 DISCORD_GUILD_ID = "1073029070411006053"
 DISCORD_TRIAL_ROLE_ID = "1511800465107583198"
 DISCORD_MEMBER_ROLE_ID = "1511810502970441900"
+DISCORD_LOCKED_ROLE_ID = "1512558475341987990"
+DISCORD_INVITE_CHANNEL_ID = "1073029071602204804"
 
 # Production KV. A DEDICATED production namespace is recommended so sandbox test data never mixes with live
 # (create it with `npx wrangler kv namespace create SIGNUP_KV --env production`, then paste its id here). The
