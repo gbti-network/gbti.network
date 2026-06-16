@@ -4446,6 +4446,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
         this._discordJoined = false;
       }
+      this._discordInviteUrl = DISCORD_INVITE_URL;
+      try {
+        const inv = await this.client?.discordInvite?.();
+        if (inv?.url) this._discordInviteUrl = inv.url;
+      } catch {
+      }
       this._loaded = true;
       this.render();
     }
@@ -4467,7 +4473,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ${this._discordCard()}
       ${this._followCard()}
       <button class="btn done" data-done type="button">I am all set</button>`);
-      this.on("[data-discord-join]", "click", () => window.open(DISCORD_INVITE_URL, "_blank", "noopener"));
+      this.on("[data-discord-join]", "click", () => window.open(this._discordInviteUrl || DISCORD_INVITE_URL, "_blank", "noopener"));
       const cb = this.$("[data-discord-cb]");
       if (cb) cb.addEventListener("change", () => {
         this._discordJoined = cb.checked;
@@ -5067,6 +5073,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-018: returns { items: [share summaries] }
       listShareComments: ({ targetSlug, limit } = {}) => request("GET", `/api/share-comments${qs({ targetSlug, limit })}`),
       // SOW-032: a Share's discussion -> { items: [comment summaries] }
+      discordInvite: () => request("GET", "/api/discord-invite"),
+      // on-demand Discord invite -> { url, source }
       postComment: (b) => request("POST", "/api/comment", b),
       // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
       editComment: (b) => request("POST", "/api/comment/edit", b),

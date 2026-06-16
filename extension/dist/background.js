@@ -17978,6 +17978,25 @@ async function setFollow({ username, on = true, ...opts }) {
   return call2("POST", { username, on }, opts);
 }
 
+// client/src/member-invite-client.mjs
+var trimBase3 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var InviteClientError = class extends Error {
+};
+async function getDiscordInvite({ token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new InviteClientError("not signed in");
+  const res = await fetch(trimBase3(signupBase) + "/membership/discord-invite", {
+    method: "GET",
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new InviteClientError(data?.message || data?.error || `invite request failed (${res.status})`);
+  return data;
+}
+
 // client/src/github-app-probe.mjs
 var GH = "https://api.github.com";
 var ghHeaders = (token) => ({ Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "gbti-network" });
@@ -18408,6 +18427,19 @@ async function setFollow2(ctx, { username, on = true } = {}) {
     throw mapFollowsError(err);
   }
 }
+async function getDiscordInvite2(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    const r = await getDiscordInvite({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    return { url: r?.url ?? null, source: r?.source ?? null };
+  } catch (err) {
+    if (err instanceof InviteClientError && /not signed in/i.test(err.message)) {
+      throw new OperationError("not-authenticated", "Sign in to get a Discord invite.");
+    }
+    throw new OperationError("invite-failed", err?.message || "the Discord invite request failed");
+  }
+}
 async function getOnboardingStatus(ctx) {
   const token = ctx.store?.get?.("githubToken");
   if (!isAppMode()) {
@@ -18703,6 +18735,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(method === "POST" ? await mutateMemberActivity(ctx, body) : await getMemberActivity(ctx));
       case "/api/follows":
         return ok(method === "POST" ? await setFollow2(ctx, body) : await getFollows2(ctx));
+      case "/api/discord-invite":
+        return ok(await getDiscordInvite2(ctx));
       case "/api/prs":
         return ok({ prs: await requireRepo2(ctx).listMyPulls(id.login) });
       case "/api/pr-status": {

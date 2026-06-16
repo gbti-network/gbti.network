@@ -51,6 +51,7 @@ import { membershipStatus } from './membership-status.mjs';
 import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { handleActivity } from './membership-activity.mjs';
 import { handleFollows } from './membership-follows.mjs';
+import { handleDiscordInvite } from './discord-invite.mjs';
 import { openPullForMember, listMemberPulls, memberPrStatus } from './github-app.mjs';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -424,6 +425,21 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET') {
           const r = await memberPrStatus(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // On-demand Discord guild invite for the welcome view. The bot mints a real invite (token never leaves the
+      // Worker), cached in KV so we do not spam Discord; fail-closed to the static DISCORD_INVITE_URL. Auth = a
+      // verified GitHub token; channel access is still governed by the reconcile role sync.
+      if (pathname === '/membership/discord-invite') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          // Build the bot client defensively: if DISCORD_BOT_TOKEN is unset, the handler falls back to the
+          // static DISCORD_INVITE_URL rather than 500-ing.
+          let discord = null;
+          try { discord = clientsFromEnv(env).discord; } catch { discord = null; }
+          const r = await handleDiscordInvite(request, env, { discord });
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

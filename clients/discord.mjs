@@ -58,5 +58,17 @@ export function createDiscordClient({ botToken, fetch = globalThis.fetch, baseUr
     async postChannelMessage(channelId, content) {
       return req('POST', `/channels/${channelId}/messages`, { content });
     },
+
+    /**
+     * Create an instant invite to a channel (on-demand guild invite). Needs CREATE_INSTANT_INVITE on the
+     * channel for the bot. `maxAgeSeconds` 0 = never expires; `maxUses` 0 = unlimited; `unique: true` forces a
+     * fresh code instead of reusing an equivalent existing one. Returns the API invite object plus a convenience
+     * `url` (`https://discord.gg/<code>`), or null.
+     */
+    async createInvite(channelId, { maxAgeSeconds = 0, maxUses = 0, unique = false } = {}) {
+      const inv = await req('POST', `/channels/${channelId}/invites`, { max_age: maxAgeSeconds, max_uses: maxUses, unique });
+      if (!inv || !inv.code) return null;
+      return { ...inv, url: `https://discord.gg/${inv.code}` };
+    },
   };
 }

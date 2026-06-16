@@ -26,6 +26,7 @@ import {
   mutateMemberActivity,
   getFollows,
   setFollow,
+  getDiscordInvite,
   getOnboardingStatus,
 } from './operations.mjs';
 import { getSettings, updateSettings, getBilling, getReferral } from './settings-ops.mjs';
@@ -92,6 +93,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/activity') return run(() => mutateMemberActivity(ctx, body ?? {})); // SOW-024
   if (method === 'GET' && pathname === '/api/follows') return run(() => getFollows(ctx)); // SOW-023
   if (method === 'POST' && pathname === '/api/follows') return run(() => setFollow(ctx, body ?? {})); // SOW-023
+  if (method === 'GET' && pathname === '/api/discord-invite') return run(() => getDiscordInvite(ctx)); // on-demand Discord invite
   if (method === 'GET' && pathname === '/api/onboarding-status') return run(() => getOnboardingStatus(ctx)); // SOW-026
   if (method === 'GET' && pathname === '/api/prs') return run(() => listPRs(ctx));
   if (method === 'GET' && pathname === '/api/pr-status') return run(() => prStatus(ctx, { number: query.number }));

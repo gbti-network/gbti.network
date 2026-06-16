@@ -93,6 +93,20 @@ test('discord addRole / removeRole hit the role endpoints', async () => {
   assert.match(calls[1].url, /\/members\/u1\/roles\/rTrial$/);
 });
 
+test('discord createInvite POSTs to the channel and derives the discord.gg url', async () => {
+  const { fetch, calls } = recorder([{ body: { code: 'abc123', max_age: 604800 } }]);
+  const discord = createDiscordClient({ botToken: 'bot', fetch });
+  const inv = await discord.createInvite('chan1', { maxAgeSeconds: 604800, maxUses: 0, unique: false });
+  assert.equal(calls[0].method, 'POST');
+  assert.match(calls[0].url, /\/channels\/chan1\/invites$/);
+  assert.deepEqual(JSON.parse(calls[0].body), { max_age: 604800, max_uses: 0, unique: false });
+  assert.equal(inv.code, 'abc123');
+  assert.equal(inv.url, 'https://discord.gg/abc123');
+  // a response without a code -> null (no usable invite)
+  const { fetch: f2 } = recorder([{ body: {} }]);
+  assert.equal(await createDiscordClient({ botToken: 'bot', fetch: f2 }).createInvite('chan1'), null);
+});
+
 // ---- GitHub ----
 test('github setStatus posts state + context and truncates description', async () => {
   const { fetch, calls } = recorder([{ body: { id: 1 } }]);

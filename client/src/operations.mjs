@@ -16,6 +16,7 @@ import {
   setCollectionItem as workerSetCollectionItem, ActivityClientError,
 } from './member-activity-client.mjs';
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
+import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
 import { probeReadiness } from './github-app-probe.mjs';
 import {
   nextStep as onboardingNextStep, STEPS as ONBOARDING_STEPS, forkFullName,
@@ -488,6 +489,25 @@ export async function setFollow(ctx, { username, on = true } = {}) {
     return r?.following ?? [];
   } catch (err) {
     throw mapFollowsError(err);
+  }
+}
+
+/**
+ * The on-demand Discord invite for the welcome view. The bot mints/caches the invite in the Worker (token never
+ * leaves it); this returns { url, source }. requireIdentity only; the Worker re-verifies the token. Failures map
+ * to an OperationError so the welcome view can fall back to the static DISCORD_INVITE_URL.
+ */
+export async function getDiscordInvite(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try {
+    const r = await workerGetDiscordInvite({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    return { url: r?.url ?? null, source: r?.source ?? null };
+  } catch (err) {
+    if (err instanceof InviteClientError && /not signed in/i.test(err.message)) {
+      throw new OperationError('not-authenticated', 'Sign in to get a Discord invite.');
+    }
+    throw new OperationError('invite-failed', err?.message || 'the Discord invite request failed');
   }
 }
 

@@ -66,6 +66,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     postShare: (b) => request('POST', '/api/share', b), // SOW-018: returns { id, path, visibility, encrypted }
     listShares: ({ limit } = {}) => request('GET', `/api/shares${qs({ limit })}`), // SOW-018: returns { items: [share summaries] }
     listShareComments: ({ targetSlug, limit } = {}) => request('GET', `/api/share-comments${qs({ targetSlug, limit })}`), // SOW-032: a Share's discussion -> { items: [comment summaries] }
+    discordInvite: () => request('GET', '/api/discord-invite'), // on-demand Discord invite -> { url, source }
     postComment: (b) => request('POST', '/api/comment', b), // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
     editComment: (b) => request('POST', '/api/comment/edit', b), // SOW-027: { id, body, authorNote? } -> { id, edited }
     getComment: ({ id }) => request('GET', `/api/comment${qs({ id })}`), // SOW-027: edit prefill -> { path, frontmatter, body }

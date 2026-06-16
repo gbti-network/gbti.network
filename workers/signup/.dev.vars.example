@@ -7,6 +7,13 @@ PUBLIC_BASE_URL="http://localhost:8787"
 DISCORD_GUILD_ID="000000000000000000"
 DISCORD_TRIAL_ROLE_ID="000000000000000000"
 DISCORD_MEMBER_ROLE_ID="000000000000000000"
+# Locked role (SOW-011): a lapsed/banned account is moved here (channel overwrites lock them out, never kicked).
+DISCORD_LOCKED_ROLE_ID="000000000000000000"
+# On-demand invite (GET /membership/discord-invite): the channel the bot mints an invite to. The bot needs
+# CREATE_INSTANT_INVITE on it. DISCORD_INVITE_URL is the static vanity fallback used when this is unset or errors.
+# DISCORD_INVITE_TTL_SECONDS is optional (default 604800 = 7 days).
+DISCORD_INVITE_CHANNEL_ID="000000000000000000"
+DISCORD_INVITE_URL="https://discord.gg/your-vanity"
 STRIPE_PRICE_ID="price_xxxxxxxxxxxxxxxx"
 GITHUB_OAUTH_CLIENT_ID="Iv1.xxxxxxxxxxxxxxxx"
 DISCORD_OAUTH_CLIENT_ID="000000000000000000"

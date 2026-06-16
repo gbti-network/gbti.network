@@ -6,7 +6,7 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getOnboardingStatus } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getOnboardingStatus } from '../../client/src/operations.mjs';
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText } from '../../client/src/roles.mjs';
@@ -97,6 +97,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(method === 'POST' ? await mutateMemberActivity(ctx, body) : await getMemberActivity(ctx));
       case '/api/follows': // SOW-023: the follow graph (subscriptions) in the deletable edge store, via the Worker (paid-only)
         return ok(method === 'POST' ? await setFollow(ctx, body) : await getFollows(ctx));
+      case '/api/discord-invite': // on-demand Discord guild invite, minted + cached by the Worker
+        return ok(await getDiscordInvite(ctx));
       case '/api/prs':
         return ok({ prs: await requireRepo(ctx).listMyPulls(id.login) });
       case '/api/pr-status': {

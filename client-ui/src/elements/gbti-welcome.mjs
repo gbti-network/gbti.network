@@ -94,6 +94,13 @@ class GbtiWelcome extends GbtiElement {
       this._follows = null; // paid-only / unavailable -> the follow card shows an upgrade notice
     }
     try { this._discordJoined = localStorage.getItem(DISCORD_DONE_KEY) === '1'; } catch { this._discordJoined = false; }
+    // Prefer a fresh, bot-minted invite from the Worker; fall back to the static DISCORD_INVITE_URL when the
+    // endpoint is unavailable (not provisioned / signed out). The bot token never reaches the page.
+    this._discordInviteUrl = DISCORD_INVITE_URL;
+    try {
+      const inv = await this.client?.discordInvite?.();
+      if (inv?.url) this._discordInviteUrl = inv.url;
+    } catch { /* keep the static fallback */ }
     this._loaded = true;
     this.render();
   }
@@ -114,8 +121,8 @@ class GbtiWelcome extends GbtiElement {
       ${this._followCard()}
       <button class="btn done" data-done type="button">I am all set</button>`);
 
-    // Discord card wiring.
-    this.on('[data-discord-join]', 'click', () => window.open(DISCORD_INVITE_URL, '_blank', 'noopener'));
+    // Discord card wiring. Use the resolved invite (live bot-minted URL, or the static fallback).
+    this.on('[data-discord-join]', 'click', () => window.open(this._discordInviteUrl || DISCORD_INVITE_URL, '_blank', 'noopener'));
     const cb = this.$('[data-discord-cb]');
     if (cb) cb.addEventListener('change', () => {
       this._discordJoined = cb.checked;
