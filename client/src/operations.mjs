@@ -635,13 +635,18 @@ async function loadOwnContribution(ctx, number) {
 export async function getContributionReview(ctx, { number } = {}) {
   const { repo, n, pr, files } = await loadOwnContribution(ctx, number);
   const proposed = [];
+  let delegation = null; // SOW-028 P4: the as-merged revenue split, so the owner sees what approving pays out
   for (const f of files) {
     if (!/\.md$/i.test(f.filename) || f.status === 'removed') continue;
     let text = null;
     try { text = await repo.getFileContent(f.filename, pr.headSha); } catch { text = null; }
     if (text == null) continue;
-    const { body } = parseContentFile(text);
+    const { frontmatter, body } = parseContentFile(text);
     proposed.push({ filename: f.filename, body });
+    const del = frontmatter && typeof frontmatter === 'object' ? frontmatter.delegation : null;
+    if (delegation == null && del && typeof del === 'object') {
+      delegation = { contributions: Number(del.contributions) || 0, comments: Number(del.comments) || 0 };
+    }
   }
   return {
     number: n,
@@ -651,6 +656,7 @@ export async function getContributionReview(ctx, { number } = {}) {
     author: pr.author,
     files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
     proposed,
+    delegation, // { contributions, comments } as it will be after merge, or null when the content sets none
   };
 }
 

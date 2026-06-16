@@ -27,7 +27,10 @@ const CSS = `
   .preview { border:1px solid var(--line); border-radius:10px; padding:16px 18px; background:var(--panel); }
   .preview + .preview { margin-top:12px; }
   .pmeta { color:var(--muted); font-size:12px; font-family:var(--font-mono,ui-monospace,monospace); margin:0 0 8px; }
-  .decide { margin-top:18px; border-top:1px solid var(--line); padding-top:16px; }
+  .award { margin-top:16px; border:1px solid var(--line); border-radius:10px; padding:13px 15px; background:var(--hover); }
+  .award b { font-size:13px; } .award p { margin:5px 0 0; font-size:13.5px; color:var(--fg); }
+  .award .zero { color:var(--muted); }
+  .decide { margin-top:16px; border-top:1px solid var(--line); padding-top:16px; }
   textarea { width:100%; box-sizing:border-box; min-height:74px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:9px 11px; font:inherit; background:var(--panel); color:var(--fg); }
   .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:11px; }
   .btn { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:700; font-size:13px; padding:8px 16px; cursor:pointer; }
@@ -124,6 +127,7 @@ class GbtiContribReview extends GbtiElement {
            <button class="tab ${this._tab === 'preview' ? 'on' : ''}" data-tab="preview" type="button">Preview as merged</button>
          </div>
          <div>${body}</div>
+         ${this._awardHtml()}
          ${this._decideHtml()}`,
     );
     this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this.render(); }));
@@ -152,6 +156,21 @@ class GbtiContribReview extends GbtiElement {
     }).join('');
   }
 
+  // SOW-028 P4: surface the reward at the decision point. The contributor is credited on this content (the
+  // stacked-avatar footnote) and earns a contribution point for a point-bearing change; the revenue cut is THIS
+  // content's `delegation.contributions` (0..7% of the owner's 30% referral commission). A 0% split is called
+  // out with a nudge, because the contributor then earns reputation but no revenue. Delegation is set on the
+  // content itself (the Revenue delegation field when you edit the post/product/prompt in your workspace).
+  _awardHtml() {
+    const who = this._data.author?.login ? '@' + esc(this._data.author.login) : 'The contributor';
+    const d = this._data.delegation;
+    const pct = d ? Math.round((d.contributions || 0) * 100) : 0;
+    const reward = pct > 0
+      ? `<p>${who} is credited as a contributor on this content and earns a <b>${pct}% share</b> of the referral revenue it brings in, plus a contribution point.</p>`
+      : `<p class="zero">${who} is credited as a contributor and earns a contribution point. You currently share <b>0%</b> of this content's revenue, so they receive reputation but no revenue. Set a revenue delegation when you edit this content to give contributors a cut.</p>`;
+    return `<div class="award"><b>If you approve</b>${reward}</div>`;
+  }
+
   _decideHtml() {
     return `<div class="decide">
       <textarea data-msg placeholder="Optional note to the contributor (required when requesting changes)"></textarea>
@@ -161,7 +180,7 @@ class GbtiContribReview extends GbtiElement {
         <button class="btn decline" data-decide="decline" type="button" ${this._busy ? 'disabled' : ''}>Decline</button>
       </div>
       ${this._error ? `<p class="err">${esc(this._error)}</p>` : ''}
-      <p class="hint">Approving submits an approval the membership gate reads, then merges the change and credits the contributor with a share of this content's revenue.</p>
+      <p class="hint">Approving submits an approval the membership gate reads, then merges the change. The client never merges directly.</p>
     </div>`;
   }
 }

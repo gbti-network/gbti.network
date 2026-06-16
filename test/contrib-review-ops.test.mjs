@@ -28,7 +28,7 @@ test('getContributionReview returns the diff + the proposed body for preview-as-
   const repo = fakeRepo({
     pull: bobPull(),
     files: [f('members/alice/posts/x/index.md', { additions: 2, deletions: 1, patch: '@@ -1 +1 @@\n-old\n+new' })],
-    contentByPath: { 'members/alice/posts/x/index.md': '---\ntitle: X\nslug: x\n---\nThe new body.' },
+    contentByPath: { 'members/alice/posts/x/index.md': '---\ntitle: X\nslug: x\ndelegation:\n  contributions: 0.05\n  comments: 0.02\n---\nThe new body.' },
   });
   const r = await getContributionReview(ctx({ repo }), { number: 7 });
   assert.equal(r.number, 7);
@@ -36,6 +36,18 @@ test('getContributionReview returns the diff + the proposed body for preview-as-
   assert.equal(r.files.length, 1);
   assert.equal(r.files[0].patch, '@@ -1 +1 @@\n-old\n+new');
   assert.deepEqual(r.proposed, [{ filename: 'members/alice/posts/x/index.md', body: 'The new body.' }]);
+  // SOW-028 P4: the as-merged revenue split travels with the review so the owner sees what approving pays.
+  assert.deepEqual(r.delegation, { contributions: 0.05, comments: 0.02 });
+});
+
+test('getContributionReview reports null delegation when the content sets none', async () => {
+  const repo = fakeRepo({
+    pull: bobPull(),
+    files: [f('members/alice/posts/x/index.md', { patch: '@@ -1 +1 @@\n-a\n+b' })],
+    contentByPath: { 'members/alice/posts/x/index.md': '---\ntitle: X\nslug: x\n---\nBody.' },
+  });
+  const r = await getContributionReview(ctx({ repo }), { number: 7 });
+  assert.equal(r.delegation, null);
 });
 
 test('getContributionReview fails closed for the owner own PR and for another folder', async () => {

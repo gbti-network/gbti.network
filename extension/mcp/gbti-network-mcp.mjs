@@ -18319,6 +18319,7 @@ async function loadOwnContribution(ctx2, number4) {
 async function getContributionReview(ctx2, { number: number4 } = {}) {
   const { repo, n, pr, files } = await loadOwnContribution(ctx2, number4);
   const proposed = [];
+  let delegation2 = null;
   for (const f of files) {
     if (!/\.md$/i.test(f.filename) || f.status === "removed") continue;
     let text = null;
@@ -18328,8 +18329,12 @@ async function getContributionReview(ctx2, { number: number4 } = {}) {
       text = null;
     }
     if (text == null) continue;
-    const { body } = parseContentFile(text);
+    const { frontmatter, body } = parseContentFile(text);
     proposed.push({ filename: f.filename, body });
+    const del = frontmatter && typeof frontmatter === "object" ? frontmatter.delegation : null;
+    if (delegation2 == null && del && typeof del === "object") {
+      delegation2 = { contributions: Number(del.contributions) || 0, comments: Number(del.comments) || 0 };
+    }
   }
   return {
     number: n,
@@ -18338,7 +18343,9 @@ async function getContributionReview(ctx2, { number: number4 } = {}) {
     headSha: pr.headSha,
     author: pr.author,
     files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
-    proposed
+    proposed,
+    delegation: delegation2
+    // { contributions, comments } as it will be after merge, or null when the content sets none
   };
 }
 var DECLINE_NOTE = "Thank you for the contribution. The folder owner has decided not to merge this change right now. You are welcome to discuss it here or open a revised proposal.";

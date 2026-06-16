@@ -24,6 +24,7 @@ const CSS = `
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
   .tab.on { background:var(--hover); color:var(--accent); }
+  .tbadge { display:inline-block; min-width:16px; margin-left:6px; padding:0 5px; border-radius:999px; background:var(--accent); color:#fff; font-size:11px; font-weight:800; line-height:16px; text-align:center; vertical-align:text-top; }
   .profile { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:12px; padding:11px 14px; margin:0 0 14px; background:var(--panel); font-size:14px; }
   .profile .lbl { color:var(--muted); font-size:12px; }
   .profile button { margin-left:auto; }
@@ -55,9 +56,19 @@ class GbtiWorkspace extends GbtiElement {
     this._prs = null;   // { prs }
     this._editing = null;
     this._reviewing = null; // SOW-028: the PR number being reviewed in the drill-in, or null
+    this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
     super.connectedCallback?.(); // base now renders the initial view with fields in place
     this._loadProfile();
     this._ensureTab('post');
+    this._loadInboxCount();
+  }
+
+  // SOW-028 P5: poll the incoming-contribution count on open (batch-first, like the rest of the client) so the
+  // Inbox tab carries a "N to review" badge without the member having to open it. Fail-soft to no badge.
+  async _loadInboxCount() {
+    try { this._inboxCount = (await this.client?.listContributions?.())?.contributions?.length ?? 0; }
+    catch { this._inboxCount = 0; }
+    if (!this._editing && this._reviewing == null) this.render();
   }
 
   // ----- data loaders (each fail-soft to an empty state, like gbti-content-list/gbti-pr-list) -----
@@ -126,10 +137,13 @@ class GbtiWorkspace extends GbtiElement {
       // decided PR drops off the list.
       this.set(this.css(CSS) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
       this.on('[data-back]', 'click', () => { this._reviewing = null; this.render(); });
-      this.$('gbti-contrib-review')?.addEventListener('contrib-decided', () => { this._reviewing = null; this.render(); });
+      this.$('gbti-contrib-review')?.addEventListener('contrib-decided', () => { this._reviewing = null; this.render(); this._loadInboxCount(); });
       return;
     }
-    const tabs = TABS.map((t) => `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}</button>`).join('');
+    const tabs = TABS.map((t) => {
+      const badge = t.id === 'inbox' && this._inboxCount ? `<span class="tbadge">${esc(this._inboxCount)}</span>` : '';
+      return `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
+    }).join('');
     this.set(this.css(CSS) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
     this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this.render(); this._ensureTab(this._tab); }));
     this._wireBody();

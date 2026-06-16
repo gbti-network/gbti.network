@@ -621,7 +621,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .preview { border:1px solid var(--line); border-radius:10px; padding:16px 18px; background:var(--panel); }
   .preview + .preview { margin-top:12px; }
   .pmeta { color:var(--muted); font-size:12px; font-family:var(--font-mono,ui-monospace,monospace); margin:0 0 8px; }
-  .decide { margin-top:18px; border-top:1px solid var(--line); padding-top:16px; }
+  .award { margin-top:16px; border:1px solid var(--line); border-radius:10px; padding:13px 15px; background:var(--hover); }
+  .award b { font-size:13px; } .award p { margin:5px 0 0; font-size:13.5px; color:var(--fg); }
+  .award .zero { color:var(--muted); }
+  .decide { margin-top:16px; border-top:1px solid var(--line); padding-top:16px; }
   textarea { width:100%; box-sizing:border-box; min-height:74px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:9px 11px; font:inherit; background:var(--panel); color:var(--fg); }
   .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:11px; }
   .btn { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:700; font-size:13px; padding:8px 16px; cursor:pointer; }
@@ -716,6 +719,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
            <button class="tab ${this._tab === "preview" ? "on" : ""}" data-tab="preview" type="button">Preview as merged</button>
          </div>
          <div>${body}</div>
+         ${this._awardHtml()}
          ${this._decideHtml()}`
       );
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
@@ -742,6 +746,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return `<div class="preview"><p class="pmeta">${esc(shortPath(p.filename))}</p>${html || '<p class="muted">Preview unavailable.</p>'}</div>`;
       }).join("");
     }
+    // SOW-028 P4: surface the reward at the decision point. The contributor is credited on this content (the
+    // stacked-avatar footnote) and earns a contribution point for a point-bearing change; the revenue cut is THIS
+    // content's `delegation.contributions` (0..7% of the owner's 30% referral commission). A 0% split is called
+    // out with a nudge, because the contributor then earns reputation but no revenue. Delegation is set on the
+    // content itself (the Revenue delegation field when you edit the post/product/prompt in your workspace).
+    _awardHtml() {
+      const who = this._data.author?.login ? "@" + esc(this._data.author.login) : "The contributor";
+      const d = this._data.delegation;
+      const pct = d ? Math.round((d.contributions || 0) * 100) : 0;
+      const reward = pct > 0 ? `<p>${who} is credited as a contributor on this content and earns a <b>${pct}% share</b> of the referral revenue it brings in, plus a contribution point.</p>` : `<p class="zero">${who} is credited as a contributor and earns a contribution point. You currently share <b>0%</b> of this content's revenue, so they receive reputation but no revenue. Set a revenue delegation when you edit this content to give contributors a cut.</p>`;
+      return `<div class="award"><b>If you approve</b>${reward}</div>`;
+    }
     _decideHtml() {
       return `<div class="decide">
       <textarea data-msg placeholder="Optional note to the contributor (required when requesting changes)"></textarea>
@@ -751,7 +767,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <button class="btn decline" data-decide="decline" type="button" ${this._busy ? "disabled" : ""}>Decline</button>
       </div>
       ${this._error ? `<p class="err">${esc(this._error)}</p>` : ""}
-      <p class="hint">Approving submits an approval the membership gate reads, then merges the change and credits the contributor with a share of this content's revenue.</p>
+      <p class="hint">Approving submits an approval the membership gate reads, then merges the change. The client never merges directly.</p>
     </div>`;
     }
   };
@@ -4810,6 +4826,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
   .tab.on { background:var(--hover); color:var(--accent); }
+  .tbadge { display:inline-block; min-width:16px; margin-left:6px; padding:0 5px; border-radius:999px; background:var(--accent); color:#fff; font-size:11px; font-weight:800; line-height:16px; text-align:center; vertical-align:text-top; }
   .profile { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:12px; padding:11px 14px; margin:0 0 14px; background:var(--panel); font-size:14px; }
   .profile .lbl { color:var(--muted); font-size:12px; }
   .profile button { margin-left:auto; }
@@ -4837,9 +4854,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._prs = null;
       this._editing = null;
       this._reviewing = null;
+      this._inboxCount = null;
       super.connectedCallback?.();
       this._loadProfile();
       this._ensureTab("post");
+      this._loadInboxCount();
+    }
+    // SOW-028 P5: poll the incoming-contribution count on open (batch-first, like the rest of the client) so the
+    // Inbox tab carries a "N to review" badge without the member having to open it. Fail-soft to no badge.
+    async _loadInboxCount() {
+      try {
+        this._inboxCount = (await this.client?.listContributions?.())?.contributions?.length ?? 0;
+      } catch {
+        this._inboxCount = 0;
+      }
+      if (!this._editing && this._reviewing == null) this.render();
     }
     // ----- data loaders (each fail-soft to an empty state, like gbti-content-list/gbti-pr-list) -----
     async _loadProfile() {
@@ -4916,10 +4945,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.$("gbti-contrib-review")?.addEventListener("contrib-decided", () => {
           this._reviewing = null;
           this.render();
+          this._loadInboxCount();
         });
         return;
       }
-      const tabs = TABS.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}</button>`).join("");
+      const tabs = TABS.map((t) => {
+        const badge = t.id === "inbox" && this._inboxCount ? `<span class="tbadge">${esc(this._inboxCount)}</span>` : "";
+        return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
+      }).join("");
       this.set(this.css(CSS13) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
