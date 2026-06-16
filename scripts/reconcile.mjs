@@ -188,13 +188,43 @@ function discordRoleId(role, env) {
   return null;
 }
 
+/**
+ * Parse the optional DISCORD_MENTION_OVERRIDES env JSON ({ "<login>": "<discord_user_id>", ... }) into a
+ * lowercased-login -> discord_user_id Map. This is the SAME map the content-syndication workflow uses to
+ * resolve a content author's Discord mention; reconcile reuses it to find the discord_user_id of a
+ * grandfathered/banned member who has NO Stripe customer, so it can still sync their managed Discord role.
+ * discord_user_id is kept OUT of the public repo, so this rides a GitHub Actions secret, never a committed
+ * file. Returns an empty Map on absent or invalid JSON (best-effort; never throws).
+ */
+export function parseDiscordUserMap(env = {}) {
+  const map = new Map();
+  const raw = env.DISCORD_MENTION_OVERRIDES;
+  if (!raw) return map;
+  let obj;
+  try { obj = JSON.parse(raw); } catch { return map; }
+  if (!obj || typeof obj !== 'object') return map;
+  for (const [login, id] of Object.entries(obj)) {
+    if (login && id) map.set(String(login).toLowerCase(), String(id));
+  }
+  return map;
+}
+
 /** Enact a single Discord role action. */
 async function enactDiscord(discord, action, env) {
   const guildId = env.DISCORD_GUILD_ID;
   const roleId = discordRoleId(action.role, env);
   if (!guildId || !roleId) return; // missing config: skip rather than throw on a partial run
-  if (action.type === 'add-role') await discord.addRole(guildId, action.discordUserId, roleId);
-  else await discord.removeRole(guildId, action.discordUserId, roleId);
+  try {
+    if (action.type === 'add-role') await discord.addRole(guildId, action.discordUserId, roleId);
+    else await discord.removeRole(guildId, action.discordUserId, roleId);
+  } catch (e) {
+    // Best-effort: a role op fails when the member is not in the guild (a grandfathered co-op member who
+    // was granted access but never joined Discord) or on a transient Discord error. Log and continue so one
+    // bad role op does not abort the rest of the run (content flips, the KV mirror, other members' roles).
+    console.warn(
+      `reconcile: WARNING Discord ${action.type} role=${action.role} for ${action.discordUserId} failed: ${e?.message ?? e}`,
+    );
+  }
 }
 
 /**
@@ -305,6 +335,50 @@ export async function gatherMembers(stripe, overrides, now, { repoIndex = null, 
   return members;
 }
 
+/**
+ * Gather member entries for grandfathered / banned github_ids that have NO Stripe customer, so their
+ * managed Discord role is still synced. gatherMembers iterates Stripe customers only, so a complimentary
+ * co-op member granted access who never ran the paid signup (no Stripe customer) would otherwise never be
+ * enumerated, and their Member role never assigned. `seen` is the set of github_ids already produced from
+ * Stripe (skip those: their Stripe metadata is authoritative for trial/discord ids). discord_user_id is
+ * resolved from the DISCORD_MENTION_OVERRIDES login->id map (kept out of the public repo). A member whose
+ * discord_user_id does not resolve still yields an entry (so a later content reconcile can find their
+ * folder), but with no discordUserId the planner emits no Discord action for them. Effective status comes
+ * from the overrides alone (derived 'none', no Stripe): grandfather -> paid -> Member role; ban -> Locked.
+ */
+export async function gatherOverrideOnlyMembers(overrides, now, { seen = new Set(), repoIndex = null, discord = null, env = {} } = {}) {
+  const members = [];
+  const userMap = parseDiscordUserMap(env);
+  const guildId = env.DISCORD_GUILD_ID ?? null;
+  // grandfathered + banned entries each carry { github_id, login }. bans first so a banned id wins the
+  // dedupe over a (contradictory) grandfather listing of the same id; effectiveStatus enforces ban anyway.
+  const entries = [...(overrides?.bans?.values?.() ?? []), ...(overrides?.grandfathers?.values?.() ?? [])];
+  for (const e of entries) {
+    const githubId = String(e?.github_id ?? '');
+    if (!githubId || seen.has(githubId)) continue;
+    seen.add(githubId);
+    const login = e?.login ?? null;
+    const discordUserId = login ? (userMap.get(String(login).toLowerCase()) ?? null) : null;
+    const effective = effectiveStatus(githubId, 'none', overrides, now);
+    const username = resolveUsername(githubId, login, overrides, repoIndex);
+    const discordRoles = await resolveDiscordRoles(discord, guildId, discordUserId, env);
+    members.push({
+      githubId,
+      githubLogin: login,
+      discordUserId,
+      email: null,
+      username,
+      derived: 'none',
+      effective,
+      role: roleOf(githubId, overrides.roles),
+      trialStartedAt: null,
+      converted: false,
+      discordRoles,
+    });
+  }
+  return members;
+}
+
 /** Enact the full plan via the clients. Returns counts per kind. */
 export async function enactPlan(actions, { github, discord, resend }, env) {
   const counts = {};
@@ -372,6 +446,16 @@ async function main() {
     members = await gatherTargetedMember(stripe, overrides, now, targetId, { repoIndex, discord, env });
   } else {
     members = await gatherMembers(stripe, overrides, now, { repoIndex, discord, env });
+    // Grandfathered / banned members with NO Stripe customer are not enumerated above (gatherMembers
+    // iterates Stripe customers only). Union them so their managed Discord role is still synced (e.g. a
+    // complimentary co-op member granted access who never ran the paid signup). The KV overrides mirror
+    // below already covers their following/decrypt/publish access independent of this enumeration.
+    const seen = new Set(members.map((m) => String(m.githubId)));
+    const overrideOnly = await gatherOverrideOnlyMembers(overrides, now, { seen, repoIndex, discord, env });
+    if (overrideOnly.length) {
+      console.log(`reconcile: + ${overrideOnly.length} override-only member(s) (grandfathered/banned, no Stripe customer).`);
+      members = members.concat(overrideOnly);
+    }
   }
 
   const actions = planReconcile({ members, repoIndex: repoIndex.byUsername, now });

@@ -20,6 +20,8 @@ import {
   enactPlan,
   targetedGithubId,
   gatherMembers,
+  gatherOverrideOnlyMembers,
+  parseDiscordUserMap,
 } from '../scripts/reconcile.mjs';
 import { buildRepoIndex, githubLoginFromUrl, githubLoginFromProfile } from '../scripts/lib/repo-content.mjs';
 import { createResendClient } from '../clients/resend.mjs';
@@ -525,6 +527,70 @@ test('FIX 2: gatherMembers sets discordRoles from getMember so a lapsed member i
   assert.equal(discordActions.length, 2);
   assert.equal(discordActions.find((a) => a.type === 'add-role').role, 'locked');
   assert.equal(discordActions.find((a) => a.type === 'remove-role').role, 'member');
+});
+
+// =============================================================================================
+// Override-only enumeration: grandfathered / banned members with NO Stripe customer still get their
+// managed Discord role synced (gatherMembers iterates Stripe customers only and would miss them).
+// =============================================================================================
+
+test('parseDiscordUserMap parses login->id JSON, lowercases logins, ignores absent/invalid', () => {
+  assert.deepEqual([...parseDiscordUserMap({}).entries()], []);
+  assert.deepEqual([...parseDiscordUserMap({ DISCORD_MENTION_OVERRIDES: 'not json' }).entries()], []);
+  assert.deepEqual([...parseDiscordUserMap({ DISCORD_MENTION_OVERRIDES: '[]' }).entries()], []); // array -> empty (no string keys)
+  const m = parseDiscordUserMap({ DISCORD_MENTION_OVERRIDES: '{"RFilipo":"629","bomsn":"920","blank":""}' });
+  assert.equal(m.get('rfilipo'), '629'); // login lowercased
+  assert.equal(m.get('bomsn'), '920');
+  assert.equal(m.has('blank'), false); // empty id dropped
+});
+
+test('gatherOverrideOnlyMembers: a grandfathered member with no Stripe customer gets the Member role', async () => {
+  const overrides = {
+    roles: new Map(),
+    bans: new Map(),
+    grandfathers: new Map([['225425', { github_id: '225425', login: 'rfilipo' }]]),
+    membersIndex: new Map(),
+  };
+  const env = {
+    DISCORD_GUILD_ID: 'g', DISCORD_MEMBER_ROLE_ID: 'rm', DISCORD_TRIAL_ROLE_ID: 'rt', DISCORD_LOCKED_ROLE_ID: 'rl',
+    DISCORD_MENTION_OVERRIDES: '{"rfilipo":"629903610582663183"}',
+  };
+  const discord = { getMember: async () => ({ roles: [] }) }; // in the guild, holds no managed role yet
+  const members = await gatherOverrideOnlyMembers(overrides, NOW, { seen: new Set(), discord, env });
+  assert.equal(members.length, 1);
+  assert.equal(members[0].githubId, '225425');
+  assert.equal(members[0].discordUserId, '629903610582663183'); // resolved from the override map
+  assert.equal(members[0].effective.status, 'paid'); // grandfather -> paid
+  assert.equal(members[0].effective.source, 'grandfather');
+
+  const actions = planReconcile({ members, repoIndex: {}, now: NOW });
+  const discordActions = ofKind(actions, 'discord');
+  assert.equal(discordActions.length, 1);
+  assert.equal(discordActions[0].type, 'add-role');
+  assert.equal(discordActions[0].role, 'member'); // grandfathered co-op member -> the full Member role
+  assert.equal(discordActions[0].discordUserId, '629903610582663183');
+});
+
+test('gatherOverrideOnlyMembers: skips ids already gathered from Stripe and yields no Discord action without an id', async () => {
+  const overrides = {
+    roles: new Map(),
+    bans: new Map([['7000', { github_id: '7000', login: 'banned-guy' }]]),
+    grandfathers: new Map([
+      ['225425', { github_id: '225425', login: 'rfilipo' }], // already seen -> skipped
+      ['9999', { github_id: '9999', login: 'no-discord' }],  // no override-map entry -> no discordUserId
+    ]),
+    membersIndex: new Map(),
+  };
+  const env = { DISCORD_GUILD_ID: 'g', DISCORD_MEMBER_ROLE_ID: 'rm', DISCORD_LOCKED_ROLE_ID: 'rl', DISCORD_MENTION_OVERRIDES: '{}' };
+  const discord = { getMember: async () => ({ roles: [] }) };
+  const members = await gatherOverrideOnlyMembers(overrides, NOW, { seen: new Set(['225425']), discord, env });
+  // rfilipo skipped (already seen); banned-guy + no-discord remain
+  assert.deepEqual(members.map((m) => m.githubId).sort(), ['7000', '9999']);
+  const banned = members.find((m) => m.githubId === '7000');
+  assert.equal(banned.effective.status, 'banned'); // ban -> Locked target
+  // No discordUserId resolves for any of them (empty map) -> the planner emits zero Discord actions.
+  const actions = planReconcile({ members, repoIndex: {}, now: NOW });
+  assert.equal(ofKind(actions, 'discord').length, 0);
 });
 
 // =============================================================================================
