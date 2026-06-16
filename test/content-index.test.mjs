@@ -23,7 +23,7 @@ test('contentItemPath: unsupported type / missing slug -> null', () => {
 test('toIndexItem: metadata only, derives url + path, never a body', () => {
   const it = toIndexItem({ data: { slug: 'hello', title: 'Hello', author: 'hudson', excerpt: 'hi', publishedAt: new Date('2026-01-01'), visibility: 'members' } }, 'post');
   assert.equal(it.path, 'members/hudson/posts/hello/index.md');
-  assert.equal(it.url, '/blog/hello/');
+  assert.equal(it.url, '/articles/hello/');
   assert.equal(it.visibility, 'members');
   assert.equal(it.excerpt, 'hi');
   assert.ok(!('body' in it) && !('encryptedBody' in it), 'no body / no enc path in the public index');

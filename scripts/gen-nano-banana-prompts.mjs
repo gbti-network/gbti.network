@@ -12,7 +12,7 @@ const SRC_IMG = path.join(ROOT, 'members/nareshdevineni/posts/15-nano-banana-pro
 const PROMPTS = path.join(ROOT, 'members/nareshdevineni/prompts');
 const COMMENTS = path.join(ROOT, 'members/nareshdevineni/comments');
 const DATE = '2025-10-07';
-const SOURCE_URL = 'https://gbti.network/blog/15-nano-banana-prompts-for-generating-linkedin-headshots/';
+const SOURCE_URL = 'https://gbti.network/articles/15-nano-banana-prompts-for-generating-linkedin-headshots/';
 
 // Per-prompt metadata (in article order). image = source filename in the article's images/ folder.
 const ITEMS = [

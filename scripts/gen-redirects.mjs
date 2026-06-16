@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 
 // Build the set of /<seg>/<slug>/ paths that WILL be public pages: published AND (public OR a Mode B stub).
-const SEG = { posts: 'blog', products: 'products', prompts: 'prompts' };
+const SEG = { posts: 'articles', products: 'products', prompts: 'prompts' };
 const field = (txt, k) => {
   const m = new RegExp('^' + k + ':\\s*"?([^"\\n]+?)"?\\s*$', 'm').exec(txt);
   return m ? m[1].trim() : null;
@@ -58,7 +58,7 @@ if (fs.existsSync(membersDir)) {
   }
 }
 
-const CONTENT_DEST = /^\/(blog|products|prompts)\/[^/]+\/$/;
+const CONTENT_DEST = /^\/(articles|products|prompts)\/[^/]+\/$/;
 const MEMBER_DEST = /^\/members\/[^/]+\/$/;
 const MEMBERS_INDEX = '/members/';
 const MEMBERSHIP = '/membership/';
@@ -96,6 +96,14 @@ const EXTRA = [
   ['/products/email-signature-generator/', '/utilities/email-signature-generator/'],
 ];
 for (const [oldPath, newPath] of EXTRA) { lines.push(`${oldPath} ${newPath} 301`); n++; }
+
+// The blog section was renamed to /articles/ (one canonical path). Catch any remaining /blog/<slug>/ link
+// (including ones inside older post bodies) with a splat so it lands on the live /articles/ page. This MUST
+// come after the specific legacy rows above so a slug that was also renamed (e.g. the snapshots-for-ai post)
+// keeps its exact destination instead of being swept to a same-slug /articles/ 404. The splat destination is
+// skipped by check-redirects (it carries a `:` placeholder), so it never fails the build guard.
+lines.push('/blog/* /articles/:splat 301');
+n++;
 
 fs.mkdirSync(path.join(ROOT, 'public'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'public/_redirects'), lines.join('\n') + '\n');

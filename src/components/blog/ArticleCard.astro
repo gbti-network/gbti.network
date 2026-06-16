@@ -25,7 +25,7 @@ const stack = avatarStack({ author: d.author, contributors: d.contributors, comm
   data-category={category}
   class="archive-card card card-hover group flex h-full flex-col overflow-hidden"
 >
-  <a href={`/blog/${d.slug}/`} class="relative block overflow-hidden pb-[56.25%]" style="background:var(--tint)">
+  <a href={`/articles/${d.slug}/`} class="relative block overflow-hidden pb-[56.25%]" style="background:var(--tint)">
     {d.coverImage ? (
       <Image src={d.coverImage} alt="" width={600} height={338} class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
     ) : (
@@ -49,7 +49,7 @@ const stack = avatarStack({ author: d.author, contributors: d.contributors, comm
       <time datetime={d.publishedAt.toISOString()} class="body-sm muted mono mt12">{formatDate(d.publishedAt)}</time>
     )}
     <h2 class="h4 mt8 card-title">
-      <a href={`/blog/${d.slug}/`}>{d.title}</a>
+      <a href={`/articles/${d.slug}/`}>{d.title}</a>
     </h2>
     <div class="byline mt-auto pt-3">
       <StackedAvatars items={stack} size="sm" />

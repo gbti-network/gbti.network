@@ -19,7 +19,7 @@ const comments = await getCollection('comment');
 const stack = avatarStack({ author: d.author, contributors: d.contributors, comments, targetType: 'post', targetSlug: d.slug, index });
 ---
 <article class="row-card group card card-hover flex flex-col gap-4 overflow-hidden p-4 sm:flex-row">
-  <a href={`/blog/${d.slug}/`} class="block shrink-0 overflow-hidden rounded-[8px] sm:w-[240px]" style="background:var(--tint)">
+  <a href={`/articles/${d.slug}/`} class="block shrink-0 overflow-hidden rounded-[8px] sm:w-[240px]" style="background:var(--tint)">
     {d.coverImage ? (
       <Image src={d.coverImage} alt="" width={240} height={204} class="h-[150px] w-full object-cover transition-transform duration-300 group-hover:scale-105 sm:h-[204px]" />
     ) : (
@@ -29,7 +29,7 @@ const stack = avatarStack({ author: d.author, contributors: d.contributors, comm
   <div class="flex flex-col gap-2 py-1 pr-1">
     {category && <span class="chip chip-green" style="align-self:flex-start;text-transform:capitalize">{category}</span>}
     <h3 class="row-title mt8">
-      <a href={`/blog/${d.slug}/`}>{d.title}</a>
+      <a href={`/articles/${d.slug}/`}>{d.title}</a>
     </h3>
     {d.excerpt && <p class="line-clamp-3 body-sm muted">{d.excerpt}</p>}
     <div class="mt-auto flex flex-wrap items-center gap-2 pt-2 body-sm muted">

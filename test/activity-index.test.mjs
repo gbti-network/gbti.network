@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildActivityIndex } from '../src/lib/activity.mjs';
 
-const e = (slug, publishedAt) => ({ type: 'post', slug, title: slug, author: 'a', url: `/blog/${slug}/`, publishedAt });
+const e = (slug, publishedAt) => ({ type: 'post', slug, title: slug, author: 'a', url: `/articles/${slug}/`, publishedAt });
 
 test('buildActivityIndex sorts newest-first, sinks undated, and caps', () => {
   const out = buildActivityIndex([e('old', 1000), e('new', 3000), e('mid', 2000), e('undated', null)], 3);

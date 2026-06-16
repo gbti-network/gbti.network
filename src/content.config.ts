@@ -96,7 +96,7 @@ const post = defineCollection({
   schema: ({ image }) => z.object({
     type: z.literal('post').default('post'),
     title: z.string(),
-    slug: z.string().regex(/^[a-z0-9-]+$/, 'kebab-case, globally unique → /blog/<slug>/'),
+    slug: z.string().regex(/^[a-z0-9-]+$/, 'kebab-case, globally unique → /articles/<slug>/'),
     author: z.string(),
     contributors,
     delegation,

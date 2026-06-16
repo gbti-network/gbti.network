@@ -5,7 +5,7 @@
 // activity-index.json. The reader fetches bodies on demand via the token-holding worker, never from this JSON.
 
 const SUBDIR = { post: 'posts', product: 'products', prompt: 'prompts' };
-const URLBASE = { post: '/blog', product: '/products', prompt: '/prompts' };
+const URLBASE = { post: '/articles', product: '/products', prompt: '/prompts' };
 
 /** Repo-relative index.md path for a content item: house/gbti owner -> house/<sub>/<slug>/index.md; a member
  *  owner -> members/<owner>/<sub>/<slug>/index.md. Null when the type/slug is unsupported. */

@@ -7,7 +7,7 @@
 
 const DISCORD_MAX = 2000;
 const SUBDIR_TYPE = { posts: 'post', products: 'product', prompts: 'prompt' };
-const URL_BASE = { post: '/blog', product: '/products', prompt: '/prompts' };
+const URL_BASE = { post: '/articles', product: '/products', prompt: '/prompts' };
 const TYPE_LABEL = { post: 'article', product: 'product', prompt: 'prompt', share: 'Share' };
 
 // members/<owner>/(posts|products|prompts)/<slug>/index.md  OR  house/(posts|products|prompts)/<slug>/index.md

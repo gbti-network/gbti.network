@@ -28,7 +28,7 @@ const any = posts.length + products.length + prompts.length;
     <div class="wrap">
       {posts.length > 0 && (
         <div class="latest-sec">
-          <div class="latest-head"><h2 class="h3">Latest from the blog</h2><a class="link" href="/blog/">All posts</a></div>
+          <div class="latest-head"><h2 class="h3">Latest articles</h2><a class="link" href="/articles/">All articles</a></div>
           <div class="latest-grid">{posts.map((p) => <ArticleCard post={p} />)}</div>
         </div>
       )}

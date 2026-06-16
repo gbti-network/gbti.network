@@ -41,8 +41,8 @@ function firstSlug(seg) {
   return null;
 }
 const pages = [
-  '/', '/blog/', '/products/', '/prompts/', '/members/', '/membership/', '/model/', '/about/', '/terms/', '/account/', '/utilities/',
-  firstSlug('blog'), firstSlug('products'), firstSlug('prompts'), firstSlug('members'),
+  '/', '/articles/', '/products/', '/prompts/', '/members/', '/membership/', '/model/', '/about/', '/terms/', '/account/', '/utilities/',
+  firstSlug('articles'), firstSlug('products'), firstSlug('prompts'), firstSlug('members'),
   '/this-page-does-not-exist/', // the 404
 ].filter(Boolean);
 

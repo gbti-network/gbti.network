@@ -34,7 +34,7 @@ test('hasPublicPage: public yes, Mode B stub yes, Mode A no, draft no, share no'
 });
 
 test('publicUrlFor: per-type slug url for a public item; null for Mode A / share', () => {
-  assert.equal(publicUrlFor({ type: 'post', slug: 'hello', hasPublicPage: true }), 'https://gbti.network/blog/hello/');
+  assert.equal(publicUrlFor({ type: 'post', slug: 'hello', hasPublicPage: true }), 'https://gbti.network/articles/hello/');
   assert.equal(publicUrlFor({ type: 'product', slug: 'radle', hasPublicPage: true }, 'https://gbti.network/'), 'https://gbti.network/products/radle/');
   assert.equal(publicUrlFor({ type: 'prompt', slug: 'p', hasPublicPage: true }), 'https://gbti.network/prompts/p/');
   assert.equal(publicUrlFor({ type: 'post', slug: 'x', hasPublicPage: false }), null); // Mode A
@@ -64,7 +64,7 @@ test('formatPublishMessage: public link, members title-only, share link, mention
   const pub = formatPublishMessage({ type: 'post', slug: 'hello', title: 'Hello', author: 'alice', hasPublicPage: true }, { mention: '<@123>' });
   assert.match(pub, /New article published by network member <@123> 🎉/);
   assert.match(pub, /\*\*Hello\*\*/);
-  assert.match(pub, /https:\/\/gbti\.network\/blog\/hello\//);
+  assert.match(pub, /https:\/\/gbti\.network\/articles\/hello\//);
 
   const modeA = formatPublishMessage({ type: 'prompt', slug: 's', title: 'Secret', author: 'a', visibility: 'members', hasPublicPage: false }, { mention: '@a' });
   assert.match(modeA, /New members-only prompt by network member @a 🎉/);
@@ -155,7 +155,7 @@ test('runner: --apply posts each item to its type channel; dry-run posts nothing
   const r = await runSyndicate({ argv: ['--apply', '--added', ...added], env, deps });
   assert.equal(r.posted.length, 2);
   const byChannel = Object.fromEntries(posts.map((p) => [p.channelId, p.message]));
-  assert.match(byChannel.C_POST, /New article published by network member <@1001> 🎉[\s\S]*\*\*Hello\*\*[\s\S]*\/blog\/hello\//);
+  assert.match(byChannel.C_POST, /New article published by network member <@1001> 🎉[\s\S]*\*\*Hello\*\*[\s\S]*\/articles\/hello\//);
   assert.match(byChannel.C_SHARE, /New members-only Share from <@1002> 🎉[\s\S]*https:\/\/example\.com/);
   // each post restricts pings to the resolved author only
   assert.deepEqual(posts.find((p) => p.channelId === 'C_POST').opts, { allowedMentions: { parse: [], users: ['1001'] } });

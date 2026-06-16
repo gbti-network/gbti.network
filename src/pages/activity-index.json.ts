@@ -20,7 +20,7 @@ const ms = (d: Date | undefined) => (d ? Number(d) : null);
 
 export const GET: APIRoute = async () => {
   const posts = (await getCollection('post')).filter(isListed).map((p): ActivityEntry => ({
-    type: 'post', slug: p.data.slug, title: p.data.title, author: p.data.author, url: `/blog/${p.data.slug}/`, path: contentItemPath('post', p.data.author, p.data.slug), publishedAt: ms(p.data.publishedAt), visibility: p.data.visibility,
+    type: 'post', slug: p.data.slug, title: p.data.title, author: p.data.author, url: `/articles/${p.data.slug}/`, path: contentItemPath('post', p.data.author, p.data.slug), publishedAt: ms(p.data.publishedAt), visibility: p.data.visibility,
   }));
   const products = (await getCollection('product')).filter(isListed).map((p): ActivityEntry => ({
     type: 'product', slug: p.data.slug, title: p.data.title, author: p.data.author, url: `/products/${p.data.slug}/`, path: contentItemPath('product', p.data.author, p.data.slug), publishedAt: ms(p.data.publishedAt), visibility: p.data.visibility,
