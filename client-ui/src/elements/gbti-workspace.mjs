@@ -10,6 +10,8 @@ import { classifyPull, parseWorkspaceTab } from '../workspace-core.mjs';
 import './gbti-content-editor.mjs';
 import './gbti-contrib-inbox.mjs';
 import './gbti-contrib-review.mjs';
+import './gbti-saved.mjs';
+import './gbti-subscriptions.mjs';
 
 const TABS = [
   { id: 'post', label: 'Articles', type: 'post' },
@@ -17,6 +19,8 @@ const TABS = [
   { id: 'product', label: 'Products', type: 'product' },
   { id: 'prs', label: 'Pull requests' },
   { id: 'inbox', label: 'Inbox' },
+  { id: 'saved', label: 'Saved' }, // SOW-037: favorites + collections
+  { id: 'subs', label: 'Subscriptions' }, // SOW-037: follows + membership
 ];
 
 const CSS = `
@@ -85,9 +89,9 @@ class GbtiWorkspace extends GbtiElement {
   async _ensureTab(id) {
     const tab = TABS.find((t) => t.id === id);
     if (!tab) return;
-    // The Inbox tab is a self-loading <gbti-contrib-inbox> (it fetches its own data on connect), so there is
-    // nothing to preload here; render() already mounted it. Returning avoids a redundant second render/fetch.
-    if (id === 'inbox') return;
+    // The Inbox / Saved / Subscriptions tabs are self-loading elements (they fetch their own data on connect),
+    // so there is nothing to preload here; render() already mounted them. Returning avoids a redundant render.
+    if (id === 'inbox' || id === 'saved' || id === 'subs') return;
     if (tab.type && !this._cache[tab.type]) {
       try { this._cache[tab.type] = (await this.client?.listContent?.({ type: tab.type }))?.items ?? []; }
       catch { this._cache[tab.type] = []; }
@@ -163,6 +167,8 @@ class GbtiWorkspace extends GbtiElement {
     // SOW-028: the incoming-contribution review inbox is its own self-loading element. It fetches + renders
     // independently (and is inert with no client), so the workspace just mounts the tag.
     if (this._tab === 'inbox') return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
+    if (this._tab === 'saved') return `<gbti-saved></gbti-saved>`; // SOW-037
+    if (this._tab === 'subs') return `<gbti-subscriptions></gbti-subscriptions>`; // SOW-037
     if (this._tab === 'prs') {
       const prs = this._prs;
       if (prs === null) return `<p class="empty">Loading your pull requests...</p>`;

@@ -34,6 +34,9 @@ test('parseWorkspaceTab reads a valid tab from the hash (leading # optional, ext
   assert.equal(parseWorkspaceTab('#tab=prs&foo=1'), 'prs');
   assert.equal(parseWorkspaceTab('#x=1&tab=inbox'), 'inbox');
   assert.equal(parseWorkspaceTab('#tab=post'), 'post');
+  // SOW-037: the Saved + Subscriptions tabs are deep-linkable too.
+  assert.equal(parseWorkspaceTab('#tab=saved'), 'saved');
+  assert.equal(parseWorkspaceTab('#tab=subs'), 'subs');
 });
 
 test('parseWorkspaceTab returns null for an absent / unknown / malformed tab (caller defaults to post)', () => {

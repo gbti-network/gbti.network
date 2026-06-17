@@ -92,6 +92,9 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     getActivity: () => request('GET', '/api/activity'), // returns { favorites, collections }
     createCollection: ({ name }) => request('POST', '/api/activity', { action: 'collection.create', name }), // returns { id, activity }
     addToCollection: ({ id, targetType, targetSlug, on = true }) => request('POST', '/api/activity', { action: 'collection.item', id, targetType, targetSlug, on }),
+    // SOW-037: manage collections from the member's "Saved" view (the ops already support these actions).
+    renameCollection: ({ id, name }) => request('POST', '/api/activity', { action: 'collection.rename', id, name }), // returns { activity }
+    deleteCollection: ({ id }) => request('POST', '/api/activity', { action: 'collection.delete', id }), // returns { activity }
     // SOW-023: the follow graph (subscriptions) in the deletable edge store (paid-only).
     getFollows: () => request('GET', '/api/follows'), // returns { following: [{ username, addedAt }] }
     setFollow: ({ username, on = true }) => request('POST', '/api/follows', { username, on }), // returns { following }
