@@ -4681,7 +4681,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     font:inherit; font-weight:700; font-size:13px; padding:6px 13px; cursor:pointer; }
   .fbtn:hover { background:var(--brand-dark); border-color:var(--brand-dark); }
   .fbtn.on { background:transparent; color:var(--accent); }
-  .fbtn.on:hover { border-color:var(--danger); color:var(--danger); }
+  /* "Following" hover: a soft on-brand green fill (inviting), not an alarming red unfollow signal. */
+  .fbtn.on:hover { background:var(--hover); border-color:var(--brand-dark); color:var(--brand-dark); }
   .pager { display:flex; align-items:center; justify-content:space-between; margin-top:13px; }
   .pager button { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-size:13px; padding:6px 12px; cursor:pointer; }
   .pager button[disabled] { opacity:.4; cursor:default; }
@@ -5209,6 +5210,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._cache = {};
       this._reading = null;
       super.connectedCallback?.();
+      this.root?.addEventListener("error", (e) => {
+        const t = e.target;
+        if (t && t.tagName === "IMG" && t.classList?.contains("thumb")) t.style.display = "none";
+      }, true);
       this._init();
     }
     // Load the active tab's index, then (if deep-linked via read=<path>) open that item in the reader.
