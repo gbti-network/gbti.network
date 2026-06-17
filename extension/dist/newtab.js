@@ -2387,6 +2387,7 @@
   var $ = (sel) => document.querySelector(sel);
   var esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var authorName = (a) => a === "gbti" ? "GBTI Network" : a;
+  var avatarFor = (a) => a === "gbti" ? "icons/icon-32.png" : `https://github.com/${encodeURIComponent(a)}.png?size=48`;
   var TYPE_LABEL = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
   function greeting() {
     const h = (/* @__PURE__ */ new Date()).getHours();
@@ -2434,11 +2435,15 @@
     feed.innerHTML = rows.map((e) => {
       const href = e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url}`;
       return `<a class="row" href="${esc(href)}">
+        <img class="row-av" src="${esc(avatarFor(e.author))}" alt="" width="30" height="30" loading="lazy" />
         <span class="badge">${esc(TYPE_LABEL[e.type] || e.type)}</span>
         <span class="title">${e.visibility === "members" ? '<span class="mlock" title="Members only">🔒 </span>' : ""}${esc(e.title)}</span>
         <span class="meta">${esc(authorName(e.author))}${e.publishedAt ? ` · ${esc(relTime(e.publishedAt))}` : ""}</span>
       </a>`;
     }).join("");
+    feed.querySelectorAll(".row-av").forEach((img) => img.addEventListener("error", () => {
+      img.src = "icons/icon-32.png";
+    }, { once: true }));
   }
   async function loadFollows() {
     FOLLOWS_LOADED = true;

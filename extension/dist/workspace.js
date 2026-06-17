@@ -5174,6 +5174,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._cache = {};
       this._reading = null;
       super.connectedCallback?.();
+      this.root?.addEventListener("error", (e) => {
+        const t = e.target;
+        if (t && t.tagName === "IMG" && t.classList?.contains("thumb")) t.style.display = "none";
+      }, true);
       this._init();
     }
     // Load the active tab's index, then (if deep-linked via read=<path>) open that item in the reader.

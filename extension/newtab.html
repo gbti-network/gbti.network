@@ -70,8 +70,9 @@
     .tab.on { background: var(--green-tint); color: var(--green-700); }
     .row .mlock { font-size: 12px; }
     .feed { display: flex; flex-direction: column; gap: 8px; }
-    .row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); text-decoration: none; }
+    .row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); text-decoration: none; }
     .row:hover { border-color: var(--line-2); }
+    .row-av { width: 30px; height: 30px; border-radius: 50%; background: var(--line); object-fit: cover; flex: none; }
     .badge { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--green-700); background: var(--green-tint); border-radius: var(--r-pill); padding: 3px 9px; }
     .row .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .row .meta { color: var(--fg-mute); font-size: 12.5px; font-family: var(--mono); white-space: nowrap; }

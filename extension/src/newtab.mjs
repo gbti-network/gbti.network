@@ -20,6 +20,10 @@ const DAILYDEV_APP_URL = 'https://app.daily.dev/';
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const authorName = (a) => (a === 'gbti' ? 'GBTI Network' : a);
+// Author avatar: GBTI's own house content uses the extension icon; a member's avatar comes from GitHub by login
+// (the activity-index author is the folder username, which equals the login for members). A 404 (folder != login,
+// or a deleted account) falls back to the GBTI icon via a post-render error listener (CSP forbids inline onerror).
+const avatarFor = (a) => (a === 'gbti' ? 'icons/icon-32.png' : `https://github.com/${encodeURIComponent(a)}.png?size=48`);
 const TYPE_LABEL = { post: 'Article', product: 'Product', prompt: 'Prompt', share: 'Share' };
 
 function greeting() {
@@ -80,12 +84,16 @@ function renderFeed(filter = '') {
       // gbti.network. Fall back to the site URL only if the entry carries no repo path (older index, defensive).
       const href = e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url}`;
       return `<a class="row" href="${esc(href)}">
+        <img class="row-av" src="${esc(avatarFor(e.author))}" alt="" width="30" height="30" loading="lazy" />
         <span class="badge">${esc(TYPE_LABEL[e.type] || e.type)}</span>
         <span class="title">${e.visibility === 'members' ? '<span class="mlock" title="Members only">🔒 </span>' : ''}${esc(e.title)}</span>
         <span class="meta">${esc(authorName(e.author))}${e.publishedAt ? ` · ${esc(relTime(e.publishedAt))}` : ''}</span>
       </a>`;
     })
     .join('');
+  // CSP-safe avatar fallback: an avatar that 404s (folder != login) swaps to the GBTI icon. Inline onerror is
+  // blocked by the MV3 extension_pages CSP, so attach the listener here after render.
+  feed.querySelectorAll('.row-av').forEach((img) => img.addEventListener('error', () => { img.src = 'icons/icon-32.png'; }, { once: true }));
 }
 
 /** Load the caller's follow list from the background worker (paid-only). Sets FOLLOWING to a Set, or null. */

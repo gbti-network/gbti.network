@@ -50,6 +50,13 @@ class GbtiBrowse extends GbtiElement {
     this._cache = {};
     this._reading = null;
     super.connectedCallback?.(); // base now renders the initial list with fields in place
+    // Hide a thumbnail that fails to load (a stale /_astro hash after a site redeploy, or a missing asset) so the
+    // row shows no image instead of a broken-image icon. CSP forbids inline onerror, and img error events do not
+    // bubble, so a single capture-phase listener on the shadow root covers every (re-)rendered list.
+    this.root?.addEventListener('error', (e) => {
+      const t = e.target;
+      if (t && t.tagName === 'IMG' && t.classList?.contains('thumb')) t.style.display = 'none';
+    }, true);
     this._init();
   }
 
