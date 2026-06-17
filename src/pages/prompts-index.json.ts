@@ -7,14 +7,17 @@ import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { isListed, byNewest } from '../lib/content';
 import { toIndexItem } from '../lib/content-index.mjs';
+import { resolveThumb } from '../lib/index-thumb';
 
 export const prerender = true;
 
 export const GET: APIRoute = async () => {
-  const items = (await getCollection('prompt'))
-    .filter(isListed)
-    .sort(byNewest)
-    .map((e) => toIndexItem(e, 'prompt'));
+  const items = await Promise.all(
+    (await getCollection('prompt'))
+      .filter(isListed)
+      .sort(byNewest)
+      .map(async (e) => ({ ...toIndexItem(e, 'prompt'), thumb: await resolveThumb(e.data, 'prompt') })),
+  );
   const body = JSON.stringify({ generatedAt: new Date().toISOString(), count: items.length, items });
   return new Response(body, { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
 };

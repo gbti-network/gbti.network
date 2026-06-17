@@ -33,14 +33,22 @@ function imageSrc(v) {
   return null;
 }
 
-/** The thumbnail URL (SITE-relative or absolute) for a content item, or null when it has no usable image. */
-export function thumbOf(data, type) {
+/** The RAW first-present thumbnail field value (an Astro ImageMetadata object or a plain string) for a type, or
+ *  null. The Astro index endpoints feed this to getImage() to emit an OPTIMIZED variant whose URL actually
+ *  exists in dist (the raw ImageMetadata.src is the un-emitted original, which 404s). */
+export function imageFieldOf(data, type) {
   const d = data || {};
   for (const f of THUMB_FIELDS[type] || []) {
-    const src = imageSrc(d[f]);
-    if (src) return src;
+    if (d[f]) return d[f];
   }
   return null;
+}
+
+/** The thumbnail URL (SITE-relative or absolute) for a content item, or null when it has no usable image. NOTE:
+ *  for an Astro image() this returns the ORIGINAL `.src`, which Astro does NOT emit unless referenced; the index
+ *  endpoints override the thumb via getImage() (see src/lib/index-thumb.ts) so the shipped URL resolves. */
+export function thumbOf(data, type) {
+  return imageSrc(imageFieldOf(data, type));
 }
 
 /** Map a content collection entry to a metadata index item (no body). The caller filters (isListed) + sorts. */
