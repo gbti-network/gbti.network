@@ -1,0 +1,32 @@
+name: E2E smoke (live)
+
+# SOW-035 Phase 1: a manual, self-cleaning end-to-end smoke against the LIVE site + Worker, run with the real
+# gbtilabs token (GH_BOT_TOKEN) so the authenticated create -> confirm -> scrub activity cycle actually runs.
+# Manual dispatch only: it briefly writes (and then removes) one favorite in the live KV activity store; it is
+# not safe to gate every PR on, and it needs the real token + production endpoints.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-smoke
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # No dependencies to install: the harness uses node fetch + a local module.
+      - name: Run the live api-smoke (authenticated as gbtilabs)
+        run: node tests/e2e/api-smoke.mjs
+        env:
+          E2E_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          E2E_SITE: https://gbti.network
+          E2E_WORKER: https://signup.gbti.network
