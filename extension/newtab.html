@@ -1,7 +1,8 @@
 <!doctype html>
-<!-- SOW-017: the GBTI Network new-tab "Latest Activity" landing page. Styled with the V3 tokens (light + dark)
-     so it reads like the site. Fetches /activity-index.json from gbti.network (covered by the extension host
-     permission) and renders the newest co-op activity. -->
+<!-- SOW-017 + SOW-036 + SOW-039: the GBTI Network new-tab page. Left-rail shell (browse destinations), a tight
+     top bar (brand + apps + theme + account menu), and the "Latest Activity" feed with three switchable view
+     modes (compact / detailed / card) + per-item content thumbnails. V3 tokens, light + dark, CSP-safe (no inline
+     scripts/handlers). Fetches /activity-index.json over the extension's gbti.network host permission. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -10,179 +11,301 @@
   <!-- No-flash theme: external (not inline) because MV3 extension_pages CSP forbids inline scripts. -->
   <script src="dist/theme-init.js"></script>
   <style>
+    /* ---- base V3 tokens (light) ---- */
     :root {
-      --paper: #ffffff; --paper-2: #faf9f8; --ink: #25232b; --fg: #24222a; --fg-soft: #57545e; --fg-mute: #84818c;
-      --line: #e7e4e0; --line-2: #d8d4cf; --green: #1f9e5f; --green-700: #0f6f40; --green-tint: #e9f6ef;
-      --r: 10px; --r-lg: 16px; --r-pill: 999px;
-      --sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-      --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+      --paper: #ffffff; --paper-2: #faf9f8; --paper-3: #f3f1ee; --ink: #25232b;
+      --fg: #24222a; --fg-soft: #57545e; --fg-mute: #84818c;
+      --line: #e7e4e0; --line-2: #ddd9d4;
+      --green: #1f9e5f; --green-700: #0f6f40; --green-mint: #5fd49a; --green-tint: #e9f6ef; --green-tint-2: #d3ecde;
+      --r-xs: 6px; --r: 10px; --r-lg: 16px; --r-pill: 999px;
+      --sh-sm: 0 1px 2px rgba(0,0,0,.05); --sh: 0 4px 14px -6px rgba(0,0,0,.14); --sh-md: 0 10px 28px -10px rgba(0,0,0,.22);
+      --f-display: 'Baloo Da 2', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --f-sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --f-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
     }
+    /* ---- dark ---- */
     [data-theme="dark"] {
-      --paper: #2d2a34; --paper-2: #1c1a21; --fg: #f3f2f0; --fg-soft: rgba(243,242,240,.72); --fg-mute: rgba(243,242,240,.5);
-      --line: rgba(255,255,255,.12); --line-2: rgba(255,255,255,.2); --green-700: #5fd49a; --green-tint: rgba(31,158,95,.13);
+      --paper: #25232d; --paper-2: #1c1a22; --paper-3: #322f3b; --ink: #f1f0ee;
+      --fg: #f1f0ee; --fg-soft: rgba(241,240,238,.66); --fg-mute: rgba(241,240,238,.42);
+      --line: rgba(255,255,255,.09); --line-2: rgba(255,255,255,.16);
+      --green-700: #5fd49a; --green-mint: #5fd49a; --green-tint: rgba(31,158,95,.14); --green-tint-2: rgba(95,212,154,.24);
+      --sh-sm: none; --sh: 0 6px 18px -8px rgba(0,0,0,.5); --sh-md: 0 12px 30px -10px rgba(0,0,0,.6);
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--paper-2); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
-    a { color: inherit; }
-    .wrap { max-width: 940px; margin: 0 auto; padding: 30px 24px 80px; }
-    .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.01em; }
-    .brand .g { width: 30px; height: 30px; border-radius: 8px; background: var(--green); color: #fff; display: grid; place-items: center; font-weight: 800; }
-    .iconbtn { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: var(--r); border: 1px solid var(--line); background: var(--paper); color: var(--fg-soft); cursor: pointer; }
-    .iconbtn:hover { color: var(--fg); border-color: var(--line-2); }
-    /* SOW-036: the avatar account control + dropdown (mirrors the gbti.network site header). */
-    .me-wrap { position: relative; }
-    .signin { font-family: var(--sans); font-weight: 700; font-size: 13px; color: #fff; background: var(--green); border: 0; border-radius: var(--r-pill); padding: 8px 16px; cursor: pointer; }
-    .signin:hover { background: var(--green-700); }
-    .me-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px 3px 3px; border: 1px solid var(--line-2); border-radius: var(--r-pill); background: var(--paper); color: var(--fg); cursor: pointer; }
-    .me-btn:hover { border-color: var(--green); }
-    .me-av { width: 30px; height: 30px; border-radius: 50%; background: var(--line); object-fit: cover; }
-    .me-caret { color: var(--fg-mute); transition: transform .15s ease; }
-    .me-btn[aria-expanded="true"] .me-caret { transform: rotate(180deg); }
-    .me-menu { position: absolute; top: calc(100% + 8px); right: 0; min-width: 220px; z-index: 60; background: var(--paper); border: 1px solid var(--line-2); border-radius: var(--r-lg); box-shadow: 0 12px 30px -12px rgba(0,0,0,.32); padding: 6px; display: flex; flex-direction: column; }
+    html, body { height: 100%; }
+    body { margin: 0; background: var(--paper-2); color: var(--fg); font-family: var(--f-sans); -webkit-font-smoothing: antialiased; }
+    a { color: inherit; text-decoration: none; }
+
+    .nt { min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; grid-template-rows: auto 1fr; }
+
+    /* ============================ top bar ============================ */
+    .nt-bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 13px 24px; border-bottom: 1.5px solid var(--line); background: var(--paper); }
+    .nt-brand { display: flex; align-items: center; gap: 11px; font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+    .nt-brand .mk { width: 30px; height: 30px; border-radius: 7px; background: var(--green); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; flex: none; }
+    .nt-spring { flex: 1; }
+
+    .nt-apps { display: none; align-items: center; gap: 4px; padding: 4px; border: 1.5px solid var(--line); border-radius: 11px; background: var(--paper-2); }
+    .nt-apps.show { display: flex; }
+    .nt-app { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; flex: none; cursor: pointer; border: 0; padding: 0; background: transparent; transition: transform .12s; }
+    .nt-app:hover { transform: translateY(-1px); }
+    .nt-app.gbti { background: #1a1820; font-family: var(--f-display); font-weight: 800; font-size: 9px; letter-spacing: -.02em; cursor: default; }
+    .nt-app img { width: 20px; height: 20px; border-radius: 5px; display: block; }
+    .nt-app .dd { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; background: #0e1217; color: #fff; font: 800 9px/1 var(--f-mono); }
+
+    .nt-icobtn { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--paper); color: var(--fg-soft); display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; transition: border-color .15s, color .15s; }
+    .nt-icobtn:hover { border-color: var(--line-2); color: var(--fg); }
+    .nt-icobtn svg { width: 19px; height: 19px; }
+
+    /* account control (SOW-036): the avatar button opens the management dropdown */
+    .nt-acctwrap { position: relative; }
+    .nt-signin { font-family: var(--f-sans); font-weight: 700; font-size: 13px; color: #fff; background: var(--green); border: 0; border-radius: var(--r-pill); padding: 9px 17px; cursor: pointer; }
+    .nt-signin:hover { background: var(--green-700); }
+    .nt-acct { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--paper); cursor: pointer; transition: border-color .15s; }
+    .nt-acct:hover { border-color: var(--line-2); }
+    .nt-acct .av { width: 34px; height: 34px; border-radius: 50%; flex: none; object-fit: cover; background: var(--line); }
+    .nt-acct svg { width: 15px; height: 15px; color: var(--fg-mute); transition: transform .15s; }
+    .nt-acct[aria-expanded="true"] svg { transform: rotate(180deg); }
+    .me-menu { position: absolute; top: calc(100% + 8px); right: 0; min-width: 230px; z-index: 80; background: var(--paper); border: 1.5px solid var(--line-2); border-radius: var(--r-lg); box-shadow: var(--sh-md); padding: 6px; display: flex; flex-direction: column; }
     .me-menu[hidden] { display: none; }
-    .me-head { padding: 7px 12px 4px; font-family: var(--mono); font-size: 12.5px; color: var(--fg-mute); }
-    .me-head b { color: var(--fg); font-family: var(--sans); font-weight: 700; }
-    .mi { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-radius: var(--r); background: transparent; color: var(--fg); font-family: var(--sans); font-size: 14px; font-weight: 500; cursor: pointer; text-decoration: none; }
+    .me-head { padding: 7px 12px 4px; font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); }
+    .me-head b { color: var(--fg); font-family: var(--f-sans); font-weight: 700; }
+    .mi { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-radius: var(--r); background: transparent; color: var(--fg); font-family: var(--f-sans); font-size: 14px; font-weight: 500; cursor: pointer; }
     .mi:hover, .mi:focus-visible { background: var(--green-tint); color: var(--green-700); outline: none; }
     .mi-signout { color: var(--fg-soft); }
     .me-sep { height: 1px; background: var(--line); margin: 5px 4px; }
-    /* App switcher: [G | daily.dev]. Shown when daily.dev is detected, or (without the management permission)
-       by default. Clicking daily.dev switches the tab to their app. */
-    .apps { display: none; align-items: center; gap: 2px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px; margin-right: 4px; }
-    .apps.show { display: inline-flex; }
-    .app { display: inline-grid; place-items: center; width: 30px; height: 30px; border: 0; background: transparent; border-radius: var(--r-pill); cursor: pointer; padding: 0; }
-    .app img { width: 20px; height: 20px; border-radius: 5px; display: block; }
-    .app.on { background: var(--green-tint); cursor: default; }
-    .app:not(.on):hover { background: var(--line); }
-    .app .dd { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; background: #0e1217; color: #fff; font: 800 9px/1 var(--mono); }
-    /* Onboarding-aware setup banner: shown until the member is signed in AND set up (fork + app install). */
-    .setup { display: none; align-items: center; gap: 14px; margin-top: 16px; padding: 13px 18px; border: 1px solid var(--green); background: var(--green-tint); border-radius: var(--r-lg); text-decoration: none; color: var(--fg); }
+
+    /* ============================ left rail ============================ */
+    .nt-rail { border-right: 1.5px solid var(--line); background: var(--paper); padding: 22px 16px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+    .nt-rail-h { font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-mute); padding: 6px 12px 8px; }
+    .nt-rail-h:not(:first-child) { margin-top: 16px; }
+    .nav-i { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r); color: var(--fg-soft); cursor: pointer; transition: background .13s, color .13s; }
+    .nav-i:hover { background: var(--paper-3); color: var(--fg); }
+    .nav-i.on { background: var(--green-tint); color: var(--green-700); }
+    .nav-i .gl { width: 22px; height: 22px; flex: none; display: flex; align-items: center; justify-content: center; }
+    .nav-i .gl svg { width: 19px; height: 19px; }
+    .nav-i .tx { min-width: 0; display: flex; flex-direction: column; }
+    .nav-i .tx .nm { font-weight: 600; font-size: 14.5px; line-height: 1.2; }
+    .nav-i .tx .sub { font-size: 12px; color: var(--fg-mute); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nt-rail-div { height: 1.5px; background: var(--line); margin: 14px 12px; border: 0; }
+    .nt-rail-foot { margin-top: auto; padding-top: 14px; }
+    .nt-coop { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: var(--r); border: 1.5px solid var(--green-tint-2); background: var(--green-tint); color: var(--green-700); font-weight: 600; font-size: 13.5px; cursor: pointer; transition: transform .13s; }
+    .nt-coop:hover { transform: translateY(-1px); }
+    .nt-coop svg { width: 17px; height: 17px; margin-left: auto; }
+
+    /* ============================ main column ============================ */
+    .nt-main { min-width: 0; padding: 26px 34px 60px; overflow-y: auto; }
+    .nt-greet { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    .nt-greet h1 { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: 30px; letter-spacing: -.02em; line-height: 1; }
+    .nt-greet .date { font-family: var(--f-mono); font-size: 13px; color: var(--fg-mute); }
+
+    /* SOW-026/029: the onboarding setup banner (shown until signed in AND set up) */
+    .setup { display: none; align-items: center; gap: 14px; margin-top: 18px; padding: 13px 18px; border: 1.5px solid var(--green); background: var(--green-tint); border-radius: var(--r-lg); color: var(--fg); cursor: pointer; }
     .setup.show { display: flex; }
     .setup .s-txt { flex: 1; }
     .setup .s-txt b { display: block; font-size: 15px; }
     .setup .s-txt span { font-size: 13px; color: var(--fg-mute); }
     .setup .s-go { background: var(--green); color: #fff; font-weight: 800; padding: 10px 18px; border-radius: var(--r); white-space: nowrap; }
     .setup:hover .s-go { background: var(--green-700); }
-    .greet { margin-top: 26px; }
-    .greet h1 { margin: 0; font-size: clamp(28px, 5vw, 44px); letter-spacing: -.02em; }
-    .greet .date { margin-top: 6px; color: var(--fg-mute); font-family: var(--mono); font-size: 13px; letter-spacing: .02em; }
-    .search { margin-top: 26px; position: relative; max-width: 560px; }
-    .search input { width: 100%; padding: 14px 18px; border: 1.5px solid var(--line-2); border-radius: var(--r-pill); background: var(--paper); color: var(--fg); font-size: 15px; font-family: var(--mono); }
-    .search input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 0 3px var(--green-tint); }
-    .tiles { margin-top: 22px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-    .tile { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); text-decoration: none; transition: border-color .15s ease, transform .15s ease; }
-    .tile:hover { border-color: var(--green); transform: translateY(-2px); }
-    .tile .t { font-weight: 700; }
-    .tile .d { font-size: 12.5px; color: var(--fg-mute); }
-    .tile[aria-disabled="true"] { opacity: .55; pointer-events: none; }
-    .feed-head { margin: 44px 0 16px; display: flex; align-items: center; justify-content: space-between; }
-    .feed-head h2 { margin: 0; font-size: 18px; }
-    .feed-head a { color: var(--green-700); text-decoration: none; font-size: 13px; font-weight: 600; }
-    /* SOW-023: Latest / Following segmented control. */
-    .tabs { display: inline-flex; gap: 4px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px; }
-    .tab { border: 0; background: transparent; color: var(--fg-mute); font-family: var(--sans); font-size: 13px; font-weight: 700; padding: 6px 15px; border-radius: var(--r-pill); cursor: pointer; }
-    .tab.on { background: var(--green-tint); color: var(--green-700); }
-    .row .mlock { font-size: 12px; }
-    .feed { display: flex; flex-direction: column; gap: 8px; }
-    .row { display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--paper); text-decoration: none; }
-    .row:hover { border-color: var(--line-2); }
-    .row-av { width: 30px; height: 30px; border-radius: 50%; background: var(--line); object-fit: cover; flex: none; }
-    .badge { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--green-700); background: var(--green-tint); border-radius: var(--r-pill); padding: 3px 9px; }
-    .row .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .row .meta { color: var(--fg-mute); font-size: 12.5px; font-family: var(--mono); white-space: nowrap; }
+
+    .nt-search { margin-top: 16px; display: flex; align-items: center; gap: 12px; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 13px 18px; max-width: 720px; transition: border-color .15s, box-shadow .15s; }
+    .nt-search:focus-within { border-color: var(--green); box-shadow: 0 0 0 4px var(--green-tint); }
+    .nt-search svg { width: 18px; height: 18px; color: var(--fg-mute); flex: none; }
+    .nt-search input { flex: 1; border: 0; outline: 0; background: none; font-family: var(--f-mono); font-size: 14px; color: var(--fg); }
+    .nt-search input::placeholder { color: var(--fg-mute); }
+
+    /* feed header: tabs + view-mode switch */
+    .nt-feedhead { display: flex; align-items: center; gap: 18px; margin-top: 26px; flex-wrap: wrap; }
+    .nt-tabs { display: flex; gap: 2px; background: var(--paper-3); border: 1.5px solid var(--line); border-radius: var(--r); padding: 3px; }
+    .nt-tab { font-family: var(--f-sans); font-weight: 600; font-size: 14px; color: var(--fg-soft); background: none; border: 0; cursor: pointer; padding: 8px 16px; border-radius: 6px; transition: all .14s; }
+    .nt-tab:hover { color: var(--fg); }
+    .nt-tab.on { background: var(--paper); color: var(--fg); box-shadow: var(--sh-sm); }
+    .nt-modes { display: flex; gap: 2px; background: var(--paper-3); border: 1.5px solid var(--line); border-radius: var(--r); padding: 3px; margin-left: auto; }
+    .nt-mode { width: 36px; height: 32px; display: flex; align-items: center; justify-content: center; color: var(--fg-mute); background: none; border: 0; cursor: pointer; border-radius: 6px; transition: all .14s; }
+    .nt-mode:hover { color: var(--fg); }
+    .nt-mode.on { background: var(--paper); color: var(--green-700); box-shadow: var(--sh-sm); }
+    .nt-mode svg { width: 17px; height: 17px; }
+
+    .nt-feed { margin-top: 16px; }
     .muted { color: var(--fg-mute); font-size: 14px; }
-    /* One-time tip: Chrome 138+ shows its own footer on any new-tab override; we cannot remove it, so we point
-       the user at the per-profile setting once, then remember the dismissal. */
-    .footertip { display: none; align-items: center; gap: 14px; margin-top: 28px; padding: 12px 16px;
-      border: 1px dashed var(--line-2); border-radius: var(--r); background: var(--paper); }
+
+    /* ============================ shared atoms ============================ */
+    .av-img { display: block; object-fit: cover; background: var(--line); flex: none; }
+    /* content thumb (image or type-glyph fallback) */
+    .thumb { display: flex; align-items: center; justify-content: center; flex: none; overflow: hidden; color: #fff; position: relative; }
+    .thumb.t-prompt { background: linear-gradient(135deg,#1f9e5f,#13794a); }
+    .thumb.t-article { background: linear-gradient(135deg,#3f74c9,#2b53a0); }
+    .thumb.t-product { background: linear-gradient(135deg,#c9683b,#a14a28); }
+    .thumb.fallback { background: var(--paper-3); color: var(--fg-mute); border: 1.5px solid var(--line); }
+    .thumb svg { width: 46%; height: 46%; }
+    .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+    /* type chip */
+    .tchip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .04em; padding: 3px 9px; border-radius: var(--r-xs); white-space: nowrap; flex: none; }
+    .tchip svg { width: 12px; height: 12px; }
+    .tchip.c-prompt { color: var(--green-700); background: var(--green-tint); border: 1.5px solid var(--green-tint-2); }
+    .tchip.c-article { color: #2b53a0; background: #ecf1fb; border: 1.5px solid #dbe6f8; }
+    .tchip.c-product { color: #a14a28; background: #fbeee7; border: 1.5px solid #f4ddcf; }
+    [data-theme="dark"] .tchip.c-article { color: #9bbbf0; background: rgba(63,116,201,.18); border-color: rgba(63,116,201,.3); }
+    [data-theme="dark"] .tchip.c-product { color: #e0a07e; background: rgba(201,104,59,.18); border-color: rgba(201,104,59,.3); }
+
+    .lock { display: inline-flex; align-items: center; gap: 5px; font-family: var(--f-mono); font-size: 10px; font-weight: 600; letter-spacing: .03em; color: var(--fg-mute); border: 1.5px solid var(--line); border-radius: var(--r-pill); padding: 2px 8px 2px 6px; white-space: nowrap; }
+    .lock svg { width: 11px; height: 11px; }
+    .meta-au { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); white-space: nowrap; }
+    .meta-au b { color: var(--fg-soft); font-weight: 500; }
+
+    /* ============================ MODE: compact ============================ */
+    .feed-compact { display: flex; flex-direction: column; gap: 8px; }
+    .row-c { display: flex; align-items: center; gap: 13px; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 12px 16px; cursor: pointer; transition: border-color .14s, box-shadow .14s, transform .14s; }
+    .row-c:hover { border-color: var(--line-2); box-shadow: var(--sh-sm); transform: translateY(-1px); }
+    .row-c .av-img { width: 34px; height: 34px; border-radius: 50%; }
+    .row-c .thumb { width: 34px; height: 34px; border-radius: 9px; }
+    .row-c .title { font-weight: 600; font-size: 15px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+    .row-c:hover .title { color: var(--green-700); }
+    .row-c .right { display: flex; align-items: center; gap: 12px; flex: none; }
+
+    /* ============================ MODE: detailed ============================ */
+    .feed-detailed { display: flex; flex-direction: column; gap: 12px; }
+    .row-d { display: grid; grid-template-columns: 76px 1fr; gap: 18px; align-items: center; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 16px 18px; cursor: pointer; transition: border-color .14s, box-shadow .14s, transform .14s; }
+    .row-d:hover { border-color: var(--line-2); box-shadow: var(--sh); transform: translateY(-2px); }
+    .row-d .thumb { width: 76px; height: 76px; border-radius: var(--r); }
+    .row-d .d-body { min-width: 0; }
+    .row-d .d-top { display: flex; align-items: center; gap: 10px; }
+    .row-d .title { font-family: var(--f-display); font-weight: 700; font-size: 18px; line-height: 1.25; margin-top: 9px; letter-spacing: -.01em; }
+    .row-d:hover .title { color: var(--green-700); }
+    .row-d .d-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 9px; }
+    .row-d .d-meta .av-img { width: 22px; height: 22px; border-radius: 50%; }
+
+    /* ============================ MODE: card ============================ */
+    .feed-card { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .card-i { display: flex; flex-direction: column; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 16px 16px 0; cursor: pointer; overflow: hidden; transition: border-color .14s, box-shadow .14s, transform .14s; }
+    .card-i:hover { border-color: var(--line-2); box-shadow: var(--sh-md); transform: translateY(-3px); }
+    .card-i .c-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .card-i .title { font-family: var(--f-display); font-weight: 700; font-size: 16px; line-height: 1.28; margin-top: 12px; letter-spacing: -.01em; min-height: 2.56em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .card-i:hover .title { color: var(--green-700); }
+    .card-i .c-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0 14px; }
+    .card-i .c-au { display: flex; align-items: center; gap: 8px; }
+    .card-i .c-au .av-img { width: 22px; height: 22px; border-radius: 50%; }
+    .card-i .thumb { margin: 0 -16px; width: calc(100% + 32px); height: 124px; border-radius: 0; }
+    .card-i .thumb.fallback { border-left: 0; border-right: 0; border-bottom: 0; }
+
+    /* ============================ one-time Chrome-footer tip ============================ */
+    .footertip { display: none; align-items: center; gap: 14px; margin-top: 28px; padding: 12px 16px; border: 1.5px dashed var(--line-2); border-radius: var(--r); background: var(--paper); }
     .footertip.show { display: flex; }
     .footertip .ft-txt { flex: 1; font-size: 13px; color: var(--fg-mute); line-height: 1.5; }
-    .footertip .ft-x { flex: none; font-family: var(--sans); font-weight: 700; font-size: 13px; color: var(--green-700);
-      background: var(--green-tint); border: 0; border-radius: var(--r-pill); padding: 7px 14px; cursor: pointer; }
+    .footertip .ft-x { flex: none; font-family: var(--f-sans); font-weight: 700; font-size: 13px; color: var(--green-700); background: var(--green-tint); border: 0; border-radius: var(--r-pill); padding: 7px 14px; cursor: pointer; }
     .footertip .ft-x:hover { background: var(--green); color: #fff; }
-    /* SOW-018 lock state: a lapsed (Locked) member's extension is locked behind a renew splash. */
-    html[data-locked] .wrap > *:not(.lock) { display: none; }
-    .lock { display: none; }
-    html[data-locked] .lock { display: block; margin-top: 120px; text-align: center; }
-    .lock .ico { font-size: 38px; }
-    .lock h1 { font-size: clamp(24px, 4vw, 34px); margin: 12px 0 6px; }
-    .lock a.cta { display: inline-block; margin-top: 18px; background: var(--green); color: #fff; font-weight: 800; text-decoration: none; padding: 11px 22px; border-radius: 12px; }
-    @media (max-width: 640px) { .tiles { grid-template-columns: 1fr 1fr; } }
+
+    /* ============================ SOW-018 lapsed-lock splash ============================ */
+    .nt-lock { display: none; }
+    html[data-locked] .nt-lock { display: flex; position: fixed; inset: 0; z-index: 200; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: var(--paper-2); }
+    .nt-lock .ico { font-size: 38px; }
+    .nt-lock h1 { font-family: var(--f-display); font-size: clamp(24px, 4vw, 34px); margin: 12px 0 6px; }
+    .nt-lock a.cta { display: inline-block; margin-top: 18px; background: var(--green); color: #fff; font-weight: 800; padding: 11px 22px; border-radius: 12px; }
+
+    /* ============================ responsive ============================ */
+    @media (max-width: 1180px) { .feed-card { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 980px) {
+      .nt { grid-template-columns: 1fr; }
+      .nt-rail { display: none; }
+      .feed-card { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 560px) {
+      .nt-main { padding: 20px 18px 48px; }
+      .feed-card { grid-template-columns: 1fr; }
+      .row-c .right .meta-au { display: none; }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="top">
-      <span class="brand"><span class="g">G</span> GBTI Network</span>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="apps" data-apps>
-          <span class="app on" title="GBTI Network (you are here)"><img src="icons/icon-32.png" alt="GBTI Network" /></span>
-          <button class="app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
-        </span>
-        <button class="iconbtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme">◐</button>
-        <!-- SOW-036: the account control. Signed out -> a "Sign in" button; signed in -> the avatar menu that
-             deep-links into the in-extension management pages (same items as the gbti.network site header). -->
-        <div class="me-wrap" data-me-wrap>
-          <button class="signin" data-signin-btn type="button" hidden>Sign in</button>
-          <button class="me-btn" data-me-btn type="button" aria-haspopup="true" aria-expanded="false" aria-label="Account menu" hidden>
-            <img class="me-av" data-me-av alt="" width="30" height="30" />
-            <svg class="me-caret" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
-          </button>
-          <div class="me-menu" data-me-menu role="menu" hidden>
-            <div class="me-head" data-me-head></div>
-            <div class="me-sep" role="separator"></div>
-            <a class="mi" role="menuitem" href="workspace.html">My workspace</a>
-            <a class="mi" role="menuitem" href="workspace.html#tab=post">My articles</a>
-            <a class="mi" role="menuitem" href="workspace.html#tab=prompt">My prompts</a>
-            <a class="mi" role="menuitem" href="workspace.html#tab=product">My products</a>
-            <a class="mi" role="menuitem" href="workspace.html#tab=prs">My pull requests</a>
-            <a class="mi" role="menuitem" href="browse.html">Browse the co-op</a>
-            <a class="mi mi-admin" role="menuitem" href="admin.html" data-role-min hidden>Admin tools</a>
-            <div class="me-sep" role="separator"></div>
-            <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
-          </div>
+  <div class="nt">
+    <!-- top bar -->
+    <header class="nt-bar">
+      <div class="nt-brand"><span class="mk">G</span> GBTI Network</div>
+      <span class="nt-spring"></span>
+      <span class="nt-apps" data-apps>
+        <span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>
+        <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
+      </span>
+      <button class="nt-icobtn" data-theme-toggle data-ico="moon" title="Toggle theme" aria-label="Toggle theme"></button>
+      <div class="nt-acctwrap" data-me-wrap>
+        <button class="nt-signin" data-signin-btn type="button" hidden>Sign in</button>
+        <button class="nt-acct" data-me-btn type="button" aria-haspopup="true" aria-expanded="false" aria-label="Account menu" hidden>
+          <img class="av" data-me-av alt="" width="34" height="34" />
+          <span data-ico="chev"></span>
+        </button>
+        <div class="me-menu" data-me-menu role="menu" hidden>
+          <div class="me-head" data-me-head></div>
+          <div class="me-sep" role="separator"></div>
+          <a class="mi" role="menuitem" href="workspace.html">My workspace</a>
+          <a class="mi" role="menuitem" href="workspace.html#tab=post">My articles</a>
+          <a class="mi" role="menuitem" href="workspace.html#tab=prompt">My prompts</a>
+          <a class="mi" role="menuitem" href="workspace.html#tab=product">My products</a>
+          <a class="mi" role="menuitem" href="workspace.html#tab=prs">My pull requests</a>
+          <a class="mi mi-admin" role="menuitem" href="admin.html" data-role-min hidden>Admin tools</a>
+          <div class="me-sep" role="separator"></div>
+          <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
         </div>
       </div>
-    </div>
+    </header>
 
-    <a class="setup" data-setup href="#">
-      <span class="s-txt" data-setup-txt></span>
-      <span class="s-go" data-setup-go>Get started</span>
-    </a>
+    <!-- left rail -->
+    <nav class="nt-rail">
+      <div class="nt-rail-h">Feeds</div>
+      <a class="nav-i on" href="newtab.html"><span class="gl" data-ico="activity"></span><span class="tx"><span class="nm">Activity</span></span></a>
 
-    <div class="greet">
-      <h1 data-greeting>Welcome back</h1>
-      <p class="date" data-date></p>
-    </div>
+      <div class="nt-rail-h">Browse</div>
+      <a class="nav-i" href="browse.html#tab=post"><span class="gl" data-ico="article"></span><span class="tx"><span class="nm">Blog</span><span class="sub">Articles</span></span></a>
+      <a class="nav-i" href="browse.html#tab=product"><span class="gl" data-ico="product"></span><span class="tx"><span class="nm">Products</span><span class="sub">Plugins and tools</span></span></a>
+      <a class="nav-i" href="browse.html#tab=prompt"><span class="gl" data-ico="prompt"></span><span class="tx"><span class="nm">AI Prompts</span><span class="sub">Reusable prompts</span></span></a>
+      <a class="nav-i" href="browse.html#tab=share"><span class="gl" data-ico="coin"></span><span class="tx"><span class="nm">Shares</span><span class="sub">The co-op stream</span></span></a>
 
-    <div class="search">
-      <input type="search" data-filter placeholder="Filter activity" autocomplete="off" aria-label="Filter activity" />
-    </div>
+      <hr class="nt-rail-div" />
+      <a class="nav-i" href="workspace.html"><span class="gl" data-ico="grid"></span><span class="tx"><span class="nm">My workspace</span><span class="sub">Content + pull requests</span></span></a>
 
-    <div class="tiles">
-      <a class="tile" href="browse.html#tab=post"><span class="t">Blog</span><span class="d">Articles</span></a>
-      <a class="tile" href="browse.html#tab=product"><span class="t">Products</span><span class="d">Plugins and tools</span></a>
-      <a class="tile" href="browse.html#tab=prompt"><span class="t">AI Prompts</span><span class="d">Reusable prompts</span></a>
-      <a class="tile" href="browse.html#tab=share"><span class="t">Shares</span><span class="d">The co-op stream</span></a>
-      <a class="tile" href="workspace.html"><span class="t">My workspace</span><span class="d">My content + pull requests</span></a>
-    </div>
-
-    <div class="feed-head">
-      <div class="tabs" role="tablist" aria-label="Activity view">
-        <button class="tab on" type="button" data-tab="latest" role="tab" aria-selected="true">Latest</button>
-        <button class="tab" type="button" data-tab="following" role="tab" aria-selected="false">Following</button>
+      <div class="nt-rail-foot">
+        <a class="nt-coop" href="https://gbti.network/">View the co-op <span data-ico="arrow"></span></a>
       </div>
-      <a href="https://gbti.network/">View the co-op</a>
-    </div>
-    <div class="feed" data-feed><p class="muted" data-feed-status>Loading the latest from the co-op...</p></div>
+    </nav>
 
-    <div class="footertip" data-footertip>
-      <span class="ft-txt">Chrome shows its own footer at the very bottom of every new tab. It is a Chrome setting, not part of this extension. To hide it, right-click that footer and choose "Hide footer on New Tab page" (it stays hidden after that).</span>
-      <button class="ft-x" type="button" data-footertip-dismiss>Got it</button>
-    </div>
+    <!-- main -->
+    <main class="nt-main">
+      <a class="setup" data-setup href="#">
+        <span class="s-txt" data-setup-txt></span>
+        <span class="s-go" data-setup-go>Get started</span>
+      </a>
 
-    <div class="lock">
+      <div class="nt-greet">
+        <h1><span data-greeting>Welcome back</span><span data-greet-name></span></h1>
+        <span class="date" data-date></span>
+      </div>
+
+      <label class="nt-search">
+        <span data-ico="search"></span>
+        <input type="search" data-filter placeholder="Filter activity" autocomplete="off" aria-label="Filter activity" />
+      </label>
+
+      <div class="nt-feedhead">
+        <div class="nt-tabs" role="tablist" aria-label="Activity view">
+          <button class="nt-tab on" type="button" data-tab="latest" role="tab" aria-selected="true">Latest</button>
+          <button class="nt-tab" type="button" data-tab="following" role="tab" aria-selected="false">Following</button>
+        </div>
+        <div class="nt-modes" role="group" aria-label="View mode">
+          <button class="nt-mode" type="button" data-mode="compact" data-ico="mCompact" title="Compact" aria-label="Compact view"></button>
+          <button class="nt-mode" type="button" data-mode="detailed" data-ico="mDetailed" title="Detailed" aria-label="Detailed view"></button>
+          <button class="nt-mode" type="button" data-mode="card" data-ico="mCard" title="Cards" aria-label="Card view"></button>
+        </div>
+      </div>
+
+      <div class="nt-feed" data-feed><p class="muted" data-feed-status>Loading the latest from the co-op...</p></div>
+
+      <div class="footertip" data-footertip>
+        <span class="ft-txt">Chrome shows its own footer at the very bottom of every new tab. It is a Chrome setting, not part of this extension. To hide it, right-click that footer and choose "Hide footer on New Tab page" (it stays hidden after that).</span>
+        <button class="ft-x" type="button" data-footertip-dismiss>Got it</button>
+      </div>
+    </main>
+
+    <!-- SOW-018: lapsed-member lock splash (shown only when html[data-locked]) -->
+    <div class="nt-lock">
       <div class="ico">🔒</div>
       <h1>Your access is locked</h1>
       <p class="muted">Your GBTI membership has lapsed. Renew to rejoin the co-op, read the community stream, and publish again.</p>

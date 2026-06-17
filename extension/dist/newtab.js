@@ -2386,9 +2386,28 @@
   var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var $ = (sel) => document.querySelector(sel);
   var esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  var authorName = (a) => a === "gbti" ? "GBTI Network" : a;
-  var avatarFor = (a) => a === "gbti" ? "icons/icon-32.png" : `https://github.com/${encodeURIComponent(a)}.png?size=48`;
-  var TYPE_LABEL = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
+  var authorName = (a) => a === "gbti" || a === "house" ? "GBTI Network" : a;
+  var avatarFor = (a) => a === "gbti" || a === "house" ? "icons/icon-32.png" : `https://github.com/${encodeURIComponent(a)}.png?size=64`;
+  var chipType = (t) => t === "post" ? "article" : t;
+  var TYPE_LABEL = { article: "ARTICLE", product: "PRODUCT", prompt: "PROMPT" };
+  var SVG = {
+    prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+    article: '<rect x="4.5" y="3.5" width="15" height="17" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 8h8M8 11.5h8M8 15h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+    product: '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m4 8.5 8 4.5 8-4.5M12 13v7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+    coin: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.5c-.6-.8-1.6-1.2-2.7-1.2-1.5 0-2.6.8-2.6 2s1 1.7 2.6 1.9c1.6.2 2.7.7 2.7 2s-1.1 2-2.7 2c-1.2 0-2.2-.5-2.8-1.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+    activity: '<path d="M3 12h4l2.5-7 5 14 2.5-7H21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
+    grid: '<rect x="4" y="4" width="7" height="7" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="4" width="7" height="7" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="4" y="13" width="7" height="7" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="13" width="7" height="7" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.7"/>',
+    lock: '<rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+    search: '<circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    sun: '<circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    moon: '<path d="M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+    chev: '<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    mCompact: '<path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',
+    mDetailed: '<rect x="3.5" y="4.5" width="5" height="5" rx="1" fill="currentColor"/><rect x="3.5" y="14.5" width="5" height="5" rx="1" fill="currentColor"/><path d="M11 6h9M11 9h6M11 16h9M11 19h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    mCard: '<rect x="4" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="4" y="13" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="13" width="7" height="7" rx="1.3" fill="currentColor"/>'
+  };
+  var ico = (k) => SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : "";
   function greeting() {
     const h = (/* @__PURE__ */ new Date()).getHours();
     return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
@@ -2412,8 +2431,67 @@
   var VIEW = "latest";
   var FOLLOWING = null;
   var FOLLOWS_LOADED = false;
+  var MODE = (() => {
+    try {
+      return localStorage.getItem("gbti-nt-mode") || "compact";
+    } catch (e) {
+      return "compact";
+    }
+  })();
+  var thumbUrl = (t) => /^https?:\/\//.test(t) ? t : `${SITE}${t}`;
+  function thumbEl(e) {
+    const ct = chipType(e.type);
+    if (e.thumb) {
+      return `<span class="thumb t-${ct}">${ico(ct)}<img class="thumb-pic" src="${esc(thumbUrl(e.thumb))}" alt="" loading="lazy" /></span>`;
+    }
+    return `<span class="thumb fallback">${ico(ct)}</span>`;
+  }
+  var chip = (type) => {
+    const ct = chipType(type);
+    return `<span class="tchip c-${ct}">${ico(ct)}${TYPE_LABEL[ct] || ct.toUpperCase()}</span>`;
+  };
+  var lockBadge = () => `<span class="lock">${ico("lock")}Members</span>`;
+  var avatarImg = (who) => `<img class="av-img" src="${esc(avatarFor(who))}" alt="" loading="lazy" />`;
+  var authorMeta = (who, ago) => `<span class="meta-au"><b>${esc(authorName(who))}</b>${ago ? ` · ${esc(ago)}` : ""}</span>`;
+  var hrefFor = (e) => e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url}`;
+  function renderCompact(items) {
+    return `<div class="feed-compact">` + items.map((e) => {
+      const ago = relTime(e.publishedAt);
+      return `<a class="row-c" href="${esc(hrefFor(e))}">
+      ${avatarImg(e.author)}${thumbEl(e)}${chip(e.type)}
+      <span class="title">${esc(e.title)}</span>
+      <span class="right">${e.visibility === "members" ? lockBadge() : ""}${authorMeta(e.author, ago)}</span>
+    </a>`;
+    }).join("") + `</div>`;
+  }
+  function renderDetailed(items) {
+    return `<div class="feed-detailed">` + items.map((e) => {
+      const ago = relTime(e.publishedAt);
+      return `<a class="row-d" href="${esc(hrefFor(e))}">
+      ${thumbEl(e)}
+      <div class="d-body">
+        <div class="d-top">${chip(e.type)}${e.visibility === "members" ? lockBadge() : ""}</div>
+        <div class="title">${esc(e.title)}</div>
+        <div class="d-meta">${avatarImg(e.author)}${authorMeta(e.author, ago)}</div>
+      </div>
+    </a>`;
+    }).join("") + `</div>`;
+  }
+  function renderCard(items) {
+    return `<div class="feed-card">` + items.map((e) => {
+      const ago = relTime(e.publishedAt);
+      return `<a class="card-i" href="${esc(hrefFor(e))}">
+      <div class="c-top">${chip(e.type)}${e.visibility === "members" ? lockBadge() : ""}</div>
+      <div class="title">${esc(e.title)}</div>
+      <div class="c-meta"><span class="c-au">${avatarImg(e.author)}${authorMeta(e.author, ago)}</span></div>
+      ${thumbEl(e)}
+    </a>`;
+    }).join("") + `</div>`;
+  }
+  var RENDER = { compact: renderCompact, detailed: renderDetailed, card: renderCard };
   function renderFeed(filter = "") {
     const feed = $("[data-feed]");
+    if (!feed) return;
     const q = filter.trim().toLowerCase();
     if (VIEW === "following") {
       if (FOLLOWING === null) {
@@ -2432,18 +2510,14 @@
       feed.innerHTML = `<p class="muted">${empty}</p>`;
       return;
     }
-    feed.innerHTML = rows.map((e) => {
-      const href = e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url}`;
-      return `<a class="row" href="${esc(href)}">
-        <img class="row-av" src="${esc(avatarFor(e.author))}" alt="" width="30" height="30" loading="lazy" />
-        <span class="badge">${esc(TYPE_LABEL[e.type] || e.type)}</span>
-        <span class="title">${e.visibility === "members" ? '<span class="mlock" title="Members only">🔒 </span>' : ""}${esc(e.title)}</span>
-        <span class="meta">${esc(authorName(e.author))}${e.publishedAt ? ` · ${esc(relTime(e.publishedAt))}` : ""}</span>
-      </a>`;
-    }).join("");
-    feed.querySelectorAll(".row-av").forEach((img) => img.addEventListener("error", () => {
+    feed.innerHTML = (RENDER[MODE] || renderCompact)(rows);
+    feed.querySelectorAll(".thumb-pic").forEach((img) => img.addEventListener("error", () => img.remove(), { once: true }));
+    feed.querySelectorAll(".av-img").forEach((img) => img.addEventListener("error", () => {
       img.src = "icons/icon-32.png";
     }, { once: true }));
+  }
+  function syncModeButtons() {
+    document.querySelectorAll(".nt-mode").forEach((b) => b.classList.toggle("on", b.dataset.mode === MODE));
   }
   async function loadFollows() {
     FOLLOWS_LOADED = true;
@@ -2473,6 +2547,8 @@
       localStorage.setItem("gbti-theme", t);
     } catch (e) {
     }
+    const btn = $("[data-theme-toggle]");
+    if (btn) btn.innerHTML = ico(t === "dark" ? "sun" : "moon");
   }
   async function api(pathname) {
     try {
@@ -2497,21 +2573,24 @@
   function applyAccount(status) {
     const meBtn = $("[data-me-btn]");
     const signinBtn = $("[data-signin-btn]");
+    const greetName = $("[data-greet-name]");
     if (status) {
       const login = status.identity.login;
       const meAv = $("[data-me-av]");
       if (meAv) {
-        meAv.src = `https://github.com/${encodeURIComponent(login)}.png?size=60`;
+        meAv.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`;
         meAv.alt = `@${login}`;
       }
       const head = $("[data-me-head]");
       if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
       const adminItem = document.querySelector(".mi-admin");
       if (adminItem) adminItem.hidden = (RANK2[status.role] ?? 0) < RANK2.moderator;
+      if (greetName) greetName.textContent = `, @${login}`;
       if (meBtn) meBtn.hidden = false;
       if (signinBtn) signinBtn.hidden = true;
     } else {
       closeMeMenu();
+      if (greetName) greetName.textContent = "";
       if (meBtn) meBtn.hidden = true;
       if (signinBtn) signinBtn.hidden = false;
     }
@@ -2596,8 +2675,16 @@
     });
   }
   function init() {
-    $("[data-greeting]").textContent = greeting();
-    $("[data-date]").textContent = longDate();
+    document.querySelectorAll("[data-ico]").forEach((el) => {
+      el.innerHTML = ico(el.dataset.ico);
+    });
+    const greetEl = $("[data-greeting]");
+    if (greetEl) greetEl.textContent = greeting();
+    const dateEl = $("[data-date]");
+    if (dateEl) dateEl.textContent = longDate();
+    const themeBtn = $("[data-theme-toggle]");
+    if (themeBtn) themeBtn.innerHTML = ico(document.documentElement.getAttribute("data-theme") === "dark" ? "sun" : "moon");
+    syncModeButtons();
     initFooterTip();
     checkMembershipLock();
     loadAccountAndSetup();
@@ -2606,9 +2693,18 @@
       e.preventDefault();
       chrome.tabs?.create ? chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }) : window.open(chrome.runtime.getURL("onboarding.html"), "_blank");
     });
-    $("[data-theme-toggle]")?.addEventListener("click", () => {
+    themeBtn?.addEventListener("click", () => {
       setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
     });
+    document.querySelectorAll(".nt-mode").forEach((b) => b.addEventListener("click", () => {
+      MODE = b.dataset.mode;
+      try {
+        localStorage.setItem("gbti-nt-mode", MODE);
+      } catch (e) {
+      }
+      syncModeButtons();
+      renderFeed($("[data-filter]")?.value || "");
+    }));
     $("[data-me-av]")?.addEventListener("error", (e) => {
       e.target.src = "icons/icon-32.png";
     });
