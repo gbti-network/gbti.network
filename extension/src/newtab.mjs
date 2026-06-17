@@ -206,9 +206,26 @@ async function checkMembershipLock() {
   return false;
 }
 
+// One-time tip about Chrome's own new-tab footer (Chrome 138+). We cannot remove that footer from an extension,
+// so we show this dismissible note once and remember the dismissal. CSP-safe (no inline handler).
+const FOOTERTIP_KEY = 'gbti-footertip-dismissed';
+function initFooterTip() {
+  const el = $('[data-footertip]');
+  if (!el) return;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(FOOTERTIP_KEY) === '1'; } catch (e) { /* storage blocked */ }
+  if (dismissed) return;
+  el.classList.add('show');
+  el.querySelector('[data-footertip-dismiss]')?.addEventListener('click', () => {
+    el.classList.remove('show');
+    try { localStorage.setItem(FOOTERTIP_KEY, '1'); } catch (e) { /* storage blocked */ }
+  });
+}
+
 function init() {
   $('[data-greeting]').textContent = greeting();
   $('[data-date]').textContent = longDate();
+  initFooterTip(); // one-time Chrome-footer hint
   checkMembershipLock(); // async; sets data-locked if the member has lapsed
   loadAccountAndSetup(); // async; shows the signed-in identity + the onboarding setup banner
   setupAppSwitcher(); // async; the [G | daily.dev] switcher

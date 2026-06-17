@@ -77,6 +77,15 @@
     .row .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .row .meta { color: var(--fg-mute); font-size: 12.5px; font-family: var(--mono); white-space: nowrap; }
     .muted { color: var(--fg-mute); font-size: 14px; }
+    /* One-time tip: Chrome 138+ shows its own footer on any new-tab override; we cannot remove it, so we point
+       the user at the per-profile setting once, then remember the dismissal. */
+    .footertip { display: none; align-items: center; gap: 14px; margin-top: 28px; padding: 12px 16px;
+      border: 1px dashed var(--line-2); border-radius: var(--r); background: var(--paper); }
+    .footertip.show { display: flex; }
+    .footertip .ft-txt { flex: 1; font-size: 13px; color: var(--fg-mute); line-height: 1.5; }
+    .footertip .ft-x { flex: none; font-family: var(--sans); font-weight: 700; font-size: 13px; color: var(--green-700);
+      background: var(--green-tint); border: 0; border-radius: var(--r-pill); padding: 7px 14px; cursor: pointer; }
+    .footertip .ft-x:hover { background: var(--green); color: #fff; }
     /* SOW-018 lock state: a lapsed (Locked) member's extension is locked behind a renew splash. */
     html[data-locked] .wrap > *:not(.lock) { display: none; }
     .lock { display: none; }
@@ -131,6 +140,11 @@
       <a href="https://gbti.network/">View the co-op</a>
     </div>
     <div class="feed" data-feed><p class="muted" data-feed-status>Loading the latest from the co-op...</p></div>
+
+    <div class="footertip" data-footertip>
+      <span class="ft-txt">Chrome shows its own footer at the very bottom of every new tab. It is a Chrome setting, not part of this extension. To hide it, right-click that footer and choose "Hide footer on New Tab page" (it stays hidden after that).</span>
+      <button class="ft-x" type="button" data-footertip-dismiss>Got it</button>
+    </div>
 
     <div class="lock">
       <div class="ico">🔒</div>

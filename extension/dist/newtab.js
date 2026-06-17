@@ -2543,9 +2543,29 @@
     }
     return false;
   }
+  var FOOTERTIP_KEY = "gbti-footertip-dismissed";
+  function initFooterTip() {
+    const el = $("[data-footertip]");
+    if (!el) return;
+    let dismissed = false;
+    try {
+      dismissed = localStorage.getItem(FOOTERTIP_KEY) === "1";
+    } catch (e) {
+    }
+    if (dismissed) return;
+    el.classList.add("show");
+    el.querySelector("[data-footertip-dismiss]")?.addEventListener("click", () => {
+      el.classList.remove("show");
+      try {
+        localStorage.setItem(FOOTERTIP_KEY, "1");
+      } catch (e) {
+      }
+    });
+  }
   function init() {
     $("[data-greeting]").textContent = greeting();
     $("[data-date]").textContent = longDate();
+    initFooterTip();
     checkMembershipLock();
     loadAccountAndSetup();
     setupAppSwitcher();
