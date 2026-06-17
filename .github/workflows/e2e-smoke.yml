@@ -38,3 +38,21 @@ jobs:
           E2E_SITE: https://gbti.network
           E2E_WORKER: https://signup.gbti.network
           GITHUB_CONTENT_REPO: gbti-network/gbti.network
+
+  # Phase 3: the Playwright extension-UI smoke. Loads the MV3 extension headed (xvfb), seeds a signed-in state,
+  # and drives the new tab + the gbti.network content-script bridge. Separate job (it needs deps + a browser).
+  ext-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npm run build:extension
+      - run: npx playwright install --with-deps chromium
+      - name: Run the live extension-UI smoke (headed under xvfb, authenticated)
+        run: xvfb-run -a node tests/e2e/ext-ui.mjs
+        env:
+          E2E_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          E2E_SITE: https://gbti.network

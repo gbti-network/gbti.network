@@ -83,10 +83,16 @@ export class GbtiElement extends Base {
   }
 }
 
-/** Define a custom element only in a DOM environment, and only once (idempotent across hosts). */
+/** Define a custom element only in a DOM environment, and only once (idempotent across hosts). NULL-SAFE on
+ *  customElements: in some content-script isolated worlds `customElements` is null, and an unguarded
+ *  customElements.get() there throws at module load, which (because importing client-ui runs every define())
+ *  aborted the whole extension content script BEFORE it could stamp data-gbti-extension / the identity signal
+ *  (the site then never detects the extension or the signed-in member). Skipping define() when the registry is
+ *  unavailable degrades the in-place editor gracefully but keeps the detection + identity bridge working. */
 export function define(tag, ctor) {
-  if (!HAS_DOM || customElements.get(tag)) return;
-  customElements.define(tag, ctor);
+  const ce = HAS_DOM ? globalThis.customElements : null;
+  if (!ce || ce.get(tag)) return;
+  ce.define(tag, ctor);
 }
 
 /** Escape text for safe interpolation into innerHTML. */

@@ -118,8 +118,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   function define(tag, ctor) {
-    if (!HAS_DOM || customElements.get(tag)) return;
-    customElements.define(tag, ctor);
+    const ce = HAS_DOM ? globalThis.customElements : null;
+    if (!ce || ce.get(tag)) return;
+    ce.define(tag, ctor);
   }
   function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
