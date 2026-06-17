@@ -1,0 +1,46 @@
+name: Sync overrides mirror
+
+# Keeps the signup Worker's effective-paid gating (ban > staff > grandfather > Stripe) alive by refreshing the
+# `overrides:mirror` blob in SIGNUP_KV frequently and INDEPENDENTLY of the daily reconcile. The Worker fails
+# closed once the mirror is older than 48h (MAX_OVERRIDES_AGE_MS), denying paid members + superadmins. The daily
+# reconcile also writes the mirror, but couples its freshness to the WHOLE reconcile succeeding (an earlier
+# failure aborts before the mirror write). This job does ONLY the mirror write (read 3 house/ files -> one KV
+# PUT, ~1s), so the gate can never be starved by an unrelated reconcile failure.
+#
+# Run locally: node scripts/sync-overrides-mirror.mjs --dry-run
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'   # every 6 hours (off the hour); 4x/day keeps the blob far inside the 48h window
+  workflow_dispatch: {}
+  # The signup Worker can fire repository_dispatch type 'sync-mirror' after a role/ban/grandfather change so the
+  # mirror refreshes immediately instead of waiting for the next 6-hour tick.
+  repository_dispatch:
+    types: [sync-mirror]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-overrides-mirror
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Sync overrides mirror
+        run: node scripts/sync-overrides-mirror.mjs
+        env:
+          # CF_ACCOUNT_ID + CF_KV_NAMESPACE_ID are non-secret identifiers (acting on them needs the token), so they
+          # are inlined like in reconcile.yml. CF_KV_NAMESPACE_ID MUST equal the production Worker's SIGNUP_KV id.
+          # Only CF_API_TOKEN (scoped to Workers KV Storage Edit on this namespace) is a real secret. If the token
+          # is missing the script exits non-zero (a red run), never a silent no-op.
+          CF_ACCOUNT_ID: "d42b12e969229c5187ad0f7289536487"
+          CF_KV_NAMESPACE_ID: "49432379e11844ac81b6fdaf22d3937a"
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}

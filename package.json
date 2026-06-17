@@ -24,6 +24,7 @@
     "verify:dist": "node scripts/check-build-secrets.mjs && node scripts/check-redirects.mjs && node scripts/check-extension.mjs",
     "test": "node --test 'test/**/*.test.mjs'",
     "reconcile": "node --env-file-if-exists=.env scripts/reconcile.mjs",
+    "sync:mirror": "node --env-file-if-exists=.env scripts/sync-overrides-mirror.mjs",
     "erase-member": "node --env-file-if-exists=.env scripts/erase-member.mjs",
     "backup-kv": "node --env-file-if-exists=.env scripts/backup-kv.mjs",
     "payout": "node --env-file-if-exists=.env scripts/payout-referrals.mjs",
