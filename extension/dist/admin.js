@@ -54,8 +54,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var CLIENT = null;
   var IDENTITY = null;
   var SUBSCRIBERS = /* @__PURE__ */ new Set();
-  function setClient(client2) {
-    CLIENT = client2;
+  function setClient(client) {
+    CLIENT = client;
     IDENTITY = null;
     for (const fn of SUBSCRIBERS) {
       try {
@@ -5420,7 +5420,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
   }
 
-  // extension/src/workspace.mjs
+  // extension/src/page-client.mjs
   async function messagingFetch(url, init = {}) {
     const u = new URL(url, "https://gbti.network");
     const req = {
@@ -5433,19 +5433,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const r = result || { status: 500, json: { error: "no_response" } };
     return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => r.json };
   }
-  var client = createHttpClient({ baseUrl: "", token: "extension", fetch: messagingFetch });
-  client.login = (onPrompt) => new Promise((resolve, reject) => {
-    const onPromptMsg = (m) => {
-      if (m?.type === "login-prompt") onPrompt({ userCode: m.userCode, verificationUri: m.verificationUri });
-    };
-    chrome.runtime.onMessage.addListener(onPromptMsg);
-    chrome.runtime.sendMessage({ type: "login" }).then((r) => {
-      chrome.runtime.onMessage.removeListener(onPromptMsg);
-      r?.ok ? resolve(r) : reject(new Error(r?.error || "sign-in failed"));
-    }).catch((e) => {
-      chrome.runtime.onMessage.removeListener(onPromptMsg);
-      reject(e);
+  function mountPageClient() {
+    const client = createHttpClient({ baseUrl: "", token: "extension", fetch: messagingFetch });
+    client.login = (onPrompt) => new Promise((resolve, reject) => {
+      const onPromptMsg = (m) => {
+        if (m?.type === "login-prompt") onPrompt({ userCode: m.userCode, verificationUri: m.verificationUri });
+      };
+      chrome.runtime.onMessage.addListener(onPromptMsg);
+      chrome.runtime.sendMessage({ type: "login" }).then((r) => {
+        chrome.runtime.onMessage.removeListener(onPromptMsg);
+        r?.ok ? resolve(r) : reject(new Error(r?.error || "sign-in failed"));
+      }).catch((e) => {
+        chrome.runtime.onMessage.removeListener(onPromptMsg);
+        reject(e);
+      });
     });
-  });
-  setClient(client);
+    setClient(client);
+    return client;
+  }
+
+  // extension/src/admin.mjs
+  mountPageClient();
 })();

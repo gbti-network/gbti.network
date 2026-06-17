@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { classifyPull } from '../workspace-core.mjs';
+import { classifyPull, parseWorkspaceTab } from '../workspace-core.mjs';
 import './gbti-content-editor.mjs';
 import './gbti-contrib-inbox.mjs';
 import './gbti-contrib-review.mjs';
@@ -51,7 +51,9 @@ class GbtiWorkspace extends GbtiElement {
     // Initialize state BEFORE super.connectedCallback(), which synchronously calls render() (base.mjs) -> _body()
     // dereferences this._cache/_tab, so they must exist first; otherwise a TypeError aborts the whole mount and
     // the workspace renders nothing. (Same fix as gbti-browse.)
-    this._tab = 'post';
+    // SOW-036 P4: open on the tab named by the deep-link hash (workspace.html#tab=prompt), falling back to 'post'.
+    // Lets the avatar menu route the member straight to "My prompts" / "My products" / "My pull requests".
+    this._tab = (typeof location !== 'undefined' && parseWorkspaceTab(location.hash)) || 'post';
     this._cache = {};   // type -> items[]
     this._prs = null;   // { prs }
     this._editing = null;
@@ -59,7 +61,7 @@ class GbtiWorkspace extends GbtiElement {
     this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
     super.connectedCallback?.(); // base now renders the initial view with fields in place
     this._loadProfile();
-    this._ensureTab('post');
+    this._ensureTab(this._tab);
     this._loadInboxCount();
   }
 

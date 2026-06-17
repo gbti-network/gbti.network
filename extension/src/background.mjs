@@ -11,6 +11,7 @@ import { deviceFlowLogin } from '../../client/src/auth-device.mjs';
 import { createRepoClient } from '../../client/src/github-repo.mjs';
 import { resolveMembership } from '../../client/src/membership.mjs';
 import { GITHUB_CLIENT_ID, activeClientId, activeScope } from '../../client/src/signup-base.mjs';
+import { resolveOpenPage } from './open-page.mjs';
 
 // GITHUB_CLIENT_ID is the PUBLIC device-flow OAuth app client id, single-sourced in signup-base.mjs (device flow
 // has no client secret, so it is safe to bundle). Baked into the extension at build time.
@@ -124,6 +125,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         store.set({ githubToken: null, identity: null });
         broadcastAuthChanged();
         sendResponse({ ok: true });
+      } else if (msg?.type === 'open-page') {
+        // SOW-036: the avatar menu (site header relay, or the new-tab dropdown) asks to open an in-extension
+        // management page in a new tab. resolveOpenPage is the authoritative allowlist: only a known page +
+        // a safe hash resolve, so a hostile gbti.network page cannot relay a request to open an arbitrary URL.
+        const rel = resolveOpenPage({ page: msg.page, hash: msg.hash });
+        if (!rel) { sendResponse({ ok: false, error: 'bad_page' }); return; }
+        try {
+          await chrome.tabs.create({ url: chrome.runtime.getURL(rel) });
+          sendResponse({ ok: true });
+        } catch (e) {
+          sendResponse({ ok: false, error: e?.message ?? 'open_failed' });
+        }
       } else {
         sendResponse({ error: 'unknown_message' });
       }

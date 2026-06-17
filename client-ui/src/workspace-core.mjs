@@ -6,6 +6,15 @@
 //   today's open-only list omits them, so an open PR with no status is "Proposed, checking").
 // status: { state, meaning, description } from client.prStatus(), or null if not loaded / unreachable.
 
+// SOW-036: the workspace deep-link tab hint. The avatar menu opens workspace.html#tab=<id>; <gbti-workspace>
+// reads the hash on connect to open directly on that management tab. Returns a valid tab id, or null when the hash
+// carries no/unknown tab (the caller defaults to 'post'). Kept in lockstep with the TABS list in gbti-workspace.
+const WORKSPACE_TABS = new Set(['post', 'prompt', 'product', 'prs', 'inbox']);
+export function parseWorkspaceTab(hash) {
+  const m = String(hash || '').replace(/^#/, '').match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+  return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
+}
+
 export function classifyPull(pr = {}, status = null) {
   if (pr.merged === true || pr.state === 'merged') return { label: 'Accepted', tone: 'ok' };
   if (pr.state === 'closed') return { label: 'Declined', tone: 'muted' };

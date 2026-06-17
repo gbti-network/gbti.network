@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, parseWorkspaceTab } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -25,4 +25,19 @@ test('open PR maps the gate status to Proposed / Needs changes / Error', () => {
 
 test('merged takes precedence over a closed flag', () => {
   assert.deepEqual(classifyPull({ state: 'closed', merged: true }, null), { label: 'Accepted', tone: 'ok' });
+});
+
+// SOW-036 P4: the workspace deep-link tab hint.
+test('parseWorkspaceTab reads a valid tab from the hash (leading # optional, extra params ignored)', () => {
+  assert.equal(parseWorkspaceTab('#tab=prompt'), 'prompt');
+  assert.equal(parseWorkspaceTab('tab=product'), 'product');
+  assert.equal(parseWorkspaceTab('#tab=prs&foo=1'), 'prs');
+  assert.equal(parseWorkspaceTab('#x=1&tab=inbox'), 'inbox');
+  assert.equal(parseWorkspaceTab('#tab=post'), 'post');
+});
+
+test('parseWorkspaceTab returns null for an absent / unknown / malformed tab (caller defaults to post)', () => {
+  for (const h of ['', '#', undefined, null, '#tab=', '#tab=bogus', '#tab=POST', '#read=x', '#tabbed=post']) {
+    assert.equal(parseWorkspaceTab(h), null, `${JSON.stringify(h)} -> null`);
+  }
 });

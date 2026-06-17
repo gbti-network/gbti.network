@@ -7,6 +7,7 @@
 
 import { setClient, createHttpClient } from '../../client-ui/src/index.mjs';
 import { buildMemberSignal } from './identity-signal.mjs';
+import { resolveOpenPage } from './open-page.mjs';
 
 /** Translate a /api/* request into a background-worker message (replaces the real network fetch). */
 async function messagingFetch(url, init = {}) {
@@ -65,6 +66,20 @@ try {
     // surface it by dispatching an event it listens for. Kept minimal: the onboarding tab (opened from the
     // toolbar icon) remains the primary sign-in surface, this is the in-page convenience path.
     document.dispatchEvent(new CustomEvent('gbti:open-auth'));
+  });
+  // SOW-036: the site header's avatar menu asks (via a page CustomEvent) to open an in-extension management page
+  // in a new tab. The page cannot link to chrome-extension:// (it does not know the id), so it dispatches
+  // gbti:open and we relay to the background, which validates against the allowlist and opens the tab. We
+  // pre-validate here too (defense in depth) so a malformed request never reaches the worker.
+  document.addEventListener('gbti:open', (e) => {
+    const detail = e?.detail || {};
+    if (!resolveOpenPage(detail)) return;
+    chrome.runtime.sendMessage({ type: 'open-page', page: detail.page, hash: detail.hash }).catch(() => {});
+  });
+  // SOW-036: sign out from the site header's avatar menu. The worker clears the token + broadcasts auth-changed,
+  // which re-stamps the page-safe signal so the header reverts to its logged-out state.
+  document.addEventListener('gbti:request-signout', () => {
+    chrome.runtime.sendMessage({ type: 'signout' }).catch(() => {});
   });
 } catch { /* chrome runtime unavailable: no marker (treated as not installed by the site) */ }
 

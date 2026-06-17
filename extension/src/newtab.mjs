@@ -134,6 +134,44 @@ async function api(pathname) {
   } catch { return null; }
 }
 
+// SOW-036: the account control roles + dropdown. The avatar menu mirrors the gbti.network site header; in the
+// extension the items are plain in-extension links (no content-script relay needed). closeMeMenu/openMeMenu read
+// the elements lazily so they are usable from both applyAccount (module scope) and the init wiring.
+const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
+function closeMeMenu() {
+  const menu = $('[data-me-menu]');
+  if (menu) menu.hidden = true;
+  $('[data-me-btn]')?.setAttribute('aria-expanded', 'false');
+}
+function openMeMenu() {
+  const menu = $('[data-me-menu]');
+  if (menu) menu.hidden = false;
+  $('[data-me-btn]')?.setAttribute('aria-expanded', 'true');
+  menu?.querySelector('.mi')?.focus();
+}
+
+/** Reflect the signed-in status into the avatar control: avatar + "@login" head + role-gated Admin item, or the
+ *  signed-out "Sign in" affordance. status is the /api/status payload when signed in, or null. */
+function applyAccount(status) {
+  const meBtn = $('[data-me-btn]');
+  const signinBtn = $('[data-signin-btn]');
+  if (status) {
+    const login = status.identity.login;
+    const meAv = $('[data-me-av]');
+    if (meAv) { meAv.src = `https://github.com/${encodeURIComponent(login)}.png?size=60`; meAv.alt = `@${login}`; }
+    const head = $('[data-me-head]');
+    if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
+    const adminItem = document.querySelector('.mi-admin');
+    if (adminItem) adminItem.hidden = (RANK[status.role] ?? 0) < RANK.moderator;
+    if (meBtn) meBtn.hidden = false;
+    if (signinBtn) signinBtn.hidden = true;
+  } else {
+    closeMeMenu();
+    if (meBtn) meBtn.hidden = true;
+    if (signinBtn) signinBtn.hidden = false;
+  }
+}
+
 // SOW-026: the new tab is onboarding-aware. Show who is signed in, and until the member is signed in AND set up
 // (fork + GBTI App install), show a setup banner that opens the onboarding tab. This keeps the new tab from
 // looking "done" while publishing is not yet wired up.
@@ -141,8 +179,7 @@ async function loadAccountAndSetup() {
   const [status, ob] = await Promise.all([api('/api/status'), api('/api/onboarding-status')]);
   const signedIn = Boolean(status?.authenticated && status?.identity?.login);
 
-  const acct = $('[data-acct]');
-  if (acct) acct.innerHTML = signedIn ? `Signed in as <b>@${esc(status.identity.login)}</b>` : '';
+  applyAccount(signedIn ? status : null);
 
   const setup = $('[data-setup]');
   if (!setup) return;
@@ -241,6 +278,26 @@ function init() {
   $('[data-theme-toggle]')?.addEventListener('click', () => {
     setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
   });
+
+  // SOW-036: the account dropdown. Toggle on click; close on Esc, on outside-click, and after a menu choice.
+  // The CSP forbids inline onerror, so attach the avatar fallback listener here.
+  $('[data-me-av]')?.addEventListener('error', (e) => { e.target.src = 'icons/icon-32.png'; });
+  $('[data-me-btn]')?.addEventListener('click', (e) => { e.stopPropagation(); $('[data-me-menu]')?.hidden ? openMeMenu() : closeMeMenu(); });
+  document.addEventListener('click', (e) => { const m = $('[data-me-menu]'); if (m && !m.hidden && !$('[data-me-wrap]')?.contains(e.target)) closeMeMenu(); });
+  document.addEventListener('keydown', (e) => { const m = $('[data-me-menu]'); if (e.key === 'Escape' && m && !m.hidden) { closeMeMenu(); $('[data-me-btn]')?.focus(); } });
+  // Sign in -> the onboarding tab (same path as the setup banner). The menu's content links navigate in-extension.
+  $('[data-signin-btn]')?.addEventListener('click', () => {
+    chrome.tabs?.create
+      ? chrome.tabs.create({ url: chrome.runtime.getURL('onboarding.html') })
+      : window.open(chrome.runtime.getURL('onboarding.html'), '_blank');
+  });
+  // Sign out -> clear the token in the worker, then re-render the control as signed-out.
+  $('[data-me-signout]')?.addEventListener('click', async () => {
+    closeMeMenu();
+    try { await chrome.runtime.sendMessage({ type: 'signout' }); } catch (e) { /* worker unreachable */ }
+    loadAccountAndSetup();
+  });
+
   $('[data-filter]')?.addEventListener('input', (e) => renderFeed(e.target.value));
 
   // SOW-023: Latest / Following tabs.

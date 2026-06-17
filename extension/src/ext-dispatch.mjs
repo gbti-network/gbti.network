@@ -10,6 +10,12 @@ import { OperationError, validateContent, publish, publishShare, listShares, lis
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText } from '../../client/src/roles.mjs';
+import { banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent } from '../../client/src/admin-ops.mjs';
+
+// SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
+// host-portable / async-safe) and commits via the repo client; capability is UX-gated here while the SOW-005
+// gate + CODEOWNERS stay the real boundary (an extension can no more merge a forbidden PR than the npm host can).
+const ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent };
 
 const CODE_STATUS = Object.freeze({
   'no-identity': 409,
@@ -113,6 +119,16 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         const n = Number(query.number);
         if (!Number.isInteger(n) || n <= 0) throw new OperationError('bad-request', 'a positive PR number is required');
         return ok(await requireRepo(ctx).gateStatus(n));
+      }
+      case '/api/admin': {
+        // SOW-036/038: governance from the extension. admin-ops expects a SYNC role() and a configured repoPath;
+        // the extension computes role async (from the GitHub-read roles.yml) and has no local clone (it commits
+        // via the repo client), so wrap ctx with a precomputed role() + a repoPath sentinel for this one call.
+        const role = await computeRole(ctx);
+        const adminCtx = { ...ctx, role: () => role, store: { get: (k) => (k === 'repoPath' ? 'extension' : ctx.store?.get(k)) } };
+        const fn = ADMIN_ACTIONS[body?.action];
+        if (!fn) throw new OperationError('bad-request', `unknown admin action: ${body?.action}`);
+        return ok(await fn(adminCtx, body ?? {}));
       }
       default:
         return { status: 404, json: { error: 'not_found' } };

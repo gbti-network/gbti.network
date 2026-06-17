@@ -27,11 +27,29 @@ const nav = [
         <svg class="ico-sun" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-sun" /></svg>
       </button>
       <a href="/membership/" class="btn-gh" data-signin><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-github" /></svg> Sign in</a>
-      {/* SOW-030: shown only when the GBTI extension stamps a signed-in member signal (presentation only). */}
-      <a class="head-me" data-head-me hidden href="/members/">
-        <img class="head-me-av" data-head-me-av alt="" width="26" height="26" decoding="async" />
-        <span class="head-me-name" data-head-me-name></span>
-      </a>
+      {/* SOW-030/036: shown only when the GBTI extension stamps a signed-in member signal (presentation only). The
+          avatar is a menu button; its items deep-link into the extension's management pages via the content-script
+          relay (the site cannot link to chrome-extension:// directly). */}
+      <div class="head-me-wrap" data-head-me-wrap hidden>
+        <button type="button" class="head-me" data-head-me aria-haspopup="true" aria-expanded="false" aria-label="Account menu">
+          <img class="head-me-av" data-head-me-av alt="" width="26" height="26" decoding="async" />
+          <span class="head-me-name" data-head-me-name></span>
+          <svg class="head-me-caret" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+        <div class="head-menu" data-head-menu role="menu" hidden>
+          <a class="hm-item" role="menuitem" data-head-me-profile href="/members/">My profile</a>
+          <div class="hm-sep" role="separator"></div>
+          <button class="hm-item" role="menuitem" type="button" data-open="workspace.html">My workspace</button>
+          <button class="hm-item" role="menuitem" type="button" data-open="workspace.html" data-hash="tab=post">My articles</button>
+          <button class="hm-item" role="menuitem" type="button" data-open="workspace.html" data-hash="tab=prompt">My prompts</button>
+          <button class="hm-item" role="menuitem" type="button" data-open="workspace.html" data-hash="tab=product">My products</button>
+          <button class="hm-item" role="menuitem" type="button" data-open="workspace.html" data-hash="tab=prs">My pull requests</button>
+          <button class="hm-item" role="menuitem" type="button" data-open="browse.html">Browse the co-op</button>
+          <button class="hm-item hm-admin" role="menuitem" type="button" data-open="admin.html" data-role-min hidden>Admin tools</button>
+          <div class="hm-sep" role="separator"></div>
+          <button class="hm-item hm-signout" role="menuitem" type="button" data-head-signout>Sign out</button>
+        </div>
+      </div>
       <button type="button" class="head-burger" data-mobile-toggle aria-label="Open menu" aria-expanded="false">
         <span></span><span></span><span></span>
       </button>
@@ -57,14 +75,28 @@ const nav = [
   .head-mobile a { padding: 11px 0; font-weight: 500; color: var(--fg-soft); border-bottom: 1px solid var(--line); }
   .head-mobile a:last-child { border-bottom: 0; }
   .head-mobile .m-join { color: var(--green-700); font-weight: 600; }
-  /* SOW-030: the signed-in chip (avatar + @login). Hidden until the extension signal arrives; when shown it
-     replaces the "Sign in" button (toggled in the script below). */
-  .head-me { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px;
+  /* SOW-030/036: the signed-in account control (avatar + @login + caret) and its dropdown menu. Hidden until the
+     extension signal arrives; when shown it replaces the "Sign in" button (toggled in the script below). */
+  .head-me-wrap { position: relative; }
+  .head-me-wrap[hidden] { display: none; }
+  .head-me { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px 4px 4px;
     border: 1px solid var(--line-2); border-radius: var(--r-pill); font-weight: 600; font-size: 14px;
-    color: var(--fg); text-decoration: none; }
+    color: var(--fg); background: var(--paper); cursor: pointer; font-family: inherit; }
   .head-me:hover { border-color: var(--green); }
-  .head-me[hidden] { display: none; }
   .head-me-av { width: 26px; height: 26px; border-radius: 50%; background: var(--line); object-fit: cover; }
+  .head-me-caret { color: var(--fg-mute); transition: transform .15s ease; }
+  .head-me[aria-expanded="true"] .head-me-caret { transform: rotate(180deg); }
+  /* The dropdown panel. Token-driven so it works in both themes. */
+  .head-menu { position: absolute; top: calc(100% + 8px); right: 0; min-width: 210px; z-index: 60;
+    background: var(--paper); border: 1px solid var(--line-2); border-radius: var(--r-lg);
+    box-shadow: 0 12px 30px -12px rgba(0,0,0,.32); padding: 6px; display: flex; flex-direction: column; }
+  .head-menu[hidden] { display: none; }
+  .hm-item { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-radius: var(--r);
+    background: transparent; color: var(--fg); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+    text-decoration: none; }
+  .hm-item:hover, .hm-item:focus-visible { background: var(--green-tint); color: var(--green-700); outline: none; }
+  .hm-signout { color: var(--fg-soft); }
+  .hm-sep { height: 1px; background: var(--line); margin: 5px 4px; }
   @media (max-width: 650px) {
     .head-cta .btn-gh { display: none; }
     .head-me-name { display: none; }
@@ -76,32 +108,75 @@ const nav = [
 <script>
   import { readMemberSignal, onMemberSignal } from '../lib/member-signal';
 
-  // SOW-030: reflect the extension's signed-in signal into the header. When a member signal is present we show
-  // the avatar + @login chip and hide the "Sign in" button; otherwise the header stays in its logged-out state.
-  // Presentation only (the signal is untrusted; authoritative checks stay server-side). The chip links to the
-  // member's own profile folder. Avatars come from GitHub by login, with a brand fallback on error.
+  // SOW-030/036: reflect the extension's signed-in signal into the header. When a member signal is present we show
+  // the avatar account menu and hide the "Sign in" button; otherwise the header stays in its logged-out state.
+  // Presentation only (the signal is untrusted; authoritative checks stay server-side). The menu's management
+  // items deep-link into the extension's pages via the content-script relay (gbti:open); the site cannot link to
+  // chrome-extension:// directly. Avatars come from GitHub by login, with a brand fallback on error.
+  const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   const signin = document.querySelector('[data-signin]');
+  const wrap = document.querySelector('[data-head-me-wrap]');
   const me = document.querySelector('[data-head-me]');
   const meAv = document.querySelector('[data-head-me-av]');
   const meName = document.querySelector('[data-head-me-name]');
+  const meProfile = document.querySelector('[data-head-me-profile]');
+  const headMenu = document.querySelector('[data-head-menu]');
+  const adminItem = document.querySelector('.hm-admin');
+
+  function closeMenu() {
+    if (!headMenu || !me) return;
+    headMenu.hidden = true;
+    me.setAttribute('aria-expanded', 'false');
+  }
+  function openMenu() {
+    if (!headMenu || !me) return;
+    headMenu.hidden = false;
+    me.setAttribute('aria-expanded', 'true');
+    // Focus the first item for keyboard users.
+    headMenu.querySelector('.hm-item')?.focus();
+  }
+
   function applyHeaderIdentity(s) {
     const login = s && s.login;
-    if (!me || !signin) return;
+    if (!wrap || !signin) return;
     if (login) {
       const folder = s.username || login;
       if (meName) meName.textContent = '@' + login;
       if (meAv) { meAv.src = 'https://github.com/' + encodeURIComponent(login) + '.png?size=52'; meAv.alt = '@' + login; }
-      me.href = '/members/' + encodeURIComponent(folder) + '/';
-      me.hidden = false;
+      if (meProfile) meProfile.href = '/members/' + encodeURIComponent(folder) + '/';
+      if (adminItem) adminItem.hidden = (RANK[s.role] ?? 0) < RANK.moderator;
+      wrap.hidden = false;
       signin.style.display = 'none';
     } else {
-      me.hidden = true;
+      closeMenu();
+      wrap.hidden = true;
       signin.style.display = '';
     }
   }
   meAv?.addEventListener('error', () => { if (meAv) meAv.src = '/favicon.svg'; });
   applyHeaderIdentity(readMemberSignal());
   onMemberSignal(applyHeaderIdentity);
+
+  // Toggle the dropdown; close on Esc, on outside-click, and after choosing an item.
+  me?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    headMenu?.hidden ? openMenu() : closeMenu();
+  });
+  document.addEventListener('click', (e) => { if (!headMenu?.hidden && !wrap?.contains(e.target)) closeMenu(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !headMenu?.hidden) { closeMenu(); me?.focus(); } });
+
+  // Management items: relay to the extension (which opens the in-extension page in a new tab). The plain-link
+  // items (My profile) navigate the site normally and are not handled here.
+  headMenu?.querySelectorAll('[data-open]').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: b.dataset.open, hash: b.dataset.hash || '' } }));
+      closeMenu();
+    });
+  });
+  document.querySelector('[data-head-signout]')?.addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('gbti:request-signout'));
+    closeMenu();
+  });
 
   // Light/dark toggle: flip data-theme on <html>, persist to localStorage. The no-FOUC initial theme is
   // set in BaseLayout's <head> before paint; this only handles the click + persistence.

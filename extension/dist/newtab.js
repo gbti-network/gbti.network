@@ -2482,11 +2482,44 @@
       return null;
     }
   }
+  var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
+  function closeMeMenu() {
+    const menu = $("[data-me-menu]");
+    if (menu) menu.hidden = true;
+    $("[data-me-btn]")?.setAttribute("aria-expanded", "false");
+  }
+  function openMeMenu() {
+    const menu = $("[data-me-menu]");
+    if (menu) menu.hidden = false;
+    $("[data-me-btn]")?.setAttribute("aria-expanded", "true");
+    menu?.querySelector(".mi")?.focus();
+  }
+  function applyAccount(status) {
+    const meBtn = $("[data-me-btn]");
+    const signinBtn = $("[data-signin-btn]");
+    if (status) {
+      const login = status.identity.login;
+      const meAv = $("[data-me-av]");
+      if (meAv) {
+        meAv.src = `https://github.com/${encodeURIComponent(login)}.png?size=60`;
+        meAv.alt = `@${login}`;
+      }
+      const head = $("[data-me-head]");
+      if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
+      const adminItem = document.querySelector(".mi-admin");
+      if (adminItem) adminItem.hidden = (RANK2[status.role] ?? 0) < RANK2.moderator;
+      if (meBtn) meBtn.hidden = false;
+      if (signinBtn) signinBtn.hidden = true;
+    } else {
+      closeMeMenu();
+      if (meBtn) meBtn.hidden = true;
+      if (signinBtn) signinBtn.hidden = false;
+    }
+  }
   async function loadAccountAndSetup() {
     const [status, ob] = await Promise.all([api("/api/status"), api("/api/onboarding-status")]);
     const signedIn = Boolean(status?.authenticated && status?.identity?.login);
-    const acct = $("[data-acct]");
-    if (acct) acct.innerHTML = signedIn ? `Signed in as <b>@${esc(status.identity.login)}</b>` : "";
+    applyAccount(signedIn ? status : null);
     const setup = $("[data-setup]");
     if (!setup) return;
     const ready = ob ? ob.ready || ob.appMode === false && signedIn : signedIn;
@@ -2575,6 +2608,35 @@
     });
     $("[data-theme-toggle]")?.addEventListener("click", () => {
       setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
+    });
+    $("[data-me-av]")?.addEventListener("error", (e) => {
+      e.target.src = "icons/icon-32.png";
+    });
+    $("[data-me-btn]")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      $("[data-me-menu]")?.hidden ? openMeMenu() : closeMeMenu();
+    });
+    document.addEventListener("click", (e) => {
+      const m = $("[data-me-menu]");
+      if (m && !m.hidden && !$("[data-me-wrap]")?.contains(e.target)) closeMeMenu();
+    });
+    document.addEventListener("keydown", (e) => {
+      const m = $("[data-me-menu]");
+      if (e.key === "Escape" && m && !m.hidden) {
+        closeMeMenu();
+        $("[data-me-btn]")?.focus();
+      }
+    });
+    $("[data-signin-btn]")?.addEventListener("click", () => {
+      chrome.tabs?.create ? chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }) : window.open(chrome.runtime.getURL("onboarding.html"), "_blank");
+    });
+    $("[data-me-signout]")?.addEventListener("click", async () => {
+      closeMeMenu();
+      try {
+        await chrome.runtime.sendMessage({ type: "signout" });
+      } catch (e) {
+      }
+      loadAccountAndSetup();
     });
     $("[data-filter]")?.addEventListener("input", (e) => renderFeed(e.target.value));
     document.querySelectorAll("[data-tab]").forEach((btn) => {

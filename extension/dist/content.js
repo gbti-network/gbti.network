@@ -4804,6 +4804,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-welcome", GbtiWelcome);
 
   // client-ui/src/workspace-core.mjs
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["post", "prompt", "product", "prs", "inbox"]);
+  function parseWorkspaceTab(hash) {
+    const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+    return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
+  }
   function classifyPull(pr = {}, status = null) {
     if (pr.merged === true || pr.state === "merged") return { label: "Accepted", tone: "ok" };
     if (pr.state === "closed") return { label: "Declined", tone: "muted" };
@@ -4857,7 +4862,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 `;
   var GbtiWorkspace = class extends GbtiElement {
     connectedCallback() {
-      this._tab = "post";
+      this._tab = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "post";
       this._cache = {};
       this._prs = null;
       this._editing = null;
@@ -4865,7 +4870,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._inboxCount = null;
       super.connectedCallback?.();
       this._loadProfile();
-      this._ensureTab("post");
+      this._ensureTab(this._tab);
       this._loadInboxCount();
     }
     // SOW-028 P5: poll the incoming-contribution count on open (batch-first, like the rest of the client) so the
@@ -5431,6 +5436,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
   }
 
+  // extension/src/open-page.mjs
+  var PAGES = /* @__PURE__ */ new Set([
+    "newtab.html",
+    "workspace.html",
+    "browse.html",
+    "shares.html",
+    "admin.html",
+    "onboarding.html"
+  ]);
+  var HASH_RE = /^[A-Za-z0-9=&_%.,-]{1,300}$/;
+  function resolveOpenPage({ page, hash } = {}) {
+    if (typeof page !== "string" || !PAGES.has(page)) return null;
+    if (hash == null || hash === "") return page;
+    const h = String(hash).replace(/^#/, "");
+    if (h === "") return page;
+    if (!HASH_RE.test(h)) return null;
+    return `${page}#${h}`;
+  }
+
   // extension/src/content.mjs
   async function messagingFetch(url, init = {}) {
     const u = new URL(url, "https://gbti.network");
@@ -5470,6 +5494,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     document.dispatchEvent(new CustomEvent("gbti:extension-ready", { detail: { version } }));
     document.addEventListener("gbti:request-signin", () => {
       document.dispatchEvent(new CustomEvent("gbti:open-auth"));
+    });
+    document.addEventListener("gbti:open", (e) => {
+      const detail = e?.detail || {};
+      if (!resolveOpenPage(detail)) return;
+      chrome.runtime.sendMessage({ type: "open-page", page: detail.page, hash: detail.hash }).catch(() => {
+      });
+    });
+    document.addEventListener("gbti:request-signout", () => {
+      chrome.runtime.sendMessage({ type: "signout" }).catch(() => {
+      });
     });
   } catch {
   }

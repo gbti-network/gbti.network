@@ -17887,6 +17887,9 @@ function rolesFromParsed(parsed) {
 function roleOf(githubId, rolesMap) {
   return rolesMap.get(String(githubId)) ?? ROLE.member;
 }
+function rank(role) {
+  return RANK[role] ?? 0;
+}
 function rolesFromText(text) {
   if (!text) return /* @__PURE__ */ new Map();
   try {
@@ -17895,6 +17898,9 @@ function rolesFromText(text) {
     return /* @__PURE__ */ new Map();
   }
 }
+var canModerate = (role) => rank(role) >= RANK.moderator;
+var canBanGrandfather = (role) => rank(role) >= RANK.admin;
+var canManageRoles = (role) => rank(role) >= RANK.superadmin;
 
 // client/src/membership.mjs
 var STAFF = /* @__PURE__ */ new Set([ROLE.moderator, ROLE.admin, ROLE.superadmin]);
@@ -18903,7 +18909,165 @@ function renderMarkdown(md) {
   return out.join("\n");
 }
 
+// client/src/admin-edits.mjs
+var idStr = (v) => String(v);
+function listFrom(obj, key) {
+  return Array.isArray(obj?.[key]) ? obj[key].map((e) => ({ ...e })) : [];
+}
+function addBan(parsed, { githubId, reason, at }) {
+  const obj = { ...parsed ?? {} };
+  const bans = listFrom(obj, "bans");
+  if (bans.some((b) => idStr(b.github_id) === idStr(githubId))) throw new Error(`already banned: ${githubId}`);
+  bans.push({ github_id: idStr(githubId), reason: reason || "banned", at: at ?? null });
+  obj.bans = bans;
+  return obj;
+}
+function removeBan(parsed, githubId) {
+  const obj = { ...parsed ?? {} };
+  obj.bans = listFrom(obj, "bans").filter((b) => idStr(b.github_id) !== idStr(githubId));
+  return obj;
+}
+function addGrandfather(parsed, { githubId, reason, at, until = null, login }) {
+  const obj = { ...parsed ?? {} };
+  const list = listFrom(obj, "grandfathered");
+  if (list.some((g) => idStr(g.github_id) === idStr(githubId))) throw new Error(`already grandfathered: ${githubId}`);
+  list.push({ github_id: idStr(githubId), ...login ? { login } : {}, reason: reason || "grandfathered", at: at ?? null, until });
+  obj.grandfathered = list;
+  return obj;
+}
+function removeGrandfather(parsed, githubId) {
+  const obj = { ...parsed ?? {} };
+  obj.grandfathered = listFrom(obj, "grandfathered").filter((g) => idStr(g.github_id) !== idStr(githubId));
+  return obj;
+}
+var ROLE_LISTS = Object.freeze({ [ROLE.superadmin]: "superadmins", [ROLE.admin]: "admins", [ROLE.moderator]: "moderators" });
+function assignRole(parsed, { githubId, role, login }) {
+  if (role !== ROLE.member && !ROLE_LISTS[role]) throw new Error(`unknown role: ${role}`);
+  const obj = { ...parsed ?? {} };
+  for (const key of Object.values(ROLE_LISTS)) {
+    obj[key] = listFrom(obj, key).filter((e) => idStr(e.github_id) !== idStr(githubId));
+  }
+  if (role !== ROLE.member) {
+    const key = ROLE_LISTS[role];
+    obj[key] = [...listFrom(obj, key), { github_id: idStr(githubId), ...login ? { login } : {} }];
+  }
+  return obj;
+}
+function setStatusDraft(frontmatter) {
+  return { ...frontmatter ?? {}, status: "draft" };
+}
+
+// client/src/admin-ops.mjs
+function requireRole(ctx, check2, need) {
+  const role = ctx.role?.() ?? "member";
+  if (!check2(role)) throw new OperationError("forbidden", `requires ${need} (you are ${role})`);
+  return role;
+}
+function requireRepo2(ctx) {
+  const repo = ctx.getRepoClient?.();
+  if (!repo) throw new OperationError("not-authenticated", "run `gbti login` first");
+  if (!ctx.store?.get("repoPath")) throw new OperationError("bad-request", "no local repoPath configured");
+  return { repo };
+}
+var readYaml = async (ctx, rel) => {
+  try {
+    return index_vite_proxy_tmp_default.load(await ctx.reader?.readFile?.(rel) || "") ?? {};
+  } catch {
+    return {};
+  }
+};
+var dumpYaml = (obj) => index_vite_proxy_tmp_default.dump(obj, { lineWidth: 100, noRefs: true });
+var nowIso = (ctx) => ctx.now ? ctx.now() : (/* @__PURE__ */ new Date()).toISOString();
+var slugOf = (rel) => rel.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+function requireId(githubId) {
+  if (githubId === void 0 || githubId === null || String(githubId).trim() === "") {
+    throw new OperationError("bad-request", "githubId is required");
+  }
+  return String(githubId);
+}
+function requirePath(rel) {
+  if (!rel || typeof rel !== "string" || rel.includes("\\") || rel.startsWith("/")) {
+    throw new OperationError("bad-request", "a valid in-repo content path is required");
+  }
+  const segments = rel.split("/");
+  if (segments.some((s) => s === "" || s === "." || s === "..")) {
+    throw new OperationError("bad-request", "a valid in-repo content path is required");
+  }
+  return rel;
+}
+function requireMemberContentPath(rel) {
+  requirePath(rel);
+  if (!rel.startsWith("members/")) {
+    throw new OperationError("forbidden", "moderation is limited to member content (members/<user>/...)");
+  }
+  return rel;
+}
+async function banMember(ctx, { githubId, reason } = {}) {
+  requireRole(ctx, canBanGrandfather, "admin");
+  const { repo } = requireRepo2(ctx);
+  const id = requireId(githubId);
+  const updated = addBan(await readYaml(ctx, "house/bans.yml"), { githubId: id, reason, at: nowIso(ctx) });
+  return publishFiles({ repo, branch: `gbti/ban-${id}`, files: [{ path: "house/bans.yml", content: dumpYaml(updated) }], message: `Ban ${id}`, title: `Ban member ${id}`, body: reason ? `Reason: ${reason}` : "" });
+}
+async function unbanMember(ctx, { githubId } = {}) {
+  requireRole(ctx, canBanGrandfather, "admin");
+  const { repo } = requireRepo2(ctx);
+  const id = requireId(githubId);
+  const updated = removeBan(await readYaml(ctx, "house/bans.yml"), id);
+  return publishFiles({ repo, branch: `gbti/unban-${id}`, files: [{ path: "house/bans.yml", content: dumpYaml(updated) }], message: `Unban ${id}`, title: `Unban member ${id}` });
+}
+async function grandfatherMember(ctx, { githubId, reason, until = null, login } = {}) {
+  requireRole(ctx, canBanGrandfather, "admin");
+  const { repo } = requireRepo2(ctx);
+  const id = requireId(githubId);
+  const updated = addGrandfather(await readYaml(ctx, "house/grandfathered.yml"), { githubId: id, reason, at: nowIso(ctx), until, login });
+  return publishFiles({ repo, branch: `gbti/grandfather-${id}`, files: [{ path: "house/grandfathered.yml", content: dumpYaml(updated) }], message: `Grandfather ${id}`, title: `Grandfather member ${id}`, body: reason ? `Reason: ${reason}` : "" });
+}
+async function ungrandfatherMember(ctx, { githubId } = {}) {
+  requireRole(ctx, canBanGrandfather, "admin");
+  const { repo } = requireRepo2(ctx);
+  const id = requireId(githubId);
+  const updated = removeGrandfather(await readYaml(ctx, "house/grandfathered.yml"), id);
+  return publishFiles({ repo, branch: `gbti/ungrandfather-${id}`, files: [{ path: "house/grandfathered.yml", content: dumpYaml(updated) }], message: `Remove grandfather ${id}`, title: `Remove grandfather for ${id}` });
+}
+async function setMemberRole(ctx, { githubId, role, login } = {}) {
+  requireRole(ctx, canManageRoles, "superadmin");
+  const { repo } = requireRepo2(ctx);
+  const id = requireId(githubId);
+  if (!role) throw new OperationError("bad-request", "role is required (member|moderator|admin|superadmin)");
+  let updated;
+  try {
+    updated = assignRole(await readYaml(ctx, "house/roles.yml"), { githubId: id, role, login });
+  } catch (err) {
+    throw new OperationError("bad-request", err.message);
+  }
+  return publishFiles({ repo, branch: `gbti/role-${id}`, files: [{ path: "house/roles.yml", content: dumpYaml(updated) }], message: `Set ${id} role=${role}`, title: `Set role for ${id}: ${role}` });
+}
+async function deplatformContent(ctx, { path: rel } = {}) {
+  requireRole(ctx, canModerate, "moderator");
+  const { repo } = requireRepo2(ctx);
+  requireMemberContentPath(rel);
+  const text = await ctx.reader?.readFile?.(rel);
+  if (text == null) throw new OperationError("not-found", `no such file: ${rel}`);
+  const { frontmatter, body } = parseContentFile(text);
+  const updated = setStatusDraft(frontmatter);
+  const content = `---
+${dumpYaml(updated).trimEnd()}
+---
+
+${String(body).trim()}
+`;
+  return publishFiles({ repo, branch: `gbti/deplatform-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Deplatform ${rel}`, title: `Deplatform ${rel}`, body: "Moderation: set status to draft." });
+}
+async function removeContent(ctx, { path: rel } = {}) {
+  requireRole(ctx, canModerate, "moderator");
+  const { repo } = requireRepo2(ctx);
+  requireMemberContentPath(rel);
+  return publishFiles({ repo, branch: `gbti/remove-${slugOf(rel)}`, files: [{ path: rel, content: null }], message: `Remove ${rel}`, title: `Remove ${rel}`, body: "Moderation: remove content." });
+}
+
 // extension/src/ext-dispatch.mjs
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -18921,7 +19085,7 @@ async function computeRole(ctx) {
   const text = await ctx.reader.readFile("house/roles.yml");
   return roleOf(id.githubId, rolesFromText(text));
 }
-function requireRepo2(ctx) {
+function requireRepo3(ctx) {
   const repo = ctx.getRepoClient?.();
   if (!repo) throw new OperationError("not-authenticated", "sign in first");
   return repo;
@@ -18990,7 +19154,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       case "/api/discord-invite":
         return ok(await getDiscordInvite2(ctx));
       case "/api/prs":
-        return ok({ prs: await requireRepo2(ctx).listMyPulls(id.login) });
+        return ok({ prs: await requireRepo3(ctx).listMyPulls(id.login) });
       case "/api/contributions":
         return ok(await listIncomingContributions(ctx));
       case "/api/contribution":
@@ -19000,7 +19164,14 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       case "/api/pr-status": {
         const n = Number(query.number);
         if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");
-        return ok(await requireRepo2(ctx).gateStatus(n));
+        return ok(await requireRepo3(ctx).gateStatus(n));
+      }
+      case "/api/admin": {
+        const role = await computeRole(ctx);
+        const adminCtx = { ...ctx, role: () => role, store: { get: (k) => k === "repoPath" ? "extension" : ctx.store?.get(k) } };
+        const fn = ADMIN_ACTIONS[body?.action];
+        if (!fn) throw new OperationError("bad-request", `unknown admin action: ${body?.action}`);
+        return ok(await fn(adminCtx, body ?? {}));
       }
       default:
         return { status: 404, json: { error: "not_found" } };
@@ -19070,6 +19241,25 @@ async function deviceFlowLogin({
         throw new Error(`device flow error: ${r.error ?? "unknown"}`);
     }
   }
+}
+
+// extension/src/open-page.mjs
+var PAGES = /* @__PURE__ */ new Set([
+  "newtab.html",
+  "workspace.html",
+  "browse.html",
+  "shares.html",
+  "admin.html",
+  "onboarding.html"
+]);
+var HASH_RE = /^[A-Za-z0-9=&_%.,-]{1,300}$/;
+function resolveOpenPage({ page, hash: hash2 } = {}) {
+  if (typeof page !== "string" || !PAGES.has(page)) return null;
+  if (hash2 == null || hash2 === "") return page;
+  const h = String(hash2).replace(/^#/, "");
+  if (h === "") return page;
+  if (!HASH_RE.test(h)) return null;
+  return `${page}#${h}`;
 }
 
 // extension/src/background.mjs
@@ -19166,6 +19356,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         store.set({ githubToken: null, identity: null });
         broadcastAuthChanged();
         sendResponse({ ok: true });
+      } else if (msg?.type === "open-page") {
+        const rel = resolveOpenPage({ page: msg.page, hash: msg.hash });
+        if (!rel) {
+          sendResponse({ ok: false, error: "bad_page" });
+          return;
+        }
+        try {
+          await chrome.tabs.create({ url: chrome.runtime.getURL(rel) });
+          sendResponse({ ok: true });
+        } catch (e) {
+          sendResponse({ ok: false, error: e?.message ?? "open_failed" });
+        }
       } else {
         sendResponse({ error: "unknown_message" });
       }

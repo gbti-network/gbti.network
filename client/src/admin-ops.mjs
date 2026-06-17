@@ -28,9 +28,12 @@ function requireRepo(ctx) {
   return { repo };
 }
 
-const readYaml = (ctx, rel) => {
+// Host-portable read: the npm host's reader.readFile is sync (returns a string); the extension's is async
+// (GitHub Contents API). `await` handles both (awaiting a plain string yields the string), so the same admin
+// ops run in either host.
+const readYaml = async (ctx, rel) => {
   try {
-    return yaml.load(ctx.reader?.readFile?.(rel) || '') ?? {};
+    return yaml.load((await ctx.reader?.readFile?.(rel)) || '') ?? {};
   } catch {
     return {};
   }
@@ -73,7 +76,7 @@ export async function banMember(ctx, { githubId, reason } = {}) {
   requireRole(ctx, canBanGrandfather, 'admin');
   const { repo } = requireRepo(ctx);
   const id = requireId(githubId);
-  const updated = addBan(readYaml(ctx,'house/bans.yml'), { githubId: id, reason, at: nowIso(ctx) });
+  const updated = addBan(await readYaml(ctx,'house/bans.yml'), { githubId: id, reason, at: nowIso(ctx) });
   return publishFiles({ repo, branch: `gbti/ban-${id}`, files: [{ path: 'house/bans.yml', content: dumpYaml(updated) }], message: `Ban ${id}`, title: `Ban member ${id}`, body: reason ? `Reason: ${reason}` : '' });
 }
 
@@ -81,7 +84,7 @@ export async function unbanMember(ctx, { githubId } = {}) {
   requireRole(ctx, canBanGrandfather, 'admin');
   const { repo } = requireRepo(ctx);
   const id = requireId(githubId);
-  const updated = removeBan(readYaml(ctx,'house/bans.yml'), id);
+  const updated = removeBan(await readYaml(ctx,'house/bans.yml'), id);
   return publishFiles({ repo, branch: `gbti/unban-${id}`, files: [{ path: 'house/bans.yml', content: dumpYaml(updated) }], message: `Unban ${id}`, title: `Unban member ${id}` });
 }
 
@@ -89,7 +92,7 @@ export async function grandfatherMember(ctx, { githubId, reason, until = null, l
   requireRole(ctx, canBanGrandfather, 'admin');
   const { repo } = requireRepo(ctx);
   const id = requireId(githubId);
-  const updated = addGrandfather(readYaml(ctx,'house/grandfathered.yml'), { githubId: id, reason, at: nowIso(ctx), until, login });
+  const updated = addGrandfather(await readYaml(ctx,'house/grandfathered.yml'), { githubId: id, reason, at: nowIso(ctx), until, login });
   return publishFiles({ repo, branch: `gbti/grandfather-${id}`, files: [{ path: 'house/grandfathered.yml', content: dumpYaml(updated) }], message: `Grandfather ${id}`, title: `Grandfather member ${id}`, body: reason ? `Reason: ${reason}` : '' });
 }
 
@@ -97,7 +100,7 @@ export async function ungrandfatherMember(ctx, { githubId } = {}) {
   requireRole(ctx, canBanGrandfather, 'admin');
   const { repo } = requireRepo(ctx);
   const id = requireId(githubId);
-  const updated = removeGrandfather(readYaml(ctx,'house/grandfathered.yml'), id);
+  const updated = removeGrandfather(await readYaml(ctx,'house/grandfathered.yml'), id);
   return publishFiles({ repo, branch: `gbti/ungrandfather-${id}`, files: [{ path: 'house/grandfathered.yml', content: dumpYaml(updated) }], message: `Remove grandfather ${id}`, title: `Remove grandfather for ${id}` });
 }
 
@@ -110,7 +113,7 @@ export async function setMemberRole(ctx, { githubId, role, login } = {}) {
   if (!role) throw new OperationError('bad-request', 'role is required (member|moderator|admin|superadmin)');
   let updated;
   try {
-    updated = assignRole(readYaml(ctx,'house/roles.yml'), { githubId: id, role, login });
+    updated = assignRole(await readYaml(ctx,'house/roles.yml'), { githubId: id, role, login });
   } catch (err) {
     throw new OperationError('bad-request', err.message);
   }
@@ -123,7 +126,7 @@ export async function deplatformContent(ctx, { path: rel } = {}) {
   requireRole(ctx, canModerate, 'moderator');
   const { repo } = requireRepo(ctx);
   requireMemberContentPath(rel);
-  const text = ctx.reader?.readFile?.(rel);
+  const text = await ctx.reader?.readFile?.(rel);
   if (text == null) throw new OperationError('not-found', `no such file: ${rel}`);
   const { frontmatter, body } = parseContentFile(text);
   const updated = setStatusDraft(frontmatter);

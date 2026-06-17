@@ -24,14 +24,29 @@
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--paper-2); color: var(--fg); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
     a { color: inherit; }
-    .wrap { max-width: 940px; margin: 0 auto; padding: 56px 24px 80px; }
+    .wrap { max-width: 940px; margin: 0 auto; padding: 30px 24px 80px; }
     .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.01em; }
     .brand .g { width: 30px; height: 30px; border-radius: 8px; background: var(--green); color: #fff; display: grid; place-items: center; font-weight: 800; }
     .iconbtn { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: var(--r); border: 1px solid var(--line); background: var(--paper); color: var(--fg-soft); cursor: pointer; }
     .iconbtn:hover { color: var(--fg); border-color: var(--line-2); }
-    .acct { font-size: 13px; color: var(--fg-soft); font-family: var(--mono); margin-right: 4px; }
-    .acct b { color: var(--fg); font-family: var(--sans); font-weight: 700; }
+    /* SOW-036: the avatar account control + dropdown (mirrors the gbti.network site header). */
+    .me-wrap { position: relative; }
+    .signin { font-family: var(--sans); font-weight: 700; font-size: 13px; color: #fff; background: var(--green); border: 0; border-radius: var(--r-pill); padding: 8px 16px; cursor: pointer; }
+    .signin:hover { background: var(--green-700); }
+    .me-btn { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px 3px 3px; border: 1px solid var(--line-2); border-radius: var(--r-pill); background: var(--paper); color: var(--fg); cursor: pointer; }
+    .me-btn:hover { border-color: var(--green); }
+    .me-av { width: 30px; height: 30px; border-radius: 50%; background: var(--line); object-fit: cover; }
+    .me-caret { color: var(--fg-mute); transition: transform .15s ease; }
+    .me-btn[aria-expanded="true"] .me-caret { transform: rotate(180deg); }
+    .me-menu { position: absolute; top: calc(100% + 8px); right: 0; min-width: 220px; z-index: 60; background: var(--paper); border: 1px solid var(--line-2); border-radius: var(--r-lg); box-shadow: 0 12px 30px -12px rgba(0,0,0,.32); padding: 6px; display: flex; flex-direction: column; }
+    .me-menu[hidden] { display: none; }
+    .me-head { padding: 7px 12px 4px; font-family: var(--mono); font-size: 12.5px; color: var(--fg-mute); }
+    .me-head b { color: var(--fg); font-family: var(--sans); font-weight: 700; }
+    .mi { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-radius: var(--r); background: transparent; color: var(--fg); font-family: var(--sans); font-size: 14px; font-weight: 500; cursor: pointer; text-decoration: none; }
+    .mi:hover, .mi:focus-visible { background: var(--green-tint); color: var(--green-700); outline: none; }
+    .mi-signout { color: var(--fg-soft); }
+    .me-sep { height: 1px; background: var(--line); margin: 5px 4px; }
     /* App switcher: [G | daily.dev]. Shown when daily.dev is detected, or (without the management permission)
        by default. Clicking daily.dev switches the tab to their app. */
     .apps { display: none; align-items: center; gap: 2px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 3px; margin-right: 4px; }
@@ -42,14 +57,14 @@
     .app:not(.on):hover { background: var(--line); }
     .app .dd { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; background: #0e1217; color: #fff; font: 800 9px/1 var(--mono); }
     /* Onboarding-aware setup banner: shown until the member is signed in AND set up (fork + app install). */
-    .setup { display: none; align-items: center; gap: 14px; margin-top: 24px; padding: 15px 18px; border: 1px solid var(--green); background: var(--green-tint); border-radius: var(--r-lg); text-decoration: none; color: var(--fg); }
+    .setup { display: none; align-items: center; gap: 14px; margin-top: 16px; padding: 13px 18px; border: 1px solid var(--green); background: var(--green-tint); border-radius: var(--r-lg); text-decoration: none; color: var(--fg); }
     .setup.show { display: flex; }
     .setup .s-txt { flex: 1; }
     .setup .s-txt b { display: block; font-size: 15px; }
     .setup .s-txt span { font-size: 13px; color: var(--fg-mute); }
     .setup .s-go { background: var(--green); color: #fff; font-weight: 800; padding: 10px 18px; border-radius: var(--r); white-space: nowrap; }
     .setup:hover .s-go { background: var(--green-700); }
-    .greet { margin-top: 44px; }
+    .greet { margin-top: 26px; }
     .greet h1 { margin: 0; font-size: clamp(28px, 5vw, 44px); letter-spacing: -.02em; }
     .greet .date { margin-top: 6px; color: var(--fg-mute); font-family: var(--mono); font-size: 13px; letter-spacing: .02em; }
     .search { margin-top: 26px; position: relative; max-width: 560px; }
@@ -101,12 +116,33 @@
     <div class="top">
       <span class="brand"><span class="g">G</span> GBTI Network</span>
       <div style="display:flex;align-items:center;gap:8px">
-        <span class="acct" data-acct></span>
         <span class="apps" data-apps>
           <span class="app on" title="GBTI Network (you are here)"><img src="icons/icon-32.png" alt="GBTI Network" /></span>
           <button class="app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
         </span>
         <button class="iconbtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme">◐</button>
+        <!-- SOW-036: the account control. Signed out -> a "Sign in" button; signed in -> the avatar menu that
+             deep-links into the in-extension management pages (same items as the gbti.network site header). -->
+        <div class="me-wrap" data-me-wrap>
+          <button class="signin" data-signin-btn type="button" hidden>Sign in</button>
+          <button class="me-btn" data-me-btn type="button" aria-haspopup="true" aria-expanded="false" aria-label="Account menu" hidden>
+            <img class="me-av" data-me-av alt="" width="30" height="30" />
+            <svg class="me-caret" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          </button>
+          <div class="me-menu" data-me-menu role="menu" hidden>
+            <div class="me-head" data-me-head></div>
+            <div class="me-sep" role="separator"></div>
+            <a class="mi" role="menuitem" href="workspace.html">My workspace</a>
+            <a class="mi" role="menuitem" href="workspace.html#tab=post">My articles</a>
+            <a class="mi" role="menuitem" href="workspace.html#tab=prompt">My prompts</a>
+            <a class="mi" role="menuitem" href="workspace.html#tab=product">My products</a>
+            <a class="mi" role="menuitem" href="workspace.html#tab=prs">My pull requests</a>
+            <a class="mi" role="menuitem" href="browse.html">Browse the co-op</a>
+            <a class="mi mi-admin" role="menuitem" href="admin.html" data-role-min hidden>Admin tools</a>
+            <div class="me-sep" role="separator"></div>
+            <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
+          </div>
+        </div>
       </div>
     </div>
 

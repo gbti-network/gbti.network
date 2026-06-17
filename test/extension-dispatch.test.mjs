@@ -99,6 +99,45 @@ test('onboarding esc: escapes HTML metacharacters before innerHTML (matches gbti
   assert.equal(esc(undefined), '');
 });
 
+// SOW-036/038: governance from the extension. admin-ops reads via the ASYNC reader (host-portable) and the
+// dispatcher supplies a sync role() + a repoPath sentinel; the SOW-005 gate + CODEOWNERS remain the real boundary.
+function adminRepo() {
+  const puts = [];
+  return {
+    puts,
+    upstream: 'gbti-network/gbti.network',
+    async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
+    async getDefaultBranch() { return 'main'; },
+    async getBranchSha() { return 'sha'; },
+    async ensureBranch() {},
+    async getFileSha() { return 'existing'; },
+    async putFile(r, p, opts) { puts.push({ path: p, content: Buffer.from(opts.contentBase64, 'base64').toString('utf8') }); },
+    async findOpenPull() { return null; },
+    async openPull() { return { number: 88, html_url: 'u' }; },
+  };
+}
+
+test('admin: an admin (per roles.yml, async-read) bans via a bans.yml PR; a plain member is forbidden', async () => {
+  const repo = adminRepo();
+  const files = { 'house/roles.yml': 'admins:\n  - github_id: "1"\n', 'house/bans.yml': 'bans: []\n' };
+  const r = await dispatch(ctxFor({ repo, files }), { pathname: '/api/admin', method: 'POST', body: { action: 'ban', githubId: '999', reason: 'spam' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.prNumber, 88);
+  assert.equal(repo.puts[0].path, 'house/bans.yml');
+  assert.match(repo.puts[0].content, /999/);
+
+  // A caller NOT in roles.yml resolves to 'member' -> forbidden (UX gate; the PR gate is the real boundary).
+  const member = await dispatch(ctxFor({ repo: adminRepo(), files: { 'house/bans.yml': 'bans: []\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'ban', githubId: '999' } });
+  assert.equal(member.status, 403);
+  assert.equal(member.json.error, 'forbidden');
+});
+
+test('admin: an unknown action is a bad-request', async () => {
+  const r = await dispatch(ctxFor({ repo: adminRepo(), files: { 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'wizard' } });
+  assert.equal(r.status, 400);
+  assert.equal(r.json.error, 'bad-request');
+});
+
 test('pr-status: rejects non-positive-integer PR numbers before hitting GitHub (matches the npm guard)', async () => {
   const calls = [];
   const repo = { upstream: 'gbti-network/gbti.network', async gateStatus(n) { calls.push(n); return { state: 'success' }; } };

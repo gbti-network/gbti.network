@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- SOW-036: the GBTI extension's Admin page. Extension-only (opened from the avatar menu's "Admin tools" entry,
+     shown only for moderator+). Mounts <gbti-auth> (sign-in via the background worker) + <gbti-admin> (role-gated
+     moderation/admin tools, SOW-006 AD1). <gbti-admin> self-gates on the signed-in role and the SOW-005 gate +
+     CODEOWNERS are the real boundary, so opening this page is harmless for a plain member. Mirrors workspace.html. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin · GBTI Network</title>
+  <!-- No-flash theme: external (not inline) because MV3 extension_pages CSP forbids inline scripts. -->
+  <script src="dist/theme-init.js"></script>
+  <style>
+    :root { --paper-2: #faf9f8; --ink: #25232b; --green: #1f9e5f; }
+    [data-theme="dark"] { --paper-2: #1c1a21; --ink: #f3f2f0; }
+    body { margin: 0; background: var(--paper-2); color: var(--ink);
+      font-family: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 40px 20px 80px; }
+    .top { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+    .g { width: 30px; height: 30px; border-radius: 8px; background: var(--green); color: #fff; display: grid; place-items: center; font-weight: 800; }
+    .top b { font-weight: 800; letter-spacing: -.01em; }
+    .top .t { margin-left: auto; font-size: 13px; opacity: .7; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top"><span class="g">G</span><b>Admin tools</b><span class="t">Governance and moderation</span></div>
+    <gbti-auth></gbti-auth>
+    <gbti-admin></gbti-admin>
+  </div>
+  <script src="dist/admin.js"></script>
+</body>
+</html>
