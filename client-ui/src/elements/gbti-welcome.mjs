@@ -13,6 +13,9 @@ import { DISCORD_INVITE_URL } from '../discord.mjs';
 const SITE = 'https://gbti.network';
 const PAGE_SIZE = 10;
 const DISCORD_DONE_KEY = 'gbti-welcome-discord-joined';
+// The welcome flow is a stepper: one to-do per screen (SOW-029 originally showed them stacked). SOW-041 adds a
+// 'categories' step here; keep this list as the single source of step order.
+const STEPS = ['discord', 'follow'];
 
 const lc = (s) => String(s || '').toLowerCase();
 const check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -57,12 +60,19 @@ const CSS = `
   .note a { color:var(--accent); }
   .done { width:100%; box-sizing:border-box; margin-top:6px; padding:12px; }
   .loading { color:var(--muted); text-align:center; padding:30px 0; }
+  /* SOW-041 stepper: a step indicator + a bottom nav bar (Back / Continue / I am all set). */
+  .stepind { display:block; text-align:center; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:0 0 14px; }
+  .stepnav { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:6px; }
+  .stepnav .grow { flex:1; }
+  .btn.ghost { background:transparent; color:var(--fg-soft); border:1.5px solid var(--line); }
+  .btn.ghost:hover { background:var(--hover); color:var(--fg); border-color:var(--line-2); }
 `;
 
 class GbtiWelcome extends GbtiElement {
   connectedCallback() {
     super.connectedCallback?.();
     this._page = 1;
+    this._step = 0; // SOW-041: the welcome is a one-to-do-per-screen stepper (Discord, then Follow members)
     this.load();
   }
 
@@ -110,6 +120,18 @@ class GbtiWelcome extends GbtiElement {
     if (!this._loaded) { this.set(this.css(CSS) + `<p class="loading">Setting up your welcome...</p>`); return; }
     const ph = phaseLabel(this._membership);
     const up = ph.upgrade ? `<a class="up" href="${SITE}/membership/" target="_blank" rel="noopener">Upgrade to publish</a>` : '';
+    // SOW-041: one to-do per screen. Show the head once, then the current step's card + a bottom nav.
+    if (this._step < 0) this._step = 0;
+    if (this._step > STEPS.length - 1) this._step = STEPS.length - 1;
+    const step = STEPS[this._step];
+    const card = step === 'discord' ? this._discordCard() : this._followCard();
+    const isLast = this._step >= STEPS.length - 1;
+    const nav = `<div class="stepnav">
+      ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
+      ${isLast
+        ? `<button class="btn done" data-done type="button">I am all set</button>`
+        : `<button class="btn" data-step-next type="button">Continue &rarr;</button>`}
+    </div>`;
     this.set(this.css(CSS) + `
       <div class="head">
         <span class="ic">${check}</span>
@@ -118,24 +140,31 @@ class GbtiWelcome extends GbtiElement {
         <p>${esc(ph.body)}</p>
         ${up}
       </div>
-      ${this._discordCard()}
-      ${this._followCard()}
-      <button class="btn done" data-done type="button">I am all set</button>`);
+      <span class="stepind">Step ${this._step + 1} of ${STEPS.length}</span>
+      ${card}
+      ${nav}`);
 
-    // Discord card wiring. Use the resolved invite (live bot-minted URL, or the static fallback).
-    this.on('[data-discord-join]', 'click', () => window.open(this._discordInviteUrl || DISCORD_INVITE_URL, '_blank', 'noopener'));
-    const cb = this.$('[data-discord-cb]');
-    if (cb) cb.addEventListener('change', () => {
-      this._discordJoined = cb.checked;
-      try { cb.checked ? localStorage.setItem(DISCORD_DONE_KEY, '1') : localStorage.removeItem(DISCORD_DONE_KEY); } catch { /* storage blocked */ }
-    });
-    // Follow toggles + paging.
-    this.$$('[data-follow]').forEach((b) => b.addEventListener('click', () => this._toggleFollow(b.getAttribute('data-follow'))));
-    this.on('[data-prev]', 'click', () => { this._page--; this.render(); });
-    this.on('[data-next]', 'click', () => { this._page++; this.render(); });
-    // Avatar fallback: drop a broken image so the letter disc shows through.
-    this.$$('.av img').forEach((img) => img.addEventListener('error', () => img.remove(), { once: true }));
+    // Step navigation.
+    this.on('[data-step-next]', 'click', () => { this._step++; this.render(); });
+    this.on('[data-step-back]', 'click', () => { this._step--; this.render(); });
     this.on('[data-done]', 'click', () => this.emit('gbti:welcome-done'));
+
+    if (step === 'discord') {
+      // Use the resolved invite (live bot-minted URL, or the static fallback).
+      this.on('[data-discord-join]', 'click', () => window.open(this._discordInviteUrl || DISCORD_INVITE_URL, '_blank', 'noopener'));
+      const cb = this.$('[data-discord-cb]');
+      if (cb) cb.addEventListener('change', () => {
+        this._discordJoined = cb.checked;
+        try { cb.checked ? localStorage.setItem(DISCORD_DONE_KEY, '1') : localStorage.removeItem(DISCORD_DONE_KEY); } catch { /* storage blocked */ }
+      });
+    } else {
+      // Follow toggles + paging (the pager's Back/More is within the list, distinct from the step Back).
+      this.$$('[data-follow]').forEach((b) => b.addEventListener('click', () => this._toggleFollow(b.getAttribute('data-follow'))));
+      this.on('[data-prev]', 'click', () => { this._page--; this.render(); });
+      this.on('[data-next]', 'click', () => { this._page++; this.render(); });
+      // Avatar fallback: drop a broken image so the letter disc shows through.
+      this.$$('.av img').forEach((img) => img.addEventListener('error', () => img.remove(), { once: true }));
+    }
   }
 
   _discordCard() {
@@ -150,8 +179,15 @@ class GbtiWelcome extends GbtiElement {
 
   _followCard() {
     const note = `<p class="note">Following a member alerts you when they publish new articles, prompts, and products (in your Following feed).</p>`;
-    // Paid-only: a trial/visitor caller cannot read or write the follow graph.
+    // The follow graph read failed. Distinguish a REAL paywall (a trial/visitor: following is paid-only) from a
+    // server-side "could not verify your membership right now" failure for an actually-paid member (e.g. a
+    // superadmin hitting a stale/missing KV overrides mirror). Showing "Upgrade" to a paid member is wrong.
     if (this._follows === null) {
+      if (this._membership === 'paid') {
+        return `<div class="card"><h3>${megaIco} Follow members</h3>
+          <p class="sub">We could not load your follow list right now. This is a temporary problem on our side, not your membership.</p>${note}
+          <p class="note" style="margin-top:10px">Try again shortly, or follow members any time from a member profile.</p></div>`;
+      }
       return `<div class="card"><h3>${megaIco} Follow members</h3>
         <p class="sub">Following members is a paid feature.</p>${note}
         <p class="note" style="margin-top:10px"><a href="${SITE}/membership/" target="_blank" rel="noopener">Upgrade</a> to follow members and build your feed.</p></div>`;

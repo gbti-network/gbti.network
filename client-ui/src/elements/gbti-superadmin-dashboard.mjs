@@ -4,6 +4,9 @@
 // route is the real boundary). Live per-member Stripe paid/trial is NOT shown here — that needs a Stripe-key
 // Worker endpoint (called out in the footnote). Inert in public (no client). The token never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { indexFileFor, SAVED_TYPES } from '../saved-core.mjs';
+
+const SITE = 'https://gbti.network';
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -48,9 +51,24 @@ class GbtiSuperadminDashboard extends GbtiElement {
   connectedCallback() {
     this._data = null; // { roster, summary }
     this._pulls = null; // open content-PR queue, or null when unavailable
+    this._counts = null; // { username(lower) -> published content count }, or null
     this._error = null; // 'forbidden' | 'auth' | 'error'
     super.connectedCallback?.();
     this._load();
+  }
+
+  // Per-member published content counts, from the PUBLIC per-type index JSONs (no auth, no new endpoint). Author
+  // is the folder username; house/gbti content does not map to a member. Best-effort; a failure leaves it null.
+  async _loadCounts() {
+    const counts = {};
+    await Promise.all(SAVED_TYPES.map(async (t) => {
+      try {
+        const res = await fetch(`${SITE}/${indexFileFor(t)}`, { cache: 'no-cache' });
+        const items = res.ok ? ((await res.json()).items || []) : [];
+        for (const it of items) { const a = String(it?.author || '').toLowerCase(); if (a && a !== 'gbti' && a !== 'house') counts[a] = (counts[a] || 0) + 1; }
+      } catch { /* skip this type */ }
+    }));
+    this._counts = counts;
   }
 
   async _load() {
@@ -64,8 +82,10 @@ class GbtiSuperadminDashboard extends GbtiElement {
       this.render();
       return;
     }
-    // Admin confirmed (the roster loaded): also load the open content-PR queue, best-effort.
+    // Admin confirmed (the roster loaded): also load the open content-PR queue + per-member content counts,
+    // both best-effort (a failure just hides that column / panel).
     try { this._pulls = (await this.client.openPulls())?.pulls || []; } catch { this._pulls = null; }
+    await this._loadCounts();
     this.render();
   }
 
@@ -117,11 +137,13 @@ class GbtiSuperadminDashboard extends GbtiElement {
       if ((ROLE_RANK[m.role] ?? 0) > 0) tags.push(`<span class="tag staff">${esc(m.role)}</span>`);
       if (m.grandfathered) tags.push(`<span class="tag gf">grandfathered${m.grandfatherUntil ? ` · until ${esc(String(m.grandfatherUntil).slice(0, 10))}` : ''}</span>`);
       if (!tags.length) tags.push(`<span class="dash">—</span>`);
-      return `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join('')}</div></td><td class="id">${esc(m.githubId)}</td></tr>`;
+      const n = this._counts && m.username ? (this._counts[m.username.toLowerCase()] || 0) : null;
+      const content = n == null ? `<span class="dash">—</span>` : esc(n);
+      return `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join('')}</div></td><td class="id">${content}</td><td class="id">${esc(m.githubId)}</td></tr>`;
     }).join('');
 
     this.set(this.css(CSS) + `${chips}
-      <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No members known yet.</td></tr>'}</tbody></table>
+      <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>Content</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No members known yet.</td></tr>'}</tbody></table>
       <p class="note">Effective status follows ban &gt; staff &gt; grandfather &gt; Stripe. The live Stripe tier is shown when the admin Stripe endpoint is reachable (otherwise it reads "unknown"); the override tiers (ban / staff / grandfather) are always authoritative from the public repo.</p>
       ${this._pullsSection()}`);
 

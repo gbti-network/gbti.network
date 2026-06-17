@@ -923,7 +923,44 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-admin", GbtiAdmin);
 
+  // client-ui/src/saved-core.mjs
+  var TYPE_INDEX = { post: "blog-index.json", product: "products-index.json", prompt: "prompts-index.json" };
+  var TYPE_LABEL = { post: "Articles", product: "Products", prompt: "Prompts" };
+  var ORDER = ["post", "product", "prompt"];
+  function indexFileFor(type) {
+    return TYPE_INDEX[type] || null;
+  }
+  function typeLabel(type) {
+    return TYPE_LABEL[type] || String(type || "");
+  }
+  var SAVED_TYPES = ORDER.slice();
+  function buildItemIndex(perType = {}) {
+    const map = /* @__PURE__ */ new Map();
+    for (const [type, items] of Object.entries(perType || {})) {
+      for (const it of items || []) {
+        if (!it || !it.slug) continue;
+        map.set(`${type}:${it.slug}`, { type, slug: it.slug, title: it.title || it.slug, url: it.url || null, path: it.path || null, thumb: it.thumb || null });
+      }
+    }
+    return map;
+  }
+  function resolveItem(index, type, slug) {
+    return index && index.get(`${type}:${slug}`) || { type, slug, title: slug, url: null, path: null, thumb: null };
+  }
+  function groupFavoritesByType(favorites = []) {
+    const groups = /* @__PURE__ */ new Map();
+    for (const f of favorites || []) {
+      if (!f || !f.type || !f.slug) continue;
+      if (!groups.has(f.type)) groups.set(f.type, []);
+      groups.get(f.type).push({ type: f.type, slug: f.slug });
+    }
+    const known = ORDER.filter((t) => groups.has(t));
+    const extra = [...groups.keys()].filter((t) => !ORDER.includes(t));
+    return [...known, ...extra].map((t) => ({ type: t, items: groups.get(t) }));
+  }
+
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
+  var SITE = "https://gbti.network";
   var CSS3 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
@@ -965,9 +1002,27 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     connectedCallback() {
       this._data = null;
       this._pulls = null;
+      this._counts = null;
       this._error = null;
       super.connectedCallback?.();
       this._load();
+    }
+    // Per-member published content counts, from the PUBLIC per-type index JSONs (no auth, no new endpoint). Author
+    // is the folder username; house/gbti content does not map to a member. Best-effort; a failure leaves it null.
+    async _loadCounts() {
+      const counts = {};
+      await Promise.all(SAVED_TYPES.map(async (t) => {
+        try {
+          const res = await fetch(`${SITE}/${indexFileFor(t)}`, { cache: "no-cache" });
+          const items = res.ok ? (await res.json()).items || [] : [];
+          for (const it of items) {
+            const a = String(it?.author || "").toLowerCase();
+            if (a && a !== "gbti" && a !== "house") counts[a] = (counts[a] || 0) + 1;
+          }
+        } catch {
+        }
+      }));
+      this._counts = counts;
     }
     async _load() {
       if (!this.client) {
@@ -988,6 +1043,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
         this._pulls = null;
       }
+      await this._loadCounts();
       this.render();
     }
     // The open content-PR queue (admin overview of what is awaiting the gate / review). null = not loaded.
@@ -1045,10 +1101,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if ((ROLE_RANK[m.role] ?? 0) > 0) tags.push(`<span class="tag staff">${esc(m.role)}</span>`);
         if (m.grandfathered) tags.push(`<span class="tag gf">grandfathered${m.grandfatherUntil ? ` · until ${esc(String(m.grandfatherUntil).slice(0, 10))}` : ""}</span>`);
         if (!tags.length) tags.push(`<span class="dash">—</span>`);
-        return `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join("")}</div></td><td class="id">${esc(m.githubId)}</td></tr>`;
+        const n = this._counts && m.username ? this._counts[m.username.toLowerCase()] || 0 : null;
+        const content = n == null ? `<span class="dash">—</span>` : esc(n);
+        return `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join("")}</div></td><td class="id">${content}</td><td class="id">${esc(m.githubId)}</td></tr>`;
       }).join("");
       this.set(this.css(CSS3) + `${chips}
-      <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No members known yet.</td></tr>'}</tbody></table>
+      <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>Content</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No members known yet.</td></tr>'}</tbody></table>
       <p class="note">Effective status follows ban &gt; staff &gt; grandfather &gt; Stripe. The live Stripe tier is shown when the admin Stripe endpoint is reachable (otherwise it reads "unknown"); the override tiers (ban / staff / grandfather) are always authoritative from the public repo.</p>
       ${this._pullsSection()}`);
       this.$$("[data-avfor]").forEach((img) => img.addEventListener("error", () => {
@@ -4747,7 +4805,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var DISCORD_INVITE_URL = "https://discord.gg/gbti-network";
 
   // client-ui/src/elements/gbti-welcome.mjs
-  var SITE = "https://gbti.network";
+  var SITE2 = "https://gbti.network";
   var PAGE_SIZE = 10;
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
   var lc = (s) => String(s || "").toLowerCase();
@@ -4809,7 +4867,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._own = "";
       }
       try {
-        const res = await fetch(`${SITE}/members-index.json`, { cache: "no-cache" });
+        const res = await fetch(`${SITE2}/members-index.json`, { cache: "no-cache" });
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
         this._members = excludeSelf(shuffle(Array.isArray(data?.members) ? data.members : []), this._own);
@@ -4843,7 +4901,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const ph = phaseLabel(this._membership);
-      const up = ph.upgrade ? `<a class="up" href="${SITE}/membership/" target="_blank" rel="noopener">Upgrade to publish</a>` : "";
+      const up = ph.upgrade ? `<a class="up" href="${SITE2}/membership/" target="_blank" rel="noopener">Upgrade to publish</a>` : "";
       this.set(this.css(CSS13) + `
       <div class="head">
         <span class="ic">${check2}</span>
@@ -4890,7 +4948,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (this._follows === null) {
         return `<div class="card"><h3>${megaIco} Follow members</h3>
         <p class="sub">Following members is a paid feature.</p>${note}
-        <p class="note" style="margin-top:10px"><a href="${SITE}/membership/" target="_blank" rel="noopener">Upgrade</a> to follow members and build your feed.</p></div>`;
+        <p class="note" style="margin-top:10px"><a href="${SITE2}/membership/" target="_blank" rel="noopener">Upgrade</a> to follow members and build your feed.</p></div>`;
       }
       if (!this._members) {
         return `<div class="card"><h3>${megaIco} Follow members</h3>
@@ -4961,44 +5019,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   }
 
-  // client-ui/src/saved-core.mjs
-  var TYPE_INDEX = { post: "blog-index.json", product: "products-index.json", prompt: "prompts-index.json" };
-  var TYPE_LABEL = { post: "Articles", product: "Products", prompt: "Prompts" };
-  var ORDER = ["post", "product", "prompt"];
-  function indexFileFor(type) {
-    return TYPE_INDEX[type] || null;
-  }
-  function typeLabel(type) {
-    return TYPE_LABEL[type] || String(type || "");
-  }
-  var SAVED_TYPES = ORDER.slice();
-  function buildItemIndex(perType = {}) {
-    const map = /* @__PURE__ */ new Map();
-    for (const [type, items] of Object.entries(perType || {})) {
-      for (const it of items || []) {
-        if (!it || !it.slug) continue;
-        map.set(`${type}:${it.slug}`, { type, slug: it.slug, title: it.title || it.slug, url: it.url || null, path: it.path || null, thumb: it.thumb || null });
-      }
-    }
-    return map;
-  }
-  function resolveItem(index, type, slug) {
-    return index && index.get(`${type}:${slug}`) || { type, slug, title: slug, url: null, path: null, thumb: null };
-  }
-  function groupFavoritesByType(favorites = []) {
-    const groups = /* @__PURE__ */ new Map();
-    for (const f of favorites || []) {
-      if (!f || !f.type || !f.slug) continue;
-      if (!groups.has(f.type)) groups.set(f.type, []);
-      groups.get(f.type).push({ type: f.type, slug: f.slug });
-    }
-    const known = ORDER.filter((t) => groups.has(t));
-    const extra = [...groups.keys()].filter((t) => !ORDER.includes(t));
-    return [...known, ...extra].map((t) => ({ type: t, items: groups.get(t) }));
-  }
-
   // client-ui/src/elements/gbti-saved.mjs
-  var SITE2 = "https://gbti.network";
+  var SITE3 = "https://gbti.network";
   var CSS14 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
@@ -5045,7 +5067,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         await Promise.all(SAVED_TYPES.map(async (t) => {
           const file = indexFileFor(t);
           if (!file) return;
-          const res = await fetch(`${SITE2}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE3}/${file}`, { cache: "no-cache" });
           perType[t] = res.ok ? (await res.json()).items || [] : [];
         }));
         this._index = buildItemIndex(perType);
@@ -5094,7 +5116,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _itemRow(item, { fav, cid } = {}) {
       const title = esc(item.title);
-      const t = item.url ? `<a class="t" href="${SITE2}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
+      const t = item.url ? `<a class="t" href="${SITE3}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
       const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc(cid)}" data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>`;
       return `<li class="row"><span class="badge">${esc(typeLabel(item.type))}</span>${t}${rm}</li>`;
     }
@@ -5135,7 +5157,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-saved", GbtiSaved);
 
   // client-ui/src/elements/gbti-subscriptions.mjs
-  var SITE3 = "https://gbti.network";
+  var SITE4 = "https://gbti.network";
   var MEMBERSHIP = { paid: "Paid member", trial: "Trial", trialing: "Trial" };
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
   var CSS15 = `
@@ -5209,11 +5231,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const card = `<div class="card">
       <div class="who"><b>Your membership</b><span>GBTI Network</span></div>
       <span class="tag ${m === "paid" ? "ok" : ""}">${esc(label)}</span>
-      <a class="btn" href="${SITE3}/membership/" target="_blank" rel="noopener">Manage</a>
+      <a class="btn" href="${SITE4}/membership/" target="_blank" rel="noopener">Manage</a>
     </div>`;
       let followHtml;
       if (this._follows === null) {
-        followHtml = `<p class="muted">Following is a paid member feature. <a href="${SITE3}/membership/" style="color:var(--accent)">Become a member</a> to subscribe to other members' activity.</p>`;
+        followHtml = `<p class="muted">Following is a paid member feature. <a href="${SITE4}/membership/" style="color:var(--accent)">Become a member</a> to subscribe to other members' activity.</p>`;
       } else if (!this._follows.length) {
         followHtml = `<p class="muted">You are not following anyone yet.</p>`;
       } else {
@@ -5221,7 +5243,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           const u = esc(f.username);
           return `<li class="row">
           <img class="av" src="https://github.com/${encodeURIComponent(f.username)}.png?size=60" alt="" loading="lazy" data-avfor="${u}" />
-          <a class="nm" href="${SITE3}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
+          <a class="nm" href="${SITE4}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
           <button class="lk" data-unfollow="${u}" type="button">Unfollow</button>
         </li>`;
         }).join("")}</ul>`;
@@ -5229,7 +5251,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.set(this.css(CSS15) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Membership</h3>${card}</section>
       <section class="sec"><h3>Following</h3>${followHtml}
-        <div class="find"><a href="${SITE3}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>
+        <div class="find"><a href="${SITE4}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>
       </section></div>`);
       this.$$("[data-avfor]").forEach((img) => img.addEventListener("error", () => {
         img.style.visibility = "hidden";
@@ -5460,8 +5482,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-workspace", GbtiWorkspace);
 
   // client-ui/src/assets.mjs
-  var SITE4 = "https://gbti.network";
-  function resolveAsset(thumb, site = SITE4) {
+  var SITE5 = "https://gbti.network";
+  function resolveAsset(thumb, site = SITE5) {
     if (!thumb || typeof thumb !== "string") return null;
     if (/^https?:\/\//.test(thumb)) return thumb;
     if (/^\/\//.test(thumb)) return `https:${thumb}`;
@@ -5469,7 +5491,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-reader.mjs
-  var SITE5 = "https://gbti.network";
+  var SITE6 = "https://gbti.network";
   var authorName2 = (a) => a === "gbti" ? "GBTI Network" : a;
   var TYPE_LABEL2 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
@@ -5479,7 +5501,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE5}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE6}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
   var CSS17 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   article { max-width:680px; margin:0 auto; }
@@ -5544,7 +5566,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const t = TYPE_LABEL2[it.type] || it.type || "";
-      const view = it.url ? `<a class="view" href="${esc(SITE5 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it.url ? `<a class="view" href="${esc(SITE6 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName2(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ""}</div>`;
       const coverUrl = resolveAsset(it.thumb);
       const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
@@ -5626,7 +5648,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE6 = "https://gbti.network";
+  var SITE7 = "https://gbti.network";
   var TABS2 = [
     { id: "post", label: "Articles", json: "blog-index.json" },
     { id: "product", label: "Products", json: "products-index.json" },
@@ -5708,7 +5730,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE6}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE7}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
