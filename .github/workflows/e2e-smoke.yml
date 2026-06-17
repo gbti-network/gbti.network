@@ -30,3 +30,11 @@ jobs:
           E2E_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
           E2E_SITE: https://gbti.network
           E2E_WORKER: https://signup.gbti.network
+      - name: Run the live content-cycle (decrypt + follows + draft-PR authoring, self-cleaning)
+        if: always()
+        run: node tests/e2e/content-cycle.mjs
+        env:
+          E2E_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          E2E_SITE: https://gbti.network
+          E2E_WORKER: https://signup.gbti.network
+          GITHUB_CONTENT_REPO: gbti-network/gbti.network

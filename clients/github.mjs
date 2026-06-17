@@ -87,6 +87,10 @@ export function createGitHubClient({ token, repo, fetch = globalThis.fetch, base
     createRef(branch, sha) {
       return req('POST', `/repos/${repo}/git/refs`, { ref: `refs/heads/${branch}`, sha });
     },
+    /** Delete a branch ref. Used by the SOW-035 E2E cleanup to scrub a test branch after closing its PR. */
+    deleteRef(branch) {
+      return req('DELETE', `/repos/${repo}/git/refs/heads/${branch}`);
+    },
     getContent(path, ref) {
       const q = ref ? `?ref=${encodeURIComponent(ref)}` : '';
       return req('GET', `/repos/${repo}/contents/${path}${q}`);
@@ -99,8 +103,10 @@ export function createGitHubClient({ token, repo, fetch = globalThis.fetch, base
         ...(sha ? { sha } : {}),
       });
     },
-    createPull({ title, head, base, body }) {
-      return req('POST', `/repos/${repo}/pulls`, { title, head, base, body });
+    createPull({ title, head, base, body, draft = false }) {
+      // draft: a GitHub draft PR cannot auto-merge, so the SOW-035 E2E authoring cycle opens drafts to avoid any
+      // race with the gate's auto-merge before it scrubs the PR.
+      return req('POST', `/repos/${repo}/pulls`, { title, head, base, body, draft });
     },
     mergePull(number, { method = 'squash' } = {}) {
       return req('PUT', `/repos/${repo}/pulls/${number}/merge`, { merge_method: method });
