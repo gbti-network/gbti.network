@@ -2,7 +2,7 @@
 // category icon the main app's PromptCard does when a content item has no image. Pure, node-testable.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { catGlyph, GLYPH_SVG } from '../client-ui/src/cat-glyph.mjs';
+import { catGlyph, glyphFor, GLYPH_SVG } from '../client-ui/src/cat-glyph.mjs';
 
 test('catGlyph maps known top-level categories to their glyph + accent', () => {
   const ai = catGlyph('ai');
@@ -28,4 +28,26 @@ test('an unknown or missing category falls back to the neutral puzzle glyph (nev
 test('category match is case-insensitive', () => {
   assert.equal(catGlyph('AI').svg, GLYPH_SVG.spark);
   assert.equal(catGlyph('Skill').svg, GLYPH_SVG.skill);
+});
+
+// SOW-041: glyphFor(category, type) — category first, then a TYPE fallback (so a Share, which has no category,
+// gets the coin glyph), then the neutral puzzle.
+test('glyphFor prefers a known category over the type', () => {
+  assert.equal(glyphFor('ai', 'share').svg, GLYPH_SVG.spark);
+  assert.equal(glyphFor('ai', 'share').accent, '#6b4fb0');
+  assert.equal(glyphFor('blockchain', 'post').svg, GLYPH_SVG.coin);
+});
+
+test('glyphFor falls back to TYPE when the category is missing/unknown (Shares -> coin)', () => {
+  assert.equal(glyphFor(null, 'share').svg, GLYPH_SVG.coin);
+  assert.equal(glyphFor('', 'share').svg, GLYPH_SVG.coin);
+  assert.equal(glyphFor('not-a-category', 'product').svg, GLYPH_SVG.box);
+  assert.equal(glyphFor(undefined, 'prompt').svg, GLYPH_SVG.spark);
+  assert.equal(glyphFor('zzz', 'post').svg, GLYPH_SVG.pencil);
+});
+
+test('glyphFor with neither a known category nor type -> the neutral puzzle glyph', () => {
+  assert.equal(glyphFor(null, null).svg, GLYPH_SVG.puzzle);
+  assert.equal(glyphFor('', 'weird-type').svg, GLYPH_SVG.puzzle);
+  assert.equal(glyphFor(null, null).accent, '#5b6472');
 });

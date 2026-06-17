@@ -2877,8 +2877,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc2 = c | 32;
-      if (lc2 >= 97 && lc2 <= 102) return lc2 - 97 + 10;
+      const lc3 = c | 32;
+      if (lc3 >= 97 && lc3 <= 102) return lc3 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -5549,6 +5549,60 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-workspace", GbtiWorkspace);
 
+  // client-ui/src/cat-glyph.mjs
+  var GLYPH_SVG = {
+    spark: '<path d="M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+    terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    pencil: '<path d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+    coin: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.3c-.6-.7-1.5-1-2.5-1-1.4 0-2.5.7-2.5 1.9 0 2.6 5 1.4 5 4 0 1.2-1.1 2-2.5 2-1 0-2-.4-2.6-1.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+    chart: '<path d="M4 19V5M4 19h16M8 16l3.5-4 3 2.5L20 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+    heart: '<path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+    users: '<circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    skill: '<path d="M13 2.5 6 13.2h5v8.3l7-10.7h-5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+    puzzle: '<path d="M9 4.5a1.8 1.8 0 0 1 3.6 0c0 .5.4.9.9.9H16a1 1 0 0 1 1 1v2.5c0 .5.4.9.9.9a1.8 1.8 0 0 1 0 3.6c-.5 0-.9.4-.9.9V17a1 1 0 0 1-1 1h-2.6c-.5 0-.9.4-.9.9a1.8 1.8 0 0 1-3.6 0c0-.5-.4-.9-.9-.9H5a1 1 0 0 1-1-1v-2.4c0-.5-.4-.9-.9-.9a1.8 1.8 0 0 1 0-3.6c.5 0 .9-.4.9-.9V6.4a1 1 0 0 1 1-1h3.1c.5 0 .9-.4.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>'
+  };
+  var CAT_GLYPH = {
+    ai: "spark",
+    devops: "terminal",
+    design: "pencil",
+    blockchain: "coin",
+    business: "chart",
+    writing: "pencil",
+    minecraft: "box",
+    entertainment: "heart",
+    generators: "spark",
+    "member-tutorials": "users",
+    gbti: "spark",
+    imagegen: "spark",
+    skill: "skill"
+  };
+  var CAT_ACCENT = {
+    ai: "#6b4fb0",
+    devops: "#2f63c0",
+    design: "#c0392f",
+    blockchain: "#b3791f",
+    business: "#138178",
+    writing: "#555a66",
+    minecraft: "#3a7d2c",
+    entertainment: "#c0392b",
+    generators: "#138178",
+    "member-tutorials": "#2f63c0",
+    gbti: "#1f9e5f",
+    imagegen: "#6b4fb0",
+    skill: "#b0316f"
+  };
+  var OTHER_ACCENT = "#5b6472";
+  var TYPE_GLYPH = { share: "coin", post: "pencil", product: "box", prompt: "spark" };
+  var TYPE_ACCENT = { share: "#b3791f", post: "#555a66", product: "#138178", prompt: "#1f9e5f" };
+  function glyphFor(category, type) {
+    const key = String(category || "").toLowerCase();
+    if (CAT_GLYPH[key]) return { svg: GLYPH_SVG[CAT_GLYPH[key]], accent: CAT_ACCENT[key] };
+    const t = String(type || "").toLowerCase();
+    if (TYPE_GLYPH[t]) return { svg: GLYPH_SVG[TYPE_GLYPH[t]], accent: TYPE_ACCENT[t] };
+    return { svg: GLYPH_SVG.puzzle, accent: OTHER_ACCENT };
+  }
+
   // client-ui/src/assets.mjs
   var SITE5 = "https://gbti.network";
   function resolveAsset(thumb, site = SITE5) {
@@ -5558,10 +5612,148 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
   }
 
+  // client-ui/src/elements/gbti-card-list.mjs
+  var MODES = /* @__PURE__ */ new Set(["compact", "detailed", "card"]);
+  var TYPE_LABEL2 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
+  var lc2 = (s) => String(s || "").toLowerCase();
+  var authorName2 = (a) => lc2(a) === "gbti" || lc2(a) === "house" ? "GBTI Network" : a;
+  function relTime2(v) {
+    if (!v) return "";
+    const ms = typeof v === "number" ? v : Date.parse(v);
+    if (!ms) return "";
+    const d = Math.floor((Date.now() - ms) / 864e5);
+    if (d < 1) return "today";
+    if (d < 30) return `${d} day${d === 1 ? "" : "s"} ago`;
+    const mo = Math.floor(d / 30);
+    if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
+    return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
+  }
+  var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+  var CSS17 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
+    background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
+  .media .gl svg { width:48%; height:48%; }
+  .media .cimg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); background:var(--hover); border-radius:6px; padding:3px 8px; white-space:nowrap; flex:none; }
+  .lock { display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px 2px 6px; white-space:nowrap; }
+  .lock svg { width:11px; height:11px; }
+  .meta { font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); white-space:nowrap; }
+  .meta b { color:var(--fg); font-weight:500; }
+  .title { font-weight:600; color:var(--fg); }
+  .empty { color:var(--muted); padding:18px 2px; }
+  a, .open { color:inherit; text-decoration:none; }
+
+  /* MODE compact */
+  .compact { display:flex; flex-direction:column; gap:8px; }
+  .row-c { display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:11px 14px; cursor:pointer; transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .row-c:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .row-c .media { width:38px; height:38px; border-radius:9px; }
+  .row-c .title { flex:1; min-width:0; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row-c:hover .title { color:var(--accent); }
+  .row-c .right { display:flex; align-items:center; gap:10px; flex:none; }
+
+  /* MODE detailed (the canonical Browse-style list) */
+  .detailed { display:flex; flex-direction:column; gap:11px; }
+  .row-d { display:grid; grid-template-columns:62px 1fr; gap:15px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px 16px; cursor:pointer; transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .row-d:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .row-d .media { width:62px; height:62px; border-radius:10px; }
+  .row-d .body { min-width:0; }
+  .row-d .top { display:flex; align-items:center; gap:9px; margin:0 0 4px; }
+  .row-d .title { font-size:15.5px; }
+  .row-d:hover .title { color:var(--accent); }
+  .row-d .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:2px 0 4px; }
+
+  /* MODE card */
+  .card { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:13px; }
+  .card-i { display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 14px 0; cursor:pointer; overflow:hidden; transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .card-i:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .card-i .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .card-i:hover .title { color:var(--accent); }
+  .card-i .meta { margin:0 0 12px; white-space:normal; }
+  .card-i .media { margin:0 -14px; width:calc(100% + 28px); height:118px; border-radius:0; }
+`;
+  var GbtiCardList = class extends GbtiElement {
+    set items(v) {
+      this._items = Array.isArray(v) ? v : [];
+      this.render();
+    }
+    get items() {
+      return this._items || [];
+    }
+    set mode(v) {
+      this._mode = MODES.has(v) ? v : "detailed";
+      this.render();
+    }
+    get mode() {
+      return this._mode || "detailed";
+    }
+    _media(item) {
+      const g = glyphFor(item.category, item.type);
+      const thumb = item.thumb ? resolveAsset(item.thumb) : null;
+      const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : "";
+      return `<span class="media" style="--ka:${esc(g.accent)}"><span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>${img}</span>`;
+    }
+    _chip(item) {
+      return `<span class="chip">${esc(TYPE_LABEL2[item.type] || item.type)}</span>`;
+    }
+    _lock(item) {
+      return item.visibility === "members" ? `<span class="lock">${lockIco}Members</span>` : "";
+    }
+    _meta(item) {
+      const ago = relTime2(item.createdAt ?? item.publishedAt);
+      return `<span class="meta"><b>${esc(authorName2(item.author))}</b>${ago ? ` · ${esc(ago)}` : ""}</span>`;
+    }
+    _open(item, i, cls) {
+      return item.openHref ? `<a class="${cls}" data-card="${i}" href="${esc(item.openHref)}">` : `<div class="${cls}" data-card="${i}" role="button" tabindex="0">`;
+    }
+    _close(item) {
+      return item.openHref ? "</a>" : "</div>";
+    }
+    _compact(items) {
+      return `<div class="compact">` + items.map((it, i) => `${this._open(it, i, "row-c")}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it)}</span>${this._close(it)}`).join("") + `</div>`;
+    }
+    _detailed(items) {
+      return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
+    }
+    _card(items) {
+      return `<div class="card">` + items.map((it, i) => `${this._open(it, i, "card-i")}<div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}${this._media(it)}${this._close(it)}`).join("") + `</div>`;
+    }
+    render() {
+      if (!this._items) return;
+      if (!this._items.length) {
+        this.set(this.css(CSS17) + `<p class="empty">Nothing here yet.</p>`);
+        return;
+      }
+      const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
+      this.set(this.css(CSS17) + body);
+      if (!this._wiredErr) {
+        this.root?.addEventListener("error", (e) => {
+          const t = e.target;
+          if (t?.tagName === "IMG" && t.classList?.contains("cimg")) t.remove();
+        }, true);
+        this._wiredErr = true;
+      }
+      this.$$("[data-card]").forEach((el) => {
+        if (el.tagName === "A") return;
+        const open = () => this.emit("card-open", { item: this._items[Number(el.dataset.card)] });
+        el.addEventListener("click", open);
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            open();
+          }
+        });
+      });
+    }
+  };
+  define("gbti-card-list", GbtiCardList);
+
   // client-ui/src/elements/gbti-reader.mjs
   var SITE6 = "https://gbti.network";
-  var authorName2 = (a) => a === "gbti" ? "GBTI Network" : a;
-  var TYPE_LABEL2 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
+  var authorName3 = (a) => a === "gbti" ? "GBTI Network" : a;
+  var TYPE_LABEL3 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
     try {
       return ms ? new Date(ms).toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" }) : "";
@@ -5570,7 +5762,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE6}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
-  var CSS17 = `
+  var CSS18 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   article { max-width:680px; margin:0 auto; }
   h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
@@ -5630,19 +5822,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS17));
+        this.set(this.css(CSS18));
         return;
       }
-      const t = TYPE_LABEL2[it.type] || it.type || "";
+      const t = TYPE_LABEL3[it.type] || it.type || "";
       const view = it.url ? `<a class="view" href="${esc(SITE6 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
-      const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName2(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ""}</div>`;
+      const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName3(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ""}</div>`;
       const coverUrl = resolveAsset(it.thumb);
       const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
       else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
-      this.set(this.css(CSS17) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>`);
+      this.set(this.css(CSS18) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>`);
     }
   };
   define("gbti-reader", GbtiReader);
@@ -5665,56 +5857,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return { tab, read };
   }
 
-  // client-ui/src/cat-glyph.mjs
-  var GLYPH_SVG = {
-    spark: '<path d="M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
-    terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
-    pencil: '<path d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
-    coin: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.3c-.6-.7-1.5-1-2.5-1-1.4 0-2.5.7-2.5 1.9 0 2.6 5 1.4 5 4 0 1.2-1.1 2-2.5 2-1 0-2-.4-2.6-1.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
-    chart: '<path d="M4 19V5M4 19h16M8 16l3.5-4 3 2.5L20 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
-    box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
-    heart: '<path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
-    users: '<circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
-    skill: '<path d="M13 2.5 6 13.2h5v8.3l7-10.7h-5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
-    puzzle: '<path d="M9 4.5a1.8 1.8 0 0 1 3.6 0c0 .5.4.9.9.9H16a1 1 0 0 1 1 1v2.5c0 .5.4.9.9.9a1.8 1.8 0 0 1 0 3.6c-.5 0-.9.4-.9.9V17a1 1 0 0 1-1 1h-2.6c-.5 0-.9.4-.9.9a1.8 1.8 0 0 1-3.6 0c0-.5-.4-.9-.9-.9H5a1 1 0 0 1-1-1v-2.4c0-.5-.4-.9-.9-.9a1.8 1.8 0 0 1 0-3.6c.5 0 .9-.4.9-.9V6.4a1 1 0 0 1 1-1h3.1c.5 0 .9-.4.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>'
-  };
-  var CAT_GLYPH = {
-    ai: "spark",
-    devops: "terminal",
-    design: "pencil",
-    blockchain: "coin",
-    business: "chart",
-    writing: "pencil",
-    minecraft: "box",
-    entertainment: "heart",
-    generators: "spark",
-    "member-tutorials": "users",
-    gbti: "spark",
-    imagegen: "spark",
-    skill: "skill"
-  };
-  var CAT_ACCENT = {
-    ai: "#6b4fb0",
-    devops: "#2f63c0",
-    design: "#c0392f",
-    blockchain: "#b3791f",
-    business: "#138178",
-    writing: "#555a66",
-    minecraft: "#3a7d2c",
-    entertainment: "#c0392b",
-    generators: "#138178",
-    "member-tutorials": "#2f63c0",
-    gbti: "#1f9e5f",
-    imagegen: "#6b4fb0",
-    skill: "#b0316f"
-  };
-  var OTHER_ACCENT = "#5b6472";
-  function catGlyph(category) {
-    const key = String(category || "").toLowerCase();
-    const g = CAT_GLYPH[key] || "puzzle";
-    return { svg: GLYPH_SVG[g] || GLYPH_SVG.puzzle, accent: CAT_ACCENT[key] || OTHER_ACCENT };
-  }
-
   // client-ui/src/elements/gbti-browse.mjs
   var SITE7 = "https://gbti.network";
   var TABS2 = [
@@ -5723,8 +5865,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "prompt", label: "Prompts", json: "prompts-index.json" },
     { id: "share", label: "Shares" }
   ];
-  var authorName3 = (a) => a === "gbti" ? "GBTI Network" : a;
-  var CSS18 = `
+  var CSS19 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -5808,7 +5949,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS18) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS19) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -5821,35 +5962,39 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS18) + `<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+      this.set(this.css(CSS19) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();
         this._ensure(this._tab);
       }));
-      if (this._tab !== "share") {
-        this.$$("[data-open]").forEach((el) => el.addEventListener("click", () => {
-          const it = (this._cache[this._tab] || [])[Number(el.dataset.open)];
-          if (it) {
-            this._reading = it;
-            this.render();
-          }
-        }));
-      }
+      this._renderBody();
     }
-    _body() {
-      if (this._tab === "share") return `<gbti-shares-feed></gbti-shares-feed>`;
+    // SOW-041: the content tabs render through the shared <gbti-card-list>; clicking a card opens it IN PLACE in the
+    // reader (the card has no openHref, so it emits card-open). The Shares tab keeps its existing authenticated feed.
+    _renderBody() {
+      const host = this.$("[data-body]");
+      if (!host) return;
+      if (this._tab === "share") {
+        host.replaceChildren(document.createElement("gbti-shares-feed"));
+        return;
+      }
       const items = this._cache?.[this._tab];
-      if (!items) return `<p class="empty">Loading...</p>`;
-      if (!items.length) return `<p class="empty">Nothing here yet.</p>`;
-      return `<ul class="rows">${items.map((it, i) => {
-        const thumb = resolveAsset(it.thumb);
-        const g = catGlyph(it.category);
-        const media = thumb ? `<img class="thumb" src="${esc(thumb)}" alt="" loading="lazy">` : `<span class="thumb glyph" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
-        return `<li class="row" data-open="${i}">${media}
-      <span class="t"><b>${esc(it.title)}</b>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}<span class="meta">${esc(authorName3(it.author))}${it.visibility === "members" ? " · members" : ""}</span></span>
-      <span class="go">Read &rarr;</span></li>`;
-      }).join("")}</ul>`;
+      if (!items) {
+        host.innerHTML = `<p class="empty">Loading...</p>`;
+        return;
+      }
+      const list = document.createElement("gbti-card-list");
+      list.mode = "detailed";
+      list.items = items;
+      list.addEventListener("card-open", (e) => {
+        const it = e.detail?.item;
+        if (it) {
+          this._reading = it;
+          this.render();
+        }
+      });
+      host.replaceChildren(list);
     }
   };
   define("gbti-browse", GbtiBrowse);

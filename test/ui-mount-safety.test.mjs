@@ -11,10 +11,12 @@ import assert from 'node:assert/strict';
 import { GbtiBrowse } from '../client-ui/src/elements/gbti-browse.mjs';
 import { GbtiWorkspace } from '../client-ui/src/elements/gbti-workspace.mjs';
 
-test('gbti-browse: render()/_body() on a fresh (un-init) instance do not throw, return a string', () => {
+test('gbti-browse: render()/_renderBody() on a fresh (un-init) instance do not throw', () => {
   const el = new GbtiBrowse();
-  assert.equal(typeof el._body(), 'string'); // the line that previously threw: this._cache[this._tab]
-  assert.doesNotThrow(() => el.render());
+  // SOW-041: the content body now MOUNTS a <gbti-card-list> (no string-returning _body); both paths must stay
+  // safe before connectedCallback sets this._cache/_tab (the bug this regression guards).
+  assert.doesNotThrow(() => el.render());      // previously threw: this._cache[this._tab]
+  assert.doesNotThrow(() => el._renderBody());
 });
 
 test('gbti-workspace: render()/_body() on a fresh (un-init) instance do not throw, return a string', () => {

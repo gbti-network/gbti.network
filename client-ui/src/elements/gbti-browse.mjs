@@ -4,10 +4,9 @@
 // never navigating to gbti.network. Host-agnostic. Fail-soft: an unreachable index renders an empty state.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { parseBrowseHash } from '../browse-hash.mjs';
-import { resolveAsset } from '../assets.mjs';
-import { catGlyph } from '../cat-glyph.mjs';
 import './gbti-reader.mjs';
 import './gbti-shares-feed.mjs';
+import './gbti-card-list.mjs'; // SOW-041: the shared content-item presentation
 
 const SITE = 'https://gbti.network';
 const TABS = [
@@ -16,8 +15,6 @@ const TABS = [
   { id: 'prompt', label: 'Prompts', json: 'prompts-index.json' },
   { id: 'share', label: 'Shares' },
 ];
-const authorName = (a) => (a === 'gbti' ? 'GBTI Network' : a);
-
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
@@ -115,33 +112,24 @@ class GbtiBrowse extends GbtiElement {
       return;
     }
     const tabs = TABS.map((t) => `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join('');
-    this.set(this.css(CSS) + `<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+    this.set(this.css(CSS) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
     this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this.render(); this._ensure(this._tab); }));
-    if (this._tab !== 'share') {
-      this.$$('[data-open]').forEach((el) => el.addEventListener('click', () => {
-        const it = (this._cache[this._tab] || [])[Number(el.dataset.open)];
-        if (it) { this._reading = it; this.render(); }
-      }));
-    }
+    this._renderBody();
   }
 
-  _body() {
-    if (this._tab === 'share') return `<gbti-shares-feed></gbti-shares-feed>`;
-    const items = this._cache?.[this._tab]; // optional chain: never throw if render runs before init
-    if (!items) return `<p class="empty">Loading...</p>`;
-    if (!items.length) return `<p class="empty">Nothing here yet.</p>`;
-    return `<ul class="rows">${items.map((it, i) => {
-      const thumb = resolveAsset(it.thumb);
-      // With an image, show the thumbnail; without one, fall back to the item's category glyph (matching the main
-      // app's PromptCard), so a prompt/article with no result image still reads with a category icon.
-      const g = catGlyph(it.category);
-      const media = thumb
-        ? `<img class="thumb" src="${esc(thumb)}" alt="" loading="lazy">`
-        : `<span class="thumb glyph" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
-      return `<li class="row" data-open="${i}">${media}
-      <span class="t"><b>${esc(it.title)}</b>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ''}<span class="meta">${esc(authorName(it.author))}${it.visibility === 'members' ? ' · members' : ''}</span></span>
-      <span class="go">Read &rarr;</span></li>`;
-    }).join('')}</ul>`;
+  // SOW-041: the content tabs render through the shared <gbti-card-list>; clicking a card opens it IN PLACE in the
+  // reader (the card has no openHref, so it emits card-open). The Shares tab keeps its existing authenticated feed.
+  _renderBody() {
+    const host = this.$('[data-body]');
+    if (!host) return;
+    if (this._tab === 'share') { host.replaceChildren(document.createElement('gbti-shares-feed')); return; }
+    const items = this._cache?.[this._tab];
+    if (!items) { host.innerHTML = `<p class="empty">Loading...</p>`; return; }
+    const list = document.createElement('gbti-card-list');
+    list.mode = 'detailed';
+    list.items = items;
+    list.addEventListener('card-open', (e) => { const it = e.detail?.item; if (it) { this._reading = it; this.render(); } });
+    host.replaceChildren(list);
   }
 }
 

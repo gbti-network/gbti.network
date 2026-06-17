@@ -40,3 +40,17 @@ export function catGlyph(category) {
   const g = CAT_GLYPH[key] || 'puzzle';
   return { svg: GLYPH_SVG[g] || GLYPH_SVG.puzzle, accent: CAT_ACCENT[key] || OTHER_ACCENT };
 }
+
+// SOW-041: a Share carries no category (it has tags), so its glyph falls back on its TYPE. Other content types
+// keep their category glyph; the type fallback only fires when the category is missing/unknown.
+const TYPE_GLYPH = { share: 'coin', post: 'pencil', product: 'box', prompt: 'spark' };
+const TYPE_ACCENT = { share: '#b3791f', post: '#555a66', product: '#138178', prompt: '#1f9e5f' };
+
+/** Resolve an item's fallback glyph by category first, then by type (for Shares + any category-less item). */
+export function glyphFor(category, type) {
+  const key = String(category || '').toLowerCase();
+  if (CAT_GLYPH[key]) return { svg: GLYPH_SVG[CAT_GLYPH[key]], accent: CAT_ACCENT[key] };
+  const t = String(type || '').toLowerCase();
+  if (TYPE_GLYPH[t]) return { svg: GLYPH_SVG[TYPE_GLYPH[t]], accent: TYPE_ACCENT[t] };
+  return { svg: GLYPH_SVG.puzzle, accent: OTHER_ACCENT };
+}
