@@ -153,6 +153,18 @@ test('overrides (SOW-038 P2): an admin caller gets the roster; a non-admin is fo
   assert.equal(member.json.error, 'forbidden');
 });
 
+test('open-pulls (SOW-038 P2): admin gets the open-PR queue; a non-admin is forbidden before the repo is read', async () => {
+  let listed = false;
+  const repo = { async listOpenPulls() { listed = true; return [{ number: 7, title: 'Add a post', html_url: 'u', author: { login: 'bob', id: '5' }, createdAt: '2026-06-17' }]; } };
+  const r = await dispatch(ctxFor({ files: { 'house/roles.yml': 'admins:\n  - github_id: "1"\n' }, repo }), { pathname: '/api/open-pulls' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.pulls.length, 1);
+  assert.equal(r.json.pulls[0].number, 7);
+
+  const member = await dispatch(ctxFor({ files: {}, repo: { async listOpenPulls() { listed = true; return []; } } }), { pathname: '/api/open-pulls' });
+  assert.equal(member.status, 403);
+});
+
 test('admin: an unknown action is a bad-request', async () => {
   const r = await dispatch(ctxFor({ repo: adminRepo(), files: { 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'wizard' } });
   assert.equal(r.status, 400);

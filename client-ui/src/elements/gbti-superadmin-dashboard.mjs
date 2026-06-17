@@ -30,6 +30,14 @@ const CSS = `
   .stat.ban { background:rgba(224,108,108,.16); color:var(--danger); }
   .src { color:var(--muted); font-size:11px; margin-left:6px; }
   .dash { color:var(--muted); }
+  .sec-h { font-size:14px; font-weight:700; margin:26px 0 10px; display:flex; align-items:center; gap:8px; }
+  .sec-h .ct { font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); font-weight:600; }
+  ul.prs { list-style:none; margin:0; padding:0; }
+  .pr { display:flex; align-items:center; gap:10px; padding:8px 8px; border-top:1px solid var(--line); }
+  .pr:first-child { border-top:0; }
+  .pr-t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--fg); text-decoration:none; font-weight:600; font-size:13.5px; }
+  a.pr-t:hover { color:var(--accent); }
+  .pr-m { flex:none; color:var(--muted); font-family:var(--font-mono, monospace); font-size:11.5px; }
   .muted { color:var(--muted); font-size:14px; }
   .note { color:var(--muted); font-size:12.5px; margin:14px 0 0; line-height:1.5; }
 `;
@@ -39,6 +47,7 @@ const ROLE_RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
 class GbtiSuperadminDashboard extends GbtiElement {
   connectedCallback() {
     this._data = null; // { roster, summary }
+    this._pulls = null; // open content-PR queue, or null when unavailable
     this._error = null; // 'forbidden' | 'auth' | 'error'
     super.connectedCallback?.();
     this._load();
@@ -52,8 +61,24 @@ class GbtiSuperadminDashboard extends GbtiElement {
     } catch (err) {
       const code = err?.code;
       this._error = code === 'forbidden' ? 'forbidden' : (code === 'no-identity' || code === 'not-authenticated') ? 'auth' : 'error';
+      this.render();
+      return;
     }
+    // Admin confirmed (the roster loaded): also load the open content-PR queue, best-effort.
+    try { this._pulls = (await this.client.openPulls())?.pulls || []; } catch { this._pulls = null; }
     this.render();
+  }
+
+  // The open content-PR queue (admin overview of what is awaiting the gate / review). null = not loaded.
+  _pullsSection() {
+    if (this._pulls === null) return '';
+    if (!this._pulls.length) return `<h3 class="sec-h">Open pull requests</h3><p class="muted">No open pull requests right now.</p>`;
+    const rows = this._pulls.map((p) => {
+      const author = p.author?.login ? `@${esc(p.author.login)}` : 'unknown';
+      const when = p.createdAt ? esc(String(p.createdAt).slice(0, 10)) : '';
+      return `<li class="pr"><a class="pr-t" href="${esc(p.html_url || '#')}" target="_blank" rel="noopener">#${esc(p.number)} ${esc(p.title || '')}</a><span class="pr-m">${author}${when ? ` · ${when}` : ''}</span></li>`;
+    }).join('');
+    return `<h3 class="sec-h">Open pull requests <span class="ct">${this._pulls.length}</span></h3><ul class="prs">${rows}</ul>`;
   }
 
   // The effective-status cell: the resolved status badge + the override source when it overrode Stripe.
@@ -97,7 +122,8 @@ class GbtiSuperadminDashboard extends GbtiElement {
 
     this.set(this.css(CSS) + `${chips}
       <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No members known yet.</td></tr>'}</tbody></table>
-      <p class="note">Effective status follows ban &gt; staff &gt; grandfather &gt; Stripe. The live Stripe tier is shown when the admin Stripe endpoint is reachable (otherwise it reads "unknown"); the override tiers (ban / staff / grandfather) are always authoritative from the public repo.</p>`);
+      <p class="note">Effective status follows ban &gt; staff &gt; grandfather &gt; Stripe. The live Stripe tier is shown when the admin Stripe endpoint is reachable (otherwise it reads "unknown"); the override tiers (ban / staff / grandfather) are always authoritative from the public repo.</p>
+      ${this._pullsSection()}`);
 
     this.$$('[data-avfor]').forEach((img) => img.addEventListener('error', () => { img.style.visibility = 'hidden'; }, { once: true }));
   }

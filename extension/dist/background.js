@@ -18725,7 +18725,7 @@ async function getOnboardingStatus(ctx) {
     links: { device: deviceVerificationUrl(), fork: forkUrl(), install: appInstallUrl({ targetId: r.githubId }), manage: manageInstallsUrl() }
   };
 }
-async function getOverridesRoster(ctx) {
+async function requireAdmin(ctx) {
   const id = requireIdentity(ctx);
   const readText = async (p) => {
     try {
@@ -18735,8 +18735,12 @@ async function getOverridesRoster(ctx) {
     }
   };
   const rolesParsed = index_vite_proxy_tmp_default.load(await readText("house/roles.yml")) || {};
-  const callerRole = roleOf2(String(id.githubId), rolesFromParsed2(rolesParsed));
-  if (!isAdminRole(callerRole)) throw new OperationError("forbidden", `the superadmin dashboard requires admin (you are ${callerRole})`);
+  const role = roleOf2(String(id.githubId), rolesFromParsed2(rolesParsed));
+  if (!isAdminRole(role)) throw new OperationError("forbidden", `this requires admin (you are ${role})`);
+  return { id, role, rolesParsed, readText };
+}
+async function getOverridesRoster(ctx) {
+  const { rolesParsed, readText } = await requireAdmin(ctx);
   const [bansParsed, gfParsed, idxParsed] = await Promise.all([
     readText("house/bans.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {}),
     readText("house/grandfathered.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {}),
@@ -18750,6 +18754,11 @@ async function getOverridesRoster(ctx) {
     stripeStatuses = null;
   }
   return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed, stripeStatuses });
+}
+async function getOpenPulls(ctx) {
+  await requireAdmin(ctx);
+  const repo = requireRepo(ctx);
+  return { pulls: await repo.listOpenPulls() };
 }
 async function listIncomingContributions(ctx) {
   const id = requireIdentity(ctx);
@@ -19314,6 +19323,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await reviewContribution(ctx, body));
       case "/api/overrides":
         return ok(await getOverridesRoster(ctx));
+      case "/api/open-pulls":
+        return ok(await getOpenPulls(ctx));
       case "/api/pr-status": {
         const n = Number(query.number);
         if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");

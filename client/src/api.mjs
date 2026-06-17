@@ -32,6 +32,7 @@ import {
   getDiscordInvite,
   getOnboardingStatus,
   getOverridesRoster,
+  getOpenPulls,
 } from './operations.mjs';
 import { getSettings, updateSettings, getBilling, getReferral } from './settings-ops.mjs';
 import { fieldsFor } from './form-fields.mjs';
@@ -120,6 +121,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/billing') return run(() => getBilling(ctx));
   if (method === 'GET' && pathname === '/api/referral') return run(() => getReferral(ctx));
   if (method === 'GET' && pathname === '/api/overrides') return run(() => getOverridesRoster(ctx)); // SOW-038 P2: superadmin dashboard roster (admin-gated)
+  if (method === 'GET' && pathname === '/api/open-pulls') return run(() => getOpenPulls(ctx)); // SOW-038 P2: open content-PR queue (admin-gated)
 
   // Role-gated admin/superadmin actions (the operations enforce the capability; the gate is authoritative).
   if (method === 'POST' && pathname === '/api/admin') {

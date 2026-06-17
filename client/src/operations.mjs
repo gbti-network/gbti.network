@@ -559,13 +559,20 @@ export async function getOnboardingStatus(ctx) {
 // (who is banned/grandfathered) is sensitive, so it is never published — it only flows to an admin+ caller here.
 // Live per-member Stripe paid/trial is NOT included (it needs a Stripe-key Worker endpoint); buildRoster marks
 // that tier 'unknown'.
-export async function getOverridesRoster(ctx) {
+// Admin gate for the superadmin surfaces. Derives the caller's OWN role from the roles.yml it reads (no
+// dependency on a host-provided role(), so it works identically in both hosts), fail-closed. Returns the parsed
+// roles + a reader so a caller that also needs the other house files does not re-read roles.yml.
+async function requireAdmin(ctx) {
   const id = requireIdentity(ctx);
   const readText = async (p) => { try { return (await ctx.reader?.readFile?.(p)) || ''; } catch { return ''; } };
   const rolesParsed = yaml.load(await readText('house/roles.yml')) || {};
-  // Gate on the caller's own role, derived from the file we just read (no dependency on a host-provided role()).
-  const callerRole = roleOf(String(id.githubId), rolesFromParsed(rolesParsed));
-  if (!isAdminRole(callerRole)) throw new OperationError('forbidden', `the superadmin dashboard requires admin (you are ${callerRole})`);
+  const role = roleOf(String(id.githubId), rolesFromParsed(rolesParsed));
+  if (!isAdminRole(role)) throw new OperationError('forbidden', `this requires admin (you are ${role})`);
+  return { id, role, rolesParsed, readText };
+}
+
+export async function getOverridesRoster(ctx) {
+  const { rolesParsed, readText } = await requireAdmin(ctx);
   const [bansParsed, gfParsed, idxParsed] = await Promise.all([
     readText('house/bans.yml').then((t) => yaml.load(t) || {}),
     readText('house/grandfathered.yml').then((t) => yaml.load(t) || {}),
@@ -580,6 +587,16 @@ export async function getOverridesRoster(ctx) {
     if (token) stripeStatuses = await workerGetRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   } catch { stripeStatuses = null; }
   return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed, stripeStatuses });
+}
+
+// SOW-038 P2: the open content-PR queue for the superadmin dashboard. Admin-gated. Lists every OPEN upstream PR
+// (newest first) so an admin sees what is awaiting the gate / review at a glance. Open PRs are public on the
+// repo, but this lives behind the admin gate alongside the roster. Returns { pulls: [{number, title, html_url,
+// author, createdAt, ...}] } from the repo client (classic reads the upstream; app mode via the Worker proxy).
+export async function getOpenPulls(ctx) {
+  await requireAdmin(ctx);
+  const repo = requireRepo(ctx);
+  return { pulls: await repo.listOpenPulls() };
 }
 
 export async function listPRs(ctx) {
