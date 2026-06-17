@@ -10,7 +10,7 @@ import './gbti-shares-feed.mjs';
 
 const SITE = 'https://gbti.network';
 const TABS = [
-  { id: 'post', label: 'Blog', json: 'blog-index.json' },
+  { id: 'post', label: 'Articles', json: 'blog-index.json' },
   { id: 'product', label: 'Products', json: 'products-index.json' },
   { id: 'prompt', label: 'Prompts', json: 'prompts-index.json' },
   { id: 'share', label: 'Shares' },

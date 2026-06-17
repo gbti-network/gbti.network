@@ -5148,7 +5148,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-browse.mjs
   var SITE4 = "https://gbti.network";
   var TABS2 = [
-    { id: "post", label: "Blog", json: "blog-index.json" },
+    { id: "post", label: "Articles", json: "blog-index.json" },
     { id: "product", label: "Products", json: "products-index.json" },
     { id: "prompt", label: "Prompts", json: "prompts-index.json" },
     { id: "share", label: "Shares" }

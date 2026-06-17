@@ -153,8 +153,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   function define(tag, ctor) {
-    if (!HAS_DOM || customElements.get(tag)) return;
-    customElements.define(tag, ctor);
+    const ce = HAS_DOM ? globalThis.customElements : null;
+    if (!ce || ce.get(tag)) return;
+    ce.define(tag, ctor);
   }
   function esc(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -4838,6 +4839,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-welcome", GbtiWelcome);
 
   // client-ui/src/workspace-core.mjs
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["post", "prompt", "product", "prs", "inbox"]);
+  function parseWorkspaceTab(hash) {
+    const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+    return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
+  }
   function classifyPull(pr = {}, status = null) {
     if (pr.merged === true || pr.state === "merged") return { label: "Accepted", tone: "ok" };
     if (pr.state === "closed") return { label: "Declined", tone: "muted" };
@@ -4891,7 +4897,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 `;
   var GbtiWorkspace = class extends GbtiElement {
     connectedCallback() {
-      this._tab = "post";
+      this._tab = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "post";
       this._cache = {};
       this._prs = null;
       this._editing = null;
@@ -4899,7 +4905,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._inboxCount = null;
       super.connectedCallback?.();
       this._loadProfile();
-      this._ensureTab("post");
+      this._ensureTab(this._tab);
       this._loadInboxCount();
     }
     // SOW-028 P5: poll the incoming-contribution count on open (batch-first, like the rest of the client) so the
@@ -5177,7 +5183,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-browse.mjs
   var SITE4 = "https://gbti.network";
   var TABS2 = [
-    { id: "post", label: "Blog", json: "blog-index.json" },
+    { id: "post", label: "Articles", json: "blog-index.json" },
     { id: "product", label: "Products", json: "products-index.json" },
     { id: "prompt", label: "Prompts", json: "prompts-index.json" },
     { id: "share", label: "Shares" }
