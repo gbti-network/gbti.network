@@ -63,6 +63,33 @@ test('roster sorts staff -> grandfathered -> banned -> members', () => {
   for (let i = 1; i < bands.length; i++) assert.ok(order[bands[i]] >= order[bands[i - 1]], `band order at ${i}`);
 });
 
+test('stripeStatuses merge: real Stripe tier fills the non-override rows + enumerates pure-Stripe members', () => {
+  const { roster, summary } = buildRoster({
+    ...parsed,
+    stripeStatuses: { 5: 'paid', 4: 'trialing', 8: 'expired' }, // 8 is pure-Stripe (no override, no index entry)
+  }, new Date('2026-06-17'));
+  const by = Object.fromEntries(roster.map((r) => [r.githubId, r]));
+
+  // a plain member with a live paid sub -> status paid via stripe (not 'unknown')
+  assert.equal(by['5'].status, 'paid');
+  assert.equal(by['5'].source, 'stripe');
+  assert.equal(by['5'].stripeStatus, 'paid');
+
+  // expired grandfather (4) now falls through to the real Stripe tier (trialing), not 'unknown'
+  assert.equal(by['4'].grandfathered, false);
+  assert.equal(by['4'].status, 'trialing');
+
+  // a pure-Stripe member (id 8, absent from every override file) is now enumerated
+  assert.ok(by['8'], 'a Stripe-only member is listed');
+  assert.equal(by['8'].status, 'expired');
+  assert.equal(by['8'].username, null);
+
+  // an override still wins over Stripe: the banned id stays banned, staff stays paid-via-staff
+  assert.equal(by['9'].status, 'banned');
+  assert.equal(by['1'].source, 'staff');
+  assert.equal(summary.total, 7); // the 6 known + the pure-Stripe id 8
+});
+
 test('empty / missing inputs yield an empty roster, not a throw', () => {
   assert.deepEqual(buildRoster({}), { roster: [], summary: { total: 0, staff: 0, grandfathered: 0, banned: 0, members: 0 } });
   assert.deepEqual(buildRoster(), { roster: [], summary: { total: 0, staff: 0, grandfathered: 0, banned: 0, members: 0 } });

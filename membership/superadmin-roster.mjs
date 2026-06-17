@@ -6,22 +6,27 @@
 import { rolesFromParsed, bansFromParsed, grandfathersFromParsed, membersIndexFromParsed, roleOf, isBanned, grandfatherActive, effectiveStatus, ROLE } from './overrides-core.mjs';
 
 /**
- * @param {{roles?:object, bans?:object, grandfathered?:object, membersIndex?:object}} parsed - parsed YAML objects
+ * @param {{roles?:object, bans?:object, grandfathered?:object, membersIndex?:object, stripeStatuses?:object}} parsed
+ *   - parsed YAML objects + an optional { github_id -> stripe status } map (SOW-038 P2 admin endpoint). When the
+ *     map is present, each row's Stripe tier is the real status and a pure-Stripe member (no override, no folder)
+ *     is also enumerated; when absent, the Stripe tier is 'unknown'.
  * @returns {{ roster: Array, summary: {total:number, staff:number, grandfathered:number, banned:number, members:number} }}
  */
-export function buildRoster({ roles, bans, grandfathered, membersIndex } = {}, now = new Date()) {
+export function buildRoster({ roles, bans, grandfathered, membersIndex, stripeStatuses } = {}, now = new Date()) {
   const roleMap = rolesFromParsed(roles);
   const banMap = bansFromParsed(bans);
   const gfMap = grandfathersFromParsed(grandfathered);
   const idx = membersIndexFromParsed(membersIndex);
+  const stripe = stripeStatuses && typeof stripeStatuses === 'object' ? stripeStatuses : {};
   const overrides = { bans: banMap, grandfathers: gfMap, roles: roleMap };
 
-  // Every github_id we can see, from the members index + each override map (a pure-Stripe member with no
-  // override and no folder is invisible here — documented gap until the Stripe-key endpoint lands).
-  const ids = new Set([...idx.keys(), ...roleMap.keys(), ...banMap.keys(), ...gfMap.keys()]);
+  // Every github_id we can see: the members index + each override map + (when the admin Stripe map is supplied)
+  // every Stripe customer, so a pure-paid member with no override and no folder is no longer invisible.
+  const ids = new Set([...idx.keys(), ...roleMap.keys(), ...banMap.keys(), ...gfMap.keys(), ...Object.keys(stripe)]);
 
   const roster = [...ids].map((id) => {
-    const eff = effectiveStatus(id, 'unknown', overrides, now); // derived='unknown': no live Stripe here
+    const derived = stripe[id] || 'unknown'; // the live Stripe tier, or 'unknown' without the admin endpoint
+    const eff = effectiveStatus(id, derived, overrides, now);
     const gf = gfMap.get(id);
     return {
       githubId: id,
@@ -30,7 +35,8 @@ export function buildRoster({ roles, bans, grandfathered, membersIndex } = {}, n
       banned: isBanned(id, banMap),
       grandfathered: grandfatherActive(id, gfMap, now),
       grandfatherUntil: gf?.until ?? null,
-      status: eff.status, // banned | paid | unknown
+      stripeStatus: stripe[id] || null, // the raw Stripe-derived tier (null when the admin endpoint was not consulted)
+      status: eff.status, // banned | paid | trialing | expired | cancelled | none | unknown
       source: eff.source, // ban | staff | grandfather | stripe
     };
   });

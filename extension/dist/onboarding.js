@@ -938,11 +938,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .nm { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--fg); text-decoration:none; }
   a.nm:hover { color:var(--accent); }
   .id { color:var(--muted); font-family:var(--font-mono, monospace); font-size:11.5px; }
-  .tags { display:flex; flex-wrap:wrap; gap:5px; }
+  .tags { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
   .tag { font-size:11px; font-weight:700; border-radius:999px; padding:2px 9px; background:var(--hover); color:var(--muted); white-space:nowrap; }
   .tag.staff { background:rgba(31,158,95,.14); color:var(--accent); }
   .tag.gf { background:rgba(201,150,43,.16); color:#a1741a; }
   .tag.ban { background:rgba(224,108,108,.16); color:var(--danger); }
+  .stat { font-size:11.5px; font-weight:700; border-radius:999px; padding:2px 10px; white-space:nowrap; background:var(--hover); color:var(--muted); }
+  .stat.ok { background:rgba(31,158,95,.14); color:var(--accent); }
+  .stat.tr { background:rgba(201,150,43,.16); color:#a1741a; }
+  .stat.ban { background:rgba(224,108,108,.16); color:var(--danger); }
+  .src { color:var(--muted); font-size:11px; margin-left:6px; }
   .dash { color:var(--muted); }
   .muted { color:var(--muted); font-size:14px; }
   .note { color:var(--muted); font-size:12.5px; margin:14px 0 0; line-height:1.5; }
@@ -968,6 +973,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._error = code === "forbidden" ? "forbidden" : code === "no-identity" || code === "not-authenticated" ? "auth" : "error";
       }
       this.render();
+    }
+    // The effective-status cell: the resolved status badge + the override source when it overrode Stripe.
+    _statusCell(m) {
+      const LABEL = { paid: "paid", trialing: "trial", expired: "expired", cancelled: "cancelled", none: "none", banned: "banned", unknown: "unknown" };
+      const cls = m.status === "paid" ? "ok" : m.status === "banned" ? "ban" : m.status === "trialing" ? "tr" : "";
+      const src = m.source && m.source !== "stripe" ? `<span class="src">via ${esc(m.source)}</span>` : "";
+      return `<span class="stat ${cls}">${esc(LABEL[m.status] || m.status)}</span>${src}`;
     }
     render() {
       if (!this.client) {
@@ -1006,11 +1018,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if ((ROLE_RANK[m.role] ?? 0) > 0) tags.push(`<span class="tag staff">${esc(m.role)}</span>`);
         if (m.grandfathered) tags.push(`<span class="tag gf">grandfathered${m.grandfatherUntil ? ` · until ${esc(String(m.grandfatherUntil).slice(0, 10))}` : ""}</span>`);
         if (!tags.length) tags.push(`<span class="dash">—</span>`);
-        return `<tr><td><div class="who">${av}${who}</div></td><td><div class="tags">${tags.join("")}</div></td><td class="id">${esc(m.githubId)}</td></tr>`;
+        return `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join("")}</div></td><td class="id">${esc(m.githubId)}</td></tr>`;
       }).join("");
       this.set(this.css(CSS3) + `${chips}
-      <table><thead><tr><th>Member</th><th>Effective overrides</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="3" class="muted">No members known from the override files yet.</td></tr>'}</tbody></table>
-      <p class="note">Status here is derived from the public override files (ban &gt; staff &gt; grandfather). Live Stripe paid/trial status per member is not shown — that needs an admin Stripe endpoint (a provisioning follow-up). A plain paid member with no override and no folder is not listed.</p>`);
+      <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="muted">No members known yet.</td></tr>'}</tbody></table>
+      <p class="note">Effective status follows ban &gt; staff &gt; grandfather &gt; Stripe. The live Stripe tier is shown when the admin Stripe endpoint is reachable (otherwise it reads "unknown"); the override tiers (ban / staff / grandfather) are always authoritative from the public repo.</p>`);
       this.$$("[data-avfor]").forEach((img) => img.addEventListener("error", () => {
         img.style.visibility = "hidden";
       }, { once: true }));

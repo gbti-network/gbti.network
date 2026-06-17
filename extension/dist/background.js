@@ -18293,15 +18293,17 @@ function isContributionToFolder(paths, ownerFolder) {
 }
 
 // membership/superadmin-roster.mjs
-function buildRoster({ roles, bans, grandfathered, membersIndex } = {}, now = /* @__PURE__ */ new Date()) {
+function buildRoster({ roles, bans, grandfathered, membersIndex, stripeStatuses } = {}, now = /* @__PURE__ */ new Date()) {
   const roleMap = rolesFromParsed2(roles);
   const banMap = bansFromParsed(bans);
   const gfMap = grandfathersFromParsed(grandfathered);
   const idx = membersIndexFromParsed(membersIndex);
+  const stripe = stripeStatuses && typeof stripeStatuses === "object" ? stripeStatuses : {};
   const overrides = { bans: banMap, grandfathers: gfMap, roles: roleMap };
-  const ids = /* @__PURE__ */ new Set([...idx.keys(), ...roleMap.keys(), ...banMap.keys(), ...gfMap.keys()]);
+  const ids = /* @__PURE__ */ new Set([...idx.keys(), ...roleMap.keys(), ...banMap.keys(), ...gfMap.keys(), ...Object.keys(stripe)]);
   const roster = [...ids].map((id) => {
-    const eff = effectiveStatus(id, "unknown", overrides, now);
+    const derived = stripe[id] || "unknown";
+    const eff = effectiveStatus(id, derived, overrides, now);
     const gf = gfMap.get(id);
     return {
       githubId: id,
@@ -18310,8 +18312,10 @@ function buildRoster({ roles, bans, grandfathered, membersIndex } = {}, now = /*
       banned: isBanned(id, banMap),
       grandfathered: grandfatherActive2(id, gfMap, now),
       grandfatherUntil: gf?.until ?? null,
+      stripeStatus: stripe[id] || null,
+      // the raw Stripe-derived tier (null when the admin endpoint was not consulted)
       status: eff.status,
-      // banned | paid | unknown
+      // banned | paid | trialing | expired | cancelled | none | unknown
       source: eff.source
       // ban | staff | grandfather | stripe
     };
@@ -18326,6 +18330,25 @@ function buildRoster({ roles, bans, grandfathered, membersIndex } = {}, now = /*
     members: roster.filter((r) => r.role === ROLE2.member && !r.grandfathered && !r.banned).length
   };
   return { roster, summary };
+}
+
+// client/src/member-admin-client.mjs
+var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var AdminClientError = class extends Error {
+};
+async function getRosterStatuses({ token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch(trimBase4(signupBase) + "/membership/admin/statuses", {
+    method: "GET",
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin statuses request failed (${res.status})`);
+  return data?.statuses ?? {};
 }
 
 // client/src/operations.mjs
@@ -18719,7 +18742,14 @@ async function getOverridesRoster(ctx) {
     readText("house/grandfathered.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {}),
     readText("house/members-index.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {})
   ]);
-  return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed });
+  let stripeStatuses = null;
+  try {
+    const token = ctx.store?.get?.("githubToken");
+    if (token) stripeStatuses = await getRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch {
+    stripeStatuses = null;
+  }
+  return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed, stripeStatuses });
 }
 async function listIncomingContributions(ctx) {
   const id = requireIdentity(ctx);

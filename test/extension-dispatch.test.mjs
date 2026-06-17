@@ -9,11 +9,13 @@ import { esc } from '../extension/src/onboarding.mjs';
 
 const POST = '---\ntype: post\ntitle: Hello\nslug: hello\nauthor: alice\nstatus: published\n---\n\nBody\n';
 
-function ctxFor({ identity = { login: 'alice', githubId: '1', username: 'alice' }, token = 'tok', files = {}, repo } = {}) {
+function ctxFor({ identity = { login: 'alice', githubId: '1', username: 'alice' }, token = 'tok', files = {}, repo, fetch } = {}) {
   return {
     identity: () => identity,
     store: { get: (k) => ({ githubToken: token })[k] },
     getRepoClient: () => repo ?? null,
+    // No network in unit tests: the SOW-038 roster's best-effort Stripe call fails fast -> 'unknown' tiers.
+    fetch: fetch ?? (async () => { throw new Error('no network in test'); }),
     reader: {
       async readFile(p) { return files[p] ?? null; },
       async get(u, p) { return p.startsWith(`members/${u}/`) && files[p] ? { path: p, frontmatter: { type: 'post', title: 'Hello' }, body: 'Body' } : null; },

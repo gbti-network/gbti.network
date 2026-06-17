@@ -27,6 +27,7 @@ import { isContributionToFolder } from '../../membership/classify-pr.mjs';
 import yaml from 'js-yaml';
 import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
+import { getRosterStatuses as workerGetRosterStatuses } from './member-admin-client.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
 
@@ -570,7 +571,15 @@ export async function getOverridesRoster(ctx) {
     readText('house/grandfathered.yml').then((t) => yaml.load(t) || {}),
     readText('house/members-index.yml').then((t) => yaml.load(t) || {}),
   ]);
-  return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed });
+  // Best-effort: merge the live Stripe tier from the admin Worker endpoint (SOW-038 P2). On any failure (the
+  // Worker is down, test mode, or the caller is not admin to it) the roster still renders with 'unknown' Stripe
+  // tiers — the override-derived status (the authoritative part) never depends on this call.
+  let stripeStatuses = null;
+  try {
+    const token = ctx.store?.get?.('githubToken');
+    if (token) stripeStatuses = await workerGetRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch { stripeStatuses = null; }
+  return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed, stripeStatuses });
 }
 
 export async function listPRs(ctx) {

@@ -1,0 +1,78 @@
+// SOW-038 P2: the admin-only per-member Stripe-status Worker endpoint. Fail-closed admin gate (token -> github_id
+// -> role from the SIGNUP_KV overrides mirror) + the Stripe enumeration. Pure over injected deps; no network.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { authorizeAdmin, membershipAdminStatuses } from '../workers/signup/membership-admin.mjs';
+
+const req = (token) => ({ headers: { get: (k) => (k === 'Authorization' && token ? `Bearer ${token}` : null) } });
+const now = new Date('2026-06-17T00:00:00Z');
+// generatedAt sits just before `now` so the Worker's freshness check (age in [0, 48h]) passes deterministically.
+const freshMirror = (overrides = {}) => ({
+  generatedAt: new Date(now.getTime() - 60_000).toISOString(),
+  roles: { superadmins: [{ github_id: '1' }], admins: [{ github_id: '2' }], moderators: [{ github_id: '3' }] },
+  bans: { bans: [] }, grandfathered: { grandfathered: [] },
+  ...overrides,
+});
+const envWith = (mirror, { stripe = true } = {}) => ({
+  SIGNUP_KV: { get: async () => mirror },
+  ...(stripe ? { STRIPE_SECRET_KEY: 'sk_test_x' } : {}),
+});
+// fetchUser maps a token to its github id; an unknown token throws (simulating GitHub rejecting it).
+const fetchUser = async (token) => {
+  const map = { sa: '1', admin: '2', mod: '3', member: '9' };
+  if (!map[token]) throw new Error('bad token');
+  return { githubId: map[token], login: token };
+};
+
+test('authorizeAdmin: no token -> 401', async () => {
+  const r = await authorizeAdmin(req(null), envWith(freshMirror()), { fetchUser, now });
+  assert.equal(r.ok, false);
+  assert.equal(r.status, 401);
+});
+
+test('authorizeAdmin: admin + superadmin pass; moderator + member are forbidden', async () => {
+  const env = envWith(freshMirror());
+  assert.equal((await authorizeAdmin(req('sa'), env, { fetchUser, now })).ok, true);
+  assert.equal((await authorizeAdmin(req('admin'), env, { fetchUser, now })).ok, true);
+  const mod = await authorizeAdmin(req('mod'), env, { fetchUser, now });
+  assert.equal(mod.status, 403);
+  const member = await authorizeAdmin(req('member'), env, { fetchUser, now });
+  assert.equal(member.status, 403);
+});
+
+test('authorizeAdmin: a stale or missing mirror fails closed (403)', async () => {
+  const stale = freshMirror({ generatedAt: new Date('2020-01-01').toISOString() });
+  assert.equal((await authorizeAdmin(req('sa'), envWith(stale), { fetchUser, now })).status, 403);
+  assert.equal((await authorizeAdmin(req('sa'), envWith(null), { fetchUser, now })).status, 403);
+  // a malformed roles section (bare array) must not silently drop the gate
+  const bad = freshMirror({ roles: [] });
+  assert.equal((await authorizeAdmin(req('sa'), envWith(bad), { fetchUser, now })).status, 403);
+});
+
+test('membershipAdminStatuses: admin gets a github_id -> status map from Stripe', async () => {
+  const customers = [
+    { metadata: { github_id: '2' }, subscriptions: { data: [{ status: 'active' }] } },
+    { metadata: { github_id: '7', trial_started_at: new Date('2026-06-10').toISOString() }, subscriptions: { data: [] } },
+    { metadata: {}, subscriptions: { data: [] } }, // no github_id -> skipped
+  ];
+  const makeStripe = () => ({ async *listCustomers() { for (const c of customers) yield c; } });
+  const r = await membershipAdminStatuses(req('admin'), envWith(freshMirror()), { fetchUser, makeStripe, now });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.statuses['2'], 'paid');
+  assert.equal(r.body.statuses['7'], 'trialing'); // within 90d of trial_started_at, no sub
+  assert.equal('' in r.body.statuses, false); // the metadata-less customer was skipped
+});
+
+test('membershipAdminStatuses: a non-admin is forbidden before any Stripe call', async () => {
+  let listed = false;
+  const makeStripe = () => ({ async *listCustomers() { listed = true; } });
+  const r = await membershipAdminStatuses(req('member'), envWith(freshMirror()), { fetchUser, makeStripe, now });
+  assert.equal(r.status, 403);
+  assert.equal(listed, false, 'Stripe must not be queried for a non-admin');
+});
+
+test('membershipAdminStatuses: a Stripe error fails closed to 502 (no partial data)', async () => {
+  const makeStripe = () => ({ async *listCustomers() { throw new Error('stripe down'); } });
+  const r = await membershipAdminStatuses(req('sa'), envWith(freshMirror()), { fetchUser, makeStripe, now });
+  assert.equal(r.status, 502);
+});

@@ -49,6 +49,7 @@ import { startOnboarding } from './connect.mjs';
 import { verifyStripeSignature, isDuplicateEvent, markEventSeen, handleStripeEvent } from './webhook.mjs';
 import { membershipStatus } from './membership-status.mjs';
 import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
+import { membershipAdminStatuses } from './membership-admin.mjs';
 import { handleActivity } from './membership-activity.mjs';
 import { handleFollows } from './membership-follows.mjs';
 import { handleDiscordInvite } from './discord-invite.mjs';
@@ -385,6 +386,16 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET' || method === 'POST') {
           const r = await handleActivity(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-038 P2: admin-only per-member Stripe status for the superadmin dashboard. Sensitive billing status,
+      // so admin-gated (fail-closed via the overrides mirror) + never cached, varied on the bearer.
+      if (pathname === '/membership/admin/statuses') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = await membershipAdminStatuses(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }
