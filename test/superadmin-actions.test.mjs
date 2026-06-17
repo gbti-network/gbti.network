@@ -55,6 +55,10 @@ test('ban / unban are idempotent and identity-minimal', () => {
   assert.equal(b.next.bans[0].at, NOW.toISOString());
   // re-ban -> no change
   assert.equal(ban(b.next, { githubId: '900' }, ctx).changed, false);
+  // an empty / whitespace reason falls back to the default (not a blank reason)
+  const blank = ban({ bans: [] }, { githubId: '901', reason: '   ' }, ctx);
+  assert.equal(blank.next.bans[0].reason, 'banned');
+  assert.equal(blank.audit.detail.reason, 'banned');
   // unban removes
   const u = unban(b.next, { githubId: '900' }, ctx);
   assert.deepEqual(u.next.bans, []);

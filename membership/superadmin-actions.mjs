@@ -39,7 +39,12 @@ function audit({ actor, action, target, detail = null, now } = {}) {
     detail,
   };
 }
-const cloneList = (list) => (Array.isArray(list) ? list.map((e) => ({ ...e })) : []);
+// Deep clone so the input parsed object is NEVER mutated even if an entry ever gains a nested field (today the
+// override entries are flat scalar records, but structuredClone keeps this defensive regardless).
+const cloneList = (list) => (Array.isArray(list) ? list.map((e) => structuredClone(e)) : []);
+// Normalize a free-text reason: an empty or whitespace-only reason falls back to the default (?? alone would
+// keep an empty string, leaving the entry's reason blank).
+const reasonOr = (reason, fallback) => (reason && String(reason).trim()) || fallback;
 const cloneRoles = (r) => ({ superadmins: cloneList(r?.superadmins), admins: cloneList(r?.admins), moderators: cloneList(r?.moderators), ...stripLists(r) });
 function stripLists(r) { const o = { ...(r || {}) }; for (const l of ALL_LISTS) delete o[l]; return o; } // preserve any other keys
 
@@ -75,8 +80,9 @@ export function ban(parsedBans, { githubId, login, reason }, ctx = {}) {
   if (list.some((e) => idOf(e) === id)) {
     return { next: { ...(parsedBans || {}), bans: list }, changed: false, audit: audit({ ...ctx, action: 'ban', target: { githubId: id, login }, detail: { reason: reason ?? null, alreadyBanned: true } }) };
   }
-  list.push({ github_id: id, ...(login ? { login } : {}), reason: reason ?? 'banned', at: isoOf(ctx.now) });
-  return { next: { ...(parsedBans || {}), bans: list }, changed: true, audit: audit({ ...ctx, action: 'ban', target: { githubId: id, login }, detail: { reason: reason ?? null } }) };
+  const r = reasonOr(reason, 'banned');
+  list.push({ github_id: id, ...(login ? { login } : {}), reason: r, at: isoOf(ctx.now) });
+  return { next: { ...(parsedBans || {}), bans: list }, changed: true, audit: audit({ ...ctx, action: 'ban', target: { githubId: id, login }, detail: { reason: r } }) };
 }
 
 /** Lift a ban. Idempotent. */
@@ -92,7 +98,7 @@ export function grandfather(parsedGf, { githubId, login, reason, until = null },
   const id = reqId(githubId);
   if (until != null && until !== '' && Number.isNaN(new Date(until).getTime())) throw new SuperadminActionError('invalid until date');
   const list = cloneList(parsedGf?.grandfathered);
-  const entry = { github_id: id, ...(login ? { login } : {}), reason: reason ?? 'complimentary access', until: until ?? null };
+  const entry = { github_id: id, ...(login ? { login } : {}), reason: reasonOr(reason, 'complimentary access'), until: until ?? null };
   const i = list.findIndex((e) => idOf(e) === id);
   let changed;
   if (i >= 0) { changed = JSON.stringify(list[i]) !== JSON.stringify(entry); list[i] = entry; }
