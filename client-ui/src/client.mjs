@@ -105,6 +105,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     getBilling: () => request('GET', '/api/billing'),
     getReferral: () => request('GET', '/api/referral'),
     admin: (action, args = {}) => request('POST', '/api/admin', { action, ...args }),
+    overrides: () => request('GET', '/api/overrides'), // SOW-038 P2: admin-gated roster { roster, summary }
   };
 }
 

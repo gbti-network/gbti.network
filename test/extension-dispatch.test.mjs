@@ -132,6 +132,25 @@ test('admin: an admin (per roles.yml, async-read) bans via a bans.yml PR; a plai
   assert.equal(member.json.error, 'forbidden');
 });
 
+test('overrides (SOW-038 P2): an admin caller gets the roster; a non-admin is forbidden', async () => {
+  const files = {
+    'house/roles.yml': 'admins:\n  - github_id: "1"\n',
+    'house/bans.yml': 'bans:\n  - github_id: "9"\n',
+    'house/grandfathered.yml': 'grandfathered:\n  - github_id: "3"\n    until: null\n',
+    'house/members-index.yml': 'members:\n  "1": alice\n  "3": founder\n  "9": baddie\n',
+  };
+  const r = await dispatch(ctxFor({ files }), { pathname: '/api/overrides' });
+  assert.equal(r.status, 200);
+  assert.ok(Array.isArray(r.json.roster));
+  assert.equal(r.json.summary.banned, 1);
+  assert.ok(r.json.roster.find((m) => m.githubId === '1' && m.role === 'admin'), 'the admin caller is in the roster');
+
+  // A caller NOT listed in roles.yml resolves to 'member' -> forbidden (the route is the real boundary).
+  const member = await dispatch(ctxFor({ files: { 'house/members-index.yml': 'members: {}\n' } }), { pathname: '/api/overrides' });
+  assert.equal(member.status, 403);
+  assert.equal(member.json.error, 'forbidden');
+});
+
 test('admin: an unknown action is a bad-request', async () => {
   const r = await dispatch(ctxFor({ repo: adminRepo(), files: { 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'wizard' } });
   assert.equal(r.status, 400);

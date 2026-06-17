@@ -18210,6 +18210,72 @@ var ROLE2 = Object.freeze({
 });
 var PRIVILEGED_ROLES = /* @__PURE__ */ new Set([ROLE2.moderator, ROLE2.admin, ROLE2.superadmin]);
 var ADMIN_ROLES = /* @__PURE__ */ new Set([ROLE2.admin, ROLE2.superadmin]);
+function isPrivilegedRole(role) {
+  return PRIVILEGED_ROLES.has(role);
+}
+function isAdminRole(role) {
+  return ADMIN_ROLES.has(role);
+}
+var idOf = (entry) => String(entry?.github_id ?? entry);
+function rolesFromParsed2(parsed) {
+  const roles = /* @__PURE__ */ new Map();
+  const assign = (list, role) => {
+    for (const e of list ?? []) {
+      const id = idOf(e);
+      if (id && id !== "REPLACE_AT_M0") roles.set(id, role);
+    }
+  };
+  assign(parsed?.moderators, ROLE2.moderator);
+  assign(parsed?.admins, ROLE2.admin);
+  assign(parsed?.superadmins, ROLE2.superadmin);
+  return roles;
+}
+function bansFromParsed(parsed) {
+  const bans = /* @__PURE__ */ new Map();
+  for (const e of parsed?.bans ?? []) {
+    const id = idOf(e);
+    if (id) bans.set(id, e);
+  }
+  return bans;
+}
+function grandfathersFromParsed(parsed) {
+  const grandfathers = /* @__PURE__ */ new Map();
+  for (const e of parsed?.grandfathered ?? []) {
+    const id = idOf(e);
+    if (id) grandfathers.set(id, e);
+  }
+  return grandfathers;
+}
+function membersIndexFromParsed(parsed) {
+  const index = /* @__PURE__ */ new Map();
+  const members = parsed?.members ?? {};
+  for (const [id, username] of Object.entries(members)) {
+    if (id && username) index.set(String(id), String(username));
+  }
+  return index;
+}
+function roleOf2(githubId, roles) {
+  return roles.get(String(githubId)) ?? ROLE2.member;
+}
+function isBanned(githubId, bans) {
+  return bans.has(String(githubId));
+}
+function grandfatherActive2(githubId, grandfathers, now = /* @__PURE__ */ new Date()) {
+  const entry = grandfathers.get(String(githubId));
+  if (!entry) return false;
+  const until = entry.until;
+  if (until === void 0 || until === null || until === "") return true;
+  const untilDate = new Date(until);
+  if (Number.isNaN(untilDate.getTime())) return false;
+  return now.getTime() < untilDate.getTime();
+}
+function effectiveStatus(githubId, derived, overrides, now = /* @__PURE__ */ new Date()) {
+  const { bans, grandfathers, roles } = overrides;
+  if (isBanned(githubId, bans)) return { status: "banned", source: "ban" };
+  if (roles && isPrivilegedRole(roleOf2(githubId, roles))) return { status: "paid", source: "staff" };
+  if (grandfatherActive2(githubId, grandfathers, now)) return { status: "paid", source: "grandfather" };
+  return { status: derived, source: "stripe" };
+}
 
 // membership/classify-pr.mjs
 var ROLE_RANK = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
@@ -18224,6 +18290,42 @@ function isContributionToFolder(paths, ownerFolder) {
   if (!ownerFolder || !Array.isArray(paths) || paths.length === 0) return false;
   const prefix = `members/${ownerFolder}/`;
   return paths.every((p) => isCleanPath(p) && p.startsWith(prefix));
+}
+
+// membership/superadmin-roster.mjs
+function buildRoster({ roles, bans, grandfathered, membersIndex } = {}, now = /* @__PURE__ */ new Date()) {
+  const roleMap = rolesFromParsed2(roles);
+  const banMap = bansFromParsed(bans);
+  const gfMap = grandfathersFromParsed(grandfathered);
+  const idx = membersIndexFromParsed(membersIndex);
+  const overrides = { bans: banMap, grandfathers: gfMap, roles: roleMap };
+  const ids = /* @__PURE__ */ new Set([...idx.keys(), ...roleMap.keys(), ...banMap.keys(), ...gfMap.keys()]);
+  const roster = [...ids].map((id) => {
+    const eff = effectiveStatus(id, "unknown", overrides, now);
+    const gf = gfMap.get(id);
+    return {
+      githubId: id,
+      username: idx.get(id) || banMap.get(id)?.login || gf?.login || null,
+      role: roleOf2(id, roleMap),
+      banned: isBanned(id, banMap),
+      grandfathered: grandfatherActive2(id, gfMap, now),
+      grandfatherUntil: gf?.until ?? null,
+      status: eff.status,
+      // banned | paid | unknown
+      source: eff.source
+      // ban | staff | grandfather | stripe
+    };
+  });
+  const band = (r) => r.role !== ROLE2.member ? 0 : r.grandfathered ? 1 : r.banned ? 2 : 3;
+  roster.sort((a, b) => band(a) - band(b) || String(a.username || a.githubId).localeCompare(String(b.username || b.githubId)));
+  const summary = {
+    total: roster.length,
+    staff: roster.filter((r) => r.role !== ROLE2.member).length,
+    grandfathered: roster.filter((r) => r.grandfathered).length,
+    banned: roster.filter((r) => r.banned).length,
+    members: roster.filter((r) => r.role === ROLE2.member && !r.grandfathered && !r.banned).length
+  };
+  return { roster, summary };
 }
 
 // client/src/operations.mjs
@@ -18599,6 +18701,25 @@ async function getOnboardingStatus(ctx) {
     steps: STEPS,
     links: { device: deviceVerificationUrl(), fork: forkUrl(), install: appInstallUrl({ targetId: r.githubId }), manage: manageInstallsUrl() }
   };
+}
+async function getOverridesRoster(ctx) {
+  const id = requireIdentity(ctx);
+  const readText = async (p) => {
+    try {
+      return await ctx.reader?.readFile?.(p) || "";
+    } catch {
+      return "";
+    }
+  };
+  const rolesParsed = index_vite_proxy_tmp_default.load(await readText("house/roles.yml")) || {};
+  const callerRole = roleOf2(String(id.githubId), rolesFromParsed2(rolesParsed));
+  if (!isAdminRole(callerRole)) throw new OperationError("forbidden", `the superadmin dashboard requires admin (you are ${callerRole})`);
+  const [bansParsed, gfParsed, idxParsed] = await Promise.all([
+    readText("house/bans.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {}),
+    readText("house/grandfathered.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {}),
+    readText("house/members-index.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {})
+  ]);
+  return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed });
 }
 async function listIncomingContributions(ctx) {
   const id = requireIdentity(ctx);
@@ -19161,6 +19282,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getContributionReview(ctx, { number: query.number }));
       case "/api/contribution-review":
         return ok(await reviewContribution(ctx, body));
+      case "/api/overrides":
+        return ok(await getOverridesRoster(ctx));
       case "/api/pr-status": {
         const n = Number(query.number);
         if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");

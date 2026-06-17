@@ -24,6 +24,9 @@ import {
 } from './onboarding.mjs';
 import { SIGNUP_BASE, GITHUB_APP_SLUG, UPSTREAM_REPO, isAppMode } from './signup-base.mjs';
 import { isContributionToFolder } from '../../membership/classify-pr.mjs';
+import yaml from 'js-yaml';
+import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
+import { buildRoster } from '../../membership/superadmin-roster.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
 
@@ -547,6 +550,28 @@ export async function getOnboardingStatus(ctx) {
 // 'favorite') into the deletable edge store (KV), keyed by github_id; the public site only ever sees the
 // member-identity-free aggregate counts in house/favorite-counts.yml (synced KV -> git by reconcile). There is
 // no longer a git favorites write path here, no favorites gate carve-out, and no favorites.yml validation.
+
+// SOW-038 P2: the superadmin dashboard roster. Reads the four PUBLIC override files via the host reader (sync on
+// the npm host, async on the extension; `await` handles both) and returns every known member with their
+// OVERRIDE-derived effective status (ban > staff > grandfather). ADMIN-gated: the caller's own role is derived
+// from the roles.yml this op already reads, so it needs no host role() and works in both hosts. Governance status
+// (who is banned/grandfathered) is sensitive, so it is never published — it only flows to an admin+ caller here.
+// Live per-member Stripe paid/trial is NOT included (it needs a Stripe-key Worker endpoint); buildRoster marks
+// that tier 'unknown'.
+export async function getOverridesRoster(ctx) {
+  const id = requireIdentity(ctx);
+  const readText = async (p) => { try { return (await ctx.reader?.readFile?.(p)) || ''; } catch { return ''; } };
+  const rolesParsed = yaml.load(await readText('house/roles.yml')) || {};
+  // Gate on the caller's own role, derived from the file we just read (no dependency on a host-provided role()).
+  const callerRole = roleOf(String(id.githubId), rolesFromParsed(rolesParsed));
+  if (!isAdminRole(callerRole)) throw new OperationError('forbidden', `the superadmin dashboard requires admin (you are ${callerRole})`);
+  const [bansParsed, gfParsed, idxParsed] = await Promise.all([
+    readText('house/bans.yml').then((t) => yaml.load(t) || {}),
+    readText('house/grandfathered.yml').then((t) => yaml.load(t) || {}),
+    readText('house/members-index.yml').then((t) => yaml.load(t) || {}),
+  ]);
+  return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed });
+}
 
 export async function listPRs(ctx) {
   const id = requireIdentity(ctx);

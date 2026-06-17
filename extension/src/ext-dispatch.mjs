@@ -6,7 +6,7 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster } from '../../client/src/operations.mjs';
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText } from '../../client/src/roles.mjs';
@@ -113,6 +113,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await getContributionReview(ctx, { number: query.number }));
       case '/api/contribution-review': // SOW-028: the owner's decision (approve | request-changes | decline)
         return ok(await reviewContribution(ctx, body));
+      case '/api/overrides': // SOW-038 P2: superadmin dashboard roster (admin-gated; reads the public house/*.yml)
+        return ok(await getOverridesRoster(ctx));
       case '/api/pr-status': {
         // Mirror operations.prStatus's guard: the npm host validates the PR number before hitting GitHub, so
         // the extension must too (else NaN/0/negative numbers reach GET /pulls/<n> under the member's token).

@@ -2417,7 +2417,7 @@
   ];
   function barHtml() {
     return `<header class="nt-bar">
-    <div class="nt-brand"><span class="mk">G</span> GBTI Network</div>
+    <div class="nt-brand"><img class="mk" src="icons/icon-128.png" alt="" /> GBTI Network</div>
     <span class="nt-spring"></span>
     <span class="nt-apps" data-apps>
       <span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>
