@@ -24,7 +24,8 @@ const topSeg = topKey(d.categories); // top-level segment -> category accent + c
 const CAT_GLYPH: Record<string, string> = {
   ai: 'ico-spark', devops: 'ico-terminal', design: 'ico-pencil', blockchain: 'ico-coin',
   business: 'ico-chart', writing: 'ico-pencil', minecraft: 'ico-box', entertainment: 'ico-heart',
-  generators: 'ico-spark', 'member-tutorials': 'ico-users', gbti: 'ico-spark',
+  generators: 'ico-spark', 'member-tutorials': 'ico-users', gbti: 'ico-spark', imagegen: 'ico-spark',
+  skill: 'ico-skill',
 };
 const catGlyph = CAT_GLYPH[topSeg] ?? 'ico-puzzle';
 const kcls = `k-${topSeg || 'other'}`;
@@ -104,6 +105,8 @@ const search = [d.title, d.shortDescription, d.exampleOutput, ...tags, ...(d.tar
   .k-entertainment { --ka:#c0392b; --kt:#fbece9; --kl:#f0c8c2; }
   .k-generators { --ka:#138178; --kt:#e7f5f3; --kl:#b6e0da; }
   .k-member-tutorials { --ka:#2f63c0; --kt:#eef3fc; --kl:#bcd0f0; }
+  .k-skill  { --ka:#b0316f; --kt:#fbeef4; --kl:#eec3d6; }
+  .k-imagegen { --ka:#6b4fb0; --kt:#f2eefb; --kl:#d6c9ee; }
   .k-gbti   { --ka:#1f9e5f; --kt:#e6f6ee; --kl:#b9e3cc; }
   .k-other  { --ka:#5b6472; --kt:#eef0f3; --kl:#d3d8e0; }
   [data-theme="dark"] .va-card { --kt: color-mix(in srgb, var(--ka) 20%, transparent); }

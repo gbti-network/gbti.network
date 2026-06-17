@@ -30,6 +30,13 @@ test('toIndexItem: metadata only, derives url + path, never a body', () => {
   assert.equal(it.author, 'hudson');
 });
 
+test('toIndexItem: carries the top-level category for the UI fallback glyph', () => {
+  const it = toIndexItem({ data: { slug: 'p', title: 'P', author: 'gbti', categories: ['ai', 'agents'] } }, 'prompt');
+  assert.equal(it.category, 'ai'); // the TOP segment of the categories path
+  const none = toIndexItem({ data: { slug: 'q', title: 'Q', author: 'gbti' } }, 'prompt');
+  assert.equal(none.category, null); // no categories -> null (the UI falls back to a neutral glyph)
+});
+
 test('thumbOf: per-type field + Astro image()/string normalization, null fallback (SOW-031)', () => {
   // post -> coverImage; an Astro image() field is an ImageMetadata object, so emit its build-optimized .src
   assert.equal(thumbOf({ coverImage: { src: '/_astro/cover.abc.webp', width: 1200 } }, 'post'), '/_astro/cover.abc.webp');

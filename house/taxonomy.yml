@@ -72,6 +72,8 @@ tree:
     label: Generators
   member-tutorials:
     label: Member Tutorials
+  skill:
+    label: Skill
   gbti:
     label: GBTI Network
     children:

@@ -65,6 +65,7 @@ export function toIndexItem(entry, type) {
     url: `${URLBASE[type] || ''}/${slug}/`,
     path: contentItemPath(type, author, slug),
     thumb: thumbOf(d, type), // SOW-031: a card thumbnail URL (SITE-relative `/_astro/...` or null), resolved in the UI
+    category: (Array.isArray(d.categories) && d.categories[0]) || null, // top-level category -> the UI's fallback glyph (cat-glyph.mjs)
     publishedAt: d.publishedAt ? Number(d.publishedAt) : null,
     visibility: d.visibility || 'public',
   };

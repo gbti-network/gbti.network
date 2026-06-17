@@ -5,6 +5,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { parseBrowseHash } from '../browse-hash.mjs';
 import { resolveAsset } from '../assets.mjs';
+import { catGlyph } from '../cat-glyph.mjs';
 import './gbti-reader.mjs';
 import './gbti-shares-feed.mjs';
 
@@ -27,6 +28,11 @@ const CSS = `
   .row:first-child { border-top:0; }
   .row:hover { background:var(--hover); }
   .row .thumb { flex:none; width:46px; height:46px; object-fit:cover; border-radius:8px; background:var(--hover); border:1px solid var(--line); }
+  /* Category-glyph fallback (no image): a rounded square with the category accent gradient + a white glyph,
+     matching the main app's PromptCard .kglyph. --ka is set inline per row from cat-glyph.mjs. */
+  .row .thumb.glyph { display:flex; align-items:center; justify-content:center; border:0; color:#fff;
+    background:linear-gradient(145deg, color-mix(in srgb, var(--ka) 66%, white), var(--ka)); }
+  .row .thumb.glyph svg { width:24px; height:24px; }
   .row .t { min-width:0; flex:1; }
   .row .t b { display:block; font-size:15px; }
   .row .t .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -126,8 +132,13 @@ class GbtiBrowse extends GbtiElement {
     if (!items.length) return `<p class="empty">Nothing here yet.</p>`;
     return `<ul class="rows">${items.map((it, i) => {
       const thumb = resolveAsset(it.thumb);
-      const img = thumb ? `<img class="thumb" src="${esc(thumb)}" alt="" loading="lazy">` : '';
-      return `<li class="row" data-open="${i}">${img}
+      // With an image, show the thumbnail; without one, fall back to the item's category glyph (matching the main
+      // app's PromptCard), so a prompt/article with no result image still reads with a category icon.
+      const g = catGlyph(it.category);
+      const media = thumb
+        ? `<img class="thumb" src="${esc(thumb)}" alt="" loading="lazy">`
+        : `<span class="thumb glyph" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
+      return `<li class="row" data-open="${i}">${media}
       <span class="t"><b>${esc(it.title)}</b>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ''}<span class="meta">${esc(authorName(it.author))}${it.visibility === 'members' ? ' · members' : ''}</span></span>
       <span class="go">Read &rarr;</span></li>`;
     }).join('')}</ul>`;
