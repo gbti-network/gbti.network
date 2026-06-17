@@ -57,7 +57,21 @@ class GbtiBrowse extends GbtiElement {
       const t = e.target;
       if (t && t.tagName === 'IMG' && t.classList?.contains('thumb')) t.style.display = 'none';
     }, true);
+    // SOW-036: react to hashchange so the shared left rail's Articles/Products/Prompts/Shares links switch the
+    // active tab (and open a read=<path> deep-link) while already on the Browse page, not just on first load.
+    this._onHash = () => {
+      const { tab, read } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
+      const t = tab && TABS.some((x) => x.id === tab) ? tab : this._tab;
+      if (read && t !== 'share') { this._tab = t; this._reading = (this._cache[t] || []).find((x) => x.path === read) || { type: t, path: read }; this.render(); this._ensure(t); return; }
+      if (t !== this._tab || this._reading) { this._tab = t; this._reading = null; this.render(); this._ensure(t); }
+    };
+    if (typeof window !== 'undefined') window.addEventListener('hashchange', this._onHash);
     this._init();
+  }
+
+  disconnectedCallback() {
+    if (this._onHash && typeof window !== 'undefined') window.removeEventListener('hashchange', this._onHash);
+    super.disconnectedCallback?.();
   }
 
   // Load the active tab's index, then (if deep-linked via read=<path>) open that item in the reader.

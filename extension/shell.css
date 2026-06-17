@@ -1,0 +1,99 @@
+/* ============================================================================
+   GBTI extension — the shared member-hub SHELL (SOW-036/039): V3 tokens + the
+   top bar + the left rail + the account dropdown. Loaded by every extension page;
+   the markup is injected by extension/src/shell.mjs (initShell). Each page puts
+   its own content in <main class="nt-main">. Light + dark, CSP-safe.
+   ========================================================================== */
+
+/* ---- base V3 tokens (light) ---- */
+:root {
+  --paper: #ffffff; --paper-2: #faf9f8; --paper-3: #f3f1ee; --ink: #25232b;
+  --fg: #24222a; --fg-soft: #57545e; --fg-mute: #84818c;
+  --line: #e7e4e0; --line-2: #ddd9d4;
+  --green: #1f9e5f; --green-700: #0f6f40; --green-mint: #5fd49a; --green-tint: #e9f6ef; --green-tint-2: #d3ecde;
+  --r-xs: 6px; --r: 10px; --r-lg: 16px; --r-pill: 999px;
+  --sh-sm: 0 1px 2px rgba(0,0,0,.05); --sh: 0 4px 14px -6px rgba(0,0,0,.14); --sh-md: 0 10px 28px -10px rgba(0,0,0,.22);
+  --f-display: 'Baloo Da 2', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --f-sans: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+/* ---- dark ---- */
+[data-theme="dark"] {
+  --paper: #25232d; --paper-2: #1c1a22; --paper-3: #322f3b; --ink: #f1f0ee;
+  --fg: #f1f0ee; --fg-soft: rgba(241,240,238,.66); --fg-mute: rgba(241,240,238,.42);
+  --line: rgba(255,255,255,.09); --line-2: rgba(255,255,255,.16);
+  --green-700: #5fd49a; --green-mint: #5fd49a; --green-tint: rgba(31,158,95,.14); --green-tint-2: rgba(95,212,154,.24);
+  --sh-sm: none; --sh: 0 6px 18px -8px rgba(0,0,0,.5); --sh-md: 0 12px 30px -10px rgba(0,0,0,.6);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--paper-2); color: var(--fg); font-family: var(--f-sans); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+
+.nt { min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; grid-template-rows: auto 1fr; }
+
+/* ============================ top bar ============================ */
+.nt-bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 13px 24px; border-bottom: 1.5px solid var(--line); background: var(--paper); }
+.nt-brand { display: flex; align-items: center; gap: 11px; font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+.nt-brand .mk { width: 30px; height: 30px; border-radius: 7px; background: var(--green); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; flex: none; }
+.nt-spring { flex: 1; }
+
+.nt-apps { display: none; align-items: center; gap: 4px; padding: 4px; border: 1.5px solid var(--line); border-radius: 11px; background: var(--paper-2); }
+.nt-apps.show { display: flex; }
+.nt-app { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; flex: none; cursor: pointer; border: 0; padding: 0; background: transparent; transition: transform .12s; }
+.nt-app:hover { transform: translateY(-1px); }
+.nt-app.gbti { background: #1a1820; font-family: var(--f-display); font-weight: 800; font-size: 9px; letter-spacing: -.02em; cursor: default; }
+.nt-app img { width: 20px; height: 20px; border-radius: 5px; display: block; }
+.nt-app .dd { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; background: #0e1217; color: #fff; font: 800 9px/1 var(--f-mono); }
+
+.nt-icobtn { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--paper); color: var(--fg-soft); display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; transition: border-color .15s, color .15s; }
+.nt-icobtn:hover { border-color: var(--line-2); color: var(--fg); }
+.nt-icobtn svg { width: 19px; height: 19px; }
+
+/* account control (SOW-036): the avatar button opens the management dropdown */
+.nt-acctwrap { position: relative; }
+.nt-signin { font-family: var(--f-sans); font-weight: 700; font-size: 13px; color: #fff; background: var(--green); border: 0; border-radius: var(--r-pill); padding: 9px 17px; cursor: pointer; }
+.nt-signin:hover { background: var(--green-700); }
+.nt-acct { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border: 1.5px solid var(--line); border-radius: var(--r-pill); background: var(--paper); cursor: pointer; transition: border-color .15s; }
+.nt-acct:hover { border-color: var(--line-2); }
+.nt-acct .av { width: 34px; height: 34px; border-radius: 50%; flex: none; object-fit: cover; background: var(--line); }
+.nt-acct svg { width: 15px; height: 15px; color: var(--fg-mute); transition: transform .15s; }
+.nt-acct[aria-expanded="true"] svg { transform: rotate(180deg); }
+.me-menu { position: absolute; top: calc(100% + 8px); right: 0; min-width: 230px; z-index: 80; background: var(--paper); border: 1.5px solid var(--line-2); border-radius: var(--r-lg); box-shadow: var(--sh-md); padding: 6px; display: flex; flex-direction: column; }
+.me-menu[hidden] { display: none; }
+.me-head { padding: 7px 12px 4px; font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); }
+.me-head b { color: var(--fg); font-family: var(--f-sans); font-weight: 700; }
+.mi { display: block; width: 100%; text-align: left; padding: 8px 12px; border: 0; border-radius: var(--r); background: transparent; color: var(--fg); font-family: var(--f-sans); font-size: 14px; font-weight: 500; cursor: pointer; }
+.mi:hover, .mi:focus-visible { background: var(--green-tint); color: var(--green-700); outline: none; }
+.mi-signout { color: var(--fg-soft); }
+.me-sep { height: 1px; background: var(--line); margin: 5px 4px; }
+
+/* ============================ left rail ============================ */
+.nt-rail { border-right: 1.5px solid var(--line); background: var(--paper); padding: 22px 16px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.nt-rail-h { font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-mute); padding: 6px 12px 8px; }
+.nt-rail-h:not(:first-child) { margin-top: 16px; }
+.nav-i { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r); color: var(--fg-soft); cursor: pointer; transition: background .13s, color .13s; }
+.nav-i:hover { background: var(--paper-3); color: var(--fg); }
+.nav-i.on { background: var(--green-tint); color: var(--green-700); }
+.nav-i .gl { width: 22px; height: 22px; flex: none; display: flex; align-items: center; justify-content: center; }
+.nav-i .gl svg { width: 19px; height: 19px; }
+.nav-i .tx { min-width: 0; display: flex; flex-direction: column; }
+.nav-i .tx .nm { font-weight: 600; font-size: 14.5px; line-height: 1.2; }
+.nav-i .tx .sub { font-size: 12px; color: var(--fg-mute); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nt-rail-div { height: 1.5px; background: var(--line); margin: 14px 12px; border: 0; }
+.nt-rail-foot { margin-top: auto; padding-top: 14px; }
+.nt-coop { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: var(--r); border: 1.5px solid var(--green-tint-2); background: var(--green-tint); color: var(--green-700); font-weight: 600; font-size: 13.5px; cursor: pointer; transition: transform .13s; }
+.nt-coop:hover { transform: translateY(-1px); }
+.nt-coop svg { width: 17px; height: 17px; margin-left: auto; }
+
+/* ============================ main column ============================ */
+.nt-main { min-width: 0; padding: 26px 34px 60px; overflow-y: auto; }
+
+/* ============================ responsive ============================ */
+@media (max-width: 980px) {
+  .nt { grid-template-columns: 1fr; }
+  .nt-rail { display: none; }
+}
+@media (max-width: 560px) {
+  .nt-main { padding: 20px 18px 48px; }
+}

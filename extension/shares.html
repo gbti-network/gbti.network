@@ -1,7 +1,7 @@
 <!doctype html>
-<!-- SOW-018: the GBTI extension's Shares page. Extension-only (Shares have no public website surface). Mounts
-     the shared client-ui components: <gbti-auth> (sign-in via the background worker) + <gbti-shares> (the
-     composer over the co-op reading feed). The script wires the messaging client. V3-ish light/dark chrome. -->
+<!-- SOW-018 + SOW-036: the GBTI extension's Shares page (extension-only; Shares have no public website surface),
+     inside the shared member-hub shell (top bar + left rail injected by shell.mjs). Mounts <gbti-shares> (the
+     composer over the co-op reading feed) behind the membership lock gate. The token stays in the worker. -->
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -9,25 +9,21 @@
   <title>Shares · GBTI Network</title>
   <!-- No-flash theme: external (not inline) because MV3 extension_pages CSP forbids inline scripts. -->
   <script src="dist/theme-init.js"></script>
+  <link rel="stylesheet" href="shell.css" />
   <style>
-    :root { --paper-2: #faf9f8; --ink: #25232b; --green: #1f9e5f; }
-    [data-theme="dark"] { --paper-2: #1c1a21; --ink: #f3f2f0; }
-    body { margin: 0; background: var(--paper-2); color: var(--ink);
-      font-family: 'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
-    .wrap { max-width: 640px; margin: 0 auto; padding: 40px 20px 80px; }
-    .top { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
-    .g { width: 30px; height: 30px; border-radius: 8px; background: var(--green); color: #fff; display: grid; place-items: center; font-weight: 800; }
-    .top b { font-weight: 800; letter-spacing: -.01em; }
-    .top .t { margin-left: auto; font-size: 13px; opacity: .7; }
+    .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 26px; letter-spacing: -.02em; margin: 0 0 4px; }
+    .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 0 0 18px; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="top"><span class="g">G</span><b>Shares</b><span class="t">The co-op stream</span></div>
-    <gbti-auth></gbti-auth>
-    <gbti-lock-gate>
-      <gbti-shares></gbti-shares>
-    </gbti-lock-gate>
+  <div class="nt" data-shell data-active="shares">
+    <main class="nt-main">
+      <h1 class="hub-h">Shares</h1>
+      <p class="hub-sub">The co-op stream.</p>
+      <gbti-lock-gate>
+        <gbti-shares></gbti-shares>
+      </gbti-lock-gate>
+    </main>
   </div>
   <script src="dist/shares.js"></script>
 </body>

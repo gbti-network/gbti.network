@@ -2380,16 +2380,12 @@
     return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
   }
 
-  // extension/src/newtab.mjs
+  // extension/src/shell.mjs
   var SITE = "https://gbti.network";
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
   var DAILYDEV_APP_URL = "https://app.daily.dev/";
-  var $ = (sel) => document.querySelector(sel);
+  var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-  var authorName = (a) => a === "gbti" || a === "house" ? "GBTI Network" : a;
-  var avatarFor = (a) => a === "gbti" || a === "house" ? "icons/icon-32.png" : `https://github.com/${encodeURIComponent(a)}.png?size=64`;
-  var chipType = (t) => t === "post" ? "article" : t;
-  var TYPE_LABEL = { article: "ARTICLE", product: "PRODUCT", prompt: "PROMPT" };
   var SVG = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<rect x="4.5" y="3.5" width="15" height="17" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 8h8M8 11.5h8M8 15h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
@@ -2408,6 +2404,198 @@
     mCard: '<rect x="4" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="4" y="13" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="13" width="7" height="7" rx="1.3" fill="currentColor"/>'
   };
   var ico = (k) => SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : "";
+  var RAIL = [
+    { group: "Feeds" },
+    { key: "activity", href: "newtab.html", ico: "activity", nm: "Activity" },
+    { group: "Browse" },
+    { key: "articles", href: "browse.html#tab=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
+    { key: "products", href: "browse.html#tab=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
+    { key: "prompts", href: "browse.html#tab=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
+    { key: "shares", href: "browse.html#tab=share", ico: "coin", nm: "Shares", sub: "The co-op stream" },
+    { div: true },
+    { key: "workspace", href: "workspace.html", ico: "grid", nm: "My workspace", sub: "Content + pull requests" }
+  ];
+  function barHtml() {
+    return `<header class="nt-bar">
+    <div class="nt-brand"><span class="mk">G</span> GBTI Network</div>
+    <span class="nt-spring"></span>
+    <span class="nt-apps" data-apps>
+      <span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>
+      <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
+    </span>
+    <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
+    <div class="nt-acctwrap" data-me-wrap>
+      <button class="nt-signin" data-signin-btn type="button" hidden>Sign in</button>
+      <button class="nt-acct" data-me-btn type="button" aria-haspopup="true" aria-expanded="false" aria-label="Account menu" hidden>
+        <img class="av" data-me-av alt="" width="34" height="34" />
+        <span data-ico="chev"></span>
+      </button>
+      <div class="me-menu" data-me-menu role="menu" hidden>
+        <div class="me-head" data-me-head></div>
+        <div class="me-sep" role="separator"></div>
+        <a class="mi" role="menuitem" href="workspace.html">My workspace</a>
+        <a class="mi" role="menuitem" href="workspace.html#tab=post">My articles</a>
+        <a class="mi" role="menuitem" href="workspace.html#tab=prompt">My prompts</a>
+        <a class="mi" role="menuitem" href="workspace.html#tab=product">My products</a>
+        <a class="mi" role="menuitem" href="workspace.html#tab=prs">My pull requests</a>
+        <a class="mi mi-admin" role="menuitem" href="admin.html" hidden>Admin tools</a>
+        <div class="me-sep" role="separator"></div>
+        <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
+      </div>
+    </div>
+  </header>`;
+  }
+  function railHtml(active) {
+    const items = RAIL.map((r) => {
+      if (r.group) return `<div class="nt-rail-h">${esc(r.group)}</div>`;
+      if (r.div) return `<hr class="nt-rail-div" />`;
+      const on = r.key === active ? " on" : "";
+      const sub = r.sub ? `<span class="sub">${esc(r.sub)}</span>` : "";
+      return `<a class="nav-i${on}" data-key="${r.key}" href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
+    }).join("");
+    return `<nav class="nt-rail">${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+  }
+  async function api(pathname) {
+    try {
+      const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname, query: {} } });
+      return r?.json ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function applyAccount(root, status) {
+    const meBtn = root.querySelector("[data-me-btn]");
+    const signinBtn = root.querySelector("[data-signin-btn]");
+    const greetName = document.querySelector("[data-greet-name]");
+    if (status) {
+      const login = status.identity.login;
+      const av = root.querySelector("[data-me-av]");
+      if (av) {
+        av.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`;
+        av.alt = `@${login}`;
+      }
+      const head = root.querySelector("[data-me-head]");
+      if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
+      const adminItem = root.querySelector(".mi-admin");
+      if (adminItem) adminItem.hidden = (RANK2[status.role] ?? 0) < RANK2.moderator;
+      if (greetName) greetName.textContent = `, @${login}`;
+      if (meBtn) meBtn.hidden = false;
+      if (signinBtn) signinBtn.hidden = true;
+    } else {
+      if (greetName) greetName.textContent = "";
+      if (meBtn) meBtn.hidden = true;
+      if (signinBtn) signinBtn.hidden = false;
+    }
+  }
+  async function loadShellAccount(root = document.querySelector("[data-shell]")) {
+    const status = await api("/api/status");
+    const signedIn = Boolean(status?.authenticated && status?.identity?.login);
+    if (root) applyAccount(root, signedIn ? status : null);
+    return signedIn ? status : null;
+  }
+  function setTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    try {
+      localStorage.setItem("gbti-theme", t);
+    } catch (e) {
+    }
+    const b = document.querySelector("[data-theme-toggle]");
+    if (b) b.innerHTML = ico(t === "dark" ? "sun" : "moon");
+  }
+  var openOnboarding = () => chrome.tabs?.create ? chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }) : window.open(chrome.runtime.getURL("onboarding.html"), "_blank");
+  function wireAccount(root) {
+    const menu = () => root.querySelector("[data-me-menu]");
+    const btn = root.querySelector("[data-me-btn]");
+    const close = () => {
+      const m = menu();
+      if (m) m.hidden = true;
+      btn?.setAttribute("aria-expanded", "false");
+    };
+    const open = () => {
+      const m = menu();
+      if (m) m.hidden = false;
+      btn?.setAttribute("aria-expanded", "true");
+      m?.querySelector(".mi")?.focus();
+    };
+    root.querySelector("[data-me-av]")?.addEventListener("error", (e) => {
+      e.target.src = "icons/icon-32.png";
+    });
+    btn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      menu()?.hidden ? open() : close();
+    });
+    document.addEventListener("click", (e) => {
+      const m = menu();
+      if (m && !m.hidden && !root.querySelector("[data-me-wrap]")?.contains(e.target)) close();
+    });
+    document.addEventListener("keydown", (e) => {
+      const m = menu();
+      if (e.key === "Escape" && m && !m.hidden) {
+        close();
+        btn?.focus();
+      }
+    });
+    root.querySelector("[data-signin-btn]")?.addEventListener("click", openOnboarding);
+    root.querySelector("[data-me-signout]")?.addEventListener("click", async () => {
+      close();
+      try {
+        await chrome.runtime.sendMessage({ type: "signout" });
+      } catch (e) {
+      }
+      location.reload();
+    });
+  }
+  async function wireApps(root) {
+    const apps = root.querySelector("[data-apps]");
+    if (!apps) return;
+    apps.querySelector("[data-open-dailydev]")?.addEventListener("click", () => {
+      window.location.href = DAILYDEV_APP_URL;
+    });
+    const img = apps.querySelector("[data-dd-img]");
+    img?.addEventListener("error", () => {
+      const b = document.createElement("span");
+      b.className = "dd";
+      b.textContent = "dd";
+      img.replaceWith(b);
+    }, { once: true });
+    let installed = null;
+    try {
+      if (chrome.management?.get) {
+        const info = await chrome.management.get(DAILYDEV_ID).catch(() => null);
+        installed = Boolean(info && info.enabled);
+      }
+    } catch {
+    }
+    if (installed === true || installed === null) apps.classList.add("show");
+  }
+  function initShell({ active = null } = {}) {
+    const root = document.querySelector("[data-shell]");
+    if (!root) return { ico, loadShellAccount: () => loadShellAccount(null) };
+    const main = root.querySelector(".nt-main");
+    const html = barHtml() + railHtml(active);
+    if (main) main.insertAdjacentHTML("beforebegin", html);
+    else root.insertAdjacentHTML("afterbegin", html);
+    root.querySelectorAll("[data-ico]").forEach((el) => {
+      el.innerHTML = ico(el.dataset.ico);
+    });
+    const themeBtn = root.querySelector("[data-theme-toggle]");
+    if (themeBtn) {
+      themeBtn.innerHTML = ico(document.documentElement.getAttribute("data-theme") === "dark" ? "sun" : "moon");
+      themeBtn.addEventListener("click", () => setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"));
+    }
+    wireApps(root);
+    wireAccount(root);
+    loadShellAccount(root);
+    return { ico, loadShellAccount: () => loadShellAccount(root) };
+  }
+
+  // extension/src/newtab.mjs
+  var SITE2 = "https://gbti.network";
+  var $ = (sel) => document.querySelector(sel);
+  var authorName = (a) => a === "gbti" || a === "house" ? "GBTI Network" : a;
+  var avatarFor = (a) => a === "gbti" || a === "house" ? "icons/icon-32.png" : `https://github.com/${encodeURIComponent(a)}.png?size=64`;
+  var chipType = (t) => t === "post" ? "article" : t;
+  var TYPE_LABEL = { article: "ARTICLE", product: "PRODUCT", prompt: "PROMPT" };
   function greeting() {
     const h = (/* @__PURE__ */ new Date()).getHours();
     return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
@@ -2438,7 +2626,7 @@
       return "compact";
     }
   })();
-  var thumbUrl = (t) => /^https?:\/\//.test(t) ? t : `${SITE}${t}`;
+  var thumbUrl = (t) => /^https?:\/\//.test(t) ? t : `${SITE2}${t}`;
   function thumbEl(e) {
     const ct = chipType(e.type);
     if (e.thumb) {
@@ -2453,7 +2641,7 @@
   var lockBadge = () => `<span class="lock">${ico("lock")}Members</span>`;
   var avatarImg = (who) => `<img class="av-img" src="${esc(avatarFor(who))}" alt="" loading="lazy" />`;
   var authorMeta = (who, ago) => `<span class="meta-au"><b>${esc(authorName(who))}</b>${ago ? ` · ${esc(ago)}` : ""}</span>`;
-  var hrefFor = (e) => e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url}`;
+  var hrefFor = (e) => e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE2}${e.url}`;
   function renderCompact(items) {
     return `<div class="feed-compact">` + items.map((e) => {
       const ago = relTime(e.publishedAt);
@@ -2495,7 +2683,7 @@
     const q = filter.trim().toLowerCase();
     if (VIEW === "following") {
       if (FOLLOWING === null) {
-        feed.innerHTML = `<p class="muted">Following is a member feature. Sign in with the GBTI client or extension as a paid member to see the people you follow. <a href="${SITE}/membership/" style="color:var(--green-700)">Become a member</a>.</p>`;
+        feed.innerHTML = `<p class="muted">Following is a member feature. Sign in with the GBTI client or extension as a paid member to see the people you follow. <a href="${SITE2}/membership/" style="color:var(--green-700)">Become a member</a>.</p>`;
         return;
       }
       if (FOLLOWING.size === 0) {
@@ -2532,25 +2720,16 @@
   async function loadActivity() {
     const status = $("[data-feed-status]");
     try {
-      const res = await fetch(`${SITE}/activity-index.json`, { cache: "no-cache" });
+      const res = await fetch(`${SITE2}/activity-index.json`, { cache: "no-cache" });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       ENTRIES = Array.isArray(data?.entries) ? data.entries : [];
       renderFeed($("[data-filter]")?.value || "");
     } catch {
-      if (status) status.innerHTML = `Could not load the latest activity. <a href="${SITE}/" style="color:var(--green-700)">Open the co-op</a> instead.`;
+      if (status) status.innerHTML = `Could not load the latest activity. <a href="${SITE2}/" style="color:var(--green-700)">Open the co-op</a> instead.`;
     }
   }
-  function setTheme(t) {
-    document.documentElement.setAttribute("data-theme", t);
-    try {
-      localStorage.setItem("gbti-theme", t);
-    } catch (e) {
-    }
-    const btn = $("[data-theme-toggle]");
-    if (btn) btn.innerHTML = ico(t === "dark" ? "sun" : "moon");
-  }
-  async function api(pathname) {
+  async function api2(pathname) {
     try {
       const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname, query: {} } });
       return r?.json ?? null;
@@ -2558,47 +2737,9 @@
       return null;
     }
   }
-  var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  function closeMeMenu() {
-    const menu = $("[data-me-menu]");
-    if (menu) menu.hidden = true;
-    $("[data-me-btn]")?.setAttribute("aria-expanded", "false");
-  }
-  function openMeMenu() {
-    const menu = $("[data-me-menu]");
-    if (menu) menu.hidden = false;
-    $("[data-me-btn]")?.setAttribute("aria-expanded", "true");
-    menu?.querySelector(".mi")?.focus();
-  }
-  function applyAccount(status) {
-    const meBtn = $("[data-me-btn]");
-    const signinBtn = $("[data-signin-btn]");
-    const greetName = $("[data-greet-name]");
-    if (status) {
-      const login = status.identity.login;
-      const meAv = $("[data-me-av]");
-      if (meAv) {
-        meAv.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`;
-        meAv.alt = `@${login}`;
-      }
-      const head = $("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
-      const adminItem = document.querySelector(".mi-admin");
-      if (adminItem) adminItem.hidden = (RANK2[status.role] ?? 0) < RANK2.moderator;
-      if (greetName) greetName.textContent = `, @${login}`;
-      if (meBtn) meBtn.hidden = false;
-      if (signinBtn) signinBtn.hidden = true;
-    } else {
-      closeMeMenu();
-      if (greetName) greetName.textContent = "";
-      if (meBtn) meBtn.hidden = true;
-      if (signinBtn) signinBtn.hidden = false;
-    }
-  }
-  async function loadAccountAndSetup() {
-    const [status, ob] = await Promise.all([api("/api/status"), api("/api/onboarding-status")]);
+  async function loadSetupBanner() {
+    const [status, ob] = await Promise.all([api2("/api/status"), api2("/api/onboarding-status")]);
     const signedIn = Boolean(status?.authenticated && status?.identity?.login);
-    applyAccount(signedIn ? status : null);
     const setup = $("[data-setup]");
     if (!setup) return;
     const ready = ob ? ob.ready || ob.appMode === false && signedIn : signedIn;
@@ -2617,32 +2758,6 @@
       if (go) go.textContent = "Finish setup";
     }
     setup.classList.add("show");
-  }
-  async function dailydevInstalled() {
-    try {
-      if (chrome.management?.get) {
-        const info = await chrome.management.get(DAILYDEV_ID).catch(() => null);
-        return Boolean(info && info.enabled);
-      }
-    } catch {
-    }
-    return null;
-  }
-  async function setupAppSwitcher() {
-    const apps = $("[data-apps]");
-    if (!apps) return;
-    apps.querySelector("[data-open-dailydev]")?.addEventListener("click", () => {
-      window.location.href = DAILYDEV_APP_URL;
-    });
-    const img = apps.querySelector("[data-dd-img]");
-    img?.addEventListener("error", () => {
-      const b = document.createElement("span");
-      b.className = "dd";
-      b.textContent = "dd";
-      img.replaceWith(b);
-    }, { once: true });
-    const installed = await dailydevInstalled();
-    if (installed === true || installed === null) apps.classList.add("show");
   }
   async function checkMembershipLock() {
     try {
@@ -2675,26 +2790,18 @@
     });
   }
   function init() {
-    document.querySelectorAll("[data-ico]").forEach((el) => {
-      el.innerHTML = ico(el.dataset.ico);
-    });
+    initShell({ active: "activity" });
     const greetEl = $("[data-greeting]");
     if (greetEl) greetEl.textContent = greeting();
     const dateEl = $("[data-date]");
     if (dateEl) dateEl.textContent = longDate();
-    const themeBtn = $("[data-theme-toggle]");
-    if (themeBtn) themeBtn.innerHTML = ico(document.documentElement.getAttribute("data-theme") === "dark" ? "sun" : "moon");
     syncModeButtons();
     initFooterTip();
     checkMembershipLock();
-    loadAccountAndSetup();
-    setupAppSwitcher();
+    loadSetupBanner();
     $("[data-setup]")?.addEventListener("click", (e) => {
       e.preventDefault();
       chrome.tabs?.create ? chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }) : window.open(chrome.runtime.getURL("onboarding.html"), "_blank");
-    });
-    themeBtn?.addEventListener("click", () => {
-      setTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark");
     });
     document.querySelectorAll(".nt-mode").forEach((b) => b.addEventListener("click", () => {
       MODE = b.dataset.mode;
@@ -2705,35 +2812,6 @@
       syncModeButtons();
       renderFeed($("[data-filter]")?.value || "");
     }));
-    $("[data-me-av]")?.addEventListener("error", (e) => {
-      e.target.src = "icons/icon-32.png";
-    });
-    $("[data-me-btn]")?.addEventListener("click", (e) => {
-      e.stopPropagation();
-      $("[data-me-menu]")?.hidden ? openMeMenu() : closeMeMenu();
-    });
-    document.addEventListener("click", (e) => {
-      const m = $("[data-me-menu]");
-      if (m && !m.hidden && !$("[data-me-wrap]")?.contains(e.target)) closeMeMenu();
-    });
-    document.addEventListener("keydown", (e) => {
-      const m = $("[data-me-menu]");
-      if (e.key === "Escape" && m && !m.hidden) {
-        closeMeMenu();
-        $("[data-me-btn]")?.focus();
-      }
-    });
-    $("[data-signin-btn]")?.addEventListener("click", () => {
-      chrome.tabs?.create ? chrome.tabs.create({ url: chrome.runtime.getURL("onboarding.html") }) : window.open(chrome.runtime.getURL("onboarding.html"), "_blank");
-    });
-    $("[data-me-signout]")?.addEventListener("click", async () => {
-      closeMeMenu();
-      try {
-        await chrome.runtime.sendMessage({ type: "signout" });
-      } catch (e) {
-      }
-      loadAccountAndSetup();
-    });
     $("[data-filter]")?.addEventListener("input", (e) => renderFeed(e.target.value));
     document.querySelectorAll("[data-tab]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -2756,7 +2834,7 @@
     });
     if (document.documentElement.getAttribute("data-off") !== "1") loadActivity();
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) loadAccountAndSetup();
+      if (!document.hidden) loadSetupBanner();
     });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

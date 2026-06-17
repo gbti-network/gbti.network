@@ -85,6 +85,9 @@ export function readZipEntries(buf) {
  *  so the unzipped folder loads directly. */
 export function loadableFiles(extDir) {
   const html = fs.readdirSync(extDir).filter((f) => f.endsWith('.html')).sort();
+  // Top-level stylesheets a page <link>s (e.g. the shared shell.css). Discovered like HTML so a new shared CSS is
+  // never forgotten by the packager.
+  const css = fs.readdirSync(extDir).filter((f) => f.endsWith('.css')).sort();
   const distDir = path.join(extDir, 'dist');
   const dist = fs.existsSync(distDir)
     ? fs.readdirSync(distDir).filter((f) => f.endsWith('.js')).sort().map((f) => `dist/${f}`)
@@ -93,7 +96,7 @@ export function loadableFiles(extDir) {
   const icons = fs.existsSync(iconsDir)
     ? fs.readdirSync(iconsDir).filter((f) => /\.(png|svg|webp)$/i.test(f)).sort().map((f) => `icons/${f}`)
     : [];
-  return ['manifest.json', ...html, ...dist, ...icons];
+  return ['manifest.json', ...html, ...css, ...dist, ...icons];
 }
 
 /** The files the extension REQUIRES to be present, derived from the manifest (service worker, content scripts,
@@ -112,6 +115,10 @@ export function requiredFiles(manifest, htmlSources = {}) {
   for (const p of Object.values(manifest.action?.default_icon ?? {})) req.add(p);
   for (const html of Object.values(htmlSources)) {
     for (const m of html.matchAll(/<script[^>]+src="([^"]+)"/g)) {
+      if (!/^https?:\/\//.test(m[1])) req.add(m[1].replace(/^\.?\//, ''));
+    }
+    // A local stylesheet a page <link>s (the shared shell.css) must be packaged too, or the page loads unstyled.
+    for (const m of html.matchAll(/<link[^>]+href="([^"]+\.css)"/g)) {
       if (!/^https?:\/\//.test(m[1])) req.add(m[1].replace(/^\.?\//, ''));
     }
   }

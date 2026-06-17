@@ -5220,7 +5220,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const t = e.target;
         if (t && t.tagName === "IMG" && t.classList?.contains("thumb")) t.style.display = "none";
       }, true);
+      this._onHash = () => {
+        const { tab: tab2, read: read2 } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
+        const t = tab2 && TABS2.some((x) => x.id === tab2) ? tab2 : this._tab;
+        if (read2 && t !== "share") {
+          this._tab = t;
+          this._reading = (this._cache[t] || []).find((x) => x.path === read2) || { type: t, path: read2 };
+          this.render();
+          this._ensure(t);
+          return;
+        }
+        if (t !== this._tab || this._reading) {
+          this._tab = t;
+          this._reading = null;
+          this.render();
+          this._ensure(t);
+        }
+      };
+      if (typeof window !== "undefined") window.addEventListener("hashchange", this._onHash);
       this._init();
+    }
+    disconnectedCallback() {
+      if (this._onHash && typeof window !== "undefined") window.removeEventListener("hashchange", this._onHash);
+      super.disconnectedCallback?.();
     }
     // Load the active tab's index, then (if deep-linked via read=<path>) open that item in the reader.
     async _init() {

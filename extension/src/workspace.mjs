@@ -4,6 +4,7 @@
 // extension/src/shares.mjs.
 
 import { setClient, createHttpClient } from '../../client-ui/src/index.mjs';
+import { initShell } from './shell.mjs';
 
 /** Relay a /api/* request to the background worker (replaces a real network fetch). Mirrors shares.mjs. */
 async function messagingFetch(url, init = {}) {
@@ -32,3 +33,6 @@ client.login = (onPrompt) =>
   });
 
 setClient(client);
+
+// SOW-036: mount the shared member-hub shell (top bar + left rail), with "My workspace" active.
+initShell({ active: 'workspace' });

@@ -4,6 +4,12 @@
 // (sign-in) + <gbti-browse> (Blog/Products/Prompts/Shares + the in-extension reader). Mirrors shares.mjs.
 
 import { setClient, createHttpClient } from '../../client-ui/src/index.mjs';
+import { initShell } from './shell.mjs';
+import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs';
+
+// Map the active browse tab to its rail key so the left rail highlights the right destination.
+const RAIL_KEY = { post: 'articles', product: 'products', prompt: 'prompts', share: 'shares' };
+const railFor = () => RAIL_KEY[parseBrowseHash(typeof location !== 'undefined' ? location.hash : '').tab] || 'articles';
 
 /** Relay a /api/* request to the background worker (replaces a real network fetch). Mirrors shares.mjs. */
 async function messagingFetch(url, init = {}) {
@@ -32,3 +38,11 @@ client.login = (onPrompt) =>
   });
 
 setClient(client);
+
+// SOW-036: mount the shared member-hub shell (top bar + left rail), highlighting the active browse destination.
+// Keep the rail highlight in sync as the in-page tab changes (gbti-browse reacts to the same hashchange).
+initShell({ active: railFor() });
+window.addEventListener('hashchange', () => {
+  const key = railFor();
+  document.querySelectorAll('.nt-rail .nav-i').forEach((n) => n.classList.toggle('on', n.dataset.key === key));
+});

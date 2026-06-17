@@ -5,6 +5,7 @@
 // the git work + calls the Worker to decrypt). The page never sees the token or the AES key.
 
 import { setClient, createHttpClient } from '../../client-ui/src/index.mjs';
+import { initShell } from './shell.mjs';
 
 /** Relay a /api/* request to the background worker (replaces a real network fetch). Mirrors content.mjs. */
 async function messagingFetch(url, init = {}) {
@@ -33,3 +34,6 @@ client.login = (onPrompt) =>
   });
 
 setClient(client);
+
+// SOW-036: mount the shared member-hub shell (top bar + left rail), with "Shares" active.
+initShell({ active: 'shares' });
