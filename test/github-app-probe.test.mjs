@@ -38,6 +38,18 @@ test('signed in, no fork -> forkReady false (install not probed)', async () => {
   assert.equal(installProbed, false, 'install is not probed without a fork');
 });
 
+test('401 on /user -> token DEFINITIVELY rejected: signedIn false, reachedGithub TRUE (caller may self-heal)', async () => {
+  const r = await probeReadiness({ token: 'expired', appSlug: SLUG, upstream: UP, fetch: async () => ({ ok: false, status: 401, async json() { return {}; } }) });
+  assert.equal(r.signedIn, false);
+  assert.equal(r.reachedGithub, true, 'a real 401 means GitHub answered and rejected the token');
+});
+
+test('a transient /user error (500) -> signedIn false, reachedGithub FALSE (must NOT self-heal a valid token)', async () => {
+  const r = await probeReadiness({ token: 'good', appSlug: SLUG, upstream: UP, fetch: async () => ({ ok: false, status: 500, async json() { return {}; } }) });
+  assert.equal(r.signedIn, false);
+  assert.equal(r.reachedGithub, false, 'a 5xx is transient; the caller treats it as offline, never signs out');
+});
+
 test('a same-named non-fork repo does NOT count as the fork', async () => {
   const fetch = gh({
     '/repos/alice/gbti.network': okJson({ fork: false }),

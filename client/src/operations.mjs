@@ -522,6 +522,14 @@ export async function getOnboardingStatus(ctx) {
     return { appMode: false, signedIn: !!token, forkReady: true, installReady: true, activeStep: token ? 'ready' : 'signin', ready: !!token, reachedGithub: true };
   }
   const r = await probeReadiness({ token, appSlug: GITHUB_APP_SLUG, upstream: UPSTREAM_REPO, fetch: ctx.fetch ?? globalThis.fetch });
+  // Self-heal a DEAD token: if GitHub reached us and rejected the token (reachedGithub && !signedIn) while a token
+  // was stored, the App user token is expired/revoked and the public client cannot refresh it. Clear the stale
+  // token + identity so the UI shows ONE clean "sign in" prompt instead of "Signed in as @x" alongside "0 of 3".
+  // probeReadiness sets reachedGithub on a definitive 401 only, never a transient error, so this never signs a
+  // member out on a GitHub blip. (The ROOT fix is the App's "Expire user authorization tokens" = OFF.)
+  if (token && r.reachedGithub && !r.signedIn) {
+    try { ctx.store?.set?.({ githubToken: null, identity: null }); } catch { /* best-effort */ }
+  }
   const activeStep = onboardingNextStep(r);
   // Enrich with the step copy + the resolved deep-links so the UI component is purely data-driven (no
   // cross-package import). The install link preselects the member account via their numeric id.

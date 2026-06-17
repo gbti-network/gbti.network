@@ -7,10 +7,14 @@ const GH = 'https://api.github.com';
 const ghHeaders = (token) => ({ Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'gbti-network' });
 const repoName = (login, upstream) => `${String(login).toLowerCase()}/${upstream.split('/')[1]}`;
 
-/** GET /user -> { login, githubId } or null (invalid token). Throws on a network error (caller treats as offline). */
+/** GET /user -> { login, githubId } or null (token DEFINITIVELY rejected: 401/403-unauthorized). Throws on a
+ *  transient error (5xx, rate-limit, network) so the caller treats it as "offline / unknown", NEVER as
+ *  signed-out. This split lets the caller self-heal a dead token (clear it) without spuriously signing a member
+ *  out on a transient GitHub blip. */
 export async function getAuthedUser({ token, fetch = globalThis.fetch }) {
   const res = await fetch(`${GH}/user`, { headers: ghHeaders(token) });
-  if (!res.ok) return null;
+  if (res.status === 401) return null; // expired / revoked user token -> definitively rejected
+  if (!res.ok) throw new Error(`github /user ${res.status}`); // transient: do not treat as signed-out
   const u = await res.json();
   return { login: String(u.login), githubId: String(u.id) };
 }

@@ -18108,7 +18108,8 @@ var ghHeaders = (token) => ({ Authorization: `Bearer ${token}`, Accept: "applica
 var repoName = (login, upstream) => `${String(login).toLowerCase()}/${upstream.split("/")[1]}`;
 async function getAuthedUser({ token, fetch = globalThis.fetch }) {
   const res = await fetch(`${GH}/user`, { headers: ghHeaders(token) });
-  if (!res.ok) return null;
+  if (res.status === 401) return null;
+  if (!res.ok) throw new Error(`github /user ${res.status}`);
   const u = await res.json();
   return { login: String(u.login), githubId: String(u.id) };
 }
@@ -18576,6 +18577,12 @@ async function getOnboardingStatus(ctx) {
     return { appMode: false, signedIn: !!token, forkReady: true, installReady: true, activeStep: token ? "ready" : "signin", ready: !!token, reachedGithub: true };
   }
   const r = await probeReadiness({ token, appSlug: GITHUB_APP_SLUG, upstream: UPSTREAM_REPO, fetch: ctx.fetch ?? globalThis.fetch });
+  if (token && r.reachedGithub && !r.signedIn) {
+    try {
+      ctx.store?.set?.({ githubToken: null, identity: null });
+    } catch {
+    }
+  }
   const activeStep = nextStep(r);
   return {
     appMode: true,
