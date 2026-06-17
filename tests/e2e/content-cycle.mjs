@@ -88,8 +88,11 @@ async function authoringCycle() {
     // register the branch teardown FIRST so an orphan branch is cleaned even if the PR never opens. Do NOT
     // swallow the error: a failed delete must surface in cr.leaked, never be reported as scrubbed.
     reg.register(`branch ${branch}`, async () => { await gh.deleteRef(branch); });
-    await gh.putContent(postPath, { message: `e2e: smoke draft post (${RUN_ID})`, content: b64(postMd), branch });
-    await gh.putContent(commentPath, { message: `e2e: smoke draft comment (${RUN_ID})`, content: b64(commentMd), branch });
+    // [skip ci]: the harness opens a draft PR then closes it + deletes the branch within ~2s, so any
+    // pull_request CI run (Unit tests, Extension drift) would fail on a checkout of the deleted ref and email a
+    // spurious failure. The skip-ci marker in the HEAD commit makes GitHub skip those push/pull_request runs.
+    await gh.putContent(postPath, { message: `e2e: smoke draft post (${RUN_ID}) [skip ci]`, content: b64(postMd), branch });
+    await gh.putContent(commentPath, { message: `e2e: smoke draft comment (${RUN_ID}) [skip ci]`, content: b64(commentMd), branch });
     const pull = await gh.createPull({ title: `[e2e] smoke ${RUN_ID} (auto-closing)`, head: branch, base: 'main', body: 'SOW-035 automated E2E. Draft PR + status:draft content, auto-closed and branch deleted by the harness. Safe to ignore.', draft: true });
     prNumber = pull?.number ?? null;
     // register the PR close AFTER createRef/putContent, so cleanup (reverse order) closes the PR BEFORE deleting its branch.
