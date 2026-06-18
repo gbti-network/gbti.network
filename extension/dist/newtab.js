@@ -2782,17 +2782,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.render();
       this._load();
       this._timer = setInterval(() => {
-        if (!this._open) this._load();
+        if (!this._open && !this._hidden()) this._load();
       }, POLL_MS);
+      this._onVis = () => {
+        if (!this._hidden() && !this._open) this._load();
+      };
+      if (typeof document !== "undefined") document.addEventListener("visibilitychange", this._onVis);
       this._onDoc = (e) => {
         if (this._open && !this.contains(e.target)) this._close();
       };
       document.addEventListener("click", this._onDoc);
     }
+    _hidden() {
+      return typeof document !== "undefined" && document.hidden === true;
+    }
     disconnectedCallback() {
       super.disconnectedCallback();
       clearInterval(this._timer);
       if (this._onDoc) document.removeEventListener("click", this._onDoc);
+      if (this._onVis && typeof document !== "undefined") document.removeEventListener("visibilitychange", this._onVis);
     }
     _safe(fn) {
       return Promise.resolve().then(fn).catch(() => []);
