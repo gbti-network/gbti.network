@@ -4879,6 +4879,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  var RANK4 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var CSS11 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
@@ -4889,8 +4890,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
 
   /* reading view (a focused Share + its discussion) */
-  .back { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; margin:0 0 14px; }
+  .rtop { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 14px; }
+  .back { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; }
   .back:hover { border-color:var(--accent); color:var(--accent); }
+  .hide { border:1px solid var(--line); background:var(--panel); color:var(--danger); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; }
+  .hide:hover { border-color:var(--danger); }
+  .hide[disabled] { opacity:.6; cursor:default; }
   .reading .who { display:flex; align-items:baseline; gap:8px; }
   .reading .who .name { font-weight:700; font-size:14px; }
   .reading .who .when { color:var(--muted); font-size:12px; }
@@ -4952,9 +4957,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.set(this.css(CSS11) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
-        membership = (await this.client.status())?.membership ?? "unknown";
+        const st = await this.client.status();
+        membership = st?.membership ?? "unknown";
+        this._role = st?.role ?? "member";
       } catch {
         membership = "unknown";
+        this._role = "member";
       }
       this._locked = LOCKED3.has(membership);
       if (this._locked) return this._splash();
@@ -5007,7 +5015,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">🔗 ${esc(hostOf(share.url))}</a>` : "";
       const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}</div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
-      this.set(this.css(CSS11) + `<button class="back" type="button" data-back>&larr; Back to the stream</button>
+      const canHide = (RANK4[this._role] ?? 0) >= RANK4.moderator && share.author && share.id;
+      const mod = canHide ? `<button class="hide" type="button" data-hide>Hide Share</button>` : "";
+      this.set(this.css(CSS11) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime3(share.createdAt))}</span>${badge}</div>
         ${title}${desc}
@@ -5018,7 +5028,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._reading = null;
         this.render();
       });
+      this.on("[data-hide]", "click", () => this._hide(share));
       this._fillBody(share);
+    }
+    // Moderation: deplatform (status -> draft) this Share via the wired admin op; on success return to the stream,
+    // where it no longer appears. Fail-soft: a forbidden/error shows inline, the Share stays.
+    async _hide(share) {
+      if (typeof confirm === "function" && !confirm("Hide this Share? It is set to draft and removed from the stream for everyone.")) return;
+      const path = `members/${share.author}/shares/${share.id}.md`;
+      const btn = this.$("[data-hide]");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Hiding…";
+      }
+      try {
+        await this.client.admin("deplatform", { path });
+        this._reading = null;
+        this.reload();
+      } catch (err) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = err?.code === "forbidden" ? "Not permitted" : "Hide failed — retry";
+        }
+      }
     }
     async _fillBody(share) {
       const html = await this._resolveBody(share);
@@ -6279,7 +6311,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "settings", label: "Settings", tag: "gbti-settings" },
     { id: "admin", label: "Admin", tag: "gbti-admin", minRole: "moderator" }
   ];
-  var RANK4 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
+  var RANK5 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var GbtiApp = class extends GbtiElement {
     constructor() {
       super();
@@ -6296,7 +6328,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
         this.role = "member";
       }
-      const tabs = TABS3.filter((t) => !t.minRole || RANK4[this.role] >= RANK4[t.minRole]);
+      const tabs = TABS3.filter((t) => !t.minRole || RANK5[this.role] >= RANK5[t.minRole]);
       const active = tabs.find((t) => t.id === this.active) ? this.active : "author";
       this.set(
         this.css(`

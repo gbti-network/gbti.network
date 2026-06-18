@@ -10,6 +10,7 @@ import './gbti-card-list.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the shared thread engine (factored out of this file)
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
+const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -21,8 +22,12 @@ const CSS = `
   .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
 
   /* reading view (a focused Share + its discussion) */
-  .back { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; margin:0 0 14px; }
+  .rtop { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 14px; }
+  .back { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; }
   .back:hover { border-color:var(--accent); color:var(--accent); }
+  .hide { border:1px solid var(--line); background:var(--panel); color:var(--danger); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; }
+  .hide:hover { border-color:var(--danger); }
+  .hide[disabled] { opacity:.6; cursor:default; }
   .reading .who { display:flex; align-items:baseline; gap:8px; }
   .reading .who .name { font-weight:700; font-size:14px; }
   .reading .who .when { color:var(--muted); font-size:12px; }
@@ -82,7 +87,7 @@ class GbtiSharesFeed extends GbtiElement {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client to read Shares.</p>`); return; }
     this.set(this.css(CSS) + `<p class="muted">Loading the co-op stream…</p>`);
     let membership = 'unknown';
-    try { membership = (await this.client.status())?.membership ?? 'unknown'; } catch { membership = 'unknown'; }
+    try { const st = await this.client.status(); membership = st?.membership ?? 'unknown'; this._role = st?.role ?? 'member'; } catch { membership = 'unknown'; this._role = 'member'; }
     this._locked = LOCKED.has(membership);
     if (this._locked) return this._splash();
     try { this._items = (await this.client.listShares())?.items ?? []; }
@@ -125,7 +130,11 @@ class GbtiSharesFeed extends GbtiElement {
     const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">🔗 ${esc(hostOf(share.url))}</a>` : '';
     const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
     const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : '';
-    this.set(this.css(CSS) + `<button class="back" type="button" data-back>&larr; Back to the stream</button>
+    // SOW-041 #5: a moderator+ can HIDE a Share (set it to draft via the SOW-005 PR flow; it drops from the stream
+    // on the next read). UX-only gate; CODEOWNERS + the gate are the real boundary. Only members/<u>/shares/ paths.
+    const canHide = (RANK[this._role] ?? 0) >= RANK.moderator && share.author && share.id;
+    const mod = canHide ? `<button class="hide" type="button" data-hide>Hide Share</button>` : '';
+    this.set(this.css(CSS) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}
@@ -133,8 +142,25 @@ class GbtiSharesFeed extends GbtiElement {
         ${link}${tags}${discussion}
       </article>`);
     this.on('[data-back]', 'click', () => { this._reading = null; this.render(); });
+    this.on('[data-hide]', 'click', () => this._hide(share));
     // Resolve the Share's note body (decrypt for a members Share); the discussion loads itself.
     this._fillBody(share);
+  }
+
+  // Moderation: deplatform (status -> draft) this Share via the wired admin op; on success return to the stream,
+  // where it no longer appears. Fail-soft: a forbidden/error shows inline, the Share stays.
+  async _hide(share) {
+    if (typeof confirm === 'function' && !confirm('Hide this Share? It is set to draft and removed from the stream for everyone.')) return;
+    const path = `members/${share.author}/shares/${share.id}.md`;
+    const btn = this.$('[data-hide]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Hiding…'; }
+    try {
+      await this.client.admin('deplatform', { path });
+      this._reading = null;
+      this.reload();
+    } catch (err) {
+      if (btn) { btn.disabled = false; btn.textContent = (err?.code === 'forbidden') ? 'Not permitted' : 'Hide failed — retry'; }
+    }
   }
 
   async _fillBody(share) {
