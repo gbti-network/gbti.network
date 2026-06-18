@@ -17182,7 +17182,8 @@ var commentSchema = external_exports.object({
   targetSlug: external_exports.string(),
   // a share comment targets the composite "<author>/<shareId>"
   status: STATUS.default("published"),
-  visibility: VISIBILITY.default("public"),
+  visibility: VISIBILITY.default("members"),
+  // SOW-044: members-only + encrypted by default; only a from-the-author intro (authorNote) on a post/product/prompt may be public
   authorNote: external_exports.boolean().default(false),
   // the deliberate "From the author" note (pinned), vs an ordinary comment
   encryptedBody: external_exports.string().optional(),

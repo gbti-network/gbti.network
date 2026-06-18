@@ -17127,7 +17127,8 @@ var commentSchema = external_exports.object({
   targetSlug: external_exports.string(),
   // a share comment targets the composite "<author>/<shareId>"
   status: STATUS.default("published"),
-  visibility: VISIBILITY.default("public"),
+  visibility: VISIBILITY.default("members"),
+  // SOW-044: members-only + encrypted by default; only a from-the-author intro (authorNote) on a post/product/prompt may be public
   authorNote: external_exports.boolean().default(false),
   // the deliberate "From the author" note (pinned), vs an ordinary comment
   encryptedBody: external_exports.string().optional(),
@@ -18569,7 +18570,8 @@ async function publishComment(ctx, { targetType, targetSlug, body, authorNote, p
   const createdAt = ctx.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
   const cid = commentId(createdAt, commentSuffix());
   const input = { id: cid, targetType, targetSlug, createdAt, status: "published" };
-  if (visibility) input.visibility = visibility;
+  const isPublicIntro = authorNote === true && ["post", "product", "prompt"].includes(targetType);
+  input.visibility = visibility === "public" && isPublicIntro ? "public" : "members";
   if (authorNote) input.authorNote = true;
   if (parentId) input.parentId = parentId;
   let built;
@@ -18612,13 +18614,15 @@ async function editComment(ctx, { id, body, authorNote } = {}) {
   }
   const fm = existing.frontmatter ?? {};
   const updatedAt = ctx.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
+  const effAuthorNote = authorNote !== void 0 ? Boolean(authorNote) : Boolean(fm.authorNote);
+  const isPublicIntro = effAuthorNote && ["post", "product", "prompt"].includes(fm.targetType);
   const input = {
     id,
     targetType: fm.targetType,
     targetSlug: fm.targetSlug,
     status: fm.status ?? "published",
-    visibility: fm.visibility ?? "public",
-    authorNote: authorNote !== void 0 ? Boolean(authorNote) : Boolean(fm.authorNote),
+    visibility: fm.visibility === "public" && isPublicIntro ? "public" : "members",
+    authorNote: effAuthorNote,
     parentId: fm.parentId,
     createdAt: fm.createdAt,
     updatedAt

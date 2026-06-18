@@ -138,6 +138,41 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
     }
   }
 
+  // SOW-044: comments are members-only + encrypted. A `public` comment is allowed ONLY as a from-the-author intro
+  // (authorNote:true) on a post/product/prompt; a discussion reply, and ANY comment on a Share, must be members,
+  // with its body in an encrypted envelope (never committed plaintext). This backstops validate-content at BUILD
+  // time, because the Pages build runs verify:dist (this guard) but not check:content (validate-content).
+  {
+    const fmField = (txt, key) => {
+      const m = new RegExp('^' + key + ':\\s*"?([^"\\n]+?)"?\\s*$', 'm').exec(txt);
+      return m ? m[1].trim() : null;
+    };
+    const commentDirs = [path.join(root, 'house/comments')];
+    const membersDir = path.join(root, 'members');
+    if (fs.existsSync(membersDir)) {
+      for (const u of fs.readdirSync(membersDir)) {
+        try { if (fs.statSync(path.join(membersDir, u)).isDirectory()) commentDirs.push(path.join(membersDir, u, 'comments')); } catch { /* skip */ }
+      }
+    }
+    for (const cd of commentDirs) {
+      if (!fs.existsSync(cd)) continue;
+      for (const f of fs.readdirSync(cd)) {
+        if (!/\.(md|mdx)$/.test(f)) continue;
+        const rel = path.relative(root, path.join(cd, f));
+        const txt = fs.readFileSync(path.join(cd, f), 'utf8');
+        const vis = fmField(txt, 'visibility') ?? 'members';
+        const isPublicIntro = /^true$/i.test(String(fmField(txt, 'authorNote') ?? '')) && ['post', 'product', 'prompt'].includes(String(fmField(txt, 'targetType')));
+        const body = txt.replace(/^---\n[\s\S]*?\n---/, '').trim();
+        if (vis === 'public' && !isPublicIntro) {
+          errors.push(`${rel}: a public comment is only allowed as a from-the-author intro (authorNote on a post/product/prompt); a discussion or share comment must be visibility:members. See SOW-044.`);
+        }
+        if (vis === 'members' && body && !fmField(txt, 'encryptedBody')) {
+          errors.push(`${rel}: a members-only comment committed plaintext (no encryptedBody); its body must be encrypted via the client. See SOW-044.`);
+        }
+      }
+    }
+  }
+
   return { errors, notes };
 }
 

@@ -359,7 +359,12 @@ export async function publishComment(ctx, { targetType, targetSlug, body, author
   const createdAt = ctx.now?.() ?? new Date().toISOString();
   const cid = makeCommentId(createdAt, commentSuffix());
   const input = { id: cid, targetType, targetSlug, createdAt, status: 'published' };
-  if (visibility) input.visibility = visibility;
+  // SOW-044: comments are members-only + encrypted. The ONLY public comment is a from-the-author intro
+  // (authorNote) on a post/product/prompt; a discussion reply, and ANY comment on a Share, is always members. The
+  // server is the boundary: coerce anything that is not a legitimate public intro to members, regardless of what
+  // the client sent (a members body is then encrypted by planMemberFiles, never committed plaintext).
+  const isPublicIntro = authorNote === true && ['post', 'product', 'prompt'].includes(targetType);
+  input.visibility = (visibility === 'public' && isPublicIntro) ? 'public' : 'members';
   if (authorNote) input.authorNote = true;
   if (parentId) input.parentId = parentId;
   let built;
@@ -409,14 +414,20 @@ export async function editComment(ctx, { id, body, authorNote } = {}) {
   }
   const fm = existing.frontmatter ?? {};
   const updatedAt = ctx.now?.() ?? new Date().toISOString();
-  // Preserve identity-defining + audience fields; set updatedAt so the "edited . view history" link renders.
+  // SOW-044: re-derive visibility the SAME way publishComment does, so an edit can NEVER strand a comment as a
+  // public non-intro (or a public Share comment) with a plaintext body. A comment is public only as a
+  // from-the-author intro (authorNote) on a post/product/prompt; anything else is coerced to members and its body
+  // is re-encrypted on re-publish. Symmetric with publishComment (the CI guards are the backstop, not the boundary).
+  const effAuthorNote = authorNote !== undefined ? Boolean(authorNote) : Boolean(fm.authorNote);
+  const isPublicIntro = effAuthorNote && ['post', 'product', 'prompt'].includes(fm.targetType);
+  // Preserve identity-defining fields; set updatedAt so the "edited . view history" link renders.
   const input = {
     id,
     targetType: fm.targetType,
     targetSlug: fm.targetSlug,
     status: fm.status ?? 'published',
-    visibility: fm.visibility ?? 'public',
-    authorNote: authorNote !== undefined ? Boolean(authorNote) : Boolean(fm.authorNote),
+    visibility: (fm.visibility === 'public' && isPublicIntro) ? 'public' : 'members',
+    authorNote: effAuthorNote,
     parentId: fm.parentId,
     createdAt: fm.createdAt,
     updatedAt,

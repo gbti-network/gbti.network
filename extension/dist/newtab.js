@@ -4918,8 +4918,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   textarea { width: 100%; box-sizing: border-box; min-height: 90px; resize: vertical; font: inherit; font-size: 14px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); }
   textarea:focus { outline: none; border-color: var(--brand); }
   .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
-  select, label.chk { font: inherit; font-size: 13px; color: var(--muted); }
-  select { padding: 7px 9px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); }
+  label.chk { font: inherit; font-size: 13px; color: var(--muted); }
   .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
   button.post { font: inherit; font-weight: 700; font-size: 14px; padding: 8px 16px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; cursor: pointer; }
   button.cancel { font: inherit; font-size: 13px; background: none; border: 0; color: var(--muted); cursor: pointer; }
@@ -4991,13 +4990,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.on(".open", "click", () => this._form({ body: "", edit: false }));
     }
     _form({ body, edit }) {
-      const visibilityRow = edit ? "" : `<select aria-label="Visibility"><option value="public">Public</option><option value="members">Members only</option></select>`;
+      const isIntroTarget = ["post", "product", "prompt"].includes(this._target().type);
+      const noteRow = !edit && isIntroTarget ? `<label class="chk"><input type="checkbox" data-authornote /> Post as my public "from the author" note</label>` : "";
       this.set(this.css(CSS10) + `
       <div class="form">
         <textarea placeholder="Write your comment (markdown supported)…" maxlength="8000">${esc(body)}</textarea>
         <div class="row">
-          ${visibilityRow}
-          <label class="chk"><input type="checkbox" data-authornote /> Mark as my author note</label>
+          ${noteRow}
           <div class="actions">
             <span class="msg" aria-live="polite"></span>
             <button class="cancel" type="button">Cancel</button>
@@ -5016,11 +5015,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._say(msg, "Write something first.", "err");
         return;
       }
-      const visibility = this.$("select")?.value || "public";
-      const authorNote = !!this.$("[data-authornote]")?.checked;
+      const t = this._target();
+      const authorNote = !!this.$("[data-authornote]")?.checked && ["post", "product", "prompt"].includes(t.type);
+      const visibility = authorNote ? "public" : "members";
       wrap?.classList.add("busy");
       try {
-        const t = this._target();
         const res = await this.client.postComment({ targetType: t.type, targetSlug: t.slug, body, visibility, authorNote });
         this._done(msg, "Posted. It appears after the next build.", "gbti-comment-posted", res);
       } catch (err) {
@@ -5036,10 +5035,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._say(msg, "A comment cannot be empty.", "err");
         return;
       }
-      const authorNote = !!this.$("[data-authornote]")?.checked;
       wrap?.classList.add("busy");
       try {
-        const res = await this.client.editComment({ id: this._editId, body, authorNote });
+        const res = await this.client.editComment({ id: this._editId, body });
         this._done(msg, "Saved. The edit appears after the next build.", "gbti-comment-edited", res);
       } catch (err) {
         this._fail(msg, err);

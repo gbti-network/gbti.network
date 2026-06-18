@@ -24,8 +24,7 @@ const CSS = `
   textarea { width: 100%; box-sizing: border-box; min-height: 90px; resize: vertical; font: inherit; font-size: 14px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); }
   textarea:focus { outline: none; border-color: var(--brand); }
   .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
-  select, label.chk { font: inherit; font-size: 13px; color: var(--muted); }
-  select { padding: 7px 9px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); }
+  label.chk { font: inherit; font-size: 13px; color: var(--muted); }
   .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
   button.post { font: inherit; font-weight: 700; font-size: 14px; padding: 8px 16px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; cursor: pointer; }
   button.cancel { font: inherit; font-size: 13px; background: none; border: 0; color: var(--muted); cursor: pointer; }
@@ -79,13 +78,19 @@ class GbtiCommentBox extends GbtiElement {
   }
 
   _form({ body, edit }) {
-    const visibilityRow = edit ? '' : `<select aria-label="Visibility"><option value="public">Public</option><option value="members">Members only</option></select>`;
+    // SOW-044: comments are members-only by default and there is no free public/members choice. The ONLY public
+    // comment is a from-the-author intro (authorNote), and only on a post/product/prompt — never on a Share. So
+    // the author-note checkbox is the sole public path, shown only for those targets in compose mode. Edit mode
+    // preserves the comment's existing audience (it only changes the body).
+    const isIntroTarget = ['post', 'product', 'prompt'].includes(this._target().type);
+    const noteRow = (!edit && isIntroTarget)
+      ? `<label class="chk"><input type="checkbox" data-authornote /> Post as my public "from the author" note</label>`
+      : '';
     this.set(this.css(CSS) + `
       <div class="form">
         <textarea placeholder="Write your comment (markdown supported)…" maxlength="8000">${esc(body)}</textarea>
         <div class="row">
-          ${visibilityRow}
-          <label class="chk"><input type="checkbox" data-authornote /> Mark as my author note</label>
+          ${noteRow}
           <div class="actions">
             <span class="msg" aria-live="polite"></span>
             <button class="cancel" type="button">Cancel</button>
@@ -101,11 +106,13 @@ class GbtiCommentBox extends GbtiElement {
     const wrap = this.$('.form'); const msg = this.$('.msg');
     const body = (this.$('textarea')?.value || '').trim();
     if (!body) { this._say(msg, 'Write something first.', 'err'); return; }
-    const visibility = this.$('select')?.value || 'public';
-    const authorNote = !!this.$('[data-authornote]')?.checked;
+    const t = this._target();
+    // A checked author-note on a post/product/prompt is the public intro; everything else is members-only. The
+    // server (publishComment) coerces independently, so this only sets the UX-correct intent.
+    const authorNote = !!this.$('[data-authornote]')?.checked && ['post', 'product', 'prompt'].includes(t.type);
+    const visibility = authorNote ? 'public' : 'members';
     wrap?.classList.add('busy');
     try {
-      const t = this._target();
       const res = await this.client.postComment({ targetType: t.type, targetSlug: t.slug, body, visibility, authorNote });
       this._done(msg, 'Posted. It appears after the next build.', 'gbti-comment-posted', res);
     } catch (err) { this._fail(msg, err); wrap?.classList.remove('busy'); }
@@ -115,10 +122,11 @@ class GbtiCommentBox extends GbtiElement {
     const wrap = this.$('.form'); const msg = this.$('.msg');
     const body = (this.$('textarea')?.value || '').trim();
     if (!body) { this._say(msg, 'A comment cannot be empty.', 'err'); return; }
-    const authorNote = !!this.$('[data-authornote]')?.checked;
     wrap?.classList.add('busy');
     try {
-      const res = await this.client.editComment({ id: this._editId, body, authorNote });
+      // SOW-044: editing only changes the body; the comment's audience (public intro vs members) is preserved by
+      // editComment (it defaults a missing authorNote/visibility to the existing values), so it never re-leaks.
+      const res = await this.client.editComment({ id: this._editId, body });
       this._done(msg, 'Saved. The edit appears after the next build.', 'gbti-comment-edited', res);
     } catch (err) { this._fail(msg, err); wrap?.classList.remove('busy'); }
   }

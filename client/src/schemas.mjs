@@ -216,7 +216,7 @@ export const commentSchema = z.object({
   targetType: z.enum(['post', 'product', 'prompt', 'share']), // SOW-032: 'share' enables the extension Shares discussion
   targetSlug: z.string(), // a share comment targets the composite "<author>/<shareId>"
   status: STATUS.default('published'),
-  visibility: VISIBILITY.default('public'),
+  visibility: VISIBILITY.default('members'), // SOW-044: members-only + encrypted by default; only a from-the-author intro (authorNote) on a post/product/prompt may be public
   authorNote: z.boolean().default(false), // the deliberate "From the author" note (pinned), vs an ordinary comment
   encryptedBody: z.string().optional(), // SOW-016: a members comment encrypts its body to this .enc
   parentId: z.string().optional(), // threaded reply (still one file each)

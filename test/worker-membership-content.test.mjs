@@ -106,6 +106,22 @@ test('decrypt: a TRIAL member CANNOT read a non-Share members-only asset (post s
   assert.equal(r.status, 403);
 });
 
+// SOW-044: a member comment encrypts under AAD `comment:<id>:body`, which is NOT a `share:` asset, so a comment
+// stays PAID-ONLY to read. This pins the owner decision that limited-access trial members cannot read member
+// comments (they read the Share body but not its members-only replies), and guards the carve-out from drift.
+test('decrypt: a TRIAL member CANNOT read a member COMMENT (aad comment:... stays paid-only)', async () => {
+  const envelope = await encryptAsset({ plaintext: 'a members reply', key: KEY, assetId: 'comment:20260610120000-x:body', kid: '1' });
+  const r = await membershipDecrypt(POST('decrypt', 'Bearer g', envelope), ENV(), deps('1', () => trialing));
+  assert.equal(r.status, 403);
+});
+
+test('decrypt: a PAID member CAN read a member COMMENT (any effective-paid caller, not the author only)', async () => {
+  const envelope = await encryptAsset({ plaintext: 'a members reply', key: KEY, assetId: 'comment:20260610120000-x:body', kid: '1' });
+  const r = await membershipDecrypt(POST('decrypt', 'Bearer g', envelope), ENV(), deps('1', () => paid));
+  assert.equal(r.status, 200);
+  assert.equal(r.body.text, 'a members reply');
+});
+
 test('decrypt: an EXPIRED/none account cannot read a Share (the extension shows its lock splash)', async () => {
   const envelope = await encryptAsset({ plaintext: 'a quick find', key: KEY, assetId: 'share:20260610-x:body', kid: '1' });
   const r = await membershipDecrypt(POST('decrypt', 'Bearer g', envelope), ENV(), deps('9', () => null));

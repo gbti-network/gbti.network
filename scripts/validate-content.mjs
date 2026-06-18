@@ -177,6 +177,19 @@ function checkContent(file, owner, type) {
     if (type === 'comment' && fmc.targetType === 'share' && !/^[a-z0-9][a-z0-9-]*\/[0-9]{14}-[a-z0-9-]+$/.test(String(fmc.targetSlug || ''))) {
       errors.push(`${rel}: a share comment targetSlug must be "<author>/<shareId>" (e.g. alice/20260615120000-x). See SOW-032.`);
     }
+    // SOW-044: comments are members-only + encrypted. A `public` comment is allowed ONLY as a from-the-author
+    // intro (authorNote:true) on a post/product/prompt; a discussion reply, and ANY comment on a Share, must be
+    // members. A members comment must carry its body in an encrypted envelope, never as committed plaintext.
+    if (type === 'comment') {
+      const cvis = fmc.visibility ?? 'members';
+      const isPublicIntro = fmc.authorNote === true && ['post', 'product', 'prompt'].includes(fmc.targetType);
+      if (cvis === 'public' && !isPublicIntro) {
+        errors.push(`${rel}: a public comment is only allowed as a from-the-author intro (authorNote:true on a post/product/prompt). A discussion comment, and any comment on a share, must be visibility:members. See SOW-044.`);
+      }
+      if (cvis === 'members' && bodyOf(txt).trim() && !fmc.encryptedBody) {
+        errors.push(`${rel}: a members-only comment must encrypt its body to an encryptedBody .enc, never commit plaintext. Publish via the client. See SOW-044.`);
+      }
+    }
   }
 }
 

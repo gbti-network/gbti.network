@@ -270,7 +270,7 @@ const comment = defineCollection({
     targetType: z.enum(['post', 'product', 'prompt', 'share']), // SOW-032: 'share' enables the extension Shares discussion
     targetSlug: z.string(), // for a share comment this is the composite "<author>/<shareId>" (member-unambiguous)
     status: STATUS.default('published'),
-    visibility: VISIBILITY.default('public'),
+    visibility: VISIBILITY.default('members'), // SOW-044: comments are members-only + encrypted by default; only a from-the-author intro (authorNote) on a post/product/prompt may be public
     authorNote: z.boolean().default(false), // SOW-014: the author's deliberate "From the author" note (pinned regardless of date), vs an ordinary conversational comment. Exactly one per target by the content owner.
     encryptedBody: z.string().optional(), // SOW-016: a visibility:members comment encrypts its body to this .enc; renders as a locked placeholder
     parentId: z.string().optional(),

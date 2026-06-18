@@ -127,6 +127,54 @@ test('SOW-016: a key value written into a .enc file in dist is still caught', ()
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+// SOW-044: comments are members-only + encrypted; the only public comment is a from-the-author intro.
+const writeComment = (root, rel, fm) => {
+  fs.mkdirSync(path.join(root, path.dirname(rel)), { recursive: true });
+  const body = fm.__body ?? '';
+  const front = Object.entries(fm).filter(([k]) => k !== '__body').map(([k, v]) => `${k}: ${v}`).join('\n');
+  fs.writeFileSync(path.join(root, rel), `---\n${front}\n---\n${body}\n`);
+};
+
+test('SOW-044: a public discussion comment (no authorNote) fails the build', () => {
+  const root = tmpRoot();
+  writeComment(root, 'members/alice/comments/c1.md', { type: 'comment', visibility: 'public', targetType: 'post', __body: 'a public reply' });
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /a public comment is only allowed as a from-the-author intro/.test(e)), errors.join('; '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('SOW-044: a public comment on a SHARE fails the build even with authorNote', () => {
+  const root = tmpRoot();
+  writeComment(root, 'members/alice/comments/c2.md', { type: 'comment', visibility: 'public', authorNote: true, targetType: 'share', __body: 'reply' });
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /a public comment is only allowed as a from-the-author intro/.test(e)), errors.join('; '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('SOW-044: a from-the-author intro (authorNote on a product) is allowed public', () => {
+  const root = tmpRoot();
+  writeComment(root, 'house/comments/intro-radle.md', { type: 'comment', visibility: 'public', authorNote: true, targetType: 'product', __body: 'why I built this' });
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.deepEqual(errors, []);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('SOW-044: a members comment committed with plaintext (no encryptedBody) fails the build', () => {
+  const root = tmpRoot();
+  writeComment(root, 'members/alice/comments/c3.md', { type: 'comment', visibility: 'members', targetType: 'post', __body: 'secret reply text' });
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /committed plaintext \(no encryptedBody\)/.test(e)), errors.join('; '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('SOW-044: a members comment with an empty stub + encryptedBody passes (the encrypted normal case)', () => {
+  const root = tmpRoot();
+  writeComment(root, 'members/alice/comments/c4.md', { type: 'comment', visibility: 'members', targetType: 'post', encryptedBody: 'members/alice/_enc/comment-c4-body.enc' });
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.deepEqual(errors, []);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test('a MEMBER_CONTENT_KEY value present in dist is caught', () => {
   const root = tmpRoot();
   const key = 'A'.repeat(43) + '=';
