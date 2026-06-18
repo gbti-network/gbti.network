@@ -10,6 +10,10 @@ import { toMs } from './all-merge.mjs';
 // SOW-043 P5: every outbound news link carries these so referred traffic is attributable to the extension.
 export const UTM = Object.freeze({ utm_source: 'gbti-network', utm_medium: 'extension', utm_campaign: 'news' });
 
+// The news worker serves publishedAt/fetchedAt as EPOCH SECONDS (per gbti-news-api INTEGRATION.md), so convert to
+// ms for the card-list's time helpers (which treat a bare number as ms). A missing/zero value -> null.
+const secToMs = (s) => (typeof s === 'number' && s > 0 ? s * 1000 : null);
+
 /** Append the GBTI UTM params to an outbound news link (preserving any existing query). A non-URL falls through. */
 export function utmLink(link, params = UTM) {
   if (typeof link !== 'string' || !link) return '';
@@ -36,7 +40,7 @@ export function newsToItem(n = {}) {
     thumb: null,
     category: n.category ?? null,
     excerpt: n.summary || '',
-    createdAt: n.publishedAt ?? n.fetchedAt ?? null,
+    createdAt: secToMs(n.publishedAt) ?? secToMs(n.fetchedAt), // epoch seconds -> ms (the feed serves seconds)
     openHref: n.link ? utmLink(n.link) : null,
     link: n.link ?? null,
   };

@@ -68,6 +68,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     listShareComments: ({ targetSlug, limit } = {}) => request('GET', `/api/share-comments${qs({ targetSlug, limit })}`), // SOW-032: a Share's discussion -> { items: [comment summaries] }
     listComments: ({ targetType, targetSlug, limit } = {}) => request('GET', `/api/comments${qs({ targetType, targetSlug, limit })}`), // SOW-041: the generic thread for any content type
     discordInvite: () => request('GET', '/api/discord-invite'), // on-demand Discord invite -> { url, source }
+    getNews: ({ category, since, limit } = {}) => request('GET', `/api/news${qs({ category, since, limit })}`), // SOW-043: members-only news -> { items, updatedAt }
     postComment: (b) => request('POST', '/api/comment', b), // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
     editComment: (b) => request('POST', '/api/comment/edit', b), // SOW-027: { id, body, authorNote? } -> { id, edited }
     getComment: ({ id }) => request('GET', `/api/comment${qs({ id })}`), // SOW-027: edit prefill -> { path, frontmatter, body }

@@ -17,6 +17,7 @@ import {
 } from './member-activity-client.mjs';
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
+import { workerGetNews, NewsClientError } from './news-client.mjs'; // SOW-043: members-only news proxy
 import { probeReadiness } from './github-app-probe.mjs';
 import {
   nextStep as onboardingNextStep, STEPS as ONBOARDING_STEPS, forkFullName,
@@ -526,6 +527,20 @@ export async function setFollow(ctx, { username, on = true } = {}) {
  * leaves it); this returns { url, source }. requireIdentity only; the Worker re-verifies the token. Failures map
  * to an OperationError so the welcome view can fall back to the static DISCORD_INVITE_URL.
  */
+// SOW-043: the members-only news feed (proxied through the signup Worker, which holds NEWS_API_KEY). Effective-paid
+// gated server-side; a non-paid/locked caller -> membership-required. Returns { items, updatedAt }.
+export async function getNews(ctx, { category, since, limit } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try {
+    return await workerGetNews({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, category, since, limit });
+  } catch (err) {
+    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', 'Sign in to read the news.');
+    if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError('membership-required', 'News is a members-only perk. Upgrade at https://gbti.network.');
+    throw new OperationError('news-failed', err?.message || 'the news request failed');
+  }
+}
+
 export async function getDiscordInvite(ctx) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');

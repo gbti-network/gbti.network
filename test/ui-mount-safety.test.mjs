@@ -12,6 +12,15 @@ import { GbtiBrowse } from '../client-ui/src/elements/gbti-browse.mjs';
 import { GbtiWorkspace } from '../client-ui/src/elements/gbti-workspace.mjs';
 import { GbtiActivityBell } from '../client-ui/src/elements/gbti-activity-bell.mjs';
 import { GbtiAccount } from '../client-ui/src/elements/gbti-account.mjs';
+import { GbtiNews } from '../client-ui/src/elements/gbti-news.mjs';
+
+// SOW-043: the news element renders the inert (no-client) + loading/locked paths without throwing.
+test('gbti-news: render() on a fresh (un-init) instance does not throw', () => {
+  const el = new GbtiNews();
+  assert.doesNotThrow(() => el.render());          // no client -> open-in-client notice
+  el._state = 'locked'; assert.doesNotThrow(() => el.render());
+  el._state = 'ready'; el._items = []; assert.doesNotThrow(() => el.render());
+});
 
 // SOW-040: the account element renders the inert (no-client) + loading paths without throwing.
 test('gbti-account: render() on a fresh (un-init) instance does not throw', () => {

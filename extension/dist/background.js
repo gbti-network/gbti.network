@@ -17639,12 +17639,12 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
     /** Open a PR upstream. head is "forkOwner:branch". Classic: POST directly with the member token. App mode
      *  (SOW-026): delegate to the Worker (the fork-scoped token cannot open a PR into the canonical repo); the
      *  Worker opens it with GBTI's App installation and dedups an existing PR (returns { already: true }). */
-    async openPull({ title, head, base: base2, body }) {
+    async openPull({ title, head, base: base3, body }) {
       if (appMode) {
-        const p2 = await callWorker("POST", "/membership/open-pr", { title, head, base: base2, body });
+        const p2 = await callWorker("POST", "/membership/open-pr", { title, head, base: base3, body });
         return { number: p2.number ?? null, html_url: p2.html_url ?? null, already: p2.already === true };
       }
-      const p = await req("POST", `/repos/${upstream}/pulls`, { title, head, base: base2, body });
+      const p = await req("POST", `/repos/${upstream}/pulls`, { title, head, base: base3, body });
       return { number: p.number, html_url: p.html_url };
     },
     /** Find an OPEN upstream PR for a given head ("forkOwner:branch"), or null. App mode (SOW-026): the
@@ -17827,8 +17827,8 @@ function defaultTitle(change) {
 async function publishContent({ repo, change, message, title, body }) {
   if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
   const fork = await repo.ensureFork();
-  const base2 = await repo.getDefaultBranch(repo.upstream);
-  const baseSha = await repo.getBranchSha(fork.full_name, base2);
+  const base3 = await repo.getDefaultBranch(repo.upstream);
+  const baseSha = await repo.getBranchSha(fork.full_name, base3);
   const branch = branchName(change.type, change.slug);
   await repo.ensureBranch(fork.full_name, branch, baseSha);
   const existingSha = await repo.getFileSha(fork.full_name, change.path, branch);
@@ -17843,15 +17843,15 @@ async function publishContent({ repo, change, message, title, body }) {
   if (existing) {
     return { prNumber: existing.number, prUrl: existing.html_url, branch, fork: fork.full_name, updated: true };
   }
-  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base2, body: body ?? "" });
+  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base3, body: body ?? "" });
   return { prNumber: pull.number, prUrl: pull.html_url, branch, fork: fork.full_name, updated: false };
 }
 async function publishFiles({ repo, branch, files, message, title, body }) {
   if (!branch) throw new Error("publishFiles: a branch name is required");
   if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
   const fork = await repo.ensureFork();
-  const base2 = await repo.getDefaultBranch(repo.upstream);
-  const baseSha = await repo.getBranchSha(fork.full_name, base2);
+  const base3 = await repo.getDefaultBranch(repo.upstream);
+  const baseSha = await repo.getBranchSha(fork.full_name, base3);
   await repo.ensureBranch(fork.full_name, branch, baseSha);
   for (const f2 of files) {
     const existingSha = await repo.getFileSha(fork.full_name, f2.path, branch);
@@ -17869,7 +17869,7 @@ async function publishFiles({ repo, branch, files, message, title, body }) {
   const head = `${fork.owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });
   if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork: fork.full_name, updated: true };
-  const pull = await repo.openPull({ title: title ?? message ?? "Update", head, base: base2, body: body ?? "" });
+  const pull = await repo.openPull({ title: title ?? message ?? "Update", head, base: base3, body: body ?? "" });
   return { prNumber: pull.number, prUrl: pull.html_url, branch, fork: fork.full_name, updated: false };
 }
 
@@ -18113,6 +18113,25 @@ async function getDiscordInvite({ token, signupBase, fetch = globalThis.fetch })
   return data;
 }
 
+// client/src/news-client.mjs
+var NewsClientError = class extends Error {
+};
+var base2 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var qs = (params = {}) => {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v != null && v !== "") p.set(k, String(v));
+  const s = p.toString();
+  return s ? `?${s}` : "";
+};
+async function workerGetNews({ token, signupBase, fetch = globalThis.fetch, category, since, limit } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const res = await fetch(`${base2(signupBase)}/membership/news${qs({ category, since, limit })}`, { headers: { Authorization: "Bearer " + token } });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("news requires a paid membership");
+  if (!res.ok) throw new NewsClientError("news unavailable (" + res.status + ")");
+  const data = await res.json();
+  return { items: Array.isArray(data?.items) ? data.items : [], updatedAt: data?.updatedAt ?? null };
+}
+
 // client/src/github-app-probe.mjs
 var GH = "https://api.github.com";
 var ghHeaders = (token) => ({ Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "gbti-network" });
@@ -18175,8 +18194,8 @@ var deviceVerificationUrl = () => "https://github.com/login/device";
 var forkUrl = () => `https://github.com/${UPSTREAM_REPO}/fork`;
 var manageInstallsUrl = () => "https://github.com/settings/installations";
 function appInstallUrl({ targetId } = {}) {
-  const base2 = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`;
-  return targetId ? `${base2}?suggested_target_id=${encodeURIComponent(targetId)}` : base2;
+  const base3 = `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new`;
+  return targetId ? `${base3}?suggested_target_id=${encodeURIComponent(targetId)}` : base3;
 }
 var forkFullName = (login) => `${String(login || "").toLowerCase()}/${UPSTREAM_REPO.split("/")[1]}`;
 var STEPS = {
@@ -18704,6 +18723,17 @@ async function setFollow2(ctx, { username, on = true } = {}) {
     return r?.following ?? [];
   } catch (err) {
     throw mapFollowsError(err);
+  }
+}
+async function getNews(ctx, { category, since, limit } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerGetNews({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, category, since, limit });
+  } catch (err) {
+    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", "Sign in to read the news.");
+    if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError("membership-required", "News is a members-only perk. Upgrade at https://gbti.network.");
+    throw new OperationError("news-failed", err?.message || "the news request failed");
   }
 }
 async function getDiscordInvite2(ctx) {
@@ -19437,6 +19467,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(method === "POST" ? await setFollow2(ctx, body) : await getFollows2(ctx));
       case "/api/discord-invite":
         return ok(await getDiscordInvite2(ctx));
+      case "/api/news":
+        return ok(await getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || void 0 }));
       case "/api/billing":
         return ok(getBilling(ctx));
       case "/api/referral":

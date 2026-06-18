@@ -9,7 +9,7 @@ import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs';
 
 // Map the active browse tab to its rail key so the left rail highlights the right destination. A bare browse.html
 // (no tab) lands on the All directory (SOW-042), so default the highlight to 'all' too.
-const RAIL_KEY = { all: 'all', post: 'articles', product: 'products', prompt: 'prompts', share: 'shares' };
+const RAIL_KEY = { all: 'all', post: 'articles', product: 'products', prompt: 'prompts', share: 'shares', news: 'news' };
 const railFor = () => RAIL_KEY[parseBrowseHash(typeof location !== 'undefined' ? location.hash : '').tab] || 'all';
 
 /** Relay a /api/* request to the background worker (replaces a real network fetch). Mirrors shares.mjs. */

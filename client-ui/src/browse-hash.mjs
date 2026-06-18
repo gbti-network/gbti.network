@@ -6,7 +6,7 @@
 // SOW-042: 'all' is the cross-type directory tab (browse.html#tab=all). buildReadHash is never called with 'all'
 // (feed rows always deep-link a concrete type), so its 'post' fallback is unaffected; parseBrowseHash recognizing
 // 'all' lets the rail's "All" link + the gbti-browse All tab round-trip.
-const TAB_IDS = new Set(['all', 'post', 'product', 'prompt', 'share']);
+const TAB_IDS = new Set(['all', 'post', 'product', 'prompt', 'share', 'news']);
 
 /** Build the location.hash fragment (WITHOUT the leading '#') for opening `path` of `type` in the reader.
  *  Falls back to a tab-only hash when there is no path (so the row still lands on the right Browse tab). */

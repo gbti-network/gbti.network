@@ -13,7 +13,7 @@ import { glyphFor } from '../cat-glyph.mjs';
 import { resolveAsset } from '../assets.mjs';
 
 const MODES = new Set(['compact', 'detailed', 'card']);
-const TYPE_LABEL = { post: 'Article', product: 'Product', prompt: 'Prompt', share: 'Share' };
+const TYPE_LABEL = { post: 'Article', product: 'Product', prompt: 'Prompt', share: 'Share', news: 'News' };
 const lc = (s) => String(s || '').toLowerCase();
 const authorName = (a) => (lc(a) === 'gbti' || lc(a) === 'house' ? 'GBTI Network' : a);
 

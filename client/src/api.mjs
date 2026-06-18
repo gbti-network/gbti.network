@@ -31,6 +31,7 @@ import {
   getFollows,
   setFollow,
   getDiscordInvite,
+  getNews,
   getOnboardingStatus,
   getOverridesRoster,
   getOpenPulls,
@@ -101,6 +102,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/follows') return run(() => getFollows(ctx)); // SOW-023
   if (method === 'POST' && pathname === '/api/follows') return run(() => setFollow(ctx, body ?? {})); // SOW-023
   if (method === 'GET' && pathname === '/api/discord-invite') return run(() => getDiscordInvite(ctx)); // on-demand Discord invite
+  if (method === 'GET' && pathname === '/api/news') return run(() => getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || undefined })); // SOW-043 members-only news
   if (method === 'GET' && pathname === '/api/onboarding-status') return run(() => getOnboardingStatus(ctx)); // SOW-026
   if (method === 'GET' && pathname === '/api/prs') return run(() => listPRs(ctx));
   if (method === 'GET' && pathname === '/api/pr-status') return run(() => prStatus(ctx, { number: query.number }));

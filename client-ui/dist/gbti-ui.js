@@ -2064,7 +2064,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     heart: '<path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
     users: '<circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
     skill: '<path d="M13 2.5 6 13.2h5v8.3l7-10.7h-5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
-    puzzle: '<path d="M9 4.5a1.8 1.8 0 0 1 3.6 0c0 .5.4.9.9.9H16a1 1 0 0 1 1 1v2.5c0 .5.4.9.9.9a1.8 1.8 0 0 1 0 3.6c-.5 0-.9.4-.9.9V17a1 1 0 0 1-1 1h-2.6c-.5 0-.9.4-.9.9a1.8 1.8 0 0 1-3.6 0c0-.5-.4-.9-.9-.9H5a1 1 0 0 1-1-1v-2.4c0-.5-.4-.9-.9-.9a1.8 1.8 0 0 1 0-3.6c.5 0 .9-.4.9-.9V6.4a1 1 0 0 1 1-1h3.1c.5 0 .9-.4.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>'
+    puzzle: '<path d="M9 4.5a1.8 1.8 0 0 1 3.6 0c0 .5.4.9.9.9H16a1 1 0 0 1 1 1v2.5c0 .5.4.9.9.9a1.8 1.8 0 0 1 0 3.6c-.5 0-.9.4-.9.9V17a1 1 0 0 1-1 1h-2.6c-.5 0-.9.4-.9.9a1.8 1.8 0 0 1-3.6 0c0-.5-.4-.9-.9-.9H5a1 1 0 0 1-1-1v-2.4c0-.5-.4-.9-.9-.9a1.8 1.8 0 0 1 0-3.6c.5 0 .9-.4.9-.9V6.4a1 1 0 0 1 1-1h3.1c.5 0 .9-.4.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+    news: '<path d="M4 5h13a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18 9h2a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2M7 9h7M7 12.5h7M7 16h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
   };
   var CAT_GLYPH = {
     ai: "spark",
@@ -2097,8 +2098,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     skill: "#b0316f"
   };
   var OTHER_ACCENT = "#5b6472";
-  var TYPE_GLYPH = { share: "coin", post: "pencil", product: "box", prompt: "spark" };
-  var TYPE_ACCENT = { share: "#b3791f", post: "#555a66", product: "#138178", prompt: "#1f9e5f" };
+  var TYPE_GLYPH = { share: "coin", post: "pencil", product: "box", prompt: "spark", news: "news" };
+  var TYPE_ACCENT = { share: "#b3791f", post: "#555a66", product: "#138178", prompt: "#1f9e5f", news: "#3a6ea5" };
   function glyphFor(category, type) {
     const key = String(category || "").toLowerCase();
     if (CAT_GLYPH[key]) return { svg: GLYPH_SVG[CAT_GLYPH[key]], accent: CAT_ACCENT[key] };
@@ -2118,7 +2119,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-card-list.mjs
   var MODES = /* @__PURE__ */ new Set(["compact", "detailed", "card"]);
-  var TYPE_LABEL2 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
+  var TYPE_LABEL2 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share", news: "News" };
   var lc = (s) => String(s || "").toLowerCase();
   var authorName = (a) => lc(a) === "gbti" || lc(a) === "house" ? "GBTI Network" : a;
   function relTime(v) {
@@ -6106,7 +6107,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/browse-hash.mjs
-  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share"]);
+  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
   function buildReadHash(type, path) {
     const t = TAB_IDS.has(type) ? type : "post";
     return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
@@ -6363,8 +6364,117 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-activity-bell", GbtiActivityBell);
 
-  // client-ui/src/elements/gbti-reader.mjs
+  // client-ui/src/news.mjs
+  var UTM = Object.freeze({ utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "news" });
+  var secToMs = (s) => typeof s === "number" && s > 0 ? s * 1e3 : null;
+  function utmLink(link, params = UTM) {
+    if (typeof link !== "string" || !link) return "";
+    try {
+      const u = new URL(link);
+      for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+      return u.toString();
+    } catch {
+      return link;
+    }
+  }
+  function newsToItem(n = {}) {
+    return {
+      type: "news",
+      kind: "news",
+      supplementary: true,
+      guid: n.guid ?? null,
+      title: n.title || n.source || "News",
+      author: n.source || "News",
+      source: n.source || null,
+      visibility: "members",
+      thumb: null,
+      category: n.category ?? null,
+      excerpt: n.summary || "",
+      createdAt: secToMs(n.publishedAt) ?? secToMs(n.fetchedAt),
+      // epoch seconds -> ms (the feed serves seconds)
+      openHref: n.link ? utmLink(n.link) : null,
+      link: n.link ?? null
+    };
+  }
+
+  // client-ui/src/elements/gbti-news.mjs
   var SITE8 = "https://gbti.network";
+  var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE8}/membership/">Become a member</a> to unlock the news feed.</div>`;
+  var CSS21 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .head { margin:0 0 14px; }
+  .head h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
+  .head .sub { margin:0; color:var(--muted); font-size:13px; }
+  .muted { color:var(--muted); font-size:14px; }
+  .nudge { padding:16px; border:1.5px dashed var(--line); border-radius:12px; background:var(--panel); font-size:14px; color:var(--muted); }
+  .nudge a { color:var(--brand); font-weight:600; }
+  button.retry { font:inherit; font-size:13px; font-weight:600; margin-left:8px; padding:5px 11px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); cursor:pointer; }
+`;
+  var GbtiNews = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback();
+      this._state = "loading";
+      this.render();
+      this._load();
+    }
+    async _load() {
+      if (!this.client) {
+        this._state = "inert";
+        this.render();
+        return;
+      }
+      try {
+        const { items } = await this.client.getNews({ limit: 60 });
+        this._items = (Array.isArray(items) ? items : []).map(newsToItem);
+        this._state = "ready";
+      } catch (err) {
+        this._state = err?.code === "membership-required" ? "locked" : err?.code === "not-authenticated" ? "signin" : "error";
+      }
+      this.render();
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS21) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        return;
+      }
+      const head = `<div class="head"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>`;
+      if (this._state === "loading") {
+        this.set(this.css(CSS21) + head + `<p class="muted">Loading the latest news…</p>`);
+        return;
+      }
+      if (this._state === "signin") {
+        this.set(this.css(CSS21) + head + nudge("Sign in to read the members-only news feed."));
+        return;
+      }
+      if (this._state === "locked") {
+        this.set(this.css(CSS21) + head + nudge("The news feed is a members-only perk."));
+        return;
+      }
+      if (this._state === "error") {
+        this.set(this.css(CSS21) + head + `<p class="muted">Could not load the news right now.<button class="retry" data-retry type="button">Retry</button></p>`);
+        this.on("[data-retry]", "click", () => {
+          this._state = "loading";
+          this.render();
+          this._load();
+        });
+        return;
+      }
+      const items = this._items || [];
+      if (!items.length) {
+        this.set(this.css(CSS21) + head + `<p class="muted">No news right now. Check back soon.</p>`);
+        return;
+      }
+      this.set(this.css(CSS21) + head + `<div data-list></div>`);
+      const list = document.createElement("gbti-card-list");
+      list.mode = "detailed";
+      list.items = items;
+      this.$("[data-list]")?.replaceChildren(list);
+    }
+  };
+  define("gbti-news", GbtiNews);
+
+  // client-ui/src/elements/gbti-reader.mjs
+  var SITE9 = "https://gbti.network";
   var authorName4 = (a) => a === "gbti" ? "GBTI Network" : a;
   function targetSlugFor(it) {
     if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
@@ -6380,8 +6490,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE8}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
-  var CSS21 = `
+  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE9}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var CSS22 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   article { max-width:680px; margin:0 auto; }
   h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
@@ -6443,11 +6553,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS21));
+        this.set(this.css(CSS22));
         return;
       }
       const t = TYPE_LABEL3[it.type] || it.type || "";
-      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Open link</a>` : "" : it.url ? `<a class="view" href="${esc(SITE8 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Open link</a>` : "" : it.url ? `<a class="view" href="${esc(SITE9 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName4(it.author))}</span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}</div>`;
       const coverUrl = resolveAsset(it.thumb);
@@ -6458,22 +6568,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
       const slug = targetSlugFor(it);
       const discussion = this._html !== null && slug ? `<div class="discussion-wrap"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
-      this.set(this.css(CSS21) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>${discussion}`);
+      this.set(this.css(CSS22) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>${discussion}`);
     }
   };
   define("gbti-reader", GbtiReader);
 
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE9 = "https://gbti.network";
+  var SITE10 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
     { id: "product", label: "Products", json: "products-index.json" },
     { id: "prompt", label: "Prompts", json: "prompts-index.json" },
-    { id: "share", label: "Shares" }
+    { id: "share", label: "Shares" },
+    { id: "news", label: "News" }
+    // SOW-043: a self-loading members-only feed (not a per-type index)
   ];
   var CONTENT_TYPES = ["post", "product", "prompt"];
-  var CSS22 = `
+  var CSS23 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -6501,7 +6613,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     connectedCallback() {
       const { tab, read } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
       this._tab = tab && TABS2.some((t) => t.id === tab) ? tab : "all";
-      this._openPath = this._tab !== "share" && this._tab !== "all" ? read : null;
+      this._openPath = this._tab !== "share" && this._tab !== "all" && this._tab !== "news" ? read : null;
       this._cache = {};
       this._shares = null;
       this._membership = null;
@@ -6514,7 +6626,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._onHash = () => {
         const { tab: tab2, read: read2 } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
         const t = tab2 && TABS2.some((x) => x.id === tab2) ? tab2 : this._tab;
-        if (read2 && t !== "share" && t !== "all") {
+        if (read2 && t !== "share" && t !== "all" && t !== "news") {
           this._tab = t;
           this._reading = (this._cache[t] || []).find((x) => x.path === read2) || { type: t, path: read2 };
           this.render();
@@ -6553,7 +6665,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE9}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE10}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
@@ -6593,7 +6705,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS22) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS23) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -6606,7 +6718,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS22) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS23) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();
@@ -6622,6 +6734,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!host) return;
       if (this._tab === "share") {
         host.replaceChildren(document.createElement("gbti-shares-feed"));
+        return;
+      }
+      if (this._tab === "news") {
+        host.replaceChildren(document.createElement("gbti-news"));
         return;
       }
       const items = this._tab === "all" ? this._allItems() : this._cache?.[this._tab];
@@ -6760,6 +6876,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-041: the generic thread for any content type
       discordInvite: () => request("GET", "/api/discord-invite"),
       // on-demand Discord invite -> { url, source }
+      getNews: ({ category, since, limit } = {}) => request("GET", `/api/news${qs({ category, since, limit })}`),
+      // SOW-043: members-only news -> { items, updatedAt }
       postComment: (b) => request("POST", "/api/comment", b),
       // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
       editComment: (b) => request("POST", "/api/comment/edit", b),

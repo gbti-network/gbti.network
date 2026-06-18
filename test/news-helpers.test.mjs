@@ -4,7 +4,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { UTM, utmLink, newsToItem, blendNews } from '../client-ui/src/news.mjs';
 
-const news = (over = {}) => ({ guid: 'g1', source: 'Example', title: 'A headline', link: 'https://ex.com/a', summary: 'A blurb', category: 'ai', publishedAt: '2026-06-16T00:00:00Z', fetchedAt: '2026-06-16T01:00:00Z', ...over });
+// The news worker serves publishedAt/fetchedAt as EPOCH SECONDS.
+const SEC = (iso) => Math.floor(Date.parse(iso) / 1000);
+const news = (over = {}) => ({ guid: 'g1', source: 'Example', title: 'A headline', link: 'https://ex.com/a', summary: 'A blurb', category: 'ai', publishedAt: SEC('2026-06-16T00:00:00Z'), fetchedAt: SEC('2026-06-16T01:00:00Z'), ...over });
 
 test('utmLink appends the GBTI UTM params, preserving existing query', () => {
   const u = new URL(utmLink('https://ex.com/a?x=1'));
@@ -34,7 +36,7 @@ test('newsToItem projects onto the card shape: members + supplementary, UTM open
   assert.equal(it.author, 'Example');
   assert.equal(it.category, 'ai');
   assert.equal(it.excerpt, 'A blurb');
-  assert.equal(it.createdAt, '2026-06-16T00:00:00Z');
+  assert.equal(it.createdAt, Date.parse('2026-06-16T00:00:00Z')); // epoch seconds -> ms
   assert.match(it.openHref, /utm_campaign=news/);
   assert.equal(it.guid, 'g1');
 });
@@ -51,7 +53,7 @@ test('blendNews keeps content primary, flags news supplementary, interleaves new
     { type: 'post', title: 'old post', createdAt: '2026-01-01T00:00:00Z' },
     { type: 'post', title: 'new post', createdAt: '2026-06-17T00:00:00Z' },
   ];
-  const items = [news({ guid: 'n1', publishedAt: '2026-06-10T00:00:00Z' }), news({ guid: 'n2', publishedAt: '2026-06-18T00:00:00Z' })];
+  const items = [news({ guid: 'n1', publishedAt: SEC('2026-06-10T00:00:00Z') }), news({ guid: 'n2', publishedAt: SEC('2026-06-18T00:00:00Z') })];
   const out = blendNews(content, items, { cap: 5 });
   assert.equal(out.length, 4);
   // newest-first across both kinds

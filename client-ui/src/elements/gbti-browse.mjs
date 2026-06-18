@@ -7,6 +7,7 @@ import { parseBrowseHash } from '../browse-hash.mjs';
 import { mergeAll, canSeeShares } from '../all-merge.mjs'; // SOW-042: the shared All directory merge + Shares policy
 import './gbti-reader.mjs';
 import './gbti-shares-feed.mjs';
+import './gbti-news.mjs'; // SOW-043: the members-only news section (its own self-loading tab)
 import './gbti-card-list.mjs'; // SOW-041: the shared content-item presentation
 
 const SITE = 'https://gbti.network';
@@ -17,6 +18,7 @@ const TABS = [
   { id: 'product', label: 'Products', json: 'products-index.json' },
   { id: 'prompt', label: 'Prompts', json: 'prompts-index.json' },
   { id: 'share', label: 'Shares' },
+  { id: 'news', label: 'News' }, // SOW-043: a self-loading members-only feed (not a per-type index)
 ];
 const CONTENT_TYPES = ['post', 'product', 'prompt'];
 const CSS = `
@@ -54,7 +56,7 @@ class GbtiBrowse extends GbtiElement {
     const { tab, read } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
     // SOW-042: a bare browse.html (e.g. the site header's "Browse the co-op") lands on the All directory.
     this._tab = tab && TABS.some((t) => t.id === tab) ? tab : 'all';
-    this._openPath = (this._tab !== 'share' && this._tab !== 'all') ? read : null; // shares + the All grid have no path-addressed reader item
+    this._openPath = (this._tab !== 'share' && this._tab !== 'all' && this._tab !== 'news') ? read : null; // shares/all/news have no path-addressed reader item
     this._cache = {};
     this._shares = null; // SOW-042: raw Shares for the All tab, fetched once (member-gated)
     this._membership = null; // SOW-042: effective status for the Shares-omission policy
@@ -72,7 +74,7 @@ class GbtiBrowse extends GbtiElement {
     this._onHash = () => {
       const { tab, read } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
       const t = tab && TABS.some((x) => x.id === tab) ? tab : this._tab;
-      if (read && t !== 'share' && t !== 'all') { this._tab = t; this._reading = (this._cache[t] || []).find((x) => x.path === read) || { type: t, path: read }; this.render(); this._ensure(t); return; }
+      if (read && t !== 'share' && t !== 'all' && t !== 'news') { this._tab = t; this._reading = (this._cache[t] || []).find((x) => x.path === read) || { type: t, path: read }; this.render(); this._ensure(t); return; }
       if (t !== this._tab || this._reading) { this._tab = t; this._reading = null; this.render(); this._ensureTab(t); }
     };
     if (typeof window !== 'undefined') window.addEventListener('hashchange', this._onHash);
@@ -156,6 +158,7 @@ class GbtiBrowse extends GbtiElement {
     const host = this.$('[data-body]');
     if (!host) return;
     if (this._tab === 'share') { host.replaceChildren(document.createElement('gbti-shares-feed')); return; }
+    if (this._tab === 'news') { host.replaceChildren(document.createElement('gbti-news')); return; } // SOW-043: self-loading members-only feed
     const items = this._tab === 'all' ? this._allItems() : this._cache?.[this._tab];
     if (!items) { host.innerHTML = `<p class="empty">Loading...</p>`; return; }
     const list = document.createElement('gbti-card-list');

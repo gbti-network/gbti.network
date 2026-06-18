@@ -16,6 +16,7 @@ export const GLYPH_SVG = {
   users: '<circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   skill: '<path d="M13 2.5 6 13.2h5v8.3l7-10.7h-5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
   puzzle: '<path d="M9 4.5a1.8 1.8 0 0 1 3.6 0c0 .5.4.9.9.9H16a1 1 0 0 1 1 1v2.5c0 .5.4.9.9.9a1.8 1.8 0 0 1 0 3.6c-.5 0-.9.4-.9.9V17a1 1 0 0 1-1 1h-2.6c-.5 0-.9.4-.9.9a1.8 1.8 0 0 1-3.6 0c0-.5-.4-.9-.9-.9H5a1 1 0 0 1-1-1v-2.4c0-.5-.4-.9-.9-.9a1.8 1.8 0 0 1 0-3.6c.5 0 .9-.4.9-.9V6.4a1 1 0 0 1 1-1h3.1c.5 0 .9-.4.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  news: '<path d="M4 5h13a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18 9h2a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2M7 9h7M7 12.5h7M7 16h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
 };
 
 // Top-level category key -> glyph key (mirrors PromptCard.astro CAT_GLYPH, plus skill + imagegen).
@@ -43,8 +44,8 @@ export function catGlyph(category) {
 
 // SOW-041: a Share carries no category (it has tags), so its glyph falls back on its TYPE. Other content types
 // keep their category glyph; the type fallback only fires when the category is missing/unknown.
-const TYPE_GLYPH = { share: 'coin', post: 'pencil', product: 'box', prompt: 'spark' };
-const TYPE_ACCENT = { share: '#b3791f', post: '#555a66', product: '#138178', prompt: '#1f9e5f' };
+const TYPE_GLYPH = { share: 'coin', post: 'pencil', product: 'box', prompt: 'spark', news: 'news' };
+const TYPE_ACCENT = { share: '#b3791f', post: '#555a66', product: '#138178', prompt: '#1f9e5f', news: '#3a6ea5' };
 
 /** Resolve an item's fallback glyph by category first, then by type (for Shares + any category-less item). */
 export function glyphFor(category, type) {
