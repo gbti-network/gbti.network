@@ -41,6 +41,12 @@ test('newsToItem projects onto the card shape: members + supplementary, UTM open
   assert.equal(it.guid, 'g1');
 });
 
+test('newsToItem prefers the AI digest over the feed excerpt, falling back when absent (SOW-046 A)', () => {
+  assert.equal(newsToItem({ ...news(), digest: 'A crisp AI summary.' }).excerpt, 'A crisp AI summary.');
+  assert.equal(newsToItem({ ...news(), digest: '' }).excerpt, 'A blurb'); // empty digest -> feed excerpt
+  assert.equal(newsToItem(news()).excerpt, 'A blurb'); // no digest -> feed excerpt
+});
+
 test('newsToItem degrades gracefully (no link, no title)', () => {
   const it = newsToItem({ source: 'Src' });
   assert.equal(it.title, 'Src');     // falls back to source

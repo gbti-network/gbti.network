@@ -93,7 +93,8 @@ export function parseFeed(xml, sourceId) {
       rawGuid: text(it.guid) || text(it['dc:identifier']),
       title: it.title,
       link: text(it.link),
-      summary: it.description ?? it['content:encoded'] ?? it.summary,
+      summary: it.description ?? it.summary,
+      content: it['content:encoded'] ?? it.description ?? it.summary,
       date: it.pubDate ?? it['dc:date'] ?? it.published,
     }, sourceId)).filter(Boolean);
   }
@@ -107,6 +108,7 @@ export function parseFeed(xml, sourceId) {
       title: e.title,
       link: atomLink(e.link),
       summary: e.summary ?? e.content,
+      content: e.content ?? e.summary,
       date: e.published ?? e.updated,
     }, sourceId)).filter(Boolean);
   }
@@ -114,8 +116,13 @@ export function parseFeed(xml, sourceId) {
   return [];
 }
 
+// How much feed-provided article text to keep for AI summarization (transient; never persisted). Bounds the AI
+// prompt size (Neurons) while giving the model real article text when the feed inlines it (<content:encoded> /
+// Atom <content>), instead of only the short display excerpt.
+const MAX_CONTENT_CHARS = 4000;
+
 /** Build a normalized item; drops items with no usable link+title (they can't be deduped or shown). */
-function normalize({ rawGuid, title, link, summary, date }, sourceId) {
+function normalize({ rawGuid, title, link, summary, content, date }, sourceId) {
   const cleanLink = text(link).trim();
   const cleanTitle = cleanText(title, 300);
   if (!cleanLink || !cleanTitle) return null;
@@ -125,7 +132,10 @@ function normalize({ rawGuid, title, link, summary, date }, sourceId) {
     source: sourceId,
     title: cleanTitle,
     link: cleanLink,
-    summary: cleanText(summary, 500),
+    summary: cleanText(summary ?? content, 500),
+    // TRANSIENT (stripped before persisting in ingest): the fuller article text for AI summarization at ingest.
+    // Prefers the feed's full content over the short excerpt, so many feeds get a real summary with NO extra fetch.
+    contentText: cleanText(content ?? summary, MAX_CONTENT_CHARS),
     publishedAt: toEpochSeconds(date),
   };
 }

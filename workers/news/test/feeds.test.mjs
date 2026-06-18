@@ -44,10 +44,28 @@ test('parseFeed handles RSS 2.0', () => {
     title: 'First & Best',
     link: 'https://ex.com/1',
     summary: 'Hello world',
+    contentText: 'Hello world', // SOW-046 A: transient article text for the AI summarizer (here = the description)
     publishedAt: toEpochSeconds('Mon, 15 Jun 2026 12:00:00 GMT'),
   });
   // guid element with attributes still resolves to its text node
   assert.equal(items[1].guid, 'guid-2');
+});
+
+test('parseFeed captures full <content:encoded> as contentText while summary stays the short excerpt (SOW-046 A)', () => {
+  const long = 'Word '.repeat(200).trim(); // ~1000 chars, well over the 500-char excerpt cap
+  const RSS_FULL = `<?xml version="1.0"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel>
+  <item>
+    <title>Full body</title>
+    <link>https://ex.com/full</link>
+    <description>Short blurb</description>
+    <content:encoded><![CDATA[<p>${long}</p>]]></content:encoded>
+  </item>
+</channel></rss>`;
+  const [it] = parseFeed(RSS_FULL, 'ex');
+  assert.equal(it.summary, 'Short blurb'); // display excerpt prefers the short <description>
+  assert.ok(it.contentText.length > 500, 'contentText carries the fuller article body for the AI'); // from content:encoded
+  assert.ok(it.contentText.startsWith('Word Word'));
 });
 
 test('parseFeed handles Atom and picks the alternate link href', () => {

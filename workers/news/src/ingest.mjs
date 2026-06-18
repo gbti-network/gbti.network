@@ -9,7 +9,7 @@
 import { SOURCES } from '../config/sources.mjs';
 import { DEFAULT_CATEGORY } from '../config/categories.mjs';
 import { parseFeed } from './feeds.mjs';
-import { classifyItem, keywordCategory } from './classify.mjs';
+import { classifyItem, analyzeItem, keywordCategory } from './classify.mjs';
 import { loadIndex, loadGuids, loadDay, dayOf, commitIngest } from './store.mjs';
 
 const FETCH_TIMEOUT_MS = 8000;
@@ -94,17 +94,19 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
     fresh.push({ ...it, fetchedAt: now });
   }
 
-  // 3. Classify fresh items up to the per-run AI budget; the overflow gets a cheap label now.
+  // 3. Classify + SUMMARIZE fresh items up to the per-run AI budget (one combined AI call each, SOW-046 A); the
+  //    overflow gets a cheap keyword label + no digest now (the feed excerpt is its display fallback). The
+  //    transient contentText (the article body fed to the summarizer) is STRIPPED here so it is never persisted.
   const toClassify = fresh.slice(0, maxClassify);
   const classified = await mapWithConcurrency(toClassify, CLASSIFY_CONCURRENCY, async (it) => {
-    const { category, classified: ok } = await classifyItem(env, it);
-    return { ...it, category, classified: ok };
+    const { category, classified: ok, digest, summarized } = await analyzeItem(env, it);
+    const { contentText, ...rest } = it;
+    return { ...rest, category, classified: ok, summarized, ...(digest ? { digest } : {}) };
   });
-  const overflowFresh = fresh.slice(toClassify.length).map((it) => ({
-    ...it,
-    category: keywordCategory(it) || DEFAULT_CATEGORY,
-    classified: false,
-  }));
+  const overflowFresh = fresh.slice(toClassify.length).map((it) => {
+    const { contentText, ...rest } = it;
+    return { ...rest, category: keywordCategory(it) || DEFAULT_CATEGORY, classified: false, summarized: false };
+  });
   const freshItems = [...classified, ...overflowFresh];
 
   // 4. If AI budget remains, retry today's still-unclassified items (recorded as category changes).
@@ -134,6 +136,7 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
     parsed: parsed.length,
     new: fresh.length,
     classifiedOk: classified.filter((it) => it.classified).length,
+    summarizedOk: classified.filter((it) => it.summarized).length,
     reclassified: updatedItems.length,
     overflow: overflowFresh.length,
     total: updatedIndex.total,

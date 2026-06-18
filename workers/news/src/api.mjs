@@ -27,6 +27,7 @@ export function publicItem(i) {
     title: i.title,
     link: i.link,
     summary: i.summary,
+    digest: i.digest, // SOW-046 A: the AI-generated 1-2 sentence summary (absent until analyzed; falls back to summary)
     category: i.category,
     publishedAt: i.publishedAt,
     fetchedAt: i.fetchedAt,

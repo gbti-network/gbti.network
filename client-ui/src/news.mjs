@@ -54,7 +54,7 @@ export function newsToItem(n = {}) {
     visibility: 'members',
     thumb: null,
     category: n.category ?? null,
-    excerpt: n.summary || '',
+    excerpt: n.digest || n.summary || '', // SOW-046 A: prefer the AI summary; fall back to the feed excerpt
     createdAt: secToMs(n.publishedAt) ?? secToMs(n.fetchedAt), // epoch seconds -> ms (the feed serves seconds)
     openHref: n.link ? utmLink(n.link) : null,
     link: n.link ?? null,
