@@ -7148,14 +7148,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var ico = (k) => SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : "";
   var RAIL = [
     { group: "Feeds" },
-    { key: "activity", href: "newtab.html", ico: "activity", nm: "Activity" },
+    { key: "activity", href: "newtab.html", ico: "activity", nm: "Activity", sub: "The latest across the co-op" },
     { group: "Browse" },
-    { key: "all", href: "browse.html#tab=all", ico: "grid", nm: "All", sub: "Everything in one place" },
-    { key: "articles", href: "browse.html#tab=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
-    { key: "products", href: "browse.html#tab=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
-    { key: "prompts", href: "browse.html#tab=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
-    { key: "shares", href: "browse.html#tab=share", ico: "coin", nm: "Shares", sub: "The co-op stream" },
-    { key: "news", href: "browse.html#tab=news", ico: "news", nm: "News", sub: "Curated, members-only" },
+    { key: "all", href: "newtab.html#type=all", ico: "grid", nm: "All", sub: "Everything in one place" },
+    { key: "articles", href: "newtab.html#type=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
+    { key: "products", href: "newtab.html#type=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
+    { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
+    { key: "shares", href: "newtab.html#type=share", ico: "coin", nm: "Shares", sub: "The co-op stream" },
+    { key: "news", href: "newtab.html#type=news", ico: "news", nm: "News", sub: "Curated, members-only" },
     { div: true },
     { key: "workspace", href: "workspace.html", ico: "grid", nm: "My workspace", sub: "Content + pull requests" }
   ];

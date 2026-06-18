@@ -53,6 +53,12 @@
 
     .nt-feed { margin-top: 16px; }
     .muted { color: var(--fg-mute); font-size: 14px; }
+
+    /* In-place reader: a content/Share item opens here (gbti-reader) instead of navigating away; Back restores
+       the feed. The feed IS the browser now, so there is no separate Browse page to bounce through. */
+    [data-feedview][hidden], [data-readerview][hidden] { display: none; }
+    .reader-back { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 18px; padding: 8px 14px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); font-family: var(--f-sans); font-weight: 600; font-size: 13px; cursor: pointer; }
+    .reader-back:hover { border-color: var(--green); color: var(--green-700); }
     /* The feed rows/cards render inside <gbti-card-list> (SOW-042), whose styles are shadow-encapsulated; the
        per-mode + atom CSS that used to live here moved into client-ui/src/elements/gbti-card-list.mjs. */
 
@@ -74,6 +80,7 @@
 <body>
   <div class="nt" data-shell data-active="activity">
     <main class="nt-main">
+      <div data-feedview>
       <a class="setup" data-setup href="#">
         <span class="s-txt" data-setup-txt></span>
         <span class="s-go" data-setup-go>Get started</span>
@@ -117,6 +124,13 @@
         <span class="ft-txt">Chrome shows its own footer at the very bottom of every new tab. It is a Chrome setting, not part of this extension. To hide it, right-click that footer and choose "Hide footer on New Tab page" (it stays hidden after that).</span>
         <button class="ft-x" type="button" data-footertip-dismiss>Got it</button>
       </div>
+      </div><!-- /[data-feedview] -->
+
+      <!-- The in-place reader: a content/Share item opens here; Back restores the feed (no Browse page). -->
+      <section data-readerview hidden>
+        <button class="reader-back" data-reader-back type="button">&larr; Back to the feed</button>
+        <div data-reader></div>
+      </section>
     </main>
 
     <!-- SOW-018: lapsed-member lock splash (shown only when html[data-locked]) -->

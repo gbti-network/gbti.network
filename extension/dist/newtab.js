@@ -2373,28 +2373,6 @@
     return LOCKED_MEMBERSHIP.has(membership);
   }
 
-  // client-ui/src/browse-hash.mjs
-  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
-  function buildReadHash(type, path) {
-    const t = TAB_IDS.has(type) ? type : "post";
-    return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
-  }
-  function parseBrowseHash(hash) {
-    const s = String(hash || "").replace(/^#/, "");
-    const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
-    const readM = s.match(/(?:^|&)read=([^&]+)/);
-    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
-    let read = null;
-    if (readM) {
-      try {
-        read = decodeURIComponent(readM[1]);
-      } catch {
-        read = readM[1];
-      }
-    }
-    return { tab, read };
-  }
-
   // client-ui/src/all-merge.mjs
   var SHARE_OK = /* @__PURE__ */ new Set(["paid", "trialing"]);
   function canSeeShares(membership) {
@@ -2770,6 +2748,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return { replies: now, following: now, review: now, prsSeen };
   }
 
+  // client-ui/src/browse-hash.mjs
+  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
+  function buildReadHash(type, path) {
+    const t = TAB_IDS.has(type) ? type : "post";
+    return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
+  }
+  function parseBrowseHash(hash) {
+    const s = String(hash || "").replace(/^#/, "");
+    const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+    const readM = s.match(/(?:^|&)read=([^&]+)/);
+    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
+    let read = null;
+    if (readM) {
+      try {
+        read = decodeURIComponent(readM[1]);
+      } catch {
+        read = readM[1];
+      }
+    }
+    return { tab, read };
+  }
+
   // client-ui/src/elements/gbti-activity-bell.mjs
   var SITE = "https://gbti.network";
   var POLL_MS = 12e4;
@@ -3035,14 +3035,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var ico = (k) => SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : "";
   var RAIL = [
     { group: "Feeds" },
-    { key: "activity", href: "newtab.html", ico: "activity", nm: "Activity" },
+    { key: "activity", href: "newtab.html", ico: "activity", nm: "Activity", sub: "The latest across the co-op" },
     { group: "Browse" },
-    { key: "all", href: "browse.html#tab=all", ico: "grid", nm: "All", sub: "Everything in one place" },
-    { key: "articles", href: "browse.html#tab=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
-    { key: "products", href: "browse.html#tab=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
-    { key: "prompts", href: "browse.html#tab=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
-    { key: "shares", href: "browse.html#tab=share", ico: "coin", nm: "Shares", sub: "The co-op stream" },
-    { key: "news", href: "browse.html#tab=news", ico: "news", nm: "News", sub: "Curated, members-only" },
+    { key: "all", href: "newtab.html#type=all", ico: "grid", nm: "All", sub: "Everything in one place" },
+    { key: "articles", href: "newtab.html#type=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
+    { key: "products", href: "newtab.html#type=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
+    { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
+    { key: "shares", href: "newtab.html#type=share", ico: "coin", nm: "Shares", sub: "The co-op stream" },
+    { key: "news", href: "newtab.html#type=news", ico: "news", nm: "News", sub: "Curated, members-only" },
     { div: true },
     { key: "workspace", href: "workspace.html", ico: "grid", nm: "My workspace", sub: "Content + pull requests" }
   ];
@@ -7420,7 +7420,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   })();
   var TYPE_FILTERS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
+  var typeFromHash = () => {
+    const m = /(?:^|[#&])type=([a-z]+)/.exec(typeof location !== "undefined" && location.hash || "");
+    return m && TYPE_FILTERS.has(m[1]) ? m[1] : null;
+  };
   var TYPE = (() => {
+    const h = typeFromHash();
+    if (h) return h;
     try {
       const t = localStorage.getItem("gbti-nt-type");
       return TYPE_FILTERS.has(t) ? t : "all";
@@ -7434,17 +7440,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var NEWS = null;
   var NEWS_LOADED = false;
   var FEED_CAP = 40;
-  var hrefFor = (e) => e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE12}${e.url}`;
   var toCardItem = (e) => ({
-    type: e.type,
-    title: e.title,
-    author: e.author,
-    visibility: e.visibility,
-    thumb: e.thumb,
-    category: e.category,
+    ...e,
+    // pass the reader fields through: gbti-reader.open needs `path` for content, author+id+body for a Share
     excerpt: e.excerpt || "",
-    createdAt: e.createdAt ?? e.publishedAt,
-    openHref: e.type === "share" ? "browse.html#tab=share" : hrefFor(e)
+    createdAt: e.createdAt ?? e.publishedAt
+    // No openHref: content + Shares open IN PLACE in the page reader (the card emits card-open). Only News keeps an
+    // openHref (its outbound UTM link, set by newsToItem), so the feed is the one browser — no Browse-page bounce.
   });
   function renderFeed(filter = "") {
     const feed = $("[data-feed]");
@@ -7480,13 +7482,54 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const list = document.createElement("gbti-card-list");
     list.mode = MODE;
     list.items = rows;
+    list.addEventListener("card-open", (e) => openReader(e.detail?.item));
     feed.replaceChildren(list);
+  }
+  function openReader(item) {
+    if (!item) return;
+    const fv = $("[data-feedview]");
+    const rv = $("[data-readerview]");
+    const host = $("[data-reader]");
+    if (!fv || !rv || !host) return;
+    const r = document.createElement("gbti-reader");
+    host.replaceChildren(r);
+    r.open(item);
+    fv.hidden = true;
+    rv.hidden = false;
+    window.scrollTo(0, 0);
+  }
+  function closeReader() {
+    const fv = $("[data-feedview]");
+    const rv = $("[data-readerview]");
+    const host = $("[data-reader]");
+    if (rv) rv.hidden = true;
+    if (host) host.replaceChildren();
+    if (fv) fv.hidden = false;
   }
   function syncModeButtons() {
     document.querySelectorAll(".nt-mode").forEach((b) => b.classList.toggle("on", b.dataset.mode === MODE));
   }
   function syncTypeButtons() {
     document.querySelectorAll(".nt-type").forEach((b) => b.classList.toggle("on", b.dataset.type === TYPE));
+  }
+  async function selectType(next) {
+    if (!TYPE_FILTERS.has(next) || next === TYPE) return;
+    TYPE = next;
+    try {
+      localStorage.setItem("gbti-nt-type", TYPE);
+    } catch (e) {
+    }
+    syncTypeButtons();
+    closeReader();
+    const needsShares = (TYPE === "all" || TYPE === "share") && !SHARES_LOADED;
+    const needsNews = (TYPE === "all" || TYPE === "news") && !NEWS_LOADED;
+    if (needsShares || needsNews) {
+      const feed = $("[data-feed]");
+      if (feed) feed.innerHTML = '<p class="muted">Loading...</p>';
+      if (needsShares) await loadShares();
+      if (needsNews) await loadNews();
+    }
+    renderFeed($("[data-filter]")?.value || "");
   }
   async function loadShares() {
     SHARES_LOADED = true;
@@ -7621,7 +7664,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function init() {
     mountPageClient();
-    initShell({ active: "activity" });
+    const RAIL_KEY = { all: "all", post: "articles", product: "products", prompt: "prompts", share: "shares", news: "news" };
+    initShell({ active: typeFromHash() ? RAIL_KEY[TYPE] : "activity" });
     const greetEl = $("[data-greeting]");
     if (greetEl) greetEl.textContent = greeting();
     const dateEl = $("[data-date]");
@@ -7647,26 +7691,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       syncModeButtons();
       renderFeed($("[data-filter]")?.value || "");
     }));
-    document.querySelectorAll(".nt-type").forEach((b) => b.addEventListener("click", async () => {
-      const next = b.dataset.type;
-      if (!TYPE_FILTERS.has(next) || next === TYPE) return;
-      TYPE = next;
-      try {
-        localStorage.setItem("gbti-nt-type", TYPE);
-      } catch (e) {
-      }
-      syncTypeButtons();
-      const needsShares = (TYPE === "all" || TYPE === "share") && !SHARES_LOADED;
-      const needsNews = (TYPE === "all" || TYPE === "news") && !NEWS_LOADED;
-      if (needsShares || needsNews) {
-        const feed = $("[data-feed]");
-        if (feed) feed.innerHTML = '<p class="muted">Loading...</p>';
-        if (needsShares) await loadShares();
-        if (needsNews) await loadNews();
-      }
-      renderFeed($("[data-filter]")?.value || "");
-    }));
+    document.querySelectorAll(".nt-type").forEach((b) => b.addEventListener("click", () => selectType(b.dataset.type)));
+    window.addEventListener("hashchange", () => {
+      const t = typeFromHash();
+      if (t) selectType(t);
+    });
     $("[data-filter]")?.addEventListener("input", (e) => renderFeed(e.target.value));
+    $("[data-reader-back]")?.addEventListener("click", closeReader);
     document.querySelectorAll("[data-tab]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const view = btn.getAttribute("data-tab");

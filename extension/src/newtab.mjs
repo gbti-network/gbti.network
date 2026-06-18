@@ -5,7 +5,6 @@
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
 import { isLockedMembership } from '../../client/src/membership.mjs';
-import { buildReadHash } from '../../client-ui/src/browse-hash.mjs';
 import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { initShell } from './shell.mjs';
@@ -39,7 +38,11 @@ let MODE = (() => { try { return localStorage.getItem('gbti-nt-mode') || 'compac
 // activity-index with the member's Shares + members-only News (capped river). MEMBERSHIP gates both; SHARES + NEWS
 // are the raw lists, loaded once on demand. News is PAID-only; Shares are paid-or-trial.
 const TYPE_FILTERS = new Set(['all', 'post', 'product', 'prompt', 'share', 'news']);
-let TYPE = (() => { try { const t = localStorage.getItem('gbti-nt-type'); return TYPE_FILTERS.has(t) ? t : 'all'; } catch (e) { return 'all'; } })();
+// The feed IS the unified content browser; the rail's Browse items are shortcuts that open it pre-filtered via
+// the hash (newtab.html#type=<X>). The hash wins over the persisted choice on load, so the rail always lands on
+// the right filter, and a hashchange (clicking a rail item while already here) switches the filter live.
+const typeFromHash = () => { const m = /(?:^|[#&])type=([a-z]+)/.exec((typeof location !== 'undefined' && location.hash) || ''); return m && TYPE_FILTERS.has(m[1]) ? m[1] : null; };
+let TYPE = (() => { const h = typeFromHash(); if (h) return h; try { const t = localStorage.getItem('gbti-nt-type'); return TYPE_FILTERS.has(t) ? t : 'all'; } catch (e) { return 'all'; } })();
 let MEMBERSHIP = 'unknown';
 let SHARES = null;
 let SHARES_LOADED = false;
@@ -47,26 +50,20 @@ let NEWS = null;
 let NEWS_LOADED = false;
 const FEED_CAP = 40; // the Activity feed is a capped river (Browse "All" is the uncapped directory)
 
-// SOW-031/042: each feed item opens IN the extension reader (browse.html deep-link), falling back to the site URL
-// only when the entry carries no repo path (older index, defensive). buildReadHash takes the RAW type. The per-mode
-// row/card markup + its atoms (thumb, chip, lock, meta) now live in the shared <gbti-card-list> (SOW-042), so the
-// activity feed and Browse render through ONE source of truth (the owner's "two stylings" complaint).
-const hrefFor = (e) => (e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url}`);
+// The per-mode row/card markup + its atoms (thumb, chip, lock, meta) live in the shared <gbti-card-list>
+// (SOW-042), so the activity feed and Browse render through ONE source of truth. Content + Shares open IN PLACE
+// in the page reader (openReader); only News carries an outbound openHref (its UTM source link).
 
 // Project a merged feed item (an activity-index entry OR a Share, both already carrying a normalized shape) onto the
 // <gbti-card-list> item shape. The RAW type ('post'/'share') is preserved so the card glyph + label resolve the same
 // way Browse does. A content item deep-links into the in-extension reader; a Share has no path-addressed reader, so
 // it routes to the Shares stream tab.
 const toCardItem = (e) => ({
-  type: e.type,
-  title: e.title,
-  author: e.author,
-  visibility: e.visibility,
-  thumb: e.thumb,
-  category: e.category,
+  ...e, // pass the reader fields through: gbti-reader.open needs `path` for content, author+id+body for a Share
   excerpt: e.excerpt || '',
   createdAt: e.createdAt ?? e.publishedAt,
-  openHref: e.type === 'share' ? 'browse.html#tab=share' : hrefFor(e),
+  // No openHref: content + Shares open IN PLACE in the page reader (the card emits card-open). Only News keeps an
+  // openHref (its outbound UTM link, set by newsToItem), so the feed is the one browser — no Browse-page bounce.
 });
 
 function renderFeed(filter = '') {
@@ -116,7 +113,33 @@ function renderFeed(filter = '') {
   const list = document.createElement('gbti-card-list');
   list.mode = MODE;
   list.items = rows; // already card items (toCardItem / newsToItem)
+  list.addEventListener('card-open', (e) => openReader(e.detail?.item)); // content + Shares open IN PLACE
   feed.replaceChildren(list);
+}
+
+/** Open a content/Share item IN the page reader (gbti-reader handles post/product/prompt/share), hiding the feed;
+ *  Back restores it. The feed IS the browser now, so there is no Browse-page bounce. News items are <a> links
+ *  (outbound UTM) and never reach here. gbti-reader is defined by mountPageClient (client-ui), called in init(). */
+function openReader(item) {
+  if (!item) return;
+  const fv = $('[data-feedview]');
+  const rv = $('[data-readerview]');
+  const host = $('[data-reader]');
+  if (!fv || !rv || !host) return;
+  const r = document.createElement('gbti-reader');
+  host.replaceChildren(r);
+  r.open(item);
+  fv.hidden = true;
+  rv.hidden = false;
+  window.scrollTo(0, 0);
+}
+function closeReader() {
+  const fv = $('[data-feedview]');
+  const rv = $('[data-readerview]');
+  const host = $('[data-reader]');
+  if (rv) rv.hidden = true;
+  if (host) host.replaceChildren();
+  if (fv) fv.hidden = false;
 }
 
 /** Reflect the active view mode onto the switcher buttons. */
@@ -127,6 +150,25 @@ function syncModeButtons() {
 /** Reflect the active type filter onto the chip-row (SOW-042). */
 function syncTypeButtons() {
   document.querySelectorAll('.nt-type').forEach((b) => b.classList.toggle('on', b.dataset.type === TYPE));
+}
+
+/** Switch the active type filter (shared by the chip-row clicks AND the rail's #type=<X> hash shortcuts). Lazily
+ *  loads Shares/News the first time they are needed, then re-renders. A no-op if the filter is unchanged. */
+async function selectType(next) {
+  if (!TYPE_FILTERS.has(next) || next === TYPE) return;
+  TYPE = next;
+  try { localStorage.setItem('gbti-nt-type', TYPE); } catch (e) {}
+  syncTypeButtons();
+  closeReader(); // switching filter returns from the reader to the feed
+  const needsShares = (TYPE === 'all' || TYPE === 'share') && !SHARES_LOADED;
+  const needsNews = (TYPE === 'all' || TYPE === 'news') && !NEWS_LOADED;
+  if (needsShares || needsNews) {
+    const feed = $('[data-feed]');
+    if (feed) feed.innerHTML = '<p class="muted">Loading...</p>';
+    if (needsShares) await loadShares();
+    if (needsNews) await loadNews();
+  }
+  renderFeed($('[data-filter]')?.value || '');
 }
 
 /** Load the member's Shares once (member-gated, fail-closed to []). Shares ride /api/shares via the background. */
@@ -265,8 +307,10 @@ function init() {
   // new tab too; the feed itself still talks to the background worker directly.
   mountPageClient();
   // The shared shell injects + wires the top bar (theme, apps, account menu, "+") + the left rail, and fills the
-  // page's static [data-ico] glyphs (search + the mode-switcher icons).
-  initShell({ active: 'activity' });
+  // page's static [data-ico] glyphs (search + the mode-switcher icons). When arrived via a Browse shortcut
+  // (#type=<X>), highlight that rail item; otherwise the Activity feed entry.
+  const RAIL_KEY = { all: 'all', post: 'articles', product: 'products', prompt: 'prompts', share: 'shares', news: 'news' };
+  initShell({ active: typeFromHash() ? RAIL_KEY[TYPE] : 'activity' });
 
   const greetEl = $('[data-greeting]');
   if (greetEl) greetEl.textContent = greeting();
@@ -299,24 +343,15 @@ function init() {
 
   // SOW-042/043: the type filter chip-row (All / Articles / Products / Prompts / Shares / News). Persist +
   // re-render; selecting All/Shares lazily loads Shares, All/News lazily loads News, the first time.
-  document.querySelectorAll('.nt-type').forEach((b) => b.addEventListener('click', async () => {
-    const next = b.dataset.type;
-    if (!TYPE_FILTERS.has(next) || next === TYPE) return;
-    TYPE = next;
-    try { localStorage.setItem('gbti-nt-type', TYPE); } catch (e) {}
-    syncTypeButtons();
-    const needsShares = (TYPE === 'all' || TYPE === 'share') && !SHARES_LOADED;
-    const needsNews = (TYPE === 'all' || TYPE === 'news') && !NEWS_LOADED;
-    if (needsShares || needsNews) {
-      const feed = $('[data-feed]');
-      if (feed) feed.innerHTML = '<p class="muted">Loading...</p>';
-      if (needsShares) await loadShares();
-      if (needsNews) await loadNews();
-    }
-    renderFeed($('[data-filter]')?.value || '');
-  }));
+  document.querySelectorAll('.nt-type').forEach((b) => b.addEventListener('click', () => selectType(b.dataset.type)));
+
+  // The rail's Browse shortcuts (newtab.html#type=<X>) switch the filter when clicked while already on the feed.
+  window.addEventListener('hashchange', () => { const t = typeFromHash(); if (t) selectType(t); });
 
   $('[data-filter]')?.addEventListener('input', (e) => renderFeed(e.target.value));
+
+  // The in-place reader's Back button returns to the feed.
+  $('[data-reader-back]')?.addEventListener('click', closeReader);
 
   // SOW-023: Latest / Following tabs.
   document.querySelectorAll('[data-tab]').forEach((btn) => {
