@@ -30,6 +30,9 @@ let ENTRIES = [];
 let VIEW = 'latest';
 let FOLLOWING = null;
 let FOLLOWS_LOADED = false;
+// SOW-046 E: the member's followed NEWS CHANNELS (source ids); the Following view drills into these for news.
+let FOLLOWED_CHANNELS = null; // a Set of lowercased source ids, or null when not loaded / not a paid member
+let PREFS_LOADED = false;
 // SOW-039: the persisted feed view mode (compact | detailed | card).
 let MODE = (() => { try { return localStorage.getItem('gbti-nt-mode') || 'compact'; } catch (e) { return 'compact'; } })();
 // SOW-042/043: the persisted type filter (all | post | product | prompt | share | news). 'all' blends the
@@ -72,12 +75,13 @@ function renderFeed(filter = '') {
   const q = filter.trim().toLowerCase();
 
   if (VIEW === 'following') {
-    if (FOLLOWING === null) {
-      feed.innerHTML = `<p class="muted">Following is a member feature. Sign in with the GBTI client or extension as a paid member to see the people you follow. <a href="${SITE}/membership/" style="color:var(--green-700)">Become a member</a>.</p>`;
+    const noChannels = !FOLLOWED_CHANNELS || FOLLOWED_CHANNELS.size === 0;
+    if (FOLLOWING === null && noChannels) {
+      feed.innerHTML = `<p class="muted">Following is a member feature. Sign in with the GBTI client or extension as a paid member to follow people and news channels. <a href="${SITE}/membership/" style="color:var(--green-700)">Become a member</a>.</p>`;
       return;
     }
-    if (FOLLOWING.size === 0) {
-      feed.innerHTML = `<p class="muted">You are not following anyone yet. Open a member profile and choose "Subscribe to activity" to build your feed.</p>`;
+    if ((!FOLLOWING || FOLLOWING.size === 0) && noChannels) {
+      feed.innerHTML = `<p class="muted">You are not following anyone or any news channel yet. Subscribe to a member's activity, or follow a channel from the News section, to build your feed.</p>`;
       return;
     }
   }
@@ -90,7 +94,13 @@ function renderFeed(filter = '') {
   let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
   if (wantNews && MEMBERSHIP === 'paid' && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem)); // news is a paid perk
   if (TYPE !== 'all') rows = rows.filter((e) => e.type === TYPE);
-  if (VIEW === 'following') rows = rows.filter((e) => FOLLOWING.has(String(e.author).toLowerCase())); // you do not follow news sources, so news drops from Following
+  // SOW-046 E: the Following view drills into followed MEMBERS' content/shares AND followed NEWS CHANNELS' news
+  // (a news item is kept when its source is in the member's followedChannels).
+  if (VIEW === 'following') {
+    rows = rows.filter((e) => (e.type === 'news'
+      ? (FOLLOWED_CHANNELS && FOLLOWED_CHANNELS.has(String(e.source ?? e.author).toLowerCase()))
+      : (FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()))));
+  }
   rows.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt)); // newest-first across all three sources
   rows = rows.slice(0, FEED_CAP); // the capped river
   if (q) rows = rows.filter((e) => `${e.title} ${authorName(e.author)}`.toLowerCase().includes(q));
@@ -166,6 +176,16 @@ async function loadFollows() {
   } catch {
     FOLLOWING = null;
   }
+}
+
+/** SOW-046 E: load the member's followed news channels (source ids) from prefs (paid-only). Set, or null. */
+async function loadPrefs() {
+  PREFS_LOADED = true;
+  try {
+    const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/prefs', query: {} } });
+    const chans = Array.isArray(r?.json?.followedChannels) ? r.json.followedChannels : null;
+    FOLLOWED_CHANNELS = chans ? new Set(chans.map((c) => String(c).toLowerCase())) : null;
+  } catch { FOLLOWED_CHANNELS = null; }
 }
 
 async function loadActivity() {
@@ -310,10 +330,11 @@ function init() {
         b.setAttribute('aria-selected', on ? 'true' : 'false');
       });
       const q = $('[data-filter]')?.value || '';
-      if (VIEW === 'following' && !FOLLOWS_LOADED) {
+      if (VIEW === 'following' && (!FOLLOWS_LOADED || !PREFS_LOADED || !NEWS_LOADED)) {
         const feed = $('[data-feed]');
-        if (feed) feed.innerHTML = '<p class="muted">Loading the members you follow...</p>';
-        await loadFollows();
+        if (feed) feed.innerHTML = '<p class="muted">Loading the people + channels you follow...</p>';
+        // Following needs followed members (loadFollows), followed channels (loadPrefs), and the news to filter.
+        await Promise.all([FOLLOWS_LOADED ? null : loadFollows(), PREFS_LOADED ? null : loadPrefs(), NEWS_LOADED ? null : loadNews()]);
       }
       renderFeed(q);
     });

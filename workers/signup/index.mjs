@@ -52,7 +52,8 @@ import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { membershipAdminStatuses } from './membership-admin.mjs';
 import { handleActivity } from './membership-activity.mjs';
 import { handleFollows } from './membership-follows.mjs';
-import { membershipNews, membershipNewsCategories } from './membership-news.mjs'; // SOW-043: members-only news proxy
+import { membershipNews, membershipNewsCategories, membershipNewsSources } from './membership-news.mjs'; // SOW-043/046: members-only news proxy
+import { handlePrefs } from './membership-prefs.mjs'; // SOW-046: member prefs (categories + followed news channels)
 import { handleDiscordInvite } from './discord-invite.mjs';
 import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewPrDetail, reviewPrFiles, reviewFileContent } from './github-app.mjs';
 
@@ -413,12 +414,22 @@ export default {
 
       // SOW-043: the members-only news proxy. Effective-paid gated; the news worker's NEWS_API_KEY is held by this
       // Worker and never reaches the client. Per-token body, so never cached and varied on the bearer.
-      if (pathname === '/membership/news' || pathname === '/membership/news-categories') {
+      if (pathname === '/membership/news' || pathname === '/membership/news-categories' || pathname === '/membership/news-sources') {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET') {
-          const r = pathname === '/membership/news'
-            ? await membershipNews(request, env)
+          const r = pathname === '/membership/news' ? await membershipNews(request, env)
+            : pathname === '/membership/news-sources' ? await membershipNewsSources(request, env)
             : await membershipNewsCategories(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-046: member prefs (category interests + followed news channels) in the deletable edge store.
+      // Effective-paid, per-member, private, ERASABLE. Per-token body, so never cached and varied on the bearer.
+      if (pathname === '/membership/prefs') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET' || method === 'POST') {
+          const r = await handlePrefs(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

@@ -2,7 +2,7 @@
 // NEWS_API_KEY server-side and proxies the news worker's /feed. Pure over injected authorize/fetch -> no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { membershipNews, membershipNewsCategories } from '../workers/signup/membership-news.mjs';
+import { membershipNews, membershipNewsCategories, membershipNewsSources } from '../workers/signup/membership-news.mjs';
 
 const ENV = { NEWS_API_BASE: 'https://gbti-news.example.workers.dev', NEWS_API_KEY: 'secret-key' };
 const req = (url = 'https://signup.gbti.network/membership/news') => new Request(url, { headers: { Authorization: 'Bearer tok' } });
@@ -50,6 +50,16 @@ test('news: a junk/oversized category or limit is sanitized, not proxied verbati
   await membershipNews(req('https://x/membership/news?category=' + encodeURIComponent('../evil?x=1') + '&limit=99999'), ENV, { authorize: paid, fetch });
   assert.ok(!/evil/.test(sentUrl), 'an unsafe category is dropped, not forwarded');
   assert.match(sentUrl, /limit=100/, 'limit is clamped to 100');
+});
+
+test('news-sources (SOW-046): paid passes through the followable channels; non-paid denied; unconfigured 502', async () => {
+  const ok = await membershipNewsSources(req(), ENV, { authorize: paid, fetch: async () => new Response(JSON.stringify({ sources: [{ id: 'bleeping-computer', name: 'BleepingComputer', count: 12 }] }), { status: 200 }) });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.sources[0].id, 'bleeping-computer');
+  let called = false;
+  assert.equal((await membershipNewsSources(req(), ENV, { authorize: denied, fetch: async () => { called = true; return new Response('{}'); } })).status, 403);
+  assert.equal(called, false);
+  assert.equal((await membershipNewsSources(req(), {}, { authorize: paid, fetch: async () => new Response('{}') })).status, 502);
 });
 
 test('news-categories: paid passes through; non-paid denied; unconfigured 502', async () => {

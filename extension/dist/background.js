@@ -18131,6 +18131,30 @@ async function workerGetNews({ token, signupBase, fetch = globalThis.fetch, cate
   const data = await res.json();
   return { items: Array.isArray(data?.items) ? data.items : [], updatedAt: data?.updatedAt ?? null };
 }
+async function workerGetNewsSources({ token, signupBase, fetch = globalThis.fetch } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const res = await fetch(`${base2(signupBase)}/membership/news-sources`, { headers: { Authorization: "Bearer " + token } });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("news requires a paid membership");
+  if (!res.ok) throw new NewsClientError("news sources unavailable (" + res.status + ")");
+  const data = await res.json();
+  return { sources: Array.isArray(data?.sources) ? data.sources : [] };
+}
+async function workerGetPrefs({ token, signupBase, fetch = globalThis.fetch } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const res = await fetch(`${base2(signupBase)}/membership/prefs`, { headers: { Authorization: "Bearer " + token } });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("prefs require a paid membership");
+  if (!res.ok) throw new NewsClientError("prefs unavailable (" + res.status + ")");
+  const data = await res.json();
+  return data?.prefs ?? { categories: [], followedChannels: [] };
+}
+async function workerSetPrefs({ token, signupBase, fetch = globalThis.fetch, patch } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const res = await fetch(`${base2(signupBase)}/membership/prefs`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(patch || {}) });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("prefs require a paid membership");
+  if (!res.ok) throw new NewsClientError("could not save prefs (" + res.status + ")");
+  const data = await res.json();
+  return data?.prefs ?? { categories: [], followedChannels: [] };
+}
 
 // client/src/github-app-probe.mjs
 var GH = "https://api.github.com";
@@ -18734,6 +18758,38 @@ async function getNews(ctx, { category, since, limit } = {}) {
     if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", "Sign in to read the news.");
     if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError("membership-required", "News is a members-only perk. Upgrade at https://gbti.network.");
     throw new OperationError("news-failed", err?.message || "the news request failed");
+  }
+}
+function mapNewsErr(err, what) {
+  if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", `Sign in to ${what}.`);
+  if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError("membership-required", `${what} is a members-only perk. Upgrade at https://gbti.network.`);
+  throw new OperationError("news-failed", err?.message || `the ${what} request failed`);
+}
+async function getNewsSources(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerGetNewsSources({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    mapNewsErr(err, "browse news channels");
+  }
+}
+async function getPrefs(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerGetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    mapNewsErr(err, "read your preferences");
+  }
+}
+async function setPrefs(ctx, { categories, followChannel } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel } });
+  } catch (err) {
+    mapNewsErr(err, "save your preferences");
   }
 }
 async function getDiscordInvite2(ctx) {
@@ -19469,6 +19525,10 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getDiscordInvite2(ctx));
       case "/api/news":
         return ok(await getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || void 0 }));
+      case "/api/news-sources":
+        return ok(await getNewsSources(ctx));
+      case "/api/prefs":
+        return ok(method === "POST" ? await setPrefs(ctx, body) : await getPrefs(ctx));
       case "/api/billing":
         return ok(getBilling(ctx));
       case "/api/referral":

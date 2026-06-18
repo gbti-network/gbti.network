@@ -19,6 +19,7 @@ import { buildAuditRecord, storeAuditRecord } from './erase-audit.mjs';
 
 export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
 export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`; // SOW-023 subscription graph
+export const PREFS_KEY = (githubId) => `prefs:${githubId}`; // SOW-046 member prefs (categories + followed news channels)
 export const LOOKUP_KEY = (githubId) => `gh:${githubId}`; // the github_id -> Stripe customer_id lookup cache
 export const MEMBERS_INDEX_PATH = 'house/members-index.yml';
 const toBase64 = (str) => Buffer.from(str, 'utf8').toString('base64');
@@ -54,6 +55,12 @@ export async function eraseActivity({ githubId, env = process.env, fetchImpl = g
 export async function eraseFollows({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   if (!githubId) throw new Error('a github_id is required');
   return deleteKvKey({ key: FOLLOWS_KEY(String(githubId)), env, fetchImpl });
+}
+
+/** Hard-delete a member's prefs (SOW-046: category interests + followed news channels) from the deletable store. */
+export async function erasePrefs({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (!githubId) throw new Error('a github_id is required');
+  return deleteKvKey({ key: PREFS_KEY(String(githubId)), env, fetchImpl });
 }
 
 /** Hard-delete the github_id -> Stripe customer_id lookup cache (`gh:<github_id>`). It is per-member identity
@@ -251,6 +258,7 @@ export async function runErasure({
 
   await runStep('activity', () => eraseActivity({ githubId, env, fetchImpl }));
   await runStep('follows', () => eraseFollows({ githubId, env, fetchImpl }));
+  await runStep('prefs', () => erasePrefs({ githubId, env, fetchImpl })); // SOW-046: categories + followed news channels
   await runStep('lookup-cache', () => eraseLookupCache({ githubId, env, fetchImpl }));
   await runStep('discord', () => eraseDiscordRoles({ githubId, stripe, discord, env }));
   await runStep('content', () => eraseContent({ github, githubId, username, files, now }));

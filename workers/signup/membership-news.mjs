@@ -63,3 +63,15 @@ export async function membershipNewsCategories(request, env, { authorize = autho
   if (!r.ok) return r;
   return { status: 200, body: { ok: true, categories: Array.isArray(r.data?.categories) ? r.data.categories : [] } };
 }
+
+/** GET /membership/news-sources -> { sources } (the channels a member can follow: id, name, description, count).
+ *  SOW-046 E. Same paid gate; the key never leaves the Worker. */
+export async function membershipNewsSources(request, env, { authorize = authorizePaid, fetch = globalThis.fetch, ...authDeps } = {}) {
+  const auth = await authorize(request, env, authDeps);
+  if (!auth.ok) return { status: auth.status, body: auth.body };
+  const cfg = newsEnv(env);
+  if (!cfg) return { status: 502, body: { error: 'news_unavailable', message: 'the news service is not configured yet' } };
+  const r = await callNews(cfg, '/sources', fetch);
+  if (!r.ok) return r;
+  return { status: 200, body: { ok: true, sources: Array.isArray(r.data?.sources) ? r.data.sources : [] } };
+}

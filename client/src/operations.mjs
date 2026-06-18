@@ -17,7 +17,7 @@ import {
 } from './member-activity-client.mjs';
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
-import { workerGetNews, NewsClientError } from './news-client.mjs'; // SOW-043: members-only news proxy
+import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, NewsClientError } from './news-client.mjs'; // SOW-043/046: members-only news proxy + prefs
 import { probeReadiness } from './github-app-probe.mjs';
 import {
   nextStep as onboardingNextStep, STEPS as ONBOARDING_STEPS, forkFullName,
@@ -539,6 +539,32 @@ export async function getNews(ctx, { category, since, limit } = {}) {
     if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError('membership-required', 'News is a members-only perk. Upgrade at https://gbti.network.');
     throw new OperationError('news-failed', err?.message || 'the news request failed');
   }
+}
+
+// SOW-046 E: the followable news channels (sources) + the member's prefs (categories + followed channels). All
+// paid-gated server-side; map the client errors to the standard codes.
+function mapNewsErr(err, what) {
+  if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', `Sign in to ${what}.`);
+  if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError('membership-required', `${what} is a members-only perk. Upgrade at https://gbti.network.`);
+  throw new OperationError('news-failed', err?.message || `the ${what} request failed`);
+}
+export async function getNewsSources(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerGetNewsSources({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch }); }
+  catch (err) { mapNewsErr(err, 'browse news channels'); }
+}
+export async function getPrefs(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerGetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch }); }
+  catch (err) { mapNewsErr(err, 'read your preferences'); }
+}
+export async function setPrefs(ctx, { categories, followChannel } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel } }); }
+  catch (err) { mapNewsErr(err, 'save your preferences'); }
 }
 
 export async function getDiscordInvite(ctx) {

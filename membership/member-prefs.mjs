@@ -1,0 +1,65 @@
+// SOW-046 (B/E): the member-prefs model — category interests + FOLLOWED NEWS CHANNELS (news source ids) — for the
+// deletable edge store (prefs:<github_id> in SIGNUP_KV). Pure + node-free, like member-follows.mjs: the Worker
+// handler does the KV read-modify-write; these transforms validate / dedupe / cap. GDPR-erasable (a hard KV delete
+// of the key; wired into sop-member-erasure.md alongside activity + follows).
+
+export class PrefsError extends Error {}
+
+const MAX_CATEGORIES = 40;
+const MAX_CHANNELS = 300;
+// A category label or a news source id (both config-defined in the news worker): a bounded token set so a stored
+// pref can never smuggle anything unexpected into a query or the UI.
+const TOKEN = /^[a-z0-9][a-z0-9 ._/+-]{0,60}$/i;
+
+function cleanList(v, max) {
+  const out = [];
+  const seen = new Set();
+  for (const x of Array.isArray(v) ? v : []) {
+    if (typeof x !== 'string') continue; // stored prefs are JSON string arrays; drop anything non-string
+    const s = x.trim();
+    if (!s || !TOKEN.test(s)) continue;
+    const k = s.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(s);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+/** Normalize a stored prefs record to { categories, followedChannels } (always arrays, deduped, capped). */
+export function normalizePrefs(stored) {
+  const p = stored && typeof stored === 'object' ? stored : {};
+  return {
+    categories: cleanList(p.categories, MAX_CATEGORIES),
+    followedChannels: cleanList(p.followedChannels, MAX_CHANNELS),
+  };
+}
+
+/**
+ * Apply a prefs patch and return the new normalized prefs. Patch shapes:
+ *  - { categories: string[] }                 replace the category interests
+ *  - { followChannel: { id, on } }            follow (on!==false) / unfollow a news source id
+ * Throws PrefsError on an invalid patch. Idempotent (re-following a channel is a no-op).
+ */
+export function applyPrefs(stored, patch = {}) {
+  const next = normalizePrefs(stored);
+  if (patch.categories !== undefined) {
+    if (!Array.isArray(patch.categories)) throw new PrefsError('categories must be an array');
+    next.categories = cleanList(patch.categories, MAX_CATEGORIES);
+  }
+  if (patch.followChannel) {
+    const id = String(patch.followChannel.id ?? '').trim();
+    if (!id || !TOKEN.test(id)) throw new PrefsError('a valid channel id is required');
+    const on = patch.followChannel.on !== false;
+    const lc = id.toLowerCase();
+    const has = next.followedChannels.some((c) => c.toLowerCase() === lc);
+    if (on && !has) {
+      if (next.followedChannels.length >= MAX_CHANNELS) throw new PrefsError('too many followed channels');
+      next.followedChannels.push(id);
+    } else if (!on && has) {
+      next.followedChannels = next.followedChannels.filter((c) => c.toLowerCase() !== lc);
+    }
+  }
+  return next;
+}

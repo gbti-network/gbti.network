@@ -32,6 +32,9 @@ import {
   setFollow,
   getDiscordInvite,
   getNews,
+  getNewsSources,
+  getPrefs,
+  setPrefs,
   getOnboardingStatus,
   getOverridesRoster,
   getOpenPulls,
@@ -103,6 +106,9 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/follows') return run(() => setFollow(ctx, body ?? {})); // SOW-023
   if (method === 'GET' && pathname === '/api/discord-invite') return run(() => getDiscordInvite(ctx)); // on-demand Discord invite
   if (method === 'GET' && pathname === '/api/news') return run(() => getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || undefined })); // SOW-043 members-only news
+  if (method === 'GET' && pathname === '/api/news-sources') return run(() => getNewsSources(ctx)); // SOW-046: followable news channels
+  if (method === 'GET' && pathname === '/api/prefs') return run(() => getPrefs(ctx)); // SOW-046: member prefs
+  if (method === 'POST' && pathname === '/api/prefs') return run(() => setPrefs(ctx, body)); // SOW-046: set categories / follow a channel
   if (method === 'GET' && pathname === '/api/onboarding-status') return run(() => getOnboardingStatus(ctx)); // SOW-026
   if (method === 'GET' && pathname === '/api/prs') return run(() => listPRs(ctx));
   if (method === 'GET' && pathname === '/api/pr-status') return run(() => prStatus(ctx, { number: query.number }));

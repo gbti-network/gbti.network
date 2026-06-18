@@ -817,8 +817,8 @@
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc3 = c | 32;
-      if (lc3 >= 97 && lc3 <= 102) return lc3 - 97 + 10;
+      const lc4 = c | 32;
+      if (lc4 >= 97 && lc4 <= 102) return lc4 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -2914,14 +2914,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
     // (post/product/prompt) need a per-item comment walk and defer to P4's server aggregator. Hard-bounded fan-out.
     async _replies(login) {
-      const lc3 = String(login).toLowerCase();
+      const lc4 = String(login).toLowerCase();
       const { items = [] } = await this.client.listShares() || {};
-      const mine = items.filter((s) => String(s.author).toLowerCase() === lc3).slice(0, MAX_OWN_SHARES);
+      const mine = items.filter((s) => String(s.author).toLowerCase() === lc4).slice(0, MAX_OWN_SHARES);
       const lists = await Promise.all(mine.map((s) => this._safe(async () => {
         const slug = s.author && s.id ? `${s.author}/${s.id}` : "";
         if (!slug) return [];
         const r = await this.client.listShareComments({ targetSlug: slug }) || {};
-        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc3).map((c) => ({
+        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc4).map((c) => ({
           id: `cmt:${c.path || `${slug}:${c.id || c.createdAt}`}`,
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
@@ -6609,19 +6609,35 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-news.mjs
   var SITE9 = "https://gbti.network";
   var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE9}/membership/">Become a member</a> to unlock the news feed.</div>`;
+  var lc3 = (s) => String(s ?? "").toLowerCase();
   var CSS21 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .head { margin:0 0 14px; }
-  .head h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
-  .head .sub { margin:0; color:var(--muted); font-size:13px; }
+  .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
+  .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
+  .head .t .sub { margin:0; color:var(--muted); font-size:13px; }
+  .tabs { display:flex; gap:2px; background:var(--hover); border:1px solid var(--line); border-radius:999px; padding:3px; }
+  .tabs button { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:12.5px; padding:6px 13px; border-radius:999px; cursor:pointer; }
+  .tabs button.on { background:var(--panel); color:var(--accent); }
   .muted { color:var(--muted); font-size:14px; }
   .nudge { padding:16px; border:1.5px dashed var(--line); border-radius:12px; background:var(--panel); font-size:14px; color:var(--muted); }
   .nudge a { color:var(--brand); font-weight:600; }
   button.retry { font:inherit; font-size:13px; font-weight:600; margin-left:8px; padding:5px 11px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); cursor:pointer; }
+  ul.chans { list-style:none; margin:0; padding:0; }
+  .chan { display:flex; align-items:center; gap:12px; padding:12px 2px; border-top:1px solid var(--line); }
+  .chan:first-child { border-top:0; }
+  .chan .ci { min-width:0; flex:1; }
+  .chan .ci b { display:block; font-size:14.5px; }
+  .chan .ci .d { display:block; color:var(--muted); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chan .ci .n { color:var(--muted); font-size:11.5px; }
+  .fbtn { flex:none; font:inherit; font-weight:600; font-size:12.5px; padding:6px 13px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--fg); cursor:pointer; }
+  .fbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .fbtn.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+  .fbtn[disabled] { opacity:.6; cursor:default; }
 `;
   var GbtiNews = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback();
+      this._view = "feed";
       this._state = "loading";
       this.render();
       this._load();
@@ -6641,27 +6657,70 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       this.render();
     }
+    async _loadChannels() {
+      this._chanState = "loading";
+      this.render();
+      try {
+        const [{ sources }, prefs] = await Promise.all([this.client.getNewsSources(), this.client.getPrefs()]);
+        this._sources = Array.isArray(sources) ? sources : [];
+        this._followed = new Set((prefs?.followedChannels || []).map(lc3));
+        this._chanState = "ready";
+      } catch (err) {
+        this._chanState = err?.code === "membership-required" ? "locked" : err?.code === "not-authenticated" ? "signin" : "error";
+      }
+      this.render();
+    }
+    _setView(v) {
+      if (v === this._view) return;
+      this._view = v;
+      if (v === "channels" && !this._chanState) {
+        this._loadChannels();
+        return;
+      }
+      this.render();
+    }
+    async _toggleFollow(id, btn) {
+      const on = !this._followed.has(lc3(id));
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = on ? "Following…" : "Unfollowing…";
+      }
+      try {
+        const prefs = await this.client.setPrefs({ followChannel: { id, on } });
+        this._followed = new Set((prefs?.followedChannels || []).map(lc3));
+      } catch {
+      }
+      this.render();
+    }
     render() {
       if (!this.client) {
         this.set(this.css(CSS21) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
-      const head = `<div class="head"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>`;
+      const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
+      const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
+      this.set(this.css(CSS21) + head + `<div data-body></div>`);
+      this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
+      this._view === "channels" ? this._renderChannels() : this._renderFeed();
+    }
+    _renderFeed() {
+      const host = this.$("[data-body]");
+      if (!host) return;
       if (this._state === "loading") {
-        this.set(this.css(CSS21) + head + `<p class="muted">Loading the latest news…</p>`);
+        host.innerHTML = `<p class="muted">Loading the latest news…</p>`;
         return;
       }
       if (this._state === "signin") {
-        this.set(this.css(CSS21) + head + nudge("Sign in to read the members-only news feed."));
+        host.innerHTML = nudge("Sign in to read the members-only news feed.");
         return;
       }
       if (this._state === "locked") {
-        this.set(this.css(CSS21) + head + nudge("The news feed is a members-only perk."));
+        host.innerHTML = nudge("The news feed is a members-only perk.");
         return;
       }
       if (this._state === "error") {
-        this.set(this.css(CSS21) + head + `<p class="muted">Could not load the news right now.<button class="retry" data-retry type="button">Retry</button></p>`);
-        this.on("[data-retry]", "click", () => {
+        host.innerHTML = `<p class="muted">Could not load the news right now.<button class="retry" data-retry type="button">Retry</button></p>`;
+        this.$("[data-retry]")?.addEventListener("click", () => {
           this._state = "loading";
           this.render();
           this._load();
@@ -6670,14 +6729,47 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const items = this._items || [];
       if (!items.length) {
-        this.set(this.css(CSS21) + head + `<p class="muted">No news right now. Check back soon.</p>`);
+        host.innerHTML = `<p class="muted">No news right now. Check back soon.</p>`;
         return;
       }
-      this.set(this.css(CSS21) + head + `<div data-list></div>`);
       const list = document.createElement("gbti-card-list");
       list.mode = "detailed";
       list.items = items;
-      this.$("[data-list]")?.replaceChildren(list);
+      host.replaceChildren(list);
+    }
+    _renderChannels() {
+      const host = this.$("[data-body]");
+      if (!host) return;
+      if (!this._chanState || this._chanState === "loading") {
+        host.innerHTML = `<p class="muted">Loading channels…</p>`;
+        return;
+      }
+      if (this._chanState === "signin") {
+        host.innerHTML = nudge("Sign in to follow news channels.");
+        return;
+      }
+      if (this._chanState === "locked") {
+        host.innerHTML = nudge("Following news channels is a members-only perk.");
+        return;
+      }
+      if (this._chanState === "error") {
+        host.innerHTML = `<p class="muted">Could not load channels.<button class="retry" data-retry type="button">Retry</button></p>`;
+        this.$("[data-retry]")?.addEventListener("click", () => this._loadChannels());
+        return;
+      }
+      const sources = this._sources || [];
+      if (!sources.length) {
+        host.innerHTML = `<p class="muted">No channels available yet.</p>`;
+        return;
+      }
+      const followed = this._followed || /* @__PURE__ */ new Set();
+      const rows = sources.map((s) => {
+        const on = followed.has(lc3(s.id));
+        const meta = [s.description, s.count != null ? `${s.count} items` : null].filter(Boolean).join(" · ");
+        return `<li class="chan"><div class="ci"><b>${esc(s.name || s.id)}</b>${meta ? `<span class="d">${esc(meta)}</span>` : ""}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
+      }).join("");
+      host.innerHTML = `<p class="muted" style="margin:0 0 10px">Follow channels to drill into them from your <b>Following</b> feed.</p><ul class="chans">${rows}</ul>`;
+      this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.dataset.follow, b)));
     }
   };
   define("gbti-news", GbtiNews);
@@ -7087,6 +7179,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // on-demand Discord invite -> { url, source }
       getNews: ({ category, since, limit } = {}) => request("GET", `/api/news${qs({ category, since, limit })}`),
       // SOW-043: members-only news -> { items, updatedAt }
+      getNewsSources: () => request("GET", "/api/news-sources"),
+      // SOW-046: followable news channels -> { sources }
+      getPrefs: () => request("GET", "/api/prefs"),
+      // SOW-046: member prefs -> { categories, followedChannels }
+      setPrefs: (patch) => request("POST", "/api/prefs", patch),
+      // SOW-046: { categories } or { followChannel: { id, on } } -> { categories, followedChannels }
       postComment: (b) => request("POST", "/api/comment", b),
       // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
       editComment: (b) => request("POST", "/api/comment/edit", b),
@@ -7193,6 +7291,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var VIEW = "latest";
   var FOLLOWING = null;
   var FOLLOWS_LOADED = false;
+  var FOLLOWED_CHANNELS = null;
+  var PREFS_LOADED = false;
   var MODE = (() => {
     try {
       return localStorage.getItem("gbti-nt-mode") || "compact";
@@ -7232,12 +7332,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!feed) return;
     const q = filter.trim().toLowerCase();
     if (VIEW === "following") {
-      if (FOLLOWING === null) {
-        feed.innerHTML = `<p class="muted">Following is a member feature. Sign in with the GBTI client or extension as a paid member to see the people you follow. <a href="${SITE12}/membership/" style="color:var(--green-700)">Become a member</a>.</p>`;
+      const noChannels = !FOLLOWED_CHANNELS || FOLLOWED_CHANNELS.size === 0;
+      if (FOLLOWING === null && noChannels) {
+        feed.innerHTML = `<p class="muted">Following is a member feature. Sign in with the GBTI client or extension as a paid member to follow people and news channels. <a href="${SITE12}/membership/" style="color:var(--green-700)">Become a member</a>.</p>`;
         return;
       }
-      if (FOLLOWING.size === 0) {
-        feed.innerHTML = `<p class="muted">You are not following anyone yet. Open a member profile and choose "Subscribe to activity" to build your feed.</p>`;
+      if ((!FOLLOWING || FOLLOWING.size === 0) && noChannels) {
+        feed.innerHTML = `<p class="muted">You are not following anyone or any news channel yet. Subscribe to a member's activity, or follow a channel from the News section, to build your feed.</p>`;
         return;
       }
     }
@@ -7246,7 +7347,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP2 }).map(toCardItem);
     if (wantNews && MEMBERSHIP2 === "paid" && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem));
     if (TYPE !== "all") rows = rows.filter((e) => e.type === TYPE);
-    if (VIEW === "following") rows = rows.filter((e) => FOLLOWING.has(String(e.author).toLowerCase()));
+    if (VIEW === "following") {
+      rows = rows.filter((e) => e.type === "news" ? FOLLOWED_CHANNELS && FOLLOWED_CHANNELS.has(String(e.source ?? e.author).toLowerCase()) : FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()));
+    }
     rows.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
     rows = rows.slice(0, FEED_CAP);
     if (q) rows = rows.filter((e) => `${e.title} ${authorName5(e.author)}`.toLowerCase().includes(q));
@@ -7312,6 +7415,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       FOLLOWING = list ? new Set(list.map((f) => String(f?.username || "").toLowerCase()).filter(Boolean)) : null;
     } catch {
       FOLLOWING = null;
+    }
+  }
+  async function loadPrefs() {
+    PREFS_LOADED = true;
+    try {
+      const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/prefs", query: {} } });
+      const chans = Array.isArray(r?.json?.followedChannels) ? r.json.followedChannels : null;
+      FOLLOWED_CHANNELS = chans ? new Set(chans.map((c) => String(c).toLowerCase())) : null;
+    } catch {
+      FOLLOWED_CHANNELS = null;
     }
   }
   async function loadActivity() {
@@ -7446,10 +7559,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           b.setAttribute("aria-selected", on ? "true" : "false");
         });
         const q = $("[data-filter]")?.value || "";
-        if (VIEW === "following" && !FOLLOWS_LOADED) {
+        if (VIEW === "following" && (!FOLLOWS_LOADED || !PREFS_LOADED || !NEWS_LOADED)) {
           const feed = $("[data-feed]");
-          if (feed) feed.innerHTML = '<p class="muted">Loading the members you follow...</p>';
-          await loadFollows();
+          if (feed) feed.innerHTML = '<p class="muted">Loading the people + channels you follow...</p>';
+          await Promise.all([FOLLOWS_LOADED ? null : loadFollows(), PREFS_LOADED ? null : loadPrefs(), NEWS_LOADED ? null : loadNews()]);
         }
         renderFeed(q);
       });
