@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { isImageGenTarget } from '../client/src/image-models.mjs';
 import { membersIndexFromParsed, overrideConsistencyErrors } from '../membership/overrides-core.mjs';
+import { validateNewsChannels } from '../membership/news-channels.mjs'; // SOW-043: the news-category -> Discord channel map
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const errors = [];
@@ -356,6 +357,19 @@ function validateOverrideConsistency() {
   for (const err of overrideConsistencyErrors(idx, entries)) errors.push(err);
 }
 validateOverrideConsistency();
+
+// SOW-043: the news-category -> Discord channel map (house/news-channels.yml). Absent is fine; when present, it
+// must be a list of { category, numeric channelId } with no duplicate category (a bad map would silently misroute
+// or drop a heart-publish). Pure validation lives in membership/news-channels.mjs.
+function validateNewsChannelsConfig() {
+  const rel = 'house/news-channels.yml';
+  if (!has(path.join(ROOT, rel))) return; // optional config
+  let parsed;
+  try { parsed = yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')); }
+  catch { errors.push(`${rel}: not valid YAML`); return; }
+  for (const err of validateNewsChannels(parsed)) errors.push(err);
+}
+validateNewsChannelsConfig();
 
 if (errors.length) {
   console.error(`✗ content validation failed (${errors.length} issue${errors.length === 1 ? '' : 's'}):`);
