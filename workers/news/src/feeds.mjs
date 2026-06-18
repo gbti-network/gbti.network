@@ -51,6 +51,16 @@ export function cleanText(raw, max = 500) {
   return s.length > max ? s.slice(0, max) : s;
 }
 
+// SOW-046 A diagnostics: how much article text do we have for an item BEFORE any external fetch? 'full' means the
+// feed inlined a real body (<content:encoded>/<content>), so the AI summary already has good input; 'thin' means we
+// only have a short blurb — the case where fetching + Readability of the SOURCE article could add value. The
+// threshold sits just above the 500-char display-excerpt cap, so 'full' == "the feed gave us more than the excerpt".
+// These counts feed the /diag route so we can MEASURE the blurb-only gap before deciding to build Readability.
+export const RICH_CONTENT_MIN = 600;
+export function contentRichness(item) {
+  return (item?.contentText?.length || 0) >= RICH_CONTENT_MIN ? 'full' : 'thin';
+}
+
 /** RFC-822 (RSS) and RFC-3339 (Atom) both parse via Date.parse. Returns epoch seconds or null. */
 export function toEpochSeconds(raw) {
   const s = text(raw).trim();

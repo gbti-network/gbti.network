@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFeed, cleanText, toEpochSeconds } from '../src/feeds.mjs';
+import { parseFeed, cleanText, toEpochSeconds, contentRichness, RICH_CONTENT_MIN } from '../src/feeds.mjs';
 
 const RSS = `<?xml version="1.0"?>
 <rss version="2.0"><channel>
@@ -83,6 +83,13 @@ test('parseFeed coerces a single <item> into an array', () => {
   assert.equal(items[0].title, 'Only one');
   // no guid in feed -> falls back to the link
   assert.equal(items[0].guid, 'https://ex.com/only');
+});
+
+test('contentRichness flags full inline content vs a thin blurb (SOW-046 A diagnostics)', () => {
+  assert.equal(contentRichness({ contentText: 'x'.repeat(RICH_CONTENT_MIN) }), 'full');
+  assert.equal(contentRichness({ contentText: 'x'.repeat(RICH_CONTENT_MIN - 1) }), 'thin');
+  assert.equal(contentRichness({ contentText: 'short blurb' }), 'thin');
+  assert.equal(contentRichness({}), 'thin'); // no content at all
 });
 
 test('parseFeed returns [] on garbage instead of throwing', () => {

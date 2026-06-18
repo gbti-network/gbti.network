@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampLimit, matchesFilter, publicItem, categoriesWithCounts, sourcesWithCounts } from '../src/api.mjs';
+import { clampLimit, matchesFilter, publicItem, categoriesWithCounts, sourcesWithCounts, contentDiagnostics } from '../src/api.mjs';
 import { SOURCES } from '../config/sources.mjs';
 
 const item = { guid: '1', source: 'hn', title: 'A', link: 'l', summary: '', category: 'Security', classified: true, publishedAt: 200, fetchedAt: 200 };
@@ -21,6 +21,24 @@ test('matchesFilter on category (case-insensitive), source, and since', () => {
   assert.equal(matchesFilter(item, { since: '100' }), true);
   assert.equal(matchesFilter(item, { since: '300' }), false);
   assert.equal(matchesFilter(item, {}), true);
+});
+
+test('contentDiagnostics aggregates full-vs-thin and flags blurb-only sources (SOW-046 A)', () => {
+  const [a, b] = SOURCES;
+  const diag = contentDiagnostics({ contentStats: { [a.id]: { full: 8, thin: 2 }, [b.id]: { full: 1, thin: 9 } } });
+  assert.equal(diag.totals.full, 9);
+  assert.equal(diag.totals.thin, 11);
+  assert.equal(diag.totals.thinPct, Math.round((11 / 20) * 100));
+  // b is mostly blurb-only (>=60% thin, >=5 sample) -> a Readability candidate; a (mostly full) is not
+  assert.ok(diag.readabilityCandidates.includes(b.id));
+  assert.ok(!diag.readabilityCandidates.includes(a.id));
+});
+
+test('contentDiagnostics is defensive on an empty / pre-upgrade index', () => {
+  const diag = contentDiagnostics({});
+  assert.equal(diag.totals.seen, 0);
+  assert.equal(diag.totals.thinPct, null);
+  assert.deepEqual(diag.readabilityCandidates, []);
 });
 
 test('publicItem drops the internal classified flag', () => {

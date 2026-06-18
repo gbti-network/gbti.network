@@ -11,6 +11,7 @@
 //   GET  /feed        items newest-first. Query: category, source, since (epoch s), limit (<=100)   [auth]
 //   GET  /categories  configured categories + current counts                                        [auth]
 //   GET  /sources     configured sources + current counts                                           [auth]
+//   GET  /diag        content-richness coverage (full vs blurb-only) per source — Readability signal  [auth]
 //   POST /refresh     run an ingest cycle on demand (same code path as the cron)                     [auth]
 //
 // Config (sources, descriptions, categories) lives in config/*.mjs. The polled collection is stored
@@ -20,7 +21,7 @@
 import { isAuthorized } from './auth.mjs';
 import { ingest } from './ingest.mjs';
 import { loadIndex, queryItems } from './store.mjs';
-import { clampLimit, publicItem, categoriesWithCounts, sourcesWithCounts } from './api.mjs';
+import { clampLimit, publicItem, categoriesWithCounts, sourcesWithCounts, contentDiagnostics } from './api.mjs';
 import { DASHBOARD_HTML } from './dashboard.mjs';
 
 const CORS = {
@@ -86,6 +87,13 @@ export default {
       if (method === 'GET' && pathname === '/sources') {
         const index = await loadIndex(env);
         return json({ updatedAt: index.updatedAt, total: index.total, sources: sourcesWithCounts(index.counts.source) });
+      }
+
+      // SOW-046 A diagnostics: content-richness coverage (full inline article text vs blurb-only), per source +
+      // overall, plus the blurb-only sources a Readability fetch would most help. The Readability go/no-go signal.
+      if (method === 'GET' && pathname === '/diag') {
+        const index = await loadIndex(env);
+        return json({ updatedAt: index.updatedAt, total: index.total, ...contentDiagnostics(index) }, 200, { 'Cache-Control': 'no-store' });
       }
 
       if (method === 'POST' && pathname === '/refresh') {

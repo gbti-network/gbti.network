@@ -29,7 +29,9 @@ async function getJSON(env, key, fallback) {
   try { return JSON.parse(raw); } catch { return fallback; }
 }
 
-export const emptyIndex = () => ({ days: [], counts: { category: {}, source: {} }, total: 0, updatedAt: 0 });
+// contentStats (SOW-046 A diagnostics): cumulative per-source { full, thin } content-richness tallies, so /diag can
+// report how many feeds are blurb-only (the Readability go/no-go signal). Defensive everywhere (older indexes lack it).
+export const emptyIndex = () => ({ days: [], counts: { category: {}, source: {} }, contentStats: {}, total: 0, updatedAt: 0 });
 
 export const loadIndex = (env) => getJSON(env, K_INDEX, emptyIndex());
 export const loadGuids = (env) => getJSON(env, K_GUIDS, {});
@@ -65,7 +67,7 @@ export function expiredDays(days, retentionDays, now) {
  * `changedCategories` is an optional list of { guid, from, to } for items reclassified this run
  * (their counts are adjusted). Returns the updated index.
  */
-export async function commitIngest(env, { freshItems = [], updatedItems = [], changedCategories = [], retentionDays, now, index, guids }) {
+export async function commitIngest(env, { freshItems = [], updatedItems = [], changedCategories = [], contentStatsDelta = {}, retentionDays, now, index, guids }) {
   const today = dayOf(now);
   index = index ?? (await loadIndex(env));
   guids = guids ?? (await loadGuids(env));
@@ -97,6 +99,13 @@ export async function commitIngest(env, { freshItems = [], updatedItems = [], ch
     for (const g of Object.keys(guids)) if (guids[g] === d) delete guids[g];
     await env.NEWS_KV.delete(kDay(d));
     index.days = index.days.filter((x) => x !== d);
+  }
+
+  // 4. Merge this run's content-richness tallies (SOW-046 A diagnostics) into the cumulative per-source stats.
+  index.contentStats = index.contentStats || {};
+  for (const [src, d] of Object.entries(contentStatsDelta)) {
+    const prev = index.contentStats[src] || { full: 0, thin: 0 };
+    index.contentStats[src] = { full: prev.full + (d.full || 0), thin: prev.thin + (d.thin || 0) };
   }
 
   index.updatedAt = now;

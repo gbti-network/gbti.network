@@ -43,6 +43,36 @@ export function categoriesWithCounts(countsByCategory = {}) {
   }));
 }
 
+/**
+ * SOW-046 A diagnostics: aggregate the cumulative per-source content-richness stats (index.contentStats) into a
+ * report for the /diag route — overall full-vs-thin, plus the sources that are mostly blurb-only (a meaningful
+ * sample and >=60% thin) which a Readability fetch would most help. Pure; defensive against an older index.
+ */
+export function contentDiagnostics(index = {}) {
+  const stats = index.contentStats || {};
+  let full = 0;
+  let thin = 0;
+  const perSource = SOURCES.map((s) => {
+    const d = stats[s.id] || { full: 0, thin: 0 };
+    const f = d.full || 0;
+    const t = d.thin || 0;
+    full += f;
+    thin += t;
+    const seen = f + t;
+    return { id: s.id, name: s.name, full: f, thin: t, thinPct: seen ? Math.round((t / seen) * 100) : null };
+  });
+  const seen = full + thin;
+  const readabilityCandidates = perSource
+    .filter((s) => s.full + s.thin >= 5 && s.thinPct !== null && s.thinPct >= 60)
+    .sort((a, b) => b.thinPct - a.thinPct)
+    .map((s) => s.id);
+  return {
+    totals: { full, thin, seen, thinPct: seen ? Math.round((thin / seen) * 100) : null },
+    readabilityCandidates,
+    perSource: perSource.sort((a, b) => b.thin - a.thin),
+  };
+}
+
 /** Sources (from config) joined with current counts (from the store index's counts.source map). */
 export function sourcesWithCounts(countsBySource = {}) {
   return SOURCES.map((s) => ({

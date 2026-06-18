@@ -8,7 +8,7 @@
 
 import { SOURCES } from '../config/sources.mjs';
 import { DEFAULT_CATEGORY } from '../config/categories.mjs';
-import { parseFeed } from './feeds.mjs';
+import { parseFeed, contentRichness } from './feeds.mjs';
 import { classifyItem, analyzeItem, keywordCategory } from './classify.mjs';
 import { loadIndex, loadGuids, loadDay, dayOf, commitIngest } from './store.mjs';
 
@@ -94,6 +94,19 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
     fresh.push({ ...it, fetchedAt: now });
   }
 
+  // 2b. SOW-046 A diagnostics: tally how many fresh items arrived with FULL inline article text vs only a THIN
+  //     blurb (per source + overall), BEFORE contentText is stripped. This measures the blurb-only gap that a
+  //     future Readability fetch would close, so the owner can decide from data, not a guess (see /diag).
+  const contentStatsDelta = {};
+  let contentFull = 0;
+  let contentThin = 0;
+  for (const it of fresh) {
+    const r = contentRichness(it);
+    if (r === 'full') contentFull += 1; else contentThin += 1;
+    const d = (contentStatsDelta[it.source] ||= { full: 0, thin: 0 });
+    d[r] += 1;
+  }
+
   // 3. Classify + SUMMARIZE fresh items up to the per-run AI budget (one combined AI call each, SOW-046 A); the
   //    overflow gets a cheap keyword label + no digest now (the feed excerpt is its display fallback). The
   //    transient contentText (the article body fed to the summarizer) is STRIPPED here so it is never persisted.
@@ -127,7 +140,7 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
   }
 
   // 5. Commit: write today's shard, update guid map + counts, prune shards outside retention.
-  const updatedIndex = await commitIngest(env, { freshItems, updatedItems, changedCategories, retentionDays, now, index, guids });
+  const updatedIndex = await commitIngest(env, { freshItems, updatedItems, changedCategories, contentStatsDelta, retentionDays, now, index, guids });
 
   const summary = {
     at: 'ingest',
@@ -137,6 +150,8 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
     new: fresh.length,
     classifiedOk: classified.filter((it) => it.classified).length,
     summarizedOk: classified.filter((it) => it.summarized).length,
+    contentFull, // SOW-046 A: fresh items that arrived with full inline article text
+    contentThin, // SOW-046 A: fresh items that arrived with only a short blurb (Readability-fetch candidates)
     reclassified: updatedItems.length,
     overflow: overflowFresh.length,
     total: updatedIndex.total,
