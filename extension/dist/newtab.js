@@ -2454,6 +2454,28 @@
     };
   }
 
+  // client-ui/src/browse-hash.mjs
+  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
+  function buildReadHash(type, path) {
+    const t = TAB_IDS.has(type) ? type : "post";
+    return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
+  }
+  function parseBrowseHash(hash) {
+    const s = String(hash || "").replace(/^#/, "");
+    const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+    const readM = s.match(/(?:^|&)read=([^&]+)/);
+    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
+    let read = null;
+    if (readM) {
+      try {
+        read = decodeURIComponent(readM[1]);
+      } catch {
+        read = readM[1];
+      }
+    }
+    return { tab, read };
+  }
+
   // client-ui/src/tokens.mjs
   var TOKENS = `
 :host {
@@ -2748,28 +2770,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return { replies: now, following: now, review: now, prsSeen };
   }
 
-  // client-ui/src/browse-hash.mjs
-  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
-  function buildReadHash(type, path) {
-    const t = TAB_IDS.has(type) ? type : "post";
-    return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
-  }
-  function parseBrowseHash(hash) {
-    const s = String(hash || "").replace(/^#/, "");
-    const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
-    const readM = s.match(/(?:^|&)read=([^&]+)/);
-    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
-    let read = null;
-    if (readM) {
-      try {
-        read = decodeURIComponent(readM[1]);
-      } catch {
-        read = readM[1];
-      }
-    }
-    return { tab, read };
-  }
-
   // client-ui/src/elements/gbti-activity-bell.mjs
   var SITE = "https://gbti.network";
   var POLL_MS = 12e4;
@@ -2917,7 +2917,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ts: toMs(e.publishedAt),
         title: e.title || "New activity",
         sub: `@${e.author}`,
-        href: e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url || ""}`
+        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url || ""}`
       }));
     }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
@@ -2935,7 +2935,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
           sub: `@${c.author}`,
-          href: "browse.html#tab=share"
+          href: "newtab.html#tab=share"
         }));
       })));
       return lists.flat();
@@ -3036,13 +3036,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var RAIL = [
     { group: "Feeds" },
     { key: "activity", href: "newtab.html", ico: "activity", nm: "Activity", sub: "The latest across the co-op" },
+    // News is a feed (curated, members-only), so it sits with Activity, not under Browse.
+    { key: "news", href: "newtab.html#type=news", ico: "news", nm: "News", sub: "Curated, members-only" },
     { group: "Browse" },
     { key: "all", href: "newtab.html#type=all", ico: "grid", nm: "All", sub: "Everything in one place" },
     { key: "articles", href: "newtab.html#type=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
     { key: "products", href: "newtab.html#type=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
     { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
     { key: "shares", href: "newtab.html#type=share", ico: "coin", nm: "Shares", sub: "The co-op stream" },
-    { key: "news", href: "newtab.html#type=news", ico: "news", nm: "News", sub: "Curated, members-only" },
     { div: true },
     { key: "workspace", href: "workspace.html", ico: "grid", nm: "My workspace", sub: "Content + pull requests" }
   ];
@@ -7421,8 +7422,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   })();
   var TYPE_FILTERS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
   var typeFromHash = () => {
-    const m = /(?:^|[#&])type=([a-z]+)/.exec(typeof location !== "undefined" && location.hash || "");
+    const m = /(?:^|[#&])(?:type|tab)=([a-z]+)/.exec(typeof location !== "undefined" && location.hash || "");
     return m && TYPE_FILTERS.has(m[1]) ? m[1] : null;
+  };
+  var readFromHash = () => {
+    const { read } = parseBrowseHash(typeof location !== "undefined" && location.hash || "");
+    return read || null;
   };
   var TYPE = (() => {
     const h = typeFromHash();
@@ -7472,7 +7477,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       rows = rows.filter((e) => e.type === "news" ? FOLLOWED_CHANNELS && FOLLOWED_CHANNELS.has(String(e.source ?? e.author).toLowerCase()) : FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()));
     }
     rows.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
-    rows = rows.slice(0, FEED_CAP);
+    if (TYPE === "all") rows = rows.slice(0, FEED_CAP);
     if (q) rows = rows.filter((e) => `${e.title} ${authorName5(e.author)}`.toLowerCase().includes(q));
     if (!rows.length) {
       const empty = VIEW === "following" ? q ? "No followed activity matches that filter." : "No recent activity from the members you follow." : q ? "No activity matches that filter." : TYPE === "share" ? "No Shares yet." : TYPE === "news" ? "No news right now. Check back soon." : "No activity yet.";
@@ -7695,7 +7700,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     window.addEventListener("hashchange", () => {
       const t = typeFromHash();
       if (t) selectType(t);
+      const rd = readFromHash();
+      if (rd) openReader({ type: t || TYPE, path: rd });
     });
+    const deepRead = readFromHash();
+    if (deepRead) openReader({ type: TYPE, path: deepRead });
     $("[data-filter]")?.addEventListener("input", (e) => renderFeed(e.target.value));
     $("[data-reader-back]")?.addEventListener("click", closeReader);
     document.querySelectorAll("[data-tab]").forEach((btn) => {

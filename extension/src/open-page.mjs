@@ -11,7 +11,6 @@
 const PAGES = new Set([
   'newtab.html',
   'workspace.html',
-  'browse.html',
   'shares.html',
   'admin.html',
   'account.html',

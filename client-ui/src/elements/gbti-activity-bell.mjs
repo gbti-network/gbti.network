@@ -3,8 +3,8 @@
 // (via activity-bell.mjs) computes an unread badge + a grouped dropdown that deep-links into the relevant surface.
 //   - To review  -> client.listContributions()        -> workspace.html#tab=inbox
 //   - Your PRs    -> client.listPRs() (resolved only)  -> the PR's GitHub URL
-//   - Replies     -> replies on the caller's OWN Shares -> the Shares stream (browse.html#tab=share)
-//   - Following   -> getFollows() ∩ the activity-index -> the in-extension reader (browse deep-link)
+//   - Replies     -> replies on the caller's OWN Shares -> the Shares filter on the unified feed (newtab.html#tab=share)
+//   - Following   -> getFollows() ∩ the activity-index -> the in-extension reader (newtab feed deep-link)
 // Unread = items past a localStorage watermark (gbti-bell-seen), set when the panel opens. A Locked/unknown account
 // hides the bell entirely (no count). Content-item replies + a cross-device server marker defer to P4. Throttle: a
 // light poll + on-open; the replies fan-out over the caller's own Shares is hard-bounded.
@@ -144,7 +144,7 @@ class GbtiActivityBell extends GbtiElement {
         ts: toMs(e.publishedAt),
         title: e.title || 'New activity',
         sub: `@${e.author}`,
-        href: e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url || ''}`,
+        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url || ''}`,
       }));
   }
 
@@ -165,7 +165,7 @@ class GbtiActivityBell extends GbtiElement {
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || 'your Share'}`,
           sub: `@${c.author}`,
-          href: 'browse.html#tab=share',
+          href: 'newtab.html#tab=share',
         }));
     })));
     return lists.flat();

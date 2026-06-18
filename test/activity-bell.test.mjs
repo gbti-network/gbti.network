@@ -7,7 +7,7 @@ import { buildBell, unreadItems, markSeen, BELL_GROUPS } from '../client-ui/src/
 
 const T0 = Date.parse('2026-06-10T00:00:00Z');
 const T1 = Date.parse('2026-06-16T00:00:00Z');
-const reply = (id, ts) => ({ id, ts, title: `r${id}`, href: 'browse.html#tab=share' });
+const reply = (id, ts) => ({ id, ts, title: `r${id}`, href: 'newtab.html#tab=share' });
 
 test('buildBell exposes the four groups in order', () => {
   const out = buildBell({}, {});

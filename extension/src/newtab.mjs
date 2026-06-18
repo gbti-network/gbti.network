@@ -7,6 +7,7 @@
 import { isLockedMembership } from '../../client/src/membership.mjs';
 import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
+import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
 import { initShell } from './shell.mjs';
 import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here (also defines <gbti-card-list>)
 
@@ -40,8 +41,11 @@ let MODE = (() => { try { return localStorage.getItem('gbti-nt-mode') || 'compac
 const TYPE_FILTERS = new Set(['all', 'post', 'product', 'prompt', 'share', 'news']);
 // The feed IS the unified content browser; the rail's Browse items are shortcuts that open it pre-filtered via
 // the hash (newtab.html#type=<X>). The hash wins over the persisted choice on load, so the rail always lands on
-// the right filter, and a hashchange (clicking a rail item while already here) switches the filter live.
-const typeFromHash = () => { const m = /(?:^|[#&])type=([a-z]+)/.exec((typeof location !== 'undefined' && location.hash) || ''); return m && TYPE_FILTERS.has(m[1]) ? m[1] : null; };
+// the right filter, and a hashchange (clicking a rail item while already here) switches the filter live. The
+// activity bell deep-links here too, in the legacy Browse hash shape (#tab=<type>&read=<repo path>); typeFromHash
+// accepts either `type=` or `tab=`, and readFromHash pulls the optional path that auto-opens the in-place reader.
+const typeFromHash = () => { const m = /(?:^|[#&])(?:type|tab)=([a-z]+)/.exec((typeof location !== 'undefined' && location.hash) || ''); return m && TYPE_FILTERS.has(m[1]) ? m[1] : null; };
+const readFromHash = () => { const { read } = parseBrowseHash((typeof location !== 'undefined' && location.hash) || ''); return read || null; };
 let TYPE = (() => { const h = typeFromHash(); if (h) return h; try { const t = localStorage.getItem('gbti-nt-type'); return TYPE_FILTERS.has(t) ? t : 'all'; } catch (e) { return 'all'; } })();
 let MEMBERSHIP = 'unknown';
 let SHARES = null;
@@ -99,7 +103,9 @@ function renderFeed(filter = '') {
       : (FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()))));
   }
   rows.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt)); // newest-first across all three sources
-  rows = rows.slice(0, FEED_CAP); // the capped river
+  // "All" is the capped recent river; a specific type filter is the uncapped directory for that type (so the rail's
+  // Articles/Products/Prompts/Shares/News shortcuts show everything, not just the latest 40).
+  if (TYPE === 'all') rows = rows.slice(0, FEED_CAP);
   if (q) rows = rows.filter((e) => `${e.title} ${authorName(e.author)}`.toLowerCase().includes(q));
 
   if (!rows.length) {
@@ -345,8 +351,19 @@ function init() {
   // re-render; selecting All/Shares lazily loads Shares, All/News lazily loads News, the first time.
   document.querySelectorAll('.nt-type').forEach((b) => b.addEventListener('click', () => selectType(b.dataset.type)));
 
-  // The rail's Browse shortcuts (newtab.html#type=<X>) switch the filter when clicked while already on the feed.
-  window.addEventListener('hashchange', () => { const t = typeFromHash(); if (t) selectType(t); });
+  // The rail's Browse shortcuts (newtab.html#type=<X>) switch the filter when clicked while already on the feed; a
+  // bell deep-link (#tab=<type>&read=<path>) also auto-opens that item in the in-place reader.
+  window.addEventListener('hashchange', () => {
+    const t = typeFromHash();
+    if (t) selectType(t);
+    const rd = readFromHash();
+    if (rd) openReader({ type: t || TYPE, path: rd });
+  });
+
+  // A bell deep-link present on first load opens that item straight into the in-place reader (the feed still
+  // renders underneath, so Back reveals it). The reader resolves the title/body from the path via the client.
+  const deepRead = readFromHash();
+  if (deepRead) openReader({ type: TYPE, path: deepRead });
 
   $('[data-filter]')?.addEventListener('input', (e) => renderFeed(e.target.value));
 

@@ -19699,7 +19699,6 @@ async function deviceFlowLogin({
 var PAGES = /* @__PURE__ */ new Set([
   "newtab.html",
   "workspace.html",
-  "browse.html",
   "shares.html",
   "admin.html",
   "account.html",

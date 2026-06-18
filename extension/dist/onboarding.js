@@ -6262,7 +6262,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ts: toMs(e.publishedAt),
         title: e.title || "New activity",
         sub: `@${e.author}`,
-        href: e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE7}${e.url || ""}`
+        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE7}${e.url || ""}`
       }));
     }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
@@ -6280,7 +6280,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
           sub: `@${c.author}`,
-          href: "browse.html#tab=share"
+          href: "newtab.html#tab=share"
         }));
       })));
       return lists.flat();

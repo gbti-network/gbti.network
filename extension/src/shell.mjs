@@ -44,13 +44,14 @@ export const ico = (k) => (SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true"
 const RAIL = [
   { group: 'Feeds' },
   { key: 'activity', href: 'newtab.html', ico: 'activity', nm: 'Activity', sub: 'The latest across the co-op' },
+  // News is a feed (curated, members-only), so it sits with Activity, not under Browse.
+  { key: 'news', href: 'newtab.html#type=news', ico: 'news', nm: 'News', sub: 'Curated, members-only' },
   { group: 'Browse' },
   { key: 'all', href: 'newtab.html#type=all', ico: 'grid', nm: 'All', sub: 'Everything in one place' },
   { key: 'articles', href: 'newtab.html#type=post', ico: 'article', nm: 'Articles', sub: 'Posts and tutorials' },
   { key: 'products', href: 'newtab.html#type=product', ico: 'product', nm: 'Products', sub: 'Plugins and tools' },
   { key: 'prompts', href: 'newtab.html#type=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Reusable prompts' },
   { key: 'shares', href: 'newtab.html#type=share', ico: 'coin', nm: 'Shares', sub: 'The co-op stream' },
-  { key: 'news', href: 'newtab.html#type=news', ico: 'news', nm: 'News', sub: 'Curated, members-only' },
   { div: true },
   { key: 'workspace', href: 'workspace.html', ico: 'grid', nm: 'My workspace', sub: 'Content + pull requests' },
 ];
