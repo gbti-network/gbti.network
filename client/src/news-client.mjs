@@ -58,3 +58,18 @@ export async function workerSetPrefs({ token, signupBase, fetch = globalThis.fet
   const data = await res.json();
   return data?.prefs ?? { categories: [], followedChannels: [] };
 }
+
+// SOW-046 C: curator-only "Add to Discord" publish. The Worker re-checks the curator capability server-side, holds
+// the Discord bot token, and resolves the CANONICAL item from the upstream feed itself, so we POST only the item's
+// IDENTITY (guid + a source hint to widen the server-side lookup) — never the display metadata (the Worker does not
+// trust client-supplied title/link/category). The 403 path is normal for a non-curator, so we surface it clearly.
+export async function workerPublishNews({ token, signupBase, fetch = globalThis.fetch, item } = {}) {
+  if (!token || !signupBase) throw new NewsClientError('not signed in');
+  const guid = String(item?.guid || '').trim();
+  if (!guid) throw new NewsClientError('a news item is required');
+  const payload = { guid, source: item?.source ?? '' };
+  const res = await fetch(`${base(signupBase)}/membership/news-publish`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError('publishing to Discord requires a news curator role');
+  if (!res.ok) throw new NewsClientError('could not publish to Discord (' + res.status + ')');
+  return res.json();
+}

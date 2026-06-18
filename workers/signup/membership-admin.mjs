@@ -10,7 +10,7 @@
 // reaches a non-admin and is never cached. Pure over injected deps so it unit-tests with no network/secrets.
 
 import { githubFetchUser } from './oauth.mjs';
-import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
+import { rolesFromParsed, roleOf, isAdminRole, curatorsFromParsed, isCurator, canCurateNews } from '../../membership/overrides-core.mjs';
 import { deriveStatusFromCustomer } from '../../membership/derive-status.mjs';
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from './membership-content.mjs';
@@ -23,7 +23,9 @@ const fail = (status, error, message) => ({ ok: false, status, body: { error, me
  * missing/unverifiable token, a missing/stale/incomplete mirror, or a non-admin role.
  * Returns { ok:true, githubId, role } or { ok:false, status, body }.
  */
-export async function authorizeAdmin(request, env, { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, now = new Date() } = {}) {
+// Verify the token -> github_id and read the fresh overrides mirror, returning the caller's role + curator flag.
+// Shared, fail-closed prefix for authorizeAdmin + authorizeCurator. Returns { ok, githubId, role, isCurator, mirror }.
+async function resolveCaller(request, env, { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, now = new Date() } = {}) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   if (!token) return fail(401, 'unauthorized', 'a GitHub bearer token is required');
@@ -42,8 +44,31 @@ export async function authorizeAdmin(request, env, { fetchImpl = globalThis.fetc
   if (!isSection(mirror.roles)) return fail(403, 'forbidden', 'member overrides are incomplete right now');
 
   const role = roleOf(githubId, rolesFromParsed(mirror.roles));
-  if (!isAdminRole(role)) return fail(403, 'forbidden', 'admin access is required');
-  return { ok: true, githubId, role };
+  return { ok: true, githubId, role, isCurator: isCurator(githubId, curatorsFromParsed(mirror.roles)), mirror };
+}
+
+/**
+ * Authorize an ADMIN/superadmin caller. Identity comes ONLY from the verified token; the role from the SIGNUP_KV
+ * overrides mirror. FAIL CLOSED on a missing/unverifiable token, a missing/stale/incomplete mirror, or a
+ * non-admin role. Returns { ok:true, githubId, role } or { ok:false, status, body }.
+ */
+export async function authorizeAdmin(request, env, deps = {}) {
+  const r = await resolveCaller(request, env, deps);
+  if (!r.ok) return r;
+  if (!isAdminRole(r.role)) return fail(403, 'forbidden', 'admin access is required');
+  return { ok: true, githubId: r.githubId, role: r.role };
+}
+
+/**
+ * SOW-046 C: authorize a NEWS CURATOR (admin/superadmin OR an explicit `curators:` listing) for the news->Discord
+ * publish. Same fail-closed mirror gate; a plain member with no curator grant is denied. Returns
+ * { ok:true, githubId, role, isCurator } or { ok:false, status, body }.
+ */
+export async function authorizeCurator(request, env, deps = {}) {
+  const r = await resolveCaller(request, env, deps);
+  if (!r.ok) return r;
+  if (!canCurateNews(r.role, r.isCurator)) return fail(403, 'forbidden', 'news curator access is required');
+  return { ok: true, githubId: r.githubId, role: r.role, isCurator: r.isCurator };
 }
 
 /**

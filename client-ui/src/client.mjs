@@ -72,6 +72,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     getNewsSources: () => request('GET', '/api/news-sources'), // SOW-046: followable news channels -> { sources }
     getPrefs: () => request('GET', '/api/prefs'), // SOW-046: member prefs -> { categories, followedChannels }
     setPrefs: (patch) => request('POST', '/api/prefs', patch), // SOW-046: { categories } or { followChannel: { id, on } } -> { categories, followedChannels }
+    publishNews: (item) => request('POST', '/api/news-publish', { item }), // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
     postComment: (b) => request('POST', '/api/comment', b), // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
     editComment: (b) => request('POST', '/api/comment/edit', b), // SOW-027: { id, body, authorNote? } -> { id, edited }
     getComment: ({ id }) => request('GET', `/api/comment${qs({ id })}`), // SOW-027: edit prefill -> { path, frontmatter, body }

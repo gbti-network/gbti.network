@@ -17353,6 +17353,9 @@ function rolesFromParsed(parsed) {
 function roleOf(githubId, rolesMap) {
   return rolesMap.get(String(githubId)) ?? ROLE.member;
 }
+function rank(role) {
+  return RANK[role] ?? 0;
+}
 function rolesFromText(text) {
   if (!text) return /* @__PURE__ */ new Map();
   try {
@@ -17361,6 +17364,20 @@ function rolesFromText(text) {
     return /* @__PURE__ */ new Map();
   }
 }
+function curatorsFromText(text) {
+  const set2 = /* @__PURE__ */ new Set();
+  if (!text) return set2;
+  try {
+    const parsed = index_vite_proxy_tmp_default.load(text);
+    for (const e of parsed?.curators ?? []) {
+      const id = String(e?.github_id ?? e);
+      if (id && id !== "REPLACE_AT_M0") set2.add(id);
+    }
+  } catch {
+  }
+  return set2;
+}
+var canCurateNews = (role, isCurator) => rank(role) >= RANK.admin || isCurator === true;
 
 // src/lib/content-index.mjs
 var READ_PATH_RE = /^(members\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
@@ -17931,6 +17948,14 @@ function buildContext(store) {
       if (!id?.githubId) return "member";
       return roleOf(id.githubId, rolesFromText(reader.readFile("house/roles.yml")));
     },
+    /** SOW-046 C: whether the signed-in user may publish news to Discord (admin/superadmin OR a roles.yml
+     * `curators:` listing). UX gating only: the Worker re-checks server-side on every publish. */
+    canCurate() {
+      const id = store.get("identity");
+      if (!id?.githubId) return false;
+      const text = reader.readFile("house/roles.yml");
+      return canCurateNews(roleOf(id.githubId, rolesFromText(text)), curatorsFromText(text).has(String(id.githubId)));
+    },
     /** SOW-011: the effective membership cached at login (paid/trialing/...). Gates publish + the UI notice. */
     membership() {
       return store.get("membership") ?? "unknown";
@@ -18166,7 +18191,9 @@ function getStatus(ctx2) {
     repoPath: ctx2.store?.get("repoPath") ?? null,
     mcpEnabled: ctx2.store?.get("mcpEnabled") ?? null,
     membership,
-    canPublish: canPublish(membership)
+    canPublish: canPublish(membership),
+    canCurate: ctx2.canCurate?.() ?? false
+    // SOW-046 C: news -> Discord publish (UX hint; Worker re-checks)
   };
 }
 function listContent(ctx2, { type } = {}) {

@@ -1,6 +1,9 @@
-// <gbti-news> (SOW-043 P2 + SOW-046 E): the members-only news section. Two views toggled in the header:
-//   - FEED: the classified news (client.getNews -> newsToItem -> shared <gbti-card-list>); each card opens the
-//     source with UTM. A non-paid/locked caller gets an upgrade nudge.
+// <gbti-news> (SOW-043 P2 + SOW-046 E + C): the members-only news section. Two views toggled in the header:
+//   - FEED: the classified news (client.getNews -> newsToItem -> shared <gbti-card-list>). A card opens an
+//     in-element SUMMARY READER (title + classified summary + an outbound "Open source" link with UTM). A NEWS
+//     CURATOR (admin/superadmin OR a roles.yml `curators:` listing, surfaced as status.canCurate) additionally
+//     gets an "Add to Discord" button that posts the item to its mapped channel via client.publishNews (the Worker
+//     holds the bot token + re-checks the capability). A non-paid/locked caller gets an upgrade nudge.
 //   - CHANNELS: the followable news channels (client.getNewsSources) with a Follow/Following toggle per channel
 //     (writes client.setPrefs({ followChannel })). Following a channel makes its news show in the new-tab
 //     Following view (SOW-046 E). Inert in public (no injected client). Host-agnostic.
@@ -35,6 +38,23 @@ const CSS = `
   .fbtn:hover { border-color:var(--accent); color:var(--accent); }
   .fbtn.on { background:var(--brand); border-color:var(--brand); color:#fff; }
   .fbtn[disabled] { opacity:.6; cursor:default; }
+
+  /* the in-element summary reader */
+  .rd { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; }
+  .rd .back { font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:transparent; border:0; padding:0; margin:0 0 12px; cursor:pointer; }
+  .rd .back:hover { color:var(--accent); }
+  .rd h4 { margin:0 0 6px; font-family:var(--font-display, var(--font-body)); font-size:19px; line-height:1.3; }
+  .rd .by { margin:0 0 14px; color:var(--muted); font-size:12.5px; }
+  .rd .sum { margin:0 0 18px; font-size:14.5px; line-height:1.6; color:var(--fg); }
+  .rd .acts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .rd a.src { font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); text-decoration:none; }
+  .rd a.src:hover { border-color:var(--accent); color:var(--accent); }
+  .rd button.disc { font:inherit; font-weight:700; font-size:13px; padding:8px 15px; border:1px solid var(--brand); border-radius:9px; background:var(--brand); color:#fff; cursor:pointer; }
+  .rd button.disc:hover { filter:brightness(1.05); }
+  .rd button.disc[disabled] { opacity:.6; cursor:default; }
+  .rd .note { font-size:12.5px; margin:12px 0 0; }
+  .rd .note.ok { color:var(--brand); }
+  .rd .note.err { color:#d4495a; }
 `;
 
 class GbtiNews extends GbtiElement {
@@ -42,12 +62,17 @@ class GbtiNews extends GbtiElement {
     super.connectedCallback();
     this._view = 'feed';
     this._state = 'loading';
+    this._open = null; // the news item currently in the reader, or null for the list
+    this._canCurate = false;
     this.render();
     this._load();
   }
 
   async _load() {
     if (!this.client) { this._state = 'inert'; this.render(); return; }
+    // The curator capability is a UX hint only (the Worker re-checks on publish); a failed status read just hides
+    // the "Add to Discord" button, never the feed.
+    try { this._canCurate = Boolean((await this.client.status())?.canCurate); } catch { this._canCurate = false; }
     try {
       const { items } = await this.client.getNews({ limit: 60 });
       this._items = (Array.isArray(items) ? items : []).map(newsToItem);
@@ -75,6 +100,7 @@ class GbtiNews extends GbtiElement {
   _setView(v) {
     if (v === this._view) return;
     this._view = v;
+    this._open = null; // leaving the feed closes any open reader
     if (v === 'channels' && !this._chanState) { this._loadChannels(); return; }
     this.render();
   }
@@ -89,13 +115,29 @@ class GbtiNews extends GbtiElement {
     this.render();
   }
 
+  async _publishToDiscord(btn) {
+    const item = this._open; if (!item) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Posting…'; }
+    this._postNote = null;
+    try {
+      const r = await this.client.publishNews(item);
+      this._postNote = r?.posted ? { ok: true, msg: 'Posted to Discord.' }
+        : r?.alreadyPosted ? { ok: true, msg: 'Already posted to Discord.' }
+        : { ok: false, msg: r?.reason || 'No Discord channel is mapped for this category yet.' };
+    } catch (err) {
+      this._postNote = { ok: false, msg: err?.message || 'Could not post to Discord.' };
+    }
+    this.render();
+  }
+
   render() {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client to read the news.</p>`); return; }
     const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === 'feed' ? 'on' : ''}" type="button">Feed</button><button data-view="channels" class="${this._view === 'channels' ? 'on' : ''}" type="button">Channels</button></div>`;
     const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
     this.set(this.css(CSS) + head + `<div data-body></div>`);
     this.$$('[data-view]').forEach((b) => b.addEventListener('click', () => this._setView(b.dataset.view)));
-    this._view === 'channels' ? this._renderChannels() : this._renderFeed();
+    if (this._view === 'channels') { this._renderChannels(); return; }
+    this._open ? this._renderReader() : this._renderFeed();
   }
 
   _renderFeed() {
@@ -112,8 +154,33 @@ class GbtiNews extends GbtiElement {
     if (!items.length) { host.innerHTML = `<p class="muted">No news right now. Check back soon.</p>`; return; }
     const list = document.createElement('gbti-card-list');
     list.mode = 'detailed';
-    list.items = items; // newsToItem carries openHref (the UTM source link) -> cards render as <a> and navigate out
+    // Drop openHref so each card opens the IN-ELEMENT reader (emits card-open) instead of navigating out; the
+    // reader carries the outbound source link + the curator action.
+    list.items = items.map(({ openHref, ...rest }) => rest);
+    list.addEventListener('card-open', (e) => {
+      const it = e.detail?.item; if (!it) return;
+      // map back to the full item (with openHref/guid) by guid so publish + "open source" have everything
+      this._open = items.find((x) => x.guid === it.guid) || it;
+      this._postNote = null;
+      this.render();
+    });
     host.replaceChildren(list);
+  }
+
+  _renderReader() {
+    const host = this.$('[data-body]'); if (!host) return;
+    const it = this._open;
+    const by = [it.source, it.category].filter(Boolean).map((s) => esc(String(s))).join(' · ');
+    const src = it.openHref ? `<a class="src" href="${esc(it.openHref)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : '';
+    const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : '';
+    const note = this._postNote ? `<p class="note ${this._postNote.ok ? 'ok' : 'err'}">${esc(this._postNote.msg)}</p>` : '';
+    host.innerHTML = `<div class="rd"><button class="back" data-back type="button">← Back to feed</button>`
+      + `<h4>${esc(it.title)}</h4>`
+      + (by ? `<p class="by">${by}</p>` : '')
+      + `<p class="sum">${esc(it.excerpt || 'No summary available.')}</p>`
+      + `<div class="acts">${src}${disc}</div>${note}</div>`;
+    this.$('[data-back]')?.addEventListener('click', () => { this._open = null; this._postNote = null; this.render(); });
+    this.$('[data-disc]')?.addEventListener('click', (e) => this._publishToDiscord(e.currentTarget));
   }
 
   _renderChannels() {

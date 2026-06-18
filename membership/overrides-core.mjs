@@ -23,6 +23,26 @@ export function isAdminRole(role) {
 
 const idOf = (entry) => String(entry?.github_id ?? entry);
 
+// SOW-046 C: the CURATOR capability is ORTHOGONAL to the ban>staff>grandfather rank (it grants only the
+// news->Discord publish, not a membership tier), so it lives in its own `curators:` list in roles.yml and never
+// touches effectiveStatus/roleOf. A caller may curate if they are admin/superadmin (inherited) OR listed as a
+// curator. roles.yml is superadmin-CODEOWNED, so only a superadmin can grant it; the gate stays the real boundary.
+export function curatorsFromParsed(parsed) {
+  const out = new Set();
+  for (const e of parsed?.curators ?? []) {
+    const id = idOf(e);
+    if (id && id !== 'REPLACE_AT_M0') out.add(id);
+  }
+  return out;
+}
+export function isCurator(githubId, curators) {
+  return curators instanceof Set && curators.has(String(githubId));
+}
+/** Whether a caller may publish news to Discord: admin/superadmin (inherited) OR an explicit curator. */
+export function canCurateNews(role, isCuratorFlag) {
+  return isAdminRole(role) || isCuratorFlag === true;
+}
+
 /** Build a github_id -> role Map from a parsed roles.yml ({ superadmins, admins, moderators }). */
 export function rolesFromParsed(parsed) {
   const roles = new Map();

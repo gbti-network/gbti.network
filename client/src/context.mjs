@@ -4,7 +4,7 @@
 
 import { createReader, createStager } from './repo-fs.mjs';
 import { createRepoClient } from './github-repo.mjs';
-import { roleOf, rolesFromText } from './roles.mjs';
+import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from './roles.mjs';
 
 export const UPSTREAM = process.env.GBTI_UPSTREAM || 'gbti-network/gbti.network';
 
@@ -33,6 +33,14 @@ export function buildContext(store) {
       const id = store.get('identity');
       if (!id?.githubId) return 'member';
       return roleOf(id.githubId, rolesFromText(reader.readFile('house/roles.yml')));
+    },
+    /** SOW-046 C: whether the signed-in user may publish news to Discord (admin/superadmin OR a roles.yml
+     * `curators:` listing). UX gating only: the Worker re-checks server-side on every publish. */
+    canCurate() {
+      const id = store.get('identity');
+      if (!id?.githubId) return false;
+      const text = reader.readFile('house/roles.yml');
+      return canCurateNews(roleOf(id.githubId, rolesFromText(text)), curatorsFromText(text).has(String(id.githubId)));
     },
     /** SOW-011: the effective membership cached at login (paid/trialing/...). Gates publish + the UI notice. */
     membership() {

@@ -17,7 +17,7 @@ import {
 } from './member-activity-client.mjs';
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
-import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, NewsClientError } from './news-client.mjs'; // SOW-043/046: members-only news proxy + prefs
+import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, NewsClientError } from './news-client.mjs'; // SOW-043/046: members-only news proxy + prefs + curator publish
 import { probeReadiness } from './github-app-probe.mjs';
 import {
   nextStep as onboardingNextStep, STEPS as ONBOARDING_STEPS, forkFullName,
@@ -67,6 +67,7 @@ export function getStatus(ctx) {
     mcpEnabled: ctx.store?.get('mcpEnabled') ?? null,
     membership,
     canPublish: canPublish(membership),
+    canCurate: ctx.canCurate?.() ?? false, // SOW-046 C: news -> Discord publish (UX hint; Worker re-checks)
   };
 }
 
@@ -565,6 +566,19 @@ export async function setPrefs(ctx, { categories, followChannel } = {}) {
   const token = ctx.store?.get?.('githubToken');
   try { return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel } }); }
   catch (err) { mapNewsErr(err, 'save your preferences'); }
+}
+
+// SOW-046 C: curator-only "Add to Discord". The Worker holds the bot token + re-checks the curator capability, so
+// a non-curator member gets a clean membership-required-style error rather than a generic failure.
+export async function publishNews(ctx, { item } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerPublishNews({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, item }); }
+  catch (err) {
+    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', 'Sign in to publish to Discord.');
+    if (err instanceof NewsClientError && /curator/i.test(err.message)) throw new OperationError('forbidden', 'Publishing news to Discord requires a curator role.');
+    throw new OperationError('news-failed', err?.message || 'could not publish to Discord');
+  }
 }
 
 export async function getDiscordInvite(ctx) {

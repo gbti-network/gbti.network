@@ -22,13 +22,37 @@ test('401 when the GitHub token cannot be verified', async () => {
   assert.equal(r.body.error, 'unauthorized');
 });
 
-test('verifies the token -> github_id and returns the Stripe-derived status', async () => {
+test('verifies the token -> github_id and returns the Stripe-derived status (canCurate false with no mirror)', async () => {
   const r = await membershipStatus(req('Bearer good'), ENV, {
     fetchUser: async () => ({ githubId: '1', githubLogin: 'alice' }),
     makeStripe: () => ({ findCustomerByGithubId: async () => paidCustomer }),
   });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ok: true, github_id: '1', login: 'alice', status: 'paid' });
+  // No SIGNUP_KV on ENV -> readCanCurate fails closed to false; the status itself is unaffected.
+  assert.deepEqual(r.body, { ok: true, github_id: '1', login: 'alice', status: 'paid', canCurate: false });
+});
+
+test('SOW-046 C: canCurate is true for a roles.yml curator (read from the fresh KV overrides mirror)', async () => {
+  const now = new Date('2026-06-18T00:00:00Z');
+  const mirror = {
+    generatedAt: new Date(now.getTime() - 60_000).toISOString(),
+    roles: { superadmins: [], admins: [], moderators: [], curators: [{ github_id: '7' }] },
+  };
+  const env = { STRIPE_SECRET_KEY: 'rk_test', SIGNUP_KV: { get: async () => mirror } };
+  // a curator
+  const r = await membershipStatus(req('Bearer good'), env, {
+    fetchUser: async () => ({ githubId: '7', githubLogin: 'cara' }),
+    makeStripe: () => ({ findCustomerByGithubId: async () => paidCustomer }),
+    now,
+  });
+  assert.equal(r.body.canCurate, true);
+  // a plain member with the same fresh mirror is not a curator
+  const r2 = await membershipStatus(req('Bearer good'), env, {
+    fetchUser: async () => ({ githubId: '9', githubLogin: 'dan' }),
+    makeStripe: () => ({ findCustomerByGithubId: async () => paidCustomer }),
+    now,
+  });
+  assert.equal(r2.body.canCurate, false);
 });
 
 test('fails closed to none when the member has no Stripe customer', async () => {

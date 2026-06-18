@@ -54,6 +54,7 @@ import { handleActivity } from './membership-activity.mjs';
 import { handleFollows } from './membership-follows.mjs';
 import { membershipNews, membershipNewsCategories, membershipNewsSources } from './membership-news.mjs'; // SOW-043/046: members-only news proxy
 import { handlePrefs } from './membership-prefs.mjs'; // SOW-046: member prefs (categories + followed news channels)
+import { membershipNewsPublish } from './membership-news-publish.mjs'; // SOW-046 C: curator-gated news -> Discord publish
 import { handleDiscordInvite } from './discord-invite.mjs';
 import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewPrDetail, reviewPrFiles, reviewFileContent } from './github-app.mjs';
 
@@ -430,6 +431,17 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET' || method === 'POST') {
           const r = await handlePrefs(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-046 C: publish a members-only news item to its mapped Discord channel. CURATOR-gated (admin/superadmin
+      // OR an explicit roles.yml curators: listing, checked server-side from the KV mirror). The Discord bot token
+      // never leaves this Worker; posts once, deduped on the news guid. Per-token, so never cached, varied on bearer.
+      if (pathname === '/membership/news-publish') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'POST') {
+          const r = await membershipNewsPublish(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

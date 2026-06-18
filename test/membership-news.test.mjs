@@ -2,7 +2,7 @@
 // NEWS_API_KEY server-side and proxies the news worker's /feed. Pure over injected authorize/fetch -> no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { membershipNews, membershipNewsCategories, membershipNewsSources } from '../workers/signup/membership-news.mjs';
+import { membershipNews, membershipNewsCategories, membershipNewsSources, findNewsItemByGuid } from '../workers/signup/membership-news.mjs';
 
 const ENV = { NEWS_API_BASE: 'https://gbti-news.example.workers.dev', NEWS_API_KEY: 'secret-key' };
 const req = (url = 'https://signup.gbti.network/membership/news') => new Request(url, { headers: { Authorization: 'Bearer tok' } });
@@ -60,6 +60,25 @@ test('news-sources (SOW-046): paid passes through the followable channels; non-p
   assert.equal((await membershipNewsSources(req(), ENV, { authorize: denied, fetch: async () => { called = true; return new Response('{}'); } })).status, 403);
   assert.equal(called, false);
   assert.equal((await membershipNewsSources(req(), {}, { authorize: paid, fetch: async () => new Response('{}') })).status, 502);
+});
+
+test('findNewsItemByGuid (SOW-046 C): resolves the canonical item by guid; fail-closed on miss/unconfigured/error', async () => {
+  const feed = { items: [{ guid: 'g1', title: 'One', category: 'ai', source: 'Example' }, { guid: 'g2', title: 'Two', category: 'devops' }] };
+  let sentUrl = null;
+  const fetch = async (url) => { sentUrl = url; return new Response(JSON.stringify(feed), { status: 200 }); };
+  const hit = await findNewsItemByGuid(ENV, { guid: 'g2', fetch });
+  assert.equal(hit.title, 'Two');
+  assert.equal(hit.category, 'devops'); // canonical category drives the channel route, not anything client-supplied
+  assert.match(sentUrl, /\/feed\?/);
+  // a guid not in the window -> null (the publish path then 404s, posting nothing)
+  assert.equal(await findNewsItemByGuid(ENV, { guid: 'ghost', fetch }), null);
+  // unconfigured / upstream error -> null, no key leak, no crash
+  assert.equal(await findNewsItemByGuid({}, { guid: 'g1', fetch: async () => new Response('{}') }), null);
+  assert.equal(await findNewsItemByGuid(ENV, { guid: 'g1', fetch: async () => { throw new Error('net'); } }), null);
+  // a forged/unsafe source hint is not forwarded verbatim (bounded to a safe token set)
+  let srcUrl = null;
+  await findNewsItemByGuid(ENV, { guid: 'g1', source: '../evil?x=1', fetch: async (url) => { srcUrl = url; return new Response(JSON.stringify(feed), { status: 200 }); } });
+  assert.ok(!/evil/.test(srcUrl), 'an unsafe source hint is dropped, not forwarded');
 });
 
 test('news-categories: paid passes through; non-paid denied; unconfigured 502', async () => {

@@ -6,11 +6,11 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getNews, getNewsSources, getPrefs, setPrefs, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, listComments } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getNews, getNewsSources, getPrefs, setPrefs, publishNews, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, listComments } from '../../client/src/operations.mjs';
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
-import { roleOf, rolesFromText } from '../../client/src/roles.mjs';
+import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from '../../client/src/roles.mjs';
 import { banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent } from '../../client/src/admin-ops.mjs';
 
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
@@ -37,6 +37,15 @@ async function computeRole(ctx) {
   return roleOf(id.githubId, rolesFromText(text));
 }
 
+// SOW-046 C: role + news-curator capability from one roles.yml read (admin/superadmin OR a `curators:` listing).
+async function computeRoleAndCurate(ctx) {
+  const id = ctx.identity?.();
+  if (!id?.githubId) return { role: 'member', canCurate: false };
+  const text = await ctx.reader.readFile('house/roles.yml');
+  const role = roleOf(id.githubId, rolesFromText(text));
+  return { role, canCurate: canCurateNews(role, curatorsFromText(text).has(String(id.githubId))) };
+}
+
 function requireRepo(ctx) {
   const repo = ctx.getRepoClient?.();
   if (!repo) throw new OperationError('not-authenticated', 'sign in first');
@@ -49,13 +58,15 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
     const id = ctx.identity?.();
     if (pathname === '/api/status') {
       const membership = ctx.membership?.() ?? 'unknown'; // SOW-011: cached at login; drives the publish notice
+      const { role, canCurate } = await computeRoleAndCurate(ctx); // SOW-046 C: news -> Discord publish capability
       return ok({
         version: '0.1.0',
         identity: id ?? null,
-        role: await computeRole(ctx),
+        role,
         authenticated: Boolean(ctx.store?.get('githubToken')),
         membership,
         canPublish: membership === 'paid',
+        canCurate,
       });
     }
     // SOW-026: first-run readiness must work BEFORE sign-in: it is the route that DRIVES the sign-in step (it
@@ -114,6 +125,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await getNewsSources(ctx));
       case '/api/prefs': // SOW-046: member prefs (categories + followed news channels)
         return ok(method === 'POST' ? await setPrefs(ctx, body) : await getPrefs(ctx));
+      case '/api/news-publish': // SOW-046 C: curator-only "Add to Discord" (the Worker holds the bot token + re-checks)
+        return ok(await publishNews(ctx, body ?? {}));
       case '/api/billing': // SOW-040: the Stripe customer-portal deep-link (no card/PCI in the client)
         return ok(getBilling(ctx));
       case '/api/referral': // SOW-040/007: the member's referral link (keyed on the immutable github_id)

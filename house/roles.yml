@@ -24,3 +24,9 @@ superadmins:
 # stored as GITHUB_BOT_TOKEN. A leaked token is then bounded to this one repo.
 admins: []
 moderators: []
+
+# SOW-046: news CURATORS. A capability grant ORTHOGONAL to the member<moderator<admin<superadmin ladder above:
+# a curator may publish a members-only news item to its mapped Discord channel (the "Add to Discord" action),
+# nothing else. admin + superadmin inherit it. This list grants it to a plain member without elevating their rank
+# (it never affects effective status / content gating). Superadmin-owned like the rest of this file.
+curators: []

@@ -17906,6 +17906,20 @@ function rolesFromText(text) {
 var canModerate = (role) => rank(role) >= RANK.moderator;
 var canBanGrandfather = (role) => rank(role) >= RANK.admin;
 var canManageRoles = (role) => rank(role) >= RANK.superadmin;
+function curatorsFromText(text) {
+  const set2 = /* @__PURE__ */ new Set();
+  if (!text) return set2;
+  try {
+    const parsed = index_vite_proxy_tmp_default.load(text);
+    for (const e of parsed?.curators ?? []) {
+      const id = String(e?.github_id ?? e);
+      if (id && id !== "REPLACE_AT_M0") set2.add(id);
+    }
+  } catch {
+  }
+  return set2;
+}
+var canCurateNews = (role, isCurator) => rank(role) >= RANK.admin || isCurator === true;
 
 // client/src/membership.mjs
 var STAFF = /* @__PURE__ */ new Set([ROLE.moderator, ROLE.admin, ROLE.superadmin]);
@@ -18154,6 +18168,16 @@ async function workerSetPrefs({ token, signupBase, fetch = globalThis.fetch, pat
   if (!res.ok) throw new NewsClientError("could not save prefs (" + res.status + ")");
   const data = await res.json();
   return data?.prefs ?? { categories: [], followedChannels: [] };
+}
+async function workerPublishNews({ token, signupBase, fetch = globalThis.fetch, item } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const guid3 = String(item?.guid || "").trim();
+  if (!guid3) throw new NewsClientError("a news item is required");
+  const payload = { guid: guid3, source: item?.source ?? "" };
+  const res = await fetch(`${base2(signupBase)}/membership/news-publish`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("publishing to Discord requires a news curator role");
+  if (!res.ok) throw new NewsClientError("could not publish to Discord (" + res.status + ")");
+  return res.json();
 }
 
 // client/src/github-app-probe.mjs
@@ -18790,6 +18814,17 @@ async function setPrefs(ctx, { categories, followChannel } = {}) {
     return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel } });
   } catch (err) {
     mapNewsErr(err, "save your preferences");
+  }
+}
+async function publishNews(ctx, { item } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerPublishNews({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, item });
+  } catch (err) {
+    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", "Sign in to publish to Discord.");
+    if (err instanceof NewsClientError && /curator/i.test(err.message)) throw new OperationError("forbidden", "Publishing news to Discord requires a curator role.");
+    throw new OperationError("news-failed", err?.message || "could not publish to Discord");
   }
 }
 async function getDiscordInvite2(ctx) {
@@ -19452,6 +19487,13 @@ async function computeRole(ctx) {
   const text = await ctx.reader.readFile("house/roles.yml");
   return roleOf(id.githubId, rolesFromText(text));
 }
+async function computeRoleAndCurate(ctx) {
+  const id = ctx.identity?.();
+  if (!id?.githubId) return { role: "member", canCurate: false };
+  const text = await ctx.reader.readFile("house/roles.yml");
+  const role = roleOf(id.githubId, rolesFromText(text));
+  return { role, canCurate: canCurateNews(role, curatorsFromText(text).has(String(id.githubId))) };
+}
 function requireRepo3(ctx) {
   const repo = ctx.getRepoClient?.();
   if (!repo) throw new OperationError("not-authenticated", "sign in first");
@@ -19462,13 +19504,15 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     const id = ctx.identity?.();
     if (pathname === "/api/status") {
       const membership = ctx.membership?.() ?? "unknown";
+      const { role, canCurate } = await computeRoleAndCurate(ctx);
       return ok({
         version: "0.1.0",
         identity: id ?? null,
-        role: await computeRole(ctx),
+        role,
         authenticated: Boolean(ctx.store?.get("githubToken")),
         membership,
-        canPublish: membership === "paid"
+        canPublish: membership === "paid",
+        canCurate
       });
     }
     if (pathname === "/api/onboarding-status") return ok(await getOnboardingStatus(ctx));
@@ -19529,6 +19573,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getNewsSources(ctx));
       case "/api/prefs":
         return ok(method === "POST" ? await setPrefs(ctx, body) : await getPrefs(ctx));
+      case "/api/news-publish":
+        return ok(await publishNews(ctx, body ?? {}));
       case "/api/billing":
         return ok(getBilling(ctx));
       case "/api/referral":

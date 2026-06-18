@@ -35,6 +35,7 @@ import {
   getNewsSources,
   getPrefs,
   setPrefs,
+  publishNews,
   getOnboardingStatus,
   getOverridesRoster,
   getOpenPulls,
@@ -109,6 +110,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/news-sources') return run(() => getNewsSources(ctx)); // SOW-046: followable news channels
   if (method === 'GET' && pathname === '/api/prefs') return run(() => getPrefs(ctx)); // SOW-046: member prefs
   if (method === 'POST' && pathname === '/api/prefs') return run(() => setPrefs(ctx, body)); // SOW-046: set categories / follow a channel
+  if (method === 'POST' && pathname === '/api/news-publish') return run(() => publishNews(ctx, body ?? {})); // SOW-046 C: curator -> Discord
   if (method === 'GET' && pathname === '/api/onboarding-status') return run(() => getOnboardingStatus(ctx)); // SOW-026
   if (method === 'GET' && pathname === '/api/prs') return run(() => listPRs(ctx));
   if (method === 'GET' && pathname === '/api/pr-status') return run(() => prStatus(ctx, { number: query.number }));

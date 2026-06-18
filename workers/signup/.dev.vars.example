@@ -63,6 +63,11 @@ MEMBER_CONTENT_KEY="replace-with-base64-of-32-random-bytes"
 NEWS_API_BASE="https://gbti-news.<your-subdomain>.workers.dev"
 NEWS_API_KEY="replace-with-the-gbti-news-bearer-key"
 
+# SOW-046 C: the news-category -> Discord-channel map for the curator "Add to Discord" action (POST
+# /membership/news-publish). A JSON string of house/news-channels.yml's shape; reuses DISCORD_BOT_TOKEN above to
+# post (the token stays in the Worker). Empty until channel ids are provisioned; an unmapped category posts nothing.
+NEWS_CHANNELS='{"channels":[{"category":"ai","channelId":"REPLACE_WITH_DISCORD_CHANNEL_ID"}]}'
+
 # SOW-026 GitHub App PR-opener (the App key NEVER leaves the Worker). Set these once the App is provisioned;
 # until then POST /membership/open-pr returns "misconfigured" and the client stays on classic OAuth.
 # GITHUB_APP_ID="123456"
