@@ -98,8 +98,12 @@ export function grandfather(parsedGf, { githubId, login, reason, until = null },
   const id = reqId(githubId);
   if (until != null && until !== '' && Number.isNaN(new Date(until).getTime())) throw new SuperadminActionError('invalid until date');
   const list = cloneList(parsedGf?.grandfathered);
-  const entry = { github_id: id, ...(login ? { login } : {}), reason: reasonOr(reason, 'complimentary access'), until: until ?? null };
   const i = list.findIndex((e) => idOf(e) === id);
+  // Carry the grant time `at`: commissions.mjs reads it as the grandfathered referrer's commission-active interval
+  // START (a missing `at` falls back to epoch, over-crediting). Preserve the ORIGINAL `at` across an idempotent
+  // re-grant so the entry stays byte-identical for the equality check below; a brand-new grant stamps `now`.
+  const at = (i >= 0 && list[i]?.at) ? list[i].at : isoOf(ctx.now);
+  const entry = { github_id: id, ...(login ? { login } : {}), reason: reasonOr(reason, 'complimentary access'), until: until ?? null, at };
   let changed;
   if (i >= 0) { changed = JSON.stringify(list[i]) !== JSON.stringify(entry); list[i] = entry; }
   else { list.push(entry); changed = true; }

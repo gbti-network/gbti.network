@@ -69,13 +69,18 @@ test('ban / unban are idempotent and identity-minimal', () => {
 test('grandfather: adds permanent grant, updates on change, rejects a bad until', () => {
   const g = grandfather({ grandfathered: [] }, { githubId: '225425', login: 'rfilipo' }, ctx);
   assert.equal(g.changed, true);
-  assert.deepEqual(g.next.grandfathered[0], { github_id: '225425', login: 'rfilipo', reason: 'complimentary access', until: null });
-  // identical re-grant -> no change
-  assert.equal(grandfather(g.next, { githubId: '225425', login: 'rfilipo' }, ctx).changed, false);
-  // changing until -> change
+  // SOW-038 P4: the entry carries `at` (the grant time) — commissions.mjs reads it as the referrer's
+  // commission-active interval start (a missing `at` falls back to epoch, over-crediting).
+  assert.deepEqual(g.next.grandfathered[0], { github_id: '225425', login: 'rfilipo', reason: 'complimentary access', until: null, at: NOW.toISOString() });
+  // identical re-grant -> no change (and `at` is preserved, not re-stamped, so it stays byte-identical)
+  const regrant = grandfather(g.next, { githubId: '225425', login: 'rfilipo' }, { ...ctx, now: new Date('2027-03-03T00:00:00Z') });
+  assert.equal(regrant.changed, false);
+  assert.equal(regrant.next.grandfathered[0].at, NOW.toISOString(), 'the original grant time is preserved across a re-grant');
+  // changing until -> change (the original `at` is still preserved)
   const g2 = grandfather(g.next, { githubId: '225425', login: 'rfilipo', until: '2027-01-01' }, ctx);
   assert.equal(g2.changed, true);
   assert.equal(g2.next.grandfathered[0].until, '2027-01-01');
+  assert.equal(g2.next.grandfathered[0].at, NOW.toISOString());
   assert.throws(() => grandfather({ grandfathered: [] }, { githubId: '1', until: 'not-a-date' }, ctx), SuperadminActionError);
   // revoke
   const rv = revokeGrandfather(g2.next, { githubId: '225425' }, ctx);

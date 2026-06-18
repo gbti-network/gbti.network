@@ -1,4 +1,6 @@
-// SOW-006 admin/superadmin tools: pure edits, role resolution, and the capability-gated orchestration.
+// SOW-006 admin/superadmin tools: role resolution + the capability-gated orchestration. SOW-038 P4: the pure
+// governance edits now live in membership/superadmin-actions.mjs (tested in test/superadmin-actions.test.mjs);
+// admin-ops orchestrates that core, so these tests cover the wiring (role gate, PR, idempotency, audit-in-body).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,41 +8,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { addBan, removeBan, addGrandfather, assignRole, revokeRole, setStatusDraft } from '../client/src/admin-edits.mjs';
 import { rolesFromParsed, roleOf, canModerate, canBanGrandfather, canManageRoles } from '../client/src/roles.mjs';
 import { createReader, loadRoles } from '../client/src/repo-fs.mjs';
 import { banMember, grandfatherMember, setMemberRole, deplatformContent, removeContent } from '../client/src/admin-ops.mjs';
 import { OperationError } from '../client/src/operations.mjs';
-
-// ---- pure edits ----
-
-test('admin-edits: ban add/remove (idempotency guard)', () => {
-  const after = addBan({ bans: [] }, { githubId: '999', reason: 'spam', at: 'T' });
-  assert.equal(after.bans[0].github_id, '999');
-  assert.throws(() => addBan(after, { githubId: '999' }), /already banned/);
-  assert.deepEqual(removeBan(after, '999').bans, []);
-});
-
-test('admin-edits: grandfather add with permanent default', () => {
-  const after = addGrandfather({}, { githubId: '7', reason: 'founder' });
-  assert.equal(after.grandfathered[0].github_id, '7');
-  assert.equal(after.grandfathered[0].until, null);
-});
-
-test('admin-edits: assignRole moves id to one list; revoke removes from all; unknown role throws', () => {
-  const base = { superadmins: [{ github_id: '1' }], admins: [], moderators: [] };
-  const asMod = assignRole(base, { githubId: '5', role: 'moderator', login: 'mo' });
-  assert.deepEqual(asMod.moderators, [{ github_id: '5', login: 'mo' }]);
-  const promote = assignRole(asMod, { githubId: '5', role: 'admin' });
-  assert.equal(promote.moderators.length, 0);
-  assert.equal(promote.admins[0].github_id, '5');
-  assert.equal(revokeRole(promote, '5').admins.length, 0);
-  assert.throws(() => assignRole(base, { githubId: '5', role: 'wizard' }), /unknown role/);
-});
-
-test('admin-edits: setStatusDraft', () => {
-  assert.equal(setStatusDraft({ status: 'published', title: 'x' }).status, 'draft');
-});
 
 // ---- roles ----
 
@@ -68,10 +39,12 @@ test('roles: loadRoles from a local repo', () => {
 function fakeRepo() {
   const puts = [];
   const deletes = [];
+  const pulls = [];
   return {
     upstream: 'gbti-network/gbti.network',
     puts,
     deletes,
+    pulls,
     async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
     async getDefaultBranch() { return 'main'; },
     async getBranchSha() { return 'sha'; },
@@ -80,7 +53,7 @@ function fakeRepo() {
     async putFile(r, p, opts) { puts.push({ path: p, content: Buffer.from(opts.contentBase64, 'base64').toString('utf8'), branch: opts.branch }); },
     async deleteFile(r, p, opts) { deletes.push({ path: p, branch: opts.branch }); },
     async findOpenPull() { return null; },
-    async openPull() { return { number: 55, html_url: 'u' }; },
+    async openPull(opts) { pulls.push(opts); return { number: 55, html_url: 'u' }; },
   };
 }
 
@@ -111,8 +84,40 @@ test('banMember: forbidden for a plain member, allowed for admin (PR edits bans.
   const out = await banMember(adminCtx({ role: 'admin', repoPath, repo }), { githubId: '999', reason: 'spam' });
   assert.equal(out.prNumber, 55);
   assert.equal(out.branch, 'gbti/ban-999');
+  assert.equal(out.changed, true);
   assert.equal(repo.puts[0].path, 'house/bans.yml');
   assert.match(repo.puts[0].content, /999/);
+});
+
+// SOW-038 P4: the governance ops are idempotent (already-in-that-state -> no PR) and fold an identity-minimal
+// audit entry into the PR body (the PR is the audit trail).
+test('banMember: idempotent no-op when already banned (no PR opened)', async () => {
+  const dir = seedRepo();
+  fs.writeFileSync(path.join(dir, 'house', 'bans.yml'), "bans:\n  - github_id: '999'\n    reason: spam\n    at: 'T'\n");
+  const repo = fakeRepo();
+  const out = await banMember(adminCtx({ role: 'admin', repoPath: dir, repo }), { githubId: '999' });
+  assert.equal(out.changed, false);
+  assert.equal(out.noop, true);
+  assert.equal(repo.puts.length, 0, 'no file write / PR for a no-op');
+  assert.equal(repo.pulls.length, 0);
+});
+
+test('banMember: records an identity-minimal audit entry (returned + folded into the PR body)', async () => {
+  const repo = fakeRepo();
+  const ctx = { ...adminCtx({ role: 'admin', repoPath: seedRepo(), repo }), identity: () => ({ githubId: '1', login: 'alice' }) };
+  const out = await banMember(ctx, { githubId: '999', reason: 'spam' });
+  assert.equal(out.audit.action, 'ban');
+  assert.equal(out.audit.actor.login, 'alice');
+  assert.equal(out.audit.target.github_id, '999');
+  // the PR body carries the parseable audit comment
+  assert.match(repo.pulls[0].body, /<!-- gbti-audit .*"action":"ban".*-->/);
+});
+
+test('setMemberRole: unknown role is a bad-request (mapped from the core SuperadminActionError)', async () => {
+  await assert.rejects(
+    setMemberRole(adminCtx({ role: 'superadmin', repoPath: seedRepo(), repo: fakeRepo() }), { githubId: '5', role: 'wizard' }),
+    (e) => e instanceof OperationError && e.code === 'bad-request',
+  );
 });
 
 test('grandfatherMember: admin opens a grandfathered.yml PR', async () => {

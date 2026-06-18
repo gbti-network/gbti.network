@@ -46,7 +46,9 @@ class GbtiAdmin extends GbtiElement {
       this.out('Working…');
       try {
         const res = await this.client.admin(action, args());
-        this.out(`<span class="tag ok">PR opened</span> <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a>`);
+        // SOW-038 P4: a governance action is idempotent — already-in-that-state returns changed:false (no PR).
+        if (res?.changed === false || res?.noop) this.out(`<span class="tag ok">No change</span> ${esc(res.message || 'already in that state')}`);
+        else this.out(`<span class="tag ok">PR opened</span> <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a>`);
       } catch (err) {
         this.out(esc(err.message), 'danger');
       }

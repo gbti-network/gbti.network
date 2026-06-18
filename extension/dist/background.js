@@ -18415,7 +18415,7 @@ function validateContent(ctx, { type, input, body } = {}) {
     return { valid: false, error: err.message };
   }
 }
-async function publish(ctx, { type, input, body, message, title, prBody } = {}) {
+async function publish(ctx, { type, input, body, message, title, prBody: prBody2 } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const membership = await ctx.membership?.() ?? "unknown";
@@ -18444,9 +18444,9 @@ async function publish(ctx, { type, input, body, message, title, prBody } = {}) 
     throw err;
   }
   if (plan) {
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message, title, body: prBody });
+    return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message, title, body: prBody2 });
   }
-  return publishContent({ repo, change: built, message, title, body: prBody });
+  return publishContent({ repo, change: built, message, title, body: prBody2 });
 }
 async function planMemberFiles({ built, body, encrypt }) {
   if (!built?.slug) return null;
@@ -18505,7 +18505,7 @@ async function decryptMemberAsset(ctx, { encPath } = {}) {
     throw new OperationError("decrypt-failed", err?.message || "could not decrypt the asset");
   }
 }
-async function publishShare(ctx, { input = {}, body = "", message, title, prBody } = {}) {
+async function publishShare(ctx, { input = {}, body = "", message, title, prBody: prBody2 } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const membership = await ctx.membership?.() ?? "unknown";
@@ -18539,12 +18539,12 @@ async function publishShare(ctx, { input = {}, body = "", message, title, prBody
     files,
     message: message ?? `Share: ${built.frontmatter.title || id_}`,
     title: title ?? `New Share${built.frontmatter.title ? `: ${built.frontmatter.title}` : ""}`,
-    body: prBody
+    body: prBody2
   });
   return { id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", encrypted: Boolean(plan?.encPath) };
 }
 var commentSuffix = () => Math.random().toString(36).slice(2, 8);
-async function planAndPublishComment(ctx, repo, built, body, { message, title, prBody }) {
+async function planAndPublishComment(ctx, repo, built, body, { message, title, prBody: prBody2 }) {
   const token = ctx.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   let plan;
@@ -18557,10 +18557,10 @@ async function planAndPublishComment(ctx, repo, built, body, { message, title, p
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
-  await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody });
+  await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody2 });
   return { id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? "public", encrypted: Boolean(plan?.encPath) };
 }
-async function publishComment(ctx, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody } = {}) {
+async function publishComment(ctx, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody: prBody2 } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const membership = await ctx.membership?.() ?? "unknown";
@@ -18583,7 +18583,7 @@ async function publishComment(ctx, { targetType, targetSlug, body, authorNote, p
   const r = await planAndPublishComment(ctx, repo, built, body, {
     message: message ?? `Comment on ${targetType} ${targetSlug}`,
     title: title ?? `Comment on ${targetType}: ${targetSlug}`,
-    prBody
+    prBody: prBody2
   });
   return { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
 }
@@ -19086,52 +19086,95 @@ function renderMarkdown(md) {
   return out.join("\n");
 }
 
-// client/src/admin-edits.mjs
-var idStr = (v) => String(v);
-function listFrom(obj, key) {
-  return Array.isArray(obj?.[key]) ? obj[key].map((e) => ({ ...e })) : [];
+// membership/superadmin-actions.mjs
+var SuperadminActionError = class extends Error {
+};
+var idOf2 = (e) => String(e?.github_id ?? "");
+var ROLE_LIST = Object.freeze({ [ROLE2.superadmin]: "superadmins", [ROLE2.admin]: "admins", [ROLE2.moderator]: "moderators" });
+var ALL_LISTS = ["superadmins", "admins", "moderators"];
+function reqId(githubId) {
+  const id = githubId != null ? String(githubId) : "";
+  if (!id) throw new SuperadminActionError("githubId is required");
+  return id;
 }
-function addBan(parsed, { githubId, reason, at }) {
-  const obj = { ...parsed ?? {} };
-  const bans = listFrom(obj, "bans");
-  if (bans.some((b) => idStr(b.github_id) === idStr(githubId))) throw new Error(`already banned: ${githubId}`);
-  bans.push({ github_id: idStr(githubId), reason: reason || "banned", at: at ?? null });
-  obj.bans = bans;
-  return obj;
+function isoOf(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new SuperadminActionError("invalid timestamp");
+  return d.toISOString();
 }
-function removeBan(parsed, githubId) {
-  const obj = { ...parsed ?? {} };
-  obj.bans = listFrom(obj, "bans").filter((b) => idStr(b.github_id) !== idStr(githubId));
-  return obj;
+function audit({ actor, action, target, detail = null, now } = {}) {
+  return {
+    at: isoOf(now),
+    actor: actor ? { github_id: actor.githubId != null ? String(actor.githubId) : actor.github_id != null ? String(actor.github_id) : null, login: actor.login ?? null } : null,
+    action,
+    target: target ? { github_id: target.githubId != null ? String(target.githubId) : null, login: target.login ?? null } : null,
+    detail
+  };
 }
-function addGrandfather(parsed, { githubId, reason, at, until = null, login }) {
-  const obj = { ...parsed ?? {} };
-  const list = listFrom(obj, "grandfathered");
-  if (list.some((g) => idStr(g.github_id) === idStr(githubId))) throw new Error(`already grandfathered: ${githubId}`);
-  list.push({ github_id: idStr(githubId), ...login ? { login } : {}, reason: reason || "grandfathered", at: at ?? null, until });
-  obj.grandfathered = list;
-  return obj;
+var cloneList = (list) => Array.isArray(list) ? list.map((e) => structuredClone(e)) : [];
+var reasonOr = (reason, fallback) => reason && String(reason).trim() || fallback;
+var cloneRoles = (r) => ({ superadmins: cloneList(r?.superadmins), admins: cloneList(r?.admins), moderators: cloneList(r?.moderators), ...stripLists(r) });
+function stripLists(r) {
+  const o = { ...r || {} };
+  for (const l of ALL_LISTS) delete o[l];
+  return o;
 }
-function removeGrandfather(parsed, githubId) {
-  const obj = { ...parsed ?? {} };
-  obj.grandfathered = listFrom(obj, "grandfathered").filter((g) => idStr(g.github_id) !== idStr(githubId));
-  return obj;
-}
-var ROLE_LISTS = Object.freeze({ [ROLE.superadmin]: "superadmins", [ROLE.admin]: "admins", [ROLE.moderator]: "moderators" });
-function assignRole(parsed, { githubId, role, login }) {
-  if (role !== ROLE.member && !ROLE_LISTS[role]) throw new Error(`unknown role: ${role}`);
-  const obj = { ...parsed ?? {} };
-  for (const key of Object.values(ROLE_LISTS)) {
-    obj[key] = listFrom(obj, key).filter((e) => idStr(e.github_id) !== idStr(githubId));
+function grantRole(parsedRoles, { githubId, login, role = ROLE2.member }, ctx = {}) {
+  const id = reqId(githubId);
+  if (role !== ROLE2.member && !ROLE_LIST[role]) throw new SuperadminActionError(`unknown role: ${role}`);
+  const next = cloneRoles(parsedRoles);
+  let changed = false;
+  for (const list of ALL_LISTS) {
+    const target = ROLE_LIST[role] === list;
+    const has = next[list].some((e) => idOf2(e) === id);
+    if (target && !has) {
+      next[list].push({ github_id: id, ...login ? { login } : {} });
+      changed = true;
+    } else if (!target && has) {
+      next[list] = next[list].filter((e) => idOf2(e) !== id);
+      changed = true;
+    }
   }
-  if (role !== ROLE.member) {
-    const key = ROLE_LISTS[role];
-    obj[key] = [...listFrom(obj, key), { github_id: idStr(githubId), ...login ? { login } : {} }];
-  }
-  return obj;
+  return { next, changed, audit: audit({ ...ctx, action: "role.grant", target: { githubId: id, login }, detail: { role } }) };
 }
-function setStatusDraft(frontmatter) {
-  return { ...frontmatter ?? {}, status: "draft" };
+function ban(parsedBans, { githubId, login, reason }, ctx = {}) {
+  const id = reqId(githubId);
+  const list = cloneList(parsedBans?.bans);
+  if (list.some((e) => idOf2(e) === id)) {
+    return { next: { ...parsedBans || {}, bans: list }, changed: false, audit: audit({ ...ctx, action: "ban", target: { githubId: id, login }, detail: { reason: reason ?? null, alreadyBanned: true } }) };
+  }
+  const r = reasonOr(reason, "banned");
+  list.push({ github_id: id, ...login ? { login } : {}, reason: r, at: isoOf(ctx.now) });
+  return { next: { ...parsedBans || {}, bans: list }, changed: true, audit: audit({ ...ctx, action: "ban", target: { githubId: id, login }, detail: { reason: r } }) };
+}
+function unban(parsedBans, { githubId, login }, ctx = {}) {
+  const id = reqId(githubId);
+  const list = cloneList(parsedBans?.bans);
+  const next = list.filter((e) => idOf2(e) !== id);
+  return { next: { ...parsedBans || {}, bans: next }, changed: next.length !== list.length, audit: audit({ ...ctx, action: "unban", target: { githubId: id, login } }) };
+}
+function grandfather(parsedGf, { githubId, login, reason, until = null }, ctx = {}) {
+  const id = reqId(githubId);
+  if (until != null && until !== "" && Number.isNaN(new Date(until).getTime())) throw new SuperadminActionError("invalid until date");
+  const list = cloneList(parsedGf?.grandfathered);
+  const i = list.findIndex((e) => idOf2(e) === id);
+  const at = i >= 0 && list[i]?.at ? list[i].at : isoOf(ctx.now);
+  const entry = { github_id: id, ...login ? { login } : {}, reason: reasonOr(reason, "complimentary access"), until: until ?? null, at };
+  let changed;
+  if (i >= 0) {
+    changed = JSON.stringify(list[i]) !== JSON.stringify(entry);
+    list[i] = entry;
+  } else {
+    list.push(entry);
+    changed = true;
+  }
+  return { next: { ...parsedGf || {}, grandfathered: list }, changed, audit: audit({ ...ctx, action: "grandfather", target: { githubId: id, login }, detail: { reason: reason ?? null, until: until ?? null } }) };
+}
+function revokeGrandfather(parsedGf, { githubId, login }, ctx = {}) {
+  const id = reqId(githubId);
+  const list = cloneList(parsedGf?.grandfathered);
+  const next = list.filter((e) => idOf2(e) !== id);
+  return { next: { ...parsedGf || {}, grandfathered: next }, changed: next.length !== list.length, audit: audit({ ...ctx, action: "grandfather.revoke", target: { githubId: id, login } }) };
 }
 
 // client/src/admin-ops.mjs
@@ -19154,8 +19197,21 @@ var readYaml = async (ctx, rel) => {
   }
 };
 var dumpYaml = (obj) => index_vite_proxy_tmp_default.dump(obj, { lineWidth: 100, noRefs: true });
-var nowIso = (ctx) => ctx.now ? ctx.now() : (/* @__PURE__ */ new Date()).toISOString();
 var slugOf = (rel) => rel.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+function actionCtx(ctx) {
+  const id = ctx.identity?.();
+  return {
+    actor: id ? { githubId: id.githubId ?? id.github_id ?? null, login: id.login ?? null } : null,
+    now: ctx.now ? ctx.now() : void 0
+  };
+}
+function prBody(reason, auditEntry) {
+  const head = reason ? `Reason: ${reason}
+
+` : "";
+  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry)} -->`;
+}
+var noop = (message, auditEntry) => ({ changed: false, noop: true, message, audit: auditEntry });
 function requireId(githubId) {
   if (githubId === void 0 || githubId === null || String(githubId).trim() === "") {
     throw new OperationError("bad-request", "githubId is required");
@@ -19183,42 +19239,59 @@ async function banMember(ctx, { githubId, reason } = {}) {
   requireRole(ctx, canBanGrandfather, "admin");
   const { repo } = requireRepo2(ctx);
   const id = requireId(githubId);
-  const updated = addBan(await readYaml(ctx, "house/bans.yml"), { githubId: id, reason, at: nowIso(ctx) });
-  return publishFiles({ repo, branch: `gbti/ban-${id}`, files: [{ path: "house/bans.yml", content: dumpYaml(updated) }], message: `Ban ${id}`, title: `Ban member ${id}`, body: reason ? `Reason: ${reason}` : "" });
+  const { next, changed, audit: audit2 } = ban(await readYaml(ctx, "house/bans.yml"), { githubId: id, reason }, actionCtx(ctx));
+  if (!changed) return noop(`already banned: ${id}`, audit2);
+  const pr = await publishFiles({ repo, branch: `gbti/ban-${id}`, files: [{ path: "house/bans.yml", content: dumpYaml(next) }], message: `Ban ${id}`, title: `Ban member ${id}`, body: prBody(reason, audit2) });
+  return { ...pr, changed: true, audit: audit2 };
 }
 async function unbanMember(ctx, { githubId } = {}) {
   requireRole(ctx, canBanGrandfather, "admin");
   const { repo } = requireRepo2(ctx);
   const id = requireId(githubId);
-  const updated = removeBan(await readYaml(ctx, "house/bans.yml"), id);
-  return publishFiles({ repo, branch: `gbti/unban-${id}`, files: [{ path: "house/bans.yml", content: dumpYaml(updated) }], message: `Unban ${id}`, title: `Unban member ${id}` });
+  const { next, changed, audit: audit2 } = unban(await readYaml(ctx, "house/bans.yml"), { githubId: id }, actionCtx(ctx));
+  if (!changed) return noop(`not banned: ${id}`, audit2);
+  const pr = await publishFiles({ repo, branch: `gbti/unban-${id}`, files: [{ path: "house/bans.yml", content: dumpYaml(next) }], message: `Unban ${id}`, title: `Unban member ${id}`, body: prBody(null, audit2) });
+  return { ...pr, changed: true, audit: audit2 };
 }
 async function grandfatherMember(ctx, { githubId, reason, until = null, login } = {}) {
   requireRole(ctx, canBanGrandfather, "admin");
   const { repo } = requireRepo2(ctx);
   const id = requireId(githubId);
-  const updated = addGrandfather(await readYaml(ctx, "house/grandfathered.yml"), { githubId: id, reason, at: nowIso(ctx), until, login });
-  return publishFiles({ repo, branch: `gbti/grandfather-${id}`, files: [{ path: "house/grandfathered.yml", content: dumpYaml(updated) }], message: `Grandfather ${id}`, title: `Grandfather member ${id}`, body: reason ? `Reason: ${reason}` : "" });
+  let result;
+  try {
+    result = grandfather(await readYaml(ctx, "house/grandfathered.yml"), { githubId: id, login, reason, until }, actionCtx(ctx));
+  } catch (err) {
+    if (err instanceof SuperadminActionError) throw new OperationError("bad-request", err.message);
+    throw err;
+  }
+  if (!result.changed) return noop(`already grandfathered: ${id}`, result.audit);
+  const pr = await publishFiles({ repo, branch: `gbti/grandfather-${id}`, files: [{ path: "house/grandfathered.yml", content: dumpYaml(result.next) }], message: `Grandfather ${id}`, title: `Grandfather member ${id}`, body: prBody(reason, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
 }
 async function ungrandfatherMember(ctx, { githubId } = {}) {
   requireRole(ctx, canBanGrandfather, "admin");
   const { repo } = requireRepo2(ctx);
   const id = requireId(githubId);
-  const updated = removeGrandfather(await readYaml(ctx, "house/grandfathered.yml"), id);
-  return publishFiles({ repo, branch: `gbti/ungrandfather-${id}`, files: [{ path: "house/grandfathered.yml", content: dumpYaml(updated) }], message: `Remove grandfather ${id}`, title: `Remove grandfather for ${id}` });
+  const { next, changed, audit: audit2 } = revokeGrandfather(await readYaml(ctx, "house/grandfathered.yml"), { githubId: id }, actionCtx(ctx));
+  if (!changed) return noop(`not grandfathered: ${id}`, audit2);
+  const pr = await publishFiles({ repo, branch: `gbti/ungrandfather-${id}`, files: [{ path: "house/grandfathered.yml", content: dumpYaml(next) }], message: `Remove grandfather ${id}`, title: `Remove grandfather for ${id}`, body: prBody(null, audit2) });
+  return { ...pr, changed: true, audit: audit2 };
 }
 async function setMemberRole(ctx, { githubId, role, login } = {}) {
   requireRole(ctx, canManageRoles, "superadmin");
   const { repo } = requireRepo2(ctx);
   const id = requireId(githubId);
   if (!role) throw new OperationError("bad-request", "role is required (member|moderator|admin|superadmin)");
-  let updated;
+  let result;
   try {
-    updated = assignRole(await readYaml(ctx, "house/roles.yml"), { githubId: id, role, login });
+    result = grantRole(await readYaml(ctx, "house/roles.yml"), { githubId: id, role, login }, actionCtx(ctx));
   } catch (err) {
-    throw new OperationError("bad-request", err.message);
+    if (err instanceof SuperadminActionError) throw new OperationError("bad-request", err.message);
+    throw err;
   }
-  return publishFiles({ repo, branch: `gbti/role-${id}`, files: [{ path: "house/roles.yml", content: dumpYaml(updated) }], message: `Set ${id} role=${role}`, title: `Set role for ${id}: ${role}` });
+  if (!result.changed) return noop(`already ${role}: ${id}`, result.audit);
+  const pr = await publishFiles({ repo, branch: `gbti/role-${id}`, files: [{ path: "house/roles.yml", content: dumpYaml(result.next) }], message: `Set ${id} role=${role}`, title: `Set role for ${id}: ${role}`, body: prBody(`role: ${role}`, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
 }
 async function deplatformContent(ctx, { path: rel } = {}) {
   requireRole(ctx, canModerate, "moderator");
@@ -19227,7 +19300,7 @@ async function deplatformContent(ctx, { path: rel } = {}) {
   const text = await ctx.reader?.readFile?.(rel);
   if (text == null) throw new OperationError("not-found", `no such file: ${rel}`);
   const { frontmatter, body } = parseContentFile(text);
-  const updated = setStatusDraft(frontmatter);
+  const updated = { ...frontmatter ?? {}, status: "draft" };
   const content = `---
 ${dumpYaml(updated).trimEnd()}
 ---
