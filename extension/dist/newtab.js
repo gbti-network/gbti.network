@@ -2434,6 +2434,39 @@
     return out.sort((a, b) => toMs(b.createdAt ?? b.publishedAt) - toMs(a.createdAt ?? a.publishedAt));
   }
 
+  // client-ui/src/news.mjs
+  var UTM = Object.freeze({ utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "news" });
+  var secToMs = (s) => typeof s === "number" && s > 0 ? s * 1e3 : null;
+  function utmLink(link, params = UTM) {
+    if (typeof link !== "string" || !link) return "";
+    try {
+      const u = new URL(link);
+      for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+      return u.toString();
+    } catch {
+      return link;
+    }
+  }
+  function newsToItem(n = {}) {
+    return {
+      type: "news",
+      kind: "news",
+      supplementary: true,
+      guid: n.guid ?? null,
+      title: n.title || n.source || "News",
+      author: n.source || "News",
+      source: n.source || null,
+      visibility: "members",
+      thumb: null,
+      category: n.category ?? null,
+      excerpt: n.summary || "",
+      createdAt: secToMs(n.publishedAt) ?? secToMs(n.fetchedAt),
+      // epoch seconds -> ms (the feed serves seconds)
+      openHref: n.link ? utmLink(n.link) : null,
+      link: n.link ?? null
+    };
+  }
+
   // client-ui/src/tokens.mjs
   var TOKENS = `
 :host {
@@ -6573,39 +6606,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-workspace", GbtiWorkspace);
 
-  // client-ui/src/news.mjs
-  var UTM = Object.freeze({ utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "news" });
-  var secToMs = (s) => typeof s === "number" && s > 0 ? s * 1e3 : null;
-  function utmLink(link, params = UTM) {
-    if (typeof link !== "string" || !link) return "";
-    try {
-      const u = new URL(link);
-      for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
-      return u.toString();
-    } catch {
-      return link;
-    }
-  }
-  function newsToItem(n = {}) {
-    return {
-      type: "news",
-      kind: "news",
-      supplementary: true,
-      guid: n.guid ?? null,
-      title: n.title || n.source || "News",
-      author: n.source || "News",
-      source: n.source || null,
-      visibility: "members",
-      thumb: null,
-      category: n.category ?? null,
-      excerpt: n.summary || "",
-      createdAt: secToMs(n.publishedAt) ?? secToMs(n.fetchedAt),
-      // epoch seconds -> ms (the feed serves seconds)
-      openHref: n.link ? utmLink(n.link) : null,
-      link: n.link ?? null
-    };
-  }
-
   // client-ui/src/elements/gbti-news.mjs
   var SITE9 = "https://gbti.network";
   var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE9}/membership/">Become a member</a> to unlock the news feed.</div>`;
@@ -7200,7 +7200,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "compact";
     }
   })();
-  var TYPE_FILTERS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share"]);
+  var TYPE_FILTERS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
   var TYPE = (() => {
     try {
       const t = localStorage.getItem("gbti-nt-type");
@@ -7212,6 +7212,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var MEMBERSHIP2 = "unknown";
   var SHARES = null;
   var SHARES_LOADED = false;
+  var NEWS = null;
+  var NEWS_LOADED = false;
   var FEED_CAP = 40;
   var hrefFor = (e) => e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE12}${e.url}`;
   var toCardItem = (e) => ({
@@ -7240,19 +7242,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     }
     const wantShares = TYPE === "all" || TYPE === "share";
-    let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP2 });
+    const wantNews = TYPE === "all" || TYPE === "news";
+    let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP2 }).map(toCardItem);
+    if (wantNews && MEMBERSHIP2 === "paid" && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem));
     if (TYPE !== "all") rows = rows.filter((e) => e.type === TYPE);
     if (VIEW === "following") rows = rows.filter((e) => FOLLOWING.has(String(e.author).toLowerCase()));
+    rows.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
     rows = rows.slice(0, FEED_CAP);
     if (q) rows = rows.filter((e) => `${e.title} ${authorName5(e.author)}`.toLowerCase().includes(q));
     if (!rows.length) {
-      const empty = VIEW === "following" ? q ? "No followed activity matches that filter." : "No recent activity from the members you follow." : q ? "No activity matches that filter." : TYPE === "share" ? "No Shares yet." : "No activity yet.";
+      const empty = VIEW === "following" ? q ? "No followed activity matches that filter." : "No recent activity from the members you follow." : q ? "No activity matches that filter." : TYPE === "share" ? "No Shares yet." : TYPE === "news" ? "No news right now. Check back soon." : "No activity yet.";
       feed.innerHTML = `<p class="muted">${empty}</p>`;
       return;
     }
     const list = document.createElement("gbti-card-list");
     list.mode = MODE;
-    list.items = rows.map(toCardItem);
+    list.items = rows;
     feed.replaceChildren(list);
   }
   function syncModeButtons() {
@@ -7277,6 +7282,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   async function ensureSharesForFilter() {
     if ((TYPE === "all" || TYPE === "share") && !SHARES_LOADED) {
       await loadShares();
+      renderFeed($("[data-filter]")?.value || "");
+    }
+  }
+  async function loadNews() {
+    NEWS_LOADED = true;
+    if (MEMBERSHIP2 !== "paid") {
+      NEWS = [];
+      return;
+    }
+    try {
+      const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/news", query: { limit: 60 } } });
+      NEWS = Array.isArray(r?.json?.items) ? r.json.items : [];
+    } catch {
+      NEWS = [];
+    }
+  }
+  async function ensureNewsForFilter() {
+    if ((TYPE === "all" || TYPE === "news") && !NEWS_LOADED) {
+      await loadNews();
       renderFeed($("[data-filter]")?.value || "");
     }
   }
@@ -7373,7 +7397,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     syncModeButtons();
     syncTypeButtons();
     initFooterTip();
-    checkMembershipLock().then(() => ensureSharesForFilter());
+    checkMembershipLock().then(() => {
+      ensureSharesForFilter();
+      ensureNewsForFilter();
+    });
     loadSetupBanner();
     $("[data-setup]")?.addEventListener("click", (e) => {
       e.preventDefault();
@@ -7397,10 +7424,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch (e) {
       }
       syncTypeButtons();
-      if ((TYPE === "all" || TYPE === "share") && !SHARES_LOADED) {
+      const needsShares = (TYPE === "all" || TYPE === "share") && !SHARES_LOADED;
+      const needsNews = (TYPE === "all" || TYPE === "news") && !NEWS_LOADED;
+      if (needsShares || needsNews) {
         const feed = $("[data-feed]");
         if (feed) feed.innerHTML = '<p class="muted">Loading...</p>';
-        await loadShares();
+        if (needsShares) await loadShares();
+        if (needsNews) await loadNews();
       }
       renderFeed($("[data-filter]")?.value || "");
     }));
