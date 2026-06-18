@@ -39,3 +39,11 @@ payload.json
 # os / editor
 .DS_Store
 Thumbs.db
+
+# SOW-043: the embedded news worker (workers/news/) keeps its own package.json (NOT a workspace); ignore its
+# local build/secret state so it never gets committed.
+workers/news/node_modules/
+workers/news/.dev.vars
+workers/news/.wrangler/
+workers/news/.snapshots/
+workers/news/.playwright-mcp/

@@ -56,6 +56,13 @@ MEMBER_CONTENT_KEY="replace-with-base64-of-32-random-bytes"
 # MEMBER_CONTENT_KEY_NEW="replace-on-rotation-with-the-next-epoch-key"
 # MEMBER_CONTENT_KEYS='{"1":"<old base64 key>"}'
 
+# SOW-043 members-only news proxy (GET /membership/news). The Worker holds the news service's bearer key so it
+# never reaches the client. NEWS_API_BASE is the deployed gbti-news Worker URL (non-secret; may also go in
+# wrangler.toml [vars]); NEWS_API_KEY is the SAME bearer secret set on the gbti-news worker. Until both are set,
+# the proxy returns a clean 502 ("news unavailable") and the UI shows an empty/locked state.
+NEWS_API_BASE="https://gbti-news.<your-subdomain>.workers.dev"
+NEWS_API_KEY="replace-with-the-gbti-news-bearer-key"
+
 # SOW-026 GitHub App PR-opener (the App key NEVER leaves the Worker). Set these once the App is provisioned;
 # until then POST /membership/open-pr returns "misconfigured" and the client stays on classic OAuth.
 # GITHUB_APP_ID="123456"
