@@ -5829,8 +5829,286 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-workspace", GbtiWorkspace);
 
-  // client-ui/src/elements/gbti-reader.mjs
+  // client-ui/src/activity-bell.mjs
+  var BELL_GROUPS = [
+    { key: "replies", label: "Replies" },
+    { key: "following", label: "Following" },
+    { key: "prs", label: "Your PRs" },
+    { key: "review", label: "To review" }
+  ];
+  function unreadItems(group, items, seen = {}) {
+    const list = Array.isArray(items) ? items : [];
+    if (group === "prs") {
+      const seenIds = new Set((seen.prsSeen || []).map(String));
+      return list.filter((it) => !seenIds.has(String(it.id)));
+    }
+    const since = Number(seen[group]) || 0;
+    return list.filter((it) => toMs(it.ts) > since);
+  }
+  function buildBell(sources = {}, seen = {}) {
+    const groups = BELL_GROUPS.map((g) => {
+      const items = (Array.isArray(sources[g.key]) ? sources[g.key] : []).slice().sort((a, b) => toMs(b.ts) - toMs(a.ts));
+      return { key: g.key, label: g.label, items, unread: unreadItems(g.key, items, seen).length };
+    });
+    return { total: groups.reduce((s, g) => s + g.unread, 0), groups };
+  }
+  function markSeen(sources = {}, now = Date.now()) {
+    const prsSeen = (Array.isArray(sources.prs) ? sources.prs : []).map((it) => String(it.id));
+    return { replies: now, following: now, review: now, prsSeen };
+  }
+
+  // client-ui/src/browse-hash.mjs
+  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share"]);
+  function buildReadHash(type, path) {
+    const t = TAB_IDS.has(type) ? type : "post";
+    return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
+  }
+  function parseBrowseHash(hash) {
+    const s = String(hash || "").replace(/^#/, "");
+    const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+    const readM = s.match(/(?:^|&)read=([^&]+)/);
+    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
+    let read = null;
+    if (readM) {
+      try {
+        read = decodeURIComponent(readM[1]);
+      } catch {
+        read = readM[1];
+      }
+    }
+    return { tab, read };
+  }
+
+  // client-ui/src/elements/gbti-activity-bell.mjs
   var SITE6 = "https://gbti.network";
+  var POLL_MS = 12e4;
+  var SEEN_KEY = "gbti-bell-seen";
+  var MAX_OWN_SHARES = 20;
+  var BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.3 21a2 2 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  function loadSeen() {
+    try {
+      return JSON.parse(localStorage.getItem(SEEN_KEY)) || {};
+    } catch {
+      return {};
+    }
+  }
+  function saveSeen(s) {
+    try {
+      localStorage.setItem(SEEN_KEY, JSON.stringify(s));
+    } catch {
+    }
+  }
+  var CSS19 = `
+  :host { position:relative; display:inline-flex; font-family:var(--font-body); }
+  .btn { width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:border-color .15s, color .15s; }
+  .btn:hover { color:var(--fg); }
+  .btn svg { width:19px; height:19px; }
+  .dot { position:absolute; top:-3px; right:-3px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:var(--danger,#d8453b); color:#fff; font-family:var(--font-mono, monospace); font-size:11px; font-weight:700; line-height:18px; text-align:center; box-shadow:0 0 0 2px var(--panel); }
+  .panel { position:absolute; top:calc(100% + 8px); right:0; width:340px; max-height:70vh; overflow-y:auto; background:var(--panel); border:1.5px solid var(--line); border-radius:14px; box-shadow:0 16px 40px -12px rgba(0,0,0,.4); padding:6px; z-index:90; }
+  .panel[hidden] { display:none; }
+  .phead { display:flex; align-items:baseline; justify-content:space-between; padding:8px 10px 6px; }
+  .phead b { font-family:var(--font-display, var(--font-body)); font-size:15px; }
+  .phead .clr { background:transparent; border:0; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; }
+  .phead .clr:hover { color:var(--accent); }
+  .grp { padding:6px 4px 2px; }
+  .grp-h { display:flex; align-items:center; gap:7px; padding:4px 8px; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+  .grp-h .n { background:var(--hover); color:var(--fg); border-radius:999px; padding:0 6px; font-size:10px; }
+  .it { display:block; padding:8px 10px; border-radius:9px; color:var(--fg); cursor:pointer; }
+  .it:hover { background:var(--hover); }
+  .it .t { font-size:13.5px; font-weight:600; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .it .s { font-size:12px; color:var(--muted); display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .it.unread .t::before { content:''; display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--accent); margin-right:7px; vertical-align:middle; }
+  .empty { color:var(--muted); font-size:13px; padding:18px 12px; text-align:center; }
+`;
+  var GbtiActivityBell = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback();
+      this._seen = loadSeen();
+      this._bell = null;
+      this._sources = null;
+      this._gated = true;
+      this._open = false;
+      this._login = null;
+      this._busy = false;
+      this.render();
+      this._load();
+      this._timer = setInterval(() => {
+        if (!this._open) this._load();
+      }, POLL_MS);
+      this._onDoc = (e) => {
+        if (this._open && !this.contains(e.target)) this._close();
+      };
+      document.addEventListener("click", this._onDoc);
+    }
+    disconnectedCallback() {
+      super.disconnectedCallback();
+      clearInterval(this._timer);
+      if (this._onDoc) document.removeEventListener("click", this._onDoc);
+    }
+    _safe(fn) {
+      return Promise.resolve().then(fn).catch(() => []);
+    }
+    async _load() {
+      if (this._busy) return;
+      this._busy = true;
+      try {
+        let membership = "unknown";
+        try {
+          const st = await this.client?.status?.();
+          membership = st?.membership ?? "unknown";
+          this._login = st?.identity?.login || null;
+        } catch {
+          membership = "unknown";
+          this._login = null;
+        }
+        if (!canSeeShares(membership) || !this._login) {
+          this._gated = true;
+          this._bell = { total: 0, groups: [] };
+          this.render();
+          return;
+        }
+        this._gated = false;
+        const sources = await this._fetchSources(this._login);
+        this._sources = sources;
+        this._bell = buildBell(sources, this._seen);
+        this.render();
+      } finally {
+        this._busy = false;
+      }
+    }
+    async _fetchSources(login) {
+      const [review, prs, following, replies] = await Promise.all([
+        this._safe(() => this._review()),
+        this._safe(() => this._prs()),
+        this._safe(() => this._following(login)),
+        this._safe(() => this._replies(login))
+      ]);
+      return { review, prs, following, replies };
+    }
+    async _review() {
+      const { contributions = [] } = await this.client.listContributions() || {};
+      return contributions.map((c) => ({
+        id: `c${c.number}`,
+        ts: toMs(c.updatedAt ?? c.createdAt),
+        title: c.title || `Contribution #${c.number}`,
+        sub: c.author?.login ? `from @${c.author.login}` : "awaiting your review",
+        href: "workspace.html#tab=inbox"
+      }));
+    }
+    async _prs() {
+      const { prs = [] } = await this.client.listPRs() || {};
+      return prs.filter((p) => p.merged === true || p.state === "merged" || p.state === "closed").map((p) => ({
+        id: p.number,
+        ts: p.number,
+        // no reliable timestamp in both host modes; the number is a recency proxy for display sort
+        title: p.title || `PR #${p.number}`,
+        sub: p.merged === true || p.state === "merged" ? "Accepted" : "Declined",
+        href: p.html_url || SITE6
+      }));
+    }
+    async _following(login) {
+      const f = await this.client.getFollows() || {};
+      const set = new Set((f.following || []).map((x) => String(x?.username || "").toLowerCase()).filter(Boolean));
+      if (!set.size) return [];
+      const res = await fetch(`${SITE6}/activity-index.json`, { cache: "no-cache" });
+      const data = res.ok ? await res.json() : {};
+      const entries = Array.isArray(data?.entries) ? data.entries : [];
+      return entries.filter((e) => set.has(String(e.author).toLowerCase())).map((e) => ({
+        id: `f:${e.type}:${e.path || e.url || e.title}`,
+        ts: toMs(e.publishedAt),
+        title: e.title || "New activity",
+        sub: `@${e.author}`,
+        href: e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE6}${e.url || ""}`
+      }));
+    }
+    // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
+    // (post/product/prompt) need a per-item comment walk and defer to P4's server aggregator. Hard-bounded fan-out.
+    async _replies(login) {
+      const lc3 = String(login).toLowerCase();
+      const { items = [] } = await this.client.listShares() || {};
+      const mine = items.filter((s) => String(s.author).toLowerCase() === lc3).slice(0, MAX_OWN_SHARES);
+      const lists = await Promise.all(mine.map((s) => this._safe(async () => {
+        const slug = s.author && s.id ? `${s.author}/${s.id}` : "";
+        if (!slug) return [];
+        const r = await this.client.listShareComments({ targetSlug: slug }) || {};
+        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc3).map((c) => ({
+          id: `cmt:${c.path || `${slug}:${c.id || c.createdAt}`}`,
+          ts: toMs(c.createdAt),
+          title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
+          sub: `@${c.author}`,
+          href: "browse.html#tab=share"
+        }));
+      })));
+      return lists.flat();
+    }
+    _close() {
+      this._open = false;
+      this.render();
+    }
+    _toggle() {
+      this._open = !this._open;
+      if (this._open && this._sources) {
+        this._seen = markSeen(this._sources);
+        saveSeen(this._seen);
+        this._bell = buildBell(this._sources, this._seen);
+      }
+      this.render();
+    }
+    _markAllSeen() {
+      if (this._sources) {
+        this._seen = markSeen(this._sources);
+        saveSeen(this._seen);
+        this._bell = buildBell(this._sources, this._seen);
+      }
+      this.render();
+    }
+    render() {
+      if (!this.root) return;
+      if (this._gated) {
+        this.hidden = true;
+        this.set("");
+        return;
+      }
+      this.hidden = false;
+      const total = this._bell?.total || 0;
+      const dot = total > 0 ? `<span class="dot">${total > 99 ? "99+" : total}</span>` : "";
+      const panel = this._open ? this._panelHtml() : "";
+      this.set(this.css(CSS19) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
+      this.on("[data-bell]", "click", (e) => {
+        e.stopPropagation();
+        this._toggle();
+      });
+      this.on("[data-clear]", "click", (e) => {
+        e.stopPropagation();
+        this._markAllSeen();
+      });
+    }
+    _panelHtml() {
+      const seen = this._seen || {};
+      const groups = (this._bell?.groups || []).filter((g) => g.items.length);
+      const unreadSet = /* @__PURE__ */ new Map();
+      for (const g of this._bell?.groups || []) {
+        const since = Number(seen[g.key]) || 0;
+        const seenIds = new Set((seen.prsSeen || []).map(String));
+        unreadSet.set(g.key, new Set(g.items.filter((it) => g.key === "prs" ? !seenIds.has(String(it.id)) : toMs(it.ts) > since).map((it) => it.id)));
+      }
+      const body = groups.length ? groups.map((g) => {
+        const un = unreadSet.get(g.key) || /* @__PURE__ */ new Set();
+        const rows = g.items.slice(0, 8).map((it) => {
+          const cls = un.has(it.id) ? "it unread" : "it";
+          const ext = /^https?:\/\//.test(it.href) ? ' target="_blank" rel="noopener"' : "";
+          return `<a class="${cls}" href="${esc(it.href)}"${ext}><span class="t">${esc(it.title)}</span><span class="s">${esc(it.sub || "")}</span></a>`;
+        }).join("");
+        const moreN = g.items.length - Math.min(g.items.length, 8);
+        return `<div class="grp"><div class="grp-h">${esc(g.label)}${g.unread ? `<span class="n">${g.unread}</span>` : ""}</div>${rows}${moreN > 0 ? `<div class="it s" style="color:var(--muted)">+${moreN} more</div>` : ""}</div>`;
+      }).join("") : `<div class="empty">You are all caught up.</div>`;
+      return `<div class="panel"><div class="phead"><b>Activity</b><button class="clr" type="button" data-clear>Mark all read</button></div>${body}</div>`;
+    }
+  };
+  define("gbti-activity-bell", GbtiActivityBell);
+
+  // client-ui/src/elements/gbti-reader.mjs
+  var SITE7 = "https://gbti.network";
   var authorName4 = (a) => a === "gbti" ? "GBTI Network" : a;
   function targetSlugFor(it) {
     if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
@@ -5846,8 +6124,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE6}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
-  var CSS19 = `
+  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE7}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var CSS20 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   article { max-width:680px; margin:0 auto; }
   h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
@@ -5909,11 +6187,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS19));
+        this.set(this.css(CSS20));
         return;
       }
       const t = TYPE_LABEL3[it.type] || it.type || "";
-      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Open link</a>` : "" : it.url ? `<a class="view" href="${esc(SITE6 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Open link</a>` : "" : it.url ? `<a class="view" href="${esc(SITE7 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName4(it.author))}</span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}</div>`;
       const coverUrl = resolveAsset(it.thumb);
@@ -5924,31 +6202,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
       const slug = targetSlugFor(it);
       const discussion = this._html !== null && slug ? `<div class="discussion-wrap"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
-      this.set(this.css(CSS19) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>${discussion}`);
+      this.set(this.css(CSS20) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>${discussion}`);
     }
   };
   define("gbti-reader", GbtiReader);
 
-  // client-ui/src/browse-hash.mjs
-  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share"]);
-  function parseBrowseHash(hash) {
-    const s = String(hash || "").replace(/^#/, "");
-    const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
-    const readM = s.match(/(?:^|&)read=([^&]+)/);
-    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
-    let read = null;
-    if (readM) {
-      try {
-        read = decodeURIComponent(readM[1]);
-      } catch {
-        read = readM[1];
-      }
-    }
-    return { tab, read };
-  }
-
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE7 = "https://gbti.network";
+  var SITE8 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
@@ -5957,7 +6217,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "share", label: "Shares" }
   ];
   var CONTENT_TYPES = ["post", "product", "prompt"];
-  var CSS20 = `
+  var CSS21 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -6037,7 +6297,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE7}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE8}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
@@ -6077,7 +6337,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS20) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS21) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -6090,7 +6350,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS20) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS21) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();
@@ -6304,7 +6564,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // extension/src/shell.mjs
-  var SITE8 = "https://gbti.network";
+  var SITE9 = "https://gbti.network";
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
   var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var RANK5 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -6350,6 +6610,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
     </span>
     <button class="nt-icobtn" data-compose data-ico="plus" title="New Share" aria-label="Post a new Share"></button>
+    <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
       <button class="nt-signin" data-signin-btn type="button" hidden>Sign in</button>
@@ -6382,7 +6643,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const sub = r.sub ? `<span class="sub">${esc2(r.sub)}</span>` : "";
       return `<a class="nav-i${on}" data-key="${r.key}" href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc2(r.nm)}</span>${sub}</span></a>`;
     }).join("");
-    return `<nav class="nt-rail">${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE8}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+    return `<nav class="nt-rail">${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE9}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
   }
   async function api(pathname) {
     try {

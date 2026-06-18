@@ -6,6 +6,7 @@
 // exported so the new-tab feed reuses them.
 
 import '../../client-ui/src/elements/gbti-share-composer.mjs'; // SOW-041 P5: the top-bar "+" mounts this composer
+import '../../client-ui/src/elements/gbti-activity-bell.mjs'; // SOW-042 P3: the top-bar activity bell
 
 const SITE = 'https://gbti.network';
 const DAILYDEV_ID = 'jlmpjdjjbgclbocgajdjefcidcncaied';
@@ -59,6 +60,7 @@ function barHtml() {
       <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
     </span>
     <button class="nt-icobtn" data-compose data-ico="plus" title="New Share" aria-label="Post a new Share"></button>
+    <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
       <button class="nt-signin" data-signin-btn type="button" hidden>Sign in</button>

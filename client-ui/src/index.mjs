@@ -33,6 +33,7 @@ import './elements/gbti-workspace.mjs';
 import './elements/gbti-saved.mjs';
 import './elements/gbti-subscriptions.mjs';
 import './elements/gbti-card-list.mjs';
+import './elements/gbti-activity-bell.mjs';
 import './elements/gbti-discussion.mjs';
 import './elements/gbti-reader.mjs';
 import './elements/gbti-browse.mjs';

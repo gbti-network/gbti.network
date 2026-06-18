@@ -10,6 +10,17 @@ import assert from 'node:assert/strict';
 
 import { GbtiBrowse } from '../client-ui/src/elements/gbti-browse.mjs';
 import { GbtiWorkspace } from '../client-ui/src/elements/gbti-workspace.mjs';
+import { GbtiActivityBell } from '../client-ui/src/elements/gbti-activity-bell.mjs';
+
+// SOW-042: the bell auto-mounts in the shell bar on every extension page, so a render throw before its state is
+// initialized would blank the whole top bar. Assert a fresh instance renders (loading + gated paths) safely.
+test('gbti-activity-bell: render() on a fresh (un-init) instance does not throw', () => {
+  const el = new GbtiActivityBell();
+  assert.doesNotThrow(() => el.render());                 // loading: this._bell/_gated undefined
+  el._gated = true; assert.doesNotThrow(() => el.render()); // gated -> hidden, empty shadow
+  el._gated = false; el._bell = { total: 0, groups: [] }; el._open = true;
+  assert.doesNotThrow(() => el.render());                  // open panel with no items
+});
 
 test('gbti-browse: render()/_renderBody() on a fresh (un-init) instance do not throw', () => {
   const el = new GbtiBrowse();
