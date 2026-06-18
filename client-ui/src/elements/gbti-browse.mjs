@@ -4,17 +4,21 @@
 // never navigating to gbti.network. Host-agnostic. Fail-soft: an unreachable index renders an empty state.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { parseBrowseHash } from '../browse-hash.mjs';
+import { mergeAll, canSeeShares } from '../all-merge.mjs'; // SOW-042: the shared All directory merge + Shares policy
 import './gbti-reader.mjs';
 import './gbti-shares-feed.mjs';
 import './gbti-card-list.mjs'; // SOW-041: the shared content-item presentation
 
 const SITE = 'https://gbti.network';
+// SOW-042: "All" is the first tab — the UNCAPPED cross-type directory (the three per-type indexes + Shares).
 const TABS = [
+  { id: 'all', label: 'All' },
   { id: 'post', label: 'Articles', json: 'blog-index.json' },
   { id: 'product', label: 'Products', json: 'products-index.json' },
   { id: 'prompt', label: 'Prompts', json: 'prompts-index.json' },
   { id: 'share', label: 'Shares' },
 ];
+const CONTENT_TYPES = ['post', 'product', 'prompt'];
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
@@ -48,9 +52,12 @@ class GbtiBrowse extends GbtiElement {
     // SOW-031: the hash carries tab + an optional read=<repo path> deep-link (set by the new-tab feed rows), so a
     // click on a Latest/Following row lands here and auto-opens that item in the reader instead of gbti.network.
     const { tab, read } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
-    this._tab = tab && TABS.some((t) => t.id === tab) ? tab : 'post';
-    this._openPath = this._tab !== 'share' ? read : null; // shares have no path-addressed reader item
+    // SOW-042: a bare browse.html (e.g. the site header's "Browse the co-op") lands on the All directory.
+    this._tab = tab && TABS.some((t) => t.id === tab) ? tab : 'all';
+    this._openPath = (this._tab !== 'share' && this._tab !== 'all') ? read : null; // shares + the All grid have no path-addressed reader item
     this._cache = {};
+    this._shares = null; // SOW-042: raw Shares for the All tab, fetched once (member-gated)
+    this._membership = null; // SOW-042: effective status for the Shares-omission policy
     this._reading = null;
     super.connectedCallback?.(); // base now renders the initial list with fields in place
     // Hide a thumbnail that fails to load (a stale /_astro hash after a site redeploy, or a missing asset) so the
@@ -65,8 +72,8 @@ class GbtiBrowse extends GbtiElement {
     this._onHash = () => {
       const { tab, read } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
       const t = tab && TABS.some((x) => x.id === tab) ? tab : this._tab;
-      if (read && t !== 'share') { this._tab = t; this._reading = (this._cache[t] || []).find((x) => x.path === read) || { type: t, path: read }; this.render(); this._ensure(t); return; }
-      if (t !== this._tab || this._reading) { this._tab = t; this._reading = null; this.render(); this._ensure(t); }
+      if (read && t !== 'share' && t !== 'all') { this._tab = t; this._reading = (this._cache[t] || []).find((x) => x.path === read) || { type: t, path: read }; this.render(); this._ensure(t); return; }
+      if (t !== this._tab || this._reading) { this._tab = t; this._reading = null; this.render(); this._ensureTab(t); }
     };
     if (typeof window !== 'undefined') window.addEventListener('hashchange', this._onHash);
     this._init();
@@ -79,7 +86,7 @@ class GbtiBrowse extends GbtiElement {
 
   // Load the active tab's index, then (if deep-linked via read=<path>) open that item in the reader.
   async _init() {
-    await this._ensure(this._tab);
+    await this._ensureTab(this._tab);
     if (this._openPath) {
       const found = (this._cache[this._tab] || []).find((x) => x.path === this._openPath);
       // Found -> open the rich index item; not found (race / pruned) -> a minimal item the reader fetches by path.
@@ -88,6 +95,9 @@ class GbtiBrowse extends GbtiElement {
       this.render();
     }
   }
+
+  // Route a tab to its loader: 'all' fans out across the per-type indexes + Shares, every other tab loads its index.
+  _ensureTab(id) { return id === 'all' ? this._ensureAll() : this._ensure(id); }
 
   async _ensure(id) {
     const tab = TABS.find((t) => t.id === id);
@@ -100,11 +110,33 @@ class GbtiBrowse extends GbtiElement {
     if (this._tab === id && !this._reading && !this._openPath) this.render();
   }
 
+  // SOW-042: the All directory. Load the three per-type indexes IN PARALLEL, then (once) the member's Shares —
+  // gated by effective status so a Locked/unknown account never sees Shares. Each source fails soft to [].
+  async _ensureAll() {
+    await Promise.all(CONTENT_TYPES.map((t) => this._ensure(t)));
+    if (this._shares === null) {
+      try { const st = await this.client?.status?.(); this._membership = st?.membership ?? 'unknown'; }
+      catch { this._membership = 'unknown'; }
+      if (canSeeShares(this._membership)) {
+        try { this._shares = (await this.client.listShares())?.items ?? []; } catch { this._shares = []; }
+      } else { this._shares = []; }
+    }
+    if (this._tab === 'all' && !this._reading && !this._openPath) this.render();
+  }
+
+  // The merged, newest-first directory items, or null while any per-type index / the Shares read is still pending.
+  _allItems() {
+    const ready = CONTENT_TYPES.every((t) => this._cache[t]);
+    if (!ready || this._shares === null) return null;
+    const items = CONTENT_TYPES.flatMap((t) => this._cache[t] || []);
+    return mergeAll({ items, shares: this._shares, membership: this._membership });
+  }
+
   render() {
     if (this._reading) {
       const label = TABS.find((t) => t.id === this._reading.type)?.label || 'list';
       this.set(this.css(CSS) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
-      this.on('[data-back]', 'click', () => { this._reading = null; this.render(); this._ensure(this._tab); });
+      this.on('[data-back]', 'click', () => { this._reading = null; this.render(); this._ensureTab(this._tab); });
       const host = this.$('[data-reader]');
       const r = document.createElement('gbti-reader');
       host.replaceChildren(r);
@@ -113,17 +145,18 @@ class GbtiBrowse extends GbtiElement {
     }
     const tabs = TABS.map((t) => `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join('');
     this.set(this.css(CSS) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
-    this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this.render(); this._ensure(this._tab); }));
+    this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this.render(); this._ensureTab(this._tab); }));
     this._renderBody();
   }
 
-  // SOW-041: the content tabs render through the shared <gbti-card-list>; clicking a card opens it IN PLACE in the
-  // reader (the card has no openHref, so it emits card-open). The Shares tab keeps its existing authenticated feed.
+  // SOW-041/042: the content tabs (incl. the All directory) render through the shared <gbti-card-list>; clicking a
+  // card opens it IN PLACE in the reader (the card has no openHref, so it emits card-open). The Shares tab keeps its
+  // existing authenticated feed. All == the per-type indexes + Shares merged newest-first (SOW-042).
   _renderBody() {
     const host = this.$('[data-body]');
     if (!host) return;
     if (this._tab === 'share') { host.replaceChildren(document.createElement('gbti-shares-feed')); return; }
-    const items = this._cache?.[this._tab];
+    const items = this._tab === 'all' ? this._allItems() : this._cache?.[this._tab];
     if (!items) { host.innerHTML = `<p class="empty">Loading...</p>`; return; }
     const list = document.createElement('gbti-card-list');
     list.mode = 'detailed';

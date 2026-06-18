@@ -6,6 +6,7 @@
 // the Worker, SOW-016; threads via SOW-032's listShareComments + the inert <gbti-comment-box>) is unchanged.
 // A Locked account gets a splash; the key never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { shareToItem, shareTitle, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + helpers
 import './gbti-card-list.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the shared thread engine (factored out of this file)
 
@@ -64,7 +65,6 @@ function relTime(iso) {
   return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? '' : 's'} ago`;
 }
 const authorName = (a) => (a === 'gbti' ? 'GBTI Network' : a || 'A member');
-const shareTitle = (it) => it.title || it.shortDescription || (it.url ? `Link: ${hostOf(it.url)}` : 'Member share');
 
 class GbtiSharesFeed extends GbtiElement {
   connectedCallback() {
@@ -115,8 +115,8 @@ class GbtiSharesFeed extends GbtiElement {
     this.on('.refresh', 'click', () => this.reload());
     const list = document.createElement('gbti-card-list');
     list.mode = 'detailed';
-    // Carry the full Share through the projection so card-open returns it (the card only reads a few fields).
-    list.items = items.map((it) => ({ ...it, type: 'share', title: shareTitle(it), excerpt: it.title ? (it.shortDescription || '') : '', thumb: null, createdAt: it.createdAt }));
+    // Carry the full Share through the shared projection so card-open returns it (the card only reads a few fields).
+    list.items = items.map((it) => shareToItem(it));
     list.addEventListener('card-open', (e) => { const it = e.detail?.item; if (it) { this._reading = it; this.render(); } });
     this.$('[data-list]')?.replaceChildren(list);
   }
@@ -190,10 +190,6 @@ class GbtiSharesFeed extends GbtiElement {
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
   }
 
-}
-
-function hostOf(u) {
-  try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return 'link'; }
 }
 
 define('gbti-shares-feed', GbtiSharesFeed);

@@ -3,7 +3,10 @@
 // navigating out to gbti.network); <gbti-browse> PARSES it on load to auto-open that item. No DOM, unit-tested so
 // the build/parse round-trip stays in lockstep across the two call sites (newtab.mjs + gbti-browse.mjs).
 
-const TAB_IDS = new Set(['post', 'product', 'prompt', 'share']);
+// SOW-042: 'all' is the cross-type directory tab (browse.html#tab=all). buildReadHash is never called with 'all'
+// (feed rows always deep-link a concrete type), so its 'post' fallback is unaffected; parseBrowseHash recognizing
+// 'all' lets the rail's "All" link + the gbti-browse All tab round-trip.
+const TAB_IDS = new Set(['all', 'post', 'product', 'prompt', 'share']);
 
 /** Build the location.hash fragment (WITHOUT the leading '#') for opening `path` of `type` in the reader.
  *  Falls back to a tab-only hash when there is no path (so the row still lands on the right Browse tab). */

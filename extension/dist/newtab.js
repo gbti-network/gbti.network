@@ -2374,7 +2374,7 @@
   }
 
   // client-ui/src/browse-hash.mjs
-  var TAB_IDS = /* @__PURE__ */ new Set(["post", "product", "prompt", "share"]);
+  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share"]);
   function buildReadHash(type, path) {
     const t = TAB_IDS.has(type) ? type : "post";
     return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
@@ -2393,6 +2393,45 @@
       }
     }
     return { tab, read };
+  }
+
+  // client-ui/src/all-merge.mjs
+  var SHARE_OK = /* @__PURE__ */ new Set(["paid", "trialing"]);
+  function canSeeShares(membership) {
+    return SHARE_OK.has(String(membership || "").toLowerCase());
+  }
+  function toMs(v) {
+    if (v == null) return 0;
+    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? 0 : t;
+  }
+  function hostOf(u) {
+    try {
+      return new URL(u).hostname.replace(/^www\./, "");
+    } catch {
+      return "link";
+    }
+  }
+  function shareTitle(it) {
+    return it.title || it.shortDescription || (it.url ? `Link: ${hostOf(it.url)}` : "Member share");
+  }
+  function shareToItem(it) {
+    return {
+      ...it,
+      type: "share",
+      title: shareTitle(it),
+      excerpt: it.title ? it.shortDescription || "" : "",
+      thumb: null,
+      createdAt: it.createdAt
+    };
+  }
+  function mergeAll({ items = [], shares = null, membership = "unknown" } = {}) {
+    const out = Array.isArray(items) ? items.slice() : [];
+    if (canSeeShares(membership) && Array.isArray(shares)) {
+      for (const s of shares) out.push(shareToItem(s));
+    }
+    return out.sort((a, b) => toMs(b.createdAt ?? b.publishedAt) - toMs(a.createdAt ?? a.publishedAt));
   }
 
   // client-ui/src/tokens.mjs
@@ -2691,6 +2730,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { group: "Feeds" },
     { key: "activity", href: "newtab.html", ico: "activity", nm: "Activity" },
     { group: "Browse" },
+    { key: "all", href: "browse.html#tab=all", ico: "grid", nm: "All", sub: "Everything in one place" },
     { key: "articles", href: "browse.html#tab=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
     { key: "products", href: "browse.html#tab=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
     { key: "prompts", href: "browse.html#tab=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
@@ -4931,7 +4971,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
   }
   var authorName3 = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
-  var shareTitle = (it) => it.title || it.shortDescription || (it.url ? `Link: ${hostOf(it.url)}` : "Member share");
   var GbtiSharesFeed = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback();
@@ -4996,7 +5035,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.on(".refresh", "click", () => this.reload());
       const list = document.createElement("gbti-card-list");
       list.mode = "detailed";
-      list.items = items.map((it) => ({ ...it, type: "share", title: shareTitle(it), excerpt: it.title ? it.shortDescription || "" : "", thumb: null, createdAt: it.createdAt }));
+      list.items = items.map((it) => shareToItem(it));
       list.addEventListener("card-open", (e) => {
         const it = e.detail?.item;
         if (it) {
@@ -5077,13 +5116,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
-  function hostOf(u) {
-    try {
-      return new URL(u).hostname.replace(/^www\./, "");
-    } catch {
-      return "link";
-    }
-  }
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
@@ -6143,8 +6175,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const t = TYPE_LABEL3[it.type] || it.type || "";
-      const view = it.url ? `<a class="view" href="${esc(SITE7 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
-      const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName4(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ""}</div>`;
+      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Open link</a>` : "" : it.url ? `<a class="view" href="${esc(SITE7 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
+      const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName4(it.author))}</span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}</div>`;
       const coverUrl = resolveAsset(it.thumb);
       const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
@@ -6161,11 +6194,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-browse.mjs
   var SITE8 = "https://gbti.network";
   var TABS2 = [
+    { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
     { id: "product", label: "Products", json: "products-index.json" },
     { id: "prompt", label: "Prompts", json: "prompts-index.json" },
     { id: "share", label: "Shares" }
   ];
+  var CONTENT_TYPES = ["post", "product", "prompt"];
   var CSS20 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
@@ -6193,9 +6228,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var GbtiBrowse = class extends GbtiElement {
     connectedCallback() {
       const { tab, read } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
-      this._tab = tab && TABS2.some((t) => t.id === tab) ? tab : "post";
-      this._openPath = this._tab !== "share" ? read : null;
+      this._tab = tab && TABS2.some((t) => t.id === tab) ? tab : "all";
+      this._openPath = this._tab !== "share" && this._tab !== "all" ? read : null;
       this._cache = {};
+      this._shares = null;
+      this._membership = null;
       this._reading = null;
       super.connectedCallback?.();
       this.root?.addEventListener("error", (e) => {
@@ -6205,7 +6242,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._onHash = () => {
         const { tab: tab2, read: read2 } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
         const t = tab2 && TABS2.some((x) => x.id === tab2) ? tab2 : this._tab;
-        if (read2 && t !== "share") {
+        if (read2 && t !== "share" && t !== "all") {
           this._tab = t;
           this._reading = (this._cache[t] || []).find((x) => x.path === read2) || { type: t, path: read2 };
           this.render();
@@ -6216,7 +6253,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._tab = t;
           this._reading = null;
           this.render();
-          this._ensure(t);
+          this._ensureTab(t);
         }
       };
       if (typeof window !== "undefined") window.addEventListener("hashchange", this._onHash);
@@ -6228,13 +6265,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     // Load the active tab's index, then (if deep-linked via read=<path>) open that item in the reader.
     async _init() {
-      await this._ensure(this._tab);
+      await this._ensureTab(this._tab);
       if (this._openPath) {
         const found = (this._cache[this._tab] || []).find((x) => x.path === this._openPath);
         this._reading = found || { type: this._tab, path: this._openPath };
         this._openPath = null;
         this.render();
       }
+    }
+    // Route a tab to its loader: 'all' fans out across the per-type indexes + Shares, every other tab loads its index.
+    _ensureTab(id) {
+      return id === "all" ? this._ensureAll() : this._ensure(id);
     }
     async _ensure(id) {
       const tab = TABS2.find((t) => t.id === id);
@@ -6247,6 +6288,36 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (this._tab === id && !this._reading && !this._openPath) this.render();
     }
+    // SOW-042: the All directory. Load the three per-type indexes IN PARALLEL, then (once) the member's Shares —
+    // gated by effective status so a Locked/unknown account never sees Shares. Each source fails soft to [].
+    async _ensureAll() {
+      await Promise.all(CONTENT_TYPES.map((t) => this._ensure(t)));
+      if (this._shares === null) {
+        try {
+          const st = await this.client?.status?.();
+          this._membership = st?.membership ?? "unknown";
+        } catch {
+          this._membership = "unknown";
+        }
+        if (canSeeShares(this._membership)) {
+          try {
+            this._shares = (await this.client.listShares())?.items ?? [];
+          } catch {
+            this._shares = [];
+          }
+        } else {
+          this._shares = [];
+        }
+      }
+      if (this._tab === "all" && !this._reading && !this._openPath) this.render();
+    }
+    // The merged, newest-first directory items, or null while any per-type index / the Shares read is still pending.
+    _allItems() {
+      const ready = CONTENT_TYPES.every((t) => this._cache[t]);
+      if (!ready || this._shares === null) return null;
+      const items = CONTENT_TYPES.flatMap((t) => this._cache[t] || []);
+      return mergeAll({ items, shares: this._shares, membership: this._membership });
+    }
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
@@ -6254,7 +6325,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
-          this._ensure(this._tab);
+          this._ensureTab(this._tab);
         });
         const host = this.$("[data-reader]");
         const r = document.createElement("gbti-reader");
@@ -6267,12 +6338,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();
-        this._ensure(this._tab);
+        this._ensureTab(this._tab);
       }));
       this._renderBody();
     }
-    // SOW-041: the content tabs render through the shared <gbti-card-list>; clicking a card opens it IN PLACE in the
-    // reader (the card has no openHref, so it emits card-open). The Shares tab keeps its existing authenticated feed.
+    // SOW-041/042: the content tabs (incl. the All directory) render through the shared <gbti-card-list>; clicking a
+    // card opens it IN PLACE in the reader (the card has no openHref, so it emits card-open). The Shares tab keeps its
+    // existing authenticated feed. All == the per-type indexes + Shares merged newest-first (SOW-042).
     _renderBody() {
       const host = this.$("[data-body]");
       if (!host) return;
@@ -6280,7 +6352,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         host.replaceChildren(document.createElement("gbti-shares-feed"));
         return;
       }
-      const items = this._cache?.[this._tab];
+      const items = this._tab === "all" ? this._allItems() : this._cache?.[this._tab];
       if (!items) {
         host.innerHTML = `<p class="empty">Loading...</p>`;
         return;
@@ -6529,6 +6601,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "compact";
     }
   })();
+  var TYPE_FILTERS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share"]);
+  var TYPE = (() => {
+    try {
+      const t = localStorage.getItem("gbti-nt-type");
+      return TYPE_FILTERS.has(t) ? t : "all";
+    } catch (e) {
+      return "all";
+    }
+  })();
+  var MEMBERSHIP2 = "unknown";
+  var SHARES = null;
+  var SHARES_LOADED = false;
+  var FEED_CAP = 40;
   var hrefFor = (e) => e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE9}${e.url}`;
   var toCardItem = (e) => ({
     type: e.type,
@@ -6538,8 +6623,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     thumb: e.thumb,
     category: e.category,
     excerpt: e.excerpt || "",
-    createdAt: e.publishedAt,
-    openHref: hrefFor(e)
+    createdAt: e.createdAt ?? e.publishedAt,
+    openHref: e.type === "share" ? "browse.html#tab=share" : hrefFor(e)
   });
   function renderFeed(filter = "") {
     const feed = $("[data-feed]");
@@ -6555,10 +6640,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
     }
-    const base = VIEW === "following" ? ENTRIES.filter((e) => FOLLOWING.has(String(e.author).toLowerCase())) : ENTRIES;
-    const rows = base.filter((e) => !q || `${e.title} ${authorName5(e.author)}`.toLowerCase().includes(q));
+    const wantShares = TYPE === "all" || TYPE === "share";
+    let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP2 });
+    if (TYPE !== "all") rows = rows.filter((e) => e.type === TYPE);
+    if (VIEW === "following") rows = rows.filter((e) => FOLLOWING.has(String(e.author).toLowerCase()));
+    rows = rows.slice(0, FEED_CAP);
+    if (q) rows = rows.filter((e) => `${e.title} ${authorName5(e.author)}`.toLowerCase().includes(q));
     if (!rows.length) {
-      const empty = VIEW === "following" ? q ? "No followed activity matches that filter." : "No recent activity from the members you follow." : ENTRIES.length ? "No activity matches that filter." : "No activity yet.";
+      const empty = VIEW === "following" ? q ? "No followed activity matches that filter." : "No recent activity from the members you follow." : q ? "No activity matches that filter." : TYPE === "share" ? "No Shares yet." : "No activity yet.";
       feed.innerHTML = `<p class="muted">${empty}</p>`;
       return;
     }
@@ -6569,6 +6658,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function syncModeButtons() {
     document.querySelectorAll(".nt-mode").forEach((b) => b.classList.toggle("on", b.dataset.mode === MODE));
+  }
+  function syncTypeButtons() {
+    document.querySelectorAll(".nt-type").forEach((b) => b.classList.toggle("on", b.dataset.type === TYPE));
+  }
+  async function loadShares() {
+    SHARES_LOADED = true;
+    if (!canSeeShares(MEMBERSHIP2)) {
+      SHARES = [];
+      return;
+    }
+    try {
+      const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/shares", query: {} } });
+      SHARES = Array.isArray(r?.json?.items) ? r.json.items : [];
+    } catch {
+      SHARES = [];
+    }
+  }
+  async function ensureSharesForFilter() {
+    if ((TYPE === "all" || TYPE === "share") && !SHARES_LOADED) {
+      await loadShares();
+      renderFeed($("[data-filter]")?.value || "");
+    }
   }
   async function loadFollows() {
     FOLLOWS_LOADED = true;
@@ -6625,6 +6736,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   async function checkMembershipLock() {
     try {
       const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/status", query: {} } });
+      MEMBERSHIP2 = r?.json?.membership ?? "unknown";
       if (isLockedMembership(r?.json?.membership)) {
         document.documentElement.setAttribute("data-locked", "1");
         return true;
@@ -6660,8 +6772,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const dateEl = $("[data-date]");
     if (dateEl) dateEl.textContent = longDate();
     syncModeButtons();
+    syncTypeButtons();
     initFooterTip();
-    checkMembershipLock();
+    checkMembershipLock().then(() => ensureSharesForFilter());
     loadSetupBanner();
     $("[data-setup]")?.addEventListener("click", (e) => {
       e.preventDefault();
@@ -6674,6 +6787,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch (e) {
       }
       syncModeButtons();
+      renderFeed($("[data-filter]")?.value || "");
+    }));
+    document.querySelectorAll(".nt-type").forEach((b) => b.addEventListener("click", async () => {
+      const next = b.dataset.type;
+      if (!TYPE_FILTERS.has(next) || next === TYPE) return;
+      TYPE = next;
+      try {
+        localStorage.setItem("gbti-nt-type", TYPE);
+      } catch (e) {
+      }
+      syncTypeButtons();
+      if ((TYPE === "all" || TYPE === "share") && !SHARES_LOADED) {
+        const feed = $("[data-feed]");
+        if (feed) feed.innerHTML = '<p class="muted">Loading...</p>';
+        await loadShares();
+      }
       renderFeed($("[data-filter]")?.value || "");
     }));
     $("[data-filter]")?.addEventListener("input", (e) => renderFeed(e.target.value));

@@ -41,6 +41,7 @@ const RAIL = [
   { group: 'Feeds' },
   { key: 'activity', href: 'newtab.html', ico: 'activity', nm: 'Activity' },
   { group: 'Browse' },
+  { key: 'all', href: 'browse.html#tab=all', ico: 'grid', nm: 'All', sub: 'Everything in one place' },
   { key: 'articles', href: 'browse.html#tab=post', ico: 'article', nm: 'Articles', sub: 'Posts and tutorials' },
   { key: 'products', href: 'browse.html#tab=product', ico: 'product', nm: 'Products', sub: 'Plugins and tools' },
   { key: 'prompts', href: 'browse.html#tab=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Reusable prompts' },

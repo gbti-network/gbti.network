@@ -6,6 +6,7 @@
 
 import { isLockedMembership } from '../../client/src/membership.mjs';
 import { buildReadHash } from '../../client-ui/src/browse-hash.mjs';
+import { mergeAll, canSeeShares } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
 import { initShell } from './shell.mjs';
 import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here (also defines <gbti-card-list>)
 
@@ -30,6 +31,14 @@ let FOLLOWING = null;
 let FOLLOWS_LOADED = false;
 // SOW-039: the persisted feed view mode (compact | detailed | card).
 let MODE = (() => { try { return localStorage.getItem('gbti-nt-mode') || 'compact'; } catch (e) { return 'compact'; } })();
+// SOW-042: the persisted type filter (all | post | product | prompt | share). 'all' merges the activity-index with
+// the member's Shares (capped river). MEMBERSHIP gates Shares; SHARES is the raw list, loaded once on demand.
+const TYPE_FILTERS = new Set(['all', 'post', 'product', 'prompt', 'share']);
+let TYPE = (() => { try { const t = localStorage.getItem('gbti-nt-type'); return TYPE_FILTERS.has(t) ? t : 'all'; } catch (e) { return 'all'; } })();
+let MEMBERSHIP = 'unknown';
+let SHARES = null;
+let SHARES_LOADED = false;
+const FEED_CAP = 40; // the Activity feed is a capped river (Browse "All" is the uncapped directory)
 
 // SOW-031/042: each feed item opens IN the extension reader (browse.html deep-link), falling back to the site URL
 // only when the entry carries no repo path (older index, defensive). buildReadHash takes the RAW type. The per-mode
@@ -37,8 +46,10 @@ let MODE = (() => { try { return localStorage.getItem('gbti-nt-mode') || 'compac
 // activity feed and Browse render through ONE source of truth (the owner's "two stylings" complaint).
 const hrefFor = (e) => (e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url}`);
 
-// Project an activity-index entry onto the <gbti-card-list> item shape. The RAW type ('post') is preserved so the
-// card glyph + "Article" label + deep-link hash all resolve the same way Browse does.
+// Project a merged feed item (an activity-index entry OR a Share, both already carrying a normalized shape) onto the
+// <gbti-card-list> item shape. The RAW type ('post'/'share') is preserved so the card glyph + label resolve the same
+// way Browse does. A content item deep-links into the in-extension reader; a Share has no path-addressed reader, so
+// it routes to the Shares stream tab.
 const toCardItem = (e) => ({
   type: e.type,
   title: e.title,
@@ -47,8 +58,8 @@ const toCardItem = (e) => ({
   thumb: e.thumb,
   category: e.category,
   excerpt: e.excerpt || '',
-  createdAt: e.publishedAt,
-  openHref: hrefFor(e),
+  createdAt: e.createdAt ?? e.publishedAt,
+  openHref: e.type === 'share' ? 'browse.html#tab=share' : hrefFor(e),
 });
 
 function renderFeed(filter = '') {
@@ -67,12 +78,19 @@ function renderFeed(filter = '') {
     }
   }
 
-  const base = VIEW === 'following' ? ENTRIES.filter((e) => FOLLOWING.has(String(e.author).toLowerCase())) : ENTRIES;
-  const rows = base.filter((e) => !q || `${e.title} ${authorName(e.author)}`.toLowerCase().includes(q));
+  // SOW-042: the "All" filter merges the activity-index with the member's Shares (newest-first, Shares omitted for a
+  // non-member by the shared policy); a specific type filter narrows to that type. The merge is the ONE shared fn.
+  const wantShares = TYPE === 'all' || TYPE === 'share';
+  let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP });
+  if (TYPE !== 'all') rows = rows.filter((e) => e.type === TYPE);
+  if (VIEW === 'following') rows = rows.filter((e) => FOLLOWING.has(String(e.author).toLowerCase()));
+  rows = rows.slice(0, FEED_CAP); // the capped river
+  if (q) rows = rows.filter((e) => `${e.title} ${authorName(e.author)}`.toLowerCase().includes(q));
+
   if (!rows.length) {
     const empty = VIEW === 'following'
       ? (q ? 'No followed activity matches that filter.' : 'No recent activity from the members you follow.')
-      : (ENTRIES.length ? 'No activity matches that filter.' : 'No activity yet.');
+      : (q ? 'No activity matches that filter.' : (TYPE === 'share' ? 'No Shares yet.' : 'No activity yet.'));
     feed.innerHTML = `<p class="muted">${empty}</p>`;
     return;
   }
@@ -86,6 +104,29 @@ function renderFeed(filter = '') {
 /** Reflect the active view mode onto the switcher buttons. */
 function syncModeButtons() {
   document.querySelectorAll('.nt-mode').forEach((b) => b.classList.toggle('on', b.dataset.mode === MODE));
+}
+
+/** Reflect the active type filter onto the chip-row (SOW-042). */
+function syncTypeButtons() {
+  document.querySelectorAll('.nt-type').forEach((b) => b.classList.toggle('on', b.dataset.type === TYPE));
+}
+
+/** Load the member's Shares once (member-gated, fail-closed to []). Shares ride /api/shares via the background. */
+async function loadShares() {
+  SHARES_LOADED = true;
+  if (!canSeeShares(MEMBERSHIP)) { SHARES = []; return; }
+  try {
+    const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/shares', query: {} } });
+    SHARES = Array.isArray(r?.json?.items) ? r.json.items : [];
+  } catch { SHARES = []; }
+}
+
+/** If the active filter needs Shares and they are not loaded yet, fetch them, then re-render the feed. */
+async function ensureSharesForFilter() {
+  if ((TYPE === 'all' || TYPE === 'share') && !SHARES_LOADED) {
+    await loadShares();
+    renderFeed($('[data-filter]')?.value || '');
+  }
 }
 
 /** Load the caller's follow list from the background worker (paid-only). Sets FOLLOWING to a Set, or null. */
@@ -148,6 +189,7 @@ async function loadSetupBanner() {
 async function checkMembershipLock() {
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/status', query: {} } });
+    MEMBERSHIP = r?.json?.membership ?? 'unknown'; // SOW-042: drives the All filter's Shares visibility
     if (isLockedMembership(r?.json?.membership)) {
       document.documentElement.setAttribute('data-locked', '1');
       return true;
@@ -185,8 +227,11 @@ function init() {
   if (dateEl) dateEl.textContent = longDate();
 
   syncModeButtons();
+  syncTypeButtons();
   initFooterTip();
-  checkMembershipLock();
+  // Status drives both the lapsed lock and the All filter's Shares visibility; once it resolves, pull Shares if the
+  // default (or persisted) filter needs them and re-render.
+  checkMembershipLock().then(() => ensureSharesForFilter());
   loadSetupBanner();
 
   // The setup banner opens the onboarding tab (sign in -> fork -> install).
@@ -202,6 +247,22 @@ function init() {
     MODE = b.dataset.mode;
     try { localStorage.setItem('gbti-nt-mode', MODE); } catch (e) {}
     syncModeButtons();
+    renderFeed($('[data-filter]')?.value || '');
+  }));
+
+  // SOW-042: the type filter chip-row (All / Articles / Products / Prompts / Shares). Persist + re-render; selecting
+  // All or Shares lazily loads the member's Shares the first time.
+  document.querySelectorAll('.nt-type').forEach((b) => b.addEventListener('click', async () => {
+    const next = b.dataset.type;
+    if (!TYPE_FILTERS.has(next) || next === TYPE) return;
+    TYPE = next;
+    try { localStorage.setItem('gbti-nt-type', TYPE); } catch (e) {}
+    syncTypeButtons();
+    if ((TYPE === 'all' || TYPE === 'share') && !SHARES_LOADED) {
+      const feed = $('[data-feed]');
+      if (feed) feed.innerHTML = '<p class="muted">Loading...</p>';
+      await loadShares();
+    }
     renderFeed($('[data-filter]')?.value || '');
   }));
 

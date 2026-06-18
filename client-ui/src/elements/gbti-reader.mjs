@@ -86,8 +86,14 @@ class GbtiReader extends GbtiElement {
     const it = this._item;
     if (!it) { this.set(this.css(CSS)); return; }
     const t = TYPE_LABEL[it.type] || it.type || '';
-    const view = it.url ? `<a class="view" href="${esc(SITE + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : '';
-    const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ''}</div>`;
+    // A Share's `url` is the external link it points at (open it directly); every other type's `url` is a
+    // gbti.network path (prefix the origin). A Share with no url shows no view link.
+    const view = it.type === 'share'
+      ? (it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Open link</a>` : '')
+      : (it.url ? `<a class="view" href="${esc(SITE + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : '');
+    // Shares carry an ISO createdAt; content items carry a numeric publishedAt.
+    const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
+    const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName(it.author))}</span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ''}</div>`;
     const coverUrl = resolveAsset(it.thumb); // SOW-031: the index item's thumbnail, shown as a cover above the body
     const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : '';
     let body;
