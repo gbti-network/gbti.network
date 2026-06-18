@@ -45,7 +45,10 @@ export function catGlyph(category) {
 // SOW-041: a Share carries no category (it has tags), so its glyph falls back on its TYPE. Other content types
 // keep their category glyph; the type fallback only fires when the category is missing/unknown.
 const TYPE_GLYPH = { share: 'coin', post: 'pencil', product: 'box', prompt: 'spark', news: 'news' };
-const TYPE_ACCENT = { share: '#b3791f', post: '#555a66', product: '#138178', prompt: '#1f9e5f', news: '#3a6ea5' };
+// Per-TYPE accent (article/product/prompt/share/news). Used by glyphFor's type fallback AND by the activity
+// feed's separation treatment (typeAccent below). Article = blue, Product = orange, Prompt = green, Share = gold:
+// a distinct, vivid spread so member contributions stand out from the News stream in the blended feed.
+const TYPE_ACCENT = { share: '#b3791f', post: '#3f74c9', product: '#c9683b', prompt: '#1f9e5f', news: '#3a6ea5' };
 
 /** Resolve an item's fallback glyph by category first, then by type (for Shares + any category-less item). */
 export function glyphFor(category, type) {
@@ -54,4 +57,11 @@ export function glyphFor(category, type) {
   const t = String(type || '').toLowerCase();
   if (TYPE_GLYPH[t]) return { svg: GLYPH_SVG[TYPE_GLYPH[t]], accent: TYPE_ACCENT[t] };
   return { svg: GLYPH_SVG.puzzle, accent: OTHER_ACCENT };
+}
+
+/** The per-TYPE accent color (article/product/prompt/share/news), the single source of truth the feed's
+ *  separation treatment (accent bar + tint + colored chip) shares with the glyph fallback so a member type's
+ *  colors always match. An unknown type falls back to the neutral OTHER_ACCENT. */
+export function typeAccent(type) {
+  return TYPE_ACCENT[String(type || '').toLowerCase()] || OTHER_ACCENT;
 }

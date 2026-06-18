@@ -2064,13 +2064,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   var OTHER_ACCENT = "#5b6472";
   var TYPE_GLYPH = { share: "coin", post: "pencil", product: "box", prompt: "spark", news: "news" };
-  var TYPE_ACCENT = { share: "#b3791f", post: "#555a66", product: "#138178", prompt: "#1f9e5f", news: "#3a6ea5" };
+  var TYPE_ACCENT = { share: "#b3791f", post: "#3f74c9", product: "#c9683b", prompt: "#1f9e5f", news: "#3a6ea5" };
   function glyphFor(category, type) {
     const key = String(category || "").toLowerCase();
     if (CAT_GLYPH[key]) return { svg: GLYPH_SVG[CAT_GLYPH[key]], accent: CAT_ACCENT[key] };
     const t = String(type || "").toLowerCase();
     if (TYPE_GLYPH[t]) return { svg: GLYPH_SVG[TYPE_GLYPH[t]], accent: TYPE_ACCENT[t] };
     return { svg: GLYPH_SVG.puzzle, accent: OTHER_ACCENT };
+  }
+  function typeAccent(type) {
+    return TYPE_ACCENT[String(type || "").toLowerCase()] || OTHER_ACCENT;
   }
 
   // client-ui/src/assets.mjs
@@ -2103,9 +2106,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
-  .media .gl svg { width:48%; height:48%; }
+  /* The glyph wrapper must FILL the media so the svg's % sizing + centering resolve (an unsized .gl made the
+     icon render tiny + off-center). Bumped to 55% so the type glyph reads clearly. */
+  .media .gl { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  .media .gl svg { width:55%; height:55%; display:block; }
   .media .cimg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); background:var(--hover); border-radius:6px; padding:3px 8px; white-space:nowrap; flex:none; }
+  .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); background:var(--hover); border:1px solid transparent; border-radius:6px; padding:3px 8px; white-space:nowrap; flex:none; }
   .lock { display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px 2px 6px; white-space:nowrap; }
   .lock svg { width:11px; height:11px; }
   .meta { font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); white-space:nowrap; }
@@ -2114,19 +2120,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .empty { color:var(--muted); padding:18px 2px; }
   a, .open { color:inherit; text-decoration:none; }
 
-  /* MODE compact */
-  .compact { display:flex; flex-direction:column; gap:8px; }
-  .row-c { display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:11px 14px; cursor:pointer; transition:border-color .14s, box-shadow .14s, transform .14s; }
-  .row-c:hover { border-color:var(--accent); transform:translateY(-1px); }
+  /* MODES compact + detailed — a continuous DIVIDED list (hairline separators, no per-row box) */
+  .compact, .detailed { display:flex; flex-direction:column; }
+  .row-c, .row-d { position:relative; cursor:pointer; border-bottom:1px solid var(--line); transition:background .14s; }
+  .row-c:last-child, .row-d:last-child { border-bottom:0; }
+  .row-c:hover, .row-d:hover { background:var(--hover); }
+
+  .row-c { display:flex; align-items:center; gap:12px; padding:12px 8px 12px 15px; }
   .row-c .media { width:38px; height:38px; border-radius:9px; }
   .row-c .title { flex:1; min-width:0; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row-c:hover .title { color:var(--accent); }
   .row-c .right { display:flex; align-items:center; gap:10px; flex:none; }
 
-  /* MODE detailed (the canonical Browse-style list) */
-  .detailed { display:flex; flex-direction:column; gap:11px; }
-  .row-d { display:grid; grid-template-columns:62px 1fr; gap:15px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px 16px; cursor:pointer; transition:border-color .14s, box-shadow .14s, transform .14s; }
-  .row-d:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .row-d { display:grid; grid-template-columns:62px 1fr; gap:15px; align-items:center; padding:14px 8px 14px 17px; }
   .row-d .media { width:62px; height:62px; border-radius:10px; }
   .row-d .body { min-width:0; }
   .row-d .top { display:flex; align-items:center; gap:9px; margin:0 0 4px; }
@@ -2134,15 +2140,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .row-d:hover .title { color:var(--accent); }
   .row-d .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:2px 0 4px; }
 
-  /* MODE card */
+  /* MODE card — boxed grid */
   .card { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:13px; }
-  .card-i { display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 14px 0; cursor:pointer; overflow:hidden; transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .card-i { position:relative; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 14px 0; cursor:pointer; overflow:hidden; transition:border-color .14s, box-shadow .14s, transform .14s; }
   .card-i:hover { border-color:var(--accent); transform:translateY(-2px); }
   .card-i .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .card-i:hover .title { color:var(--accent); }
   .card-i .meta { margin:0 0 12px; white-space:normal; }
   .card-i .media { margin:0 -14px; width:calc(100% + 28px); height:118px; border-radius:0; }
+
+  /* SEPARATION — member contributions stand out from the (non-member, high-volume) News stream: each member
+     type gets a 3px type-color accent bar + a faint tint + a colored chip; NEWS stays plain so it recedes.
+     The color comes from --cbar (set per-row in _open from cat-glyph's typeAccent). */
+  .row-c[data-type]:not([data-type="news"])::before,
+  .row-d[data-type]:not([data-type="news"])::before,
+  .card-i[data-type]:not([data-type="news"])::before { content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--cbar, var(--green)); }
+  .row-c[data-type]:not([data-type="news"]),
+  .row-d[data-type]:not([data-type="news"]) { background:color-mix(in srgb, var(--cbar) 7%, transparent); }
+  .row-c[data-type]:not([data-type="news"]):hover,
+  .row-d[data-type]:not([data-type="news"]):hover { background:color-mix(in srgb, var(--cbar) 14%, transparent); }
+  .card-i[data-type]:not([data-type="news"]) { background:color-mix(in srgb, var(--cbar) 7%, var(--panel)); }
+  [data-type]:not([data-type="news"]) .chip { color:var(--cbar); background:color-mix(in srgb, var(--cbar) 13%, transparent); border-color:color-mix(in srgb, var(--cbar) 26%, transparent); }
 `;
   var GbtiCardList = class extends GbtiElement {
     set items(v) {
@@ -2176,7 +2195,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<span class="meta"><b>${esc(authorName(item.author))}</b>${ago ? ` · ${esc(ago)}` : ""}</span>`;
     }
     _open(item, i, cls) {
-      return item.openHref ? `<a class="${cls}" data-card="${i}" href="${esc(item.openHref)}">` : `<div class="${cls}" data-card="${i}" role="button" tabindex="0">`;
+      const t = lc(item.type);
+      const accent = t && t !== "news" ? ` style="--cbar:${esc(typeAccent(t))}"` : "";
+      const attrs = `class="${cls}" data-card="${i}" data-type="${esc(t)}"${accent}`;
+      return item.openHref ? `<a ${attrs} href="${esc(item.openHref)}">` : `<div ${attrs} role="button" tabindex="0">`;
     }
     _close(item) {
       return item.openHref ? "</a>" : "</div>";
