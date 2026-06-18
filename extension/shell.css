@@ -90,6 +90,15 @@ a { color: inherit; text-decoration: none; }
 .nt-coop:hover { transform: translateY(-1px); }
 .nt-coop svg { width: 17px; height: 17px; margin-left: auto; }
 
+/* ============================ compose modal (SOW-041 P5) ============================ */
+.compose-modal { position: fixed; inset: 0; z-index: 120; display: flex; align-items: flex-start; justify-content: center; padding: 64px 18px 18px; background: rgba(20,18,24,.42); overflow-y: auto; }
+.compose-panel { width: 100%; max-width: 560px; background: var(--paper); border: 1.5px solid var(--line-2); border-radius: var(--r-lg); box-shadow: var(--sh-md); padding: 16px 18px 18px; }
+.compose-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 12px; }
+.compose-head b { font-family: var(--f-display); font-weight: 700; font-size: 16px; }
+.compose-x { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--fg-mute); cursor: pointer; }
+.compose-x:hover { background: var(--paper-3); color: var(--fg); }
+.compose-x svg { width: 18px; height: 18px; }
+
 /* ============================ main column ============================ */
 .nt-main { min-width: 0; padding: 26px 34px 60px; overflow-y: auto; }
 

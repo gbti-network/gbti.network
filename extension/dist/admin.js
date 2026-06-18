@@ -6253,7 +6253,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     chev: '<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     mCompact: '<path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',
     mDetailed: '<rect x="3.5" y="4.5" width="5" height="5" rx="1" fill="currentColor"/><rect x="3.5" y="14.5" width="5" height="5" rx="1" fill="currentColor"/><path d="M11 6h9M11 9h6M11 16h9M11 19h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
-    mCard: '<rect x="4" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="4" y="13" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="13" width="7" height="7" rx="1.3" fill="currentColor"/>'
+    mCard: '<rect x="4" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="4" y="13" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="13" width="7" height="7" rx="1.3" fill="currentColor"/>',
+    plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
   };
   var ico = (k) => SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : "";
   var RAIL = [
@@ -6275,6 +6277,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>
       <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
     </span>
+    <button class="nt-icobtn" data-compose data-ico="plus" title="New Share" aria-label="Post a new Share"></button>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
       <button class="nt-signin" data-signin-btn type="button" hidden>Sign in</button>
@@ -6399,6 +6402,30 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       location.reload();
     });
   }
+  function openComposeModal() {
+    if (document.querySelector(".compose-modal")) return;
+    const overlay = document.createElement("div");
+    overlay.className = "compose-modal";
+    overlay.innerHTML = `<div class="compose-panel"><div class="compose-head"><b>Post a Share</b><button class="compose-x" type="button" aria-label="Close">${ico("x")}</button></div><gbti-share-composer></gbti-share-composer></div>`;
+    const onEsc = (e) => {
+      if (e.key === "Escape") close();
+    };
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onEsc);
+    };
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.querySelector(".compose-x")?.addEventListener("click", close);
+    overlay.addEventListener("gbti-share-posted", close);
+    document.addEventListener("keydown", onEsc);
+    document.body.appendChild(overlay);
+    overlay.querySelector("gbti-share-composer")?.querySelector?.("input, textarea")?.focus?.();
+  }
+  function wireCompose(root) {
+    root.querySelector("[data-compose]")?.addEventListener("click", () => openComposeModal());
+  }
   async function wireApps(root) {
     const apps = root.querySelector("[data-apps]");
     if (!apps) return;
@@ -6439,6 +6466,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     wireApps(root);
     wireAccount(root);
+    wireCompose(root);
     loadShellAccount(root);
     return { ico, loadShellAccount: () => loadShellAccount(root) };
   }

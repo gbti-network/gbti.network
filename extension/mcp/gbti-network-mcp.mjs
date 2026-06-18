@@ -17506,8 +17506,12 @@ function createReader(repoPath) {
      * conversation reads top-down). Returns the PUBLIC body only; a members comment's body stays in its .enc,
      * decrypted client-side via the Worker. The npm host walks the local working copy.
      */
+    // SOW-041: the generic comment-thread reader for ANY content type; listShareComments is a thin alias.
     listShareComments(targetSlug, limit = 100) {
-      if (!repoPath || !targetSlug) return [];
+      return this.listComments("share", targetSlug, limit);
+    },
+    listComments(targetType, targetSlug, limit = 100) {
+      if (!repoPath || !targetType || !targetSlug) return [];
       const roots = [path2.join(repoPath, "members"), path2.join(repoPath, "house")];
       const out = [];
       const readCommentsDir = (commentsDir, relPrefix) => {
@@ -17527,7 +17531,7 @@ function createReader(repoPath) {
           }
           const fm = parsed.frontmatter || {};
           if (fm.status !== "published") continue;
-          if (fm.targetType !== "share" || fm.targetSlug !== targetSlug) continue;
+          if (fm.targetType !== targetType || fm.targetSlug !== targetSlug) continue;
           out.push(commentSummary(`${relPrefix}/comments/${f}`, fm, parsed.body));
         }
       };

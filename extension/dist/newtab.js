@@ -817,8 +817,8 @@
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc = c | 32;
-      if (lc >= 97 && lc <= 102) return lc - 97 + 10;
+      const lc3 = c | 32;
+      if (lc3 >= 97 && lc3 <= 102) return lc3 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -2379,13 +2379,294 @@
     const t = TAB_IDS.has(type) ? type : "post";
     return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
   }
+  function parseBrowseHash(hash) {
+    const s = String(hash || "").replace(/^#/, "");
+    const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+    const readM = s.match(/(?:^|&)read=([^&]+)/);
+    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
+    let read = null;
+    if (readM) {
+      try {
+        read = decodeURIComponent(readM[1]);
+      } catch {
+        read = readM[1];
+      }
+    }
+    return { tab, read };
+  }
+
+  // client-ui/src/tokens.mjs
+  var TOKENS = `
+:host {
+  --bg: #faf9f8; --panel: #ffffff;
+  --brand: #1f9e5f; --brand-dark: #178a51; --accent: #0f6f40;
+  --text: #24222a; --fg: #24222a; --muted: #57545e;
+  --line: #e7e4e0; --hover: #f1f1f1; --danger: #c0392b;
+  --radius: 12px;
+  --font-body: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --font-display: "Baloo Da 2", "Hanken Grotesk", system-ui, sans-serif;
+}
+:host-context([data-theme="dark"]) {
+  --bg: #1c1a21; --panel: #2d2a34;
+  --brand: #1f9e5f; --brand-dark: #46c089; --accent: #5fd49a;
+  --text: #f3f2f0; --fg: #f3f2f0; --muted: rgba(243,242,240,.72);
+  --line: rgba(255,255,255,.12); --hover: #34313c; --danger: #e06c6c;
+}
+`;
+  var BASE_CSS = `
+:host { display: block; color: var(--text); font: 15px/1.5 var(--font-body); box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
+h1, h2, h3 { font-family: var(--font-display); margin: 0 0 .5em; }
+h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+a { color: var(--accent); }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+input, select, textarea {
+  width: 100%; padding: 9px 11px; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; color: var(--text); font: inherit;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--brand); }
+textarea { min-height: 120px; resize: vertical; font-family: ui-monospace, monospace; }
+button {
+  background: var(--brand); color: #08231a; border: 0; border-radius: 8px;
+  padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer;
+}
+button:hover { background: var(--brand-dark); }
+button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+button[disabled] { opacity: .5; cursor: default; }
+.muted { color: var(--muted); }
+.danger { color: var(--danger); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--hover); font-size: 12px; color: var(--muted); }
+.tag.ok { background: rgba(31,158,95,.14); color: var(--accent); }
+.tag.bad { background: rgba(224,108,108,.16); color: var(--danger); }
+ul.list { list-style: none; margin: 0; padding: 0; }
+ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+`;
+
+  // client-ui/src/base.mjs
+  var HAS_DOM = typeof HTMLElement !== "undefined";
+  var CLIENT = null;
+  var IDENTITY = null;
+  var SUBSCRIBERS = /* @__PURE__ */ new Set();
+  function setClient(client) {
+    CLIENT = client;
+    IDENTITY = null;
+    for (const fn of SUBSCRIBERS) {
+      try {
+        fn();
+      } catch {
+      }
+    }
+  }
+  function getClient() {
+    return CLIENT;
+  }
+  async function getIdentity() {
+    if (IDENTITY) return IDENTITY;
+    if (!CLIENT) return null;
+    try {
+      const s = await CLIENT.status();
+      IDENTITY = s?.identity ?? null;
+      return IDENTITY;
+    } catch {
+      return null;
+    }
+  }
+  var Base = HAS_DOM ? HTMLElement : class {
+  };
+  var GbtiElement = class extends Base {
+    constructor() {
+      super();
+      if (HAS_DOM) this.root = this.attachShadow({ mode: "open" });
+      this._onClient = () => this.isConnected && this.render?.();
+    }
+    connectedCallback() {
+      SUBSCRIBERS.add(this._onClient);
+      this.render?.();
+    }
+    disconnectedCallback() {
+      SUBSCRIBERS.delete(this._onClient);
+    }
+    get client() {
+      return getClient();
+    }
+    /** Wrap markup with the tokens + base CSS (+ per-component extra) for the Shadow DOM. */
+    css(extra = "") {
+      return `<style>${TOKENS}${BASE_CSS}${extra}</style>`;
+    }
+    set(markup) {
+      if (this.root) this.root.innerHTML = markup;
+    }
+    $(sel) {
+      return this.root?.querySelector(sel) ?? null;
+    }
+    $$(sel) {
+      return this.root ? [...this.root.querySelectorAll(sel)] : [];
+    }
+    on(sel, event, handler) {
+      const el = this.$(sel);
+      if (el) el.addEventListener(event, handler);
+    }
+    emit(name, detail) {
+      this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
+    }
+  };
+  function define(tag, ctor) {
+    const ce = HAS_DOM ? globalThis.customElements : null;
+    if (!ce || ce.get(tag)) return;
+    ce.define(tag, ctor);
+  }
+  function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+
+  // client-ui/src/elements/gbti-share-composer.mjs
+  var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  var CSS = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
+  .sub { margin:0 0 12px; font-size:13px; color:var(--muted); }
+  textarea { width:100%; box-sizing:border-box; min-height:84px; resize:vertical; font:inherit; font-size:14px;
+    padding:10px 12px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
+  textarea:focus { outline:none; border-color:var(--brand); }
+  input.title, input.desc { width:100%; box-sizing:border-box; font:inherit; padding:9px 12px; margin-bottom:8px;
+    border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
+  input.title { font-size:15px; font-weight:700; }
+  input.desc { font-size:13px; }
+  input.title:focus, input.desc:focus { outline:none; border-color:var(--brand); }
+  .row { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; align-items:center; }
+  input[type=url] { flex:1; min-width:160px; box-sizing:border-box; font:inherit; font-size:13px; padding:8px 10px;
+    border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
+  select { font:inherit; font-size:13px; padding:8px 10px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
+  .actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:12px; }
+  button.post { font:inherit; font-weight:700; font-size:14px; padding:9px 18px; border:0; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer; }
+  button.post[disabled] { opacity:.5; cursor:default; }
+  .msg { font-size:13px; }
+  .msg.err { color:#c0392b; }
+  .msg.ok { color:var(--brand); }
+  .notice { display:flex; gap:12px; align-items:flex-start; padding:16px; border:1.5px dashed var(--line); border-radius:12px; background:var(--hover, rgba(0,0,0,.03)); }
+  .notice h3 { margin-bottom:2px; }
+  .notice a { color:var(--brand); font-weight:600; }
+  .lock { font-size:22px; line-height:1; }
+  .busy { opacity:.55; pointer-events:none; }
+`;
+  var GbtiShareComposer = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback();
+      this._loadStatus();
+    }
+    async _loadStatus() {
+      if (!this.client) {
+        this._membership = null;
+        this.render();
+        return;
+      }
+      try {
+        const s = await this.client.status();
+        this._membership = s?.membership ?? "unknown";
+      } catch {
+        this._membership = "unknown";
+      }
+      this.render();
+    }
+    render() {
+      const m = this._membership;
+      if (!this.client) return this.set(this.css(CSS) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
+      if (m === void 0) return this.set(this.css(CSS) + `<div class="card"><p class="sub">Loading…</p></div>`);
+      if (LOCKED.has(m)) return this._renderLocked();
+      if (m === "trialing") return this._renderTrial();
+      return this._renderComposer();
+    }
+    _noticeHtml(title, body, glyph) {
+      return `<div class="notice"><span class="lock">${glyph}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
+    }
+    _renderLocked() {
+      this.set(this.css(CSS) + this._noticeHtml(
+        "Your access is locked",
+        'Your membership has lapsed, so Shares are locked. <a href="https://gbti.network/membership/">Renew your membership</a> to read and post in the community stream again.',
+        "🔒"
+      ));
+    }
+    _renderTrial() {
+      this.set(this.css(CSS) + this._noticeHtml(
+        "Reading only on the free trial",
+        'On the trial you can READ the community Shares stream. Posting Shares is a paid feature. <a href="https://gbti.network/membership/">Upgrade your membership</a> to post.',
+        "👀"
+      ));
+    }
+    _renderComposer() {
+      this.set(this.css(CSS) + `
+      <div class="card">
+        <h3>Share an update</h3>
+        <p class="sub">A short note or an off-network link for the co-op. Members-only by default.</p>
+        <input class="title" type="text" placeholder="Title (optional)" maxlength="80" />
+        <input class="desc" type="text" placeholder="Short description (optional)" maxlength="200" />
+        <textarea placeholder="What are you reading, building, or finding?" maxlength="4000"></textarea>
+        <div class="row">
+          <input type="url" placeholder="https://… (optional link)" />
+          <select aria-label="Visibility">
+            <option value="members">Members only</option>
+            <option value="public">Public</option>
+          </select>
+        </div>
+        <div class="actions">
+          <span class="msg" aria-live="polite"></span>
+          <button class="post" type="button">Post Share</button>
+        </div>
+      </div>`);
+      this.on(".post", "click", () => this._post());
+    }
+    async _post() {
+      const card = this.$(".card");
+      const title = (this.$("input.title")?.value || "").trim();
+      const shortDescription = (this.$("input.desc")?.value || "").trim();
+      const body = (this.$("textarea")?.value || "").trim();
+      const url = (this.$("input[type=url]")?.value || "").trim();
+      const visibility = this.$("select")?.value || "members";
+      const msg = this.$(".msg");
+      if (!body && !url && !title) {
+        this._say(msg, "Add a title, a note, or a link first.", "err");
+        return;
+      }
+      card?.classList.add("busy");
+      try {
+        const input = { visibility };
+        if (title) input.title = title;
+        if (shortDescription) input.shortDescription = shortDescription;
+        if (url) input.url = url;
+        const res = await this.client.postShare({ input, body });
+        this._say(msg, res?.encrypted ? "Posted (members-only)." : "Posted.", "ok");
+        for (const sel of ["input.title", "input.desc", "textarea", "input[type=url]"]) {
+          const el = this.$(sel);
+          if (el) el.value = "";
+        }
+        this.emit("gbti-share-posted", res);
+      } catch (err) {
+        if (err?.code === "membership-required") {
+          this._say(msg, "Posting Shares requires a paid membership.", "err");
+        } else {
+          this._say(msg, err?.message || "Could not post the Share.", "err");
+        }
+      } finally {
+        card?.classList.remove("busy");
+      }
+    }
+    _say(el, text, kind) {
+      if (!el) return;
+      el.textContent = text;
+      el.className = `msg ${kind || ""}`;
+    }
+  };
+  define("gbti-share-composer", GbtiShareComposer);
 
   // extension/src/shell.mjs
   var SITE = "https://gbti.network";
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
   var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc2 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<rect x="4.5" y="3.5" width="15" height="17" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 8h8M8 11.5h8M8 15h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
@@ -2401,7 +2682,9 @@
     chev: '<path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
     mCompact: '<path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',
     mDetailed: '<rect x="3.5" y="4.5" width="5" height="5" rx="1" fill="currentColor"/><rect x="3.5" y="14.5" width="5" height="5" rx="1" fill="currentColor"/><path d="M11 6h9M11 9h6M11 16h9M11 19h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
-    mCard: '<rect x="4" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="4" y="13" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="13" width="7" height="7" rx="1.3" fill="currentColor"/>'
+    mCard: '<rect x="4" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="4" y="13" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="13" width="7" height="7" rx="1.3" fill="currentColor"/>',
+    plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
   };
   var ico = (k) => SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : "";
   var RAIL = [
@@ -2423,6 +2706,7 @@
       <span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>
       <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
     </span>
+    <button class="nt-icobtn" data-compose data-ico="plus" title="New Share" aria-label="Post a new Share"></button>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
       <button class="nt-signin" data-signin-btn type="button" hidden>Sign in</button>
@@ -2449,11 +2733,11 @@
   }
   function railHtml(active) {
     const items = RAIL.map((r) => {
-      if (r.group) return `<div class="nt-rail-h">${esc(r.group)}</div>`;
+      if (r.group) return `<div class="nt-rail-h">${esc2(r.group)}</div>`;
       if (r.div) return `<hr class="nt-rail-div" />`;
       const on = r.key === active ? " on" : "";
-      const sub = r.sub ? `<span class="sub">${esc(r.sub)}</span>` : "";
-      return `<a class="nav-i${on}" data-key="${r.key}" href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
+      const sub = r.sub ? `<span class="sub">${esc2(r.sub)}</span>` : "";
+      return `<a class="nav-i${on}" data-key="${r.key}" href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc2(r.nm)}</span>${sub}</span></a>`;
     }).join("");
     return `<nav class="nt-rail">${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
   }
@@ -2477,7 +2761,7 @@
         av.alt = `@${login}`;
       }
       const head = root.querySelector("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
+      if (head) head.innerHTML = `Signed in as <b>@${esc2(login)}</b>`;
       const adminItem = root.querySelector(".mi-admin");
       if (adminItem) adminItem.hidden = (RANK2[status.role] ?? 0) < RANK2.moderator;
       if (greetName) greetName.textContent = `, @${login}`;
@@ -2547,6 +2831,30 @@
       location.reload();
     });
   }
+  function openComposeModal() {
+    if (document.querySelector(".compose-modal")) return;
+    const overlay = document.createElement("div");
+    overlay.className = "compose-modal";
+    overlay.innerHTML = `<div class="compose-panel"><div class="compose-head"><b>Post a Share</b><button class="compose-x" type="button" aria-label="Close">${ico("x")}</button></div><gbti-share-composer></gbti-share-composer></div>`;
+    const onEsc = (e) => {
+      if (e.key === "Escape") close();
+    };
+    const close = () => {
+      overlay.remove();
+      document.removeEventListener("keydown", onEsc);
+    };
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    overlay.querySelector(".compose-x")?.addEventListener("click", close);
+    overlay.addEventListener("gbti-share-posted", close);
+    document.addEventListener("keydown", onEsc);
+    document.body.appendChild(overlay);
+    overlay.querySelector("gbti-share-composer")?.querySelector?.("input, textarea")?.focus?.();
+  }
+  function wireCompose(root) {
+    root.querySelector("[data-compose]")?.addEventListener("click", () => openComposeModal());
+  }
   async function wireApps(root) {
     const apps = root.querySelector("[data-apps]");
     if (!apps) return;
@@ -2587,17 +2895,3593 @@
     }
     wireApps(root);
     wireAccount(root);
+    wireCompose(root);
     loadShellAccount(root);
     return { ico, loadShellAccount: () => loadShellAccount(root) };
   }
 
-  // extension/src/newtab.mjs
+  // client-ui/src/elements/gbti-auth.mjs
+  var GbtiAuth = class extends GbtiElement {
+    async render() {
+      if (!this.client) {
+        this.set(this.css() + `<div class="panel muted">Connecting to the local client…</div>`);
+        return;
+      }
+      let status = null;
+      try {
+        status = await this.client.status();
+      } catch {
+      }
+      const id = status?.identity ?? null;
+      const role = status?.role ?? "member";
+      const authed = Boolean(status?.authenticated);
+      if (id && authed) {
+        this.set(
+          this.css() + `<div class="panel row" style="justify-content:space-between">
+             <div>Signed in as <strong>@${esc(id.login)}</strong> ${role !== "member" ? `<span class="tag ok">${esc(role)}</span>` : ""}</div>
+             <button class="ghost" id="out">Sign out</button>
+           </div>`
+        );
+        this.on("#out", "click", () => this.emit("gbti-signout"));
+        return;
+      }
+      const canLogin = typeof this.client.login === "function";
+      this.set(
+        this.css() + `<div class="panel">
+           <h2>Sign in</h2>
+           <p class="muted">Authorize with GitHub to author + publish your content as pull requests.</p>
+           ${canLogin ? `<button id="in">Sign in with GitHub</button>` : `<p class="muted">Run <code>gbti login</code> in your terminal to connect this client.</p>`}
+           <div id="prompt" class="muted" style="margin-top:10px"></div>
+         </div>`
+      );
+      if (canLogin) {
+        this.on("#in", "click", async () => {
+          const slot = this.$("#prompt");
+          try {
+            await this.client.login(({ userCode, verificationUri }) => {
+              slot.innerHTML = `Enter code <strong>${esc(userCode)}</strong> at <a href="${esc(verificationUri)}" target="_blank" rel="noopener">${esc(verificationUri)}</a>`;
+            });
+            getIdentity();
+            this.render();
+            this.emit("gbti-signin");
+          } catch (err) {
+            slot.innerHTML = `<span class="danger">${esc(err.message || "sign-in failed")}</span>`;
+          }
+        });
+      }
+    }
+  };
+  define("gbti-auth", GbtiAuth);
+
+  // client-ui/src/form.mjs
+  function coerceValue(kind, raw) {
+    switch (kind) {
+      case "boolean":
+        return Boolean(raw);
+      case "number": {
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : void 0;
+      }
+      case "array":
+        return String(raw ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+      case "json": {
+        const t = String(raw ?? "").trim();
+        return t ? JSON.parse(t) : void 0;
+      }
+      default: {
+        const t = String(raw ?? "").trim();
+        return t === "" ? void 0 : t;
+      }
+    }
+  }
+  function gatherInput(fields, getRaw) {
+    const input = {};
+    for (const f of fields ?? []) {
+      const raw = getRaw(f.key, f.kind);
+      let val;
+      try {
+        val = coerceValue(f.kind, raw);
+      } catch (err) {
+        throw new Error(`field "${f.key}": ${err.message}`);
+      }
+      if (val === void 0) continue;
+      if (Array.isArray(val) && val.length === 0) continue;
+      input[f.key] = val;
+    }
+    return input;
+  }
+
+  // client-ui/src/elements/gbti-content-editor.mjs
+  var TYPES = ["post", "product", "prompt", "profile"];
+  var GbtiContentEditor = class extends GbtiElement {
+    constructor() {
+      super();
+      this.type = this.getAttribute("type") || "post";
+      this.fields = [];
+      this.preset = null;
+    }
+    /** Seed the editor from an existing item (used by the inline editor + "edit" from My Content). */
+    load(type, input, body) {
+      this.type = type || this.type;
+      this.preset = { input: input || {}, body: body || "" };
+      if (this.isConnected) this.render();
+    }
+    async render() {
+      if (!this.client) return;
+      try {
+        const res = await this.client.formFields({ type: this.type });
+        this.fields = res?.fields ?? [];
+      } catch {
+        this.fields = [];
+      }
+      let membership = "unknown";
+      try {
+        membership = (await this.client.status())?.membership ?? "unknown";
+      } catch {
+        membership = "unknown";
+      }
+      const blocked = membership !== "paid" && membership !== "unknown";
+      const p = this.preset?.input ?? {};
+      this.set(
+        this.css(`
+        .grid { display: grid; gap: 2px; }
+        .actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
+        #out { margin-top:12px; }
+        .preview { background:#201e26; border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+        .notice { background:#2a2330; border:1px solid var(--accent); border-radius:8px; padding:10px 14px; margin-bottom:12px; }
+        .notice a { color: var(--accent); }
+      `) + `<div class="panel">
+           <h2>Author</h2>
+           ${blocked ? `<div class="notice">Publishing requires a paid membership. You can write and stage your work now; it stays on your fork until you upgrade. <a href="https://gbti.network" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
+           <label>Type</label>
+           <select id="type">${TYPES.map((t) => `<option ${t === this.type ? "selected" : ""}>${t}</option>`).join("")}</select>
+           <div class="grid" id="fields">${this.fields.map((f) => this.fieldHtml(f, p[f.key], this.fieldVisible(f, (k) => this.presetStr(p[k])))).join("")}</div>
+           <label>Body (Markdown)</label>
+           <textarea id="body">${esc(this.preset?.body ?? "")}</textarea>
+           <div class="actions">
+             <button id="preview" class="ghost">Preview</button>
+             <button id="validate" class="ghost">Validate</button>
+             <button id="publish"${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required to publish" : "Publish (open PR)"}</button>
+             <input type="file" id="img" accept="image/*" style="display:none" />
+             <button id="imgbtn" class="ghost">Add image</button>
+           </div>
+           <div id="out" class="muted"></div>
+         </div>`
+      );
+      this.on("#type", "change", (e) => {
+        this.type = e.target.value;
+        this.preset = null;
+        this.render();
+      });
+      this.on("#preview", "click", () => this.doPreview());
+      this.on("#validate", "click", () => this.doValidate());
+      this.on("#publish", "click", () => this.doPublish());
+      this.on("#imgbtn", "click", () => this.$("#img").click());
+      this.on("#img", "change", (e) => this.doImage(e.target.files?.[0]));
+      const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));
+      for (const dep of deps) {
+        const el = this.$(`[data-key="${dep}"]`);
+        if (el) {
+          el.addEventListener("input", () => this.syncConditional());
+          el.addEventListener("change", () => this.syncConditional());
+        }
+      }
+    }
+    fieldHtml(f, value, visible = true) {
+      const v = value == null ? "" : Array.isArray(value) ? value.join(", ") : typeof value === "object" ? JSON.stringify(value) : String(value);
+      const label = `<label>${esc(f.label || f.key)}${f.required ? " *" : ""}</label>`;
+      let control;
+      if (f.kind === "enum") {
+        control = `<select data-key="${f.key}">${(f.options || []).map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+      } else if (f.kind === "boolean") {
+        return `<div class="field" data-fkey="${f.key}"${visible ? "" : " hidden"}>` + label.replace("<label>", '<label style="display:flex;gap:8px;align-items:center">') + `<input type="checkbox" data-key="${f.key}" ${value ? "checked" : ""} style="width:auto" /></div>`;
+      } else if (f.kind === "textarea" || f.kind === "json") {
+        control = `<textarea data-key="${f.key}" data-kind="${f.kind}" placeholder="${esc(f.placeholder || "")}">${esc(v)}</textarea>`;
+      } else {
+        control = `<input data-key="${f.key}" data-kind="${f.kind}" value="${esc(v)}" placeholder="${esc(f.placeholder || "")}" />`;
+      }
+      return `<div class="field" data-fkey="${f.key}"${visible ? "" : " hidden"}>${label}${control}</div>`;
+    }
+    /** Format a value the way fieldHtml does, so showIf can read preset values before the DOM exists. */
+    presetStr(value) {
+      return value == null ? "" : Array.isArray(value) ? value.join(", ") : String(value);
+    }
+    /** Evaluate a field's `showIf` against a (key)=>string value reader. No showIf => always visible. */
+    fieldVisible(f, getVal) {
+      const s = f.showIf;
+      if (!s) return true;
+      return matchesShowIf(s, getVal(s.field));
+    }
+    /** Recompute conditional fields from the live DOM and toggle their wrappers. */
+    syncConditional() {
+      const getVal = (k) => {
+        const el = this.$(`[data-key="${k}"]`);
+        return el ? el.type === "checkbox" ? el.checked : el.value : "";
+      };
+      for (const f of this.fields) {
+        if (!f.showIf) continue;
+        const wrap = this.$(`.field[data-fkey="${f.key}"]`);
+        if (wrap) wrap.hidden = !this.fieldVisible(f, getVal);
+      }
+    }
+    /** Read raw value for a field key from the rendered inputs (DOM side of the pure gatherInput). */
+    rawGetter() {
+      return (key, kind) => {
+        const el = this.$(`[data-key="${key}"]`);
+        if (!el) return void 0;
+        if (kind === "boolean") return el.checked;
+        return el.value;
+      };
+    }
+    gather() {
+      const getVal = (k) => {
+        const el = this.$(`[data-key="${k}"]`);
+        return el ? el.type === "checkbox" ? el.checked : el.value : "";
+      };
+      const visible = this.fields.filter((f) => this.fieldVisible(f, getVal));
+      return { type: this.type, input: gatherInput(visible, this.rawGetter()), body: this.$("#body")?.value ?? "" };
+    }
+    out(html, cls = "muted") {
+      const o = this.$("#out");
+      if (o) {
+        o.className = cls;
+        o.innerHTML = html;
+      }
+    }
+    async doPreview() {
+      try {
+        const res = await this.client.preview({ body: this.$("#body").value });
+        this.out(`<div class="preview">${res.html || ""}</div>`);
+      } catch (err) {
+        this.out(esc(err.message), "danger");
+      }
+    }
+    async doValidate() {
+      try {
+        const { type, input, body } = this.gather();
+        const res = await this.client.validateContent({ type, input, body });
+        this.out(res.valid ? `<span class="tag ok">valid</span> ${esc(res.path || "")}` : `<span class="danger">${esc(res.error)}</span>`);
+      } catch (err) {
+        this.out(esc(err.message), "danger");
+      }
+    }
+    async doPublish() {
+      this.out("Publishing…");
+      try {
+        const { type, input, body } = this.gather();
+        const res = await this.client.publish({ type, input, body });
+        this.out(`<span class="tag ok">${res.updated ? "updated" : "opened"}</span> PR <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a>`);
+        this.emit("gbti-published", res);
+      } catch (err) {
+        this.out(esc(err.message), "danger");
+      }
+    }
+    async doImage(file) {
+      if (!file) return;
+      const dataBase64 = await fileToBase64(file);
+      try {
+        const res = await this.client.stageImage({ filename: file.name, dataBase64 });
+        const imgField = this.fields.find((f) => f.kind === "image");
+        const el = imgField && this.$(`[data-key="${imgField.key}"]`);
+        const wrap = imgField && this.$(`.field[data-fkey="${imgField.key}"]`);
+        if (el && !el.value && wrap && !wrap.hidden) {
+          el.value = res.path;
+          this.out(`Image staged into <code>${esc(imgField.label || imgField.key)}</code>: <code>${esc(res.path)}</code>`);
+        } else {
+          this.out(`Image staged: <code>${esc(res.path)}</code> (reference it in your body)`);
+        }
+      } catch (err) {
+        this.out(esc(err.message), "danger");
+      }
+    }
+  };
+  function normTok(s) {
+    return String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  }
+  function matchesShowIf(showIf, raw) {
+    if (!showIf) return true;
+    if (Array.isArray(showIf.includesModel)) {
+      const models = showIf.includesModel.map(normTok).filter(Boolean);
+      const parts = String(raw ?? "").split(",").map(normTok).filter(Boolean);
+      return parts.some((p) => models.some((m) => p.includes(m)));
+    }
+    return true;
+  }
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(",")[1] || "");
+      r.onerror = () => reject(new Error("could not read file"));
+      r.readAsDataURL(file);
+    });
+  }
+  define("gbti-content-editor", GbtiContentEditor);
+
+  // client-ui/src/elements/gbti-content-list.mjs
+  var GbtiContentList = class extends GbtiElement {
+    async render() {
+      if (!this.client) return;
+      let items = [];
+      try {
+        items = (await this.client.listContent({}))?.items ?? [];
+      } catch {
+      }
+      this.set(
+        this.css() + `<div class="panel">
+           <h2>My content</h2>
+           ${items.length === 0 ? `<p class="muted">No content yet. Use the Author tab to create your first post.</p>` : ""}
+           <ul class="list">${items.map((it, i) => this.rowHtml(it, i)).join("")}</ul>
+         </div>`
+      );
+      this.$$("button[data-i]").forEach(
+        (b) => b.addEventListener("click", async () => {
+          const it = items[Number(b.dataset.i)];
+          try {
+            const full = await this.client.getContentItem({ path: it.path });
+            this.emit("gbti-edit", { type: it.type, ...full });
+          } catch (err) {
+            b.textContent = err.message;
+          }
+        })
+      );
+    }
+    rowHtml(it, i) {
+      const status = it.status ? `<span class="tag ${it.status === "published" ? "ok" : ""}">${esc(it.status)}</span>` : "";
+      const vis = it.visibility === "members" ? `<span class="tag">members</span>` : "";
+      return `<li class="row" style="justify-content:space-between">
+      <span><strong>${esc(it.title)}</strong> <span class="muted">${esc(it.type || "")}</span> ${status} ${vis}</span>
+      <button class="ghost" data-i="${i}">Edit</button>
+    </li>`;
+    }
+  };
+  define("gbti-content-list", GbtiContentList);
+
+  // client-ui/src/elements/gbti-pr-list.mjs
+  var GbtiPrList = class extends GbtiElement {
+    async render() {
+      if (!this.client) return;
+      let prs = [];
+      try {
+        prs = (await this.client.listPRs())?.prs ?? [];
+      } catch {
+      }
+      this.set(
+        this.css() + `<div class="panel">
+           <h2>My pull requests</h2>
+           ${prs.length === 0 ? `<p class="muted">No open PRs.</p>` : ""}
+           <ul class="list">${prs.map((pr) => `<li class="row" style="justify-content:space-between" data-n="${esc(pr.number)}">
+             <span><a href="${esc(pr.html_url)}" target="_blank" rel="noopener">#${esc(pr.number)}</a> ${esc(pr.title)}</span>
+             <span class="gate tag" data-n="${esc(pr.number)}">checking…</span>
+           </li>`).join("")}</ul>
+         </div>`
+      );
+      for (const pr of prs) this.loadStatus(pr.number);
+    }
+    async loadStatus(number) {
+      const tag = this.$(`.gate[data-n="${number}"]`);
+      if (!tag) return;
+      try {
+        const s = await this.client.prStatus({ number });
+        const ok = s.state === "success";
+        const bad = s.state === "failure" || s.state === "error";
+        tag.className = `gate tag ${ok ? "ok" : bad ? "bad" : ""}`;
+        tag.textContent = s.meaning || s.state || "unknown";
+        if (s.description) tag.title = s.description;
+      } catch {
+        tag.textContent = "unknown";
+      }
+    }
+  };
+  define("gbti-pr-list", GbtiPrList);
+
+  // client-ui/src/elements/gbti-contrib-inbox.mjs
+  function shortPath(p) {
+    return String(p || "").replace(/^members\/[^/]+\//, "");
+  }
+  function whenAgo(ts, now = Date.now()) {
+    if (ts == null) return "";
+    const t = typeof ts === "number" ? ts : Date.parse(ts);
+    if (!Number.isFinite(t)) return "";
+    const s = Math.max(0, (now - t) / 1e3);
+    if (s < 60) return "just now";
+    const units = [["d", 86400], ["h", 3600], ["m", 60]];
+    for (const [label, secs] of units) {
+      const n = Math.floor(s / secs);
+      if (n >= 1) return `${n}${label} ago`;
+    }
+    return "just now";
+  }
+  var CSS2 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .count { display:inline-block; min-width:20px; text-align:center; margin-left:6px; padding:1px 7px; border-radius:999px;
+    background:var(--accent); color:#fff; font-size:12px; font-weight:800; vertical-align:middle; }
+  ul.list { list-style:none; margin:0; padding:0; }
+  .crow { border-top:1px solid var(--line); padding:13px 2px; }
+  .crow:first-child { border-top:0; }
+  .top { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+  .top b { font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .size { flex:none; font-family:var(--font-mono,ui-monospace,monospace); font-size:12px; white-space:nowrap; }
+  .size .add { color:var(--accent); font-weight:700; }
+  .size .del { color:var(--danger); font-weight:700; }
+  .meta { color:var(--muted); font-size:12.5px; margin-top:3px; }
+  .files { margin-top:7px; display:flex; flex-wrap:wrap; gap:5px; }
+  .file { font-family:var(--font-mono,ui-monospace,monospace); font-size:11.5px; padding:2px 7px; border-radius:6px;
+    background:var(--hover); color:var(--fg); }
+  .file.added { background:rgba(31,158,95,.14); color:var(--accent); }
+  .file.removed { background:rgba(224,108,108,.16); color:var(--danger); }
+  .act { margin-top:9px; display:flex; gap:8px; }
+  .btn { display:inline-block; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px;
+    font:inherit; font-weight:600; font-size:13px; padding:6px 13px; text-decoration:none; cursor:pointer; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.primary:hover { color:#fff; opacity:.92; }
+  .muted { color:var(--muted); }
+  h2 { font-size:17px; margin:0 0 12px; }
+`;
+  var GbtiContribInbox = class extends GbtiElement {
+    async render() {
+      if (!this.client) return;
+      let list = [];
+      let errored = false;
+      try {
+        list = (await this.client.listContributions?.())?.contributions ?? [];
+      } catch {
+        errored = true;
+      }
+      this.set(this.css(CSS2) + this._html(list, errored));
+      this.$$("[data-review]").forEach((b) => b.addEventListener("click", () => {
+        this.dispatchEvent(new CustomEvent("contrib-open", { detail: { number: Number(b.dataset.review) }, bubbles: true, composed: true }));
+      }));
+    }
+    _html(list, errored) {
+      if (errored) {
+        return `<div class="panel"><h2>Contributions to review</h2>
+        <p class="muted">Sign in to see contributions other members have proposed against your content.</p></div>`;
+      }
+      if (list.length === 0) {
+        return `<div class="panel"><h2>Contributions to review</h2>
+        <p class="muted">No one has proposed a change to your content yet. When a member improves one of your
+        articles, products, or prompts, it shows up here for you to review and accept.</p></div>`;
+      }
+      return `<div class="panel">
+      <h2>Contributions to review<span class="count">${list.length}</span></h2>
+      <ul class="list">${list.map((c) => this._row(c)).join("")}</ul></div>`;
+    }
+    _row(c) {
+      const who = c.author?.login ? `@${esc(c.author.login)}` : "a member";
+      const files = (c.files || []).map((f) => `<code class="file ${esc(f.status || "")}">${esc(shortPath(f.filename))}</code>`).join("");
+      const n = c.fileCount ?? (c.files || []).length;
+      return `<li class="crow">
+      <div class="top"><b>${esc(c.title || "PR #" + c.number)}</b>
+        <span class="size"><span class="add">+${c.additions | 0}</span> <span class="del">&minus;${c.deletions | 0}</span></span></div>
+      <div class="meta">${who} &middot; ${esc(n)} file${n === 1 ? "" : "s"} &middot; ${esc(whenAgo(c.createdAt))}</div>
+      <div class="files">${files}</div>
+      <div class="act">
+        <button class="btn primary" data-review="${esc(c.number)}" type="button">Review</button>
+        <a class="btn" href="${esc(c.html_url || "#")}" target="_blank" rel="noopener">On GitHub</a>
+      </div>
+    </li>`;
+    }
+  };
+  define("gbti-contrib-inbox", GbtiContribInbox);
+
+  // client-ui/src/contrib-diff.mjs
+  function diffRows(patch) {
+    if (!patch || typeof patch !== "string") return [];
+    return patch.split("\n").map((line) => {
+      if (line.startsWith("@@") || line.startsWith("+++") || line.startsWith("---")) return { cls: "hunk", text: line };
+      if (line.startsWith("+")) return { cls: "add", text: line };
+      if (line.startsWith("-")) return { cls: "del", text: line };
+      return { cls: "ctx", text: line };
+    });
+  }
+
+  // client-ui/src/elements/gbti-contrib-review.mjs
+  var CSS3 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  h2 { font-size:18px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:13px; margin:0 0 14px; }
+  .sub a { color:var(--accent); }
+  .tabs { display:inline-flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:3px; margin:0 0 12px; }
+  .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:12.5px; padding:6px 14px; border-radius:999px; cursor:pointer; }
+  .tab.on { background:var(--hover); color:var(--accent); }
+  .file { margin:0 0 14px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .file > .fh { background:var(--panel); padding:8px 12px; font-family:var(--font-mono,ui-monospace,monospace); font-size:12px; display:flex; justify-content:space-between; gap:10px; }
+  .fh .sz .add { color:var(--accent); font-weight:700; } .fh .sz .del { color:var(--danger); font-weight:700; }
+  pre.diff { margin:0; overflow:auto; font-family:var(--font-mono,ui-monospace,monospace); font-size:12px; line-height:1.5; }
+  .dl { display:block; padding:0 12px; white-space:pre-wrap; word-break:break-word; }
+  .dl.add { background:rgba(31,158,95,.12); }
+  .dl.del { background:rgba(224,108,108,.14); }
+  .dl.hunk { background:var(--hover); color:var(--muted); }
+  .preview { border:1px solid var(--line); border-radius:10px; padding:16px 18px; background:var(--panel); }
+  .preview + .preview { margin-top:12px; }
+  .pmeta { color:var(--muted); font-size:12px; font-family:var(--font-mono,ui-monospace,monospace); margin:0 0 8px; }
+  .award { margin-top:16px; border:1px solid var(--line); border-radius:10px; padding:13px 15px; background:var(--hover); }
+  .award b { font-size:13px; } .award p { margin:5px 0 0; font-size:13.5px; color:var(--fg); }
+  .award .zero { color:var(--muted); }
+  .decide { margin-top:16px; border-top:1px solid var(--line); padding-top:16px; }
+  textarea { width:100%; box-sizing:border-box; min-height:74px; resize:vertical; border:1px solid var(--line); border-radius:8px; padding:9px 11px; font:inherit; background:var(--panel); color:var(--fg); }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:11px; }
+  .btn { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:700; font-size:13px; padding:8px 16px; cursor:pointer; }
+  .btn:hover { border-color:var(--accent); }
+  .btn.approve { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.decline { color:var(--danger); }
+  .btn[disabled] { opacity:.55; cursor:default; }
+  .err { color:var(--danger); font-size:13px; margin-top:9px; }
+  .muted { color:var(--muted); }
+  .hint { color:var(--muted); font-size:12.5px; margin:10px 0 0; }
+`;
+  var GbtiContribReview = class extends GbtiElement {
+    static get observedAttributes() {
+      return ["number"];
+    }
+    connectedCallback() {
+      this._data = null;
+      this._previews = {};
+      this._tab = "diff";
+      this._busy = false;
+      this._error = "";
+      super.connectedCallback?.();
+      this._load();
+    }
+    attributeChangedCallback(name, oldV, newV) {
+      if (name === "number" && oldV !== newV && this.isConnected) this._load();
+    }
+    get _number() {
+      const n = Number(this.getAttribute("number"));
+      return Number.isInteger(n) && n > 0 ? n : null;
+    }
+    async _load() {
+      if (!this.client || this._number == null) {
+        this.render();
+        return;
+      }
+      this._data = null;
+      this._error = "";
+      this._previews = {};
+      this.render();
+      try {
+        this._data = await this.client.getContribution({ number: this._number });
+        for (const p of this._data.proposed || []) {
+          try {
+            this._previews[p.filename] = (await this.client.preview({ body: p.body }))?.html || "";
+          } catch {
+          }
+        }
+      } catch (e) {
+        this._error = e?.code === "forbidden" ? "This contribution is no longer available to review (it may have been merged, closed, or changed)." : "Could not load this contribution.";
+      }
+      this.render();
+    }
+    async _decide(decision) {
+      if (this._busy || this._number == null) return;
+      const msg = (this.$("[data-msg]")?.value || "").trim();
+      if (decision === "request-changes" && !msg) {
+        this._error = "Add a note describing the changes you would like before requesting changes.";
+        this.render();
+        return;
+      }
+      this._busy = true;
+      this._error = "";
+      this.render();
+      try {
+        await this.client.reviewContribution({ number: this._number, decision, message: msg });
+        this.dispatchEvent(new CustomEvent("contrib-decided", { detail: { number: this._number, decision }, bubbles: true, composed: true }));
+      } catch {
+        this._error = "Could not submit your decision. Try again, or review it on GitHub.";
+        this._busy = false;
+        this.render();
+      }
+    }
+    render() {
+      if (!this.client) return;
+      if (this._error && !this._data) {
+        this.set(this.css(CSS3) + `<p class="err">${esc(this._error)}</p>`);
+        return;
+      }
+      if (!this._data) {
+        this.set(this.css(CSS3) + `<p class="muted">Loading the contribution...</p>`);
+        return;
+      }
+      const d = this._data;
+      const body = this._tab === "preview" ? this._previewHtml() : this._diffHtml();
+      this.set(
+        this.css(CSS3) + `<h2>${esc(d.title || "Contribution #" + d.number)}</h2>
+         <p class="sub">From ${d.author?.login ? "@" + esc(d.author.login) : "a member"} &middot;
+           <a href="${esc(d.html_url || "#")}" target="_blank" rel="noopener">#${esc(d.number)} on GitHub</a></p>
+         <div class="tabs" role="tablist">
+           <button class="tab ${this._tab === "diff" ? "on" : ""}" data-tab="diff" type="button">Changes</button>
+           <button class="tab ${this._tab === "preview" ? "on" : ""}" data-tab="preview" type="button">Preview as merged</button>
+         </div>
+         <div>${body}</div>
+         ${this._awardHtml()}
+         ${this._decideHtml()}`
+      );
+      this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+        this._tab = b.dataset.tab;
+        this.render();
+      }));
+      this.$$("[data-decide]").forEach((b) => b.addEventListener("click", () => this._decide(b.dataset.decide)));
+    }
+    _diffHtml() {
+      const files = this._data.files || [];
+      if (files.length === 0) return `<p class="muted">No file changes.</p>`;
+      return files.map((f) => {
+        const rows = diffRows(f.patch).map((r) => `<span class="dl ${r.cls}">${esc(r.text) || "&nbsp;"}</span>`).join("");
+        const diff = f.patch ? `<pre class="diff">${rows}</pre>` : `<p class="dl ctx muted" style="padding:10px 12px">Binary or large file (no inline diff). View it on GitHub.</p>`;
+        return `<div class="file"><div class="fh"><span>${esc(shortPath(f.filename))} <span class="muted">(${esc(f.status)})</span></span>
+        <span class="sz"><span class="add">+${f.additions | 0}</span> <span class="del">&minus;${f.deletions | 0}</span></span></div>${diff}</div>`;
+      }).join("");
+    }
+    _previewHtml() {
+      const proposed = this._data.proposed || [];
+      if (proposed.length === 0) return `<p class="muted">No readable content to preview (the change touches non-article files only).</p>`;
+      return proposed.map((p) => {
+        const html = this._previews[p.filename];
+        return `<div class="preview"><p class="pmeta">${esc(shortPath(p.filename))}</p>${html || '<p class="muted">Preview unavailable.</p>'}</div>`;
+      }).join("");
+    }
+    // SOW-028 P4: surface the reward at the decision point. The contributor is credited on this content (the
+    // stacked-avatar footnote) and earns a contribution point for a point-bearing change; the revenue cut is THIS
+    // content's `delegation.contributions` (0..7% of the owner's 30% referral commission). A 0% split is called
+    // out with a nudge, because the contributor then earns reputation but no revenue. Delegation is set on the
+    // content itself (the Revenue delegation field when you edit the post/product/prompt in your workspace).
+    _awardHtml() {
+      const who = this._data.author?.login ? "@" + esc(this._data.author.login) : "The contributor";
+      const d = this._data.delegation;
+      const pct = d ? Math.round((d.contributions || 0) * 100) : 0;
+      const reward = pct > 0 ? `<p>${who} is credited as a contributor on this content and earns a <b>${pct}% share</b> of the referral revenue it brings in, plus a contribution point.</p>` : `<p class="zero">${who} is credited as a contributor and earns a contribution point. You currently share <b>0%</b> of this content's revenue, so they receive reputation but no revenue. Set a revenue delegation when you edit this content to give contributors a cut.</p>`;
+      return `<div class="award"><b>If you approve</b>${reward}</div>`;
+    }
+    _decideHtml() {
+      if (this._data && this._data.canActInClient === false) {
+        return `<div class="decide">
+        <p class="hint">Approving records your GitHub identity as the reviewer, which the membership gate reads. In this mode, approve or decline on GitHub.</p>
+        <div class="actions"><a class="btn approve" href="${esc(this._data.html_url || "#")}" target="_blank" rel="noopener">Open on GitHub to decide</a></div>
+      </div>`;
+      }
+      return `<div class="decide">
+      <textarea data-msg placeholder="Optional note to the contributor (required when requesting changes)"></textarea>
+      <div class="actions">
+        <button class="btn approve" data-decide="approve" type="button" ${this._busy ? "disabled" : ""}>Approve &amp; merge</button>
+        <button class="btn" data-decide="request-changes" type="button" ${this._busy ? "disabled" : ""}>Request changes</button>
+        <button class="btn decline" data-decide="decline" type="button" ${this._busy ? "disabled" : ""}>Decline</button>
+      </div>
+      ${this._error ? `<p class="err">${esc(this._error)}</p>` : ""}
+      <p class="hint">Approving submits an approval the membership gate reads, then merges the change. The client never merges directly.</p>
+    </div>`;
+    }
+  };
+  define("gbti-contrib-review", GbtiContribReview);
+
+  // client-ui/src/elements/gbti-members-portal.mjs
+  var GbtiMembersPortal = class extends GbtiElement {
+    async render() {
+      if (!this.client) return;
+      let items = [];
+      try {
+        items = (await this.client.listMembersOnly())?.items ?? [];
+      } catch {
+      }
+      this.set(
+        this.css() + `<div class="panel">
+           <h2>Members-only</h2>
+           <p class="muted">Content marked <code>visibility: members</code>, surfaced here (excluded from the public site).</p>
+           ${items.length === 0 ? `<p class="muted">Nothing members-only yet.</p>` : ""}
+           <ul class="list">${items.map((it) => `<li class="row" style="justify-content:space-between">
+             <span><strong>${esc(it.title)}</strong> <span class="muted">${esc(it.type || "")}</span></span>
+             <span class="muted">${esc(it.author || "")}</span>
+           </li>`).join("")}</ul>
+         </div>`
+      );
+    }
+  };
+  define("gbti-members-portal", GbtiMembersPortal);
+
+  // client-ui/src/elements/gbti-settings.mjs
+  var GbtiSettings = class extends GbtiElement {
+    async render() {
+      if (!this.client) return;
+      const [settings, billing, referral] = await Promise.all([
+        this.client.getSettings().catch(() => ({})),
+        this.client.getBilling().catch(() => ({})),
+        this.client.getReferral().catch(() => ({}))
+      ]);
+      const del = referral?.delegation ?? {};
+      this.set(
+        this.css() + `<div class="panel">
+           <h2>Settings</h2>
+           <label>Local repo path</label><input id="repoPath" value="${esc(settings.repoPath || "")}" />
+           <label>Preferred port</label><input id="preferredPort" type="number" value="${esc(settings.preferredPort || "")}" />
+           <label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input id="mcpEnabled" type="checkbox" ${settings.mcpEnabled ? "checked" : ""} style="width:auto" /> Enable the MCP HTTP endpoint</label>
+           <label style="display:flex;gap:8px;align-items:center"><input id="autostart" type="checkbox" ${settings.autostart ? "checked" : ""} style="width:auto" /> Start on login (peg-startup)</label>
+           <div class="row" style="margin-top:12px"><button id="save">Save</button><span id="out" class="muted"></span></div>
+         </div>
+         <div class="panel" style="margin-top:14px">
+           <h2>Billing</h2>
+           <p class="muted">${esc(billing.note || "Manage your membership in the Stripe customer portal.")}</p>
+           ${billing.portal ? `<a href="${esc(billing.portal)}" target="_blank" rel="noopener"><button class="ghost">Open billing portal</button></a>` : ""}
+         </div>
+         <div class="panel" style="margin-top:14px">
+           <h2>Referrals + revenue</h2>
+           ${referral.link ? `<p>Your link: <code>${esc(referral.link)}</code></p>` : ""}
+           <p class="muted">${esc(referral.note || "")}</p>
+           <p class="muted">Set <code>delegation</code> on a post/product/prompt to share up to ${Math.round((del.contributionCap ?? 0.07) * 100)}% with contributors and ${Math.round((del.commentCap ?? 0.03) * 100)}% with commenters. Default: you keep 100%.</p>
+           ${referral.connectOnboarding ? `<a href="${esc(referral.connectOnboarding)}" target="_blank" rel="noopener"><button class="ghost">Set up payouts (Stripe Connect)</button></a>` : ""}
+           ${referral.terms ? `<a href="${esc(referral.terms)}" target="_blank" rel="noopener" class="muted" style="margin-left:8px">Terms</a>` : ""}
+         </div>`
+      );
+      this.on("#save", "click", async () => {
+        const patch = {
+          repoPath: this.$("#repoPath").value.trim(),
+          preferredPort: Number(this.$("#preferredPort").value) || void 0,
+          mcpEnabled: this.$("#mcpEnabled").checked,
+          autostart: this.$("#autostart").checked
+        };
+        try {
+          await this.client.updateSettings(patch);
+          this.$("#out").textContent = "Saved.";
+        } catch (err) {
+          this.$("#out").innerHTML = `<span class="danger">${esc(err.message)}</span>`;
+        }
+      });
+    }
+  };
+  define("gbti-settings", GbtiSettings);
+
+  // client-ui/src/elements/gbti-admin.mjs
+  var RANK3 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
+  var GbtiAdmin = class extends GbtiElement {
+    async render() {
+      if (!this.client) return;
+      let role = "member";
+      try {
+        role = (await this.client.status())?.role ?? "member";
+      } catch {
+      }
+      const rank = RANK3[role] ?? 0;
+      if (rank < RANK3.moderator) {
+        this.set(this.css() + `<div class="panel muted">Admin tools are available to moderators and above.</div>`);
+        return;
+      }
+      this.set(
+        this.css(`.act{margin:14px 0;padding-top:12px;border-top:1px solid var(--line)} .act:first-of-type{border:0;padding:0}`) + `<div class="panel">
+           <h2>Admin <span class="tag ok">${esc(role)}</span></h2>
+           <div class="act">
+             <label>Deplatform / remove content (path)</label>
+             <input id="cpath" placeholder="members/<user>/posts/<slug>/index.md" />
+             <div class="row" style="margin-top:8px"><button class="ghost" id="deplatform">Deplatform (draft)</button><button class="ghost" id="remove">Remove</button></div>
+           </div>
+           ${rank >= RANK3.admin ? `<div class="act">
+             <label>Ban / grandfather (github_id)</label>
+             <input id="gid" placeholder="github_id" /><input id="reason" placeholder="reason (optional)" style="margin-top:6px" />
+             <div class="row" style="margin-top:8px"><button class="ghost" id="ban">Ban</button><button class="ghost" id="unban">Unban</button><button class="ghost" id="grandfather">Grandfather</button><button class="ghost" id="ungrandfather">Ungrandfather</button></div>
+           </div>` : ""}
+           ${rank >= RANK3.superadmin ? `<div class="act">
+             <label>Assign role</label>
+             <div class="row"><input id="rid" placeholder="github_id" /><select id="role"><option>member</option><option>moderator</option><option>admin</option><option>superadmin</option></select><button class="ghost" id="setrole">Set role</button></div>
+           </div>` : ""}
+           <div id="out" class="muted" style="margin-top:12px"></div>
+         </div>`
+      );
+      const run = (action, args) => async () => {
+        this.out("Working…");
+        try {
+          const res = await this.client.admin(action, args());
+          this.out(`<span class="tag ok">PR opened</span> <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a>`);
+        } catch (err) {
+          this.out(esc(err.message), "danger");
+        }
+      };
+      const cpath = () => ({ path: this.$("#cpath").value.trim() });
+      const gid = () => ({ githubId: this.$("#gid").value.trim(), reason: this.$("#reason").value.trim() || void 0 });
+      this.on("#deplatform", "click", run("deplatform", cpath));
+      this.on("#remove", "click", run("remove", cpath));
+      if (rank >= RANK3.admin) {
+        this.on("#ban", "click", run("ban", gid));
+        this.on("#unban", "click", run("unban", () => ({ githubId: this.$("#gid").value.trim() })));
+        this.on("#grandfather", "click", run("grandfather", gid));
+        this.on("#ungrandfather", "click", run("ungrandfather", () => ({ githubId: this.$("#gid").value.trim() })));
+      }
+      if (rank >= RANK3.superadmin) {
+        this.on("#setrole", "click", run("role", () => ({ githubId: this.$("#rid").value.trim(), role: this.$("#role").value })));
+      }
+    }
+    out(html, cls = "muted") {
+      const o = this.$("#out");
+      if (o) {
+        o.className = cls;
+        o.innerHTML = html;
+      }
+    }
+  };
+  define("gbti-admin", GbtiAdmin);
+
+  // client-ui/src/saved-core.mjs
+  var TYPE_INDEX = { post: "blog-index.json", product: "products-index.json", prompt: "prompts-index.json" };
+  var TYPE_LABEL = { post: "Articles", product: "Products", prompt: "Prompts" };
+  var ORDER = ["post", "product", "prompt"];
+  function indexFileFor(type) {
+    return TYPE_INDEX[type] || null;
+  }
+  function typeLabel(type) {
+    return TYPE_LABEL[type] || String(type || "");
+  }
+  var SAVED_TYPES = ORDER.slice();
+  function buildItemIndex(perType = {}) {
+    const map = /* @__PURE__ */ new Map();
+    for (const [type, items] of Object.entries(perType || {})) {
+      for (const it of items || []) {
+        if (!it || !it.slug) continue;
+        map.set(`${type}:${it.slug}`, { type, slug: it.slug, title: it.title || it.slug, url: it.url || null, path: it.path || null, thumb: it.thumb || null });
+      }
+    }
+    return map;
+  }
+  function resolveItem(index, type, slug) {
+    return index && index.get(`${type}:${slug}`) || { type, slug, title: slug, url: null, path: null, thumb: null };
+  }
+  function groupFavoritesByType(favorites = []) {
+    const groups = /* @__PURE__ */ new Map();
+    for (const f of favorites || []) {
+      if (!f || !f.type || !f.slug) continue;
+      if (!groups.has(f.type)) groups.set(f.type, []);
+      groups.get(f.type).push({ type: f.type, slug: f.slug });
+    }
+    const known = ORDER.filter((t) => groups.has(t));
+    const extra = [...groups.keys()].filter((t) => !ORDER.includes(t));
+    return [...known, ...extra].map((t) => ({ type: t, items: groups.get(t) }));
+  }
+
+  // client-ui/src/elements/gbti-superadmin-dashboard.mjs
   var SITE2 = "https://gbti.network";
+  var CSS4 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
+  .chip { font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; }
+  .chip b { color:var(--fg); }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; padding:0 8px 8px; border-bottom:1px solid var(--line); }
+  td { padding:9px 8px; border-top:1px solid var(--line); vertical-align:middle; }
+  tr:first-child td { border-top:0; }
+  .who { display:flex; align-items:center; gap:9px; min-width:0; }
+  .av { width:26px; height:26px; border-radius:50%; flex:none; object-fit:cover; background:var(--hover); }
+  .nm { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--fg); text-decoration:none; }
+  a.nm:hover { color:var(--accent); }
+  .id { color:var(--muted); font-family:var(--font-mono, monospace); font-size:11.5px; }
+  .tags { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+  .tag { font-size:11px; font-weight:700; border-radius:999px; padding:2px 9px; background:var(--hover); color:var(--muted); white-space:nowrap; }
+  .tag.staff { background:rgba(31,158,95,.14); color:var(--accent); }
+  .tag.gf { background:rgba(201,150,43,.16); color:#a1741a; }
+  .tag.ban { background:rgba(224,108,108,.16); color:var(--danger); }
+  .stat { font-size:11.5px; font-weight:700; border-radius:999px; padding:2px 10px; white-space:nowrap; background:var(--hover); color:var(--muted); }
+  .stat.ok { background:rgba(31,158,95,.14); color:var(--accent); }
+  .stat.tr { background:rgba(201,150,43,.16); color:#a1741a; }
+  .stat.ban { background:rgba(224,108,108,.16); color:var(--danger); }
+  .src { color:var(--muted); font-size:11px; margin-left:6px; }
+  .dash { color:var(--muted); }
+  .sec-h { font-size:14px; font-weight:700; margin:26px 0 10px; display:flex; align-items:center; gap:8px; }
+  .sec-h .ct { font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); font-weight:600; }
+  ul.prs { list-style:none; margin:0; padding:0; }
+  .pr { display:flex; align-items:center; gap:10px; padding:8px 8px; border-top:1px solid var(--line); }
+  .pr:first-child { border-top:0; }
+  .pr-t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--fg); text-decoration:none; font-weight:600; font-size:13.5px; }
+  a.pr-t:hover { color:var(--accent); }
+  .pr-m { flex:none; color:var(--muted); font-family:var(--font-mono, monospace); font-size:11.5px; }
+  .muted { color:var(--muted); font-size:14px; }
+  .note { color:var(--muted); font-size:12.5px; margin:14px 0 0; line-height:1.5; }
+`;
+  var ROLE_RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
+  var GbtiSuperadminDashboard = class extends GbtiElement {
+    connectedCallback() {
+      this._data = null;
+      this._pulls = null;
+      this._counts = null;
+      this._error = null;
+      super.connectedCallback?.();
+      this._load();
+    }
+    // Per-member published content counts, from the PUBLIC per-type index JSONs (no auth, no new endpoint). Author
+    // is the folder username; house/gbti content does not map to a member. Best-effort; a failure leaves it null.
+    async _loadCounts() {
+      const counts = {};
+      await Promise.all(SAVED_TYPES.map(async (t) => {
+        try {
+          const res = await fetch(`${SITE2}/${indexFileFor(t)}`, { cache: "no-cache" });
+          const items = res.ok ? (await res.json()).items || [] : [];
+          for (const it of items) {
+            const a = String(it?.author || "").toLowerCase();
+            if (a && a !== "gbti" && a !== "house") counts[a] = (counts[a] || 0) + 1;
+          }
+        } catch {
+        }
+      }));
+      this._counts = counts;
+    }
+    async _load() {
+      if (!this.client) {
+        this.render();
+        return;
+      }
+      try {
+        const r = await this.client.overrides();
+        this._data = { roster: r?.roster || [], summary: r?.summary || {} };
+      } catch (err) {
+        const code = err?.code;
+        this._error = code === "forbidden" ? "forbidden" : code === "no-identity" || code === "not-authenticated" ? "auth" : "error";
+        this.render();
+        return;
+      }
+      try {
+        this._pulls = (await this.client.openPulls())?.pulls || [];
+      } catch {
+        this._pulls = null;
+      }
+      await this._loadCounts();
+      this.render();
+    }
+    // The open content-PR queue (admin overview of what is awaiting the gate / review). null = not loaded.
+    _pullsSection() {
+      if (this._pulls === null) return "";
+      if (!this._pulls.length) return `<h3 class="sec-h">Open pull requests</h3><p class="muted">No open pull requests right now.</p>`;
+      const rows = this._pulls.map((p) => {
+        const author = p.author?.login ? `@${esc(p.author.login)}` : "unknown";
+        const when = p.createdAt ? esc(String(p.createdAt).slice(0, 10)) : "";
+        return `<li class="pr"><a class="pr-t" href="${esc(p.html_url || "#")}" target="_blank" rel="noopener">#${esc(p.number)} ${esc(p.title || "")}</a><span class="pr-m">${author}${when ? ` · ${when}` : ""}</span></li>`;
+      }).join("");
+      return `<h3 class="sec-h">Open pull requests <span class="ct">${this._pulls.length}</span></h3><ul class="prs">${rows}</ul>`;
+    }
+    // The effective-status cell: the resolved status badge + the override source when it overrode Stripe.
+    _statusCell(m) {
+      const LABEL = { paid: "paid", trialing: "trial", expired: "expired", cancelled: "cancelled", none: "none", banned: "banned", unknown: "unknown" };
+      const cls = m.status === "paid" ? "ok" : m.status === "banned" ? "ban" : m.status === "trialing" ? "tr" : "";
+      const src = m.source && m.source !== "stripe" ? `<span class="src">via ${esc(m.source)}</span>` : "";
+      return `<span class="stat ${cls}">${esc(LABEL[m.status] || m.status)}</span>${src}`;
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS4) + `<p class="muted">Sign in with the GBTI client to view the member roster.</p>`);
+        return;
+      }
+      if (this._error === "forbidden") {
+        this.set(this.css(CSS4) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`);
+        return;
+      }
+      if (this._error === "auth") {
+        this.set(this.css(CSS4) + `<p class="muted">Sign in to view the member roster.</p>`);
+        return;
+      }
+      if (this._error) {
+        this.set(this.css(CSS4) + `<p class="muted">Could not load the member roster. Try again shortly.</p>`);
+        return;
+      }
+      if (!this._data) {
+        this.set(this.css(CSS4) + `<p class="muted">Loading the member roster...</p>`);
+        return;
+      }
+      const s = this._data.summary || {};
+      const chips = `<div class="chips">
+      <span class="chip"><b>${esc(s.total ?? 0)}</b> known</span>
+      <span class="chip"><b>${esc(s.staff ?? 0)}</b> staff</span>
+      <span class="chip"><b>${esc(s.grandfathered ?? 0)}</b> grandfathered</span>
+      <span class="chip"><b>${esc(s.banned ?? 0)}</b> banned</span>
+    </div>`;
+      const rows = (this._data.roster || []).map((m) => {
+        const u = m.username ? esc(m.username) : "";
+        const who = m.username ? `<a class="nm" href="https://gbti.network/members/${u}/" target="_blank" rel="noopener">@${u}</a>` : `<span class="nm id">id ${esc(m.githubId)}</span>`;
+        const av = m.username ? `<img class="av" src="https://github.com/${encodeURIComponent(m.username)}.png?size=52" alt="" loading="lazy" data-avfor="${u}" />` : `<span class="av"></span>`;
+        const tags = [];
+        if (m.banned) tags.push(`<span class="tag ban">banned</span>`);
+        if ((ROLE_RANK[m.role] ?? 0) > 0) tags.push(`<span class="tag staff">${esc(m.role)}</span>`);
+        if (m.grandfathered) tags.push(`<span class="tag gf">grandfathered${m.grandfatherUntil ? ` · until ${esc(String(m.grandfatherUntil).slice(0, 10))}` : ""}</span>`);
+        if (!tags.length) tags.push(`<span class="dash">—</span>`);
+        const n = this._counts && m.username ? this._counts[m.username.toLowerCase()] || 0 : null;
+        const content = n == null ? `<span class="dash">—</span>` : esc(n);
+        return `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join("")}</div></td><td class="id">${content}</td><td class="id">${esc(m.githubId)}</td></tr>`;
+      }).join("");
+      this.set(this.css(CSS4) + `${chips}
+      <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>Content</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No members known yet.</td></tr>'}</tbody></table>
+      <p class="note">Effective status follows ban &gt; staff &gt; grandfather &gt; Stripe. The live Stripe tier is shown when the admin Stripe endpoint is reachable (otherwise it reads "unknown"); the override tiers (ban / staff / grandfather) are always authoritative from the public repo.</p>
+      ${this._pullsSection()}`);
+      this.$$("[data-avfor]").forEach((img) => img.addEventListener("error", () => {
+        img.style.visibility = "hidden";
+      }, { once: true }));
+    }
+  };
+  define("gbti-superadmin-dashboard", GbtiSuperadminDashboard);
+
+  // client-ui/src/inline.mjs
+  var TYPE_RE = /^(post|product|prompt|profile)$/;
+  function readHooks(dataset = {}) {
+    const path = dataset.gbtiPath || null;
+    const type = TYPE_RE.test(dataset.gbtiType || "") ? dataset.gbtiType : null;
+    if (!path || !type) return null;
+    return { path, type, slug: dataset.gbtiSlug || null, owner: dataset.gbtiOwner || null };
+  }
+  function canEditInPlace(hooks, identity) {
+    if (!hooks || !identity?.username) return false;
+    return hooks.path.startsWith(`members/${String(identity.username).toLowerCase()}/`);
+  }
+  function toPublishPayload(item, edits = {}) {
+    if (!item || !item.frontmatter) throw new Error("no item to edit");
+    const input = { ...item.frontmatter, ...edits.fields || {} };
+    if (edits.title != null) input.title = edits.title;
+    const type = input.type || item.type || edits.type;
+    const body = edits.body != null ? edits.body : item.body;
+    return { type, input, body };
+  }
+
+  // client-ui/src/elements/gbti-edit-panel.mjs
+  var GbtiEditPanel = class extends GbtiElement {
+    constructor() {
+      super();
+      this.item = null;
+      this.editing = false;
+      this.original = null;
+      this.membership = "unknown";
+    }
+    hooks() {
+      const fromSelf = readHooks(this.dataset || {});
+      if (fromSelf) return fromSelf;
+      const marked = typeof document !== "undefined" ? document.querySelector("[data-gbti-path]") : null;
+      return marked ? readHooks(marked.dataset) : null;
+    }
+    titleEl() {
+      return typeof document !== "undefined" ? document.querySelector(this.getAttribute("title-selector") || '[data-gbti-region="title"]') : null;
+    }
+    bodyEl() {
+      return typeof document !== "undefined" ? document.querySelector(this.getAttribute("body-selector") || '[data-gbti-region="body"]') : null;
+    }
+    async render() {
+      if (!this.client) return;
+      const hooks = this.hooks();
+      const id = await getIdentity();
+      if (!hooks || !canEditInPlace(hooks, id)) {
+        this.set("");
+        return;
+      }
+      const blocked = this.membership !== "paid" && this.membership !== "unknown";
+      const editingBar = blocked ? `<span class="muted" id="msg">Membership required to publish</span><button id="save" title="Publishing requires a paid membership">Upgrade to publish</button><button class="ghost" id="cancel">Cancel</button>` : `<span class="muted" id="msg">Editing in place</span><button id="save">Publish</button><button class="ghost" id="cancel">Cancel</button>`;
+      this.set(
+        this.css(`
+        .bar { position: fixed; right: 18px; bottom: 18px; z-index: 2147483000; display:flex; gap:8px; align-items:center;
+               background: var(--panel); border:1px solid var(--line); border-radius: 999px; padding: 8px 12px; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+        .bar .muted { font-size: 13px; }
+      `) + `<div class="bar">
+           ${this.editing ? editingBar : `<span class="muted">You own this</span><button id="edit">Edit this page</button>`}
+         </div>`
+      );
+      if (this.editing) {
+        this.on("#save", "click", () => this.save());
+        this.on("#cancel", "click", () => this.cancel());
+      } else {
+        this.on("#edit", "click", () => this.enter(hooks));
+      }
+    }
+    async enter(hooks) {
+      try {
+        this.membership = (await this.client.status())?.membership ?? "unknown";
+      } catch {
+        this.membership = "unknown";
+      }
+      try {
+        this.item = await this.client.getContentItem({ path: hooks.path });
+      } catch (err) {
+        this.flash(err.message, true);
+        return;
+      }
+      const title = this.titleEl();
+      const body = this.bodyEl();
+      this.original = { titleText: title?.textContent, bodyHtml: body?.innerHTML };
+      if (title) {
+        title.setAttribute("contenteditable", "true");
+        title.dataset.gbtiEditing = "true";
+        title.focus?.();
+      }
+      if (body) {
+        const ta = document.createElement("textarea");
+        ta.value = this.item.body || "";
+        ta.setAttribute("data-gbti-body-input", "true");
+        ta.style.cssText = "width:100%;min-height:320px;font-family:ui-monospace,monospace;font-size:14px;padding:12px;";
+        body.replaceChildren(ta);
+      }
+      this.editing = true;
+      this.render();
+    }
+    collect() {
+      const title = this.titleEl();
+      const ta = typeof document !== "undefined" ? document.querySelector("[data-gbti-body-input]") : null;
+      return {
+        title: title ? title.textContent.trim() : void 0,
+        body: ta ? ta.value : void 0
+      };
+    }
+    async save() {
+      this.flash("Publishing…");
+      try {
+        const edits = this.collect();
+        const payload = toPublishPayload(this.item, edits);
+        const res = await this.client.publish(payload);
+        this.teardown();
+        this.editing = false;
+        this.render();
+        this.flash(`Published: PR #${res.prNumber}`);
+        this.emit("gbti-published", res);
+      } catch (err) {
+        this.flash(err.message, true);
+      }
+    }
+    cancel() {
+      this.teardown(true);
+      this.editing = false;
+      this.render();
+    }
+    /** Remove the in-place editing affordances; optionally restore the original rendered regions. */
+    teardown(restore = false) {
+      const title = this.titleEl();
+      if (title) {
+        title.removeAttribute("contenteditable");
+        delete title.dataset.gbtiEditing;
+        if (restore && this.original?.titleText != null) title.textContent = this.original.titleText;
+      }
+      const body = this.bodyEl();
+      if (body && restore && this.original?.bodyHtml != null) body.innerHTML = this.original.bodyHtml;
+    }
+    flash(msg, bad = false) {
+      const el = this.$("#msg") || this.$(".muted");
+      if (el) {
+        el.textContent = msg;
+        el.className = bad ? "danger" : "muted";
+      }
+    }
+  };
+  define("gbti-edit-panel", GbtiEditPanel);
+
+  // client-ui/src/elements/gbti-locked-content.mjs
+  var CLIP_LINES = 8;
+  var PROSE = `
+  .state, .locked { color: var(--muted); font-size: 14px; padding: 10px 0; }
+  .locked a { color: var(--accent); font-weight: 600; }
+  .unlocked :is(h1,h2,h3,h4) { font-weight: 700; margin: 1em 0 .4em; line-height: 1.25; }
+  .unlocked p { margin: 0 0 1em; line-height: 1.6; }
+  .unlocked ul, .unlocked ol { margin: 0 0 1em 1.2em; }
+  .unlocked a { color: var(--accent); }
+  .unlocked pre { background: var(--panel); padding: 12px; border-radius: 8px; overflow:auto; }
+  .unlocked code { font-family: ui-monospace, monospace; }
+  /* clip/reveal for a long code block */
+  .codeclip { position: relative; margin: 0 0 1em; }
+  .codeclip pre { margin: 0; }
+  .codeclip-inner { position: relative; }
+  .codeclip.collapsed .codeclip-inner pre { max-height: calc(${CLIP_LINES} * 1.5em + 24px); overflow: hidden; }
+  .codeclip.collapsed .codeclip-inner::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3.2em;
+    background: linear-gradient(to bottom, transparent, var(--panel)); pointer-events: none; border-radius: 0 0 8px 8px;
+  }
+  .codeclip-toggle {
+    display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; padding: 4px 11px;
+    font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2;
+    background: transparent; color: var(--accent); border: 1px solid var(--line, rgba(127,127,127,.32));
+    border-radius: 6px; cursor: pointer;
+  }
+  .codeclip-toggle:hover { background: var(--panel); }
+`;
+  var GbtiLockedContent = class extends GbtiElement {
+    async render() {
+      const encPath = this.dataset?.gbtiEnc || this.getAttribute?.("data-gbti-enc");
+      if (!this.client || !encPath) return;
+      this.set(this.css(PROSE) + `<div class="state">Unlocking member content…</div>`);
+      let text;
+      try {
+        ({ text } = await this.client.decrypt({ encPath }));
+      } catch (err) {
+        const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
+        this.set(this.css(PROSE) + `<div class="locked">${locked ? 'This content is for members. <a href="/membership/">Become a member</a> to unlock.' : "This content could not be unlocked right now."}</div>`);
+        return;
+      }
+      let html = "";
+      try {
+        html = (await this.client.preview({ body: text }))?.html ?? "";
+      } catch {
+        html = "";
+      }
+      this.set(this.css(PROSE) + `<div class="unlocked">${html}</div>`);
+      this.clipLongCode();
+      this.emit("gbti-unlocked", { encPath });
+    }
+    /** Clip any long <pre> in the rendered body to CLIP_LINES with a Show more / Show less toggle. */
+    clipLongCode() {
+      const doc = this.root?.ownerDocument || (typeof document !== "undefined" ? document : null);
+      if (!doc) return;
+      for (const pre of this.$$(".unlocked pre")) {
+        const lines = (pre.textContent || "").replace(/\n$/, "").split("\n").length;
+        if (lines <= CLIP_LINES + 1) continue;
+        const clip = doc.createElement("div");
+        clip.className = "codeclip collapsed";
+        const inner = doc.createElement("div");
+        inner.className = "codeclip-inner";
+        pre.replaceWith(clip);
+        inner.appendChild(pre);
+        clip.appendChild(inner);
+        const btn = doc.createElement("button");
+        btn.type = "button";
+        btn.className = "codeclip-toggle";
+        btn.textContent = `Show more (${lines} lines)`;
+        btn.addEventListener("click", () => {
+          const collapsed = clip.classList.toggle("collapsed");
+          btn.textContent = collapsed ? `Show more (${lines} lines)` : "Show less";
+        });
+        clip.appendChild(btn);
+      }
+    }
+  };
+  define("gbti-locked-content", GbtiLockedContent);
+
+  // client-ui/src/elements/gbti-favorite.mjs
+  var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+  var CSS5 = `
+  .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
+    font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
+    border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
+    transition:color .15s ease, border-color .15s ease; }
+  .pill:hover, .pill.on { color:var(--brand); border-color:var(--brand); }
+  .pill svg { flex:none; }
+  .pill .c { font-variant-numeric: tabular-nums; }
+`;
+  var GbtiFavorite = class extends GbtiElement {
+    render() {
+      const targetType = this.dataset?.gbtiTargetType;
+      const targetSlug = this.dataset?.gbtiTargetSlug;
+      if (this._count === void 0) {
+        const n = parseInt(this.dataset?.gbtiCount || "0", 10);
+        this._count = Number.isFinite(n) && n > 0 ? n : 0;
+      }
+      if (this._faved === void 0) this._faved = false;
+      const c = Math.max(0, this._count);
+      const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
+      this.set(
+        this.css(CSS5) + `<button class="pill ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+      );
+      this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
+    }
+    _onClick(targetType, targetSlug) {
+      if (!this.client) {
+        window.location.href = "/membership/";
+        return;
+      }
+      this._toggle(targetType, targetSlug);
+    }
+    async _toggle(targetType, targetSlug) {
+      const next = !this._faved;
+      this._faved = next;
+      this._count = Math.max(0, this._count + (next ? 1 : -1));
+      this.render();
+      try {
+        const res = await this.client.toggleFavorite({ targetType, targetSlug, on: next });
+        if (res && typeof res.favorited === "boolean" && res.favorited !== next) {
+          this._count = Math.max(0, this._count - (next ? 1 : -1));
+          this._faved = res.favorited;
+          this.render();
+        }
+      } catch (err) {
+        this._faved = !next;
+        this._count = Math.max(0, this._count + (next ? -1 : 1));
+        this.render();
+        if (err?.code === "not-authenticated" || err?.code === "membership-required") window.location.href = "/membership/";
+      }
+    }
+  };
+  define("gbti-favorite", GbtiFavorite);
+
+  // client-ui/src/elements/gbti-collection.mjs
+  var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+  var CSS6 = `
+  :host { position: relative; display: inline-flex; }
+  .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
+    font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
+    border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
+    transition:color .15s ease, border-color .15s ease; }
+  .pill:hover, .pill.on { color:var(--brand); border-color:var(--brand); }
+  .pop { position:absolute; z-index:50; top:calc(100% + 8px); left:0; width:260px; max-height:340px; overflow:auto;
+    background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:12px;
+    box-shadow:0 12px 36px rgba(0,0,0,.18); padding:10px; }
+  .pop h4 { margin:2px 6px 8px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .row { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; cursor:pointer; font-size:13.5px; }
+  .row:hover { background:var(--hover, rgba(0,0,0,.04)); }
+  .row .box { width:16px; height:16px; border:1.5px solid var(--line); border-radius:4px; display:inline-flex; align-items:center; justify-content:center; flex:none; color:#fff; }
+  .row.in .box { background:var(--brand); border-color:var(--brand); }
+  .row .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .empty { padding:8px; font-size:12.5px; color:var(--muted); }
+  .new { display:flex; gap:6px; margin-top:8px; border-top:1px solid var(--line); padding-top:10px; }
+  .new input { flex:1; min-width:0; font:inherit; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
+  .new button { font:inherit; font-size:13px; font-weight:600; padding:6px 12px; border:0; border-radius:8px; background:var(--brand); color:#fff; cursor:pointer; }
+  .busy { opacity:.55; pointer-events:none; }
+`;
+  var GbtiCollection = class extends GbtiElement {
+    render() {
+      const open = this._open ? this._renderPop() : "";
+      const label = !this.client ? "Sign in to save to a collection" : "Save to a collection";
+      this.set(this.css(CSS6) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}">${folder}<span>Save</span></button>${open}`);
+      this.on(".pill", "click", (e) => {
+        e.stopPropagation();
+        this._toggleOpen();
+      });
+      if (this._open) this._wirePop();
+    }
+    _inAny() {
+      const t = this._target();
+      return (this._collections || []).some((c) => (c.items || []).some((it) => it.type === t.type && it.slug === t.slug));
+    }
+    _target() {
+      return { type: this.dataset?.gbtiTargetType, slug: this.dataset?.gbtiTargetSlug };
+    }
+    async _toggleOpen() {
+      if (!this.client) {
+        window.location.href = "/membership/";
+        return;
+      }
+      this._open = !this._open;
+      if (this._open) {
+        this.render();
+        await this._load();
+        this._away = (ev) => {
+          if (!this.contains(ev.target)) this._close();
+        };
+        this._esc = (ev) => {
+          if (ev.key === "Escape") this._close();
+        };
+        document.addEventListener("click", this._away);
+        document.addEventListener("keydown", this._esc);
+      } else {
+        this._close();
+      }
+    }
+    _close() {
+      this._open = false;
+      if (this._away) document.removeEventListener("click", this._away);
+      if (this._esc) document.removeEventListener("keydown", this._esc);
+      this.render();
+    }
+    async _load() {
+      try {
+        const a = await this.client.getActivity();
+        this._collections = a?.collections || [];
+      } catch (err) {
+        if (err?.code === "not-authenticated" || err?.code === "membership-required") {
+          window.location.href = "/membership/";
+          return;
+        }
+        this._collections = [];
+      }
+      this.render();
+    }
+    _renderPop() {
+      const t = this._target();
+      const rows = (this._collections || []).map((c) => {
+        const inIt = (c.items || []).some((it) => it.type === t.type && it.slug === t.slug);
+        return `<div class="row ${inIt ? "in" : ""}" data-id="${c.id}"><span class="box">${inIt ? "✓" : ""}</span><span class="nm">${escapeHtml(c.name)}</span></div>`;
+      }).join("");
+      return `<div class="pop ${this._busy ? "busy" : ""}"><h4>Save to collection</h4>${rows || '<div class="empty">No collections yet. Create one below.</div>'}<div class="new"><input type="text" placeholder="New collection" maxlength="80" /><button type="button">Create</button></div></div>`;
+    }
+    _wirePop() {
+      this.$$(".row").forEach((row) => row.addEventListener("click", () => this._toggleItem(row.dataset.id)));
+      const input = this.$(".new input");
+      const create = () => this._create(input?.value || "");
+      this.on(".new button", "click", create);
+      if (input) input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") create();
+      });
+    }
+    async _toggleItem(id) {
+      const t = this._target();
+      const c = (this._collections || []).find((x) => x.id === id);
+      if (!c) return;
+      const on = !(c.items || []).some((it) => it.type === t.type && it.slug === t.slug);
+      this._busy = true;
+      this.render();
+      try {
+        const res = await this.client.addToCollection({ id, targetType: t.type, targetSlug: t.slug, on });
+        this._collections = res?.activity?.collections || this._collections;
+      } catch (err) {
+        if (err?.code === "not-authenticated" || err?.code === "membership-required") {
+          window.location.href = "/membership/";
+          return;
+        }
+      }
+      this._busy = false;
+      this.render();
+    }
+    async _create(name) {
+      const nm = String(name || "").trim();
+      if (!nm) return;
+      const t = this._target();
+      this._busy = true;
+      this.render();
+      try {
+        const made = await this.client.createCollection({ name: nm });
+        this._collections = made?.activity?.collections || this._collections;
+        if (made?.id) {
+          const res = await this.client.addToCollection({ id: made.id, targetType: t.type, targetSlug: t.slug, on: true });
+          this._collections = res?.activity?.collections || this._collections;
+        }
+      } catch (err) {
+        if (err?.code === "not-authenticated" || err?.code === "membership-required") {
+          window.location.href = "/membership/";
+          return;
+        }
+      }
+      this._busy = false;
+      this.render();
+    }
+  };
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+  define("gbti-collection", GbtiCollection);
+
+  // client-ui/src/elements/gbti-subscribe.mjs
+  var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
+  var CSS7 = `
+  .btn { display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font-body);
+    font-size:14px; font-weight:600; border-radius:10px; padding:9px 16px;
+    border:1.5px solid var(--brand); background:var(--brand); color:#08231a;
+    transition:background .15s ease, color .15s ease, border-color .15s ease; }
+  .btn:hover { background:var(--brand-dark); border-color:var(--brand-dark); }
+  .btn.on { background:transparent; color:var(--brand); }
+  .btn.on:hover { border-color:var(--danger); color:var(--danger); }
+  .btn[disabled] { opacity:.6; cursor:default; }
+`;
+  var GbtiSubscribe = class extends GbtiElement {
+    static get observedAttributes() {
+      return ["data-gbti-username"];
+    }
+    attributeChangedCallback(name, oldV, newV) {
+      if (name === "data-gbti-username" && oldV !== newV) {
+        this._loaded = false;
+        this._following = void 0;
+        if (this.isConnected) this.render();
+      }
+    }
+    get _username() {
+      const u = (this.dataset?.gbtiUsername || "").trim().toLowerCase();
+      return /^[a-z0-9](?:-?[a-z0-9])*$/.test(u) ? u : "";
+    }
+    render() {
+      const username = this._username;
+      const following = this._following === true;
+      const known = this._following !== void 0;
+      const label = !known ? "Subscribe to activity" : following ? "Following" : "Subscribe to activity";
+      const onCls = following ? "on" : "";
+      this.set(
+        this.css(CSS7) + `<button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>`
+      );
+      this.on(".btn", "click", () => this._onClick());
+      if (this.client && username && !this._loaded) this._loadState(username);
+    }
+    async _loadState(username) {
+      this._loaded = true;
+      try {
+        const r = await this.client.getFollows();
+        const list = Array.isArray(r) ? r : r?.following ?? [];
+        this._following = list.some((e) => (e?.username || "").toLowerCase() === username);
+        this._canFollow = true;
+      } catch {
+        this._canFollow = false;
+      }
+      this.render();
+    }
+    _onClick() {
+      const username = this._username;
+      if (!username) return;
+      if (!this.client || this._canFollow === false) {
+        window.location.href = "/membership/";
+        return;
+      }
+      this._toggle(username);
+    }
+    async _toggle(username) {
+      const next = !(this._following === true);
+      this._following = next;
+      this.render();
+      try {
+        const r = await this.client.setFollow({ username, on: next });
+        const list = Array.isArray(r) ? r : r?.following ?? null;
+        if (list) this._following = list.some((e) => (e?.username || "").toLowerCase() === username);
+        this.render();
+      } catch (err) {
+        this._following = !next;
+        this.render();
+        if (err?.code === "not-authenticated" || err?.code === "follows-failed" || /paid|sign in/i.test(err?.message || "")) {
+          window.location.href = "/membership/";
+        }
+      }
+    }
+  };
+  define("gbti-subscribe", GbtiSubscribe);
+
+  // client-ui/src/cat-glyph.mjs
+  var GLYPH_SVG = {
+    spark: '<path d="M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+    terminal: '<rect x="3" y="4.5" width="18" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    pencil: '<path d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+    coin: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.3c-.6-.7-1.5-1-2.5-1-1.4 0-2.5.7-2.5 1.9 0 2.6 5 1.4 5 4 0 1.2-1.1 2-2.5 2-1 0-2-.4-2.6-1.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+    chart: '<path d="M4 19V5M4 19h16M8 16l3.5-4 3 2.5L20 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+    heart: '<path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+    users: '<circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    skill: '<path d="M13 2.5 6 13.2h5v8.3l7-10.7h-5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+    puzzle: '<path d="M9 4.5a1.8 1.8 0 0 1 3.6 0c0 .5.4.9.9.9H16a1 1 0 0 1 1 1v2.5c0 .5.4.9.9.9a1.8 1.8 0 0 1 0 3.6c-.5 0-.9.4-.9.9V17a1 1 0 0 1-1 1h-2.6c-.5 0-.9.4-.9.9a1.8 1.8 0 0 1-3.6 0c0-.5-.4-.9-.9-.9H5a1 1 0 0 1-1-1v-2.4c0-.5-.4-.9-.9-.9a1.8 1.8 0 0 1 0-3.6c.5 0 .9-.4.9-.9V6.4a1 1 0 0 1 1-1h3.1c.5 0 .9-.4.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>'
+  };
+  var CAT_GLYPH = {
+    ai: "spark",
+    devops: "terminal",
+    design: "pencil",
+    blockchain: "coin",
+    business: "chart",
+    writing: "pencil",
+    minecraft: "box",
+    entertainment: "heart",
+    generators: "spark",
+    "member-tutorials": "users",
+    gbti: "spark",
+    imagegen: "spark",
+    skill: "skill"
+  };
+  var CAT_ACCENT = {
+    ai: "#6b4fb0",
+    devops: "#2f63c0",
+    design: "#c0392f",
+    blockchain: "#b3791f",
+    business: "#138178",
+    writing: "#555a66",
+    minecraft: "#3a7d2c",
+    entertainment: "#c0392b",
+    generators: "#138178",
+    "member-tutorials": "#2f63c0",
+    gbti: "#1f9e5f",
+    imagegen: "#6b4fb0",
+    skill: "#b0316f"
+  };
+  var OTHER_ACCENT = "#5b6472";
+  var TYPE_GLYPH = { share: "coin", post: "pencil", product: "box", prompt: "spark" };
+  var TYPE_ACCENT = { share: "#b3791f", post: "#555a66", product: "#138178", prompt: "#1f9e5f" };
+  function glyphFor(category, type) {
+    const key = String(category || "").toLowerCase();
+    if (CAT_GLYPH[key]) return { svg: GLYPH_SVG[CAT_GLYPH[key]], accent: CAT_ACCENT[key] };
+    const t = String(type || "").toLowerCase();
+    if (TYPE_GLYPH[t]) return { svg: GLYPH_SVG[TYPE_GLYPH[t]], accent: TYPE_ACCENT[t] };
+    return { svg: GLYPH_SVG.puzzle, accent: OTHER_ACCENT };
+  }
+
+  // client-ui/src/assets.mjs
+  var SITE3 = "https://gbti.network";
+  function resolveAsset(thumb, site = SITE3) {
+    if (!thumb || typeof thumb !== "string") return null;
+    if (/^https?:\/\//.test(thumb)) return thumb;
+    if (/^\/\//.test(thumb)) return `https:${thumb}`;
+    return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
+  }
+
+  // client-ui/src/elements/gbti-card-list.mjs
+  var MODES = /* @__PURE__ */ new Set(["compact", "detailed", "card"]);
+  var TYPE_LABEL2 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
+  var lc = (s) => String(s || "").toLowerCase();
+  var authorName = (a) => lc(a) === "gbti" || lc(a) === "house" ? "GBTI Network" : a;
+  function relTime(v) {
+    if (!v) return "";
+    const ms = typeof v === "number" ? v : Date.parse(v);
+    if (!ms) return "";
+    const d = Math.floor((Date.now() - ms) / 864e5);
+    if (d < 1) return "today";
+    if (d < 30) return `${d} day${d === 1 ? "" : "s"} ago`;
+    const mo = Math.floor(d / 30);
+    if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
+    return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
+  }
+  var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+  var CSS8 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
+    background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
+  .media .gl svg { width:48%; height:48%; }
+  .media .cimg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); background:var(--hover); border-radius:6px; padding:3px 8px; white-space:nowrap; flex:none; }
+  .lock { display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px 2px 6px; white-space:nowrap; }
+  .lock svg { width:11px; height:11px; }
+  .meta { font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); white-space:nowrap; }
+  .meta b { color:var(--fg); font-weight:500; }
+  .title { font-weight:600; color:var(--fg); }
+  .empty { color:var(--muted); padding:18px 2px; }
+  a, .open { color:inherit; text-decoration:none; }
+
+  /* MODE compact */
+  .compact { display:flex; flex-direction:column; gap:8px; }
+  .row-c { display:flex; align-items:center; gap:12px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:11px 14px; cursor:pointer; transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .row-c:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .row-c .media { width:38px; height:38px; border-radius:9px; }
+  .row-c .title { flex:1; min-width:0; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row-c:hover .title { color:var(--accent); }
+  .row-c .right { display:flex; align-items:center; gap:10px; flex:none; }
+
+  /* MODE detailed (the canonical Browse-style list) */
+  .detailed { display:flex; flex-direction:column; gap:11px; }
+  .row-d { display:grid; grid-template-columns:62px 1fr; gap:15px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px 16px; cursor:pointer; transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .row-d:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .row-d .media { width:62px; height:62px; border-radius:10px; }
+  .row-d .body { min-width:0; }
+  .row-d .top { display:flex; align-items:center; gap:9px; margin:0 0 4px; }
+  .row-d .title { font-size:15.5px; }
+  .row-d:hover .title { color:var(--accent); }
+  .row-d .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:2px 0 4px; }
+
+  /* MODE card */
+  .card { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:13px; }
+  .card-i { display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 14px 0; cursor:pointer; overflow:hidden; transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .card-i:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .card-i .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .card-i:hover .title { color:var(--accent); }
+  .card-i .meta { margin:0 0 12px; white-space:normal; }
+  .card-i .media { margin:0 -14px; width:calc(100% + 28px); height:118px; border-radius:0; }
+`;
+  var GbtiCardList = class extends GbtiElement {
+    set items(v) {
+      this._items = Array.isArray(v) ? v : [];
+      this.render();
+    }
+    get items() {
+      return this._items || [];
+    }
+    set mode(v) {
+      this._mode = MODES.has(v) ? v : "detailed";
+      this.render();
+    }
+    get mode() {
+      return this._mode || "detailed";
+    }
+    _media(item) {
+      const g = glyphFor(item.category, item.type);
+      const thumb = item.thumb ? resolveAsset(item.thumb) : null;
+      const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : "";
+      return `<span class="media" style="--ka:${esc(g.accent)}"><span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>${img}</span>`;
+    }
+    _chip(item) {
+      return `<span class="chip">${esc(TYPE_LABEL2[item.type] || item.type)}</span>`;
+    }
+    _lock(item) {
+      return item.visibility === "members" ? `<span class="lock">${lockIco}Members</span>` : "";
+    }
+    _meta(item) {
+      const ago = relTime(item.createdAt ?? item.publishedAt);
+      return `<span class="meta"><b>${esc(authorName(item.author))}</b>${ago ? ` · ${esc(ago)}` : ""}</span>`;
+    }
+    _open(item, i, cls) {
+      return item.openHref ? `<a class="${cls}" data-card="${i}" href="${esc(item.openHref)}">` : `<div class="${cls}" data-card="${i}" role="button" tabindex="0">`;
+    }
+    _close(item) {
+      return item.openHref ? "</a>" : "</div>";
+    }
+    _compact(items) {
+      return `<div class="compact">` + items.map((it, i) => `${this._open(it, i, "row-c")}${this._media(it)}${this._chip(it)}<span class="title">${esc(it.title)}</span><span class="right">${this._lock(it)}${this._meta(it)}</span>${this._close(it)}`).join("") + `</div>`;
+    }
+    _detailed(items) {
+      return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
+    }
+    _card(items) {
+      return `<div class="card">` + items.map((it, i) => `${this._open(it, i, "card-i")}<div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}${this._media(it)}${this._close(it)}`).join("") + `</div>`;
+    }
+    render() {
+      if (!this._items) return;
+      if (!this._items.length) {
+        this.set(this.css(CSS8) + `<p class="empty">Nothing here yet.</p>`);
+        return;
+      }
+      const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
+      this.set(this.css(CSS8) + body);
+      if (!this._wiredErr) {
+        this.root?.addEventListener("error", (e) => {
+          const t = e.target;
+          if (t?.tagName === "IMG" && t.classList?.contains("cimg")) t.remove();
+        }, true);
+        this._wiredErr = true;
+      }
+      this.$$("[data-card]").forEach((el) => {
+        if (el.tagName === "A") return;
+        const open = () => this.emit("card-open", { item: this._items[Number(el.dataset.card)] });
+        el.addEventListener("click", open);
+        el.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            open();
+          }
+        });
+      });
+    }
+  };
+  define("gbti-card-list", GbtiCardList);
+
+  // client-ui/src/elements/gbti-comment-box.mjs
+  var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  var CSS9 = `
+  :host { display: block; font-family: var(--font-body); color: var(--fg); }
+  .nudge { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--panel); font-size: 13.5px; color: var(--muted); }
+  .nudge a { color: var(--brand); font-weight: 600; }
+  button.open { margin-top: 16px; font: inherit; font-weight: 600; font-size: 14px; padding: 9px 16px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); cursor: pointer; }
+  button.open:hover { border-color: var(--brand); color: var(--brand); }
+  .edit { font: inherit; font-size: 12px; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0; }
+  .edit:hover { color: var(--brand); text-decoration: underline; }
+  .form { margin-top: 14px; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 90px; resize: vertical; font: inherit; font-size: 14px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); }
+  textarea:focus { outline: none; border-color: var(--brand); }
+  .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  select, label.chk { font: inherit; font-size: 13px; color: var(--muted); }
+  select { padding: 7px 9px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); }
+  .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  button.post { font: inherit; font-weight: 700; font-size: 14px; padding: 8px 16px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; cursor: pointer; }
+  button.cancel { font: inherit; font-size: 13px; background: none; border: 0; color: var(--muted); cursor: pointer; }
+  .msg { font-size: 13px; } .msg.err { color: #c0392b; } .msg.ok { color: var(--brand); }
+  .busy { opacity: .55; pointer-events: none; }
+`;
+  var GbtiCommentBox = class extends GbtiElement {
+    get _editId() {
+      return this.dataset?.gbtiCommentId || this.getAttribute?.("data-gbti-comment-id") || null;
+    }
+    get _editAuthor() {
+      return this.dataset?.gbtiCommentAuthor || this.getAttribute?.("data-gbti-comment-author") || null;
+    }
+    get _target() {
+      return { type: this.dataset?.gbtiTargetType || this.getAttribute?.("data-gbti-target-type"), slug: this.dataset?.gbtiTargetSlug || this.getAttribute?.("data-gbti-target-slug") };
+    }
+    connectedCallback() {
+      super.connectedCallback();
+      this._init();
+    }
+    async _init() {
+      if (!this.client) return;
+      let s = null;
+      try {
+        s = await this.client.status();
+      } catch {
+        s = null;
+      }
+      this._membership = s?.membership ?? "unknown";
+      this._identity = s?.identity ?? null;
+      this._editId ? this._renderEditAffordance() : this._renderCompose();
+    }
+    // ---- EDIT mode: only the comment's author sees an Edit link ----
+    _renderEditAffordance() {
+      if (!this._identity || this._identity.username !== this._editAuthor) {
+        this.set(this.css(CSS9) + "");
+        return;
+      }
+      this.set(this.css(CSS9) + `<button class="edit" type="button">Edit</button>`);
+      this.on(".edit", "click", () => this._openEdit());
+    }
+    async _openEdit() {
+      this.set(this.css(CSS9) + `<p class="msg">Loading…</p>`);
+      let body = "";
+      try {
+        body = (await this.client.getComment({ id: this._editId }))?.body ?? "";
+      } catch {
+        this.set(this.css(CSS9) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
+        this.on(".edit", "click", () => this._openEdit());
+        return;
+      }
+      this._form({ body, edit: true });
+    }
+    // ---- COMPOSE mode ----
+    _renderCompose() {
+      if (LOCKED2.has(this._membership)) {
+        this.set(this.css(CSS9) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
+        return;
+      }
+      if (this._membership === "trialing") {
+        this.set(this.css(CSS9) + `<div class="nudge">Commenting is a paid feature. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
+        return;
+      }
+      if (!this._identity) {
+        this.set(this.css(CSS9) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
+        return;
+      }
+      this.set(this.css(CSS9) + `<button class="open" type="button">Write a comment</button>`);
+      this.on(".open", "click", () => this._form({ body: "", edit: false }));
+    }
+    _form({ body, edit }) {
+      const visibilityRow = edit ? "" : `<select aria-label="Visibility"><option value="public">Public</option><option value="members">Members only</option></select>`;
+      this.set(this.css(CSS9) + `
+      <div class="form">
+        <textarea placeholder="Write your comment (markdown supported)…" maxlength="8000">${esc(body)}</textarea>
+        <div class="row">
+          ${visibilityRow}
+          <label class="chk"><input type="checkbox" data-authornote /> Mark as my author note</label>
+          <div class="actions">
+            <span class="msg" aria-live="polite"></span>
+            <button class="cancel" type="button">Cancel</button>
+            <button class="post" type="button">${edit ? "Save" : "Post"}</button>
+          </div>
+        </div>
+      </div>`);
+      this.on(".cancel", "click", () => edit ? this._renderEditAffordance() : this._renderCompose());
+      this.on(".post", "click", () => edit ? this._save() : this._post());
+    }
+    async _post() {
+      const wrap = this.$(".form");
+      const msg = this.$(".msg");
+      const body = (this.$("textarea")?.value || "").trim();
+      if (!body) {
+        this._say(msg, "Write something first.", "err");
+        return;
+      }
+      const visibility = this.$("select")?.value || "public";
+      const authorNote = !!this.$("[data-authornote]")?.checked;
+      wrap?.classList.add("busy");
+      try {
+        const t = this._target();
+        const res = await this.client.postComment({ targetType: t.type, targetSlug: t.slug, body, visibility, authorNote });
+        this._done(msg, "Posted. It appears after the next build.", "gbti-comment-posted", res);
+      } catch (err) {
+        this._fail(msg, err);
+        wrap?.classList.remove("busy");
+      }
+    }
+    async _save() {
+      const wrap = this.$(".form");
+      const msg = this.$(".msg");
+      const body = (this.$("textarea")?.value || "").trim();
+      if (!body) {
+        this._say(msg, "A comment cannot be empty.", "err");
+        return;
+      }
+      const authorNote = !!this.$("[data-authornote]")?.checked;
+      wrap?.classList.add("busy");
+      try {
+        const res = await this.client.editComment({ id: this._editId, body, authorNote });
+        this._done(msg, "Saved. The edit appears after the next build.", "gbti-comment-edited", res);
+      } catch (err) {
+        this._fail(msg, err);
+        wrap?.classList.remove("busy");
+      }
+    }
+    _done(msg, text, event, detail) {
+      this._say(msg, text, "ok");
+      this.emit(event, detail);
+    }
+    _fail(msg, err) {
+      if (err?.code === "membership-required") this._say(msg, "Commenting requires a paid membership.", "err");
+      else if (err?.code === "not-authenticated" || err?.code === "no-identity") this._say(msg, "Sign in with the GBTI client first.", "err");
+      else this._say(msg, err?.message || "Could not save the comment.", "err");
+    }
+    _say(el, text, kind) {
+      if (el) {
+        el.textContent = text;
+        el.className = `msg ${kind || ""}`;
+      }
+    }
+  };
+  define("gbti-comment-box", GbtiCommentBox);
+
+  // client-ui/src/elements/gbti-discussion.mjs
+  var CSS10 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
+  .comment { border-left:2px solid var(--line); padding-left:10px; }
+  .comment.reply { margin-left:16px; }
+  .cmeta { display:flex; align-items:baseline; gap:8px; font-size:12px; }
+  .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
+  .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
+  .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
+  .cbody p { margin:0 0 .5em; } .cbody :is(h1,h2,h3,h4){ font-weight:700; margin:.6em 0 .2em; }
+  .cbody a { color:var(--accent, var(--brand)); }
+  .cbody pre { background:var(--bg, rgba(0,0,0,.05)); padding:8px; border-radius:6px; overflow:auto; }
+  .clocked { font-size:12.5px; color:var(--muted); } .clocked a { color:var(--brand); font-weight:600; }
+  .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
+`;
+  function relTime2(iso) {
+    if (!iso) return "";
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return "";
+    const diff = Date.now() - t, day = 864e5;
+    if (diff < day) return "today";
+    const d = Math.floor(diff / day);
+    if (d < 30) return `${d} day${d === 1 ? "" : "s"} ago`;
+    const mo = Math.floor(d / 30);
+    if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
+    return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
+  }
+  var authorName2 = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
+  var GbtiDiscussion = class extends GbtiElement {
+    static get observedAttributes() {
+      return ["data-gbti-target-type", "data-gbti-target-slug"];
+    }
+    connectedCallback() {
+      super.connectedCallback?.();
+      this._onComment = (e) => {
+        if (e?.detail?.targetSlug === this._slug()) this.load();
+      };
+      document.addEventListener("gbti-comment-posted", this._onComment);
+      document.addEventListener("gbti-comment-edited", this._onComment);
+      this.load();
+    }
+    disconnectedCallback() {
+      super.disconnectedCallback?.();
+      if (this._onComment) {
+        document.removeEventListener("gbti-comment-posted", this._onComment);
+        document.removeEventListener("gbti-comment-edited", this._onComment);
+      }
+    }
+    attributeChangedCallback(name, oldV, newV) {
+      if (oldV !== newV && this.isConnected) {
+        this._loaded = false;
+        this.load();
+      }
+    }
+    _type() {
+      return this.dataset.gbtiTargetType || "";
+    }
+    _slug() {
+      return this.dataset.gbtiTargetSlug || "";
+    }
+    async load() {
+      const targetType = this._type();
+      const targetSlug = this._slug();
+      if (!targetType || !targetSlug) {
+        this.set(this.css(CSS10));
+        return;
+      }
+      if (!this.client) {
+        this.set(this.css(CSS10) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
+        return;
+      }
+      if (!this._loaded) this.set(this.css(CSS10) + `<p class="empty">Loading the discussion…</p>`);
+      let items = [];
+      try {
+        items = (await this.client.listComments({ targetType, targetSlug }))?.items ?? [];
+      } catch {
+        this.set(this.css(CSS10) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
+        return;
+      }
+      const resolved = await Promise.all(items.map((c) => this._resolveBody(c).then((html) => ({ c, html }))));
+      this._render(targetType, targetSlug, resolved);
+      this._loaded = true;
+    }
+    _render(targetType, targetSlug, rows) {
+      const thread = rows.map(({ c, html }) => {
+        const reply = c.parentId ? " reply" : "";
+        const badge = c.visibility === "members" ? `<span class="cbadge">Members</span>` : "";
+        const bodyHtml = html && html.locked ? `<div class="clocked">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>` : typeof html === "string" && html ? `<div class="cbody">${html}</div>` : "";
+        return `<div class="comment${reply}">
+        <div class="cmeta"><span class="cname">${esc(authorName2(c.author))}</span><span class="cwhen">${esc(relTime2(c.createdAt))}</span>${badge}</div>
+        ${bodyHtml}
+      </div>`;
+      }).join("");
+      const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
+      this.set(this.css(CSS10) + threadHtml + this._composeHtml(targetType, targetSlug));
+    }
+    // A fresh <gbti-comment-box> for this target (it handles its own paid/trial/visitor gating UX). The injected
+    // client is process-global, so it upgrades + talks to the same host with nothing to wire here.
+    _composeHtml(targetType, targetSlug) {
+      return `<gbti-comment-box data-gbti-target-type="${esc(targetType)}" data-gbti-target-slug="${esc(targetSlug)}"></gbti-comment-box>`;
+    }
+    async _resolveBody(c) {
+      try {
+        if (c.visibility === "members") {
+          if (!c.encryptedBody) return "";
+          const { text } = await this.client.decrypt({ encPath: c.encryptedBody });
+          return (await this.client.preview({ body: text }))?.html ?? "";
+        }
+        return c.body ? (await this.client.preview({ body: c.body }))?.html ?? "" : "";
+      } catch (err) {
+        const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
+        return { locked };
+      }
+    }
+  };
+  define("gbti-discussion", GbtiDiscussion);
+
+  // client-ui/src/elements/gbti-shares-feed.mjs
+  var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  var CSS11 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
+  .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
+  .refresh { background:transparent; border:0; color:var(--muted); cursor:pointer; font:inherit; font-size:13px; }
+  .refresh:hover { color:var(--brand); }
+  .muted { color:var(--muted); font-size:13.5px; }
+  .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
+
+  /* reading view (a focused Share + its discussion) */
+  .back { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; margin:0 0 14px; }
+  .back:hover { border-color:var(--accent); color:var(--accent); }
+  .reading .who { display:flex; align-items:baseline; gap:8px; }
+  .reading .who .name { font-weight:700; font-size:14px; }
+  .reading .who .when { color:var(--muted); font-size:12px; }
+  .reading .badge { margin-left:auto; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
+  .reading .title { font-weight:700; font-size:18px; margin-top:8px; }
+  .reading .desc { color:var(--muted); font-size:13.5px; margin-top:2px; }
+  .body { margin-top:10px; font-size:14.5px; line-height:1.6; }
+  .body :is(h1,h2,h3,h4){ font-weight:700; margin:.8em 0 .3em; }
+  .body p { margin:0 0 .7em; } .body ul,.body ol { margin:0 0 .7em 1.2em; }
+  .body a { color:var(--accent, var(--brand)); }
+  .body pre { background:var(--bg, rgba(0,0,0,.05)); padding:10px; border-radius:8px; overflow:auto; }
+  .link { display:inline-flex; align-items:center; gap:6px; margin-top:10px; font-size:12.5px; color:var(--brand); text-decoration:none; }
+  .tags { margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-size:11px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
+  .locked { color:var(--muted); font-size:13.5px; } .locked a { color:var(--brand); font-weight:600; }
+  .splash { text-align:center; padding:40px 16px; }
+  .splash .lock { font-size:30px; } .splash h3 { margin:10px 0 4px; } .splash a { color:var(--brand); font-weight:600; }
+
+  /* SOW-032/041 discussion container (the thread itself renders inside <gbti-discussion>). */
+  .discussion-wrap { margin-top:22px; border-top:1px solid var(--line); padding-top:14px; }
+  .discussion-wrap h4 { margin:0 0 10px; font-size:14px; }
+`;
+  function relTime3(iso) {
+    if (!iso) return "";
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return "";
+    const diff = Date.now() - t, day = 864e5;
+    if (diff < day) return "today";
+    const d = Math.floor(diff / day);
+    if (d < 30) return `${d} day${d === 1 ? "" : "s"} ago`;
+    const mo = Math.floor(d / 30);
+    if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
+    return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
+  }
+  var authorName3 = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
+  var shareTitle = (it) => it.title || it.shortDescription || (it.url ? `Link: ${hostOf(it.url)}` : "Member share");
+  var GbtiSharesFeed = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback();
+      this._items = null;
+      this._reading = null;
+      this._locked = false;
+      this._onPosted = () => {
+        this._reading = null;
+        this.reload();
+      };
+      document.addEventListener("gbti-share-posted", this._onPosted);
+      this.reload();
+    }
+    disconnectedCallback() {
+      super.disconnectedCallback();
+      if (this._onPosted) document.removeEventListener("gbti-share-posted", this._onPosted);
+    }
+    async reload() {
+      if (!this.client) {
+        this.set(this.css(CSS11) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        return;
+      }
+      this.set(this.css(CSS11) + `<p class="muted">Loading the co-op stream…</p>`);
+      let membership = "unknown";
+      try {
+        membership = (await this.client.status())?.membership ?? "unknown";
+      } catch {
+        membership = "unknown";
+      }
+      this._locked = LOCKED3.has(membership);
+      if (this._locked) return this._splash();
+      try {
+        this._items = (await this.client.listShares())?.items ?? [];
+      } catch {
+        this.set(this.css(CSS11) + `<p class="muted">Could not load Shares right now.</p>`);
+        return;
+      }
+      this.render();
+    }
+    render() {
+      if (this._locked) return this._splash();
+      if (this._reading) {
+        this._renderReading(this._reading);
+        return;
+      }
+      this._renderList();
+    }
+    // The stream as the shared content-item card list. A Share has no image, so the card shows the coin category
+    // glyph (glyphFor type fallback). No openHref -> the card emits card-open, which opens the reading view.
+    _renderList() {
+      const head = `<div class="head"><h3>Co-op stream</h3><button class="refresh" type="button">Refresh</button></div>`;
+      const items = this._items || [];
+      if (!items.length) {
+        this.set(this.css(CSS11) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.on(".refresh", "click", () => this.reload());
+        return;
+      }
+      this.set(this.css(CSS11) + head + `<div data-list></div>`);
+      this.on(".refresh", "click", () => this.reload());
+      const list = document.createElement("gbti-card-list");
+      list.mode = "detailed";
+      list.items = items.map((it) => ({ ...it, type: "share", title: shareTitle(it), excerpt: it.title ? it.shortDescription || "" : "", thumb: null, createdAt: it.createdAt }));
+      list.addEventListener("card-open", (e) => {
+        const it = e.detail?.item;
+        if (it) {
+          this._reading = it;
+          this.render();
+        }
+      });
+      this.$("[data-list]")?.replaceChildren(list);
+    }
+    // The focused reading view: the Share's body + an always-open discussion thread.
+    _renderReading(share) {
+      const slug = share.author && share.id ? `${share.author}/${share.id}` : "";
+      const badge = share.visibility === "members" ? `<span class="badge">Members</span>` : "";
+      const title = share.title ? `<div class="title">${esc(share.title)}</div>` : "";
+      const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : "";
+      const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">🔗 ${esc(hostOf(share.url))}</a>` : "";
+      const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}</div>` : "";
+      const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
+      this.set(this.css(CSS11) + `<button class="back" type="button" data-back>&larr; Back to the stream</button>
+      <article class="reading">
+        <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime3(share.createdAt))}</span>${badge}</div>
+        ${title}${desc}
+        <div class="body" data-body><p class="empty">Loading…</p></div>
+        ${link}${tags}${discussion}
+      </article>`);
+      this.on("[data-back]", "click", () => {
+        this._reading = null;
+        this.render();
+      });
+      this._fillBody(share);
+    }
+    async _fillBody(share) {
+      const html = await this._resolveBody(share);
+      const el = this.$("[data-body]");
+      if (!el) return;
+      if (html && html.locked) el.innerHTML = `<div class="locked">This Share is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>`;
+      else el.innerHTML = typeof html === "string" && html ? html : `<p class="muted">No note.</p>`;
+    }
+    async _resolveBody(it) {
+      try {
+        if (it.visibility === "members") {
+          if (!it.encryptedBody) return "";
+          const { text } = await this.client.decrypt({ encPath: it.encryptedBody });
+          return (await this.client.preview({ body: text }))?.html ?? "";
+        }
+        return it.body ? (await this.client.preview({ body: it.body }))?.html ?? "" : "";
+      } catch (err) {
+        const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
+        return { locked };
+      }
+    }
+    _splash() {
+      this.set(this.css(CSS11) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
+    }
+  };
+  function hostOf(u) {
+    try {
+      return new URL(u).hostname.replace(/^www\./, "");
+    } catch {
+      return "link";
+    }
+  }
+  define("gbti-shares-feed", GbtiSharesFeed);
+
+  // client-ui/src/elements/gbti-shares.mjs
+  var CSS12 = `
+  :host { display:block; }
+  .stack { display:flex; flex-direction:column; gap:20px; }
+  hr { border:0; border-top:1px solid var(--line); margin:0; }
+`;
+  var GbtiShares = class extends GbtiElement {
+    render() {
+      this.set(this.css(CSS12) + `<div class="stack">
+      <gbti-share-composer></gbti-share-composer>
+      <hr />
+      <gbti-shares-feed></gbti-shares-feed>
+    </div>`);
+    }
+  };
+  define("gbti-shares", GbtiShares);
+
+  // client-ui/src/elements/gbti-lock-gate.mjs
+  var CSS13 = `
+  :host { display: block; }
+  .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
+  .splash { text-align: center; padding: 56px 20px; }
+  .splash .lock { font-size: 34px; line-height: 1; }
+  .splash h2 { margin: 12px 0 6px; font-family: var(--font-display, var(--font-body)); }
+  .splash p { color: var(--muted); margin: 0 auto; max-width: 380px; font-size: 14px; line-height: 1.5; }
+  .splash a.cta { display: inline-block; margin-top: 18px; background: var(--brand); color: #fff; font-weight: 700;
+    text-decoration: none; padding: 10px 20px; border-radius: 10px; }
+`;
+  var GbtiLockGate = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback();
+      this._check();
+    }
+    async _check() {
+      this.set(this.css(CSS13) + `<div class="checking">Checking your membership…</div>`);
+      let membership = "unknown";
+      try {
+        membership = (await this.client?.status())?.membership ?? "unknown";
+      } catch {
+        membership = "unknown";
+      }
+      if (isLockedMembership(membership)) {
+        this.set(this.css(CSS13) + `<div class="splash">
+        <div class="lock">🔒</div>
+        <h2>Your access is locked</h2>
+        <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
+           community stream, and publish again.</p>
+        <a class="cta" href="https://gbti.network/membership/">Renew membership</a>
+      </div>`);
+        return;
+      }
+      this.set(this.css(CSS13) + `<slot></slot>`);
+    }
+  };
+  define("gbti-lock-gate", GbtiLockGate);
+
+  // client-ui/src/elements/gbti-onboarding.mjs
+  var STEP_IDS = ["signin", "fork", "install"];
+  var check = (filled) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="${filled ? "var(--brand)" : "none"}" stroke="${filled ? "var(--brand)" : "var(--line)"}" stroke-width="2"/>${filled ? '<path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' : ""}</svg>`;
+  var BTN_ICON = {
+    signin: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>`,
+    fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
+    install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
+  };
+  var CSS14 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
+  .count { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .bar { height:3px; border-radius:999px; background:var(--line); overflow:hidden; margin-bottom:14px; }
+  .bar > i { display:block; height:100%; background:var(--brand); transition:width .25s ease; }
+  ul { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .row { display:flex; gap:10px; align-items:flex-start; }
+  .row .ic { flex:none; margin-top:1px; }
+  .row.done .t { color:var(--muted); font-size:13px; padding-top:1px; }
+  .card { flex:1; min-width:0; border:1px solid var(--line); border-radius:10px; padding:12px 13px; background:var(--panel); }
+  .card .title { font-family:var(--font-display); font-size:16px; font-weight:700; margin:0 0 3px; }
+  .card .why { font-size:12.5px; color:var(--muted); margin:0 0 7px; line-height:1.45; }
+  .card .see { font-size:12px; color:var(--fg); margin:0 0 11px; display:flex; gap:6px; align-items:flex-start; }
+  .card .see svg { flex:none; margin-top:1px; opacity:.7; }
+  /* Primary action. Used as BOTH a <button> (Sign in) and an <a> (Open github.com/login/device), so it must be a
+     block-level flex box (an inline <a> let its green background wrap mid-text into two ragged pieces) with WHITE
+     text to match the site's green CTA. */
+  .btn { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; box-sizing:border-box;
+    border:0; border-radius:9px; background:var(--brand); color:#fff; text-decoration:none; text-align:center;
+    font:inherit; font-weight:700; font-size:14px; padding:11px 14px; cursor:pointer; }
+  .btn:hover { background:var(--brand-dark); color:#fff; }
+  .btn svg { flex:none; }
+  .again { display:block; margin-top:8px; text-align:right; font-size:12px; color:var(--accent); background:none; border:0; cursor:pointer; }
+  .code { display:inline-flex; align-items:center; gap:8px; margin:2px 0 10px; font-family:ui-monospace,monospace; font-size:18px; font-weight:700; letter-spacing:.06em; background:var(--hover); padding:7px 11px; border-radius:8px; }
+  .copy { font-family:var(--font-body); font-size:11px; font-weight:600; letter-spacing:0; border:1px solid var(--line); background:var(--panel); color:var(--accent); border-radius:6px; padding:3px 8px; cursor:pointer; }
+  .copy:hover { border-color:var(--accent); }
+  .note { font-size:12px; color:var(--muted); margin:8px 0 0; }
+  .note.warn { color:var(--danger); }
+  /* Decodes GitHub's scary-sounding "Act on your behalf" wording on the authorize screen. */
+  .reassure { display:flex; gap:8px; align-items:flex-start; margin:0 0 11px; padding:9px 11px; border:1px solid var(--line); border-radius:8px; background:var(--hover); }
+  .reassure svg { flex:none; margin-top:1px; color:var(--accent); }
+  .reassure p { margin:0; font-size:12px; line-height:1.5; color:var(--fg); }
+  .reassure b { font-weight:700; }
+  .ready { text-align:center; padding:6px 0 2px; }
+  .ready .big { font-family:var(--font-display); font-size:17px; font-weight:700; margin:8px 0 4px; }
+  .foot { margin-top:12px; font-size:11.5px; color:var(--muted); text-align:center; }
+  .foot.err { color:var(--danger); }
+`;
+  var GbtiOnboarding = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback?.();
+      this._onVis = () => {
+        if (!document.hidden) this.refresh();
+      };
+      document.addEventListener("visibilitychange", this._onVis);
+      window.addEventListener("focus", this._onVis);
+      this.refresh();
+    }
+    disconnectedCallback() {
+      super.disconnectedCallback?.();
+      this._stopPolling();
+      document.removeEventListener("visibilitychange", this._onVis);
+      window.removeEventListener("focus", this._onVis);
+    }
+    _startPolling() {
+      if (!this._timer) this._timer = setInterval(() => {
+        if (!document.hidden) this.refresh();
+      }, 5e3);
+    }
+    _stopPolling() {
+      if (this._timer) {
+        clearInterval(this._timer);
+        this._timer = null;
+      }
+    }
+    /** The host (which runs the device flow) feeds the user code in so the sign-in card can show it. */
+    setCode(code, url) {
+      this._code = code ? { code, url } : null;
+      this.render();
+    }
+    /** Re-probe durable GitHub state and re-render. Never advances on an error (the probe returns reachedGithub:false). */
+    async refresh() {
+      if (this._busy) return;
+      this._busy = true;
+      try {
+        const s = await this.client?.onboardingStatus?.();
+        if (s) {
+          const becameReady = s.ready && !(this._status && this._status.ready);
+          this._status = s;
+          if (s.signedIn) this._code = null;
+          if (s.ready) {
+            this._stopPolling();
+            if (becameReady) this.emit("gbti:onboarding-ready", { login: s.login });
+          } else this._startPolling();
+        }
+      } catch {
+        this._status = { ...this._status || {}, reachedGithub: false };
+      } finally {
+        this._busy = false;
+        this.render();
+      }
+    }
+    render() {
+      const s = this._status;
+      if (!s) {
+        this.set(this.css(CSS14) + `<p class="note">Checking your setup...</p>`);
+        return;
+      }
+      if (s.ready) {
+        this.set(this.css(CSS14) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
+        <p class="note">Your drafts save to your copy, and we open the review request for you.</p>
+        <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
+        this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
+        return;
+      }
+      const done = [s.signedIn, s.forkReady, s.installReady];
+      const nDone = done.filter(Boolean).length;
+      const active = s.activeStep || (s.signedIn ? null : "signin");
+      const rows = STEP_IDS.map((id, i) => {
+        const meta = s.steps?.[id] || {};
+        if (done[i]) return `<li class="row done"><span class="ic">${check(true)}</span><span class="t">${esc(meta.doneLabel || meta.title || id)}</span></li>`;
+        if (id !== active) return "";
+        return `<li class="row"><span class="ic">${check(false)}</span>${this._card(id, meta, s)}</li>`;
+      }).filter(Boolean).join("");
+      const reached = s.reachedGithub !== false;
+      this.set(this.css(CSS14) + `
+      <div class="head"><h2>Set up publishing</h2><span class="count">${nDone} of 3</span></div>
+      <div class="bar"><i style="width:${Math.round(nDone / 3 * 100)}%"></i></div>
+      <ul>${rows}</ul>
+      <p class="foot${reached ? "" : " err"}">${reached ? "Reached GitHub just now." : "We could not reach GitHub. Trying again."}</p>`);
+      this.on("[data-again]", "click", () => this.refresh());
+      this.on("[data-signin]", "click", () => this.emit("gbti:onboarding-signin"));
+      const copy = this.$("[data-copy]");
+      if (copy) copy.addEventListener("click", () => {
+        try {
+          navigator.clipboard?.writeText?.(this._code?.code || "");
+          copy.textContent = "Copied";
+        } catch {
+        }
+      });
+      const open = this.$("[data-open]");
+      if (open) open.addEventListener("click", () => {
+        const u = open.getAttribute("data-open");
+        if (u) window.open(u, "_blank", "noopener");
+        setTimeout(() => this.refresh(), 1500);
+      });
+    }
+    _card(id, meta, s) {
+      const eye = `<svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 5c-5 0-8.5 4.5-9 7 0.5 2.5 4 7 9 7s8.5-4.5 9-7c-.5-2.5-4-7-9-7zm0 11a4 4 0 110-8 4 4 0 010 8z" fill="currentColor"/></svg>`;
+      const why = `<p class="why">${esc(meta.why || "")}</p>`;
+      const see = `<p class="see">${eye}<span>${esc(meta.preview || "")}</span></p>`;
+      const again = `<button class="again" data-again type="button">Check again</button>`;
+      if (id === "signin") {
+        const verifyUrl = this._code?.url || "https://github.com/login/device";
+        const shield = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`;
+        const reassure = `<div class="reassure">${shield}<p><b>"Act on your behalf" is GitHub's standard wording for any app you connect, not full account access.</b> GBTI Network can only open pull requests and save drafts to the copy you choose. It cannot read your private code, change your account, or reach any other repository. You can remove it at any time in your GitHub settings.</p></div>`;
+        const code = this._code ? `<div class="code"><span data-codeval>${esc(this._code.code)}</span><button class="copy" data-copy type="button" title="Copy the code">Copy</button></div>
+           <a class="btn" href="${esc(verifyUrl)}" target="_blank" rel="noopener">${BTN_ICON.signin}<span>Open github.com/login/device</span></a>
+           <p class="note">Copy the code, open the GitHub page, paste it there, and Authorize. Leave this tab open: it checks off on its own when you come back.</p>` : `<button class="btn" data-signin type="button">${BTN_ICON.signin}<span>${esc(meta.button || "Sign in with GitHub")}</span></button>`;
+        return `<div class="card"><p class="title">${esc(meta.title || "Sign in with GitHub")}</p>${why}${see}${reassure}${code}${again}</div>`;
+      }
+      if (id === "install" && s.allReposGrant) {
+        return `<div class="card"><p class="title">Switch to just your copy</p>
+        <p class="why">You granted GBTI access to <b>all</b> your repositories. For your security we only want your one copy. Open the installation, choose <b>Only select repositories</b>, pick gbti.network, and save.</p>
+        <button class="btn" data-open="${esc(s.links?.manage || "https://github.com/settings/installations")}" type="button">${BTN_ICON.install}<span>Fix access on GitHub</span></button>${again}
+        <p class="note warn">Access to all repositories is not accepted.</p></div>`;
+      }
+      const link = id === "fork" ? s.links?.fork : s.links?.install;
+      return `<div class="card"><p class="title">${esc(meta.title)}</p>${why}${see}
+      <button class="btn" data-open="${esc(link || "")}" type="button">${BTN_ICON[id] || ""}<span>${esc(meta.button)}</span></button>${again}</div>`;
+    }
+  };
+  define("gbti-onboarding", GbtiOnboarding);
+
+  // client-ui/src/welcome-core.mjs
+  function phaseLabel(membership) {
+    switch (membership) {
+      case "paid":
+        return { phase: "paid", title: "You are a paid member", body: "Your profile, posts, products, and prompts publish under your name. Welcome to the co-op.", upgrade: false };
+      case "trialing":
+        return { phase: "trial", title: "You are in your 90-day trial", body: "Explore the community and stage drafts now. Upgrade any time to publish under your name.", upgrade: true };
+      default:
+        return { phase: "neutral", title: "Welcome to GBTI Network", body: "You are set up to author and publish through the co-op.", upgrade: false };
+    }
+  }
+  function shuffle(list, rng = Math.random) {
+    const a = [...list];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  function excludeSelf(members, ownUsername) {
+    const me = String(ownUsername || "").toLowerCase();
+    return me ? members.filter((m) => String(m?.username || "").toLowerCase() !== me) : [...members];
+  }
+  function paginate(list, p, size = 10) {
+    const pages = Math.max(1, Math.ceil(list.length / size));
+    const page = Math.min(Math.max(1, p | 0 || 1), pages);
+    const start = (page - 1) * size;
+    return { page, pages, items: list.slice(start, start + size) };
+  }
+
+  // client-ui/src/discord.mjs
+  var DISCORD_INVITE_URL = "https://discord.gg/gbti-network";
+
+  // client-ui/src/elements/gbti-welcome.mjs
+  var SITE4 = "https://gbti.network";
+  var PAGE_SIZE = 10;
+  var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
+  var STEPS = ["discord", "follow"];
+  var lc2 = (s) => String(s || "").toLowerCase();
+  var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  var discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
+  var megaIco = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4z" fill="currentColor"/></svg>`;
+  var CSS15 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); padding:32px 28px; max-width:680px; margin:0 auto; }
+  .head { text-align:center; margin-bottom:22px; }
+  .head .ic { display:inline-grid; place-items:center; }
+  .phase { display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
+    color:var(--accent); background:var(--hover); border-radius:999px; padding:3px 11px; margin:10px 0 0; }
+  .head h2 { font-family:var(--font-display); font-size:24px; margin:8px 0 6px; }
+  .head p { color:var(--muted); margin:0 auto; max-width:46ch; line-height:1.5; }
+  .up { display:inline-block; margin-top:10px; font-size:13px; font-weight:700; color:var(--accent); text-decoration:underline; }
+  .card { border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:0 0 14px; background:var(--panel); }
+  .card h3 { font-family:var(--font-display); font-size:16px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
+  .card .sub { color:var(--muted); font-size:13px; margin:0 0 13px; line-height:1.5; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:0; border-radius:9px;
+    background:var(--brand); color:#fff; text-decoration:none; font:inherit; font-weight:700; font-size:14px; padding:10px 16px; cursor:pointer; }
+  .btn:hover { background:var(--brand-dark); color:#fff; }
+  .check { display:flex; align-items:center; gap:9px; margin-top:12px; font-size:13.5px; color:var(--fg); cursor:pointer; user-select:none; }
+  .check input { width:17px; height:17px; accent-color:var(--brand); cursor:pointer; }
+  ul.members { list-style:none; margin:6px 0 0; padding:0; }
+  .m { display:flex; align-items:center; gap:12px; padding:9px 0; border-top:1px solid var(--line); }
+  .av { flex:none; width:38px; height:38px; border-radius:50%; background:var(--hover); color:var(--muted);
+    display:grid; place-items:center; font-weight:700; overflow:hidden; position:relative; }
+  .av img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .mi { flex:1; min-width:0; } .mi b { display:block; font-size:14px; }
+  .mi span { display:block; color:var(--muted); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fbtn { flex:none; border:1.5px solid var(--brand); background:var(--brand); color:#fff; border-radius:8px;
+    font:inherit; font-weight:700; font-size:13px; padding:6px 13px; cursor:pointer; }
+  .fbtn:hover { background:var(--brand-dark); border-color:var(--brand-dark); }
+  .fbtn.on { background:transparent; color:var(--accent); }
+  /* "Following" hover: a soft on-brand green fill (inviting), not an alarming red unfollow signal. */
+  .fbtn.on:hover { background:var(--hover); border-color:var(--brand-dark); color:var(--brand-dark); }
+  .pager { display:flex; align-items:center; justify-content:space-between; margin-top:13px; }
+  .pager button { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-size:13px; padding:6px 12px; cursor:pointer; }
+  .pager button[disabled] { opacity:.4; cursor:default; }
+  .pager .pg { font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .note { color:var(--muted); font-size:12.5px; line-height:1.5; margin:0; }
+  .note a { color:var(--accent); }
+  .done { width:100%; box-sizing:border-box; margin-top:6px; padding:12px; }
+  .loading { color:var(--muted); text-align:center; padding:30px 0; }
+  /* SOW-041 stepper: a step indicator + a bottom nav bar (Back / Continue / I am all set). */
+  .stepind { display:block; text-align:center; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:0 0 14px; }
+  .stepnav { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:6px; }
+  .stepnav .grow { flex:1; }
+  .btn.ghost { background:transparent; color:var(--fg-soft); border:1.5px solid var(--line); }
+  .btn.ghost:hover { background:var(--hover); color:var(--fg); border-color:var(--line-2); }
+`;
+  var GbtiWelcome = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback?.();
+      this._page = 1;
+      this._step = 0;
+      this.load();
+    }
+    async load() {
+      try {
+        const s = await this.client?.status?.();
+        this._membership = s?.membership ?? "unknown";
+        this._own = lc2(s?.identity?.username || s?.identity?.login);
+      } catch {
+        this._membership = "unknown";
+        this._own = "";
+      }
+      try {
+        const res = await fetch(`${SITE4}/members-index.json`, { cache: "no-cache" });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = await res.json();
+        this._members = excludeSelf(shuffle(Array.isArray(data?.members) ? data.members : []), this._own);
+      } catch {
+        this._members = null;
+      }
+      try {
+        const r = await this.client?.getFollows?.();
+        const list = Array.isArray(r) ? r : r?.following ?? [];
+        this._follows = new Set(list.map((e) => lc2(e?.username)).filter(Boolean));
+      } catch {
+        this._follows = null;
+      }
+      try {
+        this._discordJoined = localStorage.getItem(DISCORD_DONE_KEY) === "1";
+      } catch {
+        this._discordJoined = false;
+      }
+      this._discordInviteUrl = DISCORD_INVITE_URL;
+      try {
+        const inv = await this.client?.discordInvite?.();
+        if (inv?.url) this._discordInviteUrl = inv.url;
+      } catch {
+      }
+      this._loaded = true;
+      this.render();
+    }
+    render() {
+      if (!this._loaded) {
+        this.set(this.css(CSS15) + `<p class="loading">Setting up your welcome...</p>`);
+        return;
+      }
+      const ph = phaseLabel(this._membership);
+      const up = ph.upgrade ? `<a class="up" href="${SITE4}/membership/" target="_blank" rel="noopener">Upgrade to publish</a>` : "";
+      if (this._step < 0) this._step = 0;
+      if (this._step > STEPS.length - 1) this._step = STEPS.length - 1;
+      const step = STEPS[this._step];
+      const card = step === "discord" ? this._discordCard() : this._followCard();
+      const isLast = this._step >= STEPS.length - 1;
+      const nav = `<div class="stepnav">
+      ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
+      ${isLast ? `<button class="btn done" data-done type="button">I am all set</button>` : `<button class="btn" data-step-next type="button">Continue &rarr;</button>`}
+    </div>`;
+      this.set(this.css(CSS15) + `
+      <div class="head">
+        <span class="ic">${check2}</span>
+        <div class="phase">${esc(ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "Welcome")}</div>
+        <h2>${esc(ph.title)}</h2>
+        <p>${esc(ph.body)}</p>
+        ${up}
+      </div>
+      <span class="stepind">Step ${this._step + 1} of ${STEPS.length}</span>
+      ${card}
+      ${nav}`);
+      this.on("[data-step-next]", "click", () => {
+        this._step++;
+        this.render();
+      });
+      this.on("[data-step-back]", "click", () => {
+        this._step--;
+        this.render();
+      });
+      this.on("[data-done]", "click", () => this.emit("gbti:welcome-done"));
+      if (step === "discord") {
+        this.on("[data-discord-join]", "click", () => window.open(this._discordInviteUrl || DISCORD_INVITE_URL, "_blank", "noopener"));
+        const cb = this.$("[data-discord-cb]");
+        if (cb) cb.addEventListener("change", () => {
+          this._discordJoined = cb.checked;
+          try {
+            cb.checked ? localStorage.setItem(DISCORD_DONE_KEY, "1") : localStorage.removeItem(DISCORD_DONE_KEY);
+          } catch {
+          }
+        });
+      } else {
+        this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.getAttribute("data-follow"))));
+        this.on("[data-prev]", "click", () => {
+          this._page--;
+          this.render();
+        });
+        this.on("[data-next]", "click", () => {
+          this._page++;
+          this.render();
+        });
+        this.$$(".av img").forEach((img) => img.addEventListener("error", () => img.remove(), { once: true }));
+      }
+    }
+    _discordCard() {
+      const done = this._discordJoined ? "checked" : "";
+      return `<div class="card">
+      <h3>${discordIco} Join our Discord</h3>
+      <p class="sub">The community is the heart of the co-op: weekly sessions, help, and the people you build with. If you have not joined yet, hop in.</p>
+      <button class="btn" data-discord-join type="button">${discordIco} Join the Discord</button>
+      <label class="check"><input type="checkbox" data-discord-cb ${done} /> I have joined the Discord</label>
+    </div>`;
+    }
+    _followCard() {
+      const note = `<p class="note">Following a member alerts you when they publish new articles, prompts, and products (in your Following feed).</p>`;
+      if (this._follows === null) {
+        if (this._membership === "paid") {
+          return `<div class="card"><h3>${megaIco} Follow members</h3>
+          <p class="sub">We could not load your follow list right now. This is a temporary problem on our side, not your membership.</p>${note}
+          <p class="note" style="margin-top:10px">Try again shortly, or follow members any time from a member profile.</p></div>`;
+        }
+        return `<div class="card"><h3>${megaIco} Follow members</h3>
+        <p class="sub">Following members is a paid feature.</p>${note}
+        <p class="note" style="margin-top:10px"><a href="${SITE4}/membership/" target="_blank" rel="noopener">Upgrade</a> to follow members and build your feed.</p></div>`;
+      }
+      if (!this._members) {
+        return `<div class="card"><h3>${megaIco} Follow members</h3>
+        <p class="sub">We could not load the member directory right now. You can follow members any time from a member profile.</p>${note}</div>`;
+      }
+      if (this._members.length === 0) {
+        return `<div class="card"><h3>${megaIco} Follow members</h3>
+        <p class="sub">No members to show yet. Check back as the co-op grows.</p>${note}</div>`;
+      }
+      const { page, pages, items } = paginate(this._members, this._page, PAGE_SIZE);
+      this._page = page;
+      const rows = items.map((m) => this._row(m)).join("");
+      const pager = pages > 1 ? `<div class="pager"><button data-prev type="button" ${page <= 1 ? "disabled" : ""}>Back</button>
+         <span class="pg">Page ${page} of ${pages}</span>
+         <button data-next type="button" ${page >= pages ? "disabled" : ""}>More</button></div>` : "";
+      return `<div class="card"><h3>${megaIco} Follow members</h3>${note}<ul class="members">${rows}</ul>${pager}</div>`;
+    }
+    _row(m) {
+      const u = lc2(m.username);
+      const followed = this._follows.has(u);
+      const initial = esc((m.displayName || m.username || "?").trim().charAt(0).toUpperCase());
+      const av = m.avatar ? `<span class="ini">${initial}</span><img src="${esc(m.avatar)}" alt="" />` : `<span class="ini">${initial}</span>`;
+      const sub = m.headline ? `<span>${esc(m.headline)}</span>` : "";
+      return `<li class="m">
+      <span class="av">${av}</span>
+      <span class="mi"><b>${esc(m.displayName || m.username)}</b>${sub}</span>
+      <button class="fbtn ${followed ? "on" : ""}" data-follow="${esc(u)}" type="button">${followed ? "Following" : "Follow"}</button>
+    </li>`;
+    }
+    async _toggleFollow(username) {
+      const u = lc2(username);
+      if (!u || !this._follows) return;
+      const was = this._follows.has(u);
+      was ? this._follows.delete(u) : this._follows.add(u);
+      this.render();
+      try {
+        const r = await this.client.setFollow({ username: u, on: !was });
+        const list = Array.isArray(r) ? r : r?.following ?? null;
+        if (list) this._follows = new Set(list.map((e) => lc2(e?.username)).filter(Boolean));
+      } catch {
+        was ? this._follows.add(u) : this._follows.delete(u);
+      }
+      this.render();
+    }
+  };
+  define("gbti-welcome", GbtiWelcome);
+
+  // client-ui/src/workspace-core.mjs
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["post", "prompt", "product", "prs", "inbox", "saved", "subs"]);
+  function parseWorkspaceTab(hash) {
+    const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+    return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
+  }
+  function classifyPull(pr = {}, status = null) {
+    if (pr.merged === true || pr.state === "merged") return { label: "Accepted", tone: "ok" };
+    if (pr.state === "closed") return { label: "Declined", tone: "muted" };
+    switch (status?.state) {
+      case "success":
+        return { label: "Proposed", tone: "ok" };
+      // mergeable / auto-merging
+      case "failure":
+        return { label: "Needs changes", tone: "bad" };
+      // held / rejected-not-paid / changes requested
+      case "error":
+        return { label: "Error", tone: "bad" };
+      default:
+        return { label: "Proposed", tone: "" };
+    }
+  }
+
+  // client-ui/src/elements/gbti-saved.mjs
+  var SITE5 = "https://gbti.network";
+  var CSS16 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .sec { margin:0 0 26px; }
+  .sec h3 { font-size:15px; margin:0 0 12px; }
+  .grp { margin:0 0 14px; }
+  .grp h4 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 6px; }
+  ul.rows { list-style:none; margin:0; padding:0; }
+  .row { display:flex; align-items:center; gap:10px; padding:9px 2px; border-top:1px solid var(--line); }
+  .row:first-child { border-top:0; }
+  .row .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--fg); text-decoration:none; font-weight:600; font-size:14px; }
+  a.t:hover { color:var(--accent); }
+  .badge { flex:none; font-size:11px; color:var(--muted); background:var(--hover); border-radius:999px; padding:2px 9px; }
+  .lk { flex:none; background:none; border:0; font:inherit; font-size:13px; font-weight:600; color:var(--accent); cursor:pointer; padding:4px 6px; border-radius:6px; }
+  .lk:hover { background:var(--hover); }
+  .lk.danger { color:var(--danger); }
+  .coll { border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin:0 0 12px; }
+  .coll-h { display:flex; align-items:center; gap:10px; margin:0 0 6px; }
+  .coll-nm { font-size:14.5px; }
+  .coll-ct { font-size:12px; color:var(--muted); }
+  .coll-act { margin-left:auto; display:flex; gap:2px; }
+  .empty { color:var(--muted); font-size:13px; padding:6px 2px; list-style:none; }
+  .muted { color:var(--muted); font-size:14px; }
+  .newc { display:flex; gap:8px; margin-top:10px; }
+  .newc input { flex:1; min-width:0; font:inherit; font-size:13.5px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
+  .btn { flex:none; font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+  .busy { opacity:.6; pointer-events:none; }
+`;
+  var GbtiSaved = class extends GbtiElement {
+    connectedCallback() {
+      this._activity = null;
+      this._index = null;
+      this._busy = false;
+      super.connectedCallback?.();
+      this._load();
+    }
+    async _load() {
+      if (!this.client) {
+        this.render();
+        return;
+      }
+      await this._reloadActivity(false);
+      try {
+        const perType = {};
+        await Promise.all(SAVED_TYPES.map(async (t) => {
+          const file = indexFileFor(t);
+          if (!file) return;
+          const res = await fetch(`${SITE5}/${file}`, { cache: "no-cache" });
+          perType[t] = res.ok ? (await res.json()).items || [] : [];
+        }));
+        this._index = buildItemIndex(perType);
+      } catch {
+        this._index = buildItemIndex({});
+      }
+      this.render();
+    }
+    async _reloadActivity(rerender = true) {
+      try {
+        const a = await this.client.getActivity();
+        this._activity = { favorites: a?.favorites || [], collections: a?.collections || [] };
+      } catch (err) {
+        this._activity = { favorites: [], collections: [], error: err?.code || "error" };
+      }
+      if (rerender) this.render();
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS16) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        return;
+      }
+      if (!this._activity) {
+        this.set(this.css(CSS16) + `<p class="muted">Loading your saved items...</p>`);
+        return;
+      }
+      if (this._activity.error === "not-authenticated") {
+        this.set(this.css(CSS16) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        return;
+      }
+      const idx = this._index || buildItemIndex({});
+      const favGroups = groupFavoritesByType(this._activity.favorites);
+      const favHtml = favGroups.length ? favGroups.map((g) => `<div class="grp"><h4>${esc(typeLabel(g.type))}</h4><ul class="rows">${g.items.map((f) => this._itemRow(resolveItem(idx, f.type, f.slug), { fav: true })).join("")}</ul></div>`).join("") : `<p class="muted">No favorites yet. Tap the heart on any article, product, or prompt to save it here.</p>`;
+      const colls = this._activity.collections;
+      const collHtml = colls.length ? colls.map((c) => `<div class="coll">
+          <div class="coll-h"><b class="coll-nm">${esc(c.name)}</b><span class="coll-ct">${(c.items || []).length} item${(c.items || []).length === 1 ? "" : "s"}</span>
+            <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
+          <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
+        </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
+      this.set(this.css(CSS16) + `<div class="${this._busy ? "busy" : ""}">
+      <section class="sec"><h3>Favorites</h3>${favHtml}</section>
+      <section class="sec"><h3>Collections</h3>${collHtml}
+        <div class="newc"><input type="text" placeholder="New collection name" maxlength="80" data-newc /><button class="btn" data-newc-go type="button">Create</button></div>
+      </section></div>`);
+      this._wire();
+    }
+    _itemRow(item, { fav, cid } = {}) {
+      const title = esc(item.title);
+      const t = item.url ? `<a class="t" href="${SITE5}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
+      const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc(cid)}" data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>`;
+      return `<li class="row"><span class="badge">${esc(typeLabel(item.type))}</span>${t}${rm}</li>`;
+    }
+    _wire() {
+      this.$$("[data-unfav]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.toggleFavorite({ targetType: b.dataset.type, targetSlug: b.dataset.slug, on: false }))));
+      this.$$("[data-rmitem]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.addToCollection({ id: b.dataset.cid, targetType: b.dataset.type, targetSlug: b.dataset.slug, on: false }))));
+      this.$$("[data-rename]").forEach((b) => b.addEventListener("click", () => {
+        const name = (typeof prompt === "function" ? prompt("Rename collection") : "") || "";
+        if (name.trim()) this._run(() => this.client.renameCollection({ id: b.dataset.cid, name: name.trim() }));
+      }));
+      this.$$("[data-del]").forEach((b) => b.addEventListener("click", () => {
+        if (typeof confirm !== "function" || confirm("Delete this collection? The saved items stay; only the list is removed.")) {
+          this._run(() => this.client.deleteCollection({ id: b.dataset.cid }));
+        }
+      }));
+      const input = this.$("[data-newc]");
+      const create = () => {
+        const n = (input?.value || "").trim();
+        if (n) this._run(() => this.client.createCollection({ name: n }));
+      };
+      this.on("[data-newc-go]", "click", create);
+      if (input) input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") create();
+      });
+    }
+    // Run a mutation, then refetch the activity (the edge store is the source of truth). Fail-soft.
+    async _run(fn) {
+      this._busy = true;
+      this.render();
+      try {
+        await fn();
+      } catch (err) {
+      }
+      this._busy = false;
+      await this._reloadActivity();
+    }
+  };
+  define("gbti-saved", GbtiSaved);
+
+  // client-ui/src/elements/gbti-subscriptions.mjs
+  var SITE6 = "https://gbti.network";
+  var MEMBERSHIP = { paid: "Paid member", trial: "Trial", trialing: "Trial" };
+  var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
+  var CSS17 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .sec { margin:0 0 26px; }
+  .sec h3 { font-size:15px; margin:0 0 12px; }
+  .card { display:flex; align-items:center; gap:12px; border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .card .who { flex:1; min-width:0; }
+  .card .who b { display:block; font-size:14.5px; }
+  .card .who span { font-size:13px; color:var(--muted); }
+  .tag { flex:none; font-size:12px; font-weight:700; border-radius:999px; padding:3px 11px; background:var(--hover); color:var(--muted); }
+  .tag.ok { background:rgba(31,158,95,.14); color:var(--accent); }
+  .btn { flex:none; font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); cursor:pointer; text-decoration:none; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); }
+  ul.rows { list-style:none; margin:0; padding:0; }
+  .row { display:flex; align-items:center; gap:11px; padding:9px 2px; border-top:1px solid var(--line); }
+  .row:first-child { border-top:0; }
+  .av { width:30px; height:30px; border-radius:50%; flex:none; object-fit:cover; background:var(--hover); }
+  .row .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; font-size:14px; color:var(--fg); text-decoration:none; }
+  a.nm:hover { color:var(--accent); }
+  .lk { flex:none; background:none; border:0; font:inherit; font-size:13px; font-weight:600; color:var(--danger); cursor:pointer; padding:4px 6px; border-radius:6px; }
+  .lk:hover { background:var(--hover); }
+  .muted { color:var(--muted); font-size:14px; }
+  .find { margin-top:12px; }
+  .find a { color:var(--accent); font-weight:600; font-size:13.5px; text-decoration:none; }
+  .busy { opacity:.6; pointer-events:none; }
+`;
+  var GbtiSubscriptions = class extends GbtiElement {
+    connectedCallback() {
+      this._membership = null;
+      this._follows = null;
+      this._followsError = false;
+      this._busy = false;
+      super.connectedCallback?.();
+      this._load();
+    }
+    async _load() {
+      if (!this.client) {
+        this.render();
+        return;
+      }
+      try {
+        this._membership = (await this.client.status())?.membership ?? "unknown";
+      } catch {
+        this._membership = "unknown";
+      }
+      await this._reloadFollows(false);
+      this.render();
+    }
+    async _reloadFollows(rerender = true) {
+      try {
+        this._follows = followList(await this.client.getFollows()).filter((f) => f && f.username);
+        this._followsError = false;
+      } catch {
+        this._follows = null;
+        this._followsError = true;
+      }
+      if (rerender) this.render();
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS17) + `<p class="muted">Sign in with the GBTI client to manage your subscriptions.</p>`);
+        return;
+      }
+      if (this._membership === null) {
+        this.set(this.css(CSS17) + `<p class="muted">Loading your subscriptions...</p>`);
+        return;
+      }
+      const m = this._membership;
+      const label = MEMBERSHIP[m] || (m === "unknown" ? "Not signed in" : "Inactive");
+      const card = `<div class="card">
+      <div class="who"><b>Your membership</b><span>GBTI Network</span></div>
+      <span class="tag ${m === "paid" ? "ok" : ""}">${esc(label)}</span>
+      <a class="btn" href="${SITE6}/membership/" target="_blank" rel="noopener">Manage</a>
+    </div>`;
+      let followHtml;
+      if (this._follows === null) {
+        followHtml = `<p class="muted">Following is a paid member feature. <a href="${SITE6}/membership/" style="color:var(--accent)">Become a member</a> to subscribe to other members' activity.</p>`;
+      } else if (!this._follows.length) {
+        followHtml = `<p class="muted">You are not following anyone yet.</p>`;
+      } else {
+        followHtml = `<ul class="rows">${this._follows.map((f) => {
+          const u = esc(f.username);
+          return `<li class="row">
+          <img class="av" src="https://github.com/${encodeURIComponent(f.username)}.png?size=60" alt="" loading="lazy" data-avfor="${u}" />
+          <a class="nm" href="${SITE6}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
+          <button class="lk" data-unfollow="${u}" type="button">Unfollow</button>
+        </li>`;
+        }).join("")}</ul>`;
+      }
+      this.set(this.css(CSS17) + `<div class="${this._busy ? "busy" : ""}">
+      <section class="sec"><h3>Membership</h3>${card}</section>
+      <section class="sec"><h3>Following</h3>${followHtml}
+        <div class="find"><a href="${SITE6}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>
+      </section></div>`);
+      this.$$("[data-avfor]").forEach((img) => img.addEventListener("error", () => {
+        img.style.visibility = "hidden";
+      }, { once: true }));
+      this.$$("[data-unfollow]").forEach((b) => b.addEventListener("click", () => this._unfollow(b.dataset.unfollow)));
+    }
+    async _unfollow(username) {
+      this._busy = true;
+      this.render();
+      try {
+        this._follows = followList(await this.client.setFollow({ username, on: false })).filter((f) => f && f.username);
+      } catch {
+        await this._reloadFollows(false);
+      }
+      this._busy = false;
+      this.render();
+    }
+  };
+  define("gbti-subscriptions", GbtiSubscriptions);
+
+  // client-ui/src/elements/gbti-workspace.mjs
+  var TABS = [
+    { id: "post", label: "Articles", type: "post" },
+    { id: "prompt", label: "Prompts", type: "prompt" },
+    { id: "product", label: "Products", type: "product" },
+    { id: "prs", label: "Pull requests" },
+    { id: "inbox", label: "Inbox" },
+    { id: "saved", label: "Saved" },
+    // SOW-037: favorites + collections
+    { id: "subs", label: "Subscriptions" }
+    // SOW-037: follows + membership
+  ];
+  var CSS18 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
+  .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
+  .tab.on { background:var(--hover); color:var(--accent); }
+  .tbadge { display:inline-block; min-width:16px; margin-left:6px; padding:0 5px; border-radius:999px; background:var(--accent); color:#fff; font-size:11px; font-weight:800; line-height:16px; text-align:center; vertical-align:text-top; }
+  .profile { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:12px; padding:11px 14px; margin:0 0 14px; background:var(--panel); font-size:14px; }
+  .profile .lbl { color:var(--muted); font-size:12px; }
+  .profile button { margin-left:auto; }
+  ul.rows { list-style:none; margin:0; padding:0; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 2px; border-top:1px solid var(--line); }
+  .row:first-child { border-top:0; }
+  .row .t { min-width:0; overflow:hidden; }
+  .row .t b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .t .meta { color:var(--muted); font-size:12.5px; }
+  .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--hover); font-size:11.5px; color:var(--muted); white-space:nowrap; }
+  .tag.ok { background:rgba(31,158,95,.14); color:var(--accent); }
+  .tag.bad { background:rgba(224,108,108,.16); color:var(--danger); }
+  .btn { flex:none; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); }
+  .right { display:flex; align-items:center; gap:8px; flex:none; }
+  .muted { color:var(--muted); }
+  .empty { color:var(--muted); padding:18px 2px; }
+  .back { margin:0 0 14px; }
+  a { color:var(--accent); }
+`;
+  var GbtiWorkspace = class extends GbtiElement {
+    connectedCallback() {
+      this._tab = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "post";
+      this._cache = {};
+      this._prs = null;
+      this._editing = null;
+      this._reviewing = null;
+      this._inboxCount = null;
+      super.connectedCallback?.();
+      this._loadProfile();
+      this._ensureTab(this._tab);
+      this._loadInboxCount();
+    }
+    // SOW-028 P5: poll the incoming-contribution count on open (batch-first, like the rest of the client) so the
+    // Inbox tab carries a "N to review" badge without the member having to open it. Fail-soft to no badge.
+    async _loadInboxCount() {
+      try {
+        this._inboxCount = (await this.client?.listContributions?.())?.contributions?.length ?? 0;
+      } catch {
+        this._inboxCount = 0;
+      }
+      if (!this._editing && this._reviewing == null) this.render();
+    }
+    // ----- data loaders (each fail-soft to an empty state, like gbti-content-list/gbti-pr-list) -----
+    async _loadProfile() {
+      try {
+        const items = (await this.client?.listContent?.({ type: "profile" }))?.items ?? [];
+        this._profile = items[0] || null;
+      } catch {
+        this._profile = null;
+      }
+      if (!this._editing) this.render();
+    }
+    async _ensureTab(id) {
+      const tab = TABS.find((t) => t.id === id);
+      if (!tab) return;
+      if (id === "inbox" || id === "saved" || id === "subs") return;
+      if (tab.type && !this._cache[tab.type]) {
+        try {
+          this._cache[tab.type] = (await this.client?.listContent?.({ type: tab.type }))?.items ?? [];
+        } catch {
+          this._cache[tab.type] = [];
+        }
+      } else if (id === "prs" && !this._prs) {
+        try {
+          this._prs = (await this.client?.listPRs?.())?.prs ?? [];
+        } catch {
+          this._prs = [];
+        }
+      }
+      if (this._tab === id && !this._editing) this.render();
+      if (id === "prs") this._loadPrStatuses();
+    }
+    _loadPrStatuses() {
+      for (const pr of this._prs || []) {
+        if (pr.merged === true || pr.state === "closed" || pr.state === "merged") this._renderPrLabel(pr, null);
+        else this._loadPrStatus(pr.number);
+      }
+    }
+    async _loadPrStatus(number) {
+      let status = null;
+      try {
+        status = await this.client?.prStatus?.({ number });
+      } catch {
+      }
+      const pr = (this._prs || []).find((p) => p.number === number);
+      if (pr) this._renderPrLabel(pr, status);
+    }
+    _renderPrLabel(pr, status) {
+      const tag = this.$(`.gate[data-n="${pr.number}"]`);
+      if (!tag) return;
+      const { label, tone } = classifyPull(pr, status);
+      tag.className = `gate tag ${tone}`;
+      tag.textContent = label;
+      if (status?.description) tag.title = status.description;
+    }
+    // ----- rendering -----
+    render() {
+      if (this._editing) {
+        this.set(this.css(CSS18) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.on("[data-back]", "click", () => {
+          this._editing = null;
+          this.render();
+        });
+        const ed = this.$("gbti-content-editor");
+        const e = this._editing;
+        if (ed?.load) ed.load(e.type, e.frontmatter, e.body);
+        return;
+      }
+      if (this._reviewing != null) {
+        this.set(this.css(CSS18) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+        this.on("[data-back]", "click", () => {
+          this._reviewing = null;
+          this.render();
+        });
+        this.$("gbti-contrib-review")?.addEventListener("contrib-decided", () => {
+          this._reviewing = null;
+          this.render();
+          this._loadInboxCount();
+        });
+        return;
+      }
+      const tabs = TABS.map((t) => {
+        const badge = t.id === "inbox" && this._inboxCount ? `<span class="tbadge">${esc(this._inboxCount)}</span>` : "";
+        return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
+      }).join("");
+      this.set(this.css(CSS18) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+      this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+        this._tab = b.dataset.tab;
+        this.render();
+        this._ensureTab(this._tab);
+      }));
+      this._wireBody();
+    }
+    _profileHtml() {
+      if (!this._profile) return "";
+      const f = this._profile.frontmatter || {};
+      const name = f.displayName || f.title || this._profile.title || "Your profile";
+      return `<div class="profile"><span class="lbl">Profile</span> <b>${esc(name)}</b><button class="btn" data-profile type="button">Edit profile</button></div>`;
+    }
+    _body() {
+      const tab = TABS.find((t) => t.id === this._tab);
+      if (this._tab === "inbox") return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
+      if (this._tab === "saved") return `<gbti-saved></gbti-saved>`;
+      if (this._tab === "subs") return `<gbti-subscriptions></gbti-subscriptions>`;
+      if (this._tab === "prs") {
+        const prs = this._prs;
+        if (prs === null) return `<p class="empty">Loading your pull requests...</p>`;
+        if (prs.length === 0) return `<p class="empty">No pull requests yet. Publish from the site or the CMS and they show here.</p>`;
+        return `<ul class="rows">${prs.map((pr) => `<li class="row">
+        <span class="t"><b>${esc(pr.title || "PR #" + pr.number)}</b><span class="meta"><a href="${esc(pr.html_url || "#")}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span></span>
+        <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join("")}</ul>`;
+      }
+      const items = this._cache?.[tab?.type];
+      if (!items) return `<p class="empty">Loading...</p>`;
+      if (items.length === 0) return `<p class="empty">No ${esc(tab.label.toLowerCase())} yet.</p>`;
+      return `<ul class="rows">${items.map((it, i) => {
+        const status = it.status ? `<span class="tag ${it.status === "published" ? "ok" : ""}">${esc(it.status)}</span>` : "";
+        const vis = it.visibility === "members" ? `<span class="tag">members</span>` : "";
+        return `<li class="row"><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span>
+        <span class="right">${status} ${vis}<button class="btn" data-edit="${i}" type="button">Open</button></span></li>`;
+      }).join("")}</ul>`;
+    }
+    _wireBody() {
+      this.on("[data-profile]", "click", () => this._openItem(this._profile?.path, "profile"));
+      if (this._tab === "inbox") {
+        this.$("gbti-contrib-inbox")?.addEventListener("contrib-open", (e) => {
+          this._reviewing = e.detail?.number ?? null;
+          this.render();
+        });
+      }
+      const tab = TABS.find((t) => t.id === this._tab);
+      if (tab?.type) {
+        this.$$("[data-edit]").forEach((b) => b.addEventListener("click", () => {
+          const it = (this._cache[tab.type] || [])[Number(b.dataset.edit)];
+          if (it) this._openItem(it.path, it.type);
+        }));
+      }
+    }
+    async _openItem(path, type) {
+      if (!path) return;
+      try {
+        const full = await this.client.getContentItem({ path });
+        this._editing = { type, frontmatter: full.frontmatter, body: full.body };
+        this.render();
+      } catch {
+      }
+    }
+  };
+  define("gbti-workspace", GbtiWorkspace);
+
+  // client-ui/src/elements/gbti-reader.mjs
+  var SITE7 = "https://gbti.network";
+  var authorName4 = (a) => a === "gbti" ? "GBTI Network" : a;
+  function targetSlugFor(it) {
+    if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
+    if (it.slug) return String(it.slug);
+    const m = String(it.path || "").match(/\/(?:posts|products|prompts)\/([^/]+)\/index\.md$/);
+    return m ? m[1] : "";
+  }
+  var TYPE_LABEL3 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
+  var dateStr = (ms) => {
+    try {
+      return ms ? new Date(ms).toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" }) : "";
+    } catch {
+      return "";
+    }
+  };
+  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE7}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var CSS19 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  article { max-width:680px; margin:0 auto; }
+  h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
+  .meta { color:var(--muted); font-size:13px; margin:0 0 18px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .cover { display:block; width:100%; max-height:340px; object-fit:cover; border-radius:12px; border:1px solid var(--line); margin:0 0 20px; }
+  .badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); background:var(--hover); border-radius:999px; padding:2px 9px; }
+  .body { font-size:15.5px; line-height:1.7; }
+  .body h1,.body h2,.body h3 { font-family:var(--font-display); margin:1.4em 0 .5em; }
+  .body p { margin:0 0 1em; }
+  .body pre { background:var(--hover); padding:12px 14px; border-radius:10px; overflow:auto; }
+  .body code { font-family:ui-monospace,monospace; font-size:.92em; }
+  .body a { color:var(--accent); }
+  .body img { max-width:100%; height:auto; border-radius:10px; }
+  .locked { border:1px solid var(--line); background:var(--hover); border-radius:10px; padding:14px 16px; color:var(--fg); font-size:14px; margin:14px 0; }
+  .locked a { color:var(--accent); }
+  .muted { color:var(--muted); }
+  .view { display:inline-block; margin-top:22px; font-size:13px; font-weight:700; color:var(--accent); text-decoration:underline; }
+  .discussion-wrap { max-width:680px; margin:30px auto 0; border-top:1px solid var(--line); padding-top:18px; }
+  .discussion-wrap h3 { font-family:var(--font-display); font-size:18px; margin:0 0 12px; }
+`;
+  var GbtiReader = class extends GbtiElement {
+    /** open(item): { type, path, title, author, publishedAt, url, visibility, body?, encryptedBody? }.
+     *  For share, body/encryptedBody come from the summary; for post/product/prompt they come from readItem(path). */
+    open(item) {
+      this._item = item;
+      this._html = null;
+      this.render();
+      this._resolve();
+    }
+    async _resolve() {
+      const it = this._item || {};
+      try {
+        if (it.type === "share") {
+          this._html = await this._body(it.visibility, it.body, it.encryptedBody);
+        } else {
+          const { frontmatter, body } = await this.client.readItem({ path: it.path });
+          this._html = await this._body(it.visibility, body, frontmatter?.encryptedBody);
+        }
+      } catch {
+        this._html = { error: true };
+      }
+      this.render();
+    }
+    // Render the public body via preview, then append the members part (decrypt -> preview) or a locked notice.
+    async _body(visibility, publicBody, encPath) {
+      let html = publicBody ? (await this.client.preview({ body: publicBody }))?.html ?? "" : "";
+      if (encPath) {
+        try {
+          const { text } = await this.client.decrypt({ encPath });
+          html += (await this.client.preview({ body: text }))?.html ?? "";
+        } catch (err) {
+          const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
+          html += locked ? lockNotice("This part") : `<p class="muted">Could not load the members-only part right now.</p>`;
+        }
+      }
+      if (!html && visibility === "members") html = lockNotice("This");
+      return html;
+    }
+    render() {
+      const it = this._item;
+      if (!it) {
+        this.set(this.css(CSS19));
+        return;
+      }
+      const t = TYPE_LABEL3[it.type] || it.type || "";
+      const view = it.url ? `<a class="view" href="${esc(SITE7 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName4(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ""}</div>`;
+      const coverUrl = resolveAsset(it.thumb);
+      const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
+      let body;
+      if (this._html === null) body = `<p class="muted">Loading...</p>`;
+      else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
+      else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
+      const slug = targetSlugFor(it);
+      const discussion = this._html !== null && slug ? `<div class="discussion-wrap"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
+      this.set(this.css(CSS19) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>${discussion}`);
+    }
+  };
+  define("gbti-reader", GbtiReader);
+
+  // client-ui/src/elements/gbti-browse.mjs
+  var SITE8 = "https://gbti.network";
+  var TABS2 = [
+    { id: "post", label: "Articles", json: "blog-index.json" },
+    { id: "product", label: "Products", json: "products-index.json" },
+    { id: "prompt", label: "Prompts", json: "prompts-index.json" },
+    { id: "share", label: "Shares" }
+  ];
+  var CSS20 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
+  .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
+  .tab.on { background:var(--hover); color:var(--accent); }
+  ul.rows { list-style:none; margin:0; padding:0; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 2px; border-top:1px solid var(--line); cursor:pointer; }
+  .row:first-child { border-top:0; }
+  .row:hover { background:var(--hover); }
+  .row .thumb { flex:none; width:46px; height:46px; object-fit:cover; border-radius:8px; background:var(--hover); border:1px solid var(--line); }
+  /* Category-glyph fallback (no image): a rounded square with the category accent gradient + a white glyph,
+     matching the main app's PromptCard .kglyph. --ka is set inline per row from cat-glyph.mjs. */
+  .row .thumb.glyph { display:flex; align-items:center; justify-content:center; border:0; color:#fff;
+    background:linear-gradient(145deg, color-mix(in srgb, var(--ka) 66%, white), var(--ka)); }
+  .row .thumb.glyph svg { width:24px; height:24px; }
+  .row .t { min-width:0; flex:1; }
+  .row .t b { display:block; font-size:15px; }
+  .row .t .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row .t .meta { color:var(--muted); font-size:12px; margin-top:2px; }
+  .row .go { flex:none; color:var(--accent); font-size:13px; font-weight:700; }
+  .empty { color:var(--muted); padding:18px 2px; }
+  .btn { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; margin:0 0 14px; }
+  .btn:hover { border-color:var(--accent); color:var(--accent); }
+`;
+  var GbtiBrowse = class extends GbtiElement {
+    connectedCallback() {
+      const { tab, read } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
+      this._tab = tab && TABS2.some((t) => t.id === tab) ? tab : "post";
+      this._openPath = this._tab !== "share" ? read : null;
+      this._cache = {};
+      this._reading = null;
+      super.connectedCallback?.();
+      this.root?.addEventListener("error", (e) => {
+        const t = e.target;
+        if (t && t.tagName === "IMG" && t.classList?.contains("thumb")) t.style.display = "none";
+      }, true);
+      this._onHash = () => {
+        const { tab: tab2, read: read2 } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
+        const t = tab2 && TABS2.some((x) => x.id === tab2) ? tab2 : this._tab;
+        if (read2 && t !== "share") {
+          this._tab = t;
+          this._reading = (this._cache[t] || []).find((x) => x.path === read2) || { type: t, path: read2 };
+          this.render();
+          this._ensure(t);
+          return;
+        }
+        if (t !== this._tab || this._reading) {
+          this._tab = t;
+          this._reading = null;
+          this.render();
+          this._ensure(t);
+        }
+      };
+      if (typeof window !== "undefined") window.addEventListener("hashchange", this._onHash);
+      this._init();
+    }
+    disconnectedCallback() {
+      if (this._onHash && typeof window !== "undefined") window.removeEventListener("hashchange", this._onHash);
+      super.disconnectedCallback?.();
+    }
+    // Load the active tab's index, then (if deep-linked via read=<path>) open that item in the reader.
+    async _init() {
+      await this._ensure(this._tab);
+      if (this._openPath) {
+        const found = (this._cache[this._tab] || []).find((x) => x.path === this._openPath);
+        this._reading = found || { type: this._tab, path: this._openPath };
+        this._openPath = null;
+        this.render();
+      }
+    }
+    async _ensure(id) {
+      const tab = TABS2.find((t) => t.id === id);
+      if (!tab?.json || this._cache[id]) return;
+      try {
+        const res = await fetch(`${SITE8}/${tab.json}`, { cache: "no-cache" });
+        this._cache[id] = res.ok ? (await res.json()).items || [] : [];
+      } catch {
+        this._cache[id] = [];
+      }
+      if (this._tab === id && !this._reading && !this._openPath) this.render();
+    }
+    render() {
+      if (this._reading) {
+        const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
+        this.set(this.css(CSS20) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.on("[data-back]", "click", () => {
+          this._reading = null;
+          this.render();
+          this._ensure(this._tab);
+        });
+        const host = this.$("[data-reader]");
+        const r = document.createElement("gbti-reader");
+        host.replaceChildren(r);
+        r.open(this._reading);
+        return;
+      }
+      const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
+      this.set(this.css(CSS20) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
+        this._tab = b.dataset.tab;
+        this.render();
+        this._ensure(this._tab);
+      }));
+      this._renderBody();
+    }
+    // SOW-041: the content tabs render through the shared <gbti-card-list>; clicking a card opens it IN PLACE in the
+    // reader (the card has no openHref, so it emits card-open). The Shares tab keeps its existing authenticated feed.
+    _renderBody() {
+      const host = this.$("[data-body]");
+      if (!host) return;
+      if (this._tab === "share") {
+        host.replaceChildren(document.createElement("gbti-shares-feed"));
+        return;
+      }
+      const items = this._cache?.[this._tab];
+      if (!items) {
+        host.innerHTML = `<p class="empty">Loading...</p>`;
+        return;
+      }
+      const list = document.createElement("gbti-card-list");
+      list.mode = "detailed";
+      list.items = items;
+      list.addEventListener("card-open", (e) => {
+        const it = e.detail?.item;
+        if (it) {
+          this._reading = it;
+          this.render();
+        }
+      });
+      host.replaceChildren(list);
+    }
+  };
+  define("gbti-browse", GbtiBrowse);
+
+  // client-ui/src/elements/gbti-app.mjs
+  var TABS3 = [
+    { id: "author", label: "Author", tag: "gbti-content-editor" },
+    { id: "shares", label: "Shares", tag: "gbti-shares" },
+    // SOW-018: composer + co-op reading feed (extension/client-only)
+    { id: "content", label: "My Content", tag: "gbti-content-list" },
+    { id: "prs", label: "PRs", tag: "gbti-pr-list" },
+    { id: "members", label: "Members-only", tag: "gbti-members-portal" },
+    { id: "settings", label: "Settings", tag: "gbti-settings" },
+    { id: "admin", label: "Admin", tag: "gbti-admin", minRole: "moderator" }
+  ];
+  var RANK4 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
+  var GbtiApp = class extends GbtiElement {
+    constructor() {
+      super();
+      this.active = "author";
+      this.role = "member";
+    }
+    async render() {
+      if (!this.client) {
+        this.set(this.css() + `<div class="panel muted">Connecting…</div>`);
+        return;
+      }
+      try {
+        this.role = (await this.client.status())?.role ?? "member";
+      } catch {
+        this.role = "member";
+      }
+      const tabs = TABS3.filter((t) => !t.minRole || RANK4[this.role] >= RANK4[t.minRole]);
+      const active = tabs.find((t) => t.id === this.active) ? this.active : "author";
+      this.set(
+        this.css(`
+        header { display:flex; align-items:center; justify-content:space-between; padding:14px 0; }
+        header h1 { font-size:20px; } header h1 span { color: var(--brand); }
+        nav { display:flex; gap:4px; flex-wrap:wrap; border-bottom:1px solid var(--line); margin-bottom:16px; }
+        nav button { background:transparent; color:var(--muted); border:0; border-bottom:2px solid transparent; padding:9px 14px; font-weight:500; }
+        nav button.active { color:var(--text); border-bottom-color: var(--brand); }
+        .wrap { max-width: 860px; margin: 0 auto; }
+      `) + `<div class="wrap">
+           <header><h1>GBTI <span>Network</span> · local CMS</h1></header>
+           <gbti-auth></gbti-auth>
+           <nav>${tabs.map((t) => `<button data-id="${t.id}" class="${t.id === active ? "active" : ""}">${esc(t.label)}</button>`).join("")}</nav>
+           <div id="pane"></div>
+         </div>`
+      );
+      const pane = this.$("#pane");
+      const el = document.createElement(tabs.find((t) => t.id === active).tag);
+      if (active === "author") this.editor = el;
+      pane.replaceChildren(el);
+      this.$$("nav button").forEach(
+        (b) => b.addEventListener("click", () => {
+          this.active = b.dataset.id;
+          this.render();
+        })
+      );
+      this.addEventListener("gbti-edit", (e) => {
+        this.active = "author";
+        this.render();
+        queueMicrotask(() => this.editor?.load?.(e.detail.type, e.detail.frontmatter, e.detail.body));
+      });
+    }
+  };
+  define("gbti-app", GbtiApp);
+
+  // client-ui/src/client.mjs
+  var GbtiClientError = class extends Error {
+    constructor(code, message) {
+      super(message || code);
+      this.name = "GbtiClientError";
+      this.code = code;
+    }
+  };
+  function createHttpClient({ baseUrl = "", token, fetch: fetch2 = globalThis.fetch } = {}) {
+    async function request(method, path, body) {
+      const headers = { Authorization: `Bearer ${token}` };
+      const init2 = { method, headers };
+      if (body !== void 0) {
+        headers["Content-Type"] = "application/json";
+        init2.body = JSON.stringify(body);
+      }
+      const res = await fetch2(`${baseUrl}${path}`, init2);
+      let json = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+      if (!res.ok) {
+        throw new GbtiClientError(json?.error || `http-${res.status}`, json?.message || json?.error || `request failed (${res.status})`);
+      }
+      return json;
+    }
+    const qs = (params) => {
+      const p = new URLSearchParams();
+      for (const [k, v] of Object.entries(params)) if (v != null && v !== "") p.set(k, String(v));
+      const s = p.toString();
+      return s ? `?${s}` : "";
+    };
+    return {
+      status: () => request("GET", "/api/status"),
+      listContent: ({ type } = {}) => request("GET", `/api/content${qs({ type })}`),
+      getContentItem: ({ path }) => request("GET", `/api/content/item${qs({ path })}`),
+      readItem: ({ path }) => request("GET", `/api/read${qs({ path })}`),
+      // SOW-031: read ANY published index.md for the in-extension reader -> { path, frontmatter, body }
+      validateContent: (b) => request("POST", "/api/validate", b),
+      publish: (b) => request("POST", "/api/publish", b),
+      postShare: (b) => request("POST", "/api/share", b),
+      // SOW-018: returns { id, path, visibility, encrypted }
+      listShares: ({ limit } = {}) => request("GET", `/api/shares${qs({ limit })}`),
+      // SOW-018: returns { items: [share summaries] }
+      listShareComments: ({ targetSlug, limit } = {}) => request("GET", `/api/share-comments${qs({ targetSlug, limit })}`),
+      // SOW-032: a Share's discussion -> { items: [comment summaries] }
+      listComments: ({ targetType, targetSlug, limit } = {}) => request("GET", `/api/comments${qs({ targetType, targetSlug, limit })}`),
+      // SOW-041: the generic thread for any content type
+      discordInvite: () => request("GET", "/api/discord-invite"),
+      // on-demand Discord invite -> { url, source }
+      postComment: (b) => request("POST", "/api/comment", b),
+      // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
+      editComment: (b) => request("POST", "/api/comment/edit", b),
+      // SOW-027: { id, body, authorNote? } -> { id, edited }
+      getComment: ({ id }) => request("GET", `/api/comment${qs({ id })}`),
+      // SOW-027: edit prefill -> { path, frontmatter, body }
+      listPRs: () => request("GET", "/api/prs"),
+      prStatus: ({ number }) => request("GET", `/api/pr-status${qs({ number })}`),
+      listContributions: () => request("GET", "/api/contributions"),
+      // SOW-028: incoming contributions to review -> { contributions: [...] }
+      getContribution: ({ number }) => request("GET", `/api/contribution${qs({ number })}`),
+      // SOW-028: one contribution's diff + proposed body
+      reviewContribution: (b) => request("POST", "/api/contribution-review", b),
+      // SOW-028: { number, decision: approve|request-changes|decline, message? }
+      formFields: ({ type }) => request("GET", `/api/form-fields${qs({ type })}`),
+      preview: ({ body }) => request("POST", "/api/preview", { body }),
+      stageImage: (b) => request("POST", "/api/image", b),
+      listMembersOnly: () => request("GET", "/api/members-content"),
+      decrypt: ({ encPath }) => request("POST", "/api/member-decrypt", { encPath }),
+      // SOW-016: returns { text }
+      // SOW-024: favorites live in the deletable edge store (KV), NOT git. toggleFavorite SETS the favorite to
+      // `on` via the activity store and derives the resulting `favorited` from the returned activity (no global
+      // count: the public aggregate count comes from house/favorite-counts.yml on the next build).
+      toggleFavorite: async ({ targetType, targetSlug, on }) => {
+        const r = await request("POST", "/api/activity", { action: "favorite", targetType, targetSlug, on });
+        const favs = r && r.activity && r.activity.favorites || [];
+        return { favorited: favs.some((f) => f.type === targetType && f.slug === targetSlug) };
+      },
+      // SOW-024: member activity (favorites + collections) in the deletable edge store.
+      getActivity: () => request("GET", "/api/activity"),
+      // returns { favorites, collections }
+      createCollection: ({ name }) => request("POST", "/api/activity", { action: "collection.create", name }),
+      // returns { id, activity }
+      addToCollection: ({ id, targetType, targetSlug, on = true }) => request("POST", "/api/activity", { action: "collection.item", id, targetType, targetSlug, on }),
+      // SOW-037: manage collections from the member's "Saved" view (the ops already support these actions).
+      renameCollection: ({ id, name }) => request("POST", "/api/activity", { action: "collection.rename", id, name }),
+      // returns { activity }
+      deleteCollection: ({ id }) => request("POST", "/api/activity", { action: "collection.delete", id }),
+      // returns { activity }
+      // SOW-023: the follow graph (subscriptions) in the deletable edge store (paid-only).
+      getFollows: () => request("GET", "/api/follows"),
+      // returns { following: [{ username, addedAt }] }
+      setFollow: ({ username, on = true }) => request("POST", "/api/follows", { username, on }),
+      // returns { following }
+      // SOW-026: first-run onboarding readiness (token/fork/install) from durable GitHub state.
+      onboardingStatus: () => request("GET", "/api/onboarding-status"),
+      // returns { appMode, signedIn, forkReady, installReady, activeStep, ready, ... }
+      getSettings: () => request("GET", "/api/settings"),
+      updateSettings: (patch) => request("POST", "/api/settings", patch),
+      getBilling: () => request("GET", "/api/billing"),
+      getReferral: () => request("GET", "/api/referral"),
+      admin: (action, args = {}) => request("POST", "/api/admin", { action, ...args }),
+      overrides: () => request("GET", "/api/overrides"),
+      // SOW-038 P2: admin-gated roster { roster, summary }
+      openPulls: () => request("GET", "/api/open-pulls")
+      // SOW-038 P2: admin-gated open content-PR queue { pulls }
+    };
+  }
+
+  // extension/src/page-client.mjs
+  async function messagingFetch(url, init2 = {}) {
+    const u = new URL(url, "https://gbti.network");
+    const req = {
+      method: init2.method || "GET",
+      pathname: u.pathname,
+      query: Object.fromEntries(u.searchParams.entries()),
+      body: init2.body ? JSON.parse(init2.body) : void 0
+    };
+    const result = await chrome.runtime.sendMessage({ type: "api", req });
+    const r = result || { status: 500, json: { error: "no_response" } };
+    return { ok: r.status >= 200 && r.status < 300, status: r.status, json: async () => r.json };
+  }
+  function mountPageClient() {
+    const client = createHttpClient({ baseUrl: "", token: "extension", fetch: messagingFetch });
+    client.login = (onPrompt) => new Promise((resolve, reject) => {
+      const onPromptMsg = (m) => {
+        if (m?.type === "login-prompt") onPrompt({ userCode: m.userCode, verificationUri: m.verificationUri });
+      };
+      chrome.runtime.onMessage.addListener(onPromptMsg);
+      chrome.runtime.sendMessage({ type: "login" }).then((r) => {
+        chrome.runtime.onMessage.removeListener(onPromptMsg);
+        r?.ok ? resolve(r) : reject(new Error(r?.error || "sign-in failed"));
+      }).catch((e) => {
+        chrome.runtime.onMessage.removeListener(onPromptMsg);
+        reject(e);
+      });
+    });
+    setClient(client);
+    return client;
+  }
+
+  // extension/src/newtab.mjs
+  var SITE9 = "https://gbti.network";
   var $ = (sel) => document.querySelector(sel);
-  var authorName = (a) => a === "gbti" || a === "house" ? "GBTI Network" : a;
+  var authorName5 = (a) => a === "gbti" || a === "house" ? "GBTI Network" : a;
   var avatarFor = (a) => a === "gbti" || a === "house" ? "icons/icon-32.png" : `https://github.com/${encodeURIComponent(a)}.png?size=64`;
   var chipType = (t) => t === "post" ? "article" : t;
-  var TYPE_LABEL = { article: "ARTICLE", product: "PRODUCT", prompt: "PROMPT" };
+  var TYPE_LABEL4 = { article: "ARTICLE", product: "PRODUCT", prompt: "PROMPT" };
   function greeting() {
     const h = (/* @__PURE__ */ new Date()).getHours();
     return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
@@ -2605,7 +6489,7 @@
   function longDate() {
     return (/* @__PURE__ */ new Date()).toLocaleDateString(void 0, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   }
-  function relTime(ms) {
+  function relTime4(ms) {
     if (!ms) return "";
     const diff = Date.now() - ms;
     const day = 864e5;
@@ -2628,40 +6512,40 @@
       return "compact";
     }
   })();
-  var thumbUrl = (t) => /^https?:\/\//.test(t) ? t : `${SITE2}${t}`;
+  var thumbUrl = (t) => /^https?:\/\//.test(t) ? t : `${SITE9}${t}`;
   function thumbEl(e) {
     const ct = chipType(e.type);
     if (e.thumb) {
-      return `<span class="thumb t-${ct}">${ico(ct)}<img class="thumb-pic" src="${esc(thumbUrl(e.thumb))}" alt="" loading="lazy" /></span>`;
+      return `<span class="thumb t-${ct}">${ico(ct)}<img class="thumb-pic" src="${esc2(thumbUrl(e.thumb))}" alt="" loading="lazy" /></span>`;
     }
     return `<span class="thumb fallback">${ico(ct)}</span>`;
   }
   var chip = (type) => {
     const ct = chipType(type);
-    return `<span class="tchip c-${ct}">${ico(ct)}${TYPE_LABEL[ct] || ct.toUpperCase()}</span>`;
+    return `<span class="tchip c-${ct}">${ico(ct)}${TYPE_LABEL4[ct] || ct.toUpperCase()}</span>`;
   };
   var lockBadge = () => `<span class="lock">${ico("lock")}Members</span>`;
-  var avatarImg = (who) => `<img class="av-img" src="${esc(avatarFor(who))}" alt="" loading="lazy" />`;
-  var authorMeta = (who, ago) => `<span class="meta-au"><b>${esc(authorName(who))}</b>${ago ? ` · ${esc(ago)}` : ""}</span>`;
-  var hrefFor = (e) => e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE2}${e.url}`;
+  var avatarImg = (who) => `<img class="av-img" src="${esc2(avatarFor(who))}" alt="" loading="lazy" />`;
+  var authorMeta = (who, ago) => `<span class="meta-au"><b>${esc2(authorName5(who))}</b>${ago ? ` · ${esc2(ago)}` : ""}</span>`;
+  var hrefFor = (e) => e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE9}${e.url}`;
   function renderCompact(items) {
     return `<div class="feed-compact">` + items.map((e) => {
-      const ago = relTime(e.publishedAt);
-      return `<a class="row-c" href="${esc(hrefFor(e))}">
+      const ago = relTime4(e.publishedAt);
+      return `<a class="row-c" href="${esc2(hrefFor(e))}">
       ${avatarImg(e.author)}${thumbEl(e)}${chip(e.type)}
-      <span class="title">${esc(e.title)}</span>
+      <span class="title">${esc2(e.title)}</span>
       <span class="right">${e.visibility === "members" ? lockBadge() : ""}${authorMeta(e.author, ago)}</span>
     </a>`;
     }).join("") + `</div>`;
   }
   function renderDetailed(items) {
     return `<div class="feed-detailed">` + items.map((e) => {
-      const ago = relTime(e.publishedAt);
-      return `<a class="row-d" href="${esc(hrefFor(e))}">
+      const ago = relTime4(e.publishedAt);
+      return `<a class="row-d" href="${esc2(hrefFor(e))}">
       ${thumbEl(e)}
       <div class="d-body">
         <div class="d-top">${chip(e.type)}${e.visibility === "members" ? lockBadge() : ""}</div>
-        <div class="title">${esc(e.title)}</div>
+        <div class="title">${esc2(e.title)}</div>
         <div class="d-meta">${avatarImg(e.author)}${authorMeta(e.author, ago)}</div>
       </div>
     </a>`;
@@ -2669,10 +6553,10 @@
   }
   function renderCard(items) {
     return `<div class="feed-card">` + items.map((e) => {
-      const ago = relTime(e.publishedAt);
-      return `<a class="card-i" href="${esc(hrefFor(e))}">
+      const ago = relTime4(e.publishedAt);
+      return `<a class="card-i" href="${esc2(hrefFor(e))}">
       <div class="c-top">${chip(e.type)}${e.visibility === "members" ? lockBadge() : ""}</div>
-      <div class="title">${esc(e.title)}</div>
+      <div class="title">${esc2(e.title)}</div>
       <div class="c-meta"><span class="c-au">${avatarImg(e.author)}${authorMeta(e.author, ago)}</span></div>
       ${thumbEl(e)}
     </a>`;
@@ -2685,7 +6569,7 @@
     const q = filter.trim().toLowerCase();
     if (VIEW === "following") {
       if (FOLLOWING === null) {
-        feed.innerHTML = `<p class="muted">Following is a member feature. Sign in with the GBTI client or extension as a paid member to see the people you follow. <a href="${SITE2}/membership/" style="color:var(--green-700)">Become a member</a>.</p>`;
+        feed.innerHTML = `<p class="muted">Following is a member feature. Sign in with the GBTI client or extension as a paid member to see the people you follow. <a href="${SITE9}/membership/" style="color:var(--green-700)">Become a member</a>.</p>`;
         return;
       }
       if (FOLLOWING.size === 0) {
@@ -2694,7 +6578,7 @@
       }
     }
     const base = VIEW === "following" ? ENTRIES.filter((e) => FOLLOWING.has(String(e.author).toLowerCase())) : ENTRIES;
-    const rows = base.filter((e) => !q || `${e.title} ${authorName(e.author)}`.toLowerCase().includes(q));
+    const rows = base.filter((e) => !q || `${e.title} ${authorName5(e.author)}`.toLowerCase().includes(q));
     if (!rows.length) {
       const empty = VIEW === "following" ? q ? "No followed activity matches that filter." : "No recent activity from the members you follow." : ENTRIES.length ? "No activity matches that filter." : "No activity yet.";
       feed.innerHTML = `<p class="muted">${empty}</p>`;
@@ -2722,13 +6606,13 @@
   async function loadActivity() {
     const status = $("[data-feed-status]");
     try {
-      const res = await fetch(`${SITE2}/activity-index.json`, { cache: "no-cache" });
+      const res = await fetch(`${SITE9}/activity-index.json`, { cache: "no-cache" });
       if (!res.ok) throw new Error(String(res.status));
       const data = await res.json();
       ENTRIES = Array.isArray(data?.entries) ? data.entries : [];
       renderFeed($("[data-filter]")?.value || "");
     } catch {
-      if (status) status.innerHTML = `Could not load the latest activity. <a href="${SITE2}/" style="color:var(--green-700)">Open the co-op</a> instead.`;
+      if (status) status.innerHTML = `Could not load the latest activity. <a href="${SITE9}/" style="color:var(--green-700)">Open the co-op</a> instead.`;
     }
   }
   async function api2(pathname) {
@@ -2792,6 +6676,7 @@
     });
   }
   function init() {
+    mountPageClient();
     initShell({ active: "activity" });
     const greetEl = $("[data-greeting]");
     if (greetEl) greetEl.textContent = greeting();

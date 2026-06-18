@@ -7,6 +7,7 @@
 import { isLockedMembership } from '../../client/src/membership.mjs';
 import { buildReadHash } from '../../client-ui/src/browse-hash.mjs';
 import { initShell, ico, esc } from './shell.mjs';
+import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here
 
 const SITE = 'https://gbti.network';
 
@@ -224,7 +225,10 @@ function initFooterTip() {
 }
 
 function init() {
-  // The shared shell injects + wires the top bar (theme, apps, account menu) + the left rail, and fills the
+  // Register the messaging-backed GbtiClient so the shell's "+" composer (and any client-ui element) works on the
+  // new tab too; the feed itself still talks to the background worker directly.
+  mountPageClient();
+  // The shared shell injects + wires the top bar (theme, apps, account menu, "+") + the left rail, and fills the
   // page's static [data-ico] glyphs (search + the mode-switcher icons).
   initShell({ active: 'activity' });
 
