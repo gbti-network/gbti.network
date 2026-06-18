@@ -114,6 +114,7 @@ GITHUB_CONTENT_REPO = "gbti-network/gbti.network"
 REFERRAL_ENABLED = "false"
 MEMBER_CONTENT_KID = "1"
 UPSTREAM_REPO = "gbti-network/gbti.network"   # SOW-026: canonical repo the App opens PRs into
+NEWS_API_BASE = "https://gbti-news.gbti-labs.workers.dev"   # SOW-043: the deployed gbti-news worker the news proxy calls (NEWS_API_KEY is a secret)
 # LIVE-only values: fill before the production deploy.
 STRIPE_PRICE_ID = "price_1Tg5NHBFxyhSkuibXFrQyqaN"            # the live $150/yr recurring price (prod_UfQDvczTRPCOOq)
 GITHUB_OAUTH_CLIENT_ID = "Ov23li18yffp7NHSM6l6"

@@ -69,11 +69,10 @@ AI_MODEL = "@cf/meta/llama-3.2-3b-instruct"
 # PRODUCTION ENVIRONMENT  (deploy: `npx wrangler deploy --env production`)
 # Wrangler does NOT inherit top-level [vars]/[ai]/[[kv_namespaces]] into a named env, so the full set
 # is redefined here. Set the production secret separately: `npx wrangler secret put NEWS_API_KEY --env production`.
-# With `--env production` and no name override, this deploys as `gbti-news-production`. To make it the
-# canonical `gbti-news` worker (and attach news.gbti.network to it), uncomment the name line below.
+# SOW-043: deployed as the canonical `gbti-news` worker (production env).
 # ===========================================================================
-# [env.production]
-# name = "gbti-news"
+[env.production]
+name = "gbti-news"
 
 [env.production.vars]
 ENVIRONMENT = "production"
