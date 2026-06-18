@@ -1,0 +1,13 @@
+---
+// SOW-024: Cloudflare Web Analytics — COOKIELESS, privacy-first traffic analytics (the owner's chosen product).
+// Because it sets NO cookies and stores no cross-site identifier, it needs NO consent gate (unlike a cookie-based
+// product such as GA4, which would wire to the gbti:analytics-consent hook). It therefore loads site-wide,
+// unconditionally. The beacon token is a PUBLIC site token (it ships in every page; not a secret), supplied at
+// build time via GBTI_CF_ANALYTICS_TOKEN. When unset, NOTHING is emitted (a clean no-op), so the build is unchanged
+// until the owner enables it. Rendered from BaseLayout's <head>. The CookieConsent banner + the gbti:analytics-
+// consent hook remain for any FUTURE cookie-based analytics, but CF Web Analytics does not use them.
+const token = (import.meta.env.GBTI_CF_ANALYTICS_TOKEN || '').trim();
+---
+{token && (
+  <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon={JSON.stringify({ token })}></script>
+)}

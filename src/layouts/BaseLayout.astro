@@ -12,7 +12,7 @@ import Footer from '../components/Footer.astro';
 import SigninModal from '../components/SigninModal.astro';
 import ReferralCapture from '../components/ReferralCapture.astro';
 import CookieConsent from '../components/CookieConsent.astro';
-import Analytics from '../components/Analytics.astro';
+import CloudflareAnalytics from '../components/CloudflareAnalytics.astro';
 
 interface Props {
   title?: string;
@@ -77,8 +77,10 @@ const ogImageUrl = new URL(ogImage || DEFAULT_OG_IMAGE, Astro.site).href;
 
     <meta name="generator" content={Astro.generator} />
 
-    {/* SOW-024: GA4 loader, defined here but fired only by the CookieConsent hook (consent-gated). */}
-    <Analytics />
+    {/* SOW-024: Cloudflare Web Analytics — cookieless, so it loads site-wide with no consent gate. (The
+        CookieConsent hook below stays available for any future cookie-based analytics.) No-op until the owner
+        sets GBTI_CF_ANALYTICS_TOKEN. */}
+    <CloudflareAnalytics />
   </head>
   <body class="flex min-h-screen flex-col">
     <a

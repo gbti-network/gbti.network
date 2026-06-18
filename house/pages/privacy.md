@@ -41,16 +41,16 @@ We practice data minimization. We do not store your email address or payment det
 - To provide the service you signed up for: authentication, publishing, membership, billing, role assignment, and community access. Our lawful basis is performance of our contract with you.
 - To keep the service secure: anti-abuse checks, access controls, and logging. Our lawful basis is our legitimate interest in protecting the network.
 - To run the referral program: when you arrive through a member's referral link, we set a first-party cookie that records only the referrer's id, so that member is credited if you join later. Our lawful basis is our legitimate interest in operating the referral program. The cookie is first-party, holds no profile, and you can clear it anytime in your browser.
-- To understand and improve the site: privacy-respecting analytics. In the EU, the EEA, and the UK we ask for your consent before any analytics cookie is set; elsewhere it loads by default. Our lawful basis is your consent where consent applies.
+- To understand and improve the site: privacy-respecting, cookieless analytics (Cloudflare Web Analytics). It sets no cookies and stores no cross-site identifier, so it needs no consent banner. Our lawful basis is our legitimate interest in understanding aggregate traffic to improve the co-op.
 
 We do not use advertising cookies, we do not sell your data, and we do not profile you to make decisions that produce legal effects.
 
 ## 5. Cookies
 
-Two kinds of cookies, plus a sign-in session cookie that is strictly necessary to keep you logged in:
+One referral cookie, plus a sign-in session cookie that is strictly necessary to keep you logged in. Our analytics is cookieless and sets no cookie at all:
 
-- **Referral (always set, for referral credit):** a first-party cookie set only when you arrive through a member's referral link, so a referral can be credited if you join. It holds only the referrer's id. It is set for all visitors, including those in the EU, the EEA, and the UK, and is not placed behind the analytics consent banner. You can clear it at any time in your browser settings.
-- **Analytics (your choice):** privacy-respecting analytics to see what is useful and improve the co-op. In the EU, the EEA, and the UK a banner asks for your consent before any analytics cookie is set; elsewhere it is on by default. You can change your choice anytime via **Cookie preferences** in the footer, or manage cookies in your browser. We do not use advertising or cross-site tracking cookies.
+- **Referral (always set, for referral credit):** a first-party cookie set only when you arrive through a member's referral link, so a referral can be credited if you join. It holds only the referrer's id. It is set for all visitors, including those in the EU, the EEA, and the UK. You can clear it at any time in your browser settings.
+- **Analytics (cookieless):** we use Cloudflare Web Analytics, which is privacy-respecting and sets NO cookie and no cross-site identifier, so there is nothing here to consent to. We do not use advertising or cross-site tracking cookies. (The EU/EEA/UK consent banner remains in place should we ever add a cookie-based analytics product.)
 
 ## 6. Who we share data with
 
