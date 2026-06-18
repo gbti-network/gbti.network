@@ -7,9 +7,19 @@
 // pipeline, so "View on gbti.network" stays in the header for pixel-perfect / interactive parity.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { resolveAsset } from '../assets.mjs';
+import './gbti-discussion.mjs'; // SOW-041: the always-open discussion below the body
 
 const SITE = 'https://gbti.network';
 const authorName = (a) => (a === 'gbti' ? 'GBTI Network' : a);
+
+// SOW-041: the comment targetSlug for an item. A post/product/prompt keys on its content slug (matching the
+// public Comments.astro); a Share keys on the composite "<author>/<shareId>". Empty -> no discussion is shown.
+function targetSlugFor(it) {
+  if (it.type === 'share') return it.author && it.id ? `${it.author}/${it.id}` : '';
+  if (it.slug) return String(it.slug);
+  const m = String(it.path || '').match(/\/(?:posts|products|prompts)\/([^/]+)\/index\.md$/);
+  return m ? m[1] : '';
+}
 const TYPE_LABEL = { post: 'Article', product: 'Product', prompt: 'Prompt', share: 'Share' };
 const dateStr = (ms) => { try { return ms ? new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : ''; } catch { return ''; } };
 const lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
@@ -32,6 +42,8 @@ const CSS = `
   .locked a { color:var(--accent); }
   .muted { color:var(--muted); }
   .view { display:inline-block; margin-top:22px; font-size:13px; font-weight:700; color:var(--accent); text-decoration:underline; }
+  .discussion-wrap { max-width:680px; margin:30px auto 0; border-top:1px solid var(--line); padding-top:18px; }
+  .discussion-wrap h3 { font-family:var(--font-display); font-size:18px; margin:0 0 12px; }
 `;
 
 class GbtiReader extends GbtiElement {
@@ -82,7 +94,13 @@ class GbtiReader extends GbtiElement {
     if (this._html === null) body = `<p class="muted">Loading...</p>`;
     else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
     else body = `<div class="body">${typeof this._html === 'string' ? this._html : ''}</div>`;
-    this.set(this.css(CSS) + `<article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}</article>`);
+    // SOW-041: the always-open discussion, mounted ONCE on the resolved render (not while loading) so its thread
+    // is not fetched twice. Shown for any item with a comment target (post/product/prompt slug or a Share slug).
+    const slug = targetSlugFor(it);
+    const discussion = (this._html !== null && slug)
+      ? `<div class="discussion-wrap"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>`
+      : '';
+    this.set(this.css(CSS) + `<article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}</article>${discussion}`);
   }
 }
 

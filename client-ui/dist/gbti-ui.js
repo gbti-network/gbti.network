@@ -5804,6 +5804,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-reader.mjs
   var SITE6 = "https://gbti.network";
   var authorName4 = (a) => a === "gbti" ? "GBTI Network" : a;
+  function targetSlugFor(it) {
+    if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
+    if (it.slug) return String(it.slug);
+    const m = String(it.path || "").match(/\/(?:posts|products|prompts)\/([^/]+)\/index\.md$/);
+    return m ? m[1] : "";
+  }
   var TYPE_LABEL3 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
     try {
@@ -5831,6 +5837,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .locked a { color:var(--accent); }
   .muted { color:var(--muted); }
   .view { display:inline-block; margin-top:22px; font-size:13px; font-weight:700; color:var(--accent); text-decoration:underline; }
+  .discussion-wrap { max-width:680px; margin:30px auto 0; border-top:1px solid var(--line); padding-top:18px; }
+  .discussion-wrap h3 { font-family:var(--font-display); font-size:18px; margin:0 0 12px; }
 `;
   var GbtiReader = class extends GbtiElement {
     /** open(item): { type, path, title, author, publishedAt, url, visibility, body?, encryptedBody? }.
@@ -5885,7 +5893,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
       else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
-      this.set(this.css(CSS19) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>`);
+      const slug = targetSlugFor(it);
+      const discussion = this._html !== null && slug ? `<div class="discussion-wrap"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
+      this.set(this.css(CSS19) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>${discussion}`);
     }
   };
   define("gbti-reader", GbtiReader);
