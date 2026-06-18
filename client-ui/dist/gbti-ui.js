@@ -2000,9 +2000,287 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-card-list", GbtiCardList);
 
-  // client-ui/src/elements/gbti-shares-feed.mjs
+  // client-ui/src/elements/gbti-comment-box.mjs
   var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var CSS9 = `
+  :host { display: block; font-family: var(--font-body); color: var(--fg); }
+  .nudge { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--panel); font-size: 13.5px; color: var(--muted); }
+  .nudge a { color: var(--brand); font-weight: 600; }
+  button.open { margin-top: 16px; font: inherit; font-weight: 600; font-size: 14px; padding: 9px 16px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); cursor: pointer; }
+  button.open:hover { border-color: var(--brand); color: var(--brand); }
+  .edit { font: inherit; font-size: 12px; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0; }
+  .edit:hover { color: var(--brand); text-decoration: underline; }
+  .form { margin-top: 14px; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 90px; resize: vertical; font: inherit; font-size: 14px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); }
+  textarea:focus { outline: none; border-color: var(--brand); }
+  .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  select, label.chk { font: inherit; font-size: 13px; color: var(--muted); }
+  select { padding: 7px 9px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); }
+  .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  button.post { font: inherit; font-weight: 700; font-size: 14px; padding: 8px 16px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; cursor: pointer; }
+  button.cancel { font: inherit; font-size: 13px; background: none; border: 0; color: var(--muted); cursor: pointer; }
+  .msg { font-size: 13px; } .msg.err { color: #c0392b; } .msg.ok { color: var(--brand); }
+  .busy { opacity: .55; pointer-events: none; }
+`;
+  var GbtiCommentBox = class extends GbtiElement {
+    get _editId() {
+      return this.dataset?.gbtiCommentId || this.getAttribute?.("data-gbti-comment-id") || null;
+    }
+    get _editAuthor() {
+      return this.dataset?.gbtiCommentAuthor || this.getAttribute?.("data-gbti-comment-author") || null;
+    }
+    get _target() {
+      return { type: this.dataset?.gbtiTargetType || this.getAttribute?.("data-gbti-target-type"), slug: this.dataset?.gbtiTargetSlug || this.getAttribute?.("data-gbti-target-slug") };
+    }
+    connectedCallback() {
+      super.connectedCallback();
+      this._init();
+    }
+    async _init() {
+      if (!this.client) return;
+      let s = null;
+      try {
+        s = await this.client.status();
+      } catch {
+        s = null;
+      }
+      this._membership = s?.membership ?? "unknown";
+      this._identity = s?.identity ?? null;
+      this._editId ? this._renderEditAffordance() : this._renderCompose();
+    }
+    // ---- EDIT mode: only the comment's author sees an Edit link ----
+    _renderEditAffordance() {
+      if (!this._identity || this._identity.username !== this._editAuthor) {
+        this.set(this.css(CSS9) + "");
+        return;
+      }
+      this.set(this.css(CSS9) + `<button class="edit" type="button">Edit</button>`);
+      this.on(".edit", "click", () => this._openEdit());
+    }
+    async _openEdit() {
+      this.set(this.css(CSS9) + `<p class="msg">Loading…</p>`);
+      let body = "";
+      try {
+        body = (await this.client.getComment({ id: this._editId }))?.body ?? "";
+      } catch {
+        this.set(this.css(CSS9) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
+        this.on(".edit", "click", () => this._openEdit());
+        return;
+      }
+      this._form({ body, edit: true });
+    }
+    // ---- COMPOSE mode ----
+    _renderCompose() {
+      if (LOCKED2.has(this._membership)) {
+        this.set(this.css(CSS9) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
+        return;
+      }
+      if (this._membership === "trialing") {
+        this.set(this.css(CSS9) + `<div class="nudge">Commenting is a paid feature. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
+        return;
+      }
+      if (!this._identity) {
+        this.set(this.css(CSS9) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
+        return;
+      }
+      this.set(this.css(CSS9) + `<button class="open" type="button">Write a comment</button>`);
+      this.on(".open", "click", () => this._form({ body: "", edit: false }));
+    }
+    _form({ body, edit }) {
+      const visibilityRow = edit ? "" : `<select aria-label="Visibility"><option value="public">Public</option><option value="members">Members only</option></select>`;
+      this.set(this.css(CSS9) + `
+      <div class="form">
+        <textarea placeholder="Write your comment (markdown supported)…" maxlength="8000">${esc(body)}</textarea>
+        <div class="row">
+          ${visibilityRow}
+          <label class="chk"><input type="checkbox" data-authornote /> Mark as my author note</label>
+          <div class="actions">
+            <span class="msg" aria-live="polite"></span>
+            <button class="cancel" type="button">Cancel</button>
+            <button class="post" type="button">${edit ? "Save" : "Post"}</button>
+          </div>
+        </div>
+      </div>`);
+      this.on(".cancel", "click", () => edit ? this._renderEditAffordance() : this._renderCompose());
+      this.on(".post", "click", () => edit ? this._save() : this._post());
+    }
+    async _post() {
+      const wrap = this.$(".form");
+      const msg = this.$(".msg");
+      const body = (this.$("textarea")?.value || "").trim();
+      if (!body) {
+        this._say(msg, "Write something first.", "err");
+        return;
+      }
+      const visibility = this.$("select")?.value || "public";
+      const authorNote = !!this.$("[data-authornote]")?.checked;
+      wrap?.classList.add("busy");
+      try {
+        const t = this._target();
+        const res = await this.client.postComment({ targetType: t.type, targetSlug: t.slug, body, visibility, authorNote });
+        this._done(msg, "Posted. It appears after the next build.", "gbti-comment-posted", res);
+      } catch (err) {
+        this._fail(msg, err);
+        wrap?.classList.remove("busy");
+      }
+    }
+    async _save() {
+      const wrap = this.$(".form");
+      const msg = this.$(".msg");
+      const body = (this.$("textarea")?.value || "").trim();
+      if (!body) {
+        this._say(msg, "A comment cannot be empty.", "err");
+        return;
+      }
+      const authorNote = !!this.$("[data-authornote]")?.checked;
+      wrap?.classList.add("busy");
+      try {
+        const res = await this.client.editComment({ id: this._editId, body, authorNote });
+        this._done(msg, "Saved. The edit appears after the next build.", "gbti-comment-edited", res);
+      } catch (err) {
+        this._fail(msg, err);
+        wrap?.classList.remove("busy");
+      }
+    }
+    _done(msg, text, event, detail) {
+      this._say(msg, text, "ok");
+      this.emit(event, detail);
+    }
+    _fail(msg, err) {
+      if (err?.code === "membership-required") this._say(msg, "Commenting requires a paid membership.", "err");
+      else if (err?.code === "not-authenticated" || err?.code === "no-identity") this._say(msg, "Sign in with the GBTI client first.", "err");
+      else this._say(msg, err?.message || "Could not save the comment.", "err");
+    }
+    _say(el, text, kind) {
+      if (el) {
+        el.textContent = text;
+        el.className = `msg ${kind || ""}`;
+      }
+    }
+  };
+  define("gbti-comment-box", GbtiCommentBox);
+
+  // client-ui/src/elements/gbti-discussion.mjs
+  var CSS10 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
+  .comment { border-left:2px solid var(--line); padding-left:10px; }
+  .comment.reply { margin-left:16px; }
+  .cmeta { display:flex; align-items:baseline; gap:8px; font-size:12px; }
+  .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
+  .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
+  .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
+  .cbody p { margin:0 0 .5em; } .cbody :is(h1,h2,h3,h4){ font-weight:700; margin:.6em 0 .2em; }
+  .cbody a { color:var(--accent, var(--brand)); }
+  .cbody pre { background:var(--bg, rgba(0,0,0,.05)); padding:8px; border-radius:6px; overflow:auto; }
+  .clocked { font-size:12.5px; color:var(--muted); } .clocked a { color:var(--brand); font-weight:600; }
+  .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
+`;
+  function relTime2(iso) {
+    if (!iso) return "";
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return "";
+    const diff = Date.now() - t, day = 864e5;
+    if (diff < day) return "today";
+    const d = Math.floor(diff / day);
+    if (d < 30) return `${d} day${d === 1 ? "" : "s"} ago`;
+    const mo = Math.floor(d / 30);
+    if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
+    return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
+  }
+  var authorName2 = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
+  var GbtiDiscussion = class extends GbtiElement {
+    static get observedAttributes() {
+      return ["data-gbti-target-type", "data-gbti-target-slug"];
+    }
+    connectedCallback() {
+      super.connectedCallback?.();
+      this._onComment = (e) => {
+        if (e?.detail?.targetSlug === this._slug()) this.load();
+      };
+      document.addEventListener("gbti-comment-posted", this._onComment);
+      document.addEventListener("gbti-comment-edited", this._onComment);
+      this.load();
+    }
+    disconnectedCallback() {
+      super.disconnectedCallback?.();
+      if (this._onComment) {
+        document.removeEventListener("gbti-comment-posted", this._onComment);
+        document.removeEventListener("gbti-comment-edited", this._onComment);
+      }
+    }
+    attributeChangedCallback(name, oldV, newV) {
+      if (oldV !== newV && this.isConnected) {
+        this._loaded = false;
+        this.load();
+      }
+    }
+    _type() {
+      return this.dataset.gbtiTargetType || "";
+    }
+    _slug() {
+      return this.dataset.gbtiTargetSlug || "";
+    }
+    async load() {
+      const targetType = this._type();
+      const targetSlug = this._slug();
+      if (!targetType || !targetSlug) {
+        this.set(this.css(CSS10));
+        return;
+      }
+      if (!this.client) {
+        this.set(this.css(CSS10) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
+        return;
+      }
+      if (!this._loaded) this.set(this.css(CSS10) + `<p class="empty">Loading the discussion…</p>`);
+      let items = [];
+      try {
+        items = (await this.client.listComments({ targetType, targetSlug }))?.items ?? [];
+      } catch {
+        this.set(this.css(CSS10) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
+        return;
+      }
+      const resolved = await Promise.all(items.map((c) => this._resolveBody(c).then((html) => ({ c, html }))));
+      this._render(targetType, targetSlug, resolved);
+      this._loaded = true;
+    }
+    _render(targetType, targetSlug, rows) {
+      const thread = rows.map(({ c, html }) => {
+        const reply = c.parentId ? " reply" : "";
+        const badge = c.visibility === "members" ? `<span class="cbadge">Members</span>` : "";
+        const bodyHtml = html && html.locked ? `<div class="clocked">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>` : typeof html === "string" && html ? `<div class="cbody">${html}</div>` : "";
+        return `<div class="comment${reply}">
+        <div class="cmeta"><span class="cname">${esc(authorName2(c.author))}</span><span class="cwhen">${esc(relTime2(c.createdAt))}</span>${badge}</div>
+        ${bodyHtml}
+      </div>`;
+      }).join("");
+      const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
+      this.set(this.css(CSS10) + threadHtml + this._composeHtml(targetType, targetSlug));
+    }
+    // A fresh <gbti-comment-box> for this target (it handles its own paid/trial/visitor gating UX). The injected
+    // client is process-global, so it upgrades + talks to the same host with nothing to wire here.
+    _composeHtml(targetType, targetSlug) {
+      return `<gbti-comment-box data-gbti-target-type="${esc(targetType)}" data-gbti-target-slug="${esc(targetSlug)}"></gbti-comment-box>`;
+    }
+    async _resolveBody(c) {
+      try {
+        if (c.visibility === "members") {
+          if (!c.encryptedBody) return "";
+          const { text } = await this.client.decrypt({ encPath: c.encryptedBody });
+          return (await this.client.preview({ body: text }))?.html ?? "";
+        }
+        return c.body ? (await this.client.preview({ body: c.body }))?.html ?? "" : "";
+      } catch (err) {
+        const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
+        return { locked };
+      }
+    }
+  };
+  define("gbti-discussion", GbtiDiscussion);
+
+  // client-ui/src/elements/gbti-shares-feed.mjs
+  var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  var CSS11 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -2032,22 +2310,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .splash { text-align:center; padding:40px 16px; }
   .splash .lock { font-size:30px; } .splash h3 { margin:10px 0 4px; } .splash a { color:var(--brand); font-weight:600; }
 
-  /* SOW-032 discussion (now always-open in the reading view) */
+  /* SOW-032/041 discussion container (the thread itself renders inside <gbti-discussion>). */
   .discussion-wrap { margin-top:22px; border-top:1px solid var(--line); padding-top:14px; }
   .discussion-wrap h4 { margin:0 0 10px; font-size:14px; }
-  .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
-  .comment { border-left:2px solid var(--line); padding-left:10px; }
-  .comment.reply { margin-left:16px; }
-  .cmeta { display:flex; align-items:baseline; gap:8px; font-size:12px; }
-  .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
-  .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
-  .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
-  .cbody p { margin:0 0 .5em; } .cbody :is(h1,h2,h3,h4){ font-weight:700; margin:.6em 0 .2em; }
-  .cbody a { color:var(--accent, var(--brand)); }
-  .cbody pre { background:var(--bg, rgba(0,0,0,.05)); padding:8px; border-radius:6px; overflow:auto; }
-  .clocked { font-size:12.5px; color:var(--muted); } .clocked a { color:var(--brand); font-weight:600; }
 `;
-  function relTime2(iso) {
+  function relTime3(iso) {
     if (!iso) return "";
     const t = Date.parse(iso);
     if (Number.isNaN(t)) return "";
@@ -2059,7 +2326,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
     return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
   }
-  var authorName2 = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
+  var authorName3 = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
   var shareTitle = (it) => it.title || it.shortDescription || (it.url ? `Link: ${hostOf(it.url)}` : "Member share");
   var GbtiSharesFeed = class extends GbtiElement {
     connectedCallback() {
@@ -2072,40 +2339,30 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.reload();
       };
       document.addEventListener("gbti-share-posted", this._onPosted);
-      this._onComment = (e) => {
-        const slug = e?.detail?.targetSlug;
-        if (slug) this._reloadOpenThread(slug);
-      };
-      document.addEventListener("gbti-comment-posted", this._onComment);
-      document.addEventListener("gbti-comment-edited", this._onComment);
       this.reload();
     }
     disconnectedCallback() {
       super.disconnectedCallback();
       if (this._onPosted) document.removeEventListener("gbti-share-posted", this._onPosted);
-      if (this._onComment) {
-        document.removeEventListener("gbti-comment-posted", this._onComment);
-        document.removeEventListener("gbti-comment-edited", this._onComment);
-      }
     }
     async reload() {
       if (!this.client) {
-        this.set(this.css(CSS9) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        this.set(this.css(CSS11) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      this.set(this.css(CSS9) + `<p class="muted">Loading the co-op stream…</p>`);
+      this.set(this.css(CSS11) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         membership = (await this.client.status())?.membership ?? "unknown";
       } catch {
         membership = "unknown";
       }
-      this._locked = LOCKED2.has(membership);
+      this._locked = LOCKED3.has(membership);
       if (this._locked) return this._splash();
       try {
         this._items = (await this.client.listShares())?.items ?? [];
       } catch {
-        this.set(this.css(CSS9) + `<p class="muted">Could not load Shares right now.</p>`);
+        this.set(this.css(CSS11) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       this.render();
@@ -2124,11 +2381,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const head = `<div class="head"><h3>Co-op stream</h3><button class="refresh" type="button">Refresh</button></div>`;
       const items = this._items || [];
       if (!items.length) {
-        this.set(this.css(CSS9) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS11) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
-      this.set(this.css(CSS9) + head + `<div data-list></div>`);
+      this.set(this.css(CSS11) + head + `<div data-list></div>`);
       this.on(".refresh", "click", () => this.reload());
       const list = document.createElement("gbti-card-list");
       list.mode = "detailed";
@@ -2150,10 +2407,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : "";
       const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">🔗 ${esc(hostOf(share.url))}</a>` : "";
       const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}</div>` : "";
-      const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><div class="discussion" data-slug="${esc(slug)}"><p class="empty">Loading the discussion…</p></div></div>` : "";
-      this.set(this.css(CSS9) + `<button class="back" type="button" data-back>&larr; Back to the stream</button>
+      const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
+      this.set(this.css(CSS11) + `<button class="back" type="button" data-back>&larr; Back to the stream</button>
       <article class="reading">
-        <div class="who"><span class="name">${esc(authorName2(share.author))}</span><span class="when">${esc(relTime2(share.createdAt))}</span>${badge}</div>
+        <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime3(share.createdAt))}</span>${badge}</div>
         ${title}${desc}
         <div class="body" data-body><p class="empty">Loading…</p></div>
         ${link}${tags}${discussion}
@@ -2163,7 +2420,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.render();
       });
       this._fillBody(share);
-      if (slug) this._loadThread(slug);
     }
     async _fillBody(share) {
       const html = await this._resolveBody(share);
@@ -2186,61 +2442,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     }
     _splash() {
-      this.set(this.css(CSS9) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS11) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
-    }
-    /** Reload an OPEN thread in place (after a reply is posted/edited); no-op if no discussion is mounted. */
-    _reloadOpenThread(slug) {
-      const panel = this.$(`.discussion[data-slug="${cssEscape(slug)}"]`);
-      if (panel) this._loadThread(slug);
-    }
-    async _loadThread(slug) {
-      const panel = this.$(`.discussion[data-slug="${cssEscape(slug)}"]`);
-      if (!panel) return;
-      if (!this.client) {
-        panel.innerHTML = `<p class="empty">Open in the GBTI client to read the discussion.</p>`;
-        return;
-      }
-      let items = [];
-      try {
-        items = (await this.client.listShareComments({ targetSlug: slug }))?.items ?? [];
-      } catch {
-        panel.innerHTML = `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(slug);
-        return;
-      }
-      const resolved = await Promise.all(items.map((c) => this._resolveCommentBody(c).then((html) => ({ c, html }))));
-      this._renderThread(panel, slug, resolved);
-    }
-    _renderThread(panel, slug, rows) {
-      const thread = rows.map(({ c, html }) => {
-        const reply = c.parentId ? " reply" : "";
-        const badge = c.visibility === "members" ? `<span class="cbadge">Members</span>` : "";
-        const bodyHtml = html && html.locked ? `<div class="clocked">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>` : typeof html === "string" && html ? `<div class="cbody">${html}</div>` : "";
-        return `<div class="comment${reply}">
-        <div class="cmeta"><span class="cname">${esc(authorName2(c.author))}</span><span class="cwhen">${esc(relTime2(c.createdAt))}</span>${badge}</div>
-        ${bodyHtml}
-      </div>`;
-      }).join("");
-      const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
-      panel.innerHTML = threadHtml + this._composeHtml(slug);
-    }
-    // A fresh <gbti-comment-box> for this Share (the element handles its own paid/trial/visitor gating UX). The
-    // injected client is process-global, so it upgrades + talks to the same host with nothing to wire here.
-    _composeHtml(slug) {
-      return `<gbti-comment-box data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-comment-box>`;
-    }
-    async _resolveCommentBody(c) {
-      try {
-        if (c.visibility === "members") {
-          if (!c.encryptedBody) return "";
-          const { text } = await this.client.decrypt({ encPath: c.encryptedBody });
-          return (await this.client.preview({ body: text }))?.html ?? "";
-        }
-        return c.body ? (await this.client.preview({ body: c.body }))?.html ?? "" : "";
-      } catch (err) {
-        const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
-        return { locked };
-      }
     }
   };
   function hostOf(u) {
@@ -2250,20 +2453,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "link";
     }
   }
-  function cssEscape(s) {
-    return String(s ?? "").replace(/["\\]/g, "\\$&");
-  }
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS10 = `
+  var CSS12 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS10) + `<div class="stack">
+      this.set(this.css(CSS12) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -4646,7 +4846,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS11 = `
+  var CSS13 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -4662,7 +4862,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS11) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS13) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -4670,7 +4870,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         membership = "unknown";
       }
       if (isLockedMembership(membership)) {
-        this.set(this.css(CSS11) + `<div class="splash">
+        this.set(this.css(CSS13) + `<div class="splash">
         <div class="lock">🔒</div>
         <h2>Your access is locked</h2>
         <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
@@ -4679,170 +4879,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>`);
         return;
       }
-      this.set(this.css(CSS11) + `<slot></slot>`);
+      this.set(this.css(CSS13) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
-
-  // client-ui/src/elements/gbti-comment-box.mjs
-  var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS12 = `
-  :host { display: block; font-family: var(--font-body); color: var(--fg); }
-  .nudge { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--panel); font-size: 13.5px; color: var(--muted); }
-  .nudge a { color: var(--brand); font-weight: 600; }
-  button.open { margin-top: 16px; font: inherit; font-weight: 600; font-size: 14px; padding: 9px 16px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); cursor: pointer; }
-  button.open:hover { border-color: var(--brand); color: var(--brand); }
-  .edit { font: inherit; font-size: 12px; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0; }
-  .edit:hover { color: var(--brand); text-decoration: underline; }
-  .form { margin-top: 14px; }
-  textarea { width: 100%; box-sizing: border-box; min-height: 90px; resize: vertical; font: inherit; font-size: 14px; padding: 10px 12px; border: 1.5px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--fg); }
-  textarea:focus { outline: none; border-color: var(--brand); }
-  .row { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
-  select, label.chk { font: inherit; font-size: 13px; color: var(--muted); }
-  select { padding: 7px 9px; border: 1.5px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); }
-  .actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-  button.post { font: inherit; font-weight: 700; font-size: 14px; padding: 8px 16px; border: 0; border-radius: 10px; background: var(--brand); color: #fff; cursor: pointer; }
-  button.cancel { font: inherit; font-size: 13px; background: none; border: 0; color: var(--muted); cursor: pointer; }
-  .msg { font-size: 13px; } .msg.err { color: #c0392b; } .msg.ok { color: var(--brand); }
-  .busy { opacity: .55; pointer-events: none; }
-`;
-  var GbtiCommentBox = class extends GbtiElement {
-    get _editId() {
-      return this.dataset?.gbtiCommentId || this.getAttribute?.("data-gbti-comment-id") || null;
-    }
-    get _editAuthor() {
-      return this.dataset?.gbtiCommentAuthor || this.getAttribute?.("data-gbti-comment-author") || null;
-    }
-    get _target() {
-      return { type: this.dataset?.gbtiTargetType || this.getAttribute?.("data-gbti-target-type"), slug: this.dataset?.gbtiTargetSlug || this.getAttribute?.("data-gbti-target-slug") };
-    }
-    connectedCallback() {
-      super.connectedCallback();
-      this._init();
-    }
-    async _init() {
-      if (!this.client) return;
-      let s = null;
-      try {
-        s = await this.client.status();
-      } catch {
-        s = null;
-      }
-      this._membership = s?.membership ?? "unknown";
-      this._identity = s?.identity ?? null;
-      this._editId ? this._renderEditAffordance() : this._renderCompose();
-    }
-    // ---- EDIT mode: only the comment's author sees an Edit link ----
-    _renderEditAffordance() {
-      if (!this._identity || this._identity.username !== this._editAuthor) {
-        this.set(this.css(CSS12) + "");
-        return;
-      }
-      this.set(this.css(CSS12) + `<button class="edit" type="button">Edit</button>`);
-      this.on(".edit", "click", () => this._openEdit());
-    }
-    async _openEdit() {
-      this.set(this.css(CSS12) + `<p class="msg">Loading…</p>`);
-      let body = "";
-      try {
-        body = (await this.client.getComment({ id: this._editId }))?.body ?? "";
-      } catch {
-        this.set(this.css(CSS12) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
-        this.on(".edit", "click", () => this._openEdit());
-        return;
-      }
-      this._form({ body, edit: true });
-    }
-    // ---- COMPOSE mode ----
-    _renderCompose() {
-      if (LOCKED3.has(this._membership)) {
-        this.set(this.css(CSS12) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
-        return;
-      }
-      if (this._membership === "trialing") {
-        this.set(this.css(CSS12) + `<div class="nudge">Commenting is a paid feature. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
-        return;
-      }
-      if (!this._identity) {
-        this.set(this.css(CSS12) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
-        return;
-      }
-      this.set(this.css(CSS12) + `<button class="open" type="button">Write a comment</button>`);
-      this.on(".open", "click", () => this._form({ body: "", edit: false }));
-    }
-    _form({ body, edit }) {
-      const visibilityRow = edit ? "" : `<select aria-label="Visibility"><option value="public">Public</option><option value="members">Members only</option></select>`;
-      this.set(this.css(CSS12) + `
-      <div class="form">
-        <textarea placeholder="Write your comment (markdown supported)…" maxlength="8000">${esc(body)}</textarea>
-        <div class="row">
-          ${visibilityRow}
-          <label class="chk"><input type="checkbox" data-authornote /> Mark as my author note</label>
-          <div class="actions">
-            <span class="msg" aria-live="polite"></span>
-            <button class="cancel" type="button">Cancel</button>
-            <button class="post" type="button">${edit ? "Save" : "Post"}</button>
-          </div>
-        </div>
-      </div>`);
-      this.on(".cancel", "click", () => edit ? this._renderEditAffordance() : this._renderCompose());
-      this.on(".post", "click", () => edit ? this._save() : this._post());
-    }
-    async _post() {
-      const wrap = this.$(".form");
-      const msg = this.$(".msg");
-      const body = (this.$("textarea")?.value || "").trim();
-      if (!body) {
-        this._say(msg, "Write something first.", "err");
-        return;
-      }
-      const visibility = this.$("select")?.value || "public";
-      const authorNote = !!this.$("[data-authornote]")?.checked;
-      wrap?.classList.add("busy");
-      try {
-        const t = this._target();
-        const res = await this.client.postComment({ targetType: t.type, targetSlug: t.slug, body, visibility, authorNote });
-        this._done(msg, "Posted. It appears after the next build.", "gbti-comment-posted", res);
-      } catch (err) {
-        this._fail(msg, err);
-        wrap?.classList.remove("busy");
-      }
-    }
-    async _save() {
-      const wrap = this.$(".form");
-      const msg = this.$(".msg");
-      const body = (this.$("textarea")?.value || "").trim();
-      if (!body) {
-        this._say(msg, "A comment cannot be empty.", "err");
-        return;
-      }
-      const authorNote = !!this.$("[data-authornote]")?.checked;
-      wrap?.classList.add("busy");
-      try {
-        const res = await this.client.editComment({ id: this._editId, body, authorNote });
-        this._done(msg, "Saved. The edit appears after the next build.", "gbti-comment-edited", res);
-      } catch (err) {
-        this._fail(msg, err);
-        wrap?.classList.remove("busy");
-      }
-    }
-    _done(msg, text, event, detail) {
-      this._say(msg, text, "ok");
-      this.emit(event, detail);
-    }
-    _fail(msg, err) {
-      if (err?.code === "membership-required") this._say(msg, "Commenting requires a paid membership.", "err");
-      else if (err?.code === "not-authenticated" || err?.code === "no-identity") this._say(msg, "Sign in with the GBTI client first.", "err");
-      else this._say(msg, err?.message || "Could not save the comment.", "err");
-    }
-    _say(el, text, kind) {
-      if (el) {
-        el.textContent = text;
-        el.className = `msg ${kind || ""}`;
-      }
-    }
-  };
-  define("gbti-comment-box", GbtiCommentBox);
 
   // client-ui/src/elements/gbti-onboarding.mjs
   var STEP_IDS = ["signin", "fork", "install"];
@@ -4852,7 +4892,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
     install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
   };
-  var CSS13 = `
+  var CSS14 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
@@ -4949,11 +4989,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const s = this._status;
       if (!s) {
-        this.set(this.css(CSS13) + `<p class="note">Checking your setup...</p>`);
+        this.set(this.css(CSS14) + `<p class="note">Checking your setup...</p>`);
         return;
       }
       if (s.ready) {
-        this.set(this.css(CSS13) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
+        this.set(this.css(CSS14) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
         <p class="note">Your drafts save to your copy, and we open the review request for you.</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
@@ -4969,7 +5009,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return `<li class="row"><span class="ic">${check(false)}</span>${this._card(id, meta, s)}</li>`;
       }).filter(Boolean).join("");
       const reached = s.reachedGithub !== false;
-      this.set(this.css(CSS13) + `
+      this.set(this.css(CSS14) + `
       <div class="head"><h2>Set up publishing</h2><span class="count">${nDone} of 3</span></div>
       <div class="bar"><i style="width:${Math.round(nDone / 3 * 100)}%"></i></div>
       <ul>${rows}</ul>
@@ -5060,7 +5100,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
   var megaIco = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4z" fill="currentColor"/></svg>`;
-  var CSS14 = `
+  var CSS15 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); padding:32px 28px; max-width:680px; margin:0 auto; }
   .head { text-align:center; margin-bottom:22px; }
   .head .ic { display:inline-grid; place-items:center; }
@@ -5152,7 +5192,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this._loaded) {
-        this.set(this.css(CSS14) + `<p class="loading">Setting up your welcome...</p>`);
+        this.set(this.css(CSS15) + `<p class="loading">Setting up your welcome...</p>`);
         return;
       }
       const ph = phaseLabel(this._membership);
@@ -5166,7 +5206,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
       ${isLast ? `<button class="btn done" data-done type="button">I am all set</button>` : `<button class="btn" data-step-next type="button">Continue &rarr;</button>`}
     </div>`;
-      this.set(this.css(CSS14) + `
+      this.set(this.css(CSS15) + `
       <div class="head">
         <span class="ic">${check2}</span>
         <div class="phase">${esc(ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "Welcome")}</div>
@@ -5301,7 +5341,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE4 = "https://gbti.network";
-  var CSS15 = `
+  var CSS16 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -5367,15 +5407,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS15) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS15) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS15) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -5387,7 +5427,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS15) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS16) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
         <div class="newc"><input type="text" placeholder="New collection name" maxlength="80" data-newc /><button class="btn" data-newc-go type="button">Create</button></div>
@@ -5440,7 +5480,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var SITE5 = "https://gbti.network";
   var MEMBERSHIP = { paid: "Paid member", trial: "Trial", trialing: "Trial" };
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS16 = `
+  var CSS17 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -5499,11 +5539,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS16) + `<p class="muted">Sign in with the GBTI client to manage your subscriptions.</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Sign in with the GBTI client to manage your subscriptions.</p>`);
         return;
       }
       if (this._membership === null) {
-        this.set(this.css(CSS16) + `<p class="muted">Loading your subscriptions...</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Loading your subscriptions...</p>`);
         return;
       }
       const m = this._membership;
@@ -5528,7 +5568,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         </li>`;
         }).join("")}</ul>`;
       }
-      this.set(this.css(CSS16) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS17) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Membership</h3>${card}</section>
       <section class="sec"><h3>Following</h3>${followHtml}
         <div class="find"><a href="${SITE5}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>
@@ -5564,7 +5604,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "subs", label: "Subscriptions" }
     // SOW-037: follows + membership
   ];
-  var CSS17 = `
+  var CSS18 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -5669,7 +5709,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // ----- rendering -----
     render() {
       if (this._editing) {
-        this.set(this.css(CSS17) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS18) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this.render();
@@ -5680,7 +5720,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       if (this._reviewing != null) {
-        this.set(this.css(CSS17) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+        this.set(this.css(CSS18) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
         this.on("[data-back]", "click", () => {
           this._reviewing = null;
           this.render();
@@ -5696,7 +5736,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const badge = t.id === "inbox" && this._inboxCount ? `<span class="tbadge">${esc(this._inboxCount)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS17) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+      this.set(this.css(CSS18) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();
@@ -5763,7 +5803,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-reader.mjs
   var SITE6 = "https://gbti.network";
-  var authorName3 = (a) => a === "gbti" ? "GBTI Network" : a;
+  var authorName4 = (a) => a === "gbti" ? "GBTI Network" : a;
   var TYPE_LABEL3 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
     try {
@@ -5773,7 +5813,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE6}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
-  var CSS18 = `
+  var CSS19 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   article { max-width:680px; margin:0 auto; }
   h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
@@ -5833,19 +5873,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS18));
+        this.set(this.css(CSS19));
         return;
       }
       const t = TYPE_LABEL3[it.type] || it.type || "";
       const view = it.url ? `<a class="view" href="${esc(SITE6 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
-      const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName3(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ""}</div>`;
+      const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName4(it.author))}</span>${it.publishedAt ? `<span>· ${esc(dateStr(it.publishedAt))}</span>` : ""}</div>`;
       const coverUrl = resolveAsset(it.thumb);
       const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
       else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
-      this.set(this.css(CSS18) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>`);
+      this.set(this.css(CSS19) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>`);
     }
   };
   define("gbti-reader", GbtiReader);
@@ -5876,7 +5916,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "prompt", label: "Prompts", json: "prompts-index.json" },
     { id: "share", label: "Shares" }
   ];
-  var CSS19 = `
+  var CSS20 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -5960,7 +6000,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS19) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS20) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -5973,7 +6013,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS19) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS20) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();
@@ -6122,6 +6162,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-018: returns { items: [share summaries] }
       listShareComments: ({ targetSlug, limit } = {}) => request("GET", `/api/share-comments${qs({ targetSlug, limit })}`),
       // SOW-032: a Share's discussion -> { items: [comment summaries] }
+      listComments: ({ targetType, targetSlug, limit } = {}) => request("GET", `/api/comments${qs({ targetType, targetSlug, limit })}`),
+      // SOW-041: the generic thread for any content type
       discordInvite: () => request("GET", "/api/discord-invite"),
       // on-demand Discord invite -> { url, source }
       postComment: (b) => request("POST", "/api/comment", b),

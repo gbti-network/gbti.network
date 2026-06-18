@@ -7,6 +7,7 @@
 // A Locked account gets a splash; the key never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
 import './gbti-card-list.mjs';
+import './gbti-discussion.mjs'; // SOW-041: the shared thread engine (factored out of this file)
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 
@@ -40,20 +41,9 @@ const CSS = `
   .splash { text-align:center; padding:40px 16px; }
   .splash .lock { font-size:30px; } .splash h3 { margin:10px 0 4px; } .splash a { color:var(--brand); font-weight:600; }
 
-  /* SOW-032 discussion (now always-open in the reading view) */
+  /* SOW-032/041 discussion container (the thread itself renders inside <gbti-discussion>). */
   .discussion-wrap { margin-top:22px; border-top:1px solid var(--line); padding-top:14px; }
   .discussion-wrap h4 { margin:0 0 10px; font-size:14px; }
-  .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
-  .comment { border-left:2px solid var(--line); padding-left:10px; }
-  .comment.reply { margin-left:16px; }
-  .cmeta { display:flex; align-items:baseline; gap:8px; font-size:12px; }
-  .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
-  .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
-  .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
-  .cbody p { margin:0 0 .5em; } .cbody :is(h1,h2,h3,h4){ font-weight:700; margin:.6em 0 .2em; }
-  .cbody a { color:var(--accent, var(--brand)); }
-  .cbody pre { background:var(--bg, rgba(0,0,0,.05)); padding:8px; border-radius:6px; overflow:auto; }
-  .clocked { font-size:12.5px; color:var(--muted); } .clocked a { color:var(--brand); font-weight:600; }
 `;
 
 function relTime(iso) {
@@ -77,22 +67,15 @@ class GbtiSharesFeed extends GbtiElement {
     this._items = null; // raw shares
     this._reading = null; // the share being read, or null (the list)
     this._locked = false;
-    // Refresh the feed when a Share is posted from the composer (event bubbles + composed to document).
+    // Refresh the feed when a Share is posted from the composer (event bubbles + composed to document). The
+    // discussion's own reload-on-comment lives in <gbti-discussion> now.
     this._onPosted = () => { this._reading = null; this.reload(); };
     document.addEventListener('gbti-share-posted', this._onPosted);
-    // SOW-032: a posted/edited comment reloads ONLY the open thread (the reading view's discussion), keyed on slug.
-    this._onComment = (e) => { const slug = e?.detail?.targetSlug; if (slug) this._reloadOpenThread(slug); };
-    document.addEventListener('gbti-comment-posted', this._onComment);
-    document.addEventListener('gbti-comment-edited', this._onComment);
     this.reload();
   }
   disconnectedCallback() {
     super.disconnectedCallback();
     if (this._onPosted) document.removeEventListener('gbti-share-posted', this._onPosted);
-    if (this._onComment) {
-      document.removeEventListener('gbti-comment-posted', this._onComment);
-      document.removeEventListener('gbti-comment-edited', this._onComment);
-    }
   }
 
   async reload() {
@@ -141,7 +124,7 @@ class GbtiSharesFeed extends GbtiElement {
     const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : '';
     const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">🔗 ${esc(hostOf(share.url))}</a>` : '';
     const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
-    const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><div class="discussion" data-slug="${esc(slug)}"><p class="empty">Loading the discussion…</p></div></div>` : '';
+    const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : '';
     this.set(this.css(CSS) + `<button class="back" type="button" data-back>&larr; Back to the stream</button>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
@@ -150,9 +133,8 @@ class GbtiSharesFeed extends GbtiElement {
         ${link}${tags}${discussion}
       </article>`);
     this.on('[data-back]', 'click', () => { this._reading = null; this.render(); });
-    // Resolve the body (decrypt for a members Share) + load the discussion, both async, fail-soft.
+    // Resolve the Share's note body (decrypt for a members Share); the discussion loads itself.
     this._fillBody(share);
-    if (slug) this._loadThread(slug);
   }
 
   async _fillBody(share) {
@@ -182,67 +164,10 @@ class GbtiSharesFeed extends GbtiElement {
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
   }
 
-  /** Reload an OPEN thread in place (after a reply is posted/edited); no-op if no discussion is mounted. */
-  _reloadOpenThread(slug) {
-    const panel = this.$(`.discussion[data-slug="${cssEscape(slug)}"]`);
-    if (panel) this._loadThread(slug);
-  }
-
-  async _loadThread(slug) {
-    const panel = this.$(`.discussion[data-slug="${cssEscape(slug)}"]`);
-    if (!panel) return;
-    if (!this.client) { panel.innerHTML = `<p class="empty">Open in the GBTI client to read the discussion.</p>`; return; }
-    let items = [];
-    try { items = (await this.client.listShareComments({ targetSlug: slug }))?.items ?? []; }
-    catch { panel.innerHTML = `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(slug); return; }
-    const resolved = await Promise.all(items.map((c) => this._resolveCommentBody(c).then((html) => ({ c, html }))));
-    this._renderThread(panel, slug, resolved);
-  }
-
-  _renderThread(panel, slug, rows) {
-    const thread = rows.map(({ c, html }) => {
-      const reply = c.parentId ? ' reply' : '';
-      const badge = c.visibility === 'members' ? `<span class="cbadge">Members</span>` : '';
-      const bodyHtml = (html && html.locked)
-        ? `<div class="clocked">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>`
-        : (typeof html === 'string' && html) ? `<div class="cbody">${html}</div>` : '';
-      return `<div class="comment${reply}">
-        <div class="cmeta"><span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}</div>
-        ${bodyHtml}
-      </div>`;
-    }).join('');
-    const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
-    panel.innerHTML = threadHtml + this._composeHtml(slug);
-  }
-
-  // A fresh <gbti-comment-box> for this Share (the element handles its own paid/trial/visitor gating UX). The
-  // injected client is process-global, so it upgrades + talks to the same host with nothing to wire here.
-  _composeHtml(slug) {
-    return `<gbti-comment-box data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-comment-box>`;
-  }
-
-  async _resolveCommentBody(c) {
-    try {
-      if (c.visibility === 'members') {
-        if (!c.encryptedBody) return ''; // a members comment with no body
-        const { text } = await this.client.decrypt({ encPath: c.encryptedBody });
-        return (await this.client.preview({ body: text }))?.html ?? '';
-      }
-      return c.body ? (await this.client.preview({ body: c.body }))?.html ?? '' : '';
-    } catch (err) {
-      const locked = err?.code === 'membership-required' || err?.code === 'not-authenticated';
-      return { locked };
-    }
-  }
 }
 
 function hostOf(u) {
   try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return 'link'; }
-}
-
-// Escape a value for safe interpolation inside a double-quoted attribute selector ([data-slug="…"]).
-function cssEscape(s) {
-  return String(s ?? '').replace(/["\\]/g, '\\$&');
 }
 
 define('gbti-shares-feed', GbtiSharesFeed);

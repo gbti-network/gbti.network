@@ -179,8 +179,10 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
      * them OLDEST-first (a conversation reads top-down). A members comment's plaintext is NOT read here; its .enc
      * is decrypted client-side via the Worker, exactly like a members Share body.
      */
-    async listShareComments(targetSlug, limit = 100) {
-      if (!owner || !repo || !targetSlug) return [];
+    // SOW-041: the generic comment-thread reader for ANY content type; listShareComments is a thin alias.
+    async listShareComments(targetSlug, limit = 100) { return this.listComments('share', targetSlug, limit); },
+    async listComments(targetType, targetSlug, limit = 100) {
+      if (!owner || !repo || !targetType || !targetSlug) return [];
       const t = await tree();
       if (!t || !Array.isArray(t.tree)) return [];
       const paths = t.tree
@@ -195,7 +197,7 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
         if (text == null) continue;
         const { frontmatter, body } = parseContentFile(text);
         if (frontmatter?.status !== 'published') continue;
-        if (frontmatter?.targetType !== 'share' || frontmatter?.targetSlug !== targetSlug) continue;
+        if (frontmatter?.targetType !== targetType || frontmatter?.targetSlug !== targetSlug) continue;
         out.push(commentSummary(rel, frontmatter, body));
       }
       out.sort(byCommentOldest);

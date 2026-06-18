@@ -17456,8 +17456,12 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch = globalThis.
      * them OLDEST-first (a conversation reads top-down). A members comment's plaintext is NOT read here; its .enc
      * is decrypted client-side via the Worker, exactly like a members Share body.
      */
+    // SOW-041: the generic comment-thread reader for ANY content type; listShareComments is a thin alias.
     async listShareComments(targetSlug, limit = 100) {
-      if (!owner || !repo || !targetSlug) return [];
+      return this.listComments("share", targetSlug, limit);
+    },
+    async listComments(targetType, targetSlug, limit = 100) {
+      if (!owner || !repo || !targetType || !targetSlug) return [];
       const t = await tree();
       if (!t || !Array.isArray(t.tree)) return [];
       const paths = t.tree.filter((e) => e && e.type === "blob" && typeof e.path === "string" && COMMENT_PATH.test(e.path)).map((e) => e.path).sort((a, b) => basename(b).localeCompare(basename(a)));
@@ -17469,7 +17473,7 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch = globalThis.
         if (text == null) continue;
         const { frontmatter, body } = parseContentFile(text);
         if (frontmatter?.status !== "published") continue;
-        if (frontmatter?.targetType !== "share" || frontmatter?.targetSlug !== targetSlug) continue;
+        if (frontmatter?.targetType !== targetType || frontmatter?.targetSlug !== targetSlug) continue;
         out.push(commentSummary(rel, frontmatter, body));
       }
       out.sort(byCommentOldest);
@@ -18382,6 +18386,15 @@ async function listShareComments(ctx, { targetSlug, limit } = {}) {
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listShareComments !== "function") return { items: [] };
   return { items: await ctx.reader.listShareComments(targetSlug, n) ?? [] };
+}
+var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share"]);
+async function listComments(ctx, { targetType, targetSlug, limit } = {}) {
+  requireIdentity(ctx);
+  if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError("bad-request", "a valid targetType is required");
+  if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
+  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
+  if (typeof ctx.reader?.listComments !== "function") return { items: [] };
+  return { items: await ctx.reader.listComments(targetType, targetSlug, n) ?? [] };
 }
 async function readContent(ctx, { path } = {}) {
   requireIdentity(ctx);
@@ -19299,6 +19312,9 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       case "/api/share-comments":
         return ok(await listShareComments(ctx, { targetSlug: query.targetSlug, limit: Number(query.limit) || void 0 }));
       // SOW-032 discussion (Git Trees enumerate)
+      case "/api/comments":
+        return ok(await listComments(ctx, { targetType: query.targetType, targetSlug: query.targetSlug, limit: Number(query.limit) || void 0 }));
+      // SOW-041 generic discussion
       case "/api/comment":
         return ok(method === "POST" ? await publishComment(ctx, body) : await getComment(ctx, { id: query.id }));
       case "/api/comment/edit":

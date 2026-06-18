@@ -108,6 +108,19 @@ export async function listShareComments(ctx, { targetSlug, limit } = {}) {
   return { items: (await ctx.reader.listShareComments(targetSlug, n)) ?? [] };
 }
 
+// SOW-041: the generic comment thread for ANY content type (post/product/prompt/share). Powers the shared
+// <gbti-discussion> in the expanded reader; listShareComments is the 'share' specialization. Same read surface
+// (the COMMENT_PATH enumeration + the published filter), just parameterized on targetType.
+const COMMENT_TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share']);
+export async function listComments(ctx, { targetType, targetSlug, limit } = {}) {
+  requireIdentity(ctx);
+  if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError('bad-request', 'a valid targetType is required');
+  if (!targetSlug || typeof targetSlug !== 'string') throw new OperationError('bad-request', 'targetSlug is required');
+  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
+  if (typeof ctx.reader?.listComments !== 'function') return { items: [] };
+  return { items: (await ctx.reader.listComments(targetType, targetSlug, n)) ?? [] };
+}
+
 /**
  * SOW-031: read ANY published content index.md for the in-extension reader (cross-member, allowlist-gated),
  * unlike getContentItem which is own-folder-scoped for editing. The reader's `read` enforces isReadablePath

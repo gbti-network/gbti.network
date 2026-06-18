@@ -6,7 +6,7 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, listComments } from '../../client/src/operations.mjs';
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText } from '../../client/src/roles.mjs';
@@ -93,6 +93,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await listShares(ctx, { limit: Number(query.limit) || undefined })); // SOW-018 feed (Git Trees enumerate)
       case '/api/share-comments':
         return ok(await listShareComments(ctx, { targetSlug: query.targetSlug, limit: Number(query.limit) || undefined })); // SOW-032 discussion (Git Trees enumerate)
+      case '/api/comments':
+        return ok(await listComments(ctx, { targetType: query.targetType, targetSlug: query.targetSlug, limit: Number(query.limit) || undefined })); // SOW-041 generic discussion
       case '/api/comment': // SOW-027: publish a comment (POST) or read one's own for an edit prefill (GET)
         return ok(method === 'POST' ? await publishComment(ctx, body) : await getComment(ctx, { id: query.id }));
       case '/api/comment/edit':
