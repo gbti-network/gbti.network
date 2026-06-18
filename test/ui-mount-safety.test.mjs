@@ -11,6 +11,15 @@ import assert from 'node:assert/strict';
 import { GbtiBrowse } from '../client-ui/src/elements/gbti-browse.mjs';
 import { GbtiWorkspace } from '../client-ui/src/elements/gbti-workspace.mjs';
 import { GbtiActivityBell } from '../client-ui/src/elements/gbti-activity-bell.mjs';
+import { GbtiAccount } from '../client-ui/src/elements/gbti-account.mjs';
+
+// SOW-040: the account element renders the inert (no-client) + loading paths without throwing.
+test('gbti-account: render() on a fresh (un-init) instance does not throw', () => {
+  const el = new GbtiAccount();
+  assert.doesNotThrow(() => el.render());            // no client -> sign-in nudge
+  el._loaded = true; el._status = { authenticated: false };
+  assert.doesNotThrow(() => el.render());            // loaded, signed out
+});
 
 // SOW-042: the bell auto-mounts in the shell bar on every extension page, so a render throw before its state is
 // initialized would blank the whole top bar. Assert a fresh instance renders (loading + gated paths) safely.

@@ -34,6 +34,16 @@ test('status: returns identity + role resolved from house/roles.yml (async reade
   assert.equal(r.json.authenticated, true);
 });
 
+test('SOW-040: billing + referral routes (the account surface) work in the extension host', async () => {
+  const billing = await dispatch(ctxFor(), { pathname: '/api/billing' });
+  assert.equal(billing.status, 200);
+  assert.ok(billing.json.portal, 'returns the Stripe customer-portal deep-link');
+  const referral = await dispatch(ctxFor(), { pathname: '/api/referral' });
+  assert.equal(referral.status, 200);
+  assert.equal(referral.json.code, '1'); // the immutable github_id keys the payout (SOW-007)
+  assert.match(referral.json.link, /\/join\?ref=1$/);
+});
+
 test('content + item: lists + reads via the async reader, own-folder scoped', async () => {
   const ctx = ctxFor({ files: { 'members/alice/posts/hello/index.md': POST } });
   const list = await dispatch(ctx, { pathname: '/api/content' });

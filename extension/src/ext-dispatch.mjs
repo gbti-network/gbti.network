@@ -7,6 +7,7 @@
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
 import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, listComments } from '../../client/src/operations.mjs';
+import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText } from '../../client/src/roles.mjs';
@@ -107,6 +108,10 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(method === 'POST' ? await setFollow(ctx, body) : await getFollows(ctx));
       case '/api/discord-invite': // on-demand Discord guild invite, minted + cached by the Worker
         return ok(await getDiscordInvite(ctx));
+      case '/api/billing': // SOW-040: the Stripe customer-portal deep-link (no card/PCI in the client)
+        return ok(getBilling(ctx));
+      case '/api/referral': // SOW-040/007: the member's referral link (keyed on the immutable github_id)
+        return ok(getReferral(ctx));
       case '/api/prs':
         return ok({ prs: await requireRepo(ctx).listMyPulls(id.login) });
       case '/api/contributions': // SOW-028: the owner's incoming-contribution review inbox (open PRs against their folder)

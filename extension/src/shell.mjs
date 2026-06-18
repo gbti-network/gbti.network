@@ -78,6 +78,7 @@ function barHtml() {
         <a class="mi" role="menuitem" href="workspace.html#tab=prs">My pull requests</a>
         <a class="mi" role="menuitem" href="workspace.html#tab=saved">Saved</a>
         <a class="mi" role="menuitem" href="workspace.html#tab=subs">Subscriptions</a>
+        <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi mi-admin" role="menuitem" href="admin.html" hidden>Admin tools</a>
         <div class="me-sep" role="separator"></div>
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>

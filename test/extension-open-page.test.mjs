@@ -20,7 +20,7 @@ test('an allowlisted page with a safe hash resolves to page#hash (leading # opti
 });
 
 test('every menu destination is on the allowlist', () => {
-  for (const p of ['workspace.html', 'browse.html', 'shares.html', 'admin.html', 'onboarding.html']) {
+  for (const p of ['workspace.html', 'browse.html', 'shares.html', 'admin.html', 'account.html', 'onboarding.html']) {
     assert.ok(OPENABLE_PAGES.has(p), `${p} should be openable`);
     assert.equal(resolveOpenPage({ page: p }), p);
   }

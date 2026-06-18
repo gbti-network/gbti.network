@@ -14,6 +14,7 @@ const PAGES = new Set([
   'browse.html',
   'shares.html',
   'admin.html',
+  'account.html',
   'onboarding.html',
 ]);
 

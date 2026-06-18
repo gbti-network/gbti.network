@@ -15,6 +15,7 @@ import './elements/gbti-contrib-inbox.mjs';
 import './elements/gbti-contrib-review.mjs';
 import './elements/gbti-members-portal.mjs';
 import './elements/gbti-settings.mjs';
+import './elements/gbti-account.mjs';
 import './elements/gbti-admin.mjs';
 import './elements/gbti-superadmin-dashboard.mjs';
 import './elements/gbti-edit-panel.mjs';

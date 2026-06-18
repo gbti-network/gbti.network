@@ -34,6 +34,7 @@ await build({ ...common, entryPoints: [src('shares.mjs')], format: 'iife', outfi
 await build({ ...common, entryPoints: [src('workspace.mjs')], format: 'iife', outfile: out('workspace.js') }); // SOW-033 Workspace page
 await build({ ...common, entryPoints: [src('browse.mjs')], format: 'iife', outfile: out('browse.js') }); // SOW-031 Browse page
 await build({ ...common, entryPoints: [src('admin.mjs')], format: 'iife', outfile: out('admin.js') }); // SOW-036/038 Admin page
+await build({ ...common, entryPoints: [src('account.mjs')], format: 'iife', outfile: out('account.js') }); // SOW-040 Account page
 
 // SOW-025: the GBTI MCP server ships INSIDE the extension folder as a self-contained, zero-install NODE bundle.
 // Chrome NEVER loads it (it is not in manifest.json / web_accessible_resources) — the files just ride along in
