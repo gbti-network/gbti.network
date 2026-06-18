@@ -17122,10 +17122,10 @@ var commentSchema = external_exports.object({
   type: external_exports.literal("comment").default("comment"),
   id: external_exports.string().min(1),
   author: external_exports.string(),
-  targetType: external_exports.enum(["post", "product", "prompt", "share"]),
-  // SOW-032: 'share' enables the extension Shares discussion
+  targetType: external_exports.enum(["post", "product", "prompt", "share", "news"]),
+  // SOW-032: 'share'; SOW-046 D: 'news' discussion
   targetSlug: external_exports.string(),
-  // a share comment targets the composite "<author>/<shareId>"
+  // a share comment targets "<author>/<shareId>"; a news comment targets "news-<hash of guid>"
   status: STATUS.default("published"),
   visibility: VISIBILITY.default("members"),
   // SOW-044: members-only + encrypted by default; only a from-the-author intro (authorNote) on a post/product/prompt may be public
@@ -18179,6 +18179,15 @@ async function workerPublishNews({ token, signupBase, fetch = globalThis.fetch, 
   if (!res.ok) throw new NewsClientError("could not publish to Discord (" + res.status + ")");
   return res.json();
 }
+async function workerNewsDiscussed({ token, signupBase, fetch = globalThis.fetch, guid: guid3 } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const g = String(guid3 || "").trim();
+  if (!g) throw new NewsClientError("a news item is required");
+  const res = await fetch(`${base2(signupBase)}/membership/news-discussed`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ guid: g }) });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("news discussion requires a paid membership");
+  if (!res.ok) throw new NewsClientError("could not reflect the discussion (" + res.status + ")");
+  return res.json();
+}
 
 // client/src/github-app-probe.mjs
 var GH = "https://api.github.com";
@@ -18455,7 +18464,7 @@ async function listShareComments(ctx, { targetSlug, limit } = {}) {
   if (typeof ctx.reader?.listShareComments !== "function") return { items: [] };
   return { items: await ctx.reader.listShareComments(targetSlug, n) ?? [] };
 }
-var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share"]);
+var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
 async function listComments(ctx, { targetType, targetSlug, limit } = {}) {
   requireIdentity(ctx);
   if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError("bad-request", "a valid targetType is required");
@@ -18825,6 +18834,17 @@ async function publishNews(ctx, { item } = {}) {
     if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", "Sign in to publish to Discord.");
     if (err instanceof NewsClientError && /curator/i.test(err.message)) throw new OperationError("forbidden", "Publishing news to Discord requires a curator role.");
     throw new OperationError("news-failed", err?.message || "could not publish to Discord");
+  }
+}
+async function reflectNewsDiscussion(ctx, { guid: guid3 } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerNewsDiscussed({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, guid: guid3 });
+  } catch (err) {
+    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", "Sign in first.");
+    if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError("membership-required", "News discussion is a members-only perk.");
+    throw new OperationError("news-failed", err?.message || "could not reflect the discussion");
   }
 }
 async function getDiscordInvite2(ctx) {
@@ -19575,6 +19595,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(method === "POST" ? await setPrefs(ctx, body) : await getPrefs(ctx));
       case "/api/news-publish":
         return ok(await publishNews(ctx, body ?? {}));
+      case "/api/news-discussed":
+        return ok(await reflectNewsDiscussion(ctx, body ?? {}));
       case "/api/billing":
         return ok(getBilling(ctx));
       case "/api/referral":

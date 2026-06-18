@@ -2,7 +2,7 @@
 // projection, and blending news into a content+shares feed as supplementary. Deploy-independent; no DOM/client.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { UTM, utmLink, newsToItem, blendNews } from '../client-ui/src/news.mjs';
+import { UTM, utmLink, newsToItem, blendNews, newsTargetSlug } from '../client-ui/src/news.mjs';
 
 // The news worker serves publishedAt/fetchedAt as EPOCH SECONDS.
 const SEC = (iso) => Math.floor(Date.parse(iso) / 1000);
@@ -78,6 +78,17 @@ test('blendNews does not mutate inputs + tolerates empties', () => {
   assert.deepEqual(content, before);
   assert.deepEqual(blendNews(), []);
   assert.deepEqual(blendNews([], []), []);
+});
+
+test('newsTargetSlug (SOW-046 D): deterministic, slug-safe "news-<hash>", distinct per guid, validator-shaped', () => {
+  const a = newsTargetSlug('https://example.com/article-one?x=1');
+  const b = newsTargetSlug('https://example.com/article-two');
+  assert.equal(a, newsTargetSlug('https://example.com/article-one?x=1'), 'same guid -> same slug');
+  assert.notEqual(a, b, 'different guids -> different slugs');
+  // matches the CI validator rule /^news-[a-z0-9]+$/ (slug-safe; no URL chars leak through)
+  for (const s of [a, b, newsTargetSlug(''), newsTargetSlug('urn:uuid:abc-123')]) {
+    assert.match(s, /^news-[a-z0-9]+$/);
+  }
 });
 
 test('UTM is the documented extension/news campaign', () => {

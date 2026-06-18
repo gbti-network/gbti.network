@@ -178,6 +178,11 @@ function checkContent(file, owner, type) {
     if (type === 'comment' && fmc.targetType === 'share' && !/^[a-z0-9][a-z0-9-]*\/[0-9]{14}-[a-z0-9-]+$/.test(String(fmc.targetSlug || ''))) {
       errors.push(`${rel}: a share comment targetSlug must be "<author>/<shareId>" (e.g. alice/20260615120000-x). See SOW-032.`);
     }
+    // SOW-046 D: a news comment targets a deterministic slug-safe id derived from the (URL-shaped) news guid:
+    // "news-<hash>" (newsTargetSlug in client-ui/src/news.mjs). A raw guid (a URL) is never used as a targetSlug.
+    if (type === 'comment' && fmc.targetType === 'news' && !/^news-[a-z0-9]+$/.test(String(fmc.targetSlug || ''))) {
+      errors.push(`${rel}: a news comment targetSlug must be "news-<hash>" (the hashed news guid; see newsTargetSlug). See SOW-046 D.`);
+    }
     // SOW-044: comments are members-only + encrypted. A `public` comment is allowed ONLY as a from-the-author
     // intro (authorNote:true) on a post/product/prompt; a discussion reply, and ANY comment on a Share, must be
     // members. A members comment must carry its body in an encrypted envelope, never as committed plaintext.

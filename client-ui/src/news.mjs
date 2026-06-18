@@ -14,6 +14,21 @@ export const UTM = Object.freeze({ utm_source: 'gbti-network', utm_medium: 'exte
 // ms for the card-list's time helpers (which treat a bare number as ms). A missing/zero value -> null.
 const secToMs = (s) => (typeof s === 'number' && s > 0 ? s * 1000 : null);
 
+// SOW-046 D: a news item's guid is URL-shaped (not slug-safe), so derive a deterministic, slug-safe comment
+// targetSlug "news-<hash>" from it (FNV-1a 32-bit -> base36). Same guid -> same slug across every host, so the
+// reader, the comment-publish, and the CI validator agree without sharing state. The guid stays the lookup key for
+// the Discord-reflect dedupe (the client passes the guid directly); the slug is only the comment-thread key.
+export function newsTargetSlug(guid) {
+  const s = String(guid ?? '');
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  // mix in the length so two short inputs that hash alike still differ, then base36 for a compact slug-safe tail
+  return `news-${(h >>> 0).toString(36)}${(s.length % 36).toString(36)}`;
+}
+
 /** Append the GBTI UTM params to an outbound news link (preserving any existing query). A non-URL falls through. */
 export function utmLink(link, params = UTM) {
   if (typeof link !== 'string' || !link) return '';

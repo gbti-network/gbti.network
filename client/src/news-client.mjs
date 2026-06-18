@@ -73,3 +73,16 @@ export async function workerPublishNews({ token, signupBase, fetch = globalThis.
   if (!res.ok) throw new NewsClientError('could not publish to Discord (' + res.status + ')');
   return res.json();
 }
+
+// SOW-046 D: tell the Worker a member started discussing a news item, so it appends a one-time "members are
+// discussing this" notice to the curator-posted Discord message. Best-effort + idempotent server-side; a non-paid
+// caller or an item that was never posted is a clean no-op (reflected:false), never surfaced as a hard error.
+export async function workerNewsDiscussed({ token, signupBase, fetch = globalThis.fetch, guid } = {}) {
+  if (!token || !signupBase) throw new NewsClientError('not signed in');
+  const g = String(guid || '').trim();
+  if (!g) throw new NewsClientError('a news item is required');
+  const res = await fetch(`${base(signupBase)}/membership/news-discussed`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ guid: g }) });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError('news discussion requires a paid membership');
+  if (!res.ok) throw new NewsClientError('could not reflect the discussion (' + res.status + ')');
+  return res.json();
+}

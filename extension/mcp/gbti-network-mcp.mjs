@@ -17177,10 +17177,10 @@ var commentSchema = external_exports.object({
   type: external_exports.literal("comment").default("comment"),
   id: external_exports.string().min(1),
   author: external_exports.string(),
-  targetType: external_exports.enum(["post", "product", "prompt", "share"]),
-  // SOW-032: 'share' enables the extension Shares discussion
+  targetType: external_exports.enum(["post", "product", "prompt", "share", "news"]),
+  // SOW-032: 'share'; SOW-046 D: 'news' discussion
   targetSlug: external_exports.string(),
-  // a share comment targets the composite "<author>/<shareId>"
+  // a share comment targets "<author>/<shareId>"; a news comment targets "news-<hash of guid>"
   status: STATUS.default("published"),
   visibility: VISIBILITY.default("members"),
   // SOW-044: members-only + encrypted by default; only a from-the-author intro (authorNote) on a post/product/prompt may be public

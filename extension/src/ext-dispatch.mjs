@@ -6,7 +6,7 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getNews, getNewsSources, getPrefs, setPrefs, publishNews, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, listComments } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, listComments } from '../../client/src/operations.mjs';
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
@@ -127,6 +127,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(method === 'POST' ? await setPrefs(ctx, body) : await getPrefs(ctx));
       case '/api/news-publish': // SOW-046 C: curator-only "Add to Discord" (the Worker holds the bot token + re-checks)
         return ok(await publishNews(ctx, body ?? {}));
+      case '/api/news-discussed': // SOW-046 D: reflect a news discussion onto its Discord post (one-time notice)
+        return ok(await reflectNewsDiscussion(ctx, body ?? {}));
       case '/api/billing': // SOW-040: the Stripe customer-portal deep-link (no card/PCI in the client)
         return ok(getBilling(ctx));
       case '/api/referral': // SOW-040/007: the member's referral link (keyed on the immutable github_id)

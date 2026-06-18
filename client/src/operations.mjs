@@ -17,7 +17,7 @@ import {
 } from './member-activity-client.mjs';
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
-import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, NewsClientError } from './news-client.mjs'; // SOW-043/046: members-only news proxy + prefs + curator publish
+import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, NewsClientError } from './news-client.mjs'; // SOW-043/046: members-only news proxy + prefs + curator publish + discussion reflect
 import { probeReadiness } from './github-app-probe.mjs';
 import {
   nextStep as onboardingNextStep, STEPS as ONBOARDING_STEPS, forkFullName,
@@ -113,7 +113,7 @@ export async function listShareComments(ctx, { targetSlug, limit } = {}) {
 // SOW-041: the generic comment thread for ANY content type (post/product/prompt/share). Powers the shared
 // <gbti-discussion> in the expanded reader; listShareComments is the 'share' specialization. Same read surface
 // (the COMMENT_PATH enumeration + the published filter), just parameterized on targetType.
-const COMMENT_TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share']);
+const COMMENT_TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share', 'news']); // SOW-046 D: 'news' enables news discussion
 export async function listComments(ctx, { targetType, targetSlug, limit } = {}) {
   requireIdentity(ctx);
   if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError('bad-request', 'a valid targetType is required');
@@ -578,6 +578,20 @@ export async function publishNews(ctx, { item } = {}) {
     if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', 'Sign in to publish to Discord.');
     if (err instanceof NewsClientError && /curator/i.test(err.message)) throw new OperationError('forbidden', 'Publishing news to Discord requires a curator role.');
     throw new OperationError('news-failed', err?.message || 'could not publish to Discord');
+  }
+}
+
+// SOW-046 D: best-effort reflect of a news discussion onto Discord (the Worker appends a one-time notice to the
+// curator-posted message). Fire-and-forget from the UI after a comment posts; an error here never blocks the
+// comment, so map failures to a soft news-failed and let the caller ignore it.
+export async function reflectNewsDiscussion(ctx, { guid } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerNewsDiscussed({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, guid }); }
+  catch (err) {
+    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', 'Sign in first.');
+    if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError('membership-required', 'News discussion is a members-only perk.');
+    throw new OperationError('news-failed', err?.message || 'could not reflect the discussion');
   }
 }
 

@@ -6332,6 +6332,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/news.mjs
   var UTM = Object.freeze({ utm_source: "gbti-network", utm_medium: "extension", utm_campaign: "news" });
   var secToMs = (s) => typeof s === "number" && s > 0 ? s * 1e3 : null;
+  function newsTargetSlug(guid) {
+    const s = String(guid ?? "");
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return `news-${(h >>> 0).toString(36)}${(s.length % 36).toString(36)}`;
+  }
   function utmLink(link, params = UTM) {
     if (typeof link !== "string" || !link) return "";
     try {
@@ -6406,6 +6415,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .rd .note { font-size:12.5px; margin:12px 0 0; }
   .rd .note.ok { color:var(--brand); }
   .rd .note.err { color:#d4495a; }
+  .rd .disc-wrap { margin-top:20px; padding-top:16px; border-top:1px solid var(--line); }
+  .rd .disc-wrap h5 { margin:0 0 10px; font-family:var(--font-display, var(--font-body)); font-size:14px; }
 `;
   var GbtiNews = class extends GbtiElement {
     connectedCallback() {
@@ -6414,8 +6425,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._state = "loading";
       this._open = null;
       this._canCurate = false;
+      this._onComment = (e) => {
+        const it = this._open;
+        if (!it?.guid || !this.client?.newsDiscussed) return;
+        if (e?.detail?.targetSlug !== newsTargetSlug(it.guid)) return;
+        Promise.resolve(this.client.newsDiscussed(it.guid)).catch(() => {
+        });
+      };
+      document.addEventListener("gbti-comment-posted", this._onComment);
       this.render();
       this._load();
+    }
+    disconnectedCallback() {
+      super.disconnectedCallback?.();
+      if (this._onComment) document.removeEventListener("gbti-comment-posted", this._onComment);
     }
     async _load() {
       if (!this.client) {
@@ -6553,7 +6576,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const src = it.openHref ? `<a class="src" href="${esc(it.openHref)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : "";
       const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
       const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc(this._postNote.msg)}</p>` : "";
-      host.innerHTML = `<div class="rd"><button class="back" data-back type="button">← Back to feed</button><h4>${esc(it.title)}</h4>` + (by ? `<p class="by">${by}</p>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${src}${disc}</div>${note}</div>`;
+      const slug = it.guid ? newsTargetSlug(it.guid) : "";
+      const discussion = slug ? `<div class="disc-wrap"><h5>Discussion</h5><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
+      host.innerHTML = `<div class="rd"><button class="back" data-back type="button">← Back to feed</button><h4>${esc(it.title)}</h4>` + (by ? `<p class="by">${by}</p>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${src}${disc}</div>${note}${discussion}</div>`;
       this.$("[data-back]")?.addEventListener("click", () => {
         this._open = null;
         this._postNote = null;
@@ -7011,6 +7036,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-046: { categories } or { followChannel: { id, on } } -> { categories, followedChannels }
       publishNews: (item) => request("POST", "/api/news-publish", { item }),
       // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
+      newsDiscussed: (guid) => request("POST", "/api/news-discussed", { guid }),
+      // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
       postComment: (b) => request("POST", "/api/comment", b),
       // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
       editComment: (b) => request("POST", "/api/comment/edit", b),

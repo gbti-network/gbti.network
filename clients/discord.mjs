@@ -62,6 +62,12 @@ export function createDiscordClient({ botToken, fetch = globalThis.fetch, baseUr
       return req('POST', `/channels/${channelId}/messages`, { content, allowed_mentions: allowedMentions });
     },
 
+    /** Edit a message the bot posted (SOW-046 D: append a "discussion started" notice to a news post). Same
+     *  ping-safe default as postChannelMessage. Needs the message to be the bot's own. */
+    async editChannelMessage(channelId, messageId, content, { allowedMentions = { parse: [] } } = {}) {
+      return req('PATCH', `/channels/${channelId}/messages/${messageId}`, { content, allowed_mentions: allowedMentions });
+    },
+
     /**
      * Create an instant invite to a channel (on-demand guild invite). Needs CREATE_INSTANT_INVITE on the
      * channel for the bot. `maxAgeSeconds` 0 = never expires; `maxUses` 0 = unlimited; `unique: true` forces a

@@ -56,11 +56,14 @@ export async function membershipNewsPublish(request, env, { authorize = authoriz
 
   if (!env.DISCORD_BOT_TOKEN) return { status: 502, body: { error: 'discord_unavailable', message: 'Discord is not configured' } };
   const client = discord || createDiscordClient({ botToken: env.DISCORD_BOT_TOKEN, fetch });
+  const content = formatPost(item);
   let msg;
-  try { msg = await client.postChannelMessage(channelId, formatPost(item)); }
+  try { msg = await client.postChannelMessage(channelId, content); }
   catch { return { status: 502, body: { error: 'discord_failed', message: 'could not post to Discord' } }; }
 
-  const record = { channelId, messageId: msg?.id ?? null, postedAt: now(), by: auth.githubId, guid, category: item.category ?? null };
+  // Store the posted content so the SOW-046 D discussion-reflect can re-edit it (a Discord edit replaces the whole
+  // message; we append the notice to this stored body).
+  const record = { channelId, messageId: msg?.id ?? null, postedAt: now(), by: auth.githubId, guid, category: item.category ?? null, content };
   await kv.put(NEWS_POSTED_KEY(guid), JSON.stringify(record));
   return { status: 200, body: { ok: true, posted: true, channelId: record.channelId, messageId: record.messageId } };
 }
