@@ -6,7 +6,7 @@
 // the Worker, SOW-016; threads via SOW-032's listShareComments + the inert <gbti-comment-box>) is unchanged.
 // A Locked account gets a splash; the key never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { shareToItem, shareTitle, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + helpers
+import { shareToItem, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + link-host helper
 import './gbti-card-list.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the shared thread engine (factored out of this file)
 
