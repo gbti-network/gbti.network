@@ -6511,27 +6511,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var SITE9 = "https://gbti.network";
   var $ = (sel) => document.querySelector(sel);
   var authorName5 = (a) => a === "gbti" || a === "house" ? "GBTI Network" : a;
-  var avatarFor = (a) => a === "gbti" || a === "house" ? "icons/icon-32.png" : `https://github.com/${encodeURIComponent(a)}.png?size=64`;
-  var chipType = (t) => t === "post" ? "article" : t;
-  var TYPE_LABEL4 = { article: "ARTICLE", product: "PRODUCT", prompt: "PROMPT" };
   function greeting() {
     const h = (/* @__PURE__ */ new Date()).getHours();
     return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
   }
   function longDate() {
     return (/* @__PURE__ */ new Date()).toLocaleDateString(void 0, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
-  }
-  function relTime4(ms) {
-    if (!ms) return "";
-    const diff = Date.now() - ms;
-    const day = 864e5;
-    if (diff < day) return "today";
-    const d = Math.floor(diff / day);
-    if (d < 30) return `${d} day${d === 1 ? "" : "s"} ago`;
-    const mo = Math.floor(d / 30);
-    if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
-    const y = Math.floor(d / 365);
-    return `${y} year${y === 1 ? "" : "s"} ago`;
   }
   var ENTRIES = [];
   var VIEW = "latest";
@@ -6544,57 +6529,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "compact";
     }
   })();
-  var thumbUrl = (t) => /^https?:\/\//.test(t) ? t : `${SITE9}${t}`;
-  function thumbEl(e) {
-    const ct = chipType(e.type);
-    if (e.thumb) {
-      return `<span class="thumb t-${ct}">${ico(ct)}<img class="thumb-pic" src="${esc2(thumbUrl(e.thumb))}" alt="" loading="lazy" /></span>`;
-    }
-    return `<span class="thumb fallback">${ico(ct)}</span>`;
-  }
-  var chip = (type) => {
-    const ct = chipType(type);
-    return `<span class="tchip c-${ct}">${ico(ct)}${TYPE_LABEL4[ct] || ct.toUpperCase()}</span>`;
-  };
-  var lockBadge = () => `<span class="lock">${ico("lock")}Members</span>`;
-  var avatarImg = (who) => `<img class="av-img" src="${esc2(avatarFor(who))}" alt="" loading="lazy" />`;
-  var authorMeta = (who, ago) => `<span class="meta-au"><b>${esc2(authorName5(who))}</b>${ago ? ` · ${esc2(ago)}` : ""}</span>`;
   var hrefFor = (e) => e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE9}${e.url}`;
-  function renderCompact(items) {
-    return `<div class="feed-compact">` + items.map((e) => {
-      const ago = relTime4(e.publishedAt);
-      return `<a class="row-c" href="${esc2(hrefFor(e))}">
-      ${avatarImg(e.author)}${thumbEl(e)}${chip(e.type)}
-      <span class="title">${esc2(e.title)}</span>
-      <span class="right">${e.visibility === "members" ? lockBadge() : ""}${authorMeta(e.author, ago)}</span>
-    </a>`;
-    }).join("") + `</div>`;
-  }
-  function renderDetailed(items) {
-    return `<div class="feed-detailed">` + items.map((e) => {
-      const ago = relTime4(e.publishedAt);
-      return `<a class="row-d" href="${esc2(hrefFor(e))}">
-      ${thumbEl(e)}
-      <div class="d-body">
-        <div class="d-top">${chip(e.type)}${e.visibility === "members" ? lockBadge() : ""}</div>
-        <div class="title">${esc2(e.title)}</div>
-        <div class="d-meta">${avatarImg(e.author)}${authorMeta(e.author, ago)}</div>
-      </div>
-    </a>`;
-    }).join("") + `</div>`;
-  }
-  function renderCard(items) {
-    return `<div class="feed-card">` + items.map((e) => {
-      const ago = relTime4(e.publishedAt);
-      return `<a class="card-i" href="${esc2(hrefFor(e))}">
-      <div class="c-top">${chip(e.type)}${e.visibility === "members" ? lockBadge() : ""}</div>
-      <div class="title">${esc2(e.title)}</div>
-      <div class="c-meta"><span class="c-au">${avatarImg(e.author)}${authorMeta(e.author, ago)}</span></div>
-      ${thumbEl(e)}
-    </a>`;
-    }).join("") + `</div>`;
-  }
-  var RENDER = { compact: renderCompact, detailed: renderDetailed, card: renderCard };
+  var toCardItem = (e) => ({
+    type: e.type,
+    title: e.title,
+    author: e.author,
+    visibility: e.visibility,
+    thumb: e.thumb,
+    category: e.category,
+    excerpt: e.excerpt || "",
+    createdAt: e.publishedAt,
+    openHref: hrefFor(e)
+  });
   function renderFeed(filter = "") {
     const feed = $("[data-feed]");
     if (!feed) return;
@@ -6616,11 +6562,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       feed.innerHTML = `<p class="muted">${empty}</p>`;
       return;
     }
-    feed.innerHTML = (RENDER[MODE] || renderCompact)(rows);
-    feed.querySelectorAll(".thumb-pic").forEach((img) => img.addEventListener("error", () => img.remove(), { once: true }));
-    feed.querySelectorAll(".av-img").forEach((img) => img.addEventListener("error", () => {
-      img.src = "icons/icon-32.png";
-    }, { once: true }));
+    const list = document.createElement("gbti-card-list");
+    list.mode = MODE;
+    list.items = rows.map(toCardItem);
+    feed.replaceChildren(list);
   }
   function syncModeButtons() {
     document.querySelectorAll(".nt-mode").forEach((b) => b.classList.toggle("on", b.dataset.mode === MODE));

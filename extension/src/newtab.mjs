@@ -6,18 +6,13 @@
 
 import { isLockedMembership } from '../../client/src/membership.mjs';
 import { buildReadHash } from '../../client-ui/src/browse-hash.mjs';
-import { initShell, ico, esc } from './shell.mjs';
-import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here
+import { initShell } from './shell.mjs';
+import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here (also defines <gbti-card-list>)
 
 const SITE = 'https://gbti.network';
 
 const $ = (sel) => document.querySelector(sel);
 const authorName = (a) => (a === 'gbti' || a === 'house' ? 'GBTI Network' : a);
-// Author avatar: GBTI's own house content uses the extension icon; a member's avatar comes from GitHub by login.
-const avatarFor = (a) => (a === 'gbti' || a === 'house' ? 'icons/icon-32.png' : `https://github.com/${encodeURIComponent(a)}.png?size=64`);
-// The activity index uses type 'post'; the feed UI labels/colors it as an "article" (matching the site + design).
-const chipType = (t) => (t === 'post' ? 'article' : t);
-const TYPE_LABEL = { article: 'ARTICLE', product: 'PRODUCT', prompt: 'PROMPT' };
 
 function greeting() {
   const h = new Date().getHours();
@@ -25,18 +20,6 @@ function greeting() {
 }
 function longDate() {
   return new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-}
-function relTime(ms) {
-  if (!ms) return '';
-  const diff = Date.now() - ms;
-  const day = 86400000;
-  if (diff < day) return 'today';
-  const d = Math.floor(diff / day);
-  if (d < 30) return `${d} day${d === 1 ? '' : 's'} ago`;
-  const mo = Math.floor(d / 30);
-  if (mo < 12) return `${mo} month${mo === 1 ? '' : 's'} ago`;
-  const y = Math.floor(d / 365);
-  return `${y} year${y === 1 ? '' : 's'} ago`;
 }
 
 let ENTRIES = [];
@@ -48,60 +31,25 @@ let FOLLOWS_LOADED = false;
 // SOW-039: the persisted feed view mode (compact | detailed | card).
 let MODE = (() => { try { return localStorage.getItem('gbti-nt-mode') || 'compact'; } catch (e) { return 'compact'; } })();
 
-// ---- feed atoms ----
-const thumbUrl = (t) => (/^https?:\/\//.test(t) ? t : `${SITE}${t}`);
-function thumbEl(e) {
-  const ct = chipType(e.type);
-  if (e.thumb) {
-    // The type glyph sits behind; the optimized content image overlays it. If the image errs, a post-render
-    // listener removes it and the glyph + gradient remain (so a row never shows a broken image).
-    return `<span class="thumb t-${ct}">${ico(ct)}<img class="thumb-pic" src="${esc(thumbUrl(e.thumb))}" alt="" loading="lazy" /></span>`;
-  }
-  return `<span class="thumb fallback">${ico(ct)}</span>`;
-}
-const chip = (type) => { const ct = chipType(type); return `<span class="tchip c-${ct}">${ico(ct)}${TYPE_LABEL[ct] || ct.toUpperCase()}</span>`; };
-const lockBadge = () => `<span class="lock">${ico('lock')}Members</span>`;
-const avatarImg = (who) => `<img class="av-img" src="${esc(avatarFor(who))}" alt="" loading="lazy" />`;
-const authorMeta = (who, ago) => `<span class="meta-au"><b>${esc(authorName(who))}</b>${ago ? ` · ${esc(ago)}` : ''}</span>`;
-// SOW-031: each feed item opens IN the extension reader (browse.html deep-link), falling back to the site URL
-// only when the entry carries no repo path (older index, defensive). buildReadHash takes the RAW type.
+// SOW-031/042: each feed item opens IN the extension reader (browse.html deep-link), falling back to the site URL
+// only when the entry carries no repo path (older index, defensive). buildReadHash takes the RAW type. The per-mode
+// row/card markup + its atoms (thumb, chip, lock, meta) now live in the shared <gbti-card-list> (SOW-042), so the
+// activity feed and Browse render through ONE source of truth (the owner's "two stylings" complaint).
 const hrefFor = (e) => (e.path ? `browse.html#${buildReadHash(e.type, e.path)}` : `${SITE}${e.url}`);
 
-function renderCompact(items) {
-  return `<div class="feed-compact">` + items.map((e) => {
-    const ago = relTime(e.publishedAt);
-    return `<a class="row-c" href="${esc(hrefFor(e))}">
-      ${avatarImg(e.author)}${thumbEl(e)}${chip(e.type)}
-      <span class="title">${esc(e.title)}</span>
-      <span class="right">${e.visibility === 'members' ? lockBadge() : ''}${authorMeta(e.author, ago)}</span>
-    </a>`;
-  }).join('') + `</div>`;
-}
-function renderDetailed(items) {
-  return `<div class="feed-detailed">` + items.map((e) => {
-    const ago = relTime(e.publishedAt);
-    return `<a class="row-d" href="${esc(hrefFor(e))}">
-      ${thumbEl(e)}
-      <div class="d-body">
-        <div class="d-top">${chip(e.type)}${e.visibility === 'members' ? lockBadge() : ''}</div>
-        <div class="title">${esc(e.title)}</div>
-        <div class="d-meta">${avatarImg(e.author)}${authorMeta(e.author, ago)}</div>
-      </div>
-    </a>`;
-  }).join('') + `</div>`;
-}
-function renderCard(items) {
-  return `<div class="feed-card">` + items.map((e) => {
-    const ago = relTime(e.publishedAt);
-    return `<a class="card-i" href="${esc(hrefFor(e))}">
-      <div class="c-top">${chip(e.type)}${e.visibility === 'members' ? lockBadge() : ''}</div>
-      <div class="title">${esc(e.title)}</div>
-      <div class="c-meta"><span class="c-au">${avatarImg(e.author)}${authorMeta(e.author, ago)}</span></div>
-      ${thumbEl(e)}
-    </a>`;
-  }).join('') + `</div>`;
-}
-const RENDER = { compact: renderCompact, detailed: renderDetailed, card: renderCard };
+// Project an activity-index entry onto the <gbti-card-list> item shape. The RAW type ('post') is preserved so the
+// card glyph + "Article" label + deep-link hash all resolve the same way Browse does.
+const toCardItem = (e) => ({
+  type: e.type,
+  title: e.title,
+  author: e.author,
+  visibility: e.visibility,
+  thumb: e.thumb,
+  category: e.category,
+  excerpt: e.excerpt || '',
+  createdAt: e.publishedAt,
+  openHref: hrefFor(e),
+});
 
 function renderFeed(filter = '') {
   const feed = $('[data-feed]');
@@ -128,12 +76,11 @@ function renderFeed(filter = '') {
     feed.innerHTML = `<p class="muted">${empty}</p>`;
     return;
   }
-  feed.innerHTML = (RENDER[MODE] || renderCompact)(rows);
-
-  // CSP-safe fallbacks: a content image that 404s drops to the type glyph; an author avatar that 404s drops to
-  // the GBTI icon.
-  feed.querySelectorAll('.thumb-pic').forEach((img) => img.addEventListener('error', () => img.remove(), { once: true }));
-  feed.querySelectorAll('.av-img').forEach((img) => img.addEventListener('error', () => { img.src = 'icons/icon-32.png'; }, { once: true }));
+  // The shared card-list owns the markup, the three density modes, and the CSP-safe broken-image fallback.
+  const list = document.createElement('gbti-card-list');
+  list.mode = MODE;
+  list.items = rows.map(toCardItem);
+  feed.replaceChildren(list);
 }
 
 /** Reflect the active view mode onto the switcher buttons. */
