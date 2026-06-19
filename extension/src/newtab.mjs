@@ -369,7 +369,22 @@ function init() {
   const deepRead = readFromHash();
   if (deepRead) openReader({ type: TYPE, path: deepRead });
 
-  $('[data-filter]')?.addEventListener('input', (e) => renderFeed(e.target.value));
+  // Collapsible filter search: the icon expands an inline input; it collapses on blur-when-empty or Escape, and the
+  // icon itself toggles (clearing + closing an open field). The input keeps data-filter so the feed wiring is unchanged.
+  const srch = $('[data-srch]');
+  const srchIn = $('[data-filter]');
+  const srchBtn = $('[data-search-toggle]');
+  const expandSearch = () => { srch?.classList.add('open'); srchBtn?.setAttribute('aria-expanded', 'true'); srchIn?.focus(); };
+  const collapseSearch = () => { srch?.classList.remove('open'); srchBtn?.setAttribute('aria-expanded', 'false'); };
+  srchBtn?.addEventListener('click', () => {
+    if (srch?.classList.contains('open')) {
+      if (srchIn?.value) { srchIn.value = ''; renderFeed(''); } // clear the active filter as it closes
+      collapseSearch();
+    } else expandSearch();
+  });
+  srchIn?.addEventListener('input', (e) => renderFeed(e.target.value));
+  srchIn?.addEventListener('blur', () => { if (!srchIn.value) collapseSearch(); });
+  srchIn?.addEventListener('keydown', (e) => { if (e.key === 'Escape') { srchIn.value = ''; renderFeed(''); collapseSearch(); } });
 
   // The in-place reader's Back button returns to the feed.
   $('[data-reader-back]')?.addEventListener('click', closeReader);

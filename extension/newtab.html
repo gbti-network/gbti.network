@@ -25,14 +25,8 @@
     .setup .s-go { display: inline-flex; align-items: center; flex: none; background: var(--green); color: #fff; font-weight: 800; padding: 10px 18px; border-radius: var(--r); white-space: nowrap; }
     .setup:hover .s-go { background: var(--green-700); }
 
-    .nt-search { margin-top: 16px; display: flex; align-items: center; gap: 12px; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 13px 18px; max-width: 720px; transition: border-color .15s, box-shadow .15s; }
-    .nt-search:focus-within { border-color: var(--green); box-shadow: 0 0 0 4px var(--green-tint); }
-    .nt-search svg { width: 18px; height: 18px; color: var(--fg-mute); flex: none; }
-    .nt-search input { flex: 1; border: 0; outline: 0; background: none; font-family: var(--f-mono); font-size: 14px; color: var(--fg); }
-    .nt-search input::placeholder { color: var(--fg-mute); }
-
-    /* feed header: tabs + view-mode switch */
-    .nt-feedhead { display: flex; align-items: center; gap: 18px; margin-top: 26px; flex-wrap: wrap; }
+    /* feed header: tabs + collapsible search + view-mode switch */
+    .nt-feedhead { display: flex; align-items: center; gap: 12px; margin-top: 26px; flex-wrap: wrap; }
     .nt-tabs { display: flex; gap: 2px; background: var(--paper-3); border: 1.5px solid var(--line); border-radius: var(--r); padding: 3px; }
     .nt-tab { font-family: var(--f-sans); font-weight: 600; font-size: 14px; color: var(--fg-soft); background: none; border: 0; cursor: pointer; padding: 8px 16px; border-radius: 6px; transition: all .14s; }
     .nt-tab:hover { color: var(--fg); }
@@ -42,6 +36,19 @@
     .nt-mode:hover { color: var(--fg); }
     .nt-mode.on { background: var(--paper); color: var(--green-700); box-shadow: var(--sh-sm); }
     .nt-mode svg { width: 17px; height: 17px; }
+
+    /* Collapsible search: a square icon button by default (sits right of the Latest/Following tabs); clicking it
+       expands an inline filter input. Blur-when-empty or Escape collapses it; the icon click also clears + closes. */
+    .nt-srch { display: inline-flex; align-items: center; height: 38px; border: 1.5px solid var(--line); background: var(--paper); border-radius: var(--r); overflow: hidden; transition: border-color .15s, box-shadow .15s; }
+    .nt-srch.open { border-color: var(--green); box-shadow: 0 0 0 4px var(--green-tint); }
+    .nt-srch-btn { width: 36px; height: 100%; flex: none; display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; color: var(--fg-mute); cursor: pointer; transition: color .14s; }
+    .nt-srch-btn:hover { color: var(--fg); }
+    .nt-srch.open .nt-srch-btn { color: var(--green-700); }
+    .nt-srch-btn svg { width: 17px; height: 17px; }
+    .nt-srch-in { width: 0; padding: 0; border: 0; outline: 0; background: none; font-family: var(--f-mono); font-size: 14px; color: var(--fg); transition: width .2s ease, padding .2s ease; }
+    .nt-srch.open .nt-srch-in { width: 210px; padding-right: 12px; }
+    .nt-srch-in::placeholder { color: var(--fg-mute); }
+    @media (max-width: 650px) { .nt-srch.open .nt-srch-in { width: 150px; } }
 
     /* SOW-042: the type filter chip-row. It is the MOBILE counterpart to the left rail, so it is HIDDEN by
        default (the rail is the filter on wider screens) and only shown under 650px, where the rail is hidden.
@@ -95,15 +102,15 @@
         <span class="date" data-date></span>
       </div>
 
-      <label class="nt-search">
-        <span data-ico="search"></span>
-        <input type="search" data-filter placeholder="Filter activity" autocomplete="off" aria-label="Filter activity" />
-      </label>
-
       <div class="nt-feedhead">
         <div class="nt-tabs" role="tablist" aria-label="Activity view">
           <button class="nt-tab on" type="button" data-tab="latest" role="tab" aria-selected="true">Latest</button>
           <button class="nt-tab" type="button" data-tab="following" role="tab" aria-selected="false">Following</button>
+        </div>
+        <!-- Collapsible filter search: collapsed to an icon, expands inline to the right of the tabs. -->
+        <div class="nt-srch" data-srch>
+          <button class="nt-srch-btn" type="button" data-search-toggle data-ico="search" aria-label="Search activity" aria-expanded="false"></button>
+          <input type="search" class="nt-srch-in" data-filter placeholder="Filter activity" autocomplete="off" aria-label="Filter activity" />
         </div>
         <div class="nt-modes" role="group" aria-label="View mode">
           <button class="nt-mode" type="button" data-mode="compact" data-ico="mCompact" title="Compact" aria-label="Compact view"></button>
