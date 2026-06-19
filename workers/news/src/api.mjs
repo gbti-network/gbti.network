@@ -26,6 +26,7 @@ export function publicItem(i) {
     source: i.source,
     title: i.title,
     link: i.link,
+    image: i.image ?? null, // source article image (RSS enclosure/media), or null when the feed carried none
     summary: i.summary,
     digest: i.digest, // SOW-046 A: the AI-generated 1-2 sentence summary (absent until analyzed; falls back to summary)
     category: i.category,

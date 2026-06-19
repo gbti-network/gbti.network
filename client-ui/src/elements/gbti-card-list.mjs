@@ -69,15 +69,18 @@ const CSS = `
   .row-d:hover .title { color:var(--accent); }
   .row-d .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:2px 0 4px; }
 
-  /* MODE card — boxed grid */
+  /* MODE card — boxed grid, image-led (mirrors the /prompts grid card: 4:3 cover image up top, body below) */
   .card { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:13px; }
-  .card-i { position:relative; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 14px 0; cursor:pointer; overflow:hidden; transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .card-i { position:relative; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:0; cursor:pointer; overflow:hidden; transition:border-color .14s, box-shadow .14s, transform .14s; }
   .card-i:hover { border-color:var(--accent); transform:translateY(-2px); }
+  /* The lead media: full-bleed at the top, a 4:3 box like /prompts .va-lead, object-fit cover. The card rounds
+     only its top corners (overflow:hidden), so the image's BOTTOM edge is square (no rounded bottom). */
+  .card-i .media { width:100%; aspect-ratio:4 / 3; height:auto; border-radius:0; flex:none; }
+  .card-i .cbody { display:flex; flex-direction:column; padding:14px; }
   .card-i .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .card-i:hover .title { color:var(--accent); }
-  .card-i .meta { margin:0 0 12px; white-space:normal; }
-  .card-i .media { margin:0 -14px; width:calc(100% + 28px); height:118px; border-radius:0; }
+  .card-i .meta { margin:0; white-space:normal; }
 
   /* SEPARATION — member contributions stand out from the (non-member, high-volume) News stream: each member
      type gets a 3px type-color accent bar + a faint tint + a colored chip; NEWS stays plain so it recedes.
@@ -125,7 +128,10 @@ class GbtiCardList extends GbtiElement {
     return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, 'row-d')}${this._media(it)}<div class="body"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ''}${this._meta(it)}</div>${this._close(it)}`).join('') + `</div>`;
   }
   _card(items) {
-    return `<div class="card">` + items.map((it, i) => `${this._open(it, i, 'card-i')}<div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}${this._media(it)}${this._close(it)}`).join('') + `</div>`;
+    // Image-led card (matches the /prompts grid card): the media leads at the TOP, full-bleed + 4:3, then a
+    // padded body. Because the media meets the body below it, its bottom edge stays square (the card only rounds
+    // the top corners) — no rounded bottom on the image.
+    return `<div class="card">` + items.map((it, i) => `${this._open(it, i, 'card-i')}${this._media(it)}<div class="cbody"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`).join('') + `</div>`;
   }
 
   render() {

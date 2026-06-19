@@ -47,6 +47,12 @@ test('newsToItem prefers the AI digest over the feed excerpt, falling back when 
   assert.equal(newsToItem(news()).excerpt, 'A blurb'); // no digest -> feed excerpt
 });
 
+test('newsToItem maps the source article image onto thumb (SOW-046 F), null when absent', () => {
+  assert.equal(newsToItem({ ...news(), image: 'https://cdn.ex.com/a.jpg' }).thumb, 'https://cdn.ex.com/a.jpg');
+  assert.equal(newsToItem({ ...news(), ogImage: 'https://cdn.ex.com/og.png' }).thumb, 'https://cdn.ex.com/og.png');
+  assert.equal(newsToItem(news()).thumb, null); // feed carried no image -> the card-list shows the news glyph
+});
+
 test('newsToItem degrades gracefully (no link, no title)', () => {
   const it = newsToItem({ source: 'Src' });
   assert.equal(it.title, 'Src');     // falls back to source

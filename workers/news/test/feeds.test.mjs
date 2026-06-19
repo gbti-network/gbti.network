@@ -43,6 +43,7 @@ test('parseFeed handles RSS 2.0', () => {
     source: 'ex',
     title: 'First & Best',
     link: 'https://ex.com/1',
+    image: null, // SOW-046 F: no enclosure/media on this item
     summary: 'Hello world',
     contentText: 'Hello world', // SOW-046 A: transient article text for the AI summarizer (here = the description)
     publishedAt: toEpochSeconds('Mon, 15 Jun 2026 12:00:00 GMT'),
@@ -107,4 +108,65 @@ test('toEpochSeconds parses RFC-822 and RFC-3339, null on junk', () => {
   assert.equal(typeof toEpochSeconds('Mon, 15 Jun 2026 12:00:00 GMT'), 'number');
   assert.equal(toEpochSeconds('not a date'), null);
   assert.equal(toEpochSeconds(''), null);
+});
+
+// SOW-046 F: extract the source article image from the item's own markup (no extra fetch). Covers an image
+// <enclosure>, Media RSS <media:thumbnail>/<media:content> (incl. a <media:group>), and an Atom enclosure link.
+const RSS_IMG = `<?xml version="1.0"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel>
+  <item>
+    <title>Enclosure image</title>
+    <link>https://ex.com/e</link>
+    <guid>https://ex.com/e</guid>
+    <enclosure url="https://cdn.ex.com/e.jpg" type="image/jpeg" length="12345"/>
+  </item>
+  <item>
+    <title>Media thumbnail</title>
+    <link>https://ex.com/m</link>
+    <guid>https://ex.com/m</guid>
+    <media:thumbnail url="https://cdn.ex.com/m.png"/>
+  </item>
+  <item>
+    <title>Media group content</title>
+    <link>https://ex.com/g</link>
+    <guid>https://ex.com/g</guid>
+    <media:group><media:content url="https://cdn.ex.com/g.webp" medium="image"/></media:group>
+  </item>
+  <item>
+    <title>Non-image enclosure is ignored</title>
+    <link>https://ex.com/p</link>
+    <guid>https://ex.com/p</guid>
+    <enclosure url="https://cdn.ex.com/p.mp3" type="audio/mpeg"/>
+  </item>
+  <item>
+    <title>No media at all</title>
+    <link>https://ex.com/n</link>
+    <guid>https://ex.com/n</guid>
+  </item>
+</channel></rss>`;
+
+const ATOM_IMG = `<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <title>Atom enclosure image</title>
+    <link href="https://ex.com/a1" rel="alternate"/>
+    <link href="https://cdn.ex.com/a1.jpg" rel="enclosure" type="image/jpeg"/>
+    <id>tag:ex.com,2026:a1</id>
+  </entry>
+</feed>`;
+
+test('parseFeed extracts an item image from enclosure / media:* (SOW-046 F)', () => {
+  const items = parseFeed(RSS_IMG, 'src');
+  const by = Object.fromEntries(items.map((i) => [i.title, i.image]));
+  assert.equal(by['Enclosure image'], 'https://cdn.ex.com/e.jpg');
+  assert.equal(by['Media thumbnail'], 'https://cdn.ex.com/m.png');
+  assert.equal(by['Media group content'], 'https://cdn.ex.com/g.webp');
+  assert.equal(by['Non-image enclosure is ignored'], null); // audio enclosure -> no image
+  assert.equal(by['No media at all'], null);
+});
+
+test('parseFeed extracts an Atom enclosure-link image (SOW-046 F)', () => {
+  const [it] = parseFeed(ATOM_IMG, 'src');
+  assert.equal(it.image, 'https://cdn.ex.com/a1.jpg');
+  assert.equal(it.link, 'https://ex.com/a1'); // the alternate link still wins for the article URL
 });

@@ -69,6 +69,36 @@ export function toEpochSeconds(raw) {
   return Number.isNaN(ms) ? null : Math.floor(ms / 1000);
 }
 
+/** Best-effort image URL for a feed item, taken from the item's OWN markup (no extra HTTP fetch): an image
+ *  <enclosure>, an Atom <link rel="enclosure" type="image/...">, or Media RSS <media:thumbnail>/<media:content>
+ *  (incl. a <media:group> wrapper). Returns '' when the item carries no usable image. This is the cheap source
+ *  of a news card's picture; true per-article og:image would need a fetch + HTML parse per item (heavier). */
+function pickImage(node) {
+  if (!node || typeof node !== 'object') return '';
+  const ok = (u) => typeof u === 'string' && /^https?:\/\//i.test(u.trim()) && !/\.svg(\?|#|$)/i.test(u.trim());
+  // <enclosure url="..." type="image/..."> (RSS 2.0), enclosure may repeat.
+  for (const enc of toArray(node.enclosure)) {
+    if (enc && typeof enc === 'object' && /^image\//i.test(enc['@_type'] || '') && ok(enc['@_url'])) return enc['@_url'].trim();
+  }
+  // Atom enclosure link: <link rel="enclosure" type="image/..." href="...">.
+  for (const l of toArray(node.link)) {
+    if (l && typeof l === 'object' && l['@_rel'] === 'enclosure' && /^image\//i.test(l['@_type'] || '') && ok(l['@_href'])) return l['@_href'].trim();
+  }
+  // Media RSS: prefer a thumbnail, then a content image; both may sit under a <media:group>.
+  const grp = (node['media:group'] && typeof node['media:group'] === 'object') ? node['media:group'] : node;
+  for (const key of ['media:thumbnail', 'media:content']) {
+    for (const m of toArray(grp[key])) {
+      if (!m || typeof m !== 'object') continue;
+      const url = m['@_url'];
+      const medium = m['@_medium'] || '';
+      const type = m['@_type'] || '';
+      const looksImage = key === 'media:thumbnail' || medium === 'image' || /^image\//i.test(type) || (!medium && !type);
+      if (looksImage && ok(url)) return url.trim();
+    }
+  }
+  return '';
+}
+
 /** Pick the best href from an Atom <link>, which may be a string, one object, or an array of them. */
 function atomLink(link) {
   const arr = toArray(link);
@@ -106,6 +136,7 @@ export function parseFeed(xml, sourceId) {
       summary: it.description ?? it.summary,
       content: it['content:encoded'] ?? it.description ?? it.summary,
       date: it.pubDate ?? it['dc:date'] ?? it.published,
+      image: pickImage(it),
     }, sourceId)).filter(Boolean);
   }
 
@@ -120,6 +151,7 @@ export function parseFeed(xml, sourceId) {
       summary: e.summary ?? e.content,
       content: e.content ?? e.summary,
       date: e.published ?? e.updated,
+      image: pickImage(e),
     }, sourceId)).filter(Boolean);
   }
 
@@ -132,7 +164,7 @@ export function parseFeed(xml, sourceId) {
 const MAX_CONTENT_CHARS = 4000;
 
 /** Build a normalized item; drops items with no usable link+title (they can't be deduped or shown). */
-function normalize({ rawGuid, title, link, summary, content, date }, sourceId) {
+function normalize({ rawGuid, title, link, summary, content, date, image }, sourceId) {
   const cleanLink = text(link).trim();
   const cleanTitle = cleanText(title, 300);
   if (!cleanLink || !cleanTitle) return null;
@@ -142,6 +174,7 @@ function normalize({ rawGuid, title, link, summary, content, date }, sourceId) {
     source: sourceId,
     title: cleanTitle,
     link: cleanLink,
+    image: (typeof image === 'string' && image) ? image : null, // source article image (RSS media), or null
     summary: cleanText(summary ?? content, 500),
     // TRANSIENT (stripped before persisting in ingest): the fuller article text for AI summarization at ingest.
     // Prefers the feed's full content over the short excerpt, so many feeds get a real summary with NO extra fetch.
