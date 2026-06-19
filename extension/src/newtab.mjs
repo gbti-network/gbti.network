@@ -96,7 +96,9 @@ function renderFeed(filter = '') {
   // ('news') = news BLENDED with member content + Shares; the single-type directories narrow to their type.
   const { wantNews, wantShares, narrow } = feedSources(TYPE);
   let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
-  if (wantNews && MEMBERSHIP === 'paid' && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem)); // news is a paid perk
+  // SOW-046 G: strip openHref so a news card opens the in-extension expanded reader (card-open) instead of bouncing
+  // to the source; the reader still offers an "Open source" link (it rebuilds the UTM link from item.link).
+  if (wantNews && MEMBERSHIP === 'paid' && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n)); // news is a paid perk
   if (narrow) rows = rows.filter((e) => e.type === TYPE);
   // SOW-046 E: the Following view drills into followed MEMBERS' content/shares AND followed NEWS CHANNELS' news
   // (a news item is kept when its source is in the member's followedChannels).
@@ -126,16 +128,16 @@ function renderFeed(filter = '') {
   feed.replaceChildren(list);
 }
 
-/** Open a content/Share item IN the page reader (gbti-reader handles post/product/prompt/share), hiding the feed;
- *  Back restores it. The feed IS the browser now, so there is no Browse-page bounce. News items are <a> links
- *  (outbound UTM) and never reach here. gbti-reader is defined by mountPageClient (client-ui), called in init(). */
+/** Open an item IN the page reader, hiding the feed; Back restores it. The feed IS the browser now (no Browse-page
+ *  bounce). content/Share -> <gbti-reader>; News -> <gbti-news-reader> (SOW-046 G: the expanded news view with
+ *  publisher detail + Follow-publisher + discussion). Both are defined by mountPageClient (client-ui), called in init(). */
 function openReader(item) {
   if (!item) return;
   const fv = $('[data-feedview]');
   const rv = $('[data-readerview]');
   const host = $('[data-reader]');
   if (!fv || !rv || !host) return;
-  const r = document.createElement('gbti-reader');
+  const r = document.createElement(item.type === 'news' ? 'gbti-news-reader' : 'gbti-reader');
   host.replaceChildren(r);
   r.open(item);
   fv.hidden = true;
@@ -375,8 +377,8 @@ function init() {
   const srch = $('[data-srch]');
   const srchIn = $('[data-filter]');
   const srchBtn = $('[data-search-toggle]');
-  const expandSearch = () => { srch?.classList.add('open'); srchBtn?.setAttribute('aria-expanded', 'true'); srchIn?.focus(); };
-  const collapseSearch = () => { srch?.classList.remove('open'); srchBtn?.setAttribute('aria-expanded', 'false'); };
+  const expandSearch = () => { srch?.classList.add('open'); srchBtn?.classList.add('on'); srchBtn?.setAttribute('aria-expanded', 'true'); srchIn?.focus(); };
+  const collapseSearch = () => { srch?.classList.remove('open'); srchBtn?.classList.remove('on'); srchBtn?.setAttribute('aria-expanded', 'false'); };
   srchBtn?.addEventListener('click', () => {
     if (srch?.classList.contains('open')) {
       if (srchIn?.value) { srchIn.value = ''; renderFeed(''); } // clear the active filter as it closes

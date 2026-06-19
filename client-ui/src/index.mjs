@@ -36,6 +36,7 @@ import './elements/gbti-subscriptions.mjs';
 import './elements/gbti-card-list.mjs';
 import './elements/gbti-activity-bell.mjs';
 import './elements/gbti-news.mjs';
+import './elements/gbti-news-reader.mjs'; // SOW-046 G: the in-extension expanded news view (opened from the feed)
 import './elements/gbti-discussion.mjs';
 import './elements/gbti-reader.mjs';
 import './elements/gbti-browse.mjs';
