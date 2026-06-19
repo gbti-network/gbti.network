@@ -2140,15 +2140,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .row-d:hover .title { color:var(--accent); }
   .row-d .ex { display:block; color:var(--muted); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin:2px 0 4px; }
 
-  /* MODE card — boxed grid */
+  /* MODE card — boxed grid, image-led (mirrors the /prompts grid card: 4:3 cover image up top, body below) */
   .card { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:13px; }
-  .card-i { position:relative; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 14px 0; cursor:pointer; overflow:hidden; transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .card-i { position:relative; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:0; cursor:pointer; overflow:hidden; transition:border-color .14s, box-shadow .14s, transform .14s; }
   .card-i:hover { border-color:var(--accent); transform:translateY(-2px); }
+  /* The lead media: full-bleed at the top, a 4:3 box like /prompts .va-lead, object-fit cover. The card rounds
+     only its top corners (overflow:hidden), so the image's BOTTOM edge is square (no rounded bottom). */
+  .card-i .media { width:100%; aspect-ratio:4 / 3; height:auto; border-radius:0; flex:none; }
+  .card-i .cbody { display:flex; flex-direction:column; padding:14px; }
   .card-i .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .card-i:hover .title { color:var(--accent); }
-  .card-i .meta { margin:0 0 12px; white-space:normal; }
-  .card-i .media { margin:0 -14px; width:calc(100% + 28px); height:118px; border-radius:0; }
+  .card-i .meta { margin:0; white-space:normal; }
 
   /* SEPARATION — member contributions stand out from the (non-member, high-volume) News stream: each member
      type gets a 3px type-color accent bar + a faint tint + a colored chip; NEWS stays plain so it recedes.
@@ -2210,7 +2213,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
     }
     _card(items) {
-      return `<div class="card">` + items.map((it, i) => `${this._open(it, i, "card-i")}<div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}${this._media(it)}${this._close(it)}`).join("") + `</div>`;
+      return `<div class="card">` + items.map((it, i) => `${this._open(it, i, "card-i")}${this._media(it)}<div class="cbody"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
     }
     render() {
       if (!this._items) return;
@@ -5363,6 +5366,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var lc2 = (s) => String(s || "").toLowerCase();
   var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
+  var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
   var megaIco = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4z" fill="currentColor"/></svg>`;
   var CSS16 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); padding:32px 28px; max-width:680px; margin:0 auto; }
@@ -5408,6 +5412,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .stepnav .grow { flex:1; }
   .btn.ghost { background:transparent; color:var(--fg-soft); border:1.5px solid var(--line); }
   .btn.ghost:hover { background:var(--hover); color:var(--fg); border-color:var(--line-2); }
+  /* SOW-048: the forced-sign-in (login splash) mode. */
+  .btn.signin { width:100%; box-sizing:border-box; padding:13px; font-size:15px; }
+  .codebox { text-align:center; }
+  .codebox .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+  .codeval { display:flex; align-items:center; justify-content:center; gap:10px; margin:8px 0 14px; flex-wrap:wrap; }
+  .codeval code { font-family:var(--font-mono, monospace); font-size:22px; font-weight:700; letter-spacing:.14em; background:var(--hover); border:1px solid var(--line); border-radius:8px; padding:8px 14px; }
+  .codeval .btn { padding:8px 13px; font-size:13px; }
 `;
   var GbtiWelcome = class extends GbtiElement {
     connectedCallback() {
@@ -5417,13 +5428,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.load();
     }
     async load() {
+      this._authGate = this.hasAttribute("auth-gate");
+      let s = null;
       try {
-        const s = await this.client?.status?.();
+        s = await this.client?.status?.();
         this._membership = s?.membership ?? "unknown";
         this._own = lc2(s?.identity?.username || s?.identity?.login);
       } catch {
         this._membership = "unknown";
         this._own = "";
+      }
+      this._authenticated = Boolean(s?.authenticated && (s?.identity?.login || s?.identity?.username));
+      if (this._authGate && !this._authenticated) {
+        this._loaded = true;
+        this.render();
+        return;
       }
       try {
         const res = await fetch(`${SITE4}/members-index.json`, { cache: "no-cache" });
@@ -5454,9 +5473,49 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._loaded = true;
       this.render();
     }
+    // SOW-048: feed the device-flow user code into the splash (host calls this from the gbti:welcome-signin handler).
+    setCode(userCode, verificationUri) {
+      this._code = userCode || null;
+      if (verificationUri) this._verifyUri = verificationUri;
+      this.render();
+    }
+    // SOW-048: the login splash (signed-out, auth-gate mode). Sign in with GitHub via the device flow; once the host
+    // hands back a user code we show it + the github.com/login/device link. Authentication, not payment — a new
+    // visitor with a GitHub account can sign in and lands in the normal (membership-gated) app afterward.
+    _renderSignedOut() {
+      const code = this._code;
+      const verify = this._verifyUri || "https://github.com/login/device";
+      const action = code ? `<div class="codebox">
+           <p class="sub">Enter this code at GitHub to finish signing in:</p>
+           <div class="codeval"><code>${esc(code)}</code><button class="btn ghost" data-copy type="button">Copy</button></div>
+           <a class="btn" href="${esc(verify)}" target="_blank" rel="noopener">Open github.com/login/device</a>
+           <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
+         </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
+      this.set(this.css(CSS16) + `
+      <div class="head">
+        <span class="ic">${check2}</span>
+        <h2>Sign in to GBTI Network</h2>
+        <p>The developer co-op. Sign in with your GitHub account to publish articles, products, and prompts, follow members, read the members-only news, and join the community.</p>
+      </div>
+      <div class="card">
+        ${action}
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE4}/membership/" target="_blank" rel="noopener">Become a member</a> &mdash; the trial is free.</p>
+      </div>`);
+      this.on("[data-auth-signin]", "click", () => this.emit("gbti:welcome-signin"));
+      this.on("[data-copy]", "click", () => {
+        try {
+          navigator.clipboard?.writeText(code);
+        } catch {
+        }
+      });
+    }
     render() {
       if (!this._loaded) {
         this.set(this.css(CSS16) + `<p class="loading">Setting up your welcome...</p>`);
+        return;
+      }
+      if (this._authGate && !this._authenticated) {
+        this._renderSignedOut();
         return;
       }
       const ph = phaseLabel(this._membership);
@@ -6383,7 +6442,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       author: n.source || "News",
       source: n.source || null,
       visibility: "members",
-      thumb: null,
+      // SOW-046 F: the source article's image (RSS enclosure/media:* surfaced by the news worker's /feed). The
+      // card-list resolves an absolute URL straight through (resolveAsset), so a news card shows the article image
+      // and falls back to the news glyph when the feed carried none.
+      thumb: n.image || n.ogImage || null,
       category: n.category ?? null,
       excerpt: n.digest || n.summary || "",
       // SOW-046 A: prefer the AI summary; fall back to the feed excerpt
@@ -7270,11 +7332,53 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (signinBtn) signinBtn.hidden = false;
     }
   }
+  function shouldGate(status) {
+    return !(status?.authenticated && status?.identity?.login);
+  }
   async function loadShellAccount(root = document.querySelector("[data-shell]")) {
     const status = await api("/api/status");
-    const signedIn = Boolean(status?.authenticated && status?.identity?.login);
+    const signedIn = !shouldGate(status);
     if (root) applyAccount(root, signedIn ? status : null);
     return signedIn ? status : null;
+  }
+  function shellLogin(onPrompt) {
+    return new Promise((resolve, reject) => {
+      const onMsg = (m) => {
+        if (m?.type === "login-prompt") onPrompt?.({ userCode: m.userCode, verificationUri: m.verificationUri });
+      };
+      try {
+        chrome.runtime.onMessage.addListener(onMsg);
+      } catch {
+        reject(new Error("messaging unavailable"));
+        return;
+      }
+      chrome.runtime.sendMessage({ type: "login" }).then((r) => {
+        chrome.runtime.onMessage.removeListener(onMsg);
+        r?.ok ? resolve(r) : reject(new Error(r?.error || "sign-in failed"));
+      }).catch((e) => {
+        chrome.runtime.onMessage.removeListener(onMsg);
+        reject(e);
+      });
+    });
+  }
+  function mountAuthGate(root) {
+    if (!root || document.querySelector(".gbti-authwrap")) return;
+    document.documentElement.setAttribute("data-unauth", "1");
+    const wrap = document.createElement("div");
+    wrap.className = "gbti-authwrap";
+    const el = document.createElement("gbti-welcome");
+    el.setAttribute("auth-gate", "");
+    wrap.appendChild(el);
+    root.appendChild(wrap);
+    let signingIn = false;
+    el.addEventListener("gbti:welcome-signin", () => {
+      if (signingIn) return;
+      signingIn = true;
+      shellLogin(({ userCode, verificationUri }) => el.setCode?.(userCode, verificationUri)).then(() => location.reload()).catch(() => {
+        el.setCode?.(null);
+        signingIn = false;
+      });
+    });
   }
   function setTheme(t) {
     document.documentElement.setAttribute("data-theme", t);
@@ -7393,7 +7497,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     wireApps(root);
     wireAccount(root);
     wireCompose(root);
-    loadShellAccount(root);
+    loadShellAccount(root).then((status) => {
+      if (!status) mountAuthGate(root);
+    });
     return { ico, loadShellAccount: () => loadShellAccount(root) };
   }
 

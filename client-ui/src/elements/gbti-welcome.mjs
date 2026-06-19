@@ -20,6 +20,8 @@ const STEPS = ['discord', 'follow'];
 const lc = (s) => String(s || '').toLowerCase();
 const check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
+// SOW-048: the GitHub mark for the forced-sign-in (login splash) mode.
+const githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
 const megaIco = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4z" fill="currentColor"/></svg>`;
 
 const CSS = `
@@ -66,6 +68,13 @@ const CSS = `
   .stepnav .grow { flex:1; }
   .btn.ghost { background:transparent; color:var(--fg-soft); border:1.5px solid var(--line); }
   .btn.ghost:hover { background:var(--hover); color:var(--fg); border-color:var(--line-2); }
+  /* SOW-048: the forced-sign-in (login splash) mode. */
+  .btn.signin { width:100%; box-sizing:border-box; padding:13px; font-size:15px; }
+  .codebox { text-align:center; }
+  .codebox .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
+  .codeval { display:flex; align-items:center; justify-content:center; gap:10px; margin:8px 0 14px; flex-wrap:wrap; }
+  .codeval code { font-family:var(--font-mono, monospace); font-size:22px; font-weight:700; letter-spacing:.14em; background:var(--hover); border:1px solid var(--line); border-radius:8px; padding:8px 14px; }
+  .codeval .btn { padding:8px 13px; font-size:13px; }
 `;
 
 class GbtiWelcome extends GbtiElement {
@@ -77,15 +86,21 @@ class GbtiWelcome extends GbtiElement {
   }
 
   async load() {
-    // Phase + own identity (to exclude self from the follow list).
+    // SOW-048: in auth-gate mode this element doubles as the extension's LOGIN SPLASH. Phase + own identity + the
+    // authenticated flag all come from the one status read.
+    this._authGate = this.hasAttribute('auth-gate');
+    let s = null;
     try {
-      const s = await this.client?.status?.();
+      s = await this.client?.status?.();
       this._membership = s?.membership ?? 'unknown';
       this._own = lc(s?.identity?.username || s?.identity?.login);
     } catch {
       this._membership = 'unknown';
       this._own = '';
     }
+    this._authenticated = Boolean(s?.authenticated && (s?.identity?.login || s?.identity?.username));
+    // Signed-out + auth-gate: show ONLY the sign-in splash; skip every member fetch (they 403 / are pointless).
+    if (this._authGate && !this._authenticated) { this._loaded = true; this.render(); return; }
     // The randomized members list (shuffled ONCE so paging does not churn). Fail gracefully if the site is not
     // deployed yet (the JSON 404s) — show a friendly notice, never crash.
     try {
@@ -116,8 +131,44 @@ class GbtiWelcome extends GbtiElement {
     this.render();
   }
 
+  // SOW-048: feed the device-flow user code into the splash (host calls this from the gbti:welcome-signin handler).
+  setCode(userCode, verificationUri) {
+    this._code = userCode || null;
+    if (verificationUri) this._verifyUri = verificationUri;
+    this.render();
+  }
+
+  // SOW-048: the login splash (signed-out, auth-gate mode). Sign in with GitHub via the device flow; once the host
+  // hands back a user code we show it + the github.com/login/device link. Authentication, not payment — a new
+  // visitor with a GitHub account can sign in and lands in the normal (membership-gated) app afterward.
+  _renderSignedOut() {
+    const code = this._code;
+    const verify = this._verifyUri || 'https://github.com/login/device';
+    const action = code
+      ? `<div class="codebox">
+           <p class="sub">Enter this code at GitHub to finish signing in:</p>
+           <div class="codeval"><code>${esc(code)}</code><button class="btn ghost" data-copy type="button">Copy</button></div>
+           <a class="btn" href="${esc(verify)}" target="_blank" rel="noopener">Open github.com/login/device</a>
+           <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
+         </div>`
+      : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
+    this.set(this.css(CSS) + `
+      <div class="head">
+        <span class="ic">${check}</span>
+        <h2>Sign in to GBTI Network</h2>
+        <p>The developer co-op. Sign in with your GitHub account to publish articles, products, and prompts, follow members, read the members-only news, and join the community.</p>
+      </div>
+      <div class="card">
+        ${action}
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a> &mdash; the trial is free.</p>
+      </div>`);
+    this.on('[data-auth-signin]', 'click', () => this.emit('gbti:welcome-signin'));
+    this.on('[data-copy]', 'click', () => { try { navigator.clipboard?.writeText(code); } catch { /* clipboard blocked */ } });
+  }
+
   render() {
     if (!this._loaded) { this.set(this.css(CSS) + `<p class="loading">Setting up your welcome...</p>`); return; }
+    if (this._authGate && !this._authenticated) { this._renderSignedOut(); return; } // SOW-048 login splash
     const ph = phaseLabel(this._membership);
     const up = ph.upgrade ? `<a class="up" href="${SITE}/membership/" target="_blank" rel="noopener">Upgrade to publish</a>` : '';
     // SOW-041: one to-do per screen. Show the head once, then the current step's card + a bottom nav.

@@ -32,6 +32,15 @@ a { color: inherit; text-decoration: none; }
 
 .nt { min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; grid-template-rows: auto 1fr; }
 
+/* ===================== SOW-048: forced-sign-in auth gate ===================== */
+/* With no GitHub token the shell shows ONLY the <gbti-welcome> login splash; everything else is hidden. */
+html[data-unauth] [data-shell] > *:not(.gbti-authwrap) { display: none !important; }
+/* Defensive: hide any body-level overlay (e.g. the Share compose modal) while the gate is up — its trigger is
+   already hidden, but this guarantees nothing escapes the wall. */
+html[data-unauth] .compose-modal { display: none !important; }
+.gbti-authwrap { position: fixed; inset: 0; z-index: 250; overflow: auto; background: var(--paper-2);
+  display: grid; place-items: center; padding: 28px 16px; box-sizing: border-box; }
+
 /* ============================ top bar ============================ */
 .nt-bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 13px 24px; border-bottom: 1.5px solid var(--line); background: var(--paper); }
 .nt-brand { display: flex; align-items: center; gap: 11px; font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-spacing: -.01em; }

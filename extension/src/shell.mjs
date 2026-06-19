@@ -7,6 +7,7 @@
 
 import '../../client-ui/src/elements/gbti-share-composer.mjs'; // SOW-041 P5: the top-bar "+" mounts this composer
 import '../../client-ui/src/elements/gbti-activity-bell.mjs'; // SOW-042 P3: the top-bar activity bell
+import '../../client-ui/src/elements/gbti-welcome.mjs'; // SOW-048: dual-purposed as the forced-sign-in login splash
 
 const SITE = 'https://gbti.network';
 const DAILYDEV_ID = 'jlmpjdjjbgclbocgajdjefcidcncaied';
@@ -141,12 +142,52 @@ function applyAccount(root, status) {
   }
 }
 
-/** Load /api/status and reflect it into the account control. Returns the status (or null). */
+/** SOW-048: the gate decision (PURE, testable). A signed-in caller has both a token (authenticated) and a GitHub
+ *  login. Everything else (signed out, malformed status) is gated to the login splash. AUTH, not membership. */
+export function shouldGate(status) {
+  return !(status?.authenticated && status?.identity?.login);
+}
+
+/** Load /api/status and reflect it into the account control. Returns the status (or null when not signed in). */
 export async function loadShellAccount(root = document.querySelector('[data-shell]')) {
   const status = await api('/api/status');
-  const signedIn = Boolean(status?.authenticated && status?.identity?.login);
+  const signedIn = !shouldGate(status);
   if (root) applyAccount(root, signedIn ? status : null);
   return signedIn ? status : null;
+}
+
+// SOW-048: run the GitHub App device flow via the background worker (same contract as onboarding/page-client).
+// `onPrompt` receives the user code to display; resolves on success, rejects on failure/cancel.
+function shellLogin(onPrompt) {
+  return new Promise((resolve, reject) => {
+    const onMsg = (m) => { if (m?.type === 'login-prompt') onPrompt?.({ userCode: m.userCode, verificationUri: m.verificationUri }); };
+    try { chrome.runtime.onMessage.addListener(onMsg); } catch { reject(new Error('messaging unavailable')); return; }
+    chrome.runtime.sendMessage({ type: 'login' })
+      .then((r) => { chrome.runtime.onMessage.removeListener(onMsg); r?.ok ? resolve(r) : reject(new Error(r?.error || 'sign-in failed')); })
+      .catch((e) => { chrome.runtime.onMessage.removeListener(onMsg); reject(e); });
+  });
+}
+
+/** SOW-048: the forced-sign-in gate. With no token, hide the app (data-unauth) and overlay ONLY the dual-purpose
+ *  <gbti-welcome> login splash. Its Sign in button runs the device flow; on success we reload into the signed-in
+ *  app (initShell re-runs, now signed in, no gate). Idempotent. */
+function mountAuthGate(root) {
+  if (!root || document.querySelector('.gbti-authwrap')) return;
+  document.documentElement.setAttribute('data-unauth', '1');
+  const wrap = document.createElement('div');
+  wrap.className = 'gbti-authwrap';
+  const el = document.createElement('gbti-welcome');
+  el.setAttribute('auth-gate', '');
+  wrap.appendChild(el);
+  root.appendChild(wrap);
+  let signingIn = false; // guard against click-spam starting parallel device flows (+ leaking login-prompt listeners)
+  el.addEventListener('gbti:welcome-signin', () => {
+    if (signingIn) return;
+    signingIn = true;
+    shellLogin(({ userCode, verificationUri }) => el.setCode?.(userCode, verificationUri))
+      .then(() => location.reload())                          // signed in -> re-run initShell -> the app renders
+      .catch(() => { el.setCode?.(null); signingIn = false; }); // failed/cancelled -> allow another attempt
+  });
 }
 
 function setTheme(t) {
@@ -227,6 +268,8 @@ export function initShell({ active = null } = {}) {
   wireApps(root);
   wireAccount(root);
   wireCompose(root);
-  loadShellAccount(root);
+  // SOW-048: gate AFTER the status round-trip. Signed in -> the app stays; signed out -> the login splash overlays
+  // it (data-unauth hides the rest). Kept off the synchronous path so initShell's return shape is unchanged.
+  loadShellAccount(root).then((status) => { if (!status) mountAuthGate(root); });
   return { ico, loadShellAccount: () => loadShellAccount(root) };
 }
