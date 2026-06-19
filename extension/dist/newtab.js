@@ -5416,12 +5416,36 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var TYPE_LABEL2 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share", news: "News" };
   var lc2 = (s) => String(s || "").toLowerCase();
   var authorName = (a) => lc2(a) === "gbti" || lc2(a) === "house" ? "GBTI Network" : a;
-  function relTime(v) {
+  function faviconFor(urlOrHost) {
+    let host = String(urlOrHost || "").trim();
+    if (!host) return "";
+    try {
+      host = new URL(host).hostname;
+    } catch {
+      host = host.replace(/^https?:\/\//i, "").split("/")[0];
+    }
+    if (!host) return "";
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
+  }
+  function avatarFor(item = {}) {
+    if (lc2(item.type) === "news") {
+      return { src: faviconFor(item.link || item.openHref), title: item.source || item.author || "News" };
+    }
+    const a = lc2(item.author);
+    const login = a === "gbti" || a === "house" ? "gbti-network" : item.author;
+    return { src: login ? `https://github.com/${encodeURIComponent(login)}.png?size=48` : "", title: authorName(item.author) };
+  }
+  function relTime(v, now = Date.now()) {
     if (!v) return "";
     const ms = typeof v === "number" ? v : Date.parse(v);
     if (!ms) return "";
-    const d = Math.floor((Date.now() - ms) / 864e5);
-    if (d < 1) return "today";
+    const diff = now - ms;
+    if (diff < 6e4) return "just now";
+    const mins = Math.floor(diff / 6e4);
+    if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+    const hrs = Math.floor(diff / 36e5);
+    if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+    const d = Math.floor(diff / 864e5);
     if (d < 30) return `${d} day${d === 1 ? "" : "s"} ago`;
     const mo = Math.floor(d / 30);
     if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
@@ -5440,8 +5464,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); background:var(--hover); border:1px solid transparent; border-radius:6px; padding:3px 8px; white-space:nowrap; flex:none; }
   .lock { display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px 2px 6px; white-space:nowrap; }
   .lock svg { width:11px; height:11px; }
-  .meta { font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); white-space:nowrap; }
+  .meta { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); white-space:nowrap; }
   .meta b { color:var(--fg); font-weight:500; }
+  /* SOW-049: the meta avatar (member github avatar / news publisher favicon). The name/source is the title tooltip. */
+  .av { position:relative; width:20px; height:20px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center;
+    background:var(--hover); color:var(--muted); font-size:10px; font-weight:700; line-height:1; }
+  .av img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .av .ini { user-select:none; }
+  .meta .ago { color:var(--muted); }
   .title { font-weight:600; color:var(--fg); }
   .empty { color:var(--muted); padding:18px 2px; }
   a, .open { color:inherit; text-decoration:none; }
@@ -5459,6 +5489,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .row-c .right { display:flex; align-items:center; gap:10px; flex:none; }
 
   .row-d { display:grid; grid-template-columns:62px 1fr; gap:15px; align-items:center; padding:14px 8px 14px 17px; }
+  .row-d.no-media { grid-template-columns:1fr; } /* SOW-049: news has no left media -> the title spans full width */
   .row-d .media { width:62px; height:62px; border-radius:10px; }
   .row-d .body { min-width:0; }
   .row-d .top { display:flex; align-items:center; gap:9px; margin:0 0 4px; }
@@ -5508,6 +5539,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return this._mode || "detailed";
     }
     _media(item) {
+      if (lc2(item.type) === "news") return "";
       const g = glyphFor(item.category, item.type);
       const thumb = item.thumb ? resolveAsset(item.thumb) : null;
       const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : "";
@@ -5519,14 +5551,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _lock(item) {
       return item.visibility === "members" ? `<span class="lock">${lockIco}Members</span>` : "";
     }
+    // SOW-049: the meta leads with a small avatar (member -> github avatar; news -> publisher favicon); the name/source
+    // is the avatar's hover tooltip (title), not a persistent label. Broken images fall back to an initial disc.
     _meta(item) {
       const ago = relTime(item.createdAt ?? item.publishedAt);
-      return `<span class="meta"><b>${esc(authorName(item.author))}</b>${ago ? ` · ${esc(ago)}` : ""}</span>`;
+      const av = avatarFor(item);
+      const ini = esc((av.title || "?").trim().charAt(0).toUpperCase() || "?");
+      const img = av.src ? `<img class="avimg" src="${esc(av.src)}" alt="" loading="lazy">` : "";
+      return `<span class="meta"><span class="av" title="${esc(av.title)}"><span class="ini">${ini}</span>${img}</span>${ago ? `<span class="ago">${esc(ago)}</span>` : ""}</span>`;
     }
     _open(item, i, cls) {
       const t = lc2(item.type);
       const accent = t && t !== "news" ? ` style="--cbar:${esc(typeAccent(t))}"` : "";
-      const attrs = `class="${cls}" data-card="${i}" data-type="${esc(t)}"${accent}`;
+      const nomedia = t === "news" ? " no-media" : "";
+      const attrs = `class="${cls}${nomedia}" data-card="${i}" data-type="${esc(t)}"${accent}`;
       return item.openHref ? `<a ${attrs} href="${esc(item.openHref)}">` : `<div ${attrs} role="button" tabindex="0">`;
     }
     _close(item) {
@@ -5552,7 +5590,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
-          if (t?.tagName === "IMG" && t.classList?.contains("cimg")) t.remove();
+          if (t?.tagName === "IMG" && (t.classList?.contains("cimg") || t.classList?.contains("avimg"))) t.remove();
         }, true);
         this._wiredErr = true;
       }
