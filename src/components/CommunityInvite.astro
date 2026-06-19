@@ -27,7 +27,7 @@ const perks = [
 ];
 const isMemberAuthored = author !== 'gbti';
 ---
-<section class="dark" style="max-width:820px;margin:48px auto 0;border-radius:var(--r-lg);overflow:hidden;padding:40px">
+<section class="dark community-invite" style="max-width:820px;margin:48px auto 0;border-radius:var(--r-lg);overflow:hidden;padding:40px">
   <div class="chip" style="display:inline-flex"><span class="chip-dot"></span> A creator co-op, powered by Git</div>
   <h2 class="h2 mt16" style="color:#fff">Join the GBTI Network</h2>
   <p class="lead mt12">
@@ -53,6 +53,13 @@ const isMemberAuthored = author !== 'gbti';
     )}
   </div>
 </section>
+<style is:global>
+  /* SOW-050: the Join CTA is irrelevant to an ACTIVE member (paid or trial). member-signal.ts toggles
+     html.is-gbti-member-active when the extension reports a paid/trial membership; hide the invite for them.
+     Presentation-only (the signal is untrusted by design; the CTA is cosmetic). Visitors + lapsed accounts,
+     for whom joining/renewing matters, still see it. */
+  html.is-gbti-member-active .community-invite { display: none; }
+</style>
 {refCode && (
   <script
     define:vars={{ refCode, via: via ?? '', cookie: REF_COOKIE, viaCookie: REF_VIA_COOKIE, days: REF_COOKIE_DAYS }}

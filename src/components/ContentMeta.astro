@@ -1,0 +1,49 @@
+---
+// SOW-050: the unified author/byline for every content detail page (articles / products / prompts). One look:
+// avatar + author link + published date. Pass `stack` (the SOW-008/009 author+contributors+commenters set) to
+// render stacked avatars (articles); omit it for a single author avatar (products / prompts). `center` + `dark`
+// adapt it to each page's header (centered card, dark product banner, left-aligned prompt header). It renders the
+// BYLINE only, never the <h1> (the page keeps data-gbti-region="title" on its own title).
+import { getCollection } from 'astro:content';
+import { authorDisplay, authorHref, authorAvatar, formatDate } from '../lib/authors';
+import type { AvatarItem } from '../lib/avatars';
+import Avatar from './Avatar.astro';
+import StackedAvatars from './StackedAvatars.astro';
+
+interface Props {
+  author: string;
+  publishedAt?: Date;
+  stack?: AvatarItem[]; // when provided, render the stacked avatar set instead of a single author avatar
+  center?: boolean;
+  dark?: boolean;
+}
+const { author, publishedAt, stack, center = false, dark = false } = Astro.props;
+const prof = (await getCollection('profile')).find((p) => p.data.username === author)?.data;
+const name = prof?.displayName ?? authorDisplay(author);
+const avatar = authorAvatar(author, prof?.avatar);
+const href = authorHref(author);
+---
+<div class:list={['content-meta', center && 'cm-center', dark && 'cm-dark']}>
+  {stack && stack.length
+    ? <StackedAvatars items={stack} size="md" />
+    : <a href={href} class="cm-av" aria-label={name}><Avatar item={{ name, avatar }} size={40} class="rounded-full" /></a>}
+  <div class="cm-txt">
+    <a href={href} class="cm-name">{name}</a>
+    {publishedAt && <time class="cm-date" datetime={publishedAt.toISOString()}>{formatDate(publishedAt)}</time>}
+  </div>
+</div>
+
+<style>
+  .content-meta { display: flex; align-items: center; gap: 12px; }
+  .cm-center { justify-content: center; }
+  .cm-av { flex: none; display: inline-flex; }
+  .cm-txt { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; min-width: 0; }
+  .cm-center .cm-txt { justify-content: center; }
+  .cm-name { font-family: var(--f-display); font-weight: 700; font-size: 16px; color: var(--fg); }
+  .cm-name:hover { color: var(--green-700); }
+  .cm-date { font-family: var(--f-mono); font-size: 13px; color: var(--fg-mute); }
+  /* On the dark product banner, the byline sits on ink: lift the text to the on-dark palette. */
+  .cm-dark .cm-name { color: #fff; }
+  .cm-dark .cm-name:hover { color: var(--green-mint); }
+  .cm-dark .cm-date { color: var(--on-dark-mute, rgba(255,255,255,.7)); }
+</style>

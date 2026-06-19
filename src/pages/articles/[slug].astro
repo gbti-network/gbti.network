@@ -4,19 +4,16 @@ import { Image } from 'astro:assets';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Prose from '../../components/blog/Prose.astro';
 import RelatedPosts from '../../components/blog/RelatedPosts.astro';
-import Comments from '../../components/blog/Comments.astro';
 import ContributionCredits from '../../components/blog/ContributionCredits.astro';
 import OpenHistory from '../../components/blog/OpenHistory.astro';
-import AuthorBox from '../../components/blog/AuthorBox.astro';
-import CommunityInvite from '../../components/CommunityInvite.astro';
+import ContentMeta from '../../components/ContentMeta.astro';
+import ContentActions from '../../components/ContentActions.astro';
+import ContentFooter from '../../components/ContentFooter.astro';
 import VideoEmbed from '../../components/VideoEmbed.astro';
-import StackedAvatars from '../../components/StackedAvatars.astro';
 import EditHooks from '../../components/EditHooks.astro';
-import FavoriteButton from '../../components/FavoriteButton.astro';
 import { favoriteCount } from '../../lib/favorites';
 import LockedBody from '../../components/LockedBody.astro';
 import { hasPublicPage, isStub } from '../../lib/content';
-import { authorDisplay, authorHref, formatDate } from '../../lib/authors';
 import { buildAvatarIndex, avatarStack } from '../../lib/avatars';
 
 export async function getStaticPaths() {
@@ -28,6 +25,7 @@ const { post } = Astro.props;
 const d = post.data;
 const { Content } = await render(post);
 const taxonomy = [...d.categories, ...d.tags];
+const postUrl = new URL(`/articles/${d.slug}/`, Astro.site ?? 'https://gbti.network').href;
 
 const avatarIndex = buildAvatarIndex(await getCollection('profile'));
 const stack = avatarStack({
@@ -48,14 +46,8 @@ const stack = avatarStack({
           <h1 data-gbti-region="title" class="h1">{d.title}</h1>
 
           <div class="mt-20 flex col items-center g12">
-            <div class="flex items-center g12">
-              <StackedAvatars items={stack} size="md" />
-              <a href={authorHref(d.author)} class="link" style="font-size:18px">
-                {authorDisplay(d.author)}
-              </a>
-            </div>
-            {d.publishedAt && <time class="body-sm muted" datetime={d.publishedAt.toISOString()}>{formatDate(d.publishedAt)}</time>}
-            <FavoriteButton targetType="post" targetSlug={d.slug} count={favoriteCount('post', d.slug)} size="sm" />
+            <ContentMeta author={d.author} publishedAt={d.publishedAt} stack={stack} center />
+            <ContentActions type="post" slug={d.slug} title={d.title} url={postUrl} categories={d.categories} count={favoriteCount('post', d.slug)} />
           </div>
 
           {taxonomy.length > 0 && (
@@ -81,9 +73,7 @@ const stack = avatarStack({
         </div>
       </article>
 
-      <CommunityInvite author={d.author} via={`post:${d.slug}`} />
-      <Comments targetType="post" targetSlug={d.slug} />
-      <AuthorBox author={d.author} publishedAt={d.publishedAt} />
+      <ContentFooter type="post" slug={d.slug} author={d.author} publishedAt={d.publishedAt} />
       <OpenHistory filePath={post.filePath} author={d.author} contributors={d.contributors} />
       <RelatedPosts post={post} />
       <ContributionCredits contributors={d.contributors} />

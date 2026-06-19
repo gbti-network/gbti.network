@@ -3,16 +3,15 @@ import { getCollection, render } from 'astro:content';
 import { Image } from 'astro:assets';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Prose from '../../components/blog/Prose.astro';
-import Comments from '../../components/blog/Comments.astro';
 import EditHooks from '../../components/EditHooks.astro';
 import LockedBody from '../../components/LockedBody.astro';
 import Avatar from '../../components/Avatar.astro';
+import ContentMeta from '../../components/ContentMeta.astro';
+import ContentActions from '../../components/ContentActions.astro';
+import ContentFooter from '../../components/ContentFooter.astro';
 import { hasPublicPage, isStub } from '../../lib/content';
 import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
 import { breadcrumb, categoryLabel } from '../../lib/taxonomy';
-import { buildShare } from '../../lib/share';
-import FavoriteButton from '../../components/FavoriteButton.astro';
-import CollectionButton from '../../components/CollectionButton.astro';
 import { favoriteCount } from '../../lib/favorites';
 
 export async function getStaticPaths() {
@@ -41,15 +40,8 @@ const LINK_LABELS: Record<string, string> = {
 };
 const linkLabel = (l: { type: string; label?: string }) => l.label ?? LINK_LABELS[l.type] ?? l.type;
 
-// Social share targets (see .data/ops/share-ops). The text + hashtags are built by the central share
-// schema (src/lib/share.ts): a conversational lead, the type's base tags, and the content's category
-// tag, shaped per platform. X / WhatsApp / SMS use documented intent URLs; Copy and Substack are
-// JS-driven (Substack has no public prefill intent, so we copy the payload + open the composer).
+// Canonical URL for the unified share control (ContentActions -> ShareRow builds the per-platform links).
 const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.network').href;
-const share = buildShare({ type: 'prompt', title: d.title, url: shareUrl, categories: d.categories });
-const xHref = share.x;
-const waHref = share.whatsapp;
-const smsHref = share.sms;
 ---
 <BaseLayout title={d.title} description={d.exampleOutput}>
   <section class="band tint">
@@ -66,11 +58,13 @@ const smsHref = share.sms;
           ))}
         </nav>
         <h1 data-gbti-region="title" class="h1 mt12">{d.title}</h1>
-        <p class="body-sm mt16" style="color:var(--fg-soft)">by <a href={authorHref(d.author)} class="link" style="display:inline-flex">{authorName}</a>{paid && <span class="chip chip-green" style="margin-left:10px">Paid</span>}</p>
+        <div class="mt16 flex items-center g12 wrap-w">
+          <ContentMeta author={d.author} publishedAt={d.publishedAt} />
+          {paid && <span class="chip chip-green">Paid</span>}
+        </div>
         {(d.shortDescription || d.exampleOutput) && <p class="lead mt20" style="max-width:70ch">{d.shortDescription || d.exampleOutput}</p>}
-        <div class="mt20 flex items-center g12">
-          <FavoriteButton targetType="prompt" targetSlug={d.slug} count={favoriteCount('prompt', d.slug)} />
-          <CollectionButton targetType="prompt" targetSlug={d.slug} />
+        <div class="mt20">
+          <ContentActions type="prompt" slug={d.slug} title={d.title} url={shareUrl} categories={d.categories} count={favoriteCount('prompt', d.slug)} />
         </div>
       </header>
 
@@ -156,28 +150,6 @@ const smsHref = share.sms;
             </div>
           )}
 
-          <!-- SHARE (see .data/ops/share-ops) -->
-          <div class="card" style="padding:22px">
-            <p class="eyebrow">Share</p>
-            <div class="share-row mt16">
-              <a class="share-btn" href={xHref} target="_blank" rel="noopener" aria-label="Share on X" data-tooltip="Share on X">
-                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-              </a>
-              <button type="button" class="share-btn" data-substack data-share-text={share.substackText} aria-label="Share on Substack (copies the link)" data-tooltip="Copies the link, opens Notes">
-                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.54 24V10.812H1.46zM22.54 0H1.46v2.836h21.08V0z"/></svg>
-              </button>
-              <a class="share-btn" href={waHref} target="_blank" rel="noopener" aria-label="Share on WhatsApp" data-tooltip="Share on WhatsApp">
-                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-              </a>
-              <a class="share-btn" href={smsHref} aria-label="Share via SMS" data-tooltip="Share via SMS">
-                <svg viewBox="0 0 24 24"><use href="#ico-chat"/></svg>
-              </a>
-              <button type="button" class="share-btn" data-copy-link data-url={shareUrl} aria-label="Copy link" data-tooltip="Copy link">
-                <svg viewBox="0 0 24 24"><use href="#ico-link"/></svg>
-              </button>
-            </div>
-          </div>
-
           {links.length > 0 && (
             <div class="card" style="padding:22px">
               <p class="eyebrow">Resources</p>
@@ -197,7 +169,7 @@ const smsHref = share.sms;
         </aside>
       </div>
 
-      <Comments targetType="prompt" targetSlug={d.slug} author={d.author} wide />
+      <ContentFooter type="prompt" slug={d.slug} author={d.author} publishedAt={d.publishedAt} />
     </div>
   </section>
   <EditHooks type="prompt" owner={d.author} slug={d.slug} />
@@ -236,14 +208,6 @@ const smsHref = share.sms;
     /* Raw markdown view: preformatted but wrapping, so long prompt lines never force horizontal scroll. */
     .prompt-raw { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--f-mono); font-size: 13px; line-height: 1.65; color: var(--fg); background: transparent; }
     .prompt-view[hidden] { display: none; }
-    /* share buttons */
-    .share-row { display: flex; flex-wrap: wrap; gap: 8px; }
-    .share-btn { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
-      border: 1.5px solid var(--line-2); border-radius: var(--r-sm); background: var(--paper); color: var(--fg-soft);
-      cursor: pointer; transition: border-color .15s, color .15s, transform .15s; }
-    .share-btn:hover { border-color: var(--ink); color: var(--ink); transform: translateY(-1px); }
-    .share-btn.copied { border-color: var(--green); color: var(--green-700); }
-    .share-btn svg { width: 18px; height: 18px; }
     .detail-aside .chip { text-decoration: none; }
     .detail-aside a.chip { transition: border-color .15s ease, color .15s ease; }
     .detail-aside a.chip:hover { border-color: var(--green); color: var(--green-700); }
@@ -271,21 +235,7 @@ const smsHref = share.sms;
       }
     });
 
-    // Share: Copy link (clipboard + a brief "copied" state) and Substack (no public prefill intent, so we
-    // copy the title+link to the clipboard, then open the Notes composer for the reader to paste).
-    document.querySelectorAll<HTMLButtonElement>('[data-copy-link]').forEach((b) => b.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(b.dataset.url ?? '');
-        b.classList.add('copied');
-        const prev = b.dataset.tooltip; // flip the custom tooltip to a brief confirmation
-        b.dataset.tooltip = 'Copied!';
-        setTimeout(() => { b.classList.remove('copied'); if (prev) b.dataset.tooltip = prev; }, 1500);
-      } catch {}
-    }));
-    document.querySelectorAll<HTMLButtonElement>('[data-substack]').forEach((b) => b.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(b.dataset.shareText ?? ''); b.classList.add('copied'); setTimeout(() => b.classList.remove('copied'), 1500); } catch {}
-      window.open('https://substack.com/notes', '_blank', 'noopener');
-    }));
+    // (Social share copy/Substack handlers now live in the shared ShareRow component.)
 
     // Visual <-> Markdown toggle for the prompt body.
     document.querySelectorAll<HTMLElement>('.prompt-block').forEach((block) => {

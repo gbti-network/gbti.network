@@ -66,6 +66,8 @@ export function applyMemberSignalClasses(s: MemberSignal | null): void {
   const el = document.documentElement;
   el.classList.toggle('is-gbti-member', !!s);
   el.classList.toggle('is-gbti-paid', s?.membership === 'paid');
+  // SOW-050: an ACTIVE member is paid OR on trial (both are "members" for whom the Join CTA is irrelevant).
+  el.classList.toggle('is-gbti-member-active', s?.membership === 'paid' || s?.membership === 'trialing');
   if (s && s.role) el.dataset.gbtiRole = s.role;
   else delete el.dataset.gbtiRole;
 }
