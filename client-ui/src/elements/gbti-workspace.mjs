@@ -14,6 +14,7 @@ import './gbti-saved.mjs';
 import './gbti-subscriptions.mjs';
 
 const TABS = [
+  { id: 'overview', label: 'Overview' }, // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
   { id: 'post', label: 'Articles', type: 'post' },
   { id: 'prompt', label: 'Prompts', type: 'prompt' },
   { id: 'product', label: 'Products', type: 'product' },
@@ -22,6 +23,10 @@ const TABS = [
   { id: 'saved', label: 'Saved' }, // SOW-037: favorites + collections
   { id: 'subs', label: 'Subscriptions' }, // SOW-037: follows + membership
 ];
+
+// SOW-052: the overview tiles — each is a section of the WorkBench. `count` is filled from the loaded data;
+// `href` deep-links (the workbench rail + the element both honor #tab=). Settings/Admin are separate pages.
+const MEMBERSHIP_LABEL = { paid: 'Paid member', trial: 'Trial', trialing: 'Trial', expired: 'Expired', cancelled: 'Cancelled', none: 'Not a member', banned: 'Suspended', unknown: 'Not signed in' };
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -48,6 +53,20 @@ const CSS = `
   .empty { color:var(--muted); padding:18px 2px; }
   .back { margin:0 0 14px; }
   a { color:var(--accent); }
+  /* SOW-052: the Overview hub */
+  .ov-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid var(--line); border-radius:12px; padding:14px 16px; background:var(--panel); margin:0 0 16px; }
+  .ov-hero b { font-size:15px; }
+  .ov-hero .muted { font-size:12.5px; }
+  .ov-draft { font-size:12.5px; color:var(--accent); font-weight:700; }
+  .ov-tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; margin:0 0 22px; }
+  .ov-tile { display:flex; flex-direction:column; gap:4px; border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--panel); text-decoration:none; color:var(--fg); transition:border-color .14s, transform .14s; }
+  .ov-tile:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .ov-n { font-weight:800; font-size:22px; line-height:1; color:var(--accent); min-height:16px; }
+  .ov-nm { font-weight:600; font-size:13.5px; color:var(--fg); }
+  .ov-h3 { font-weight:700; font-size:15px; margin:0 0 10px; }
+  .ov-att { list-style:none; margin:0; padding:0; }
+  .ov-att li { display:flex; align-items:center; gap:10px; padding:9px 2px; border-top:1px solid var(--line); }
+  .ov-att li:first-child { border-top:0; }
 `;
 
 class GbtiWorkspace extends GbtiElement {
@@ -57,9 +76,10 @@ class GbtiWorkspace extends GbtiElement {
     // the workspace renders nothing. (Same fix as gbti-browse.)
     // SOW-036 P4: open on the tab named by the deep-link hash (workspace.html#tab=prompt), falling back to 'post'.
     // Lets the avatar menu route the member straight to "My prompts" / "My products" / "My pull requests".
-    this._tab = (typeof location !== 'undefined' && parseWorkspaceTab(location.hash)) || 'post';
+    this._tab = (typeof location !== 'undefined' && parseWorkspaceTab(location.hash)) || 'overview'; // SOW-052 default
     this._cache = {};   // type -> items[]
     this._prs = null;   // { prs }
+    this._overview = null; // SOW-052: { membership, role, counts, attention[] }
     this._editing = null;
     this._reviewing = null; // SOW-028: the PR number being reviewed in the drill-in, or null
     this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
@@ -67,6 +87,51 @@ class GbtiWorkspace extends GbtiElement {
     this._loadProfile();
     this._ensureTab(this._tab);
     this._loadInboxCount();
+    // SOW-052: the WorkBench rail deep-links to #tab=<id>; switch the tab on a same-document hash change.
+    this._onHash = () => {
+      const t = (typeof location !== 'undefined' && parseWorkspaceTab(location.hash)) || 'overview';
+      if (t !== this._tab && !this._editing && this._reviewing == null) { this._tab = t; this.render(); this._ensureTab(t); }
+    };
+    if (typeof window !== 'undefined') window.addEventListener('hashchange', this._onHash);
+  }
+
+  disconnectedCallback() {
+    if (typeof window !== 'undefined' && this._onHash) window.removeEventListener('hashchange', this._onHash);
+    super.disconnectedCallback?.();
+  }
+
+  // SOW-052: load the overview hub data — content counts (+ drafts), PR + saved + follow counts, membership, and
+  // the "needs attention" PR list. Fail-soft: every read defaults to 0/empty, never throws. Reuses _cache/_prs.
+  async _ensureOverview() {
+    if (this._overview) return;
+    const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null); // tolerate a missing client method (undefined)
+    const [post, prompt, product, prs, activity, follows, status] = await Promise.all([
+      num(this.client?.listContent?.({ type: 'post' })),
+      num(this.client?.listContent?.({ type: 'prompt' })),
+      num(this.client?.listContent?.({ type: 'product' })),
+      num(this.client?.listPRs?.()),
+      num(this.client?.getActivity?.()),
+      num(this.client?.getFollows?.()),
+      num(this.client?.status?.()),
+    ]);
+    const items = (r) => (Array.isArray(r?.items) ? r.items : []);
+    this._cache.post = items(post); this._cache.prompt = items(prompt); this._cache.product = items(product);
+    this._prs = Array.isArray(prs?.prs) ? prs.prs : (this._prs || []);
+    const drafts = [...items(post), ...items(prompt), ...items(product)].filter((it) => it.status === 'draft').length;
+    const favs = (activity?.favorites?.length || 0) + (activity?.collections?.length || 0);
+    const followN = Array.isArray(follows) ? follows.length : (follows?.following?.length || 0);
+    const attention = (this._prs || [])
+      .map((pr) => ({ pr, c: classifyPull(pr, null) }))
+      .filter(({ pr, c }) => c.label === 'Declined' || (pr.state !== 'closed' && pr.merged !== true)) // declined or still open
+      .slice(0, 6)
+      .map(({ pr, c }) => ({ title: pr.title || `PR #${pr.number}`, url: pr.html_url || '', label: c.label, tone: c.tone }));
+    this._overview = {
+      membership: status?.membership || 'unknown',
+      role: status?.role || 'member',
+      counts: { post: items(post).length, prompt: items(prompt).length, product: items(product).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
+      attention,
+    };
+    if (this._tab === 'overview' && !this._editing) this.render();
   }
 
   // SOW-028 P5: poll the incoming-contribution count on open (batch-first, like the rest of the client) so the
@@ -89,6 +154,7 @@ class GbtiWorkspace extends GbtiElement {
   async _ensureTab(id) {
     const tab = TABS.find((t) => t.id === id);
     if (!tab) return;
+    if (id === 'overview') { this._ensureOverview(); return; } // SOW-052
     // The Inbox / Saved / Subscriptions tabs are self-loading elements (they fetch their own data on connect),
     // so there is nothing to preload here; render() already mounted them. Returning avoids a redundant render.
     if (id === 'inbox' || id === 'saved' || id === 'subs') return;
@@ -164,6 +230,7 @@ class GbtiWorkspace extends GbtiElement {
 
   _body() {
     const tab = TABS.find((t) => t.id === this._tab);
+    if (this._tab === 'overview') return this._overviewHtml(); // SOW-052
     // SOW-028: the incoming-contribution review inbox is its own self-loading element. It fetches + renders
     // independently (and is inert with no client), so the workspace just mounts the tag.
     if (this._tab === 'inbox') return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
@@ -186,6 +253,37 @@ class GbtiWorkspace extends GbtiElement {
       return `<li class="row"><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span></span>
         <span class="right">${status} ${vis}<button class="btn" data-edit="${i}" type="button">Open</button></span></li>`;
     }).join('')}</ul>`;
+  }
+
+  // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
+  // and the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
+  _overviewHtml() {
+    const ov = this._overview;
+    if (!ov) return `<p class="empty">Loading your WorkBench...</p>`;
+    const c = ov.counts;
+    const mLabel = MEMBERSHIP_LABEL[ov.membership] || 'Member';
+    const isStaff = ['moderator', 'admin', 'superadmin'].includes(ov.role);
+    const tiles = [
+      { nm: 'Articles', href: 'workspace.html#tab=post', n: c.post },
+      { nm: 'Prompts', href: 'workspace.html#tab=prompt', n: c.prompt },
+      { nm: 'Products', href: 'workspace.html#tab=product', n: c.product },
+      { nm: 'Pull requests', href: 'workspace.html#tab=prs', n: c.prs },
+      { nm: 'Saved', href: 'workspace.html#tab=saved', n: c.saved },
+      { nm: 'Subscriptions', href: 'workspace.html#tab=subs', n: c.subs },
+      { nm: 'Settings', href: 'account.html', n: null },
+      ...(isStaff ? [{ nm: 'Admin tools', href: 'admin.html', n: null }] : []),
+    ];
+    const tileHtml = tiles.map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? '' : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join('');
+    const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? '' : 's'} in progress</span>` : '';
+    const att = ov.attention.length
+      ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc(a.tone)}">${esc(a.label)}</span> <a href="${esc(a.url || '#')}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join('')}</ul>`
+      : `<p class="muted">No pull requests need your attention.</p>`;
+    return `<div class="ov">
+      <div class="ov-hero"><div><b>Your WorkBench</b><br/><span class="muted">Membership: ${esc(mLabel)}</span></div>${draft}</div>
+      <div class="ov-tiles">${tileHtml}</div>
+      <h3 class="ov-h3">Pull requests</h3>
+      ${att}
+    </div>`;
   }
 
   _wireBody() {

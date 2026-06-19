@@ -333,11 +333,15 @@ function init() {
   // Register the messaging-backed GbtiClient so the shell's "+" composer (and any client-ui element) works on the
   // new tab too; the feed itself still talks to the background worker directly.
   mountPageClient();
-  // The shared shell injects + wires the top bar (theme, apps, account menu, "+") + the left rail, and fills the
-  // page's static [data-ico] glyphs (search + the mode-switcher icons). The rail item highlighted is derived from
-  // the active TYPE (railKeyForType): a bare load lights Activity (the 'all' river), a #type=<X> lights its
-  // Browse item. selectType keeps it in sync thereafter.
-  initShell({ active: railKeyForType(TYPE) });
+  // The shared shell injects the left rail (feed variant: search + Latest/Following on top) + the control cluster
+  // (theme, apps, account, "+") into the greeting's top-right, and fills the page's [data-ico] glyphs. The rail
+  // item highlighted is derived from the active TYPE (railKeyForType); selectType keeps it in sync thereafter.
+  initShell({ active: railKeyForType(TYPE), nav: 'feed' });
+  // SOW-052: relocate the view-mode switch into the control cluster's slot (a DOM move; the .nt-mode click wiring
+  // below still finds it by selector).
+  const modesEl = $('.nt-greet .nt-modes');
+  const modesSlot = $('[data-modes-slot]');
+  if (modesEl && modesSlot) modesSlot.appendChild(modesEl);
 
   const greetEl = $('[data-greeting]');
   if (greetEl) greetEl.textContent = greeting();
@@ -392,22 +396,11 @@ function init() {
   const deepRead = readFromHash();
   if (deepRead) openReader({ type: TYPE, path: deepRead });
 
-  // Collapsible filter search: the icon expands an inline input; it collapses on blur-when-empty or Escape, and the
-  // icon itself toggles (clearing + closing an open field). The input keeps data-filter so the feed wiring is unchanged.
-  const srch = $('[data-srch]');
+  // SOW-052: the feed search is now a persistent input in the left rail (shell-rendered). Filter the feed in place
+  // on input; Escape clears it. No collapse toggle anymore.
   const srchIn = $('[data-filter]');
-  const srchBtn = $('[data-search-toggle]');
-  const expandSearch = () => { srch?.classList.add('open'); srchBtn?.classList.add('on'); srchBtn?.setAttribute('aria-expanded', 'true'); srchIn?.focus(); };
-  const collapseSearch = () => { srch?.classList.remove('open'); srchBtn?.classList.remove('on'); srchBtn?.setAttribute('aria-expanded', 'false'); };
-  srchBtn?.addEventListener('click', () => {
-    if (srch?.classList.contains('open')) {
-      if (srchIn?.value) { srchIn.value = ''; renderFeed(''); } // clear the active filter as it closes
-      collapseSearch();
-    } else expandSearch();
-  });
   srchIn?.addEventListener('input', (e) => renderFeed(e.target.value));
-  srchIn?.addEventListener('blur', () => { if (!srchIn.value) collapseSearch(); });
-  srchIn?.addEventListener('keydown', (e) => { if (e.key === 'Escape') { srchIn.value = ''; renderFeed(''); collapseSearch(); } });
+  srchIn?.addEventListener('keydown', (e) => { if (e.key === 'Escape') { srchIn.value = ''; renderFeed(''); srchIn.blur(); } });
 
   // The in-place reader's Back button returns to the feed.
   $('[data-reader-back]')?.addEventListener('click', closeReader);

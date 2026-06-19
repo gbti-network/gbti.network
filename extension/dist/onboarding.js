@@ -3594,8 +3594,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc4 = c | 32;
-      if (lc4 >= 97 && lc4 <= 102) return lc4 - 97 + 10;
+      const lc5 = c | 32;
+      if (lc5 >= 97 && lc5 <= 102) return lc5 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -5678,7 +5678,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-welcome", GbtiWelcome);
 
   // client-ui/src/workspace-core.mjs
-  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["post", "prompt", "product", "prs", "inbox", "saved", "subs"]);
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "product", "prs", "inbox", "saved", "subs"]);
   function parseWorkspaceTab(hash) {
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
@@ -5955,6 +5955,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-workspace.mjs
   var TABS = [
+    { id: "overview", label: "Overview" },
+    // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
     { id: "post", label: "Articles", type: "post" },
     { id: "prompt", label: "Prompts", type: "prompt" },
     { id: "product", label: "Products", type: "product" },
@@ -5965,6 +5967,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "subs", label: "Subscriptions" }
     // SOW-037: follows + membership
   ];
+  var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
   var CSS19 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
@@ -5990,12 +5993,27 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .empty { color:var(--muted); padding:18px 2px; }
   .back { margin:0 0 14px; }
   a { color:var(--accent); }
+  /* SOW-052: the Overview hub */
+  .ov-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid var(--line); border-radius:12px; padding:14px 16px; background:var(--panel); margin:0 0 16px; }
+  .ov-hero b { font-size:15px; }
+  .ov-hero .muted { font-size:12.5px; }
+  .ov-draft { font-size:12.5px; color:var(--accent); font-weight:700; }
+  .ov-tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; margin:0 0 22px; }
+  .ov-tile { display:flex; flex-direction:column; gap:4px; border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--panel); text-decoration:none; color:var(--fg); transition:border-color .14s, transform .14s; }
+  .ov-tile:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .ov-n { font-weight:800; font-size:22px; line-height:1; color:var(--accent); min-height:16px; }
+  .ov-nm { font-weight:600; font-size:13.5px; color:var(--fg); }
+  .ov-h3 { font-weight:700; font-size:15px; margin:0 0 10px; }
+  .ov-att { list-style:none; margin:0; padding:0; }
+  .ov-att li { display:flex; align-items:center; gap:10px; padding:9px 2px; border-top:1px solid var(--line); }
+  .ov-att li:first-child { border-top:0; }
 `;
   var GbtiWorkspace = class extends GbtiElement {
     connectedCallback() {
-      this._tab = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "post";
+      this._tab = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "overview";
       this._cache = {};
       this._prs = null;
+      this._overview = null;
       this._editing = null;
       this._reviewing = null;
       this._inboxCount = null;
@@ -6003,6 +6021,50 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._loadProfile();
       this._ensureTab(this._tab);
       this._loadInboxCount();
+      this._onHash = () => {
+        const t = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "overview";
+        if (t !== this._tab && !this._editing && this._reviewing == null) {
+          this._tab = t;
+          this.render();
+          this._ensureTab(t);
+        }
+      };
+      if (typeof window !== "undefined") window.addEventListener("hashchange", this._onHash);
+    }
+    disconnectedCallback() {
+      if (typeof window !== "undefined" && this._onHash) window.removeEventListener("hashchange", this._onHash);
+      super.disconnectedCallback?.();
+    }
+    // SOW-052: load the overview hub data — content counts (+ drafts), PR + saved + follow counts, membership, and
+    // the "needs attention" PR list. Fail-soft: every read defaults to 0/empty, never throws. Reuses _cache/_prs.
+    async _ensureOverview() {
+      if (this._overview) return;
+      const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null);
+      const [post, prompt2, product, prs, activity, follows, status2] = await Promise.all([
+        num(this.client?.listContent?.({ type: "post" })),
+        num(this.client?.listContent?.({ type: "prompt" })),
+        num(this.client?.listContent?.({ type: "product" })),
+        num(this.client?.listPRs?.()),
+        num(this.client?.getActivity?.()),
+        num(this.client?.getFollows?.()),
+        num(this.client?.status?.())
+      ]);
+      const items = (r) => Array.isArray(r?.items) ? r.items : [];
+      this._cache.post = items(post);
+      this._cache.prompt = items(prompt2);
+      this._cache.product = items(product);
+      this._prs = Array.isArray(prs?.prs) ? prs.prs : this._prs || [];
+      const drafts = [...items(post), ...items(prompt2), ...items(product)].filter((it) => it.status === "draft").length;
+      const favs = (activity?.favorites?.length || 0) + (activity?.collections?.length || 0);
+      const followN = Array.isArray(follows) ? follows.length : follows?.following?.length || 0;
+      const attention = (this._prs || []).map((pr) => ({ pr, c: classifyPull(pr, null) })).filter(({ pr, c }) => c.label === "Declined" || pr.state !== "closed" && pr.merged !== true).slice(0, 6).map(({ pr, c }) => ({ title: pr.title || `PR #${pr.number}`, url: pr.html_url || "", label: c.label, tone: c.tone }));
+      this._overview = {
+        membership: status2?.membership || "unknown",
+        role: status2?.role || "member",
+        counts: { post: items(post).length, prompt: items(prompt2).length, product: items(product).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
+        attention
+      };
+      if (this._tab === "overview" && !this._editing) this.render();
     }
     // SOW-028 P5: poll the incoming-contribution count on open (batch-first, like the rest of the client) so the
     // Inbox tab carries a "N to review" badge without the member having to open it. Fail-soft to no badge.
@@ -6027,6 +6089,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _ensureTab(id) {
       const tab = TABS.find((t) => t.id === id);
       if (!tab) return;
+      if (id === "overview") {
+        this._ensureOverview();
+        return;
+      }
       if (id === "inbox" || id === "saved" || id === "subs") return;
       if (tab.type && !this._cache[tab.type]) {
         try {
@@ -6113,6 +6179,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _body() {
       const tab = TABS.find((t) => t.id === this._tab);
+      if (this._tab === "overview") return this._overviewHtml();
       if (this._tab === "inbox") return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
       if (this._tab === "saved") return `<gbti-saved></gbti-saved>`;
       if (this._tab === "subs") return `<gbti-subscriptions></gbti-subscriptions>`;
@@ -6133,6 +6200,34 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return `<li class="row"><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span>
         <span class="right">${status2} ${vis}<button class="btn" data-edit="${i}" type="button">Open</button></span></li>`;
       }).join("")}</ul>`;
+    }
+    // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
+    // and the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
+    _overviewHtml() {
+      const ov = this._overview;
+      if (!ov) return `<p class="empty">Loading your WorkBench...</p>`;
+      const c = ov.counts;
+      const mLabel = MEMBERSHIP_LABEL[ov.membership] || "Member";
+      const isStaff = ["moderator", "admin", "superadmin"].includes(ov.role);
+      const tiles = [
+        { nm: "Articles", href: "workspace.html#tab=post", n: c.post },
+        { nm: "Prompts", href: "workspace.html#tab=prompt", n: c.prompt },
+        { nm: "Products", href: "workspace.html#tab=product", n: c.product },
+        { nm: "Pull requests", href: "workspace.html#tab=prs", n: c.prs },
+        { nm: "Saved", href: "workspace.html#tab=saved", n: c.saved },
+        { nm: "Subscriptions", href: "workspace.html#tab=subs", n: c.subs },
+        { nm: "Settings", href: "account.html", n: null },
+        ...isStaff ? [{ nm: "Admin tools", href: "admin.html", n: null }] : []
+      ];
+      const tileHtml = tiles.map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? "" : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join("");
+      const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? "" : "s"} in progress</span>` : "";
+      const att = ov.attention.length ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc(a.tone)}">${esc(a.label)}</span> <a href="${esc(a.url || "#")}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join("")}</ul>` : `<p class="muted">No pull requests need your attention.</p>`;
+      return `<div class="ov">
+      <div class="ov-hero"><div><b>Your WorkBench</b><br/><span class="muted">Membership: ${esc(mLabel)}</span></div>${draft}</div>
+      <div class="ov-tiles">${tileHtml}</div>
+      <h3 class="ov-h3">Pull requests</h3>
+      ${att}
+    </div>`;
     }
     _wireBody() {
       this.on("[data-profile]", "click", () => this._openItem(this._profile?.path, "profile"));
@@ -6365,14 +6460,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
     // (post/product/prompt) need a per-item comment walk and defer to P4's server aggregator. Hard-bounded fan-out.
     async _replies(login) {
-      const lc4 = String(login).toLowerCase();
+      const lc5 = String(login).toLowerCase();
       const { items = [] } = await this.client.listShares() || {};
-      const mine = items.filter((s) => String(s.author).toLowerCase() === lc4).slice(0, MAX_OWN_SHARES);
+      const mine = items.filter((s) => String(s.author).toLowerCase() === lc5).slice(0, MAX_OWN_SHARES);
       const lists = await Promise.all(mine.map((s) => this._safe(async () => {
         const slug = s.author && s.id ? `${s.author}/${s.id}` : "";
         if (!slug) return [];
         const r = await this.client.listShareComments({ targetSlug: slug }) || {};
-        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc4).map((c) => ({
+        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc5).map((c) => ({
           id: `cmt:${c.path || `${slug}:${c.id || c.createdAt}`}`,
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
@@ -6746,6 +6841,136 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-news", GbtiNews);
 
+  // client-ui/src/elements/gbti-news-reader.mjs
+  var lc4 = (s) => String(s ?? "").toLowerCase();
+  var CSS22 = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); max-width:760px; }
+  .pub { display:flex; align-items:center; gap:12px; padding:0 0 16px; margin:0 0 16px; border-bottom:1px solid var(--line); }
+  .pav { position:relative; width:40px; height:40px; border-radius:10px; overflow:hidden; flex:none; background:var(--hover); }
+  .pav img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .pub .pi { min-width:0; flex:1; }
+  .pub .pi b { display:block; font-size:15px; }
+  .pub .pi .d { display:block; color:var(--muted); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fbtn { flex:none; font:inherit; font-weight:600; font-size:12.5px; padding:7px 15px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--fg); cursor:pointer; }
+  .fbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .fbtn.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+  .fbtn[disabled] { opacity:.6; cursor:default; }
+  h2 { font-family:var(--font-display, var(--font-body)); font-size:23px; line-height:1.3; margin:0 0 12px; }
+  .sum { font-size:15px; line-height:1.6; color:var(--fg); margin:0 0 20px; }
+  .acts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  a.src { font:inherit; font-weight:600; font-size:13.5px; padding:9px 16px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); text-decoration:none; }
+  a.src:hover { border-color:var(--accent); color:var(--accent); }
+  button.disc { font:inherit; font-weight:700; font-size:13.5px; padding:9px 16px; border:1px solid var(--brand); border-radius:9px; background:var(--brand); color:#fff; cursor:pointer; }
+  button.disc[disabled] { opacity:.6; cursor:default; }
+  .note { font-size:12.5px; margin:12px 0 0; } .note.ok { color:var(--brand); } .note.err { color:#d4495a; }
+  .disc-wrap { margin-top:24px; padding-top:18px; border-top:1px solid var(--line); }
+  .disc-wrap h4 { margin:0 0 12px; font-family:var(--font-display, var(--font-body)); font-size:15px; }
+  .muted { color:var(--muted); }
+`;
+  var GbtiNewsReader = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback?.();
+      this._onComment = (e) => {
+        const it = this._item;
+        if (!it?.guid || !this.client?.newsDiscussed) return;
+        if (e?.detail?.targetSlug !== newsTargetSlug(it.guid)) return;
+        Promise.resolve(this.client.newsDiscussed(it.guid)).catch(() => {
+        });
+      };
+      document.addEventListener("gbti-comment-posted", this._onComment);
+    }
+    disconnectedCallback() {
+      super.disconnectedCallback?.();
+      if (this._onComment) document.removeEventListener("gbti-comment-posted", this._onComment);
+    }
+    /** Mirrors <gbti-reader>.open(item): the new-tab mounts this then calls open() with the news card item. */
+    async open(item) {
+      this._item = item || null;
+      this._postNote = null;
+      this._canCurate = false;
+      this._publisher = null;
+      this._followed = null;
+      this.render();
+      if (!item || !this.client) return;
+      try {
+        const [status2, srcs, prefs] = await Promise.all([
+          this.client.status?.().catch(() => null),
+          this.client.getNewsSources?.().catch(() => null),
+          this.client.getPrefs?.().catch(() => null)
+        ]);
+        this._canCurate = Boolean(status2?.canCurate);
+        const sid = lc4(item.source);
+        this._publisher = (srcs?.sources || []).find((s) => lc4(s.id) === sid || lc4(s.name) === sid) || null;
+        this._followed = new Set((prefs?.followedChannels || []).map(lc4));
+      } catch {
+      }
+      this.render();
+    }
+    async _toggleFollow(btn) {
+      const id = this._item?.source;
+      if (!id || !this._followed) return;
+      const on = !this._followed.has(lc4(id));
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = on ? "Following…" : "Unfollowing…";
+      }
+      try {
+        const prefs = await this.client.setPrefs({ followChannel: { id, on } });
+        this._followed = new Set((prefs?.followedChannels || []).map(lc4));
+      } catch {
+      }
+      this.render();
+    }
+    async _publishToDiscord(btn) {
+      const it = this._item;
+      if (!it) return;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Posting…";
+      }
+      this._postNote = null;
+      try {
+        const r = await this.client.publishNews(it);
+        this._postNote = r?.posted ? { ok: true, msg: "Posted to Discord." } : r?.alreadyPosted ? { ok: true, msg: "Already posted to Discord." } : { ok: false, msg: r?.reason || "No Discord channel is mapped for this category yet." };
+      } catch (err) {
+        this._postNote = { ok: false, msg: err?.message || "Could not post to Discord." };
+      }
+      this.render();
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS22) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        return;
+      }
+      const it = this._item;
+      if (!it) {
+        this.set(this.css(CSS22) + `<p class="muted">No item selected.</p>`);
+        return;
+      }
+      const fav = faviconFor(it.link || it.openHref);
+      const pub = this._publisher;
+      const followable = Boolean(this.client?.setPrefs && it.source && this._followed);
+      const followed = followable && this._followed.has(lc4(it.source));
+      const meta = [pub?.description, pub?.count != null ? `${pub.count} items` : null].filter(Boolean).join(" · ");
+      const open = it.openHref || (it.link ? utmLink(it.link) : "");
+      const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
+      const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc(this._postNote.msg)}</p>` : "";
+      const slug = it.guid ? newsTargetSlug(it.guid) : "";
+      const discussion = slug ? `<div class="disc-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
+      this.set(this.css(CSS22) + `<div class="pub"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="pi"><b>${esc(pub?.name || it.source || "Publisher")}</b>${meta ? `<span class="d">${esc(meta)}</span>` : ""}</div>` + (followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "") + `</div><h2>${esc(it.title || "News")}</h2><p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + discussion);
+      if (!this._wiredErr) {
+        this.root?.addEventListener("error", (e) => {
+          const t = e.target;
+          if (t?.tagName === "IMG" && t.classList?.contains("avimg")) t.remove();
+        }, true);
+        this._wiredErr = true;
+      }
+      this.$("[data-follow]")?.addEventListener("click", (e) => this._toggleFollow(e.currentTarget));
+      this.$("[data-disc]")?.addEventListener("click", (e) => this._publishToDiscord(e.currentTarget));
+    }
+  };
+  define("gbti-news-reader", GbtiNewsReader);
+
   // client-ui/src/elements/gbti-reader.mjs
   var SITE9 = "https://gbti.network";
   var authorName4 = (a) => a === "gbti" ? "GBTI Network" : a;
@@ -6764,7 +6989,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE9}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
-  var CSS22 = `
+  var CSS23 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   article { max-width:680px; margin:0 auto; }
   h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
@@ -6826,7 +7051,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS22));
+        this.set(this.css(CSS23));
         return;
       }
       const t = TYPE_LABEL3[it.type] || it.type || "";
@@ -6841,7 +7066,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
       const slug = targetSlugFor(it);
       const discussion = this._html !== null && slug ? `<div class="discussion-wrap"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
-      this.set(this.css(CSS22) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>${discussion}`);
+      this.set(this.css(CSS23) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>${discussion}`);
     }
   };
   define("gbti-reader", GbtiReader);
@@ -6858,7 +7083,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-043: a self-loading members-only feed (not a per-type index)
   ];
   var CONTENT_TYPES = ["post", "product", "prompt"];
-  var CSS23 = `
+  var CSS24 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -6978,7 +7203,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS23) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS24) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -6991,7 +7216,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS23) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS24) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();

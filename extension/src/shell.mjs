@@ -36,17 +36,23 @@ export const SVG = {
   mCard: '<rect x="4" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="4" y="13" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="13" width="7" height="7" rx="1.3" fill="currentColor"/>',
   plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  // SOW-052: the WorkBench rail glyphs.
+  bookmark: '<path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  users: '<circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a3 3 0 0 1 0 5.6M16.5 13.5a5.5 5.5 0 0 1 4 5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  gear: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13a7.8 7.8 0 0 0 0-2l1.7-1.3-1.7-3-2 .8a7.6 7.6 0 0 0-1.7-1l-.3-2.1H10l-.3 2.1a7.6 7.6 0 0 0-1.7 1l-2-.8-1.7 3L6 11a7.8 7.8 0 0 0 0 2l-1.7 1.3 1.7 3 2-.8a7.6 7.6 0 0 0 1.7 1l.3 2.1h3.6l.3-2.1a7.6 7.6 0 0 0 1.7-1l2 .8 1.7-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  pr: '<circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 8.2v7.6M18 15.8V11a4 4 0 0 0-4-4h-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
 };
 export const ico = (k) => (SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : '');
 
-// The persistent rail. The Activity feed IS the unified content browser; the Browse destinations are SHORTCUTS
-// that open the feed pre-filtered to one type (newtab.html#type=<X>), not a separate page. The feed reads the
-// hash to pre-select the matching filter chip.
-const RAIL = [
+// SOW-052: two rail variants. The FEED rail (new tab) is the content browser — its destinations open the feed
+// pre-filtered to one type (newtab.html#type=<X>); it also carries a top control block (feed search + Latest/
+// Following). The WORKBENCH rail (workspace / account / admin) is the member's management nav — what used to live
+// in the avatar dropdown. `initShell({ nav })` picks the variant.
+const RAIL_FEED = [
   { group: 'Feeds' },
   { key: 'activity', href: 'newtab.html', ico: 'activity', nm: 'Activity', sub: 'The latest across the co-op' },
-  // News is a feed (curated, members-only), so it sits with Activity, not under Browse.
-  { key: 'news', href: 'newtab.html#type=news', ico: 'news', nm: 'News', sub: 'Curated, members-only' },
+  // News is a curated feed open to the limited trial (not members-only), so it sits with Activity, not Browse.
+  { key: 'news', href: 'newtab.html#type=news', ico: 'news', nm: 'News', sub: 'Curated, limited trial' },
   { group: 'Member Activity' },
   // No "All" item: Activity (bare newtab.html) IS the all-types river. These narrow to a single member-content type.
   { key: 'articles', href: 'newtab.html#type=post', ico: 'article', nm: 'Articles', sub: 'Posts and tutorials' },
@@ -54,18 +60,51 @@ const RAIL = [
   { key: 'prompts', href: 'newtab.html#type=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Reusable prompts' },
   { key: 'shares', href: 'newtab.html#type=share', ico: 'coin', nm: 'Shares', sub: 'The co-op stream' },
   { div: true },
-  { key: 'workspace', href: 'workspace.html', ico: 'grid', nm: 'My workspace', sub: 'Content + pull requests' },
+  { key: 'workspace', href: 'workspace.html', ico: 'grid', nm: 'My WorkBench', sub: 'Your content + tools' },
 ];
 
-function barHtml() {
-  return `<header class="nt-bar">
-    <div class="nt-brand"><img class="mk" src="icons/icon-128.png" alt="" /> GBTI Network</div>
-    <span class="nt-spring"></span>
+const RAIL_WORKBENCH = [
+  { group: 'WorkBench' },
+  // Explicit #tab=overview so clicking it ON workspace.html is a same-document switch (no reload), like the others.
+  { key: 'overview', href: 'workspace.html#tab=overview', ico: 'grid', nm: 'Overview', sub: 'Your hub at a glance' },
+  { group: 'My Content' },
+  { key: 'post', href: 'workspace.html#tab=post', ico: 'article', nm: 'Articles', sub: 'Your posts' },
+  { key: 'prompt', href: 'workspace.html#tab=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Your prompts' },
+  { key: 'product', href: 'workspace.html#tab=product', ico: 'product', nm: 'Products', sub: 'Your products' },
+  { group: 'Activity' },
+  { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests', sub: 'Proposed + accepted' },
+  { key: 'saved', href: 'workspace.html#tab=saved', ico: 'bookmark', nm: 'Saved', sub: 'Favorites + collections' },
+  { key: 'subs', href: 'workspace.html#tab=subs', ico: 'users', nm: 'Subscriptions', sub: 'Who you follow' },
+  { div: true },
+  { key: 'settings', href: 'account.html', ico: 'gear', nm: 'Settings', sub: 'Membership + account' },
+  { key: 'admin', href: 'admin.html', ico: 'lock', nm: 'Admin tools', sub: 'Moderation', adminOnly: true },
+];
+
+const RAILS = { feed: RAIL_FEED, workbench: RAIL_WORKBENCH };
+
+// The feed rail's top control block (SOW-052): the persistent feed search + the Latest/Following toggle, moved out
+// of the new-tab content header. newtab.mjs wires these by selector ([data-filter] / [data-tab]).
+function feedControlsHtml() {
+  return `<div class="nt-rail-feedctrls">
+    <label class="nt-rsrch"><span class="gl" data-ico="search"></span><input type="search" data-filter placeholder="Filter the feed" autocomplete="off" aria-label="Filter the feed" /></label>
+    <div class="nt-tabs" role="tablist" aria-label="Activity view">
+      <button class="nt-tab on" type="button" data-tab="latest" role="tab" aria-selected="true">Latest</button>
+      <button class="nt-tab" type="button" data-tab="following" role="tab" aria-selected="false">Following</button>
+    </div>
+  </div>`;
+}
+
+// SOW-052: the relocatable control cluster (no longer a full-width bar). initShell appends it to the page's
+// top-right [data-topbar] slot. Order: apps, the view-mode slot (the new tab moves its .nt-modes here), bell,
+// theme, account, then the "+" compose to the right of the avatar. The account dropdown is collapsed to just
+// "My WorkBench" + Sign out (the old section deep-links moved to the WorkBench rail).
+function controlsHtml() {
+  return `<div class="nt-controls" data-controls>
     <span class="nt-apps" data-apps>
       <span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>
       <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
     </span>
-    <button class="nt-icobtn" data-compose data-ico="plus" title="New Share" aria-label="Post a new Share"></button>
+    <span class="nt-modes-slot" data-modes-slot></span>
     <gbti-activity-bell></gbti-activity-bell>
     <button class="nt-icobtn" data-theme-toggle title="Toggle theme" aria-label="Toggle theme"></button>
     <div class="nt-acctwrap" data-me-wrap>
@@ -77,31 +116,28 @@ function barHtml() {
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
-        <a class="mi" role="menuitem" href="workspace.html">My workspace</a>
-        <a class="mi" role="menuitem" href="workspace.html#tab=post">My articles</a>
-        <a class="mi" role="menuitem" href="workspace.html#tab=prompt">My prompts</a>
-        <a class="mi" role="menuitem" href="workspace.html#tab=product">My products</a>
-        <a class="mi" role="menuitem" href="workspace.html#tab=prs">My pull requests</a>
-        <a class="mi" role="menuitem" href="workspace.html#tab=saved">Saved</a>
-        <a class="mi" role="menuitem" href="workspace.html#tab=subs">Subscriptions</a>
-        <a class="mi" role="menuitem" href="account.html">Settings</a>
-        <a class="mi mi-admin" role="menuitem" href="admin.html" hidden>Admin tools</a>
+        <a class="mi" role="menuitem" href="workspace.html">My WorkBench</a>
         <div class="me-sep" role="separator"></div>
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
     </div>
-  </header>`;
+    <button class="nt-icobtn" data-compose data-ico="plus" title="New Share" aria-label="Post a new Share"></button>
+  </div>`;
 }
 
-function railHtml(active) {
-  const items = RAIL.map((r) => {
+function railHtml(active, nav = 'feed') {
+  const rail = RAILS[nav] || RAIL_FEED;
+  const items = rail.map((r) => {
     if (r.group) return `<div class="nt-rail-h">${esc(r.group)}</div>`;
     if (r.div) return `<hr class="nt-rail-div" />`;
     const on = r.key === active ? ' on' : '';
+    const admin = r.adminOnly ? ' data-admin-only hidden' : ''; // role-gated after /api/status resolves
     const sub = r.sub ? `<span class="sub">${esc(r.sub)}</span>` : '';
-    return `<a class="nav-i${on}" data-key="${r.key}" href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
+    return `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
   }).join('');
-  return `<nav class="nt-rail">${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+  // The feed rail leads with the feed search + Latest/Following; the workbench rail does not.
+  const top = nav === 'feed' ? feedControlsHtml() : '';
+  return `<nav class="nt-rail">${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
 }
 
 /** Re-highlight the rail to `key` (or clear when null). The rail renders its active item ONCE at initShell, but
@@ -130,7 +166,8 @@ function applyAccount(root, status) {
     if (av) { av.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`; av.alt = `@${login}`; }
     const head = root.querySelector('[data-me-head]');
     if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
-    const adminItem = root.querySelector('.mi-admin');
+    // SOW-052: the Admin entry now lives in the WorkBench rail (role-gated there), not the dropdown.
+    const adminItem = root.querySelector('[data-admin-only]');
     if (adminItem) adminItem.hidden = (RANK[status.role] ?? 0) < RANK.moderator;
     if (greetName) greetName.textContent = `, @${login}`;
     if (meBtn) meBtn.hidden = false;
@@ -250,15 +287,25 @@ async function wireApps(root) {
   if (installed === true || installed === null) apps.classList.add('show'); // show when present, or when we cannot tell
 }
 
-/** Inject + wire the shell into [data-shell]. `active` is the rail key to highlight (or null). */
-export function initShell({ active = null } = {}) {
+/** Inject + wire the shell into [data-shell]. `active` = the rail key to highlight (or null); `nav` = which rail
+ *  variant ('feed' for the new tab, 'workbench' for the management pages). SOW-052: there is no top bar anymore —
+ *  the control cluster is appended to the page's top-right [data-topbar] slot (created at the top of <main> if the
+ *  page does not provide one), and the rail varies by `nav`. */
+export function initShell({ active = null, nav = 'feed' } = {}) {
   const root = document.querySelector('[data-shell]');
   if (!root) return { ico, loadShellAccount: () => loadShellAccount(null) };
   const main = root.querySelector('.nt-main');
-  const html = barHtml() + railHtml(active);
-  if (main) main.insertAdjacentHTML('beforebegin', html);
-  else root.insertAdjacentHTML('afterbegin', html);
-  // Fill the inline-SVG glyphs (rail + toolbar + any static [data-ico] in the page main). Trusted constants.
+  // The rail is the left column (a direct child of [data-shell], before <main>).
+  if (main) main.insertAdjacentHTML('beforebegin', railHtml(active, nav));
+  else root.insertAdjacentHTML('afterbegin', railHtml(active, nav));
+  // The controls live top-right of the content: append them to the page's [data-topbar] row (create a bare one at
+  // the top of <main> when the page does not wrap its heading in one).
+  if (main) {
+    let topbar = main.querySelector('[data-topbar]');
+    if (!topbar) { topbar = document.createElement('div'); topbar.className = 'nt-top'; topbar.setAttribute('data-topbar', ''); main.prepend(topbar); }
+    topbar.insertAdjacentHTML('beforeend', controlsHtml());
+  }
+  // Fill the inline-SVG glyphs (rail + controls + any static [data-ico] in the page main). Trusted constants.
   root.querySelectorAll('[data-ico]').forEach((el) => { el.innerHTML = ico(el.dataset.ico); });
   const themeBtn = root.querySelector('[data-theme-toggle]');
   if (themeBtn) {

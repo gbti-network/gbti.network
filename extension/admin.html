@@ -12,16 +12,17 @@
   <script src="dist/theme-init.js"></script>
   <link rel="stylesheet" href="shell.css" />
   <style>
-    .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 26px; letter-spacing: -.02em; margin: 0 0 4px; }
-    .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 0 0 18px; }
+    .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; margin: 0; }
+    .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 4px 0 0; }
     .hub-h2 { font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-spacing: -.01em; margin: 28px 0 12px; }
   </style>
 </head>
 <body>
   <div class="nt" data-shell>
     <main class="nt-main">
-      <h1 class="hub-h">Admin tools</h1>
-      <p class="hub-sub">Governance and moderation.</p>
+      <div class="nt-top" data-topbar>
+        <div><h1 class="hub-h">Admin tools</h1><p class="hub-sub">Governance and moderation.</p></div>
+      </div>
       <h2 class="hub-h2">Member roster</h2>
       <gbti-superadmin-dashboard></gbti-superadmin-dashboard>
       <h2 class="hub-h2">Actions</h2>

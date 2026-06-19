@@ -30,7 +30,9 @@ html, body { height: 100%; }
 body { margin: 0; background: var(--paper-2); color: var(--fg); font-family: var(--f-sans); -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration: none; }
 
-.nt { min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; grid-template-rows: auto 1fr; }
+/* SOW-052: no top bar — just the rail (left) + the scrolling main (right). The single row fills the viewport;
+   main scrolls internally so the rail stays put. */
+.nt { min-height: 100vh; display: grid; grid-template-columns: 232px 1fr; grid-template-rows: 1fr; }
 
 /* ===================== SOW-048: forced-sign-in auth gate ===================== */
 /* With no GitHub token the shell shows ONLY the <gbti-welcome> login splash; everything else is hidden. */
@@ -41,11 +43,13 @@ html[data-unauth] .compose-modal { display: none !important; }
 .gbti-authwrap { position: fixed; inset: 0; z-index: 250; overflow: auto; background: var(--paper-2);
   display: grid; place-items: center; padding: 28px 16px; box-sizing: border-box; }
 
-/* ============================ top bar ============================ */
-.nt-bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 13px 24px; border-bottom: 1.5px solid var(--line); background: var(--paper); }
-.nt-brand { display: flex; align-items: center; gap: 11px; font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
-.nt-brand .mk { width: 32px; height: 32px; border-radius: 8px; display: block; object-fit: cover; flex: none; }
-.nt-spring { flex: 1; }
+/* ============================ control cluster (top-right of content; SOW-052) ============================ */
+/* The page's top row: heading/greeting on the left, the relocated control cluster on the right. The shell appends
+   .nt-controls into the page's [data-topbar]; it scrolls with the content (like the old feed header did). */
+[data-topbar] { display: flex; align-items: center; justify-content: space-between; gap: 16px 20px; flex-wrap: wrap; margin-bottom: 18px; }
+.nt-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-left: auto; }
+.nt-modes-slot { display: inline-flex; align-items: center; }
+.nt-modes-slot:empty { display: none; }
 
 .nt-apps { display: none; align-items: center; gap: 4px; padding: 4px; border: 1.5px solid var(--line); border-radius: 11px; background: var(--paper-2); }
 .nt-apps.show { display: flex; }
@@ -82,7 +86,20 @@ html[data-unauth] .compose-modal { display: none !important; }
 .me-sep { height: 1px; background: var(--line); margin: 5px 4px; }
 
 /* ============================ left rail ============================ */
-.nt-rail { border-right: 1.5px solid var(--line); background: var(--paper); padding: 22px 16px; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.nt-rail { border-right: 1.5px solid var(--line); background: var(--paper); padding: 22px 16px; display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; }
+
+/* SOW-052: the feed rail leads with the feed search + the Latest/Following toggle (moved out of the new-tab header). */
+.nt-rail-feedctrls { display: flex; flex-direction: column; gap: 10px; padding: 0 4px 10px; }
+.nt-rsrch { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper-2); }
+.nt-rsrch:focus-within { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-tint); }
+.nt-rsrch .gl { width: 16px; height: 16px; flex: none; display: flex; color: var(--fg-mute); }
+.nt-rsrch .gl svg { width: 16px; height: 16px; }
+.nt-rsrch input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-family: var(--f-mono); font-size: 13px; color: var(--fg); }
+.nt-rsrch input::placeholder { color: var(--fg-mute); }
+.nt-tabs { display: flex; gap: 2px; background: var(--paper-3); border: 1.5px solid var(--line); border-radius: var(--r); padding: 3px; }
+.nt-tab { flex: 1; font-family: var(--f-sans); font-weight: 600; font-size: 13.5px; color: var(--fg-soft); background: none; border: 0; cursor: pointer; padding: 7px 10px; border-radius: 6px; transition: all .14s; }
+.nt-tab:hover { color: var(--fg); }
+.nt-tab.on { background: var(--paper); color: var(--fg); box-shadow: var(--sh-sm); }
 .nt-rail-h { font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-mute); padding: 6px 12px 8px; }
 .nt-rail-h:not(:first-child) { margin-top: 16px; }
 .nav-i { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--r); color: var(--fg-soft); cursor: pointer; transition: background .13s, color .13s; }

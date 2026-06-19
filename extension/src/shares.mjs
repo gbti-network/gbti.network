@@ -35,5 +35,5 @@ client.login = (onPrompt) =>
 
 setClient(client);
 
-// SOW-036: mount the shared member-hub shell (top bar + left rail), with "Shares" active.
-initShell({ active: 'shares' });
+// SOW-052: mount the shell with the WorkBench rail (consistent management chrome; Shares has no rail destination).
+initShell({ active: null, nav: 'workbench' });

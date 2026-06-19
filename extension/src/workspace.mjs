@@ -4,7 +4,8 @@
 // extension/src/shares.mjs.
 
 import { setClient, createHttpClient } from '../../client-ui/src/index.mjs';
-import { initShell } from './shell.mjs';
+import { initShell, setRailActive } from './shell.mjs';
+import { parseWorkspaceTab } from '../../client-ui/src/workspace-core.mjs';
 
 /** Relay a /api/* request to the background worker (replaces a real network fetch). Mirrors shares.mjs. */
 async function messagingFetch(url, init = {}) {
@@ -34,5 +35,9 @@ client.login = (onPrompt) =>
 
 setClient(client);
 
-// SOW-036: mount the shared member-hub shell (top bar + left rail), with "My workspace" active.
-initShell({ active: 'workspace' });
+// SOW-052: mount the shell with the WorkBench rail; the active item tracks the workspace tab (overview by default).
+// The rail's #tab= links switch tab without a reload (<gbti-workspace> listens for hashchange), so keep the rail
+// highlight in sync here too.
+const wbTab = () => parseWorkspaceTab(location.hash) || 'overview';
+initShell({ active: wbTab(), nav: 'workbench' });
+window.addEventListener('hashchange', () => setRailActive(wbTab()));

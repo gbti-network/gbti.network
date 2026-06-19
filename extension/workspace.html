@@ -11,13 +11,13 @@
   <script src="dist/theme-init.js"></script>
   <link rel="stylesheet" href="shell.css" />
   <style>
-    .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 26px; letter-spacing: -.02em; margin: 0 0 18px; }
+    .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; margin: 0; }
   </style>
 </head>
 <body>
-  <div class="nt" data-shell data-active="workspace">
+  <div class="nt" data-shell data-active="overview">
     <main class="nt-main">
-      <h1 class="hub-h">My workspace</h1>
+      <div class="nt-top" data-topbar><h1 class="hub-h">My WorkBench</h1></div>
       <gbti-lock-gate>
         <gbti-workspace></gbti-workspace>
       </gbti-lock-gate>

@@ -6,7 +6,7 @@ import { mountPageClient } from './page-client.mjs'; // sets the client + define
 import { initShell } from './shell.mjs';
 
 mountPageClient();
-initShell({ active: 'account' });
+initShell({ active: 'settings', nav: 'workbench' }); // SOW-052: Account = the WorkBench "Settings" section
 
 // <gbti-account>'s "Sign out" + the file-and-sign-out step of "Request deletion" emit this event.
 document.addEventListener('gbti:request-signout', async () => {

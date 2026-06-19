@@ -7,6 +7,5 @@ import { initShell } from './shell.mjs';
 
 mountPageClient();
 
-// SOW-036: mount the shared member-hub shell (top bar + left rail). Admin is not a rail destination (reached via
-// the account menu), so no rail item is highlighted.
-initShell({ active: null });
+// SOW-052: mount the shell with the WorkBench rail; Admin is its "Admin tools" section (role-gated in the rail).
+initShell({ active: 'admin', nav: 'workbench' });
