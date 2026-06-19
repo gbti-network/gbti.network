@@ -3332,8 +3332,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var esc2 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
-    article: '<path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M16 8 2 22M17.5 15H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
-    // quill (Articles)
+    article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
+    // inkwell + quill (Articles)
     product: '<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m4 8.5 8 4.5 8-4.5M12 13v7" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     coin: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.5c-.6-.8-1.6-1.2-2.7-1.2-1.5 0-2.6.8-2.6 2s1 1.7 2.6 1.9c1.6.2 2.7.7 2.7 2s-1.1 2-2.7 2c-1.2 0-2.2-.5-2.8-1.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
     news: '<path d="M4 5h13a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18 9h2a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2M7 9h7M7 12.5h7M7 16h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
@@ -3629,6 +3629,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function railKeyForType(type) {
     return RAIL_KEY[type] || "activity";
+  }
+  function feedSources(type) {
+    return {
+      wantNews: type === "news",
+      wantShares: type === "all" || type === "news" || type === "share",
+      narrow: !(type === "all" || type === "news")
+    };
   }
 
   // client-ui/src/elements/gbti-auth.mjs
@@ -7618,11 +7625,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
     }
-    const wantShares = TYPE === "all" || TYPE === "share";
-    const wantNews = TYPE === "all" || TYPE === "news";
+    const { wantNews, wantShares, narrow } = feedSources(TYPE);
     let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP2 }).map(toCardItem);
     if (wantNews && MEMBERSHIP2 === "paid" && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem));
-    if (TYPE !== "all") rows = rows.filter((e) => e.type === TYPE);
+    if (narrow) rows = rows.filter((e) => e.type === TYPE);
     if (VIEW === "following") {
       rows = rows.filter((e) => e.type === "news" ? FOLLOWED_CHANNELS && FOLLOWED_CHANNELS.has(String(e.source ?? e.author).toLowerCase()) : FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()));
     }
@@ -7673,8 +7679,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     syncTypeButtons();
     setRailActive(railKeyForType(TYPE));
     closeReader();
-    const needsShares = (TYPE === "all" || TYPE === "share") && !SHARES_LOADED;
-    const needsNews = (TYPE === "all" || TYPE === "news") && !NEWS_LOADED;
+    const needsShares = feedSources(TYPE).wantShares && !SHARES_LOADED;
+    const needsNews = feedSources(TYPE).wantNews && !NEWS_LOADED;
     if (needsShares || needsNews) {
       const feed = $("[data-feed]");
       if (feed) feed.innerHTML = '<p class="muted">Loading...</p>';
@@ -7697,7 +7703,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   }
   async function ensureSharesForFilter() {
-    if ((TYPE === "all" || TYPE === "share") && !SHARES_LOADED) {
+    if (feedSources(TYPE).wantShares && !SHARES_LOADED) {
       await loadShares();
       renderFeed($("[data-filter]")?.value || "");
     }
@@ -7716,7 +7722,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   }
   async function ensureNewsForFilter() {
-    if ((TYPE === "all" || TYPE === "news") && !NEWS_LOADED) {
+    if (feedSources(TYPE).wantNews && !NEWS_LOADED) {
       await loadNews();
       renderFeed($("[data-filter]")?.value || "");
     }
@@ -7895,10 +7901,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           b.setAttribute("aria-selected", on ? "true" : "false");
         });
         const q = $("[data-filter]")?.value || "";
-        if (VIEW === "following" && (!FOLLOWS_LOADED || !PREFS_LOADED || !NEWS_LOADED)) {
+        const wantN = feedSources(TYPE).wantNews;
+        if (VIEW === "following" && (!FOLLOWS_LOADED || !PREFS_LOADED || wantN && !NEWS_LOADED)) {
           const feed = $("[data-feed]");
           if (feed) feed.innerHTML = '<p class="muted">Loading the people + channels you follow...</p>';
-          await Promise.all([FOLLOWS_LOADED ? null : loadFollows(), PREFS_LOADED ? null : loadPrefs(), NEWS_LOADED ? null : loadNews()]);
+          await Promise.all([FOLLOWS_LOADED ? null : loadFollows(), PREFS_LOADED ? null : loadPrefs(), wantN && !NEWS_LOADED ? loadNews() : null]);
         }
         renderFeed(q);
       });
