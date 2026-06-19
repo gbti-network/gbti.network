@@ -43,13 +43,17 @@
     .nt-mode.on { background: var(--paper); color: var(--green-700); box-shadow: var(--sh-sm); }
     .nt-mode svg { width: 17px; height: 17px; }
 
-    /* SOW-042: the type filter chip-row */
-    .nt-types { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-    .nt-type { font-family: var(--f-sans); font-weight: 600; font-size: 13px; color: var(--fg-soft); background: var(--paper); border: 1.5px solid var(--line); cursor: pointer; padding: 7px 15px; border-radius: var(--r-pill); transition: background .14s, border-color .14s, color .14s; }
-    .nt-type:hover { border-color: var(--line-2); color: var(--fg); }
-    /* Active filter = SOLID green + white text (the light-tint + green-text read as low-contrast/"dark on dark"). */
-    .nt-type.on { background: var(--green); border-color: var(--green); color: #fff; }
-    .nt-type.on:hover { background: var(--green-700); border-color: var(--green-700); color: #fff; }
+    /* SOW-042: the type filter chip-row. It is the MOBILE counterpart to the left rail, so it is HIDDEN by
+       default (the rail is the filter on wider screens) and only shown under 650px, where the rail is hidden.
+       Framed + styled to match the rail: a paper panel holding nav-item-style chips (icon + label), the same
+       hover (paper-3) and active (green-tint + green-700) treatment as .nav-i. */
+    .nt-types { display: none; gap: 6px; margin-top: 14px; flex-wrap: wrap; padding: 6px; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); }
+    .nt-type { display: inline-flex; align-items: center; gap: 9px; font-family: var(--f-sans); font-weight: 600; font-size: 13.5px; color: var(--fg-soft); background: none; border: 0; cursor: pointer; padding: 8px 13px; border-radius: var(--r); transition: background .13s, color .13s; }
+    .nt-type:hover { background: var(--paper-3); color: var(--fg); }
+    .nt-type.on { background: var(--green-tint); color: var(--green-700); }
+    .nt-type .ti { width: 18px; height: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+    .nt-type .ti svg { width: 17px; height: 17px; }
+    @media (max-width: 650px) { .nt-types { display: flex; } }
 
     .nt-feed { margin-top: 16px; }
     .muted { color: var(--fg-mute); font-size: 14px; }
@@ -108,14 +112,16 @@
         </div>
       </div>
 
-      <!-- SOW-042: the type filter. "All" merges every type (incl. the member's Shares); the rest narrow to one. -->
+      <!-- SOW-042: the type filter. "All" merges every type (incl. the member's Shares); the rest narrow to one.
+           This horizontal filter is the MOBILE (<650px) counterpart to the left rail (which is hidden there), so
+           each chip carries the SAME glyph as its rail item. Hidden on wider screens (the rail is the filter). -->
       <div class="nt-types" role="group" aria-label="Filter by type">
-        <button class="nt-type on" type="button" data-type="all">All</button>
-        <button class="nt-type" type="button" data-type="post">Articles</button>
-        <button class="nt-type" type="button" data-type="product">Products</button>
-        <button class="nt-type" type="button" data-type="prompt">Prompts</button>
-        <button class="nt-type" type="button" data-type="share">Shares</button>
-        <button class="nt-type" type="button" data-type="news">News</button>
+        <button class="nt-type on" type="button" data-type="all"><span class="ti" data-ico="activity"></span>All</button>
+        <button class="nt-type" type="button" data-type="post"><span class="ti" data-ico="article"></span>Articles</button>
+        <button class="nt-type" type="button" data-type="product"><span class="ti" data-ico="product"></span>Products</button>
+        <button class="nt-type" type="button" data-type="prompt"><span class="ti" data-ico="prompt"></span>Prompts</button>
+        <button class="nt-type" type="button" data-type="share"><span class="ti" data-ico="coin"></span>Shares</button>
+        <button class="nt-type" type="button" data-type="news"><span class="ti" data-ico="news"></span>News</button>
       </div>
 
       <div class="nt-feed" data-feed><p class="muted" data-feed-status>Loading the latest from the co-op...</p></div>

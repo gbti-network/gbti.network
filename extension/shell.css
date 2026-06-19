@@ -112,7 +112,10 @@ html[data-unauth] .compose-modal { display: none !important; }
 .nt-main { min-width: 0; padding: 26px 34px 60px; overflow-y: auto; }
 
 /* ============================ responsive ============================ */
-@media (max-width: 980px) {
+/* The left rail is the filter on every NON-mobile screen, so it stays down to 650px; under 650px it gives way to
+   the single column + the horizontal type-filter chip-row (newtab.html .nt-types), so there is no width with no
+   filter at all. */
+@media (max-width: 650px) {
   .nt { grid-template-columns: 1fr; }
   .nt-rail { display: none; }
 }
