@@ -3040,7 +3040,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // News is a feed (curated, members-only), so it sits with Activity, not under Browse.
     { key: "news", href: "newtab.html#type=news", ico: "news", nm: "News", sub: "Curated, members-only" },
     { group: "Browse" },
-    { key: "all", href: "newtab.html#type=all", ico: "grid", nm: "All", sub: "Everything in one place" },
+    // No "All" item: Activity (bare newtab.html) IS the all-types river. Browse narrows to a single type.
     { key: "articles", href: "newtab.html#type=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
     { key: "products", href: "newtab.html#type=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
     { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
@@ -3092,6 +3092,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<a class="nav-i${on}" data-key="${r.key}" href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc2(r.nm)}</span>${sub}</span></a>`;
     }).join("");
     return `<nav class="nt-rail">${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE2}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+  }
+  function setRailActive(key) {
+    document.querySelectorAll(".nt-rail .nav-i").forEach((a) => a.classList.toggle("on", a.dataset.key === key));
   }
   async function api(pathname) {
     try {
@@ -3250,6 +3253,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     wireCompose(root);
     loadShellAccount(root);
     return { ico, loadShellAccount: () => loadShellAccount(root) };
+  }
+
+  // client-ui/src/feed-route.mjs
+  var TYPE_FILTERS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
+  var RAIL_KEY = { all: "activity", post: "articles", product: "products", prompt: "prompts", share: "shares", news: "news" };
+  function parseTypeFromHash(hash) {
+    const m = /(?:^|[#&])(?:type|tab)=([a-z]+)/.exec(String(hash || ""));
+    return m && TYPE_FILTERS.has(m[1]) ? m[1] : null;
+  }
+  function typeForHash(hash) {
+    return parseTypeFromHash(hash) || "all";
+  }
+  function railKeyForType(type) {
+    return RAIL_KEY[type] || "activity";
   }
 
   // client-ui/src/elements/gbti-auth.mjs
@@ -7421,25 +7438,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "compact";
     }
   })();
-  var TYPE_FILTERS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
-  var typeFromHash = () => {
-    const m = /(?:^|[#&])(?:type|tab)=([a-z]+)/.exec(typeof location !== "undefined" && location.hash || "");
-    return m && TYPE_FILTERS.has(m[1]) ? m[1] : null;
-  };
+  var hashStr = () => typeof location !== "undefined" && location.hash || "";
   var readFromHash = () => {
-    const { read } = parseBrowseHash(typeof location !== "undefined" && location.hash || "");
+    const { read } = parseBrowseHash(hashStr());
     return read || null;
   };
-  var TYPE = (() => {
-    const h = typeFromHash();
-    if (h) return h;
-    try {
-      const t = localStorage.getItem("gbti-nt-type");
-      return TYPE_FILTERS.has(t) ? t : "all";
-    } catch (e) {
-      return "all";
-    }
-  })();
+  var TYPE = typeForHash(hashStr());
   var MEMBERSHIP2 = "unknown";
   var SHARES = null;
   var SHARES_LOADED = false;
@@ -7521,11 +7525,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   async function selectType(next) {
     if (!TYPE_FILTERS.has(next) || next === TYPE) return;
     TYPE = next;
-    try {
-      localStorage.setItem("gbti-nt-type", TYPE);
-    } catch (e) {
-    }
     syncTypeButtons();
+    setRailActive(railKeyForType(TYPE));
     closeReader();
     const needsShares = (TYPE === "all" || TYPE === "share") && !SHARES_LOADED;
     const needsNews = (TYPE === "all" || TYPE === "news") && !NEWS_LOADED;
@@ -7670,8 +7671,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function init() {
     mountPageClient();
-    const RAIL_KEY = { all: "all", post: "articles", product: "products", prompt: "prompts", share: "shares", news: "news" };
-    initShell({ active: typeFromHash() ? RAIL_KEY[TYPE] : "activity" });
+    initShell({ active: railKeyForType(TYPE) });
     const greetEl = $("[data-greeting]");
     if (greetEl) greetEl.textContent = greeting();
     const dateEl = $("[data-date]");
@@ -7699,10 +7699,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }));
     document.querySelectorAll(".nt-type").forEach((b) => b.addEventListener("click", () => selectType(b.dataset.type)));
     window.addEventListener("hashchange", () => {
-      const t = typeFromHash();
-      if (t) selectType(t);
+      const t = typeForHash(hashStr());
+      selectType(t);
       const rd = readFromHash();
-      if (rd) openReader({ type: t || TYPE, path: rd });
+      if (rd) openReader({ type: t, path: rd });
     });
     const deepRead = readFromHash();
     if (deepRead) openReader({ type: TYPE, path: deepRead });

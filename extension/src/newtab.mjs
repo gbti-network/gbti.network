@@ -8,7 +8,8 @@ import { isLockedMembership } from '../../client/src/membership.mjs';
 import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
-import { initShell } from './shell.mjs';
+import { initShell, setRailActive } from './shell.mjs';
+import { TYPE_FILTERS, typeForHash, railKeyForType } from '../../client-ui/src/feed-route.mjs';
 import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here (also defines <gbti-card-list>)
 
 const SITE = 'https://gbti.network';
@@ -35,18 +36,19 @@ let FOLLOWED_CHANNELS = null; // a Set of lowercased source ids, or null when no
 let PREFS_LOADED = false;
 // SOW-039: the persisted feed view mode (compact | detailed | card).
 let MODE = (() => { try { return localStorage.getItem('gbti-nt-mode') || 'compact'; } catch (e) { return 'compact'; } })();
-// SOW-042/043: the persisted type filter (all | post | product | prompt | share | news). 'all' blends the
+// SOW-042/043: the active type filter (all | post | product | prompt | share | news). 'all' blends the
 // activity-index with the member's Shares + members-only News (capped river). MEMBERSHIP gates both; SHARES + NEWS
-// are the raw lists, loaded once on demand. News is PAID-only; Shares are paid-or-trial.
-const TYPE_FILTERS = new Set(['all', 'post', 'product', 'prompt', 'share', 'news']);
+// are the raw lists, loaded once on demand. News is PAID-only; Shares are paid-or-trial. (TYPE_FILTERS,
+// parseTypeFromHash, typeForHash, railKeyForType live in client-ui/src/feed-route.mjs so they are node-testable.)
 // The feed IS the unified content browser; the rail's Browse items are shortcuts that open it pre-filtered via
-// the hash (newtab.html#type=<X>). The hash wins over the persisted choice on load, so the rail always lands on
-// the right filter, and a hashchange (clicking a rail item while already here) switches the filter live. The
-// activity bell deep-links here too, in the legacy Browse hash shape (#tab=<type>&read=<repo path>); typeFromHash
-// accepts either `type=` or `tab=`, and readFromHash pulls the optional path that auto-opens the in-place reader.
-const typeFromHash = () => { const m = /(?:^|[#&])(?:type|tab)=([a-z]+)/.exec((typeof location !== 'undefined' && location.hash) || ''); return m && TYPE_FILTERS.has(m[1]) ? m[1] : null; };
-const readFromHash = () => { const { read } = parseBrowseHash((typeof location !== 'undefined' && location.hash) || ''); return read || null; };
-let TYPE = (() => { const h = typeFromHash(); if (h) return h; try { const t = localStorage.getItem('gbti-nt-type'); return TYPE_FILTERS.has(t) ? t : 'all'; } catch (e) { return 'all'; } })();
+// the hash (newtab.html#type=<X>). A BARE newtab.html (the Activity rail item) is ALWAYS the all-types river: the
+// hash alone decides the filter, so clicking Activity deterministically resets to 'all' (there is no persisted
+// type to fight it). The activity bell deep-links here too, in the legacy Browse hash shape
+// (#tab=<type>&read=<repo path>); the hash parser accepts `type=` OR `tab=`, and readFromHash pulls the optional
+// path that auto-opens the in-place reader.
+const hashStr = () => (typeof location !== 'undefined' && location.hash) || '';
+const readFromHash = () => { const { read } = parseBrowseHash(hashStr()); return read || null; };
+let TYPE = typeForHash(hashStr()); // bare newtab.html -> 'all' (the river); #type=<X> -> that type
 let MEMBERSHIP = 'unknown';
 let SHARES = null;
 let SHARES_LOADED = false;
@@ -163,8 +165,8 @@ function syncTypeButtons() {
 async function selectType(next) {
   if (!TYPE_FILTERS.has(next) || next === TYPE) return;
   TYPE = next;
-  try { localStorage.setItem('gbti-nt-type', TYPE); } catch (e) {}
   syncTypeButtons();
+  setRailActive(railKeyForType(TYPE)); // keep the left rail in lockstep with the chips + feed
   closeReader(); // switching filter returns from the reader to the feed
   const needsShares = (TYPE === 'all' || TYPE === 'share') && !SHARES_LOADED;
   const needsNews = (TYPE === 'all' || TYPE === 'news') && !NEWS_LOADED;
@@ -313,10 +315,10 @@ function init() {
   // new tab too; the feed itself still talks to the background worker directly.
   mountPageClient();
   // The shared shell injects + wires the top bar (theme, apps, account menu, "+") + the left rail, and fills the
-  // page's static [data-ico] glyphs (search + the mode-switcher icons). When arrived via a Browse shortcut
-  // (#type=<X>), highlight that rail item; otherwise the Activity feed entry.
-  const RAIL_KEY = { all: 'all', post: 'articles', product: 'products', prompt: 'prompts', share: 'shares', news: 'news' };
-  initShell({ active: typeFromHash() ? RAIL_KEY[TYPE] : 'activity' });
+  // page's static [data-ico] glyphs (search + the mode-switcher icons). The rail item highlighted is derived from
+  // the active TYPE (railKeyForType): a bare load lights Activity (the 'all' river), a #type=<X> lights its
+  // Browse item. selectType keeps it in sync thereafter.
+  initShell({ active: railKeyForType(TYPE) });
 
   const greetEl = $('[data-greeting]');
   if (greetEl) greetEl.textContent = greeting();
@@ -352,12 +354,14 @@ function init() {
   document.querySelectorAll('.nt-type').forEach((b) => b.addEventListener('click', () => selectType(b.dataset.type)));
 
   // The rail's Browse shortcuts (newtab.html#type=<X>) switch the filter when clicked while already on the feed; a
-  // bell deep-link (#tab=<type>&read=<path>) also auto-opens that item in the in-place reader.
+  // bell deep-link (#tab=<type>&read=<path>) also auto-opens that item in the in-place reader. A hash that drops
+  // the type (back to a bare or typeless fragment) resets to 'all' (typeForHash), so the river is reachable
+  // without a full reload too.
   window.addEventListener('hashchange', () => {
-    const t = typeFromHash();
-    if (t) selectType(t);
+    const t = typeForHash(hashStr());
+    selectType(t);
     const rd = readFromHash();
-    if (rd) openReader({ type: t || TYPE, path: rd });
+    if (rd) openReader({ type: t, path: rd });
   });
 
   // A bell deep-link present on first load opens that item straight into the in-place reader (the feed still

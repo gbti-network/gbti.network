@@ -7153,7 +7153,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // News is a feed (curated, members-only), so it sits with Activity, not under Browse.
     { key: "news", href: "newtab.html#type=news", ico: "news", nm: "News", sub: "Curated, members-only" },
     { group: "Browse" },
-    { key: "all", href: "newtab.html#type=all", ico: "grid", nm: "All", sub: "Everything in one place" },
+    // No "All" item: Activity (bare newtab.html) IS the all-types river. Browse narrows to a single type.
     { key: "articles", href: "newtab.html#type=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
     { key: "products", href: "newtab.html#type=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
     { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },

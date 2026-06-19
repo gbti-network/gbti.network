@@ -47,3 +47,6 @@ workers/news/.dev.vars
 workers/news/.wrangler/
 workers/news/.snapshots/
 workers/news/.playwright-mcp/
+
+# Playwright MCP run artifacts (snapshots/console logs from local verification)
+.playwright-mcp/

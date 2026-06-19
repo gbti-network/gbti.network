@@ -47,7 +47,7 @@ const RAIL = [
   // News is a feed (curated, members-only), so it sits with Activity, not under Browse.
   { key: 'news', href: 'newtab.html#type=news', ico: 'news', nm: 'News', sub: 'Curated, members-only' },
   { group: 'Browse' },
-  { key: 'all', href: 'newtab.html#type=all', ico: 'grid', nm: 'All', sub: 'Everything in one place' },
+  // No "All" item: Activity (bare newtab.html) IS the all-types river. Browse narrows to a single type.
   { key: 'articles', href: 'newtab.html#type=post', ico: 'article', nm: 'Articles', sub: 'Posts and tutorials' },
   { key: 'products', href: 'newtab.html#type=product', ico: 'product', nm: 'Products', sub: 'Plugins and tools' },
   { key: 'prompts', href: 'newtab.html#type=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Reusable prompts' },
@@ -101,6 +101,13 @@ function railHtml(active) {
     return `<a class="nav-i${on}" data-key="${r.key}" href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
   }).join('');
   return `<nav class="nt-rail">${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+}
+
+/** Re-highlight the rail to `key` (or clear when null). The rail renders its active item ONCE at initShell, but
+ *  the new-tab feed switches type via same-document hash navigation (no reload), so it calls this to keep the
+ *  left rail in lockstep with the chips + feed. */
+export function setRailActive(key) {
+  document.querySelectorAll('.nt-rail .nav-i').forEach((a) => a.classList.toggle('on', a.dataset.key === key));
 }
 
 /** GET /api/* via the background worker; null on any failure. */
