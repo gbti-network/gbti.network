@@ -114,9 +114,12 @@ function renderFeed(filter = '') {
   if (q) rows = rows.filter((e) => `${e.title} ${authorName(e.author)}`.toLowerCase().includes(q));
 
   if (!rows.length) {
+    // Cold start: if this view is still fetching news (nothing cached yet), say "loading", not "no news" — the
+    // list refreshes in place once it lands (avoids a "no news" flash that then fills in).
+    const newsLoading = wantNews && MEMBERSHIP === 'paid' && !NEWS_LOADED;
     const empty = VIEW === 'following'
       ? (q ? 'No followed activity matches that filter.' : 'No recent activity from the members you follow.')
-      : (q ? 'No activity matches that filter.' : (TYPE === 'share' ? 'No Shares yet.' : (TYPE === 'news' ? 'No news right now. Check back soon.' : 'No activity yet.')));
+      : (q ? 'No activity matches that filter.' : newsLoading ? 'Loading the latest news…' : (TYPE === 'share' ? 'No Shares yet.' : (TYPE === 'news' ? 'No news right now. Check back soon.' : 'No activity yet.')));
     feed.innerHTML = `<p class="muted">${empty}</p>`;
     return;
   }
@@ -165,21 +168,17 @@ function syncTypeButtons() {
 
 /** Switch the active type filter (shared by the chip-row clicks AND the rail's #type=<X> hash shortcuts). Lazily
  *  loads Shares/News the first time they are needed, then re-renders. A no-op if the filter is unchanged. */
-async function selectType(next) {
+function selectType(next) {
   if (!TYPE_FILTERS.has(next) || next === TYPE) return;
   TYPE = next;
   syncTypeButtons();
   setRailActive(railKeyForType(TYPE)); // keep the left rail in lockstep with the chips + feed
   closeReader(); // switching filter returns from the reader to the feed
-  const needsShares = feedSources(TYPE).wantShares && !SHARES_LOADED;
-  const needsNews = feedSources(TYPE).wantNews && !NEWS_LOADED;
-  if (needsShares || needsNews) {
-    const feed = $('[data-feed]');
-    if (feed) feed.innerHTML = '<p class="muted">Loading...</p>';
-    if (needsShares) await loadShares();
-    if (needsNews) await loadNews();
-  }
+  // Render IMMEDIATELY with whatever is already loaded (member activity + any cached news) — no blank "Loading...".
   renderFeed($('[data-filter]')?.value || '');
+  // Then refresh the sources this view needs in the BACKGROUND; each re-renders (re-sorts) the list when it lands.
+  ensureSharesForFilter();
+  ensureNewsForFilter();
 }
 
 /** Load the member's Shares once (member-gated, fail-closed to []). Shares ride /api/shares via the background. */
@@ -200,15 +199,32 @@ async function ensureSharesForFilter() {
   }
 }
 
+// News cache (chrome.storage.local): news is the SAME curated feed for every paid member (not per-member), so we
+// persist the last good fetch and re-hydrate it on the next new tab for an INSTANT first paint — the network
+// refresh then re-sorts the list in place instead of showing a blank "Loading...". Render stays paid-gated.
+const NEWS_CACHE_KEY = 'gbti-news-cache';
+async function readNewsCache() {
+  try { const r = await chrome.storage?.local?.get?.(NEWS_CACHE_KEY); const c = r?.[NEWS_CACHE_KEY]; return Array.isArray(c?.items) ? c.items : null; }
+  catch { return null; }
+}
+function writeNewsCache(items) {
+  try { chrome.storage?.local?.set?.({ [NEWS_CACHE_KEY]: { items, at: Date.now() } }); } catch { /* storage unavailable */ }
+}
+
 /** Load the member's News once (SOW-043). News is PAID-only (the Worker 403s a non-paid caller), so only attempt
- *  for a paid member; otherwise fail-closed to []. Rides /api/news via the background (the key stays in the Worker). */
+ *  for a paid member; otherwise fail-closed to []. Rides /api/news via the background (the key stays in the Worker).
+ *  A successful fetch updates the cache; an empty/failed fetch KEEPS the already-hydrated cache (no blanking). */
 async function loadNews() {
   NEWS_LOADED = true;
   if (MEMBERSHIP !== 'paid') { NEWS = []; return; }
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/news', query: { limit: 60 } } });
-    NEWS = Array.isArray(r?.json?.items) ? r.json.items : [];
-  } catch { NEWS = []; }
+    const items = Array.isArray(r?.json?.items) ? r.json.items : [];
+    if (items.length) { NEWS = items; writeNewsCache(items); }
+    else if (!Array.isArray(NEWS)) NEWS = []; // empty AND no cache hydrated -> []
+  } catch {
+    if (!Array.isArray(NEWS)) NEWS = []; // network failure AND no cache -> []; otherwise keep the cached items
+  }
 }
 
 /** If the active filter needs News and it is not loaded yet, fetch it, then re-render the feed. */
@@ -334,6 +350,10 @@ function init() {
   // Status drives the lapsed lock + the All filter's Shares (paid/trial) + News (paid) visibility; once it
   // resolves, pull whatever the default/persisted filter needs and re-render.
   checkMembershipLock().then(() => { ensureSharesForFilter(); ensureNewsForFilter(); });
+  // Hydrate the news cache for an INSTANT first paint (a #type=news tab shows the last-known news while the live
+  // fetch runs); skip if a fresh fetch already landed. Render gating stays paid-only, so this never leaks to a
+  // non-paid viewer. The live loadNews then re-sorts the list in place.
+  readNewsCache().then((cached) => { if (cached && !NEWS_LOADED) { NEWS = cached; renderFeed($('[data-filter]')?.value || ''); } });
   loadSetupBanner();
 
   // The setup banner opens the onboarding tab (sign in -> fork -> install).
