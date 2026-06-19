@@ -9,7 +9,7 @@ import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
 import { initShell, setRailActive } from './shell.mjs';
-import { TYPE_FILTERS, typeForHash, railKeyForType } from '../../client-ui/src/feed-route.mjs';
+import { TYPE_FILTERS, typeForHash, railKeyForType, feedSources } from '../../client-ui/src/feed-route.mjs';
 import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here (also defines <gbti-card-list>)
 
 const SITE = 'https://gbti.network';
@@ -92,11 +92,12 @@ function renderFeed(filter = '') {
   // SOW-042/043: the "All" filter blends content + the member's Shares (the ONE shared mergeAll, Shares omitted for
   // a non-member) with members-only News (supplementary, paid-only). A specific type filter narrows to that type.
   // Content + Shares are projected by toCardItem; News (a different source) by newsToItem; both are card items.
-  const wantShares = TYPE === 'all' || TYPE === 'share';
-  const wantNews = TYPE === 'all' || TYPE === 'news';
+  // The per-view source matrix (pure, node-tested): Activity ('all') = member content + Shares, NO news; News
+  // ('news') = news BLENDED with member content + Shares; the single-type directories narrow to their type.
+  const { wantNews, wantShares, narrow } = feedSources(TYPE);
   let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
   if (wantNews && MEMBERSHIP === 'paid' && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem)); // news is a paid perk
-  if (TYPE !== 'all') rows = rows.filter((e) => e.type === TYPE);
+  if (narrow) rows = rows.filter((e) => e.type === TYPE);
   // SOW-046 E: the Following view drills into followed MEMBERS' content/shares AND followed NEWS CHANNELS' news
   // (a news item is kept when its source is in the member's followedChannels).
   if (VIEW === 'following') {
@@ -168,8 +169,8 @@ async function selectType(next) {
   syncTypeButtons();
   setRailActive(railKeyForType(TYPE)); // keep the left rail in lockstep with the chips + feed
   closeReader(); // switching filter returns from the reader to the feed
-  const needsShares = (TYPE === 'all' || TYPE === 'share') && !SHARES_LOADED;
-  const needsNews = (TYPE === 'all' || TYPE === 'news') && !NEWS_LOADED;
+  const needsShares = feedSources(TYPE).wantShares && !SHARES_LOADED;
+  const needsNews = feedSources(TYPE).wantNews && !NEWS_LOADED;
   if (needsShares || needsNews) {
     const feed = $('[data-feed]');
     if (feed) feed.innerHTML = '<p class="muted">Loading...</p>';
@@ -191,7 +192,7 @@ async function loadShares() {
 
 /** If the active filter needs Shares and they are not loaded yet, fetch them, then re-render the feed. */
 async function ensureSharesForFilter() {
-  if ((TYPE === 'all' || TYPE === 'share') && !SHARES_LOADED) {
+  if (feedSources(TYPE).wantShares && !SHARES_LOADED) {
     await loadShares();
     renderFeed($('[data-filter]')?.value || '');
   }
@@ -210,7 +211,7 @@ async function loadNews() {
 
 /** If the active filter needs News and it is not loaded yet, fetch it, then re-render the feed. */
 async function ensureNewsForFilter() {
-  if ((TYPE === 'all' || TYPE === 'news') && !NEWS_LOADED) {
+  if (feedSources(TYPE).wantNews && !NEWS_LOADED) {
     await loadNews();
     renderFeed($('[data-filter]')?.value || '');
   }
@@ -401,11 +402,13 @@ function init() {
         b.setAttribute('aria-selected', on ? 'true' : 'false');
       });
       const q = $('[data-filter]')?.value || '';
-      if (VIEW === 'following' && (!FOLLOWS_LOADED || !PREFS_LOADED || !NEWS_LOADED)) {
+      // News only appears in the News view now, so Following loads news ONLY when the current view wants it
+      // (TYPE==='news'); on Activity it loads just the followed members + channels for the member-content filter.
+      const wantN = feedSources(TYPE).wantNews;
+      if (VIEW === 'following' && (!FOLLOWS_LOADED || !PREFS_LOADED || (wantN && !NEWS_LOADED))) {
         const feed = $('[data-feed]');
         if (feed) feed.innerHTML = '<p class="muted">Loading the people + channels you follow...</p>';
-        // Following needs followed members (loadFollows), followed channels (loadPrefs), and the news to filter.
-        await Promise.all([FOLLOWS_LOADED ? null : loadFollows(), PREFS_LOADED ? null : loadPrefs(), NEWS_LOADED ? null : loadNews()]);
+        await Promise.all([FOLLOWS_LOADED ? null : loadFollows(), PREFS_LOADED ? null : loadPrefs(), (wantN && !NEWS_LOADED) ? loadNews() : null]);
       }
       renderFeed(q);
     });

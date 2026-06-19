@@ -3,7 +3,7 @@
 // narrows + lights its Browse item, and the activity bell's legacy #tab=<X> deep-link resolves the same. No DOM.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TYPE_FILTERS, parseTypeFromHash, typeForHash, railKeyForType } from '../client-ui/src/feed-route.mjs';
+import { TYPE_FILTERS, parseTypeFromHash, typeForHash, railKeyForType, feedSources } from '../client-ui/src/feed-route.mjs';
 
 test('parseTypeFromHash reads a known type from #type=<X> (leading # optional)', () => {
   assert.equal(parseTypeFromHash('#type=post'), 'post');
@@ -61,4 +61,29 @@ test('there is no "all" rail key: the Browse "All" item was dropped', () => {
 
 test('TYPE_FILTERS is the canonical set the feed + chips share', () => {
   assert.deepEqual([...TYPE_FILTERS].sort(), ['all', 'news', 'post', 'product', 'prompt', 'share']);
+});
+
+test('feedSources: Activity (all) blends member content + Shares but NO news', () => {
+  assert.deepEqual(feedSources('all'), { wantNews: false, wantShares: true, narrow: false });
+});
+
+test('feedSources: News blends news + member content + Shares (member activity injected, not narrowed)', () => {
+  assert.deepEqual(feedSources('news'), { wantNews: true, wantShares: true, narrow: false });
+});
+
+test('feedSources: Shares loads Shares then narrows to that type', () => {
+  assert.deepEqual(feedSources('share'), { wantNews: false, wantShares: true, narrow: true });
+});
+
+test('feedSources: a single content type narrows, no Shares, no news', () => {
+  for (const t of ['post', 'product', 'prompt']) {
+    assert.deepEqual(feedSources(t), { wantNews: false, wantShares: false, narrow: true }, t);
+  }
+});
+
+test('feedSources: only the News view wants news; only all/news are blended (not narrowed)', () => {
+  for (const t of [...TYPE_FILTERS]) {
+    assert.equal(feedSources(t).wantNews, t === 'news', `wantNews for ${t}`);
+    assert.equal(feedSources(t).narrow, !(t === 'all' || t === 'news'), `narrow for ${t}`);
+  }
 });

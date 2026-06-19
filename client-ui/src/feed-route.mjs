@@ -25,3 +25,21 @@ export function typeForHash(hash) {
 export function railKeyForType(type) {
   return RAIL_KEY[type] || 'activity';
 }
+
+/**
+ * Which sources a given TYPE view composes, and whether it narrows to a single type. Pure + node-testable; the
+ * new-tab feed (renderFeed + the lazy-load gates) is driven entirely by this so the two stay in lockstep.
+ *   - `all`  (Activity): member content + Shares, NO news. The quick river (capped).
+ *   - `news` (News): news BLENDED with member content + Shares, newest-first (member activity is injected).
+ *   - `share`: Shares only (loads Shares, then narrows).
+ *   - `post|product|prompt`: that one content type only (no Shares, no news).
+ * `narrow` is false for the two BLENDED views (`all`, `news`) and true for the single-type directories.
+ * @returns {{ wantNews: boolean, wantShares: boolean, narrow: boolean }}
+ */
+export function feedSources(type) {
+  return {
+    wantNews: type === 'news',
+    wantShares: type === 'all' || type === 'news' || type === 'share',
+    narrow: !(type === 'all' || type === 'news'),
+  };
+}
