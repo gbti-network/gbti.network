@@ -5678,7 +5678,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-welcome", GbtiWelcome);
 
   // client-ui/src/workspace-core.mjs
-  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "product", "prs", "inbox", "saved", "subs"]);
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "product", "prs", "inbox", "saved", "subs", "earnings"]);
   function parseWorkspaceTab(hash) {
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
@@ -5964,8 +5964,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "inbox", label: "Inbox" },
     { id: "saved", label: "Saved" },
     // SOW-037: favorites + collections
-    { id: "subs", label: "Subscriptions" }
+    { id: "subs", label: "Subscriptions" },
     // SOW-037: follows + membership
+    { id: "earnings", label: "Earnings" }
+    // SOW-052: placeholder for referrals + rewards (SOW-007/008)
   ];
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
   var CSS19 = `
@@ -5974,7 +5976,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
   .tab.on { background:var(--hover); color:var(--accent); }
   .tbadge { display:inline-block; min-width:16px; margin-left:6px; padding:0 5px; border-radius:999px; background:var(--accent); color:#fff; font-size:11px; font-weight:800; line-height:16px; text-align:center; vertical-align:text-top; }
-  .profile { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:12px; padding:11px 14px; margin:0 0 14px; background:var(--panel); font-size:14px; }
+  .profile { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:2px; padding:11px 14px; margin:0 0 14px; background:var(--panel); font-size:14px; }
   .profile .lbl { color:var(--muted); font-size:12px; }
   .profile button { margin-left:auto; }
   ul.rows { list-style:none; margin:0; padding:0; }
@@ -5994,12 +5996,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .back { margin:0 0 14px; }
   a { color:var(--accent); }
   /* SOW-052: the Overview hub */
-  .ov-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid var(--line); border-radius:12px; padding:14px 16px; background:var(--panel); margin:0 0 16px; }
+  .ov-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid var(--line); border-radius:2px; padding:14px 16px; background:var(--panel); margin:0 0 16px; }
   .ov-hero b { font-size:15px; }
   .ov-hero .muted { font-size:12.5px; }
   .ov-draft { font-size:12.5px; color:var(--accent); font-weight:700; }
   .ov-tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; margin:0 0 22px; }
-  .ov-tile { display:flex; flex-direction:column; gap:4px; border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--panel); text-decoration:none; color:var(--fg); transition:border-color .14s, transform .14s; }
+  .ov-tile { display:flex; flex-direction:column; gap:4px; border:1px solid var(--line); border-radius:2px; padding:14px; background:var(--panel); text-decoration:none; color:var(--fg); transition:border-color .14s, transform .14s; }
   .ov-tile:hover { border-color:var(--accent); transform:translateY(-2px); }
   .ov-n { font-weight:800; font-size:22px; line-height:1; color:var(--accent); min-height:16px; }
   .ov-nm { font-weight:600; font-size:13.5px; color:var(--fg); }
@@ -6093,6 +6095,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._ensureOverview();
         return;
       }
+      if (id === "earnings") return;
       if (id === "inbox" || id === "saved" || id === "subs") return;
       if (tab.type && !this._cache[tab.type]) {
         try {
@@ -6180,6 +6183,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _body() {
       const tab = TABS.find((t) => t.id === this._tab);
       if (this._tab === "overview") return this._overviewHtml();
+      if (this._tab === "earnings") return `<div class="ov-hero"><div><b>Earnings</b><br/><span class="muted">Referral revenue-share and contributor rewards.</span></div></div><p class="empty">Earnings are coming soon. When live, this is where your referral commissions (30% lifetime of members you bring in) and accepted-contribution rewards will show, with payout status. Today you can manage your referral link + membership under <a href="account.html">Settings</a>.</p>`;
       if (this._tab === "inbox") return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
       if (this._tab === "saved") return `<gbti-saved></gbti-saved>`;
       if (this._tab === "subs") return `<gbti-subscriptions></gbti-subscriptions>`;
@@ -6216,6 +6220,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         { nm: "Pull requests", href: "workspace.html#tab=prs", n: c.prs },
         { nm: "Saved", href: "workspace.html#tab=saved", n: c.saved },
         { nm: "Subscriptions", href: "workspace.html#tab=subs", n: c.subs },
+        { nm: "Earnings", href: "workspace.html#tab=earnings", n: null },
         { nm: "Settings", href: "account.html", n: null },
         ...isStaff ? [{ nm: "Admin tools", href: "admin.html", n: null }] : []
       ];
@@ -7507,7 +7512,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     bookmark: '<path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     users: '<circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a3 3 0 0 1 0 5.6M16.5 13.5a5.5 5.5 0 0 1 4 5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     gear: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13a7.8 7.8 0 0 0 0-2l1.7-1.3-1.7-3-2 .8a7.6 7.6 0 0 0-1.7-1l-.3-2.1H10l-.3 2.1a7.6 7.6 0 0 0-1.7 1l-2-.8-1.7 3L6 11a7.8 7.8 0 0 0 0 2l-1.7 1.3 1.7 3 2-.8a7.6 7.6 0 0 0 1.7 1l.3 2.1h3.6l.3-2.1a7.6 7.6 0 0 0 1.7-1l2 .8 1.7-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
-    pr: '<circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 8.2v7.6M18 15.8V11a4 4 0 0 0-4-4h-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>'
+    pr: '<circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 8.2v7.6M18 15.8V11a4 4 0 0 0-4-4h-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+    // SOW-052: the "Network" rail item (back to the co-op feed) — connected nodes.
+    network: '<circle cx="6" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 7h8M7.7 8.6 10.7 16M16.3 8.6 13.3 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
   };
   var ico = (k) => SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true">${SVG[k]}</svg>` : "";
   var RAIL_FEED = [
@@ -7522,10 +7529,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
     { key: "shares", href: "newtab.html#type=share", ico: "coin", nm: "Shares", sub: "The co-op stream" },
     { div: true },
-    { key: "workspace", href: "workspace.html", ico: "grid", nm: "My WorkBench", sub: "Your content + tools" }
+    { key: "workspace", href: "workspace.html", ico: "grid", nm: "WorkBench", sub: "Your content + tools" }
   ];
   var RAIL_WORKBENCH = [
-    { group: "WorkBench" },
+    // SOW-052: a "Network" item up top takes the member back to the main co-op feed (newtab). No "WorkBench" eyebrow.
+    { key: "network", href: "newtab.html", ico: "network", nm: "Network", sub: "Back to the co-op" },
     // Explicit #tab=overview so clicking it ON workspace.html is a same-document switch (no reload), like the others.
     { key: "overview", href: "workspace.html#tab=overview", ico: "grid", nm: "Overview", sub: "Your hub at a glance" },
     { group: "My Content" },
@@ -7536,6 +7544,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests", sub: "Proposed + accepted" },
     { key: "saved", href: "workspace.html#tab=saved", ico: "bookmark", nm: "Saved", sub: "Favorites + collections" },
     { key: "subs", href: "workspace.html#tab=subs", ico: "users", nm: "Subscriptions", sub: "Who you follow" },
+    { key: "earnings", href: "workspace.html#tab=earnings", ico: "coin", nm: "Earnings", sub: "Referrals + rewards" },
     { div: true },
     { key: "settings", href: "account.html", ico: "gear", nm: "Settings", sub: "Membership + account" },
     { key: "admin", href: "admin.html", ico: "lock", nm: "Admin tools", sub: "Moderation", adminOnly: true }
@@ -7568,7 +7577,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="me-menu" data-me-menu role="menu" hidden>
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
-        <a class="mi" role="menuitem" href="workspace.html">My WorkBench</a>
+        <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
         <div class="me-sep" role="separator"></div>
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>

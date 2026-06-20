@@ -22,6 +22,7 @@ const TABS = [
   { id: 'inbox', label: 'Inbox' },
   { id: 'saved', label: 'Saved' }, // SOW-037: favorites + collections
   { id: 'subs', label: 'Subscriptions' }, // SOW-037: follows + membership
+  { id: 'earnings', label: 'Earnings' }, // SOW-052: placeholder for referrals + rewards (SOW-007/008)
 ];
 
 // SOW-052: the overview tiles — each is a section of the WorkBench. `count` is filled from the loaded data;
@@ -34,7 +35,7 @@ const CSS = `
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
   .tab.on { background:var(--hover); color:var(--accent); }
   .tbadge { display:inline-block; min-width:16px; margin-left:6px; padding:0 5px; border-radius:999px; background:var(--accent); color:#fff; font-size:11px; font-weight:800; line-height:16px; text-align:center; vertical-align:text-top; }
-  .profile { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:12px; padding:11px 14px; margin:0 0 14px; background:var(--panel); font-size:14px; }
+  .profile { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:2px; padding:11px 14px; margin:0 0 14px; background:var(--panel); font-size:14px; }
   .profile .lbl { color:var(--muted); font-size:12px; }
   .profile button { margin-left:auto; }
   ul.rows { list-style:none; margin:0; padding:0; }
@@ -54,12 +55,12 @@ const CSS = `
   .back { margin:0 0 14px; }
   a { color:var(--accent); }
   /* SOW-052: the Overview hub */
-  .ov-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid var(--line); border-radius:12px; padding:14px 16px; background:var(--panel); margin:0 0 16px; }
+  .ov-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid var(--line); border-radius:2px; padding:14px 16px; background:var(--panel); margin:0 0 16px; }
   .ov-hero b { font-size:15px; }
   .ov-hero .muted { font-size:12.5px; }
   .ov-draft { font-size:12.5px; color:var(--accent); font-weight:700; }
   .ov-tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; margin:0 0 22px; }
-  .ov-tile { display:flex; flex-direction:column; gap:4px; border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--panel); text-decoration:none; color:var(--fg); transition:border-color .14s, transform .14s; }
+  .ov-tile { display:flex; flex-direction:column; gap:4px; border:1px solid var(--line); border-radius:2px; padding:14px; background:var(--panel); text-decoration:none; color:var(--fg); transition:border-color .14s, transform .14s; }
   .ov-tile:hover { border-color:var(--accent); transform:translateY(-2px); }
   .ov-n { font-weight:800; font-size:22px; line-height:1; color:var(--accent); min-height:16px; }
   .ov-nm { font-weight:600; font-size:13.5px; color:var(--fg); }
@@ -155,6 +156,7 @@ class GbtiWorkspace extends GbtiElement {
     const tab = TABS.find((t) => t.id === id);
     if (!tab) return;
     if (id === 'overview') { this._ensureOverview(); return; } // SOW-052
+    if (id === 'earnings') return; // SOW-052: static placeholder, nothing to load
     // The Inbox / Saved / Subscriptions tabs are self-loading elements (they fetch their own data on connect),
     // so there is nothing to preload here; render() already mounted them. Returning avoids a redundant render.
     if (id === 'inbox' || id === 'saved' || id === 'subs') return;
@@ -231,6 +233,7 @@ class GbtiWorkspace extends GbtiElement {
   _body() {
     const tab = TABS.find((t) => t.id === this._tab);
     if (this._tab === 'overview') return this._overviewHtml(); // SOW-052
+    if (this._tab === 'earnings') return `<div class="ov-hero"><div><b>Earnings</b><br/><span class="muted">Referral revenue-share and contributor rewards.</span></div></div><p class="empty">Earnings are coming soon. When live, this is where your referral commissions (30% lifetime of members you bring in) and accepted-contribution rewards will show, with payout status. Today you can manage your referral link + membership under <a href="account.html">Settings</a>.</p>`; // SOW-052 placeholder (SOW-007/008)
     // SOW-028: the incoming-contribution review inbox is its own self-loading element. It fetches + renders
     // independently (and is inert with no client), so the workspace just mounts the tag.
     if (this._tab === 'inbox') return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
@@ -270,6 +273,7 @@ class GbtiWorkspace extends GbtiElement {
       { nm: 'Pull requests', href: 'workspace.html#tab=prs', n: c.prs },
       { nm: 'Saved', href: 'workspace.html#tab=saved', n: c.saved },
       { nm: 'Subscriptions', href: 'workspace.html#tab=subs', n: c.subs },
+      { nm: 'Earnings', href: 'workspace.html#tab=earnings', n: null },
       { nm: 'Settings', href: 'account.html', n: null },
       ...(isStaff ? [{ nm: 'Admin tools', href: 'admin.html', n: null }] : []),
     ];
