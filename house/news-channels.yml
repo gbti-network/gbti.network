@@ -4,14 +4,21 @@
 # that item to the mapped channel ONCE, deduped on the news item's guid (news-posted:<guid> in KV). A category
 # with NO mapping here means the heart is still recorded, but nothing is posted to Discord (fail-closed).
 #
-# `category` is a news category from the news worker's classifier (gbti-news-api/config/categories.mjs).
-# `channelId` is the numeric Discord channel id the bot posts into (the bot must be in that guild + have send
-# permission — provisioned by the owner). Channel ids are non-secret.
+# `category` MUST be one of the news worker's classifier categories (workers/news/config/categories.mjs). The
+# match is case-insensitive (channelForCategory lowercases both sides), so use the name verbatim or lowercased. A
+# category that is not in the classifier set simply never matches and nothing posts (fail-closed). Valid keys:
+#   ai/ml, web dev, frameworks/libraries, open source, security, devops/cloud, programming languages,
+#   hardware, blockchain, energy, business/funding, other
+# (NOTE: bare "ai" or "devops" do NOT match; the classifier emits "AI/ML" and "DevOps/Cloud".)
 #
-# Empty by default until the news worker is deployed + the channels are chosen. Example:
+# `channelId` is the numeric Discord channel id the bot posts into (the bot must be in that guild + have send
+# permission, provisioned by the owner). Channel ids are non-secret.
+#
+# Empty by default until the news worker is deployed + the channels are chosen. Example (mirror this shape into
+# the Worker var NEWS_CHANNELS as a JSON string):
 #   channels:
-#     - category: ai
+#     - category: ai/ml
 #       channelId: "111111111111111111"
-#     - category: devops
+#     - category: devops/cloud
 #       channelId: "222222222222222222"
 channels: []
