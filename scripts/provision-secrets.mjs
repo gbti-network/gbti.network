@@ -161,7 +161,7 @@ function statusOf(reg) {
   // So never auto-mark a local TEST value as push-ready, and flag a SET name that may still be test-mode.
   if (reg.classify === 'stripe' || reg.classify === 'stripe-price') {
     const mode = reg.classify === 'stripe' ? stripeMode(local?.value) : null;
-    if (setSomewhere) verdict = 'SET (verify prod is LIVE, not test)';
+    if (setSomewhere) verdict = 'SET (mode not readable here; confirm LIVE in the Stripe Dashboard)';
     else if (mode === 'live') verdict = 'READY (LIVE local -> push)';
     else if (local) verdict = 'NEEDS LIVE (local is test/unknown)';
     else verdict = 'NEEDS LIVE KEY (none local)';
