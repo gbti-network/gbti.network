@@ -165,8 +165,8 @@ function statusOf(reg) {
     else if (mode === 'live') verdict = 'READY (LIVE local -> push)';
     else if (local) verdict = 'NEEDS LIVE (local is test/unknown)';
     else verdict = 'NEEDS LIVE KEY (none local)';
-  } else if (pairCheck(reg)?.mismatch) {
-    // The local secret belongs to a different (sandbox) app than prod -> pushing it would mismatch.
+  } else if (targetMissing && local && pairCheck(reg)?.mismatch) {
+    // Prod is MISSING and the local value is for a different (sandbox) app -> pushing it would mismatch.
     verdict = `LOCAL IS SANDBOX (${reg.pairedIdVar} differs: prod has a different app; do NOT push local)`;
   } else if (targetMissing && local) {
     verdict = 'READY (local value -> push)';
