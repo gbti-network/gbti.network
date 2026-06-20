@@ -5,7 +5,7 @@
 // addToCollection (remove item), createCollection / renameCollection / deleteCollection. Host-agnostic + inert in
 // public (no client -> a sign-in nudge). The GitHub token never reaches the page (the host holds it).
 import { GbtiElement, define, esc } from '../base.mjs';
-import { buildItemIndex, resolveItem, groupFavoritesByType, indexFileFor, typeLabel, SAVED_TYPES } from '../saved-core.mjs';
+import { buildItemIndex, resolveItem, groupFavoritesByType, indexFileFor, typeLabel, SAVED_TYPES, savedTypeChips, filterSavedByType } from '../saved-core.mjs';
 
 const SITE = 'https://gbti.network';
 
@@ -31,6 +31,11 @@ const CSS = `
   .coll-act { margin-left:auto; display:flex; gap:2px; }
   .empty { color:var(--muted); font-size:13px; padding:6px 2px; list-style:none; }
   .muted { color:var(--muted); font-size:14px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 16px; }
+  .chip { font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; }
+  .chip:hover { color:var(--fg); border-color:var(--accent); }
+  .chip.on { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .chip .n { opacity:.7; font-variant-numeric:tabular-nums; }
   .newc { display:flex; gap:8px; margin-top:10px; }
   .newc input { flex:1; min-width:0; font:inherit; font-size:13.5px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
   .btn { flex:none; font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
@@ -42,6 +47,7 @@ class GbtiSaved extends GbtiElement {
     this._activity = null; // { favorites, collections, error? }
     this._index = null; // Map "type:slug" -> item
     this._busy = false;
+    this._filter = 'all'; // SOW-050 P2: the active content-type chip ('all' | post | product | prompt | share)
     super.connectedCallback?.();
     this._load();
   }
@@ -79,12 +85,21 @@ class GbtiSaved extends GbtiElement {
     if (this._activity.error === 'not-authenticated') { this.set(this.css(CSS) + `<p class="muted">Sign in to manage favorites and collections.</p>`); return; }
     const idx = this._index || buildItemIndex({});
 
-    const favGroups = groupFavoritesByType(this._activity.favorites);
+    // SOW-050 P2: chips are computed from the FULL activity (so counts and available types are stable as you
+    // filter); the displayed favorites + collections are the activity narrowed to the active type chip.
+    const chips = savedTypeChips(this._activity);
+    if (!chips.some((c) => c.type === this._filter)) this._filter = 'all'; // the filtered type emptied out -> fall back
+    const chipsHtml = chips.length > 1
+      ? `<div class="chips">${chips.map((c) => `<button class="chip ${c.type === this._filter ? 'on' : ''}" type="button" data-chip="${esc(c.type)}">${esc(c.label)} <span class="n">${c.count}</span></button>`).join('')}</div>`
+      : '';
+    const view = filterSavedByType(this._activity, this._filter);
+
+    const favGroups = groupFavoritesByType(view.favorites);
     const favHtml = favGroups.length
       ? favGroups.map((g) => `<div class="grp"><h4>${esc(typeLabel(g.type))}</h4><ul class="rows">${g.items.map((f) => this._itemRow(resolveItem(idx, f.type, f.slug), { fav: true })).join('')}</ul></div>`).join('')
-      : `<p class="muted">No favorites yet. Tap the heart on any article, product, or prompt to save it here.</p>`;
+      : `<p class="muted">No favorites yet. Tap the heart on any article, product, prompt, or Share to save it here.</p>`;
 
-    const colls = this._activity.collections;
+    const colls = view.collections;
     const collHtml = colls.length
       ? colls.map((c) => `<div class="coll">
           <div class="coll-h"><b class="coll-nm">${esc(c.name)}</b><span class="coll-ct">${(c.items || []).length} item${(c.items || []).length === 1 ? '' : 's'}</span>
@@ -94,6 +109,7 @@ class GbtiSaved extends GbtiElement {
       : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
 
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
+      ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
         <div class="newc"><input type="text" placeholder="New collection name" maxlength="80" data-newc /><button class="btn" data-newc-go type="button">Create</button></div>
@@ -111,6 +127,8 @@ class GbtiSaved extends GbtiElement {
   }
 
   _wire() {
+    // SOW-050 P2: the type-filter chips filter the already-loaded activity locally (no refetch) for an instant switch.
+    this.$$('[data-chip]').forEach((b) => b.addEventListener('click', () => { this._filter = b.dataset.chip; this.render(); }));
     this.$$('[data-unfav]').forEach((b) => b.addEventListener('click', () => this._run(() => this.client.toggleFavorite({ targetType: b.dataset.type, targetSlug: b.dataset.slug, on: false }))));
     this.$$('[data-rmitem]').forEach((b) => b.addEventListener('click', () => this._run(() => this.client.addToCollection({ id: b.dataset.cid, targetType: b.dataset.type, targetSlug: b.dataset.slug, on: false }))));
     this.$$('[data-rename]').forEach((b) => b.addEventListener('click', () => {

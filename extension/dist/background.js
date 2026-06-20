@@ -18413,6 +18413,62 @@ function buildRoster({ roles, bans, grandfathered, membersIndex, stripeStatuses 
   return { roster, summary };
 }
 
+// membership/member-activity.mjs
+var CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share"]);
+var MAX_NAME_LEN = 80;
+var SLUG_RE = /^[a-z0-9-]+$/;
+var SHARE_SLUG_RE = /^[a-z0-9-]+\/[a-z0-9-]+$/;
+var slugOk = (type, slug) => (type === "share" ? SHARE_SLUG_RE : SLUG_RE).test(slug);
+function emptyActivity() {
+  return { favorites: [], collections: [], updatedAt: null };
+}
+var isTarget = (type, slug) => CONTENT_TYPES.has(type) && typeof slug === "string" && slugOk(type, slug);
+var targetKey = (t) => `${t.type}:${t.slug}`;
+function normalizeActivity(raw) {
+  const a = emptyActivity();
+  if (!raw || typeof raw !== "object") return a;
+  if (Array.isArray(raw.favorites)) {
+    const seen = /* @__PURE__ */ new Set();
+    for (const f2 of raw.favorites) {
+      if (!f2 || !isTarget(f2.type, f2.slug)) continue;
+      const k = targetKey(f2);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      a.favorites.push({ type: f2.type, slug: f2.slug, addedAt: Number(f2.addedAt) || 0 });
+    }
+  }
+  if (Array.isArray(raw.collections)) {
+    const seenIds = /* @__PURE__ */ new Set();
+    for (const c of raw.collections) {
+      if (!c || typeof c.id !== "string" || typeof c.name !== "string") continue;
+      if (seenIds.has(c.id)) continue;
+      seenIds.add(c.id);
+      const items = [];
+      const seenItems = /* @__PURE__ */ new Set();
+      if (Array.isArray(c.items)) {
+        for (const it of c.items) {
+          if (!it || !isTarget(it.type, it.slug)) continue;
+          const k = targetKey(it);
+          if (seenItems.has(k)) continue;
+          seenItems.add(k);
+          items.push({ type: it.type, slug: it.slug, addedAt: Number(it.addedAt) || 0 });
+        }
+      }
+      a.collections.push({ id: c.id, name: c.name.slice(0, MAX_NAME_LEN), createdAt: Number(c.createdAt) || 0, items });
+    }
+  }
+  a.updatedAt = Number(raw.updatedAt) || null;
+  return a;
+}
+function filterActivity(activity, types2) {
+  const a = normalizeActivity(activity);
+  if (!Array.isArray(types2) || types2.length === 0) return a;
+  const allow = new Set(types2);
+  a.favorites = a.favorites.filter((f2) => allow.has(f2.type));
+  a.collections = a.collections.map((c) => ({ ...c, items: c.items.filter((it) => allow.has(it.type)) }));
+  return a;
+}
+
 // client/src/member-admin-client.mjs
 var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var AdminClientError = class extends Error {
@@ -18737,12 +18793,13 @@ function mapActivityError(err) {
   }
   return new OperationError("activity-failed", err?.message || "the activity request failed");
 }
-async function getMemberActivity(ctx) {
+async function getMemberActivity(ctx, { types: types2 } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   try {
     const r = await getActivity({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-    return r?.activity ?? { favorites: [], collections: [] };
+    const activity = r?.activity ?? { favorites: [], collections: [] };
+    return Array.isArray(types2) && types2.length ? filterActivity(activity, types2) : activity;
   } catch (err) {
     throw mapActivityError(err);
   }

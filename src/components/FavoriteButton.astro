@@ -7,7 +7,7 @@
 // a working toggle that writes the DELETABLE edge store (KV), NOT git (SOW-024). The displayed count refreshes
 // on the next reconcile + batched build (two-tier model, like comments).
 interface Props {
-  targetType: 'post' | 'product' | 'prompt';
+  targetType: 'post' | 'product' | 'prompt' | 'share'; // SOW-050 P3: Shares are a first-class basket type
   targetSlug: string;
   count?: number;
   size?: 'sm' | 'md';

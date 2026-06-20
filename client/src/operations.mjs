@@ -28,6 +28,7 @@ import { isContributionToFolder } from '../../membership/classify-pr.mjs';
 import yaml from 'js-yaml';
 import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
+import { filterActivity } from '../../membership/member-activity.mjs';
 import { getRosterStatuses as workerGetRosterStatuses, triggerAdminOp as workerTriggerAdminOp } from './member-admin-client.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
@@ -460,12 +461,15 @@ function mapActivityError(err) {
   return new OperationError('activity-failed', err?.message || 'the activity request failed');
 }
 
-export async function getMemberActivity(ctx) {
+// SOW-050 P2: an optional `types` filter (a list of content types) narrows the returned favorites + collection
+// items server-side. Omitted/empty -> the full activity, unchanged (additive; no storage migration).
+export async function getMemberActivity(ctx, { types } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
   try {
     const r = await workerGetActivity({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-    return r?.activity ?? { favorites: [], collections: [] };
+    const activity = r?.activity ?? { favorites: [], collections: [] };
+    return Array.isArray(types) && types.length ? filterActivity(activity, types) : activity;
   } catch (err) {
     throw mapActivityError(err);
   }

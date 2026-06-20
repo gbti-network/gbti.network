@@ -85,6 +85,9 @@ async function run(fn) {
   }
 }
 
+// SOW-050 P2: a comma-separated `types` query (e.g. "post,share") -> a trimmed list, or undefined when absent.
+const parseTypeList = (v) => (typeof v === 'string' && v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined);
+
 export async function handleApi(reqInfo, ctx) {
   const { method, pathname } = reqInfo;
   const query = normalizeQuery(reqInfo.query);
@@ -103,7 +106,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/comment') return run(() => publishComment(ctx, body ?? {})); // SOW-027
   if (method === 'POST' && pathname === '/api/comment/edit') return run(() => editComment(ctx, body ?? {})); // SOW-027
   if (method === 'GET' && pathname === '/api/comment') return run(() => getComment(ctx, { id: query.id })); // SOW-027 edit prefill
-  if (method === 'GET' && pathname === '/api/activity') return run(() => getMemberActivity(ctx)); // SOW-024 (favorites + collections)
+  if (method === 'GET' && pathname === '/api/activity') return run(() => getMemberActivity(ctx, { types: parseTypeList(query.types) })); // SOW-024 (favorites + collections); SOW-050 P2 optional type filter
   if (method === 'POST' && pathname === '/api/activity') return run(() => mutateMemberActivity(ctx, body ?? {})); // SOW-024
   if (method === 'GET' && pathname === '/api/follows') return run(() => getFollows(ctx)); // SOW-023
   if (method === 'POST' && pathname === '/api/follows') return run(() => setFollow(ctx, body ?? {})); // SOW-023

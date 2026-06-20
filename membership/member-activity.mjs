@@ -12,12 +12,17 @@
 //     collections: [{ id, name, createdAt, items: [{ type, slug, addedAt }] }],
 //     updatedAt }
 
-export const CONTENT_TYPES = new Set(['post', 'product', 'prompt']);
+// SOW-050 P3: a Share is a first-class basket type alongside post/product/prompt. Its slug is the composite
+// "<author>/<id>" (the same targetSlug the comment system uses), so it legitimately carries one slash; every
+// other type stays a single segment.
+export const CONTENT_TYPES = new Set(['post', 'product', 'prompt', 'share']);
 export const MAX_FAVORITES = 2000;
 export const MAX_COLLECTIONS = 100;
 export const MAX_ITEMS_PER_COLLECTION = 1000;
 export const MAX_NAME_LEN = 80;
 const SLUG_RE = /^[a-z0-9-]+$/;
+const SHARE_SLUG_RE = /^[a-z0-9-]+\/[a-z0-9-]+$/;
+const slugOk = (type, slug) => (type === 'share' ? SHARE_SLUG_RE : SLUG_RE).test(slug);
 
 /** Thrown for caller-input problems; the handler maps it to a 400 (never a 500). */
 export class ActivityError extends Error {}
@@ -26,7 +31,7 @@ export function emptyActivity() {
   return { favorites: [], collections: [], updatedAt: null };
 }
 
-const isTarget = (type, slug) => CONTENT_TYPES.has(type) && typeof slug === 'string' && SLUG_RE.test(slug);
+const isTarget = (type, slug) => CONTENT_TYPES.has(type) && typeof slug === 'string' && slugOk(type, slug);
 const targetKey = (t) => `${t.type}:${t.slug}`;
 
 /** Defensive: coerce any stored/incoming value into the canonical shape, dropping malformed entries, so a
@@ -118,6 +123,19 @@ export function deleteCollection(activity, { id }, { now = Date.now } = {}) {
   a.collections = a.collections.filter((c) => c.id !== id);
   if (a.collections.length === before) throw new ActivityError('collection not found');
   a.updatedAt = now();
+  return a;
+}
+
+/** SOW-050 P2: a pure, optional content-type filter over an activity object. `types` is a list of allowed
+ *  content types; an empty/missing list returns the (normalized) activity unchanged. Favorites are filtered
+ *  directly; every collection is KEPT (so the named lists never disappear from the view) with its items narrowed
+ *  to the allowed types. Used server-side by getMemberActivity and mirrored by the Saved view's chip row. */
+export function filterActivity(activity, types) {
+  const a = normalizeActivity(activity);
+  if (!Array.isArray(types) || types.length === 0) return a;
+  const allow = new Set(types);
+  a.favorites = a.favorites.filter((f) => allow.has(f.type));
+  a.collections = a.collections.map((c) => ({ ...c, items: c.items.filter((it) => allow.has(it.type)) }));
   return a;
 }
 

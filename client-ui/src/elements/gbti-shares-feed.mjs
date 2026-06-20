@@ -9,6 +9,8 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { shareToItem, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + link-host helper
 import './gbti-card-list.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the shared thread engine (factored out of this file)
+import './gbti-favorite.mjs'; // SOW-050 P3: Shares are first-class — favorite + collect them like every other type
+import './gbti-collection.mjs';
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -35,6 +37,7 @@ const CSS = `
   .reading .badge { margin-left:auto; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
   .reading .title { font-weight:700; font-size:18px; margin-top:8px; }
   .reading .desc { color:var(--muted); font-size:13.5px; margin-top:2px; }
+  .reading .actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; } /* SOW-050 P3: favorite + collect a Share */
   .body { margin-top:10px; font-size:14.5px; line-height:1.6; }
   .body :is(h1,h2,h3,h4){ font-weight:700; margin:.8em 0 .3em; }
   .body p { margin:0 0 .7em; } .body ul,.body ol { margin:0 0 .7em 1.2em; }
@@ -129,6 +132,12 @@ class GbtiSharesFeed extends GbtiElement {
     const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : '';
     const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">🔗 ${esc(hostOf(share.url))}</a>` : '';
     const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
+    // SOW-050 P3: the same Favorite + Collection cluster every content type carries. A Share keys on its composite
+    // "<author>/<id>" slug (the comment system's targetSlug), so favorites + collections round-trip it identically.
+    const actions = slug ? `<div class="actions">
+      <gbti-favorite data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-favorite>
+      <gbti-collection data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-collection>
+    </div>` : '';
     const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : '';
     // SOW-041 #5: a moderator+ can HIDE a Share (set it to draft via the SOW-005 PR flow; it drops from the stream
     // on the next read). UX-only gate; CODEOWNERS + the gate are the real boundary. Only members/<u>/shares/ paths.
@@ -137,7 +146,7 @@ class GbtiSharesFeed extends GbtiElement {
     this.set(this.css(CSS) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
-        ${title}${desc}
+        ${title}${desc}${actions}
         <div class="body" data-body><p class="empty">Loading…</p></div>
         ${link}${tags}${discussion}
       </article>`);

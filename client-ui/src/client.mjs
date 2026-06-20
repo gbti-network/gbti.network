@@ -96,7 +96,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
       return { favorited: favs.some((f) => f.type === targetType && f.slug === targetSlug) };
     },
     // SOW-024: member activity (favorites + collections) in the deletable edge store.
-    getActivity: () => request('GET', '/api/activity'), // returns { favorites, collections }
+    getActivity: ({ types } = {}) => request('GET', `/api/activity${qs({ types: Array.isArray(types) && types.length ? types.join(',') : undefined })}`), // returns { favorites, collections }; SOW-050 P2 optional type filter
     createCollection: ({ name }) => request('POST', '/api/activity', { action: 'collection.create', name }), // returns { id, activity }
     addToCollection: ({ id, targetType, targetSlug, on = true }) => request('POST', '/api/activity', { action: 'collection.item', id, targetType, targetSlug, on }),
     // SOW-037: manage collections from the member's "Saved" view (the ops already support these actions).

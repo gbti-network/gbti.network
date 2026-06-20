@@ -4690,8 +4690,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/saved-core.mjs
   var TYPE_INDEX = { post: "blog-index.json", product: "products-index.json", prompt: "prompts-index.json" };
-  var TYPE_LABEL = { post: "Articles", product: "Products", prompt: "Prompts" };
-  var ORDER = ["post", "product", "prompt"];
+  var TYPE_LABEL = { post: "Articles", product: "Products", prompt: "Prompts", share: "Shares" };
+  var ORDER = ["post", "product", "prompt", "share"];
   function indexFileFor(type) {
     return TYPE_INDEX[type] || null;
   }
@@ -4722,6 +4722,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const known = ORDER.filter((t) => groups.has(t));
     const extra = [...groups.keys()].filter((t) => !ORDER.includes(t));
     return [...known, ...extra].map((t) => ({ type: t, items: groups.get(t) }));
+  }
+  function savedTypeCounts(activity = {}) {
+    const counts = {};
+    const bump = (t) => {
+      if (t) counts[t] = (counts[t] || 0) + 1;
+    };
+    for (const f of activity.favorites || []) bump(f?.type);
+    for (const c of activity.collections || []) for (const it of c?.items || []) bump(it?.type);
+    return counts;
+  }
+  function savedTypeChips(activity = {}) {
+    const counts = savedTypeCounts(activity);
+    const total = Object.values(counts).reduce((n, v) => n + v, 0);
+    const chips = [{ type: "all", label: "All", count: total }];
+    for (const t of ORDER) if (counts[t]) chips.push({ type: t, label: typeLabel(t), count: counts[t] });
+    return chips;
+  }
+  function filterSavedByType(activity = {}, type) {
+    if (!type || type === "all") return activity;
+    return {
+      favorites: (activity.favorites || []).filter((f) => f?.type === type),
+      collections: (activity.collections || []).map((c) => ({ ...c, items: (c?.items || []).filter((it) => it?.type === type) }))
+    };
   }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
@@ -5989,6 +6012,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .reading .badge { margin-left:auto; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
   .reading .title { font-weight:700; font-size:18px; margin-top:8px; }
   .reading .desc { color:var(--muted); font-size:13.5px; margin-top:2px; }
+  .reading .actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; } /* SOW-050 P3: favorite + collect a Share */
   .body { margin-top:10px; font-size:14.5px; line-height:1.6; }
   .body :is(h1,h2,h3,h4){ font-weight:700; margin:.8em 0 .3em; }
   .body p { margin:0 0 .7em; } .body ul,.body ol { margin:0 0 .7em 1.2em; }
@@ -6100,13 +6124,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : "";
       const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">🔗 ${esc(hostOf(share.url))}</a>` : "";
       const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}</div>` : "";
+      const actions = slug ? `<div class="actions">
+      <gbti-favorite data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-favorite>
+      <gbti-collection data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-collection>
+    </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const canHide = (RANK4[this._role] ?? 0) >= RANK4.moderator && share.author && share.id;
       const mod = canHide ? `<button class="hide" type="button" data-hide>Hide Share</button>` : "";
       this.set(this.css(CSS14) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime3(share.createdAt))}</span>${badge}</div>
-        ${title}${desc}
+        ${title}${desc}${actions}
         <div class="body" data-body><p class="empty">Loading…</p></div>
         ${link}${tags}${discussion}
       </article>`);
@@ -6442,6 +6470,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .coll-act { margin-left:auto; display:flex; gap:2px; }
   .empty { color:var(--muted); font-size:13px; padding:6px 2px; list-style:none; }
   .muted { color:var(--muted); font-size:14px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 16px; }
+  .chip { font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; }
+  .chip:hover { color:var(--fg); border-color:var(--accent); }
+  .chip.on { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .chip .n { opacity:.7; font-variant-numeric:tabular-nums; }
   .newc { display:flex; gap:8px; margin-top:10px; }
   .newc input { flex:1; min-width:0; font:inherit; font-size:13.5px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
   .btn { flex:none; font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
@@ -6452,6 +6485,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._activity = null;
       this._index = null;
       this._busy = false;
+      this._filter = "all";
       super.connectedCallback?.();
       this._load();
     }
@@ -6498,15 +6532,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const idx = this._index || buildItemIndex({});
-      const favGroups = groupFavoritesByType(this._activity.favorites);
-      const favHtml = favGroups.length ? favGroups.map((g) => `<div class="grp"><h4>${esc(typeLabel(g.type))}</h4><ul class="rows">${g.items.map((f) => this._itemRow(resolveItem(idx, f.type, f.slug), { fav: true })).join("")}</ul></div>`).join("") : `<p class="muted">No favorites yet. Tap the heart on any article, product, or prompt to save it here.</p>`;
-      const colls = this._activity.collections;
+      const chips = savedTypeChips(this._activity);
+      if (!chips.some((c) => c.type === this._filter)) this._filter = "all";
+      const chipsHtml = chips.length > 1 ? `<div class="chips">${chips.map((c) => `<button class="chip ${c.type === this._filter ? "on" : ""}" type="button" data-chip="${esc(c.type)}">${esc(c.label)} <span class="n">${c.count}</span></button>`).join("")}</div>` : "";
+      const view = filterSavedByType(this._activity, this._filter);
+      const favGroups = groupFavoritesByType(view.favorites);
+      const favHtml = favGroups.length ? favGroups.map((g) => `<div class="grp"><h4>${esc(typeLabel(g.type))}</h4><ul class="rows">${g.items.map((f) => this._itemRow(resolveItem(idx, f.type, f.slug), { fav: true })).join("")}</ul></div>`).join("") : `<p class="muted">No favorites yet. Tap the heart on any article, product, prompt, or Share to save it here.</p>`;
+      const colls = view.collections;
       const collHtml = colls.length ? colls.map((c) => `<div class="coll">
           <div class="coll-h"><b class="coll-nm">${esc(c.name)}</b><span class="coll-ct">${(c.items || []).length} item${(c.items || []).length === 1 ? "" : "s"}</span>
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
       this.set(this.css(CSS18) + `<div class="${this._busy ? "busy" : ""}">
+      ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
         <div class="newc"><input type="text" placeholder="New collection name" maxlength="80" data-newc /><button class="btn" data-newc-go type="button">Create</button></div>
@@ -6520,6 +6559,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<li class="row"><span class="badge">${esc(typeLabel(item.type))}</span>${t}${rm}</li>`;
     }
     _wire() {
+      this.$$("[data-chip]").forEach((b) => b.addEventListener("click", () => {
+        this._filter = b.dataset.chip;
+        this.render();
+      }));
       this.$$("[data-unfav]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.toggleFavorite({ targetType: b.dataset.type, targetSlug: b.dataset.slug, on: false }))));
       this.$$("[data-rmitem]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.addToCollection({ id: b.dataset.cid, targetType: b.dataset.type, targetSlug: b.dataset.slug, on: false }))));
       this.$$("[data-rename]").forEach((b) => b.addEventListener("click", () => {
@@ -7809,8 +7852,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return { favorited: favs.some((f) => f.type === targetType && f.slug === targetSlug) };
       },
       // SOW-024: member activity (favorites + collections) in the deletable edge store.
-      getActivity: () => request("GET", "/api/activity"),
-      // returns { favorites, collections }
+      getActivity: ({ types: types2 } = {}) => request("GET", `/api/activity${qs({ types: Array.isArray(types2) && types2.length ? types2.join(",") : void 0 })}`),
+      // returns { favorites, collections }; SOW-050 P2 optional type filter
       createCollection: ({ name }) => request("POST", "/api/activity", { action: "collection.create", name }),
       // returns { id, activity }
       addToCollection: ({ id, targetType, targetSlug, on = true }) => request("POST", "/api/activity", { action: "collection.item", id, targetType, targetSlug, on }),

@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 import {
   emptyActivity, normalizeActivity, applyFavorite, createCollection, renameCollection,
-  deleteCollection, setCollectionItem, ActivityError, MAX_NAME_LEN,
+  deleteCollection, setCollectionItem, filterActivity, ActivityError, MAX_NAME_LEN,
 } from '../membership/member-activity.mjs';
 import { handleActivity, eraseMemberActivity, ACTIVITY_KEY } from '../workers/signup/membership-activity.mjs';
 
@@ -57,6 +57,43 @@ test('collections: create returns an id, rename, add/remove items, delete', () =
   a = deleteCollection(a, { id }, { now: clock });
   assert.equal(a.collections.length, 0);
   assert.throws(() => deleteCollection(a, { id }, { now: clock }), ActivityError);
+});
+
+// ---- SOW-050: Shares as a first-class basket type + the type filter ----
+
+test('SOW-050 P3: a Share favorite accepts the composite "<author>/<id>" slug; other types stay single-segment', () => {
+  // a share's slug legitimately carries one slash
+  let a = applyFavorite(emptyActivity(), { type: 'share', slug: 'hudson/my-note', on: true }, { now: clock });
+  assert.equal(a.favorites.length, 1);
+  assert.deepEqual(a.favorites[0], { type: 'share', slug: 'hudson/my-note', addedAt: 1000 });
+  // a bad share slug (no second segment, or a space) is rejected
+  assert.throws(() => applyFavorite(emptyActivity(), { type: 'share', slug: 'hudson', on: true }), ActivityError);
+  assert.throws(() => applyFavorite(emptyActivity(), { type: 'share', slug: 'hudson/a b', on: true }), ActivityError);
+  // a non-share type must NOT accept a slash (the single-segment rule still holds)
+  assert.throws(() => applyFavorite(emptyActivity(), { type: 'post', slug: 'a/b', on: true }), ActivityError);
+  // a share round-trips through a collection item too
+  let made = createCollection(emptyActivity(), { name: 'Notes' }, { now: clock, genId: () => 's1' });
+  made = setCollectionItem(made.activity, { id: 's1', type: 'share', slug: 'dikafei/x9', on: true }, { now: clock });
+  assert.equal(made.collections[0].items[0].slug, 'dikafei/x9');
+});
+
+test('SOW-050 P2: filterActivity narrows favorites + collection items to the allowed types, keeps every collection', () => {
+  const activity = {
+    favorites: [{ type: 'post', slug: 'a' }, { type: 'share', slug: 'me/n1' }, { type: 'product', slug: 'b' }],
+    collections: [{ id: 'c1', name: 'Mix', items: [{ type: 'post', slug: 'a' }, { type: 'share', slug: 'me/n1' }] }],
+    updatedAt: 7,
+  };
+  // no/empty types -> unchanged (normalized)
+  assert.equal(filterActivity(activity, []).favorites.length, 3);
+  assert.equal(filterActivity(activity).favorites.length, 3);
+  // single type
+  const shares = filterActivity(activity, ['share']);
+  assert.deepEqual(shares.favorites.map((f) => f.slug), ['me/n1']);
+  assert.equal(shares.collections.length, 1); // the collection is KEPT
+  assert.deepEqual(shares.collections[0].items.map((i) => i.slug), ['me/n1']); // its items are narrowed
+  // multiple types
+  const pp = filterActivity(activity, ['post', 'product']);
+  assert.deepEqual(pp.favorites.map((f) => f.type).sort(), ['post', 'product']);
 });
 
 test('normalizeActivity drops malformed entries and caps the name length', () => {

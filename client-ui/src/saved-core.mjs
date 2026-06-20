@@ -3,9 +3,11 @@
 // content index JSONs (the same indexes gbti-browse fetches). Node-free so it unit-tests without a DOM/network.
 
 // A favorite's type is the content type ('post' for an article). Map it to its build-time index file + label.
+// SOW-050 P3: 'share' is a first-class saved type. Shares have no public page/index, so there is no index file
+// (indexFileFor('share') -> null and resolveItem falls back to the slug); they still get a label + sort slot.
 const TYPE_INDEX = { post: 'blog-index.json', product: 'products-index.json', prompt: 'prompts-index.json' };
-const TYPE_LABEL = { post: 'Articles', product: 'Products', prompt: 'Prompts' };
-const ORDER = ['post', 'product', 'prompt'];
+const TYPE_LABEL = { post: 'Articles', product: 'Products', prompt: 'Prompts', share: 'Shares' };
+const ORDER = ['post', 'product', 'prompt', 'share'];
 
 export function indexFileFor(type) { return TYPE_INDEX[type] || null; }
 export function typeLabel(type) { return TYPE_LABEL[type] || String(type || ''); }
@@ -44,6 +46,36 @@ export function groupFavoritesByType(favorites = []) {
   const known = ORDER.filter((t) => groups.has(t));
   const extra = [...groups.keys()].filter((t) => !ORDER.includes(t));
   return [...known, ...extra].map((t) => ({ type: t, items: groups.get(t) }));
+}
+
+/** SOW-050 P2: per-type saved counts ({ post: n, share: n, ... }) across favorites + every collection's items.
+ *  Drives the Saved view's type-filter chip row (a type chip shows only when its count is > 0). */
+export function savedTypeCounts(activity = {}) {
+  const counts = {};
+  const bump = (t) => { if (t) counts[t] = (counts[t] || 0) + 1; };
+  for (const f of activity.favorites || []) bump(f?.type);
+  for (const c of activity.collections || []) for (const it of c?.items || []) bump(it?.type);
+  return counts;
+}
+
+/** SOW-050 P2: the ordered type-filter chips for the Saved view. Always an 'all' chip first, then one chip per
+ *  known content type that actually has saved items, in the canonical ORDER. [{ type, label, count }]. */
+export function savedTypeChips(activity = {}) {
+  const counts = savedTypeCounts(activity);
+  const total = Object.values(counts).reduce((n, v) => n + v, 0);
+  const chips = [{ type: 'all', label: 'All', count: total }];
+  for (const t of ORDER) if (counts[t]) chips.push({ type: t, label: typeLabel(t), count: counts[t] });
+  return chips;
+}
+
+/** SOW-050 P2: narrow a display activity ({favorites, collections}) to a single content type for the chip row.
+ *  `type` null/'all' returns the activity unchanged. Collections are kept; only their items are narrowed. */
+export function filterSavedByType(activity = {}, type) {
+  if (!type || type === 'all') return activity;
+  return {
+    favorites: (activity.favorites || []).filter((f) => f?.type === type),
+    collections: (activity.collections || []).map((c) => ({ ...c, items: (c?.items || []).filter((it) => it?.type === type) })),
+  };
 }
 
 /** Total saved count across favorites + every collection's items (for an at-a-glance header). */

@@ -1,7 +1,7 @@
 // SOW-037: the pure helpers behind the member "Saved" view. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItemIndex, resolveItem, groupFavoritesByType, savedCount, indexFileFor, typeLabel } from '../client-ui/src/saved-core.mjs';
+import { buildItemIndex, resolveItem, groupFavoritesByType, savedCount, indexFileFor, typeLabel, savedTypeCounts, savedTypeChips, filterSavedByType } from '../client-ui/src/saved-core.mjs';
 
 test('indexFileFor / typeLabel map content types to their index + label', () => {
   assert.equal(indexFileFor('post'), 'blog-index.json');
@@ -10,6 +10,9 @@ test('indexFileFor / typeLabel map content types to their index + label', () => 
   assert.equal(indexFileFor('bogus'), null);
   assert.equal(typeLabel('post'), 'Articles');
   assert.equal(typeLabel('prompt'), 'Prompts');
+  // SOW-050 P3: Shares are a labelled type with no build-time index (resolveItem falls back to the slug).
+  assert.equal(typeLabel('share'), 'Shares');
+  assert.equal(indexFileFor('share'), null);
 });
 
 test('buildItemIndex keys by type:slug and resolveItem falls back to the slug when absent', () => {
@@ -46,8 +49,40 @@ test('groupFavoritesByType groups in a stable order and drops malformed', () => 
 });
 
 test('groupFavoritesByType places unknown types after the known ones', () => {
-  const groups = groupFavoritesByType([{ type: 'share', slug: 'x' }, { type: 'post', slug: 'y' }]);
-  assert.deepEqual(groups.map((g) => g.type), ['post', 'share']);
+  // 'share' is now a KNOWN type (sorts after prompt); use a genuinely unknown type to cover the tail ordering.
+  const groups = groupFavoritesByType([{ type: 'news', slug: 'x' }, { type: 'post', slug: 'y' }]);
+  assert.deepEqual(groups.map((g) => g.type), ['post', 'news']);
+  // a Share sorts last among the known types
+  const withShare = groupFavoritesByType([{ type: 'share', slug: 'me/x' }, { type: 'post', slug: 'y' }]);
+  assert.deepEqual(withShare.map((g) => g.type), ['post', 'share']);
+});
+
+test('SOW-050 P2: savedTypeCounts + savedTypeChips tally favorites + collection items per type', () => {
+  const activity = {
+    favorites: [{ type: 'post', slug: 'a' }, { type: 'share', slug: 'me/n' }, { type: 'post', slug: 'b' }],
+    collections: [{ items: [{ type: 'prompt', slug: 'p' }, { type: 'share', slug: 'me/n' }] }],
+  };
+  assert.deepEqual(savedTypeCounts(activity), { post: 2, share: 2, prompt: 1 });
+  const chips = savedTypeChips(activity);
+  assert.deepEqual(chips[0], { type: 'all', label: 'All', count: 5 }); // 'all' first, total count
+  // known order: post, prompt, share (product has 0 -> no chip)
+  assert.deepEqual(chips.slice(1).map((c) => c.type), ['post', 'prompt', 'share']);
+  assert.equal(chips.find((c) => c.type === 'share').count, 2);
+  // empty activity -> only the 'all' chip (count 0)
+  assert.deepEqual(savedTypeChips({}), [{ type: 'all', label: 'All', count: 0 }]);
+});
+
+test('SOW-050 P2: filterSavedByType narrows favorites + collection items but keeps every collection', () => {
+  const activity = {
+    favorites: [{ type: 'post', slug: 'a' }, { type: 'share', slug: 'me/n' }],
+    collections: [{ id: 'c1', name: 'Mix', items: [{ type: 'post', slug: 'a' }, { type: 'share', slug: 'me/n' }] }],
+  };
+  assert.equal(filterSavedByType(activity, 'all'), activity); // 'all' is a pass-through
+  assert.equal(filterSavedByType(activity, null), activity);
+  const shares = filterSavedByType(activity, 'share');
+  assert.deepEqual(shares.favorites.map((f) => f.slug), ['me/n']);
+  assert.equal(shares.collections.length, 1); // collection kept
+  assert.deepEqual(shares.collections[0].items.map((i) => i.type), ['share']); // items narrowed
 });
 
 test('savedCount counts favorites + items across collections', () => {

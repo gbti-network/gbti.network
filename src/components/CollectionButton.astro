@@ -6,7 +6,7 @@
 // working picker (it reads/writes the deletable edge store via /membership/activity, member-activity-client.mjs).
 // Collections are private + erasable (SOW-024), NOT in the public git repo, unlike SOW-013 favorites.yml.
 interface Props {
-  targetType: 'post' | 'product' | 'prompt';
+  targetType: 'post' | 'product' | 'prompt' | 'share'; // SOW-050 P3: Shares are a first-class basket type
   targetSlug: string;
   size?: 'sm' | 'md';
 }
