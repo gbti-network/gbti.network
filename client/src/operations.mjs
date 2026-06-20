@@ -28,7 +28,7 @@ import { isContributionToFolder } from '../../membership/classify-pr.mjs';
 import yaml from 'js-yaml';
 import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
-import { getRosterStatuses as workerGetRosterStatuses } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, triggerAdminOp as workerTriggerAdminOp } from './member-admin-client.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
 
@@ -690,6 +690,20 @@ export async function getOpenPulls(ctx) {
   await requireAdmin(ctx);
   const repo = requireRepo(ctx);
   return { pulls: await repo.listOpenPulls() };
+}
+
+// SOW-038 P3: trigger an allow-listed superadmin OPERATION (reconcile / e2e) via the Worker's dispatch endpoint.
+// Admin-gated locally (UX, fail-closed) AND by the Worker (the authority + the dispatch token). Returns
+// { ok, triggered } or throws OperationError.
+export async function triggerAdminOp(ctx, { action } = {}) {
+  await requireAdmin(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) throw new OperationError('not-authenticated', 'sign in first');
+  try {
+    return await workerTriggerAdminOp({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, action });
+  } catch (err) {
+    throw new OperationError('admin-op-failed', err?.message || 'could not trigger the operation');
+  }
 }
 
 export async function listPRs(ctx) {

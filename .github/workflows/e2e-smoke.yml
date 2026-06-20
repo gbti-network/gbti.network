@@ -7,6 +7,10 @@ name: E2E smoke (live)
 
 on:
   workflow_dispatch: {}
+  # SOW-038 P3: the superadmin dashboard "Run E2E smoke" button fires repository_dispatch type 'admin-e2e'
+  # (via the signup Worker's allow-listed /membership/admin/ops). Same job; the trigger is the only addition.
+  repository_dispatch:
+    types: [admin-e2e]
 
 permissions:
   contents: read

@@ -50,6 +50,7 @@ import { verifyStripeSignature, isDuplicateEvent, markEventSeen, handleStripeEve
 import { membershipStatus } from './membership-status.mjs';
 import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { membershipAdminStatuses } from './membership-admin.mjs';
+import { membershipAdminOps } from './membership-admin-ops.mjs'; // SOW-038 P3: admin-gated reconcile/E2E dispatch
 import { handleActivity } from './membership-activity.mjs';
 import { handleFollows } from './membership-follows.mjs';
 import { membershipNews, membershipNewsCategories, membershipNewsSources } from './membership-news.mjs'; // SOW-043/046: members-only news proxy
@@ -400,6 +401,16 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET') {
           const r = await membershipAdminStatuses(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-038 P3: admin-gated OPERATIONS triggers (reconcile / E2E-smoke) via an allow-listed repository_dispatch.
+      // The dispatch token stays in the Worker; the caller can only name an allow-listed action. Never cached.
+      if (pathname === '/membership/admin/ops') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'POST') {
+          const r = await membershipAdminOps(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

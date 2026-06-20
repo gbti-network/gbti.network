@@ -43,6 +43,12 @@ const CSS = `
   .pr-m { flex:none; color:var(--muted); font-family:var(--font-mono, monospace); font-size:11.5px; }
   .muted { color:var(--muted); font-size:14px; }
   .note { color:var(--muted); font-size:12.5px; margin:14px 0 0; line-height:1.5; }
+  /* SOW-038 P3: operations triggers */
+  .ops { display:flex; flex-wrap:wrap; gap:10px; }
+  .opbtn { font:inherit; font-weight:600; font-size:13px; padding:9px 15px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); cursor:pointer; }
+  .opbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .opbtn[disabled] { opacity:.6; cursor:default; }
+  .opnote { font-size:12.5px; margin:10px 0 0; } .opnote.ok { color:var(--accent); } .opnote.err { color:var(--danger); }
 `;
 
 const ROLE_RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -101,6 +107,31 @@ class GbtiSuperadminDashboard extends GbtiElement {
     return `<h3 class="sec-h">Open pull requests <span class="ct">${this._pulls.length}</span></h3><ul class="prs">${rows}</ul>`;
   }
 
+  // SOW-038 P3: the operations section (reconcile / E2E-smoke triggers). The dashboard is admin-gated (the roster
+  // loaded), so these show only to a confirmed admin; the Worker re-checks + holds the dispatch token.
+  _opsSection() {
+    const note = this._opNote ? `<p class="opnote ${this._opNote.ok ? 'ok' : 'err'}">${esc(this._opNote.msg)}</p>` : '';
+    return `<h3 class="sec-h">Operations</h3>
+      <div class="ops">
+        <button class="opbtn" data-op="reconcile" type="button">Run reconcile (apply)</button>
+        <button class="opbtn" data-op="e2e" type="button">Run E2E smoke</button>
+      </div>${note}
+      <p class="note">Reconcile brings published content + Discord roles in line with Stripe + overrides (full <code>--apply</code>; idempotent). E2E smoke runs the live authenticated create &rarr; confirm &rarr; scrub cycle. Both kick off a GitHub Actions run; results appear in the repo's Actions tab.</p>`;
+  }
+
+  async _runOp(action, btn) {
+    if (btn) btn.disabled = true;
+    this._opNote = { ok: true, msg: 'Triggering&hellip;' };
+    this.render();
+    try {
+      await this.client.adminOp(action);
+      this._opNote = { ok: true, msg: `Triggered "${action}". Watch the run in the repo's Actions tab.` };
+    } catch (err) {
+      this._opNote = { ok: false, msg: err?.message || 'Could not trigger the operation.' };
+    }
+    this.render();
+  }
+
   // The effective-status cell: the resolved status badge + the override source when it overrode Stripe.
   _statusCell(m) {
     const LABEL = { paid: 'paid', trialing: 'trial', expired: 'expired', cancelled: 'cancelled', none: 'none', banned: 'banned', unknown: 'unknown' };
@@ -145,9 +176,11 @@ class GbtiSuperadminDashboard extends GbtiElement {
     this.set(this.css(CSS) + `${chips}
       <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>Content</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No members known yet.</td></tr>'}</tbody></table>
       <p class="note">Effective status follows ban &gt; staff &gt; grandfather &gt; Stripe. The live Stripe tier is shown when the admin Stripe endpoint is reachable (otherwise it reads "unknown"); the override tiers (ban / staff / grandfather) are always authoritative from the public repo.</p>
-      ${this._pullsSection()}`);
+      ${this._pullsSection()}
+      ${this._opsSection()}`);
 
     this.$$('[data-avfor]').forEach((img) => img.addEventListener('error', () => { img.style.visibility = 'hidden'; }, { once: true }));
+    this.$$('[data-op]').forEach((b) => b.addEventListener('click', () => this._runOp(b.dataset.op, b))); // SOW-038 P3
   }
 }
 

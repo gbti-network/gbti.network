@@ -114,6 +114,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     admin: (action, args = {}) => request('POST', '/api/admin', { action, ...args }),
     overrides: () => request('GET', '/api/overrides'), // SOW-038 P2: admin-gated roster { roster, summary }
     openPulls: () => request('GET', '/api/open-pulls'), // SOW-038 P2: admin-gated open content-PR queue { pulls }
+    adminOp: (action) => request('POST', '/api/admin-ops', { action }), // SOW-038 P3: trigger reconcile / e2e -> { ok, triggered }
   };
 }
 
