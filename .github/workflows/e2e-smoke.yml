@@ -42,6 +42,18 @@ jobs:
           E2E_SITE: https://gbti.network
           E2E_WORKER: https://signup.gbti.network
           GITHUB_CONTENT_REPO: gbti-network/gbti.network
+      # SOW-035 Phase 4: admin gates + override precedence + a governance draft-PR + reconcile dry-run.
+      # All safe-by-default: read-only checks or a never-merged DRAFT PR that auto-scrubs. The reconcile dry-run
+      # only runs when STRIPE_SECRET_KEY (a read-only test key) is set; otherwise it skips, keeping the run green.
+      - name: Run the live admin-cycle (admin gates + override precedence + governance draft-PR + reconcile dry-run)
+        if: always()
+        run: node tests/e2e/admin-cycle.mjs
+        env:
+          E2E_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          E2E_SITE: https://gbti.network
+          E2E_WORKER: https://signup.gbti.network
+          GITHUB_CONTENT_REPO: gbti-network/gbti.network
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
 
   # Phase 3: the Playwright extension-UI smoke. Loads the MV3 extension headed (xvfb), seeds a signed-in state,
   # and drives the new tab + the gbti.network content-script bridge. Separate job (it needs deps + a browser).
