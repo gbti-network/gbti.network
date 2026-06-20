@@ -39,7 +39,7 @@ const REGISTRY = [
   { name: 'DISCORD_OAUTH_CLIENT_SECRET', targets: ['worker'], pairedIdVar: 'DISCORD_OAUTH_CLIENT_ID', caution: 'human-todo flags resetting this before launch (it was read in a session). Reset, then push the fresh value.', note: 'Website Discord connect (shared app).' },
   { name: 'REGATE_DISPATCH_TOKEN', targets: ['worker'], note: 'Post-payment re-gate + the SOW-038 admin ops buttons. Same value as GH_BOT_TOKEN / GITHUB_BOT_TOKEN.', localName: 'GITHUB_BOT_TOKEN' },
   { name: 'STRIPE_SECRET_KEY', targets: ['worker', 'actions'], classify: 'stripe', note: 'Worker=write key, Actions=read key. Prod must be a LIVE key for real charges.' },
-  { name: 'STRIPE_PRICE_ID', targets: ['worker'], classify: 'stripe-price', note: 'The annual $150 price id; live price for production.' },
+  { name: 'STRIPE_PRICE_ID', targets: ['worker'], kind: 'var', note: 'The annual $150 price id. NON-SECRET var in wrangler.toml [env.production.vars], not a secret.' },
   { name: 'STRIPE_WEBHOOK_SECRET', targets: ['worker'], optional: true, note: 'Only if the optional Stripe webhook is enabled.' },
   { name: 'SESSION_SECRET', targets: ['worker'], note: 'Signed session/state cookie.' },
   { name: 'MEMBER_CONTENT_KEY', targets: ['worker'], note: 'AES key for member-only content (never leaves the Worker).' },
@@ -149,6 +149,11 @@ function mark(set, name) { return set === undefined ? '?' : set.has(name) ? 'SET
 
 // ---- report ----
 function statusOf(reg) {
+  // A non-secret var lives in wrangler.toml [env.production.vars], not the secret store. Check it there.
+  if (reg.kind === 'var') {
+    const pv = prodVar(reg.name);
+    return { reg, w: pv ? 'var-set' : 'var-MISSING', a: 'n/a', local: findLocal(reg), verdict: pv ? 'ok (non-secret var in wrangler.toml)' : 'MISSING (set in wrangler.toml [env.production.vars])' };
+  }
   const wn = reg.targets.includes('worker') ? workerNames() : null;
   const an = reg.targets.includes('actions') ? actionNames() : null;
   const local = findLocal(reg);
