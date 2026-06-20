@@ -170,3 +170,42 @@ test('parseFeed extracts an Atom enclosure-link image (SOW-046 F)', () => {
   assert.equal(it.image, 'https://cdn.ex.com/a1.jpg');
   assert.equal(it.link, 'https://ex.com/a1'); // the alternate link still wins for the article URL
 });
+
+// SOW-050 Tier 0: when a feed carries no enclosure/media image, fall back to the FIRST inline <img> in the item body
+// (content:encoded / description), with NO extra fetch. Skips tracking/beacon images; media still wins when present.
+const RSS_INLINE = `<?xml version="1.0"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/"><channel>
+  <item>
+    <title>Inline content image</title>
+    <link>https://ex.com/i</link>
+    <guid>https://ex.com/i</guid>
+    <content:encoded><![CDATA[<p>Lead</p><img src="https://cdn.ex.com/lead.jpg" width="800"/><p>More</p>]]></content:encoded>
+  </item>
+  <item>
+    <title>Description image</title>
+    <link>https://ex.com/d</link>
+    <guid>https://ex.com/d</guid>
+    <description><![CDATA[<img src='https://cdn.ex.com/desc.png'> body]]></description>
+  </item>
+  <item>
+    <title>Tracking beacon is skipped</title>
+    <link>https://ex.com/t</link>
+    <guid>https://ex.com/t</guid>
+    <description><![CDATA[<img src="https://feeds.feedburner.com/~r/site/~4/abc.gif"> text]]></description>
+  </item>
+  <item>
+    <title>Media wins over inline</title>
+    <link>https://ex.com/w</link>
+    <guid>https://ex.com/w</guid>
+    <media:thumbnail url="https://cdn.ex.com/win.png"/>
+    <content:encoded><![CDATA[<img src="https://cdn.ex.com/inline.jpg"/>]]></content:encoded>
+  </item>
+</channel></rss>`;
+
+test('parseFeed falls back to the first inline body <img> (SOW-050 Tier 0)', () => {
+  const by = Object.fromEntries(parseFeed(RSS_INLINE, 'src').map((i) => [i.title, i.image]));
+  assert.equal(by['Inline content image'], 'https://cdn.ex.com/lead.jpg');
+  assert.equal(by['Description image'], 'https://cdn.ex.com/desc.png'); // single-quoted src too
+  assert.equal(by['Tracking beacon is skipped'], null); // feedburner .gif beacon -> not picked
+  assert.equal(by['Media wins over inline'], 'https://cdn.ex.com/win.png'); // enclosure/media still takes priority
+});

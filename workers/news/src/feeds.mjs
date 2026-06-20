@@ -73,6 +73,18 @@ export function toEpochSeconds(raw) {
  *  <enclosure>, an Atom <link rel="enclosure" type="image/...">, or Media RSS <media:thumbnail>/<media:content>
  *  (incl. a <media:group> wrapper). Returns '' when the item carries no usable image. This is the cheap source
  *  of a news card's picture; true per-article og:image would need a fetch + HTML parse per item (heavier). */
+// SOW-050 Tier 0: tracking pixels + feed-plumbing images that should never be picked as a lead image. Substring
+// match on the URL (feedburner/feedproxy beacons, ad networks, WordPress/Gravatar stat pixels) + 1x1 .gif beacons.
+const TRACKING_IMG = /(feedburner|feedproxy|doubleclick|googleadservices|pixel\.wp\.com|stats\.wordpress|\/feed\/|gravatar\.com\/avatar)/i;
+
+// SOW-050 Tier 0: pull the first inline <img src> from an HTML body string (content:encoded / description). Many
+// feeds inline the full post, so the lead image is right here with NO extra fetch. Returns '' when none.
+function firstInlineImg(html) {
+  const s = String(html || '');
+  const m = s.match(/<img\b[^>]*?\ssrc\s*=\s*["']([^"']+)["']/i);
+  return m ? m[1].trim() : '';
+}
+
 function pickImage(node) {
   if (!node || typeof node !== 'object') return '';
   const ok = (u) => typeof u === 'string' && /^https?:\/\//i.test(u.trim()) && !/\.svg(\?|#|$)/i.test(u.trim());
@@ -95,6 +107,13 @@ function pickImage(node) {
       const looksImage = key === 'media:thumbnail' || medium === 'image' || /^image\//i.test(type) || (!medium && !type);
       if (looksImage && ok(url)) return url.trim();
     }
+  }
+  // SOW-050 Tier 0: last resort, the first <img> the feed inlined in the item body (content:encoded / description /
+  // summary / Atom content). Free (no fetch) and covers the many feeds that ship the full post. Skips .gif (often a
+  // 1x1 beacon) and known tracking/plumbing hosts.
+  for (const field of ['content:encoded', 'description', 'summary', 'content']) {
+    const u = firstInlineImg(text(node[field]));
+    if (u && ok(u) && !/\.gif(\?|#|$)/i.test(u) && !TRACKING_IMG.test(u)) return u;
   }
   return '';
 }

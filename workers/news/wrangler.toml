@@ -30,8 +30,11 @@ account_id = "d42b12e969229c5187ad0f7289536487"
 # SOW-043: hourly ingestion ENABLED (the host app absorbs the news worker + wants the automated workflow). This
 # schedule registers on the next `wrangler deploy` of this worker. Stays within the Cloudflare free-tier budget
 # (SOURCE_CHUNK + MAX_CLASSIFY + ~9 KV ops < 50 subrequests/run). Set back to [] to pause ingestion.
+# Two schedules, each with its OWN free-tier budget (50 subrequests + 10 ms CPU per invocation): ingest at :00
+# (collection + AI) and the SOW-050 image backfill at :30 (offset so they never overlap on KV). 2 of the Free
+# limit of 5 cron triggers per account. The :30 run is matched by IMAGE_BACKFILL_CRON in [vars].
 [triggers]
-crons = ["0 * * * *"]
+crons = ["0 * * * *", "30 * * * *"]
 
 # Workers AI binding (classification). Free tier: 10,000 Neurons/day.
 [ai]
@@ -64,6 +67,11 @@ SOURCE_CHUNK = "20"
 MAX_CLASSIFY = "16"
 # Workers AI model id used for classification.
 AI_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+# SOW-050 Tier 1: article fetches per image-backfill run (its own 50-subrequest budget on the :30 cron). The backlog
+# drains at this rate per hour (a per-item `imgTried` flag makes it converge + never refetch an image-less article).
+MAX_IMAGE_BACKFILL = "12"
+# The cron expression (must match one entry in [triggers].crons) that runs the image backfill instead of ingest.
+IMAGE_BACKFILL_CRON = "30 * * * *"
 
 # ===========================================================================
 # PRODUCTION ENVIRONMENT  (deploy: `npx wrangler deploy --env production`)
@@ -80,6 +88,13 @@ RETENTION_DAYS = "30"
 SOURCE_CHUNK = "20"
 MAX_CLASSIFY = "16"
 AI_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+MAX_IMAGE_BACKFILL = "12"
+IMAGE_BACKFILL_CRON = "30 * * * *"
+
+# Named envs do not inherit top-level [triggers], so the production deploy path (`--env production`) needs both
+# schedules redefined here (ingest at :00 + the SOW-050 image backfill at :30).
+[env.production.triggers]
+crons = ["0 * * * *", "30 * * * *"]
 
 [env.production.ai]
 binding = "AI"

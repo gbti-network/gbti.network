@@ -37,9 +37,11 @@ export const loadIndex = (env) => getJSON(env, K_INDEX, emptyIndex());
 export const loadGuids = (env) => getJSON(env, K_GUIDS, {});
 export const loadDay = (env, d) => getJSON(env, kDay(d), []);
 
-const saveIndex = (env, index) => env.NEWS_KV.put(K_INDEX, JSON.stringify(index));
+// Exported so the SOW-050 image backfill can rewrite a shard in place (image/imgTried fields) + bump freshness,
+// keeping ALL KV access isolated in this module (the R2-swap-is-one-file invariant).
+export const saveIndex = (env, index) => env.NEWS_KV.put(K_INDEX, JSON.stringify(index));
 const saveGuids = (env, guids) => env.NEWS_KV.put(K_GUIDS, JSON.stringify(guids));
-const saveDay = (env, d, items) => env.NEWS_KV.put(kDay(d), JSON.stringify(items));
+export const saveDay = (env, d, items) => env.NEWS_KV.put(kDay(d), JSON.stringify(items));
 
 /** Merge incoming items into a day's array, dedupe by guid (incoming wins), sort newest-first. Pure. */
 export function mergeDayItems(existing, incoming) {

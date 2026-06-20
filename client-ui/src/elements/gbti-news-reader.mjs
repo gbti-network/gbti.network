@@ -23,6 +23,7 @@ const CSS = `
   .fbtn:hover { border-color:var(--accent); color:var(--accent); }
   .fbtn.on { background:var(--brand); border-color:var(--brand); color:#fff; }
   .fbtn[disabled] { opacity:.6; cursor:default; }
+  .hero { display:block; width:100%; aspect-ratio:16 / 9; object-fit:cover; border-radius:12px; margin:0 0 18px; background:var(--hover); }
   h2 { font-family:var(--font-display, var(--font-body)); font-size:23px; line-height:1.3; margin:0 0 12px; }
   .sum { font-size:15px; line-height:1.6; color:var(--fg); margin:0 0 20px; }
   .acts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
@@ -118,17 +119,21 @@ class GbtiNewsReader extends GbtiElement {
     const note = this._postNote ? `<p class="note ${this._postNote.ok ? 'ok' : 'err'}">${esc(this._postNote.msg)}</p>` : '';
     const slug = it.guid ? newsTargetSlug(it.guid) : '';
     const discussion = slug ? `<div class="disc-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : '';
+    // SOW-050: the source article's og:image as a hero (drops out on load error via the capture handler below).
+    const heroSrc = it.thumb || it.image || '';
+    const hero = heroSrc ? `<img class="hero" src="${esc(heroSrc)}" alt="" loading="lazy">` : '';
     this.set(this.css(CSS)
       + `<div class="pub"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ''}</span>`
       + `<div class="pi"><b>${esc(pub?.name || it.source || 'Publisher')}</b>${meta ? `<span class="d">${esc(meta)}</span>` : ''}</div>`
       + (followable ? `<button class="fbtn ${followed ? 'on' : ''}" data-follow type="button">${followed ? 'Following' : 'Follow'}</button>` : '')
       + `</div>`
+      + hero
       + `<h2>${esc(it.title || 'News')}</h2>`
       + `<p class="sum">${esc(it.excerpt || 'No summary available.')}</p>`
       + `<div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ''}${disc}</div>${note}`
       + discussion);
-    if (!this._wiredErr) { // a broken favicon drops to the empty disc (CSP-safe capture phase)
-      this.root?.addEventListener('error', (e) => { const t = e.target; if (t?.tagName === 'IMG' && t.classList?.contains('avimg')) t.remove(); }, true);
+    if (!this._wiredErr) { // a broken favicon drops to the empty disc, a broken hero removes itself (CSP-safe capture phase)
+      this.root?.addEventListener('error', (e) => { const t = e.target; if (t?.tagName === 'IMG' && (t.classList?.contains('avimg') || t.classList?.contains('hero'))) t.remove(); }, true);
       this._wiredErr = true;
     }
     this.$('[data-follow]')?.addEventListener('click', (e) => this._toggleFollow(e.currentTarget));

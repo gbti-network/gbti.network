@@ -13,6 +13,7 @@
 //   GET  /sources     configured sources + current counts                                           [auth]
 //   GET  /diag        content-richness coverage (full vs blurb-only) per source — Readability signal  [auth]
 //   POST /refresh     run an ingest cycle on demand (same code path as the cron)                     [auth]
+//   POST /backfill-images  fetch og:images for stored items lacking one (SOW-050 Tier 1; capped)     [auth]
 //
 // Config (sources, descriptions, categories) lives in config/*.mjs. The polled collection is stored
 // day-sharded in KV (src/store.mjs). CORS is wildcard-open: every data route is bearer-authenticated
@@ -20,6 +21,7 @@
 
 import { isAuthorized } from './auth.mjs';
 import { ingest } from './ingest.mjs';
+import { backfillImages } from './backfill.mjs';
 import { loadIndex, queryItems } from './store.mjs';
 import { clampLimit, publicItem, categoriesWithCounts, sourcesWithCounts, contentDiagnostics } from './api.mjs';
 import { DASHBOARD_HTML } from './dashboard.mjs';
@@ -38,13 +40,14 @@ function json(body, status = 200, extraHeaders = {}) {
 }
 
 export default {
-  // Hourly cron. Keep the handler quick; do the work in the background but never float the promise.
+  // Cron. Two schedules share this Worker (each gets its own 50-subrequest / 10 ms-CPU budget): the ingest schedule
+  // runs collection + AI; the IMAGE_BACKFILL_CRON schedule (offset, e.g. ":30") fetches og:images for stored items
+  // that lack one (SOW-050 Tier 1). Branch on controller.cron. Keep the handler quick; work runs via waitUntil.
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(
-      ingest(env).catch((err) =>
-        console.error(JSON.stringify({ at: 'scheduled', cron: controller.cron, error: String(err?.message || err) })),
-      ),
-    );
+    const onErr = (err) => console.error(JSON.stringify({ at: 'scheduled', cron: controller.cron, error: String(err?.message || err) }));
+    const backfillCron = env.IMAGE_BACKFILL_CRON || '30 * * * *';
+    const job = controller.cron === backfillCron ? backfillImages(env) : ingest(env);
+    ctx.waitUntil(job.catch(onErr));
   },
 
   async fetch(request, env, ctx) {
@@ -98,6 +101,13 @@ export default {
 
       if (method === 'POST' && pathname === '/refresh') {
         const summary = await ingest(env);
+        return json({ ok: true, summary });
+      }
+
+      // SOW-050 Tier 1: backfill og:images for already-stored items lacking one (same code path as the backfill cron).
+      // Capped per call (MAX_IMAGE_BACKFILL); call repeatedly to drain the backlog faster than the hourly schedule.
+      if (method === 'POST' && pathname === '/backfill-images') {
+        const summary = await backfillImages(env);
         return json({ ok: true, summary });
       }
 
