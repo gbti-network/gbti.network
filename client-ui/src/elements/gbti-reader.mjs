@@ -94,7 +94,7 @@ class GbtiReader extends GbtiElement {
     // Shares carry an ISO createdAt; content items carry a numeric publishedAt.
     const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
     const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName(it.author))}</span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ''}</div>`;
-    const coverUrl = resolveAsset(it.thumb); // SOW-031: the index item's thumbnail, shown as a cover above the body
+    const coverUrl = resolveAsset(it.thumbCard || it.thumb); // SOW-031/050: the larger card derivative reads crisp as a full-width cover
     const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : '';
     let body;
     if (this._html === null) body = `<p class="muted">Loading...</p>`;

@@ -18431,6 +18431,21 @@ async function getRosterStatuses({ token, signupBase, fetch = globalThis.fetch }
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin statuses request failed (${res.status})`);
   return data?.statuses ?? {};
 }
+async function triggerAdminOp({ token, signupBase, fetch = globalThis.fetch, action }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch(trimBase4(signupBase) + "/membership/admin/ops", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ action })
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `operation failed (${res.status})`);
+  return data;
+}
 
 // client/src/operations.mjs
 var OperationError = class extends Error {
@@ -18917,6 +18932,16 @@ async function getOpenPulls(ctx) {
   await requireAdmin(ctx);
   const repo = requireRepo(ctx);
   return { pulls: await repo.listOpenPulls() };
+}
+async function triggerAdminOp2(ctx, { action } = {}) {
+  await requireAdmin(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  if (!token) throw new OperationError("not-authenticated", "sign in first");
+  try {
+    return await triggerAdminOp({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, action });
+  } catch (err) {
+    throw new OperationError("admin-op-failed", err?.message || "could not trigger the operation");
+  }
 }
 async function listIncomingContributions(ctx) {
   const id = requireIdentity(ctx);
@@ -19613,6 +19638,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getOverridesRoster(ctx));
       case "/api/open-pulls":
         return ok(await getOpenPulls(ctx));
+      case "/api/admin-ops":
+        return ok(await triggerAdminOp2(ctx, body ?? {}));
       case "/api/pr-status": {
         const n = Number(query.number);
         if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");

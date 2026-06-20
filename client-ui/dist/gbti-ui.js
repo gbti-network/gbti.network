@@ -1246,6 +1246,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .pr-m { flex:none; color:var(--muted); font-family:var(--font-mono, monospace); font-size:11.5px; }
   .muted { color:var(--muted); font-size:14px; }
   .note { color:var(--muted); font-size:12.5px; margin:14px 0 0; line-height:1.5; }
+  /* SOW-038 P3: operations triggers */
+  .ops { display:flex; flex-wrap:wrap; gap:10px; }
+  .opbtn { font:inherit; font-weight:600; font-size:13px; padding:9px 15px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); cursor:pointer; }
+  .opbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .opbtn[disabled] { opacity:.6; cursor:default; }
+  .opnote { font-size:12.5px; margin:10px 0 0; } .opnote.ok { color:var(--accent); } .opnote.err { color:var(--danger); }
 `;
   var ROLE_RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var GbtiSuperadminDashboard = class extends GbtiElement {
@@ -1307,6 +1313,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }).join("");
       return `<h3 class="sec-h">Open pull requests <span class="ct">${this._pulls.length}</span></h3><ul class="prs">${rows}</ul>`;
     }
+    // SOW-038 P3: the operations section (reconcile / E2E-smoke triggers). The dashboard is admin-gated (the roster
+    // loaded), so these show only to a confirmed admin; the Worker re-checks + holds the dispatch token.
+    _opsSection() {
+      const note = this._opNote ? `<p class="opnote ${this._opNote.ok ? "ok" : "err"}">${esc(this._opNote.msg)}</p>` : "";
+      return `<h3 class="sec-h">Operations</h3>
+      <div class="ops">
+        <button class="opbtn" data-op="reconcile" type="button">Run reconcile (apply)</button>
+        <button class="opbtn" data-op="e2e" type="button">Run E2E smoke</button>
+      </div>${note}
+      <p class="note">Reconcile brings published content + Discord roles in line with Stripe + overrides (full <code>--apply</code>; idempotent). E2E smoke runs the live authenticated create &rarr; confirm &rarr; scrub cycle. Both kick off a GitHub Actions run; results appear in the repo's Actions tab.</p>`;
+    }
+    async _runOp(action, btn) {
+      if (btn) btn.disabled = true;
+      this._opNote = { ok: true, msg: "Triggering&hellip;" };
+      this.render();
+      try {
+        await this.client.adminOp(action);
+        this._opNote = { ok: true, msg: `Triggered "${action}". Watch the run in the repo's Actions tab.` };
+      } catch (err) {
+        this._opNote = { ok: false, msg: err?.message || "Could not trigger the operation." };
+      }
+      this.render();
+    }
     // The effective-status cell: the resolved status badge + the override source when it overrode Stripe.
     _statusCell(m) {
       const LABEL = { paid: "paid", trialing: "trial", expired: "expired", cancelled: "cancelled", none: "none", banned: "banned", unknown: "unknown" };
@@ -1358,10 +1387,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.set(this.css(CSS4) + `${chips}
       <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>Content</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No members known yet.</td></tr>'}</tbody></table>
       <p class="note">Effective status follows ban &gt; staff &gt; grandfather &gt; Stripe. The live Stripe tier is shown when the admin Stripe endpoint is reachable (otherwise it reads "unknown"); the override tiers (ban / staff / grandfather) are always authoritative from the public repo.</p>
-      ${this._pullsSection()}`);
+      ${this._pullsSection()}
+      ${this._opsSection()}`);
       this.$$("[data-avfor]").forEach((img) => img.addEventListener("error", () => {
         img.style.visibility = "hidden";
       }, { once: true }));
+      this.$$("[data-op]").forEach((b) => b.addEventListener("click", () => this._runOp(b.dataset.op, b)));
     }
   };
   define("gbti-superadmin-dashboard", GbtiSuperadminDashboard);
@@ -2248,17 +2279,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return this._mode || "detailed";
     }
     _media(item) {
-      if (lc(item.type) === "news") return "";
+      const isCard = this.mode === "card";
+      if (lc(item.type) === "news" && !isCard) return "";
       const g = glyphFor(item.category, item.type);
-      const thumb = item.thumb ? resolveAsset(item.thumb) : null;
+      const raw = isCard && item.thumbCard ? item.thumbCard : item.thumb || item.thumbCard;
+      const thumb = raw ? resolveAsset(raw) : null;
       const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : "";
       return `<span class="media" style="--ka:${esc(g.accent)}"><span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>${img}</span>`;
     }
     _chip(item) {
       return `<span class="chip">${esc(TYPE_LABEL2[item.type] || item.type)}</span>`;
     }
+    // News is open to the limited trial, not members-only, so it never carries the Members lock badge (SOW-050).
     _lock(item) {
-      return item.visibility === "members" ? `<span class="lock">${lockIco}Members</span>` : "";
+      return item.visibility === "members" && lc(item.type) !== "news" ? `<span class="lock">${lockIco}Members</span>` : "";
     }
     // SOW-049: the meta leads with a small avatar (member -> github avatar; news -> publisher favicon); the name/source
     // is the avatar's hover tooltip (title), not a persistent label. Broken images fall back to an initial disc.
@@ -2272,7 +2306,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _open(item, i, cls) {
       const t = lc(item.type);
       const accent = t && t !== "news" ? ` style="--cbar:${esc(typeAccent(t))}"` : "";
-      const nomedia = t === "news" ? " no-media" : "";
+      const nomedia = t === "news" && cls !== "card-i" ? " no-media" : "";
       const attrs = `class="${cls}${nomedia}" data-card="${i}" data-type="${esc(t)}"${accent}`;
       return item.openHref ? `<a ${attrs} href="${esc(item.openHref)}">` : `<div ${attrs} role="button" tabindex="0">`;
     }
@@ -7098,7 +7132,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Open link</a>` : "" : it.url ? `<a class="view" href="${esc(SITE9 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName4(it.author))}</span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}</div>`;
-      const coverUrl = resolveAsset(it.thumb);
+      const coverUrl = resolveAsset(it.thumbCard || it.thumb);
       const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
@@ -7480,8 +7514,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       admin: (action, args = {}) => request("POST", "/api/admin", { action, ...args }),
       overrides: () => request("GET", "/api/overrides"),
       // SOW-038 P2: admin-gated roster { roster, summary }
-      openPulls: () => request("GET", "/api/open-pulls")
+      openPulls: () => request("GET", "/api/open-pulls"),
       // SOW-038 P2: admin-gated open content-PR queue { pulls }
+      adminOp: (action) => request("POST", "/api/admin-ops", { action })
+      // SOW-038 P3: trigger reconcile / e2e -> { ok, triggered }
     };
   }
 

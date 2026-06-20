@@ -16,7 +16,7 @@ export const GET: APIRoute = async () => {
     (await getCollection('prompt'))
       .filter(isListed)
       .sort(byNewest)
-      .map(async (e) => ({ ...toIndexItem(e, 'prompt'), thumb: await resolveThumb(e.data, 'prompt') })),
+      .map(async (e) => ({ ...toIndexItem(e, 'prompt'), ...(await resolveThumb(e.data, 'prompt')) })),
   );
   const body = JSON.stringify({ generatedAt: new Date().toISOString(), count: items.length, items });
   return new Response(body, { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });

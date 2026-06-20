@@ -7,17 +7,26 @@
 import { getImage } from 'astro:assets';
 import { imageFieldOf } from './content-index.mjs';
 
-const THUMB_WIDTH = 96; // list rows render at <=46px; 96px covers retina without shipping the full image
+// SOW-050: two derivatives per item. `thumb` feeds the dense list rows (compact/detailed, <=62px boxes); `thumbCard`
+// feeds the card-grid box (~220-360px wide at 4:3), which previously upscaled the 96px list thumb ~2-4x and read
+// blurry. Each width is clamped to the original so we never UPSCALE (downscaling stays crisp). Both are webp.
+const THUMB_WIDTH = 96;
+const CARD_WIDTH = 600; // covers the widest card box at 2x DPI; webp keeps it small + only visible cards load it
 
-export async function resolveThumb(data: any, type: string): Promise<string | null> {
+export type ThumbSet = { thumb: string | null; thumbCard: string | null };
+
+export async function resolveThumb(data: any, type: string): Promise<ThumbSet> {
   const v = imageFieldOf(data, type);
-  if (!v) return null;
-  if (typeof v === 'string') return v || null; // a raw path: leave it for the client to resolve
+  if (!v) return { thumb: null, thumbCard: null };
+  if (typeof v === 'string') return { thumb: v || null, thumbCard: v || null }; // a raw path: client resolves it
   try {
-    const width = Math.min(Number(v.width) || THUMB_WIDTH, THUMB_WIDTH);
-    const img = await getImage({ src: v, width, format: 'webp' });
-    return img.src; // an emitted /_astro/... URL that exists in dist
+    const orig = Number(v.width) || CARD_WIDTH;
+    const [small, card] = await Promise.all([
+      getImage({ src: v, width: Math.min(orig, THUMB_WIDTH), format: 'webp' }),
+      getImage({ src: v, width: Math.min(orig, CARD_WIDTH), format: 'webp' }),
+    ]);
+    return { thumb: small.src, thumbCard: card.src }; // emitted /_astro/... URLs that exist in dist
   } catch {
-    return null; // never ship a thumb we could not optimize (the row renders with no image)
+    return { thumb: null, thumbCard: null }; // never ship a thumb we could not optimize (renders with no image)
   }
 }

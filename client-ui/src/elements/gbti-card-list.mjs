@@ -140,14 +140,22 @@ class GbtiCardList extends GbtiElement {
   get mode() { return this._mode || 'detailed'; }
 
   _media(item) {
-    if (lc(item.type) === 'news') return ''; // SOW-049: news cards have NO left icon/image; the favicon lives in the meta
+    const isCard = this.mode === 'card';
+    // SOW-049/050: in the dense list rows (compact/detailed) news shows NO left media (its publisher favicon sits in
+    // the meta); only the image-led card surfaces the article og:image. Member types always show a media block.
+    if (lc(item.type) === 'news' && !isCard) return '';
     const g = glyphFor(item.category, item.type);
-    const thumb = item.thumb ? resolveAsset(item.thumb) : null;
+    // SOW-050: the card box is ~220-360px wide, so it uses the larger thumbCard derivative; the small thumb (96px)
+    // upscaled blurry there. Dense list rows keep the small thumb. News carries one URL (its og:image), so it falls
+    // back to thumb when no card derivative exists.
+    const raw = (isCard && item.thumbCard) ? item.thumbCard : (item.thumb || item.thumbCard);
+    const thumb = raw ? resolveAsset(raw) : null;
     const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : '';
     return `<span class="media" style="--ka:${esc(g.accent)}"><span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>${img}</span>`;
   }
   _chip(item) { return `<span class="chip">${esc(TYPE_LABEL[item.type] || item.type)}</span>`; }
-  _lock(item) { return item.visibility === 'members' ? `<span class="lock">${lockIco}Members</span>` : ''; }
+  // News is open to the limited trial, not members-only, so it never carries the Members lock badge (SOW-050).
+  _lock(item) { return item.visibility === 'members' && lc(item.type) !== 'news' ? `<span class="lock">${lockIco}Members</span>` : ''; }
   // SOW-049: the meta leads with a small avatar (member -> github avatar; news -> publisher favicon); the name/source
   // is the avatar's hover tooltip (title), not a persistent label. Broken images fall back to an initial disc.
   _meta(item) {
@@ -162,7 +170,9 @@ class GbtiCardList extends GbtiElement {
     // color for member types only, so NEWS rows render plain and recede in the blended feed.
     const t = lc(item.type);
     const accent = t && t !== 'news' ? ` style="--cbar:${esc(typeAccent(t))}"` : '';
-    const nomedia = t === 'news' ? ' no-media' : ''; // SOW-049: news has no left media -> the title leads full-width
+    // SOW-049/050: news drops its left media in the dense list rows (title leads full-width); the image-led CARD keeps
+    // a media block so the article og:image can show.
+    const nomedia = (t === 'news' && cls !== 'card-i') ? ' no-media' : '';
     const attrs = `class="${cls}${nomedia}" data-card="${i}" data-type="${esc(t)}"${accent}`;
     return item.openHref ? `<a ${attrs} href="${esc(item.openHref)}">` : `<div ${attrs} role="button" tabindex="0">`;
   }
