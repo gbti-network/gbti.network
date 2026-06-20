@@ -15,6 +15,7 @@
 
 import { createRegistry } from './lib/cleanup.mjs';
 import { createGitHubClient } from '../../clients/github.mjs';
+import { runnable, FULL } from './lib/tags.mjs'; // SOW-035 P5: write cycles are 'full'; smoke runs read-only only
 
 const SITE = process.env.E2E_SITE || 'https://gbti.network';
 const WORKER = process.env.E2E_WORKER || 'https://signup.gbti.network';
@@ -49,6 +50,7 @@ async function decryptCycle() {
 }
 
 async function followsCycle() {
+  if (!runnable([FULL])) { skip('follow create + confirm + scrub', 'skipped (E2E_TAGS=smoke is read-only)'); return; }
   if (!HAVE_TOKEN) { skip('follow create + confirm + scrub', 'no real token'); return; }
   const base = await getJson(WORKER + '/membership/follows', { headers: authHeaders });
   if (base.status !== 200) { check('follow create + confirm + scrub', false, `baseline ${base.status} (paid-only; is the actor effective-paid?)`); return; }
@@ -68,6 +70,7 @@ async function followsCycle() {
 }
 
 async function authoringCycle() {
+  if (!runnable([FULL])) { skip('content + comment draft PR created (authoring + confirm)', 'skipped (E2E_TAGS=smoke is read-only)'); return; }
   if (!HAVE_TOKEN) { skip('content + comment draft PR created (authoring + confirm)', 'no real token'); skip('content PR + branch scrubbed (zero leaks)', 'no real token'); return; }
   const gh = createGitHubClient({ token: TOKEN, repo: REPO, fetch: globalThis.fetch });
   const slug = `e2e-smoke-${RUN_ID}`;

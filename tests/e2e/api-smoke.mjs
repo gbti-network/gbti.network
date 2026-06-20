@@ -11,6 +11,7 @@
 // exactly what it added (favorite on -> off). It never writes content, opens a PR, or changes another member.
 
 import { createRegistry } from './lib/cleanup.mjs';
+import { runnable, FULL } from './lib/tags.mjs'; // SOW-035 P5: the favorite write cycle is 'full'; smoke is read-only
 
 const SITE = process.env.E2E_SITE || 'https://gbti.network';
 const WORKER = process.env.E2E_WORKER || 'https://signup.gbti.network';
@@ -79,7 +80,9 @@ async function main() {
     check('status oracle authenticates the token', status.status === 200 && status.body?.ok === true, `login=${status.body?.login} status=${status.body?.status}`);
 
     const target = { type: 'prompt', slug: promptItems[0]?.slug };
-    if (!target.slug) {
+    if (!runnable([FULL])) {
+      skip('activity favorite create + confirm + scrub', 'skipped (E2E_TAGS=smoke is read-only)');
+    } else if (!target.slug) {
       skip('activity favorite create + confirm + scrub', 'no prompt slug available');
     } else {
       const baseline = await getJson(WORKER + '/membership/activity', { headers: authHeaders });

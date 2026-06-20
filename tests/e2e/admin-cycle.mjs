@@ -27,6 +27,7 @@ import {
   rolesFromParsed, bansFromParsed, grandfathersFromParsed, effectiveStatus, roleOf, ROLE,
 } from '../../membership/overrides-core.mjs';
 import { grandfather } from '../../membership/superadmin-actions.mjs';
+import { runnable, FULL } from './lib/tags.mjs'; // SOW-035 P5: write cycles are 'full'; smoke runs read-only only
 
 const SITE = process.env.E2E_SITE || 'https://gbti.network';
 const WORKER = process.env.E2E_WORKER || 'https://signup.gbti.network';
@@ -116,6 +117,7 @@ async function livePrecedenceChecks() {
 
 // --- 3. Governance PR authoring: a DRAFT PR adding a sentinel grandfather entry, confirmed then scrubbed ---
 async function governanceAuthoringCycle() {
+  if (!runnable([FULL])) { skip('governance grandfather draft PR authored (confirm)', 'skipped (E2E_TAGS=smoke is read-only)'); return; }
   if (!HAVE_TOKEN) { skip('governance grandfather draft PR authored (confirm)', 'no real token'); skip('governance PR + branch scrubbed (zero leaks)', 'no real token'); return; }
   const gh = createGitHubClient({ token: TOKEN, repo: REPO, fetch: globalThis.fetch });
   const branch = `e2e/governance-${RUN_ID}`;
@@ -164,6 +166,7 @@ async function governanceAuthoringCycle() {
 
 // --- 4. Reconcile dry run (creds-gated): the planner runs against the live registry without applying ---
 async function reconcileDryRunCycle() {
+  if (!runnable([FULL])) { skip('reconcile dry run plans without applying', 'skipped (E2E_TAGS=smoke is read-only)'); return; }
   const haveStripe = !!process.env.STRIPE_SECRET_KEY || process.env.E2E_RECONCILE === '1';
   if (!haveStripe) { skip('reconcile dry run plans without applying', 'set STRIPE_SECRET_KEY or E2E_RECONCILE=1 (reads the live Stripe registry)'); return; }
   const r = spawnSync('node', ['scripts/reconcile.mjs'], { encoding: 'utf8', timeout: 180000, env: process.env });

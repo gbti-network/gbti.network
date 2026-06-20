@@ -6,6 +6,11 @@ name: E2E smoke (live)
 # not safe to gate every PR on, and it needs the real token + production endpoints.
 
 on:
+  # SOW-035 Phase 5: nightly scheduled run (in addition to manual + the dashboard trigger). The suite is
+  # self-cleaning and safe-by-default (it opens + auto-closes draft PRs and toggles one KV favorite/follow), so a
+  # nightly run leaves no residue. Dial to weekly (e.g. '41 6 * * 1') if the draft-PR churn is undesired.
+  schedule:
+    - cron: '41 6 * * *'   # nightly at 06:41 UTC (off the hour)
   workflow_dispatch: {}
   # SOW-038 P3: the superadmin dashboard "Run E2E smoke" button fires repository_dispatch type 'admin-e2e'
   # (via the signup Worker's allow-listed /membership/admin/ops). Same job; the trigger is the only addition.
