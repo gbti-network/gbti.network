@@ -3656,8 +3656,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc5 = c | 32;
-      if (lc5 >= 97 && lc5 <= 102) return lc5 - 97 + 10;
+      const lc6 = c | 32;
+      if (lc6 >= 97 && lc6 <= 102) return lc6 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -6542,14 +6542,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
     // (post/product/prompt) need a per-item comment walk and defer to P4's server aggregator. Hard-bounded fan-out.
     async _replies(login) {
-      const lc5 = String(login).toLowerCase();
+      const lc6 = String(login).toLowerCase();
       const { items = [] } = await this.client.listShares() || {};
-      const mine = items.filter((s) => String(s.author).toLowerCase() === lc5).slice(0, MAX_OWN_SHARES);
+      const mine = items.filter((s) => String(s.author).toLowerCase() === lc6).slice(0, MAX_OWN_SHARES);
       const lists = await Promise.all(mine.map((s) => this._safe(async () => {
         const slug = s.author && s.id ? `${s.author}/${s.id}` : "";
         if (!slug) return [];
         const r = await this.client.listShareComments({ targetSlug: slug }) || {};
-        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc5).map((c) => ({
+        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc6).map((c) => ({
           id: `cmt:${c.path || `${slug}:${c.id || c.createdAt}`}`,
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
@@ -7058,7 +7058,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-reader.mjs
   var SITE9 = "https://gbti.network";
-  var authorName4 = (a) => a === "gbti" ? "GBTI Network" : a;
+  var lc5 = (s) => String(s || "").toLowerCase();
+  var isHouse = (a) => {
+    const x = lc5(a);
+    return !x || x === "gbti" || x === "house";
+  };
+  var authorName4 = (a) => isHouse(a) ? "GBTI Network" : a;
+  var githubLogin = (a) => lc5(a) === "gbti" || lc5(a) === "house" ? "gbti-network" : a;
+  var githubAvatar = (a) => a ? `https://github.com/${encodeURIComponent(githubLogin(a))}.png?size=96` : "";
   function targetSlugFor(it) {
     if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
     if (it.slug) return String(it.slug);
@@ -7074,49 +7081,144 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE9}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var _directory = null;
+  function loadDirectory() {
+    if (_directory) return _directory;
+    _directory = fetch(`${SITE9}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => new Map((j.members || []).map((m) => [lc5(m.username), m]))).catch(() => /* @__PURE__ */ new Map());
+    return _directory;
+  }
+  var SOCIALS = [
+    ["github", "GitHub", "https://github.com/"],
+    ["website", "Website", ""],
+    ["x", "X", "https://x.com/"],
+    ["bluesky", "Bluesky", "https://bsky.app/profile/"],
+    ["youtube", "YouTube", "https://youtube.com/"],
+    ["devto", "DEV", "https://dev.to/"],
+    ["reddit", "Reddit", "https://reddit.com/user/"],
+    ["mastodon", "Mastodon", ""],
+    ["linkedin", "LinkedIn", "https://linkedin.com/in/"]
+  ];
+  function linkUrl(value, base) {
+    const v = String(value || "").trim();
+    if (!v) return "";
+    if (/^https?:\/\//i.test(v)) return v;
+    if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
+    return `${base}${v.replace(/^@/, "")}`;
+  }
   var CSS23 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  article { max-width:680px; margin:0 auto; }
-  h1 { font-family:var(--font-display); font-size:28px; line-height:1.2; margin:0 0 8px; }
-  .meta { color:var(--muted); font-size:13px; margin:0 0 18px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .cover { display:block; width:100%; max-height:340px; object-fit:cover; border-radius:12px; border:1px solid var(--line); margin:0 0 20px; }
+  .wrap { max-width:1160px; margin:0 auto; }
+  .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
+  @media (max-width:960px) { .cols { grid-template-columns:1fr; gap:28px; } }
+  article { min-width:0; }
+  h1 { font-family:var(--font-display); font-size:30px; line-height:1.2; margin:0 0 12px; }
+
+  .meta { color:var(--muted); font-size:13px; margin:0 0 18px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .meta .who { display:inline-flex; align-items:center; gap:8px; }
+  .meta .av { width:24px; height:24px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center; background:var(--hover); color:var(--muted); font-size:11px; font-weight:700; }
+  .meta .av img { width:100%; height:100%; object-fit:cover; }
+  .meta .who b { color:var(--fg); font-weight:600; }
   .badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); background:var(--hover); border-radius:999px; padding:2px 9px; }
+  .cats { display:flex; gap:6px; flex-wrap:wrap; }
+  .cat { font-size:11px; font-weight:600; color:var(--muted); background:var(--hover); border:1px solid var(--line); border-radius:999px; padding:2px 9px; }
+
+  /* SOW-050: the hero cover is contained by WIDTH only (height auto, no object-fit crop), so the whole image
+     shows at full resolution with no clipping. */
+  .cover { display:block; width:100%; height:auto; border-radius:12px; border:1px solid var(--line); margin:0 0 22px; }
+
   .body { font-size:15.5px; line-height:1.7; }
   .body h1,.body h2,.body h3 { font-family:var(--font-display); margin:1.4em 0 .5em; }
   .body p { margin:0 0 1em; }
-  .body pre { background:var(--hover); padding:12px 14px; border-radius:10px; overflow:auto; }
-  .body code { font-family:ui-monospace,monospace; font-size:.92em; }
   .body a { color:var(--accent); }
   .body img { max-width:100%; height:auto; border-radius:10px; }
+  .body ul,.body ol { padding-left:1.4em; margin:0 0 1em; }
+  .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
+  .body > pre, .body code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .body :not(pre) > code { background:var(--hover); border:1px solid var(--line); border-radius:5px; padding:.08em .35em; font-size:.9em; }
+
+  /* SOW-050: code cards (built from <pre> in _enhanceCode) — a header bar with the language + a Copy button, a
+     dark, horizontally-scrollable body that preserves whitespace. */
+  .codecard { margin:0 0 1.2em; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--code-bg, #11131a); }
+  .codebar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 10px; background:color-mix(in srgb, var(--line) 40%, transparent); border-bottom:1px solid var(--line); }
+  .codelang { font-family:ui-monospace,monospace; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+  .copybtn { font:inherit; font-size:11px; font-weight:600; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:2px 9px; cursor:pointer; }
+  .copybtn:hover { color:var(--fg); border-color:var(--accent); }
+  .codecard pre { margin:0; padding:13px 14px; overflow-x:auto; }
+  .codecard pre code { display:block; white-space:pre; color:var(--code-fg, #e6e6e6); font-size:13px; line-height:1.55; background:none; border:0; padding:0; }
+
   .locked { border:1px solid var(--line); background:var(--hover); border-radius:10px; padding:14px 16px; color:var(--fg); font-size:14px; margin:14px 0; }
   .locked a { color:var(--accent); }
   .muted { color:var(--muted); }
   .view { display:inline-block; margin-top:22px; font-size:13px; font-weight:700; color:var(--accent); text-decoration:underline; }
-  .discussion-wrap { max-width:680px; margin:30px auto 0; border-top:1px solid var(--line); padding-top:18px; }
-  .discussion-wrap h3 { font-family:var(--font-display); font-size:18px; margin:0 0 12px; }
+
+  /* The right drawer */
+  .side { display:flex; flex-direction:column; gap:22px; }
+  .author { border:1px solid var(--line); background:var(--panel); border-radius:14px; padding:18px; }
+  .author .a-top { display:flex; align-items:center; gap:12px; }
+  .author .a-av { width:48px; height:48px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center; background:var(--hover); color:var(--muted); font-weight:700; }
+  .author .a-av img { width:100%; height:100%; object-fit:cover; }
+  .author .a-name { font-family:var(--font-display); font-size:17px; font-weight:700; line-height:1.2; }
+  .author .a-user { font-size:12px; color:var(--muted); }
+  .author .a-note { font-size:13.5px; line-height:1.5; color:var(--fg); margin:12px 0 0; }
+  .author .follow { display:inline-flex; align-items:center; justify-content:center; gap:6px; margin-top:14px; width:100%; font:inherit; font-size:13px; font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; text-decoration:none; }
+  .author .follow.on { background:transparent; color:var(--fg); border-color:var(--line); }
+  .author .follow.muted { background:transparent; color:var(--muted); border-color:var(--line); cursor:default; }
+  .author .socials { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; }
+  .author .soc { font-size:12px; font-weight:600; color:var(--muted); background:var(--hover); border:1px solid var(--line); border-radius:8px; padding:4px 9px; text-decoration:none; display:inline-flex; align-items:center; gap:5px; }
+  .author .soc:hover { color:var(--fg); border-color:var(--accent); }
+  .author .soc.discord b { color:var(--fg); font-weight:600; }
+
+  .discussion h3 { font-family:var(--font-display); font-size:17px; margin:0 0 12px; }
+  @media (max-width:960px) { .discussion { border-top:1px solid var(--line); padding-top:18px; } }
 `;
   var GbtiReader = class extends GbtiElement {
-    /** open(item): { type, path, title, author, publishedAt, url, visibility, body?, encryptedBody? }.
-     *  For share, body/encryptedBody come from the summary; for post/product/prompt they come from readItem(path). */
+    /** open(item): { type, path, title, author, publishedAt, url, visibility, thumb?, thumbCard?, thumbWide?,
+     *  categoryLabels?, body?, encryptedBody? }. For share, body/encryptedBody come from the summary; for
+     *  post/product/prompt they come from readItem(path). */
     open(item) {
       this._item = item;
       this._html = null;
+      this._author = void 0;
       this.render();
       this._resolve();
     }
     async _resolve() {
       const it = this._item || {};
-      try {
-        if (it.type === "share") {
-          this._html = await this._body(it.visibility, it.body, it.encryptedBody);
-        } else {
-          const { frontmatter, body } = await this.client.readItem({ path: it.path });
-          this._html = await this._body(it.visibility, body, frontmatter?.encryptedBody);
-        }
-      } catch {
-        this._html = { error: true };
-      }
+      const [html, author] = await Promise.all([this._resolveBody(it), this._resolveAuthor(it)]);
+      this._html = html;
+      this._author = author;
       this.render();
+    }
+    async _resolveBody(it) {
+      try {
+        if (it.type === "share") return await this._body(it.visibility, it.body, it.encryptedBody);
+        const { frontmatter, body } = await this.client.readItem({ path: it.path });
+        return await this._body(it.visibility, body, frontmatter?.encryptedBody);
+      } catch {
+        return { error: true };
+      }
+    }
+    // Resolve the author drawer model: directory entry (avatar/name/headline/links), whether the viewer follows
+    // them, and whether the viewer CAN follow (effective-paid). House content yields a branded, non-followable card.
+    async _resolveAuthor(it) {
+      const username = lc5(it.author);
+      if (isHouse(username)) return { house: true };
+      const [dir, status2] = await Promise.all([
+        loadDirectory(),
+        this.client.status ? this.client.status().catch(() => null) : Promise.resolve(null)
+      ]);
+      const entry = dir.get(username) || null;
+      const me = lc5(status2?.identity?.username || status2?.identity?.login);
+      const canFollow = !!status2?.canPublish;
+      let following = false;
+      if (canFollow && this.client.getFollows) {
+        try {
+          const f = await this.client.getFollows();
+          following = (f?.following || []).some((x) => lc5(x.username) === username);
+        } catch {
+        }
+      }
+      return { house: false, username, entry, canFollow, following, isSelf: !!me && me === username };
     }
     // Render the public body via preview, then append the members part (decrypt -> preview) or a locked notice.
     async _body(visibility, publicBody, encPath) {
@@ -7133,25 +7235,121 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!html && visibility === "members") html = lockNotice("This");
       return html;
     }
+    _metaHtml(it, when) {
+      const t = TYPE_LABEL3[it.type] || it.type || "";
+      const name = authorName4(it.author);
+      const avUrl = this._author?.entry?.avatar || githubAvatar(it.author);
+      const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
+      const av = `<span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`;
+      const cats = Array.isArray(it.categoryLabels) && it.categoryLabels.length ? `<span class="cats">${it.categoryLabels.map((c) => `<span class="cat">${esc(c)}</span>`).join("")}</span>` : "";
+      return `<div class="meta"><span class="badge">${esc(t)}</span><span class="who">${av}<b>${esc(name)}</b></span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}${cats}</div>`;
+    }
+    _authorCardHtml(it) {
+      const a = this._author;
+      if (!a || a.house) {
+        return `<div class="author"><div class="a-top"><span class="a-av"><img src="${esc(githubAvatar("gbti"))}" alt=""></span><div><div class="a-name">GBTI Network</div><div class="a-user">The co-op</div></div></div><p class="a-note">Articles, products, and prompts from the GBTI Network co-op.</p></div>`;
+      }
+      const e = a.entry || {};
+      const name = e.displayName || it.author;
+      const avUrl = e.avatar || githubAvatar(it.author);
+      const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
+      const note = e.headline ? `<p class="a-note">${esc(e.headline)}</p>` : "";
+      let follow = "";
+      if (a.isSelf) follow = "";
+      else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
+      else follow = `<a class="follow muted" href="${SITE9}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
+      const links = e.links || {};
+      const chips = [];
+      for (const [key, label, base] of SOCIALS) {
+        const url = linkUrl(links[key], base);
+        if (url) chips.push(`<a class="soc" href="${esc(url)}" target="_blank" rel="noopener nofollow">${esc(label)}</a>`);
+      }
+      if (links.discord) {
+        const handle = String(links.discord).trim();
+        chips.push(`<span class="soc discord" title="Discord: ${esc(handle)}">Discord <b>${esc(handle)}</b></span>`);
+      }
+      const socials = chips.length ? `<div class="socials">${chips.join("")}</div>` : "";
+      return `<div class="author"><div class="a-top"><span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span><div><div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>${note}${follow}${socials}</div>`;
+    }
     render() {
       const it = this._item;
       if (!it) {
         this.set(this.css(CSS23));
         return;
       }
-      const t = TYPE_LABEL3[it.type] || it.type || "";
       const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Open link</a>` : "" : it.url ? `<a class="view" href="${esc(SITE9 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
-      const meta = `<div class="meta"><span class="badge">${esc(t)}</span><span>${esc(authorName4(it.author))}</span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}</div>`;
-      const coverUrl = resolveAsset(it.thumbCard || it.thumb);
+      const meta = this._metaHtml(it, when);
+      const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
       const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
       else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
+      const resolved = this._html !== null;
       const slug = targetSlugFor(it);
-      const discussion = this._html !== null && slug ? `<div class="discussion-wrap"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
-      this.set(this.css(CSS23) + `<article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>${discussion}`);
+      const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></section>` : "";
+      const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${discussion}</aside>` : '<aside class="side"></aside>';
+      this.set(this.css(CSS23) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}</article>${side}</div></div>`);
+      if (resolved) {
+        this._enhanceCode();
+        this._wireFollow(it);
+      }
+    }
+    // SOW-050: upgrade each <pre> code block into a code card (language label + Copy button). Idempotent per render.
+    _enhanceCode() {
+      this.$$(".body pre").forEach((pre) => {
+        const code = pre.querySelector("code");
+        const lang = code && code.dataset && code.dataset.lang || "";
+        const card = document.createElement("div");
+        card.className = "codecard";
+        const bar = document.createElement("div");
+        bar.className = "codebar";
+        const tag = document.createElement("span");
+        tag.className = "codelang";
+        tag.textContent = lang || "code";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "copybtn";
+        btn.textContent = "Copy";
+        btn.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(code ? code.innerText : pre.innerText);
+            btn.textContent = "Copied";
+            setTimeout(() => {
+              btn.textContent = "Copy";
+            }, 1200);
+          } catch {
+            btn.textContent = "Copy failed";
+            setTimeout(() => {
+              btn.textContent = "Copy";
+            }, 1200);
+          }
+        });
+        bar.append(tag, btn);
+        pre.replaceWith(card);
+        card.append(bar, pre);
+      });
+    }
+    // Toggle follow in place (no full re-render, which would remount the discussion). Optimistic; reverts on error.
+    _wireFollow(it) {
+      const btn = this.$("[data-follow]");
+      if (!btn || !this.client.setFollow) return;
+      btn.addEventListener("click", async () => {
+        const want = !btn.classList.contains("on");
+        btn.disabled = true;
+        btn.classList.toggle("on", want);
+        btn.textContent = want ? "Following" : "Follow";
+        try {
+          await this.client.setFollow({ username: it.author, on: want });
+          if (this._author) this._author.following = want;
+        } catch {
+          btn.classList.toggle("on", !want);
+          btn.textContent = !want ? "Following" : "Follow";
+        } finally {
+          btn.disabled = false;
+        }
+      });
     }
   };
   define("gbti-reader", GbtiReader);

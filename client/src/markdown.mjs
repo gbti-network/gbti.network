@@ -18,11 +18,20 @@ function inline(escaped) {
   return t;
 }
 
+// A fenced-code language tag -> a safe `language-x` class + data-lang attribute (consumed by the reader's code
+// card for the language label + per-language styling). Only the first token after the fence is used, lowercased
+// and reduced to a safe charset; an unknown/empty tag yields no class.
+function codeOpen(lang) {
+  const tag = String(lang || '').trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, '');
+  return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : '<pre><code>';
+}
+
 export function renderMarkdown(md) {
   const lines = String(md ?? '').replace(/\r\n/g, '\n').split('\n');
   const out = [];
   let inCode = false;
   let codeBuf = [];
+  let codeLang = '';
   let listType = null;
   let listBuf = [];
   const flushList = () => {
@@ -37,8 +46,8 @@ export function renderMarkdown(md) {
   while (i < lines.length) {
     const line = lines[i];
     if (/^```/.test(line)) {
-      if (!inCode) { inCode = true; codeBuf = []; }
-      else { inCode = false; flushList(); out.push(`<pre><code>${escapeHtml(codeBuf.join('\n'))}</code></pre>`); }
+      if (!inCode) { inCode = true; codeBuf = []; codeLang = line.slice(3); }
+      else { inCode = false; flushList(); out.push(`${codeOpen(codeLang)}${escapeHtml(codeBuf.join('\n'))}</code></pre>`); codeLang = ''; }
       i++; continue;
     }
     if (inCode) { codeBuf.push(line); i++; continue; }
@@ -63,6 +72,6 @@ export function renderMarkdown(md) {
     out.push(`<p>${inline(para.join(' '))}</p>`);
   }
   flushList();
-  if (inCode) out.push(`<pre><code>${escapeHtml(codeBuf.join('\n'))}</code></pre>`);
+  if (inCode) out.push(`${codeOpen(codeLang)}${escapeHtml(codeBuf.join('\n'))}</code></pre>`);
   return out.join('\n');
 }

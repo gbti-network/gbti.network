@@ -40,6 +40,11 @@ test('renderMarkdown: headings, emphasis, lists, code, links, and HTML escaping'
   assert.match(renderMarkdown('`code`'), /<code>code<\/code>/);
   assert.match(renderMarkdown('[GBTI](https://gbti.network)'), /<a href="https:\/\/gbti\.network"[^>]*>GBTI<\/a>/);
   assert.match(renderMarkdown('```\nx<y\n```'), /<pre><code>x&lt;y<\/code><\/pre>/);
+  // SOW-050: a fenced block tags its language onto the <code> (class + data-lang) for the reader's code card;
+  // an unknown/dirty tag is sanitized to a safe charset.
+  assert.match(renderMarkdown('```js\nconst a=1;\n```'), /<pre><code class="language-js" data-lang="js">const a=1;<\/code><\/pre>/);
+  assert.match(renderMarkdown('```TS x\ny\n```'), /class="language-ts" data-lang="ts"/); // first token, lowercased
+  assert.doesNotMatch(renderMarkdown('```"><img>\nz\n```'), /<img>/); // tag chars stripped, never injected
   // XSS safety: raw HTML is escaped, not injected
   assert.doesNotMatch(renderMarkdown('<script>alert(1)</script>'), /<script>/);
   assert.match(renderMarkdown('<script>alert(1)</script>'), /&lt;script&gt;/);

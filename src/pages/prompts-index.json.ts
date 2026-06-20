@@ -8,6 +8,7 @@ import { getCollection } from 'astro:content';
 import { isListed, byNewest } from '../lib/content';
 import { toIndexItem } from '../lib/content-index.mjs';
 import { resolveThumb } from '../lib/index-thumb';
+import { breadcrumb } from '../lib/taxonomy';
 
 export const prerender = true;
 
@@ -16,7 +17,7 @@ export const GET: APIRoute = async () => {
     (await getCollection('prompt'))
       .filter(isListed)
       .sort(byNewest)
-      .map(async (e) => ({ ...toIndexItem(e, 'prompt'), ...(await resolveThumb(e.data, 'prompt')) })),
+      .map(async (e) => ({ ...toIndexItem(e, 'prompt'), ...(await resolveThumb(e.data, 'prompt')), categoryLabels: breadcrumb(e.data.categories) })),
   );
   const body = JSON.stringify({ generatedAt: new Date().toISOString(), count: items.length, items });
   return new Response(body, { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });

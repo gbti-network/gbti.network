@@ -19249,11 +19249,16 @@ function inline(escaped) {
   t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
   return t;
 }
+function codeOpen(lang) {
+  const tag = String(lang || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, "");
+  return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
+}
 function renderMarkdown(md) {
   const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
   const out = [];
   let inCode = false;
   let codeBuf = [];
+  let codeLang = "";
   let listType = null;
   let listBuf = [];
   const flushList = () => {
@@ -19270,10 +19275,12 @@ function renderMarkdown(md) {
       if (!inCode) {
         inCode = true;
         codeBuf = [];
+        codeLang = line.slice(3);
       } else {
         inCode = false;
         flushList();
-        out.push(`<pre><code>${escapeHtml(codeBuf.join("\n"))}</code></pre>`);
+        out.push(`${codeOpen(codeLang)}${escapeHtml(codeBuf.join("\n"))}</code></pre>`);
+        codeLang = "";
       }
       i++;
       continue;
@@ -19336,7 +19343,7 @@ function renderMarkdown(md) {
     out.push(`<p>${inline(para.join(" "))}</p>`);
   }
   flushList();
-  if (inCode) out.push(`<pre><code>${escapeHtml(codeBuf.join("\n"))}</code></pre>`);
+  if (inCode) out.push(`${codeOpen(codeLang)}${escapeHtml(codeBuf.join("\n"))}</code></pre>`);
   return out.join("\n");
 }
 
