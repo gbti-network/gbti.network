@@ -31,9 +31,12 @@ const ENV_FILES = ['workers/signup/.dev.vars', '.env']; // search order; first h
 
 // Each tracked secret: where it must live, whether a local value can be reused, and any caution.
 // localName covers the GitHub Actions rule that secret names cannot start with GITHUB_ (GH_BOT_TOKEN <- GITHUB_BOT_TOKEN).
+// pairedIdVar: a non-secret CLIENT_ID that this secret belongs to. If the prod value (wrangler.toml
+// [env.production.vars]) differs from the local .dev.vars value, the local secret is for a DIFFERENT app
+// (sandbox), so pushing it to prod would create a client-id/secret MISMATCH. The script refuses unless --force.
 const REGISTRY = [
-  { name: 'GITHUB_OAUTH_CLIENT_SECRET', targets: ['worker'], note: 'Website GitHub signup (OAuth code exchange).' },
-  { name: 'DISCORD_OAUTH_CLIENT_SECRET', targets: ['worker'], caution: 'human-todo flags resetting this before launch (it was read in a session). Reset, then push the fresh value.', note: 'Website Discord connect.' },
+  { name: 'GITHUB_OAUTH_CLIENT_SECRET', targets: ['worker'], pairedIdVar: 'GITHUB_OAUTH_CLIENT_ID', note: 'Website GitHub signup (OAuth code exchange). SEPARATE sandbox vs prod apps.' },
+  { name: 'DISCORD_OAUTH_CLIENT_SECRET', targets: ['worker'], pairedIdVar: 'DISCORD_OAUTH_CLIENT_ID', caution: 'human-todo flags resetting this before launch (it was read in a session). Reset, then push the fresh value.', note: 'Website Discord connect (shared app).' },
   { name: 'REGATE_DISPATCH_TOKEN', targets: ['worker'], note: 'Post-payment re-gate + the SOW-038 admin ops buttons. Same value as GH_BOT_TOKEN / GITHUB_BOT_TOKEN.', localName: 'GITHUB_BOT_TOKEN' },
   { name: 'STRIPE_SECRET_KEY', targets: ['worker', 'actions'], classify: 'stripe', note: 'Worker=write key, Actions=read key. Prod must be a LIVE key for real charges.' },
   { name: 'STRIPE_PRICE_ID', targets: ['worker'], classify: 'stripe-price', note: 'The annual $150 price id; live price for production.' },
@@ -86,6 +89,33 @@ function findLocal(reg) {
  *  credential by itself, so reporting the MODE is safe and is exactly the live-vs-test signal we need. */
 function stripeMode(v) { const m = /^(sk|rk)_(live|test)_/.exec(v || ''); return m ? m[2] : null; }
 
+/** Read a NON-SECRET var from workers/signup/wrangler.toml [env.production.vars] (e.g. a public OAuth client id). */
+function prodVar(key) {
+  const abs = path.join(WORKER_DIR, 'wrangler.toml');
+  if (!fs.existsSync(abs)) return null;
+  let inProd = false;
+  for (const raw of fs.readFileSync(abs, 'utf8').split('\n')) {
+    const line = raw.trim();
+    if (line.startsWith('[')) { inProd = line === '[env.production.vars]'; continue; }
+    if (!inProd) continue;
+    const m = new RegExp('^' + key + '\\s*=\\s*("([^"]*)"|\'([^\']*)\'|([^\\s#]+))').exec(line);
+    if (m) return m[2] ?? m[3] ?? m[4] ?? null;
+  }
+  return null;
+}
+function localVar(key) { for (const f of ENV_FILES) { const m = envMap(f); if (m && m.has(key)) return m.get(key); } return null; }
+
+/** For a secret tied to a non-secret CLIENT_ID, compare prod vs local id. A mismatch means the local secret is for
+ *  a DIFFERENT (sandbox) app, so pushing it to prod would create a client-id/secret mismatch. Returns null if not
+ *  applicable or undeterminable. */
+function pairCheck(reg) {
+  if (!reg.pairedIdVar) return null;
+  const prodId = prodVar(reg.pairedIdVar);
+  const localId = localVar(reg.pairedIdVar);
+  if (!prodId || !localId) return null;
+  return { mismatch: prodId !== localId, prodId, localId };
+}
+
 /** A safe, value-free description of a local hit: length + a type hint, never the value. */
 function describeLocal(reg, hit) {
   if (!hit) return 'absent';
@@ -135,6 +165,9 @@ function statusOf(reg) {
     else if (mode === 'live') verdict = 'READY (LIVE local -> push)';
     else if (local) verdict = 'NEEDS LIVE (local is test/unknown)';
     else verdict = 'NEEDS LIVE KEY (none local)';
+  } else if (pairCheck(reg)?.mismatch) {
+    // The local secret belongs to a different (sandbox) app than prod -> pushing it would mismatch.
+    verdict = `LOCAL IS SANDBOX (${reg.pairedIdVar} differs: prod has a different app; do NOT push local)`;
   } else if (targetMissing && local) {
     verdict = 'READY (local value -> push)';
   } else if (targetMissing && !local) {
@@ -195,6 +228,13 @@ async function put(reg, toActions, assumeYes) {
   if (!local) { console.error(`No real local value for ${reg.localName || reg.name} in ${ENV_FILES.join(' or ')} (a placeholder does not count). Nothing to push.`); process.exit(1); }
   if ((reg.classify === 'stripe' || reg.classify === 'stripe-price') && stripeMode(local.value) !== 'live') {
     console.error(`Refusing to push ${reg.name}: the local value is ${stripeMode(local.value) || 'not a recognized live'} key/price, and production must be LIVE. Add the live value to workers/signup/.dev.vars first.`);
+    process.exit(1);
+  }
+  const pc = pairCheck(reg);
+  if (pc?.mismatch && !args.includes('--force')) {
+    console.error(`Refusing to push ${reg.name}: ${reg.pairedIdVar} differs between local (${pc.localId}) and prod (${pc.prodId}).`);
+    console.error('The local secret is for the SANDBOX app, so it would NOT match the production client id. Obtain the');
+    console.error('PRODUCTION app secret (for the prod client id) and push that. Use --force only if you are certain.');
     process.exit(1);
   }
   const target = toActions ? 'GitHub Actions' : 'the production Worker';
