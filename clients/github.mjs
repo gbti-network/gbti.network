@@ -74,6 +74,18 @@ export function createGitHubClient({ token, repo, fetch = globalThis.fetch, base
     setLabels(number, labels) {
       return req('PUT', `/repos/${repo}/issues/${number}/labels`, { labels });
     },
+    /** SOW-053: ADD labels without removing existing ones (PUT/setLabels replaces; this keeps the gate label). */
+    addLabels(number, labels) {
+      return req('POST', `/repos/${repo}/issues/${number}/labels`, { labels });
+    },
+    /** SOW-053: post a comment on a PR (issues endpoint). */
+    comment(number, body) {
+      return req('POST', `/repos/${repo}/issues/${number}/comments`, { body });
+    },
+    /** SOW-053: open PRs (metadata; the list endpoint omits mergeable_state, so the caller getPull()s each). */
+    listOpenPulls() {
+      return req('GET', `/repos/${repo}/pulls?state=open&per_page=100`);
+    },
     /** Post an optional comment, then close the PR. Used to auto-reject non-member PRs with a nudge. */
     async closePull(number, { comment } = {}) {
       if (comment) await req('POST', `/repos/${repo}/issues/${number}/comments`, { body: comment });

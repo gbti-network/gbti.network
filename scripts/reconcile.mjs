@@ -30,6 +30,7 @@ import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
 import { buildOverridesMirror, mirrorOverridesToKv } from './lib/kv-mirror.mjs';
 import { syncFavoriteCounts, readCountsFromDisk } from './lib/favorite-counts.mjs';
+import { mergeState, alreadyLabeled, conflictComment, CONFLICT_LABEL } from './lib/pr-conflict.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 
@@ -282,6 +283,35 @@ export function buildClients(env, fetchImpl = globalThis.fetch) {
 }
 
 /**
+ * SOW-053 Part B: sweep open PRs and surface true merge conflicts. Auto-merge stalls SILENTLY on a conflicting
+ * member PR; this adds a `needs-rebase` label + a one-time @-mention comment telling the author to re-publish
+ * (which reloads the fresh file + clears the conflict). Idempotent (skips an already-labeled PR) and fail-soft
+ * (any GitHub error is swallowed so the conflict sweep never breaks the rest of reconcile). The list endpoint omits
+ * mergeable_state, so each open PR is fetched once via getPull. Returns the list of surfaced { number, login }.
+ */
+export async function surfaceConflicts({ github, dryRun = true } = {}) {
+  const surfaced = [];
+  if (!github?.listOpenPulls) return surfaced;
+  let open;
+  try { open = await github.listOpenPulls(); } catch { return surfaced; }
+  for (const p of open || []) {
+    let pull;
+    try { pull = await github.getPull(p.number); } catch { continue; } // mergeable_state only on the single-PR GET
+    if (mergeState(pull) !== 'conflicting' || alreadyLabeled(pull)) continue;
+    const login = pull.user?.login || p.user?.login || '';
+    surfaced.push({ number: pull.number, login });
+    if (dryRun) continue;
+    try {
+      await github.addLabels(pull.number, [CONFLICT_LABEL]);
+      await github.comment(pull.number, conflictComment(login));
+    } catch (e) {
+      console.error(`reconcile: WARNING could not surface conflict on PR #${pull.number}: ${e?.message ?? e}`);
+    }
+  }
+  return surfaced;
+}
+
+/**
  * Resolve the SET of managed Discord roles a member CURRENTLY holds (a subset of 'member' | 'trial' |
  * 'locked') from their live guild member record. The planner reconciles this set to exactly the one
  * target role, removing any stray. Best-effort: any getMember error (including a missing member)
@@ -508,6 +538,17 @@ async function main() {
       console.error('reconcile: favorite-counts sync FAILED:', e?.message ?? e);
       process.exitCode = 1;
     }
+  }
+
+  // SOW-053 Part B: surface conflicting PRs (auto-merge stalls silently on them). Runs in both modes; the sweep
+  // only labels + comments on --apply, and is fail-soft so it never breaks the rest of reconcile.
+  try {
+    const conflicts = await surfaceConflicts({ github, dryRun });
+    if (conflicts.length) {
+      console.log(`reconcile: ${conflicts.length} conflicting PR(s)${dryRun ? ' (dry-run, would label + comment)' : ' surfaced'}: ` + conflicts.map((c) => `#${c.number}`).join(', '));
+    }
+  } catch (e) {
+    console.error('reconcile: conflict sweep failed (non-fatal):', e?.message ?? e);
   }
 
   if (dryRun) {

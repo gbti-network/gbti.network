@@ -23,6 +23,12 @@ function defaultTitle(change) {
     : `${change.type}: ${change.slug}`;
 }
 
+// SOW-053 NOTE: we deliberately base the publish branch on the FORK's main (below), not fresh upstream. Investigated
+// "base on fresh upstream + force-reset on re-publish" and REJECTED it: the Contents API writes the WHOLE file, so on
+// a fresh base any field another actor added to that same file since the member loaded it (e.g. SOW-008 contributor
+// credits, a reconcile status flip) reads as a DELETION and gets clobbered by the merge. The stale base + the
+// fresh-read-for-edit + GitHub's 3-way merge is exactly what preserves those concurrent edits. See SOW-053.
+
 /**
  * Publish a content change as (or into) a PR.
  *
