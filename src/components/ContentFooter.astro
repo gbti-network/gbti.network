@@ -1,8 +1,9 @@
 ---
 // SOW-050: the unified closing block shared by every content detail page (articles / products / prompts) so the
-// discussion + author region reads the same everywhere: the member-aware Community Invite, then the Comments
-// thread (same centered reading width on all three — the prompt page drops its old `wide`), then the AuthorBox.
-// Post-only extras (OpenHistory / RelatedPosts / ContributionCredits) stay on the article page, after this block.
+// discussion + author region reads the same everywhere: the member-aware Community Invite, then the "Written by"
+// AuthorBox, then the Comments thread (same centered reading width on all three — the prompt page drops its old
+// `wide`). Post-only extras (OpenHistory / RelatedPosts / ContributionCredits) stay on the article page, after
+// this block.
 import CommunityInvite from './CommunityInvite.astro';
 import Comments from './blog/Comments.astro';
 import AuthorBox from './blog/AuthorBox.astro';
@@ -19,5 +20,5 @@ const { type, slug, author, publishedAt, via } = Astro.props;
 const viaTag = via ?? `${type}:${slug}`;
 ---
 <CommunityInvite author={author} via={viaTag} />
-<Comments targetType={type} targetSlug={slug} author={author} />
 <AuthorBox author={author} publishedAt={publishedAt} />
+<Comments targetType={type} targetSlug={slug} author={author} />
