@@ -129,6 +129,15 @@ function controlsHtml() {
   </div>`;
 }
 
+// SOW-052: the GBTI Network brand mark, pinned to the very top of the rail (above the feed search / workbench
+// nav). Links home (newtab.html). The icon is the packaged extension logo, accessible by a page-relative path.
+function brandHtml() {
+  return `<a class="nt-brand" href="newtab.html" aria-label="GBTI Network home">
+    <img class="nt-brand-mk" src="icons/icon-128.png" alt="" width="26" height="26" />
+    <span class="nt-brand-tx">GBTI <b>Network</b></span>
+  </a>`;
+}
+
 function railHtml(active, nav = 'feed') {
   const rail = RAILS[nav] || RAIL_FEED;
   const items = rail.map((r) => {
@@ -139,9 +148,10 @@ function railHtml(active, nav = 'feed') {
     const sub = r.sub ? `<span class="sub">${esc(r.sub)}</span>` : '';
     return `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
   }).join('');
-  // The feed rail leads with the feed search + Latest/Following; the workbench rail does not.
+  // The feed rail leads with the feed search + Latest/Following; the workbench rail does not. The brand sits above
+  // either, at the very top of the rail.
   const top = nav === 'feed' ? feedControlsHtml() : '';
-  return `<nav class="nt-rail">${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+  return `<nav class="nt-rail">${brandHtml()}${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
 }
 
 /** Re-highlight the rail to `key` (or clear when null). The rail renders its active item ONCE at initShell, but

@@ -7833,6 +7833,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     <button class="nt-icobtn" data-compose data-ico="plus" title="New Share" aria-label="Post a new Share"></button>
   </div>`;
   }
+  function brandHtml() {
+    return `<a class="nt-brand" href="newtab.html" aria-label="GBTI Network home">
+    <img class="nt-brand-mk" src="icons/icon-128.png" alt="" width="26" height="26" />
+    <span class="nt-brand-tx">GBTI <b>Network</b></span>
+  </a>`;
+  }
   function railHtml(active, nav = "feed") {
     const rail = RAILS[nav] || RAIL_FEED;
     const items = rail.map((r) => {
@@ -7844,7 +7850,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc2(r.nm)}</span>${sub}</span></a>`;
     }).join("");
     const top = nav === "feed" ? feedControlsHtml() : "";
-    return `<nav class="nt-rail">${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE11}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
+    return `<nav class="nt-rail">${brandHtml()}${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE11}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
   }
   function setRailActive(key) {
     document.querySelectorAll(".nt-rail .nav-i").forEach((a) => a.classList.toggle("on", a.dataset.key === key));
