@@ -17,7 +17,25 @@ const faqs = [
   { q: 'Is my GitHub sign-in safe?', a: 'Yes. Sign-in happens between your browser and GitHub. Your token is stored locally by the extension and never sent to GBTI servers.' },
   { q: 'It did not load, what went wrong?', a: 'Two things to check: Developer mode needs to be on, and you need to select the unzipped folder, not the ZIP file itself. If the folder has a manifest.json at its top level, you picked the right one.' },
   { q: 'Do I need to be a member?', a: 'The extension is free to install and use. Publishing to the network goes through network membership, which is where the review and revenue-share flow lives.' },
+  { q: 'Can my AI agent publish for me?', a: 'Yes. The extension folder ships a GBTI MCP server, so an agent like Claude Code can draft, publish, and maintain your content through the same gated flow. Publishing still requires an active paid membership.' },
 ];
+
+// The recommended prompt a member pastes into Claude Code to wire it up to the GBTI MCP server. Built as a
+// line array (not a template literal) so the tool names and the <placeholder> read cleanly without escaping.
+const mcpPrompt = [
+  'Set up the GBTI Network MCP server in Claude Code so you can publish and maintain my GBTI content.',
+  '',
+  '1. Register it as an MCP server. If I have the GBTI Chrome extension installed, run the copy that ships in its folder:',
+  '     claude mcp add gbti-network -- node <path-to-the-unzipped-extension>/mcp/gbti-network-mcp.mjs',
+  '   Otherwise run it straight from npm:',
+  '     claude mcp add gbti-network -- npx gbti-network-mcp',
+  '',
+  '2. Sign me in: call the login tool, give me the GitHub device URL and code, and after I authorize, call login_confirm. Confirm with whoami.',
+  '',
+  '3. Show what I can work on with list_my_content, then use publish_content to publish or update a post, product, or prompt.',
+  '',
+  'Important: publishing is a members-only feature of GBTI. publish_content only works when my GitHub account is an active paid member. Without the right privileges the gate rejects the change, so do not attempt to bypass it.',
+].join('\n');
 ---
 <BaseLayout
   title="Install the GBTI extension"
@@ -30,6 +48,8 @@ const faqs = [
     <g id="i-pencil"><path d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.8"/></g>
     <g id="i-publish"><path d="M12 19V8m0 0l-4 4m4-4l4 4M5 5h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g>
     <g id="i-plus"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></g>
+    <g id="i-term"><rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 10l3 2.5L7 15M12.5 15H16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g id="i-bot"><rect x="5" y="8" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8V4.5M12 4.5h-1.5M9 13h.01M15 13h.01M9.5 16.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
   </defs></svg>
 
   <!-- ============ HERO (download in the header) ============ -->
@@ -226,6 +246,45 @@ const faqs = [
     </div>
   </section>
 
+  <!-- ============ MCP / AGENTIC PUBLISHING ============ -->
+  <section class="band tint" id="mcp">
+    <div class="wrap">
+      <div class="sec-head center">
+        <p class="eyebrow">Publish with your AI agent</p>
+        <h2 class="h2 mt12">It ships with a GBTI MCP server</h2>
+        <p class="lead">The extension folder also carries a GBTI MCP server. Connect it to Claude Code or any MCP client and your agent can publish new content and maintain what you have already shipped, through the same gated flow you use in the browser.</p>
+      </div>
+
+      <div class="mcp-grid mt40">
+        <div class="mcp-copy">
+          <ul class="mcp-list">
+            <li>
+              <span class="mcp-ic"><svg viewBox="0 0 24 24"><use href="#i-publish"/></svg></span>
+              <div><b>Author from your agent</b><p>Your agent can draft, validate, and publish posts, products, and prompts, and check the status of your pull requests, all through the managed GBTI tools.</p></div>
+            </li>
+            <li>
+              <span class="mcp-ic"><svg viewBox="0 0 24 24"><use href="#i-gh"/></svg></span>
+              <div><b>Signs in as you</b><p>A GitHub device-flow login signs the MCP server in as you. Your token stays on your own machine, the same as the browser extension.</p></div>
+            </li>
+            <li>
+              <span class="mcp-ic"><svg viewBox="0 0 24 24"><use href="#i-bot"/></svg></span>
+              <div><b>Same content, both ways</b><p>Edit in the browser or hand it to your agent. Both write to the same files and go through the same review, so nothing drifts.</p></div>
+            </li>
+          </ul>
+          <p class="mcp-note">
+            <svg viewBox="0 0 24 24"><use href="#i-lock"/></svg>
+            <span>Publishing is a <b>members-only</b> feature of the extension. The MCP server signs in as you, but the gate still applies: <b>only active paid members can publish</b>. Without the right privileges the publish tools are rejected, so an agent cannot push content for a non-member.</span>
+          </p>
+        </div>
+
+        <div class="mcp-prompt">
+          <div class="cb-head"><svg viewBox="0 0 24 24"><use href="#i-term"/></svg> Paste this into Claude Code</div>
+          <pre class="codeblock"><code>{mcpPrompt}</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ============ FAQ ============ -->
   <section class="band-sm">
     <div class="wrap">
@@ -314,6 +373,24 @@ const faqs = [
     .ie-line { height: 11px; border-radius: 6px; background: #e8eaed; margin-top: 15px; }
     .ie-line.w92 { width: 92%; } .ie-line.w76 { width: 76%; }
     .ext-mock-cap { text-align: center; max-width: 560px; margin: 20px auto 0; color: var(--fg-soft); font-size: 15px; }
+
+    /* ---- MCP / agentic publishing ---- */
+    .mcp-grid { display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 44px; align-items: start; max-width: 1000px; margin-left: auto; margin-right: auto; }
+    .mcp-list { display: flex; flex-direction: column; gap: 20px; list-style: none; padding: 0; margin: 0; }
+    .mcp-list li { display: flex; gap: 14px; }
+    .mcp-ic { width: 42px; height: 42px; border-radius: 10px; flex: none; background: var(--green-tint); color: var(--green-700); border: 1.5px solid var(--green-tint-2); display: inline-flex; align-items: center; justify-content: center; }
+    .mcp-ic svg { width: 21px; height: 21px; }
+    .mcp-list b { font-family: var(--f-display); font-weight: 700; font-size: 17px; display: block; color: var(--fg); }
+    .mcp-list p { color: var(--fg-soft); font-size: 14.5px; margin-top: 5px; line-height: 1.5; }
+    .mcp-note { display: flex; gap: 12px; align-items: flex-start; margin-top: 26px; padding: 16px 18px; border-radius: var(--r); background: var(--green-tint); border: 1.5px solid var(--green-tint-2); font-size: 14px; color: var(--fg-soft); line-height: 1.55; }
+    .mcp-note svg { width: 20px; height: 20px; flex: none; color: var(--green-700); margin-top: 1px; }
+    .mcp-note b { color: var(--fg); }
+    /* the prompt code block (pinned dark in both themes for code recognizability) */
+    .mcp-prompt { border-radius: var(--r-lg); box-shadow: var(--sh); }
+    .cb-head { display: flex; align-items: center; gap: 8px; background: #25232b; color: #c9c6d0; font-family: var(--f-mono); font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; padding: 11px 16px; border-radius: var(--r-lg) var(--r-lg) 0 0; }
+    .cb-head svg { width: 15px; height: 15px; color: var(--green-mint); }
+    .codeblock { margin: 0; background: #1c1a21; color: #e6e4ea; border-radius: 0 0 var(--r-lg) var(--r-lg); padding: 18px; font-family: var(--f-mono); font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+    @media (max-width: 860px) { .mcp-grid { grid-template-columns: 1fr; gap: 30px; } }
     @media (prefers-reduced-motion: reduce) { .ie-caret { animation: none; } }
     @media (max-width: 520px) { .ie-user .ie-tag { display: none; } .ie-doc { padding: 18px; } .ie-title { font-size: 19px; } }
 
