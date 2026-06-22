@@ -8,6 +8,10 @@ import assert from 'node:assert/strict';
 import {
   effectiveMembership,
   canPublish,
+  canSeeNews,
+  canFollow,
+  canSave,
+  canBrowse,
   isBlockedFromPublishing,
   isLockedMembership,
   bannedIdsFromText,
@@ -140,6 +144,32 @@ test('getStatus surfaces membership + canPublish for the UI notice', () => {
   );
   const paid = getStatus(ctxFor('paid'));
   assert.equal(paid.canPublish, true);
+});
+
+// SOW-060: the FREE-tier perks (browse / news / save / follow) need only a signed-in identity, not paid. Every
+// known signed-in status qualifies; only 'banned' and the unresolved 'unknown' are excluded. canPublish stays paid.
+test('free-tier predicates: every known signed-in status may browse/news/save/follow; banned + unknown may not', () => {
+  for (const m of ['paid', 'trialing', 'expired', 'cancelled', 'none']) {
+    assert.equal(canSeeNews(m), true, `${m} sees news`);
+    assert.equal(canFollow(m), true, `${m} follows`);
+    assert.equal(canSave(m), true, `${m} saves`);
+    assert.equal(canBrowse(m), true, `${m} browses`);
+  }
+  for (const m of ['banned', 'unknown', undefined, null, '']) {
+    assert.equal(canSeeNews(m), false, `${m} sees no news`);
+    assert.equal(canFollow(m), false, `${m} does not follow`);
+  }
+});
+
+// SOW-060 regression: opening the free perks must NOT open publishing. A free (none) member gets every perk but
+// canPublish stays false; this guards against the predicate split accidentally widening canPublish. (The
+// status-object WIRING regression that asserts getStatus surfaces these rides with the operations.mjs change.)
+test('SOW-060 regression: a free (none) member follows + sees news + saves + browses but cannot publish', () => {
+  assert.equal(canFollow('none'), true);
+  assert.equal(canSeeNews('none'), true);
+  assert.equal(canSave('none'), true);
+  assert.equal(canBrowse('none'), true);
+  assert.equal(canPublish('none'), false);
 });
 
 // SOW-018: the extension lock-splash predicate. Lapsed accounts lock; trial reads; paid is full; unknown fails OPEN.

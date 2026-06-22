@@ -4,7 +4,7 @@
 // the decrypt/encrypt round-trip. Injected fetchUser + Stripe + KV: no network, no secrets.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { membershipDecrypt, membershipEncrypt, authorizePaid, OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from '../workers/signup/membership-content.mjs';
+import { membershipDecrypt, membershipEncrypt, authorizePaid, authorizeMember, OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from '../workers/signup/membership-content.mjs';
 import { encryptAsset, generateEpochKey } from '../client/src/crypto-assets.mjs';
 
 const KEY = generateEpochKey();
@@ -139,4 +139,38 @@ test('authorizePaid: a grandfathered member with no Stripe sub is authorized (so
   const r = await authorizePaid(POST('decrypt', 'Bearer g'), ENV({}, mirror), deps('3', () => null));
   assert.equal(r.ok, true);
   assert.equal(r.source, 'grandfather');
+});
+
+// SOW-060: authorizeMember is the FREE / member tier (the news/follows/prefs gate). Any signed-in, non-banned
+// caller passes; it inherits resolveEffective's fail-closed behavior (401 no-token, 403 stale/incomplete mirror).
+test('authorizeMember: a signed-in member with NO subscription (none) is authorized (free tier)', async () => {
+  const r = await authorizeMember(POST('news', 'Bearer g'), ENV(), deps('9', () => null));
+  assert.equal(r.ok, true);
+  assert.equal(r.githubId, '9');
+});
+
+test('authorizeMember: an active trial is authorized', async () => {
+  const trial = { id: 'c', metadata: { github_id: '7', trial_started_at: String(Math.floor(Date.now() / 1000)) }, subscriptions: { data: [] } };
+  const r = await authorizeMember(POST('news', 'Bearer g'), ENV(), deps('7', () => trial));
+  assert.equal(r.ok, true);
+});
+
+test('authorizeMember: a banned member is denied even with a paid sub (fail closed)', async () => {
+  const mirror = freshMirror({ bans: { bans: [{ github_id: '1' }] } });
+  const r = await authorizeMember(POST('news', 'Bearer g'), ENV({}, mirror), deps('1', () => paid));
+  assert.equal(r.ok, false);
+  assert.equal(r.status, 403);
+  assert.match(r.body.message, /not permitted/);
+});
+
+test('authorizeMember: no bearer token -> 401', async () => {
+  const r = await authorizeMember(POST('news', null), ENV(), deps('9', () => null));
+  assert.equal(r.ok, false);
+  assert.equal(r.status, 401);
+});
+
+test('authorizeMember: a missing/stale overrides mirror fails closed (403), never opens to a free caller', async () => {
+  const r = await authorizeMember(POST('news', 'Bearer g'), ENV({}, null), deps('9', () => null));
+  assert.equal(r.ok, false);
+  assert.equal(r.status, 403);
 });

@@ -67,7 +67,7 @@ export async function resolveEffective(request, env, { fetchImpl = globalThis.fe
     grandfathers: grandfathersFromParsed(mirror.grandfathered),
   };
   const effective = effectiveStatus(githubId, derived, overrides, now);
-  return { ok: true, githubId, status: effective.status, source: effective.source };
+  return { ok: true, githubId, login: user.githubLogin ?? null, status: effective.status, source: effective.source };
 }
 
 /**
@@ -80,7 +80,21 @@ export async function authorizePaid(request, env, deps = {}) {
   if (r.status !== 'paid') {
     return deny(r.status === 'banned' ? 'this account is not permitted' : 'an active paid membership is required');
   }
-  return { ok: true, githubId: r.githubId, source: r.source };
+  return { ok: true, githubId: r.githubId, login: r.login, source: r.source };
+}
+
+/**
+ * SOW-060: authorize any SIGNED-IN, non-banned caller (the FREE / member tier). Thin wrapper over resolveEffective:
+ * a verified token + a fresh, well-shaped overrides mirror is enough, and only a ban is denied (so it inherits the
+ * 401-no-token, 401-bad-token, and 403-stale/incomplete-mirror fail-closed behavior verbatim). Used for the FREE
+ * perks that carry NO member-only content body: NEWS browse/follow, the follow graph, and news/category prefs.
+ * Member-only CONTENT (decrypt/encrypt, Shares, publishing, Discord side effects) stays on authorizePaid.
+ */
+export async function authorizeMember(request, env, deps = {}) {
+  const r = await resolveEffective(request, env, deps);
+  if (!r.ok) return r;
+  if (r.status === 'banned') return deny('this account is not permitted');
+  return { ok: true, githubId: r.githubId, login: r.login, source: r.source };
 }
 
 // SOW-018: a Share's encrypted body carries the AAD `share:<id>:body` (encAssetFor('share', ...)). The AAD is

@@ -4,7 +4,7 @@
 // banner (SOW-026/029), and the lapsed-member lock (SOW-018). Fetches the public activity index over the
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
-import { isLockedMembership } from '../../client/src/membership.mjs';
+import { isLockedMembership, canSeeNews } from '../../client/src/membership.mjs'; // SOW-060: news is a free-tier (signed-in) perk
 import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
@@ -80,7 +80,7 @@ function renderFeed(filter = '') {
   if (VIEW === 'following') {
     const noChannels = !FOLLOWED_CHANNELS || FOLLOWED_CHANNELS.size === 0;
     if (FOLLOWING === null && noChannels) {
-      feed.innerHTML = `<p class="muted">Following is a member feature. Sign in with the GBTI client or extension as a paid member to follow people and news channels. <a href="${SITE}/membership/" style="color:var(--green-700)">Become a member</a>.</p>`;
+      feed.innerHTML = `<p class="muted">Follow people and news channels to build your own feed. Subscribe to a member's activity, or follow a channel from the News section.</p>`;
       return;
     }
     if ((!FOLLOWING || FOLLOWING.size === 0) && noChannels) {
@@ -98,7 +98,7 @@ function renderFeed(filter = '') {
   let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
   // SOW-046 G: strip openHref so a news card opens the in-extension expanded reader (card-open) instead of bouncing
   // to the source; the reader still offers an "Open source" link (it rebuilds the UTM link from item.link).
-  if (wantNews && MEMBERSHIP === 'paid' && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n)); // news is a paid perk
+  if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n)); // SOW-060: news is a free-tier (signed-in) perk
   if (narrow) rows = rows.filter((e) => e.type === TYPE);
   // SOW-046 E: the Following view drills into followed MEMBERS' content/shares AND followed NEWS CHANNELS' news
   // (a news item is kept when its source is in the member's followedChannels).
@@ -116,7 +116,7 @@ function renderFeed(filter = '') {
   if (!rows.length) {
     // Cold start: if this view is still fetching news (nothing cached yet), say "loading", not "no news" — the
     // list refreshes in place once it lands (avoids a "no news" flash that then fills in).
-    const newsLoading = wantNews && MEMBERSHIP === 'paid' && !NEWS_LOADED;
+    const newsLoading = wantNews && canSeeNews(MEMBERSHIP) && !NEWS_LOADED;
     const empty = VIEW === 'following'
       ? (q ? 'No followed activity matches that filter.' : 'No recent activity from the members you follow.')
       : (q ? 'No activity matches that filter.' : newsLoading ? 'Loading the latest news…' : (TYPE === 'share' ? 'No Shares yet.' : (TYPE === 'news' ? 'No news right now. Check back soon.' : 'No activity yet.')));
@@ -211,12 +211,13 @@ function writeNewsCache(items) {
   try { chrome.storage?.local?.set?.({ [NEWS_CACHE_KEY]: { items, at: Date.now() } }); } catch { /* storage unavailable */ }
 }
 
-/** Load the member's News once (SOW-043). News is PAID-only (the Worker 403s a non-paid caller), so only attempt
- *  for a paid member; otherwise fail-closed to []. Rides /api/news via the background (the key stays in the Worker).
- *  A successful fetch updates the cache; an empty/failed fetch KEEPS the already-hydrated cache (no blanking). */
+/** Load the member's News once (SOW-043 / SOW-060). News is a FREE-tier perk: the Worker allows any signed-in,
+ *  non-banned member, so attempt for any signed-in member (canSeeNews); a locked/banned account fails-closed to [].
+ *  Rides /api/news via the background (the key stays in the Worker). A successful fetch updates the cache; an
+ *  empty/failed fetch KEEPS the already-hydrated cache (no blanking). */
 async function loadNews() {
   NEWS_LOADED = true;
-  if (MEMBERSHIP !== 'paid') { NEWS = []; return; }
+  if (!canSeeNews(MEMBERSHIP)) { NEWS = []; return; }
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/news', query: { limit: 60 } } });
     const items = Array.isArray(r?.json?.items) ? r.json.items : [];
@@ -235,7 +236,7 @@ async function ensureNewsForFilter() {
   }
 }
 
-/** Load the caller's follow list from the background worker (paid-only). Sets FOLLOWING to a Set, or null. */
+/** Load the caller's follow list from the background worker (SOW-060: a free-tier perk, signed-in). Sets FOLLOWING to a Set, or null. */
 async function loadFollows() {
   FOLLOWS_LOADED = true;
   try {
@@ -247,7 +248,7 @@ async function loadFollows() {
   }
 }
 
-/** SOW-046 E: load the member's followed news channels (source ids) from prefs (paid-only). Set, or null. */
+/** SOW-046 E / SOW-060: load the member's followed news channels (source ids) from prefs (a free-tier perk, signed-in). Set, or null. */
 async function loadPrefs() {
   PREFS_LOADED = true;
   try {

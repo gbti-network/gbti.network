@@ -74,6 +74,17 @@ export function canPublish(membership) {
   return membership === 'paid';
 }
 
+// SOW-060: the FREE tier. These perks need only a signed-in identity, NOT a subscription: browse member activity,
+// see + follow NEWS, save (favorite), collect, and follow members/channels/categories. Every KNOWN signed-in
+// status qualifies; only 'banned' and the unresolved 'unknown' are excluded (an explicit allowlist, matching
+// canSeeShares' style). Member-only content + comment bodies stay on canSeeShares; publishing stays on canPublish.
+const FREE_TIER = new Set(['paid', 'trialing', 'expired', 'cancelled', 'none']);
+/** Whether a signed-in member may browse, save, collect, follow, and see news (the free-tier perks). */
+export function canSeeNews(membership) { return FREE_TIER.has(membership); }
+export function canFollow(membership) { return FREE_TIER.has(membership); }
+export function canSave(membership) { return FREE_TIER.has(membership); }
+export function canBrowse(membership) { return FREE_TIER.has(membership); }
+
 // SOW-018: a "Locked" account is a member whose access has LAPSED (expired trial, cancelled, banned, or no
 // record). The extension shows a lock splash for these. Deliberately EXCLUDES 'trialing' (an active trial may
 // read), 'paid', and 'unknown' (the status oracle is unreachable — fail OPEN so a paid member is never wrongly

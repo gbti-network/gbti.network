@@ -5,7 +5,10 @@
 // NEWS_API_KEY are Worker env (set at deploy); until they are set this returns 502 (the client renders "news
 // unavailable"), never a key leak. Pure over the injected `authorize`/`fetch`, so it unit-tests with no network.
 
-import { authorizePaid } from './membership-content.mjs';
+// SOW-060: NEWS is a FREE-tier perk (browse + follow channels). It is gated to any signed-in, non-banned caller
+// (authorizeMember), NOT effective-paid. The server-held NEWS_API_KEY still never reaches the client. Member-only
+// content (decrypt/encrypt/Shares/publishing) stays on authorizePaid.
+import { authorizeMember } from './membership-content.mjs';
 
 // A category label is config-defined (gbti-news-api/config/categories.mjs); bound the proxied query to a safe
 // token set so the proxy can never be pointed at an arbitrary upstream path/query.
@@ -55,8 +58,8 @@ export async function findNewsItemByGuid(env, { guid, source, fetch = globalThis
   return items.find((it) => String(it?.guid) === String(guid)) ?? null;
 }
 
-/** GET /membership/news?category&since&limit -> { items } for an effective-paid member. The key never leaves. */
-export async function membershipNews(request, env, { authorize = authorizePaid, fetch = globalThis.fetch, ...authDeps } = {}) {
+/** GET /membership/news?category&since&limit -> { items } for any signed-in member (SOW-060). The key never leaves. */
+export async function membershipNews(request, env, { authorize = authorizeMember, fetch = globalThis.fetch, ...authDeps } = {}) {
   const auth = await authorize(request, env, authDeps);
   if (!auth.ok) return { status: auth.status, body: auth.body };
   const cfg = newsEnv(env);
@@ -77,7 +80,7 @@ export async function membershipNews(request, env, { authorize = authorizePaid, 
 }
 
 /** GET /membership/news-categories -> { categories } (the classifier label set + live counts). Same paid gate. */
-export async function membershipNewsCategories(request, env, { authorize = authorizePaid, fetch = globalThis.fetch, ...authDeps } = {}) {
+export async function membershipNewsCategories(request, env, { authorize = authorizeMember, fetch = globalThis.fetch, ...authDeps } = {}) {
   const auth = await authorize(request, env, authDeps);
   if (!auth.ok) return { status: auth.status, body: auth.body };
   const cfg = newsEnv(env);
@@ -89,7 +92,7 @@ export async function membershipNewsCategories(request, env, { authorize = autho
 
 /** GET /membership/news-sources -> { sources } (the channels a member can follow: id, name, description, count).
  *  SOW-046 E. Same paid gate; the key never leaves the Worker. */
-export async function membershipNewsSources(request, env, { authorize = authorizePaid, fetch = globalThis.fetch, ...authDeps } = {}) {
+export async function membershipNewsSources(request, env, { authorize = authorizeMember, fetch = globalThis.fetch, ...authDeps } = {}) {
   const auth = await authorize(request, env, authDeps);
   if (!auth.ok) return { status: auth.status, body: auth.body };
   const cfg = newsEnv(env);

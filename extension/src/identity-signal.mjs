@@ -20,5 +20,10 @@ export function buildMemberSignal(status) {
     role: typeof status.role === 'string' ? status.role : 'member',
     membership: typeof status.membership === 'string' ? status.membership : 'unknown',
     canPublish: status.canPublish === true,
+    // SOW-060: the free-tier capability flags (signed-in perks), so the page can render them without re-deriving.
+    canSeeNews: status.canSeeNews === true,
+    canFollow: status.canFollow === true,
+    canSave: status.canSave === true,
+    canBrowse: status.canBrowse === true,
   };
 }

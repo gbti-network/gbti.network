@@ -2,8 +2,8 @@
 // via the signup Worker's GET/POST /membership/follows. Mirrors member-activity-client.mjs: thin, injectable
 // fetch wrappers that send the GitHub bearer token. Unit-tested with a fake fetch (no network).
 //
-// Following is effective-paid only (read + write); the Worker is the authority (fail-closed). A follow is NOT
-// a PR: it writes the private, erasable edge store, never the public repo.
+// SOW-060: following is a FREE-tier perk (any signed-in, non-banned member; read + write); the Worker is the
+// authority (fail-closed). A follow is NOT a PR: it writes the private, erasable edge store, never the public repo.
 
 const trimBase = (signupBase) => String(signupBase || '').replace(/\/$/, '');
 

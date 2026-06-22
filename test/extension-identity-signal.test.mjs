@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildMemberSignal } from '../extension/src/identity-signal.mjs';
 
-const ALLOWED = ['authenticated', 'login', 'githubId', 'username', 'role', 'membership', 'canPublish'];
+// SOW-060: the signal also carries the free-tier capability flags so the page can render them without re-deriving.
+const ALLOWED = ['authenticated', 'login', 'githubId', 'username', 'role', 'membership', 'canPublish', 'canSeeNews', 'canFollow', 'canSave', 'canBrowse'];
 
 test('signed-out / missing status -> null (no signal)', () => {
   assert.equal(buildMemberSignal(null), null);

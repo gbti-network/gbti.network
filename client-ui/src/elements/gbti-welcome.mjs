@@ -111,13 +111,14 @@ class GbtiWelcome extends GbtiElement {
     } catch {
       this._members = null; // could not load
     }
-    // Pre-mark already-followed members. A trial/visitor caller is denied (paid-only Worker) -> follows = null.
+    // Pre-mark already-followed members. SOW-060: following is a free-tier perk, so this succeeds for any signed-in
+    // member; a throw means the read was unavailable (or a banned/unknown account) -> follows = null.
     try {
       const r = await this.client?.getFollows?.();
       const list = Array.isArray(r) ? r : (r?.following ?? []);
       this._follows = new Set(list.map((e) => lc(e?.username)).filter(Boolean));
     } catch {
-      this._follows = null; // paid-only / unavailable -> the follow card shows an upgrade notice
+      this._follows = null; // unavailable -> the follow card shows a retry, not an upgrade notice
     }
     try { this._discordJoined = localStorage.getItem(DISCORD_DONE_KEY) === '1'; } catch { this._discordJoined = false; }
     // Prefer a fresh, bot-minted invite from the Worker; fall back to the static DISCORD_INVITE_URL when the
@@ -152,6 +153,11 @@ class GbtiWelcome extends GbtiElement {
            <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
          </div>`
       : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
+    // SOW: when the host gates BECAUSE the prior session's token expired (not a fresh sign-in), say so, so the
+    // member understands why they are back at the splash instead of in their hub.
+    const expired = this.hasAttribute('expired')
+      ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>`
+      : '';
     this.set(this.css(CSS) + `
       <div class="head">
         <span class="ic">${check}</span>
@@ -159,7 +165,7 @@ class GbtiWelcome extends GbtiElement {
         <p>The developer co-op. Sign in with your GitHub account to publish articles, products, and prompts, follow members, read the members-only news, and join the community.</p>
       </div>
       <div class="card">
-        ${action}
+        ${expired}${action}
         <p class="note" style="margin-top:14px">New here? <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a> &mdash; the trial is free.</p>
       </div>`);
     this.on('[data-auth-signin]', 'click', () => this.emit('gbti:welcome-signin'));
@@ -230,18 +236,13 @@ class GbtiWelcome extends GbtiElement {
 
   _followCard() {
     const note = `<p class="note">Following a member alerts you when they publish new articles, prompts, and products (in your Following feed).</p>`;
-    // The follow graph read failed. Distinguish a REAL paywall (a trial/visitor: following is paid-only) from a
-    // server-side "could not verify your membership right now" failure for an actually-paid member (e.g. a
-    // superadmin hitting a stale/missing KV overrides mirror). Showing "Upgrade" to a paid member is wrong.
+    // SOW-060: following is a FREE perk for any signed-in member, so there is no paywall state here. A null follow
+    // list means a transient read failure (or a stale/missing KV overrides mirror for a since-banned account), not
+    // a membership gate, so show a retry, never an upgrade prompt.
     if (this._follows === null) {
-      if (this._membership === 'paid') {
-        return `<div class="card"><h3>${megaIco} Follow members</h3>
-          <p class="sub">We could not load your follow list right now. This is a temporary problem on our side, not your membership.</p>${note}
-          <p class="note" style="margin-top:10px">Try again shortly, or follow members any time from a member profile.</p></div>`;
-      }
       return `<div class="card"><h3>${megaIco} Follow members</h3>
-        <p class="sub">Following members is a paid feature.</p>${note}
-        <p class="note" style="margin-top:10px"><a href="${SITE}/membership/" target="_blank" rel="noopener">Upgrade</a> to follow members and build your feed.</p></div>`;
+        <p class="sub">We could not load your follow list right now. This is a temporary problem on our side.</p>${note}
+        <p class="note" style="margin-top:10px">Try again shortly, or follow members any time from a member profile.</p></div>`;
     }
     if (!this._members) {
       return `<div class="card"><h3>${megaIco} Follow members</h3>

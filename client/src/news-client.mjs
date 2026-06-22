@@ -16,7 +16,7 @@ const qs = (params = {}) => {
 export async function workerGetNews({ token, signupBase, fetch = globalThis.fetch, category, since, limit } = {}) {
   if (!token || !signupBase) throw new NewsClientError('not signed in');
   const res = await fetch(`${base(signupBase)}/membership/news${qs({ category, since, limit })}`, { headers: { Authorization: 'Bearer ' + token } });
-  if (res.status === 401 || res.status === 403) throw new NewsClientError('news requires a paid membership');
+  if (res.status === 401 || res.status === 403) throw new NewsClientError('news requires sign-in');
   if (!res.ok) throw new NewsClientError('news unavailable (' + res.status + ')');
   const data = await res.json();
   return { items: Array.isArray(data?.items) ? data.items : [], updatedAt: data?.updatedAt ?? null };
@@ -25,7 +25,7 @@ export async function workerGetNews({ token, signupBase, fetch = globalThis.fetc
 export async function workerGetNewsCategories({ token, signupBase, fetch = globalThis.fetch } = {}) {
   if (!token || !signupBase) throw new NewsClientError('not signed in');
   const res = await fetch(`${base(signupBase)}/membership/news-categories`, { headers: { Authorization: 'Bearer ' + token } });
-  if (res.status === 401 || res.status === 403) throw new NewsClientError('news requires a paid membership');
+  if (res.status === 401 || res.status === 403) throw new NewsClientError('news requires sign-in');
   if (!res.ok) throw new NewsClientError('news categories unavailable (' + res.status + ')');
   const data = await res.json();
   return { categories: Array.isArray(data?.categories) ? data.categories : [] };
@@ -35,7 +35,7 @@ export async function workerGetNewsCategories({ token, signupBase, fetch = globa
 export async function workerGetNewsSources({ token, signupBase, fetch = globalThis.fetch } = {}) {
   if (!token || !signupBase) throw new NewsClientError('not signed in');
   const res = await fetch(`${base(signupBase)}/membership/news-sources`, { headers: { Authorization: 'Bearer ' + token } });
-  if (res.status === 401 || res.status === 403) throw new NewsClientError('news requires a paid membership');
+  if (res.status === 401 || res.status === 403) throw new NewsClientError('news requires sign-in');
   if (!res.ok) throw new NewsClientError('news sources unavailable (' + res.status + ')');
   const data = await res.json();
   return { sources: Array.isArray(data?.sources) ? data.sources : [] };
@@ -44,7 +44,7 @@ export async function workerGetNewsSources({ token, signupBase, fetch = globalTh
 export async function workerGetPrefs({ token, signupBase, fetch = globalThis.fetch } = {}) {
   if (!token || !signupBase) throw new NewsClientError('not signed in');
   const res = await fetch(`${base(signupBase)}/membership/prefs`, { headers: { Authorization: 'Bearer ' + token } });
-  if (res.status === 401 || res.status === 403) throw new NewsClientError('prefs require a paid membership');
+  if (res.status === 401 || res.status === 403) throw new NewsClientError('prefs require sign-in');
   if (!res.ok) throw new NewsClientError('prefs unavailable (' + res.status + ')');
   const data = await res.json();
   return data?.prefs ?? { categories: [], followedChannels: [] };
@@ -53,7 +53,7 @@ export async function workerGetPrefs({ token, signupBase, fetch = globalThis.fet
 export async function workerSetPrefs({ token, signupBase, fetch = globalThis.fetch, patch } = {}) {
   if (!token || !signupBase) throw new NewsClientError('not signed in');
   const res = await fetch(`${base(signupBase)}/membership/prefs`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(patch || {}) });
-  if (res.status === 401 || res.status === 403) throw new NewsClientError('prefs require a paid membership');
+  if (res.status === 401 || res.status === 403) throw new NewsClientError('prefs require sign-in');
   if (!res.ok) throw new NewsClientError('could not save prefs (' + res.status + ')');
   const data = await res.json();
   return data?.prefs ?? { categories: [], followedChannels: [] };

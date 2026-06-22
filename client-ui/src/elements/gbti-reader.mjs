@@ -15,6 +15,8 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { resolveAsset } from '../assets.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the always-open discussion, now mounted inside the author drawer
+import './gbti-upvote.mjs'; // SOW-057: the share upvote control
+import { hostOf } from '../all-merge.mjs'; // SOW-057: the link domain for the "Read article on <domain>" CTA
 
 const SITE = 'https://gbti.network';
 const lc = (s) => String(s || '').toLowerCase();
@@ -163,7 +165,7 @@ class GbtiReader extends GbtiElement {
   }
 
   // Resolve the author drawer model: directory entry (avatar/name/headline/links), whether the viewer follows
-  // them, and whether the viewer CAN follow (effective-paid). House content yields a branded, non-followable card.
+  // them, and whether the viewer CAN follow (SOW-060: any signed-in member). House content yields a branded, non-followable card.
   async _resolveAuthor(it) {
     const username = lc(it.author);
     if (isHouse(username)) return { house: true };
@@ -173,10 +175,11 @@ class GbtiReader extends GbtiElement {
     ]);
     const entry = dir.get(username) || null;
     const me = lc(status?.identity?.username || status?.identity?.login);
-    const canFollow = !!status?.canPublish; // follow is effective-paid only (the Worker fail-closes otherwise)
+    const canFollow = !!status?.canFollow; // SOW-060: following is a free-tier perk (signed-in); the Worker fail-closes otherwise
     let following = false;
     if (canFollow && this.client.getFollows) {
-      try { const f = await this.client.getFollows(); following = (f?.following || []).some((x) => lc(x.username) === username); }
+      // getFollows() returns a bare array (operations.mjs) on both hosts; tolerate the { following: [...] } shape too.
+      try { const f = await this.client.getFollows(); const list = Array.isArray(f) ? f : (f?.following ?? []); following = list.some((x) => lc(x.username) === username); }
       catch { /* leave following=false */ }
     }
     return { house: false, username, entry, canFollow, following, isSelf: !!me && me === username };
@@ -252,7 +255,7 @@ class GbtiReader extends GbtiElement {
     if (!it) { this.set(this.css(CSS)); return; }
     // A Share's `url` is the external link it points at; every other type's `url` is a gbti.network path.
     const view = it.type === 'share'
-      ? (it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Open link</a>` : '')
+      ? (it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf(it.url))}</a>` : '')
       : (it.url ? `<a class="view" href="${esc(SITE + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : '');
     const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
     const meta = this._metaHtml(it, when);
@@ -272,7 +275,12 @@ class GbtiReader extends GbtiElement {
     // The author drawer only renders once resolved (so its data is present); while loading the side column is empty.
     const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${discussion}</aside>` : '<aside class="side"></aside>';
 
-    this.set(this.css(CSS) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}</article>${side}</div></div>`);
+    // SOW-057: an upvote control on a Share (extension-only), hidden for the share's own author (whose vote never counts).
+    const shareUpvote = (it.type === 'share' && slug && this._author && !this._author.isSelf)
+      ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>`
+      : '';
+
+    this.set(this.css(CSS) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}${shareUpvote}</article>${side}</div></div>`);
     if (resolved) { this._enhanceCode(); this._wireFollow(it); }
   }
 

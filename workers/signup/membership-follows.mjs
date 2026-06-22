@@ -2,19 +2,19 @@
 //   GET  /membership/follows               -> { ok, following: [{ username, addedAt }] }   (the caller's own list)
 //   POST /membership/follows { username, on } -> { ok, following }   (on:true follow, on:false unfollow)
 //
-// Auth = EFFECTIVE-PAID, fail-closed (authorizePaid: ban > staff > grandfather > Stripe, from the KV overrides
-// mirror). Both READ and WRITE are paid-only: a trial member's follows are not persisted (SOW-011) and the feed
-// is a paid perk. Data is keyed `follows:<github_id>` in SIGNUP_KV, so it is per-member, private, and ERASABLE
-// (eraseMemberFollows = a hard KV delete; SOW-024 right-to-erasure runbook). The transforms are the pure
-// membership/member-follows.mjs core; this handler only does auth + the KV read-modify-write, so it is
-// unit-tested with a fake KV + a stubbed authorizer (no network, no secrets).
+// SOW-060: following is a FREE-tier perk. Auth = SIGNED-IN, non-banned (authorizeMember: ban > staff > grandfather
+// > Stripe, fail-closed from the KV overrides mirror), NOT effective-paid. Both READ and WRITE work for any signed-in
+// member (the follow graph needs an identity but not a subscription). Data is keyed `follows:<github_id>` in
+// SIGNUP_KV, so it is per-member, private, and ERASABLE (eraseMemberFollows = a hard KV delete; SOW-024 right-to-
+// erasure runbook). The transforms are the pure membership/member-follows.mjs core; this handler only does auth +
+// the KV read-modify-write, so it is unit-tested with a fake KV + a stubbed authorizer (no network, no secrets).
 
-import { authorizePaid } from './membership-content.mjs';
+import { authorizeMember } from './membership-content.mjs';
 import { FollowError, normalizeFollows, applyFollow } from '../../membership/member-follows.mjs';
 
 export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`;
 
-export async function handleFollows(request, env, { kv = env?.SIGNUP_KV, now = Date.now, authorize = authorizePaid, ...authDeps } = {}) {
+export async function handleFollows(request, env, { kv = env?.SIGNUP_KV, now = Date.now, authorize = authorizeMember, ...authDeps } = {}) {
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the follow store is not configured' } };
 
   const auth = await authorize(request, env, authDeps);

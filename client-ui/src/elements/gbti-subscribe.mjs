@@ -1,10 +1,11 @@
 // <gbti-subscribe> (SOW-023): upgrades the inert "Subscribe to activity" control baked by SubscribeButton.astro.
 // The public static build ships `<gbti-subscribe data-gbti-username=..>` wrapping a button + a membership-gated
 // dialog in its light DOM (the visitor path). When a host loads @gbti/client-ui, this element upgrades into a
-// real follow toggle: it reads the caller's follow list (client.getFollows) and, for an effective-paid member,
-// toggles client.setFollow({ username, on }) against the deletable edge store via the Worker (never a PR; the
-// GitHub token never reaches the page). A trial/visitor caller (the Worker denies the paid-only read) falls back
-// to the membership route. The followed username is observed, so the JS-driven prompts directory hero can set it.
+// real follow toggle: it reads the caller's follow list (client.getFollows) and, for any SIGNED-IN member
+// (SOW-060: following is a free-tier perk, not paid-only), toggles client.setFollow({ username, on }) against the
+// deletable edge store via the Worker (never a PR; the GitHub token never reaches the page). A signed-out visitor
+// (the Worker denies the read) falls back to the membership route. The followed username is observed, so the
+// JS-driven prompts directory hero can set it.
 import { GbtiElement, define } from '../base.mjs';
 
 // Megaphone inlined: a Shadow-DOM <use href="#ico-mega"> cannot reach the page sprite across the shadow boundary.

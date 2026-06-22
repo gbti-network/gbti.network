@@ -6,12 +6,13 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, getDiscordInvite, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, listComments } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, listComments } from '../../client/src/operations.mjs';
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from '../../client/src/roles.mjs';
 import { banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, getTaxonomy, addContentCategory, renameContentCategoryLabel } from '../../client/src/admin-ops.mjs';
+import { canSeeNews, canFollow, canSave, canBrowse } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates
 
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
 // host-portable / async-safe) and commits via the repo client; capability is UX-gated here while the SOW-005
@@ -58,15 +59,25 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
     const id = ctx.identity?.();
     if (pathname === '/api/status') {
       const membership = ctx.membership?.() ?? 'unknown'; // SOW-011: cached at login; drives the publish notice
-      const { role, canCurate } = await computeRoleAndCurate(ctx); // SOW-046 C: news -> Discord publish capability
+      const { role, canCurate } = await computeRoleAndCurate(ctx); // SOW-046 C: also the first read that proves the token
+      // computeRoleAndCurate read house/roles.yml; if the token was dead, the reader already cleared the session.
+      // Re-read auth state AFTER that read so an expired token reports unauthenticated + nulls the stale identity,
+      // sending shouldGate() -> the sign-in splash (sessionExpired distinguishes expiry from a plain sign-out).
+      const live = Boolean(ctx.store?.get('githubToken'));
       return ok({
         version: '0.1.0',
-        identity: id ?? null,
+        identity: live ? (id ?? null) : null,
         role,
-        authenticated: Boolean(ctx.store?.get('githubToken')),
+        authenticated: live,
         membership,
         canPublish: membership === 'paid',
+        // SOW-060: free-tier perks (browse / news / save / follow) need only a signed-in identity, not paid.
+        canSeeNews: canSeeNews(membership),
+        canFollow: canFollow(membership),
+        canSave: canSave(membership),
+        canBrowse: canBrowse(membership),
         canCurate,
+        sessionExpired: ctx.authExpired?.() === true,
       });
     }
     // SOW-026: first-run readiness must work BEFORE sign-in: it is the route that DRIVES the sign-in step (it
@@ -117,6 +128,10 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(method === 'POST' ? await mutateMemberActivity(ctx, body) : await getMemberActivity(ctx));
       case '/api/follows': // SOW-023: the follow graph (subscriptions) in the deletable edge store, via the Worker (paid-only)
         return ok(method === 'POST' ? await setFollow(ctx, body) : await getFollows(ctx));
+      case '/api/upvote': // SOW-057: upvote a share (effective-paid, via the Worker; two votes enqueue syndication)
+        return ok(await upvoteContent(ctx, body ?? {}));
+      case '/api/og-preview': // SOW-057: server-side OpenGraph preview for the share composer (SSRF-guarded in the Worker)
+        return ok(await ogPreview(ctx, body ?? {}));
       case '/api/discord-invite': // on-demand Discord guild invite, minted + cached by the Worker
         return ok(await getDiscordInvite(ctx));
       case '/api/news': // SOW-043: members-only news, proxied through the signup Worker (holds NEWS_API_KEY)
@@ -147,6 +162,10 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await getTaxonomy(ctx));
       case '/api/open-pulls': // SOW-038 P2: the open content-PR queue (admin-gated)
         return ok(await getOpenPulls(ctx));
+      case '/api/syndication': // SOW-058: the superadmin syndication tracker (admin-gated, via the Worker)
+        return ok(await getSyndicationQueue(ctx));
+      case '/api/syndication/cancel': // SOW-058: cancel a pending syndication item (superadmin only)
+        return ok(await cancelSyndication(ctx, body ?? {}));
       case '/api/admin-ops': // SOW-038 P3: trigger reconcile / E2E-smoke (admin-gated; the Worker holds the dispatch token)
         return ok(await triggerAdminOp(ctx, body ?? {}));
       case '/api/pr-status': {

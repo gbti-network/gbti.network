@@ -17,9 +17,9 @@ test('workerGetNews returns the items + sends the bearer token + builds the quer
   assert.match(url, /limit=10/);
 });
 
-test('workerGetNews maps 401/403 to a paid-membership error (not a generic failure)', async () => {
+test('workerGetNews maps 401/403 to a sign-in error (SOW-060: news is a free-tier perk, not paid)', async () => {
   const fetch = async () => ({ ok: false, status: 403, json: async () => ({}) });
-  await assert.rejects(() => workerGetNews(opts(fetch)), (e) => e instanceof NewsClientError && /paid membership/i.test(e.message));
+  await assert.rejects(() => workerGetNews(opts(fetch)), (e) => e instanceof NewsClientError && /sign-in/i.test(e.message));
 });
 
 test('workerGetNews requires a token + base (not signed in)', async () => {
