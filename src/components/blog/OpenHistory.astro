@@ -110,7 +110,7 @@ const n = commits.length; // commits shown as history
         {n === 0 && (
           <div class="ch-empty">
             <Avatar item={houseItem} size={34} class="rounded-full" />
-            <span>No tracked contributions yet. A member who improves this article through an accepted pull request earns a <a class="rev-link" href="/co-op/"><b>share of the revenue</b></a> it generates.</span>
+            <span>No tracked contributions yet. A member who improves this article through an accepted pull request earns a <a class="rev-link" href="/revenue-model/"><b>share of the revenue</b></a> it generates.</span>
           </div>
         )}
 
@@ -118,7 +118,7 @@ const n = commits.length; // commits shown as history
         {n > 0 && hasAccepted && acceptedCount === 1 && (
           <div class="cl-note">
             <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-coin"/></svg>
-            <span>This article has <b>1 accepted contribution</b>. Its author earns a <a class="rev-link" href="/co-op/"><b>share of the revenue</b></a> it generates.</span>
+            <span>This article has <b>1 accepted contribution</b>. Its author earns a <a class="rev-link" href="/revenue-model/"><b>share of the revenue</b></a> it generates.</span>
           </div>
         )}
 
@@ -132,7 +132,7 @@ const n = commits.length; // commits shown as history
             </div>
             <div class="cl-reward">
               <svg class="cl-reward-ico" viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-coin"/></svg>
-              <span>Every accepted contribution earns its author a <a class="rev-link" href="/co-op/"><b>share of the revenue</b></a> this article generates.</span>
+              <span>Every accepted contribution earns its author a <a class="rev-link" href="/revenue-model/"><b>share of the revenue</b></a> this article generates.</span>
             </div>
           </div>
         )}
@@ -140,7 +140,7 @@ const n = commits.length; // commits shown as history
         {n > 0 && !hasAccepted && (
           <div class="cl-note cl-note--neutral">
             <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-coin"/></svg>
-            <span>The changes below are the change history of this article. A member who improves it through an accepted pull request earns a <a class="rev-link" href="/co-op/"><b>share of the revenue</b></a> it generates.</span>
+            <span>The changes below are the change history of this article. A member who improves it through an accepted pull request earns a <a class="rev-link" href="/revenue-model/"><b>share of the revenue</b></a> it generates.</span>
           </div>
         )}
 
@@ -238,7 +238,7 @@ const n = commits.length; // commits shown as history
   /* neutral note: no accepted contributions yet, so the history makes no revenue claim (muted, not a banner) */
   .cl-note--neutral { color: var(--fg-mute); }
   .cl-note--neutral b { color: var(--green-700); }
-  /* "share of the revenue" links to the co-op explainer; green + bold, no underline */
+  /* "share of the revenue" links to the revenue-model explainer; green + bold, no underline */
   .rev-link { color: var(--green-700); text-decoration: none; }
   .rev-link b { color: inherit; }
   .rev-link:hover { color: var(--green-600); }

@@ -22,9 +22,10 @@ function rehypeDemoteBodyH1() {
 
 export default defineConfig({
   site: 'https://gbti.network',
-  // The Model page was merged into About; keep old links working. One key only: with trailingSlash:'ignore'
-  // it serves both /model and /model/, and two keys collide ("route defined more than once" build warning).
-  redirects: { '/model': '/about' },
+  // The About and Co-op pages were retired and folded into the Revenue Model lander; keep old links working.
+  // One key per source (no trailing slash): with trailingSlash:'ignore' each serves both /x and /x/, and a
+  // second key for the same path would collide ("route defined more than once" build warning).
+  redirects: { '/model': '/revenue-model', '/about': '/revenue-model', '/co-op': '/revenue-model' },
   markdown: { rehypePlugins: [rehypeDemoteBodyH1] },
   // Dev-only Astro toolbar — hidden so local testing matches the published view.
   devToolbar: { enabled: false },
