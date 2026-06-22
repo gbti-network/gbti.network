@@ -67,7 +67,7 @@ const RAIL_FEED = [
 
 const RAIL_WORKBENCH = [
   // SOW-052: a "Network" item up top takes the member back to the main co-op feed (newtab). No "WorkBench" eyebrow.
-  { key: 'network', href: 'newtab.html', ico: 'network', nm: 'Network', sub: 'Back to the co-op' },
+  { key: 'network', href: 'newtab.html', ico: 'network', nm: 'Network', sub: 'Exit WorkBench' },
   // Explicit #tab=overview so clicking it ON workspace.html is a same-document switch (no reload), like the others.
   { key: 'overview', href: 'workspace.html#tab=overview', ico: 'grid', nm: 'Overview', sub: 'Your hub at a glance' },
   { group: 'My Content' },
