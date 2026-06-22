@@ -43,29 +43,58 @@ const faqs = [
         <span class="dl-sub">ZIP · load unpacked</span>
       </div>
       <div class="browsers hero-browsers">
-        <span class="bchip"><span class="d"></span> Chrome</span>
-        <span class="bchip"><span class="d"></span> Edge</span>
-        <span class="bchip"><span class="d"></span> Brave</span>
+        <span class="bchip"><span class="blogo blogo-chrome"></span> Chrome</span>
+        <span class="bchip">
+          <span class="blogo"><svg viewBox="0 0 48 48" aria-hidden="true">
+            <defs>
+              <linearGradient id="edgeA" x1="8" y1="36" x2="40" y2="36" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0c59a4"/><stop offset="1" stop-color="#114a8b"/></linearGradient>
+              <linearGradient id="edgeB" x1="12" y1="10" x2="40" y2="34" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#35c1f1"/><stop offset=".5" stop-color="#258fb6"/><stop offset="1" stop-color="#2aac4e"/></linearGradient>
+            </defs>
+            <path fill="url(#edgeA)" d="M41 33c-3 6-9 9-16 9-10 0-18-7-18-17 0-4 1-7 3-10-3 10 4 17 13 17 6 0 11-2 14-6z"/>
+            <path fill="url(#edgeB)" d="M24 6c11 0 17 7 17 15 0 4-3 7-7 7-4 0-6-3-10-3-8 0-13 7-7 14-8-3-11-10-11-16C6 14 14 6 24 6z"/>
+          </svg></span> Edge</span>
+        <span class="bchip">
+          <span class="blogo"><svg viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#f8521e" d="M24 4l9 3 3-2 5 5-1.6 4 2.6 7-18 15L6 21l2.6-7L7 10l5-5 3 2z"/>
+            <path fill="#fff" d="M24 13l5.5 2.6-1.2 7.4 3 3-7.3 5-7.3-5 3-3-1.2-7.4z" opacity=".96"/>
+            <path fill="#f8521e" d="M24 22l2.2 3.2-2.2 1.6-2.2-1.6z"/>
+          </svg></span> Brave</span>
         <span class="bchip soon"><span class="d"></span> Chrome Web Store soon</span>
       </div>
     </div>
   </section>
 
-  <!-- ============ WHAT IT DOES ============ -->
-  <section class="band-sm">
+  <!-- ============ EXTENSION MOCKUP (under the header) ============ -->
+  <section class="ext-mockwrap">
     <div class="wrap">
-      <div class="sec-head center">
-        <p class="eyebrow">What it does</p>
-        <h2 class="h2 mt12">Three things, once it is installed</h2>
-      </div>
-      <div class="feat-grid mt32">
-        {feats.map((f) => (
-          <div class="card feat-card">
-            <span class="itile"><svg viewBox="0 0 24 24"><use href={`#${f.icon}`}/></svg></span>
-            <h3>{f.title}</h3>
-            <p>{f.body}</p>
+      <div class="bw ext-mock">
+        <div class="bw-bar">
+          <span class="bw-dots"><i></i><i></i><i></i></span>
+          <span class="bw-url"><svg viewBox="0 0 24 24"><use href="#i-lock"/></svg> gbti.network/blog/my-article</span>
+          <span class="bw-toolbar"><span class="tb-ico"></span><span class="tb-ico tb-gbti">G</span></span>
+        </div>
+        <div class="ext-stage">
+          <div class="ext-pagehint" aria-hidden="true">
+            <span class="ph-line w60"></span><span class="ph-line w90"></span><span class="ph-line w80"></span><span class="ph-line w40"></span>
           </div>
-        ))}
+          <div class="ext-pop">
+            <div class="ep-head">
+              <span class="ep-logo">G</span>
+              <span class="ep-name">GBTI</span>
+              <span class="ep-status"><span class="ep-dot"></span> Signed in</span>
+            </div>
+            <div class="ep-user">
+              <span class="ep-av">A</span>
+              <span class="ep-uinfo"><b>@atwellpub</b><span>Paid member</span></span>
+            </div>
+            <div class="ep-actions">
+              <span class="ep-btn ep-btn-primary"><svg viewBox="0 0 24 24"><use href="#i-pencil"/></svg> Edit this page</span>
+              <span class="ep-btn"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg> New draft</span>
+              <span class="ep-btn"><svg viewBox="0 0 24 24"><use href="#i-publish"/></svg> Publish through the network</span>
+            </div>
+            <div class="ep-foot">Your work, edited where it lives.</div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -176,6 +205,25 @@ const faqs = [
     </div>
   </section>
 
+  <!-- ============ WHAT IT DOES ============ -->
+  <section class="band-sm">
+    <div class="wrap">
+      <div class="sec-head center">
+        <p class="eyebrow">What it does</p>
+        <h2 class="h2 mt12">Three things, once it is installed</h2>
+      </div>
+      <div class="feat-grid mt32">
+        {feats.map((f) => (
+          <div class="card feat-card">
+            <span class="itile"><svg viewBox="0 0 24 24"><use href={`#${f.icon}`}/></svg></span>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
   <!-- ============ FAQ ============ -->
   <section class="band-sm">
     <div class="wrap">
@@ -208,7 +256,7 @@ const faqs = [
 
   <style>
     /* ---- hero ---- */
-    .ext-hero { padding: 72px 0 80px; text-align: center; background: radial-gradient(120% 120% at 50% -20%, var(--paper) 0%, var(--paper-2) 70%); border-bottom: 1px solid var(--line); }
+    .ext-hero { padding: 72px 0 80px; text-align: center; background: radial-gradient(120% 120% at 50% -20%, var(--paper) 0%, var(--paper-2) 70%); }
     .ext-hero .wrap { max-width: 880px; }
     .ext-hero .lead { max-width: 600px; margin: 18px auto 0; }
     .dl-row { display: inline-flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 32px; }
@@ -221,6 +269,41 @@ const faqs = [
     .bchip .d { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
     .bchip.soon { color: var(--fg-mute); }
     .bchip.soon .d { background: var(--line-2); }
+    /* browser logos (Chrome via gradient, Edge + Brave inline SVG) */
+    .blogo { width: 18px; height: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+    .blogo svg { width: 18px; height: 18px; display: block; }
+    .blogo-chrome { border-radius: 50%; background:
+      radial-gradient(circle at 50% 50%, #1a73e8 0 30%, #fff 30% 41%, rgba(255,255,255,0) 41%),
+      conic-gradient(from 60deg, #fbbc05 0 120deg, #34a853 120deg 240deg, #ea4335 240deg 360deg); }
+
+    /* ---- extension mockup (pinned light, sits under the hero) ---- */
+    .ext-mockwrap { background: var(--paper-2); }
+    .ext-mock { max-width: 760px; margin: -56px auto 0; position: relative; z-index: 3; }
+    .bw-toolbar { display: inline-flex; align-items: center; gap: 10px; flex: none; margin-left: 4px; }
+    .tb-ico { width: 22px; height: 22px; border-radius: 50%; background: #e8eaed; flex: none; }
+    .tb-gbti { background: var(--green); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-family: var(--f-display); font-weight: 800; font-size: 13px; box-shadow: 0 0 0 2px #d7f0e2; }
+    .ext-stage { position: relative; min-height: 290px; padding: 22px; background: linear-gradient(180deg, #fbfcfd 0%, #eef1f5 100%); }
+    .ext-pagehint { display: flex; flex-direction: column; gap: 13px; padding: 12px 8px; }
+    .ext-pagehint .ph-line { height: 12px; border-radius: 6px; background: #e2e6ea; }
+    .ph-line.w40 { width: 40%; } .ph-line.w60 { width: 60%; } .ph-line.w80 { width: 80%; } .ph-line.w90 { width: 90%; }
+    .ext-pop { position: absolute; top: 14px; right: 18px; width: 290px; background: #fff; border: 1px solid #e3e5e8; border-radius: 14px; box-shadow: 0 16px 40px rgba(32,33,36,.22); overflow: hidden; }
+    .ep-head { display: flex; align-items: center; gap: 9px; padding: 14px 16px; border-bottom: 1px solid #eef0f2; }
+    .ep-logo { width: 26px; height: 26px; border-radius: 7px; background: var(--green); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-family: var(--f-display); font-weight: 800; font-size: 16px; flex: none; }
+    .ep-name { font-family: var(--f-display); font-weight: 800; font-size: 16px; color: #202124; }
+    .ep-status { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: #1e8e3e; }
+    .ep-dot { width: 7px; height: 7px; border-radius: 50%; background: #1e8e3e; flex: none; }
+    .ep-user { display: flex; align-items: center; gap: 11px; padding: 14px 16px; border-bottom: 1px solid #eef0f2; }
+    .ep-av { width: 34px; height: 34px; border-radius: 50%; background: #1f9e5f; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-family: var(--f-display); font-weight: 700; font-size: 15px; flex: none; }
+    .ep-uinfo { display: flex; flex-direction: column; line-height: 1.3; }
+    .ep-uinfo b { font-size: 14px; color: #202124; }
+    .ep-uinfo span { font-size: 12px; color: #5f6368; }
+    .ep-actions { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
+    .ep-btn { display: flex; align-items: center; gap: 10px; padding: 10px 13px; border-radius: 9px; border: 1px solid #e3e5e8; background: #fff; font-size: 13.5px; font-weight: 600; color: #3c4043; }
+    .ep-btn svg { width: 17px; height: 17px; flex: none; color: #5f6368; }
+    .ep-btn-primary { background: #e8f6ef; border-color: #cdebdc; color: #137a48; }
+    .ep-btn-primary svg { color: #1f9e5f; }
+    .ep-foot { padding: 11px 16px; background: #f7f8fa; border-top: 1px solid #eef0f2; font-size: 11.5px; color: #80868b; text-align: center; }
+    @media (max-width: 520px) { .ext-pop { position: static; width: auto; margin-top: 16px; } .ext-stage { min-height: 0; } }
 
     /* ---- what it does ---- */
     .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
