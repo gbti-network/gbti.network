@@ -12,13 +12,13 @@ const members = (await getCollection('profile'))
   .filter((p) => p.data.directory)
   .sort((a, b) => a.data.displayName.localeCompare(b.data.displayName));
 ---
-<BaseLayout title="Members" description="Members of the GBTI Network creator co-op.">
+<BaseLayout title="Members" description="Members of the GBTI Network.">
   <section class="band tint">
     <div class="wrap">
       <div class="sec-head center">
-        <p class="eyebrow">The co-op</p>
+        <p class="eyebrow">The Network</p>
         <h1 class="h1 mt12">Members</h1>
-        <p class="lead">The creators building the GBTI Network co-op.</p>
+        <p class="lead">The creators building the GBTI Network.</p>
         <div class="mx-auto mt24" style="width:100%;max-width:440px">
           <input
             type="search"

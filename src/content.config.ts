@@ -305,6 +305,7 @@ const share = defineCollection({
     title: z.string().optional(), // optional short headline; the body carries the note
     shortDescription: z.string().max(200).optional(), // SOW-032: an optional one-line blurb shown under the title
     url: z.string().url().optional(), // the external content being shared (link, find)
+    image: z.string().optional(), // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
     tags: z.array(z.string()).default([]),
     createdAt: z.coerce.date(),
     updatedAt: z.coerce.date().optional(),

@@ -10,18 +10,18 @@ import { EXTENSION, extensionZipUrl } from '../../lib/extension';
 const feats = [
   { icon: 'i-gh', title: 'Sign in with GitHub', body: 'Click the GBTI icon in your toolbar and sign in. Your GitHub credentials stay on your own machine, not on our servers.' },
   { icon: 'i-pencil', title: 'Edit in place', body: 'Open any page you can edit and change it where it lives. No separate dashboard, no copy-paste between tabs.' },
-  { icon: 'i-publish', title: 'Publish through the co-op', body: 'Save a draft or publish straight to the network. Your changes go through the same review flow as everyone else.' },
+  { icon: 'i-publish', title: 'Publish through the network', body: 'Save a draft or publish straight to the network. Your changes go through the same review flow as everyone else.' },
 ];
 const faqs = [
   { q: 'How do I update it?', a: 'While it is an unpacked extension, download the latest ZIP, unzip it over the old folder, and click Reload on the extensions page. Once the Chrome Web Store listing is live, updates happen on their own.' },
   { q: 'Is my GitHub sign-in safe?', a: 'Yes. Sign-in happens between your browser and GitHub. Your token is stored locally by the extension and never sent to GBTI servers.' },
   { q: 'It did not load, what went wrong?', a: 'Two things to check: Developer mode needs to be on, and you need to select the unzipped folder, not the ZIP file itself. If the folder has a manifest.json at its top level, you picked the right one.' },
-  { q: 'Do I need to be a member?', a: 'The extension is free to install and use. Publishing to the network goes through co-op membership, which is where the review and revenue-share flow lives.' },
+  { q: 'Do I need to be a member?', a: 'The extension is free to install and use. Publishing to the network goes through network membership, which is where the review and revenue-share flow lives.' },
 ];
 ---
 <BaseLayout
   title="Install the GBTI extension"
-  description="Download the GBTI Network browser extension and load it as an unpacked extension to sign in, edit your work in place, and publish through the co-op."
+  description="Download the GBTI Network browser extension and load it as an unpacked extension to sign in, edit your work in place, and publish through the network."
 >
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
     <g id="i-dl"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
@@ -37,7 +37,7 @@ const faqs = [
     <div class="wrap">
       <span class="chip chip-green"><span class="chip-dot"></span> Free · v{EXTENSION.version}</span>
       <h1 class="h1 mt20">Install the GBTI extension</h1>
-      <p class="lead">The extension is how you sign in, edit your work in place, and publish through the co-op. It runs in your browser and keeps your GitHub sign-in on your own machine.</p>
+      <p class="lead">The extension is how you sign in, edit your work in place, and publish through the network. It runs in your browser and keeps your GitHub sign-in on your own machine.</p>
       <div class="dl-row">
         <a class="btn btn-primary btn-lg" href={extensionZipUrl} download><svg viewBox="0 0 24 24" width="19" height="19"><use href="#i-dl"/></svg> Download the extension</a>
         <span class="dl-sub">ZIP · load unpacked</span>
@@ -198,7 +198,7 @@ const faqs = [
   <section class="band dark tcenter">
     <div class="wrap">
       <h2 class="h2" style="color:#fff">Edit and publish your work in place</h2>
-      <p class="lead" style="max-width:560px;margin:16px auto 0">Install the free extension, then sign in to start drafting and publishing through the GBTI co-op.</p>
+      <p class="lead" style="max-width:560px;margin:16px auto 0">Install the free extension, then sign in to start drafting and publishing through the GBTI Network.</p>
       <div class="hero-c-cta">
         <a class="btn btn-primary btn-lg" href={extensionZipUrl} download>Download the extension</a>
         <a class="btn btn-ghost btn-lg" href="/membership/">See membership</a>

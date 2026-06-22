@@ -8,9 +8,9 @@ import { MEMBERSHIP_PRICE_LABEL, BILLING_PERIOD, TRIAL_DAYS_SITE, REFERRAL_PCT, 
 const flywheel = [
   { n: '01', icon: 'pencil', title: 'You publish', body: 'Write articles, list products, share prompts. Everything lives in a public Git repo and renders on your profile.' },
   { n: '02', icon: 'globe', title: 'Work gets discovered', body: 'Your work reaches developers across the network and the open web, carrying your referral code.' },
-  { n: '03', icon: 'users', title: 'A reader joins', body: 'When someone becomes a member because of your work, they join the co-op as a member too.' },
+  { n: '03', icon: 'users', title: 'A reader joins', body: 'When someone becomes a member because of your work, they join the network as a member too.' },
   { n: '04', icon: 'coin', title: 'You earn a share', body: `You earn ${REFERRAL_PCT} of that member's revenue, for as long as they stay a member.` },
-  { n: '05', icon: 'spark', title: 'The co-op grows', body: 'More members fund more tools, sessions, and shared revenue. The flywheel turns again.' },
+  { n: '05', icon: 'spark', title: 'The network grows', body: 'More members fund more tools, sessions, and shared revenue. The flywheel turns again.' },
 ];
 
 const git = [
@@ -28,15 +28,15 @@ const splits = [
 ---
 <BaseLayout
   title="About GBTI Network"
-  description={`About GBTI Network: a creator co-op built on Git, where the work you publish earns you ${REFERRAL_PCT} of every member it brings in.`}
+  description={`About GBTI Network: a creator network built on Git, where the work you publish earns you ${REFERRAL_PCT} of every member it brings in.`}
 >
   <!-- ============ HERO ============ -->
   <section class="band tcenter">
     <div class="wrap">
       <div class="chip" style="display:inline-flex"><span class="chip-dot"></span> About</div>
-      <h1 class="h1 mt20">A creator co-op, powered by Git</h1>
+      <h1 class="h1 mt20">A creator network, powered by Git</h1>
       <p class="lead" style="max-width:660px;margin:18px auto 0">
-        GBTI is a developer co-op. Members publish their work, the network helps it get found,
+        GBTI is a developer network. Members publish their work, the network helps it get found,
         and the revenue it brings in is shared back with the people who made it.
       </p>
       <div class="hero-c-cta">

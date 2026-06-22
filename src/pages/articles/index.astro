@@ -7,13 +7,13 @@ import { isListed, byNewest } from '../../lib/content';
 const posts = (await getCollection('post')).filter(isListed).sort(byNewest);
 const categories = [...new Set(posts.map((p) => p.data.categories?.[0]).filter(Boolean))].sort();
 ---
-<BaseLayout title="Blog" description="Articles from the GBTI Network creator co-op.">
+<BaseLayout title="News" description="Articles from the GBTI Network.">
   <section class="band tint">
     <div class="wrap">
       <div class="sec-head center">
-        <p class="eyebrow">From the co-op</p>
-        <h1 class="h1 mt12">Blog</h1>
-        <p class="lead">Writing from the GBTI Network co-op: tutorials, essays, and field notes from across the membership.</p>
+        <p class="eyebrow">From the Network</p>
+        <h1 class="h1 mt12">Latest Articles from the Network</h1>
+        <p class="lead">Writing from the GBTI Network: tutorials, essays, and field notes from across the membership.</p>
       </div>
 
       <div class="filter-row" style="justify-content:center" role="tablist" aria-label="Filter by category">

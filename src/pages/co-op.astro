@@ -6,7 +6,7 @@ import { MEMBERSHIP_PRICE_LABEL, BILLING_PERIOD, TRIAL_DAYS_SITE, REFERRAL_PCT, 
 // the site land. Every number is single-sourced from lib/membership so it tracks the real config. Design
 // language mirrors the homepage / about / membership pages (V3 tokens: band, wrap, eyebrow, h2, cards).
 const splits = [
-  { pct: REFERRAL_PCT, who: 'the author', title: 'Referral share', body: `When someone joins the co-op because of work you published, you earn ${REFERRAL_PCT} of their membership revenue for the life of their membership.` },
+  { pct: REFERRAL_PCT, who: 'the author', title: 'Referral share', body: `When someone joins the network because of work you published, you earn ${REFERRAL_PCT} of their membership revenue for the life of their membership.` },
   { pct: `up to ${CONTRIBUTION_PCT}`, who: 'contributors', title: 'Contribution pool', body: `The author can delegate up to ${CONTRIBUTION_PCT} of that share to the members who improved the work through accepted contributions.` },
   { pct: `up to ${COMMENT_PCT}`, who: 'commenters', title: 'Comment pool', body: `And up to ${COMMENT_PCT} to the members whose comments add to the discussion on a piece of work.` },
 ];
@@ -19,16 +19,16 @@ const flow = [
 ];
 ---
 <BaseLayout
-  title="How the co-op works"
-  description={`The GBTI co-op shares its revenue: the author earns ${REFERRAL_PCT} of every member their work brings in, and delegates up to ${CONTRIBUTION_PCT} to contributors and ${COMMENT_PCT} to commenters.`}
+  title="How the network works"
+  description={`The GBTI Network shares its revenue: the author earns ${REFERRAL_PCT} of every member their work brings in, and delegates up to ${CONTRIBUTION_PCT} to contributors and ${COMMENT_PCT} to commenters.`}
 >
   <!-- ============ HERO ============ -->
   <section class="band tcenter">
     <div class="wrap">
-      <div class="chip" style="display:inline-flex"><span class="chip-dot"></span> The co-op</div>
+      <div class="chip" style="display:inline-flex"><span class="chip-dot"></span> The Network</div>
       <h1 class="h1 mt20">Publish and Earn</h1>
       <p class="lead" style="max-width:680px;margin:18px auto 0">
-        GBTI is a developer co-op. Members publish their work, the network helps it get found, other members
+        GBTI is a developer network. Members publish their work, the network helps it get found, other members
         improve it, and the revenue it brings in is shared back with everyone who created the value.
       </p>
       <div class="hero-c-cta">

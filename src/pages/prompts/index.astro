@@ -23,13 +23,13 @@ const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.aut
   return [u, { name: pr?.displayName ?? authorDisplay(u), avatar: authorAvatar(u, pr?.avatar) ?? '', headline: pr?.headline ?? '', href: authorHref(u) }];
 }));
 ---
-<BaseLayout title="AI Prompts" description="A directory of AI prompts shared by the GBTI Network co-op.">
+<BaseLayout title="AI Prompts" description="A directory of AI prompts shared by the GBTI Network.">
   <section class="band prompts-page">
     <div class="wrap">
       <div id="default-hero" class="sec-head center">
         <p class="eyebrow">AI prompt directory</p>
         <h1 class="h1 mt12">AI Prompts</h1>
-        <p class="lead">Reusable AI prompts shared by the co-op for tools like Claude, GPT, Gemini, Midjourney, Nano Banana, and many others.</p>
+        <p class="lead">Reusable AI prompts shared by the network for tools like Claude, GPT, Gemini, Midjourney, Nano Banana, and many others.</p>
       </div>
 
       {/* Author hero: replaces the default hero when the directory is filtered to one member (?author=).
