@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { dispatch } from '../extension/src/ext-dispatch.mjs';
+import { buildExtContext } from '../extension/src/ext-context.mjs';
 import { esc } from '../extension/src/onboarding.mjs';
 
 const POST = '---\ntype: post\ntitle: Hello\nslug: hello\nauthor: alice\nstatus: published\n---\n\nBody\n';
@@ -32,6 +33,33 @@ test('status: returns identity + role resolved from house/roles.yml (async reade
   assert.equal(r.json.identity.login, 'alice');
   assert.equal(r.json.role, 'admin');
   assert.equal(r.json.authenticated, true);
+});
+
+test('status: an expired token (401 on the roles read) reports unauthenticated + sessionExpired and clears the dead session', async () => {
+  // The REAL buildExtContext wiring: a 401 carrying the token -> the reader fires onAuthError -> the session is
+  // cleared. /api/status re-reads auth AFTER the roles read, so it reports authenticated:false + identity:null
+  // (no stale @handle) + sessionExpired:true (the shell shows the "session expired" sign-in splash).
+  const data = { githubToken: 'dead', identity: { login: 'alice', githubId: '1', username: 'alice' }, membership: 'paid' };
+  const store = { get: (k) => data[k], set: (patch) => Object.assign(data, patch) };
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: false, status: 401, json: async () => ({ message: 'Bad credentials' }) });
+  try {
+    const ctx = buildExtContext(store);
+    const r = await dispatch(ctx, { pathname: '/api/status' });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.authenticated, false);
+    assert.equal(r.json.identity, null);
+    assert.equal(r.json.sessionExpired, true);
+    assert.equal(data.githubToken, null, 'the dead token is cleared');
+    assert.equal(data.identity, null, 'the stale identity is cleared');
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test('status: a healthy token is NOT flagged expired', async () => {
+  const ctx = ctxFor({ files: { 'house/roles.yml': 'admins:\n  - github_id: "1"\n' } });
+  const r = await dispatch(ctx, { pathname: '/api/status' });
+  assert.equal(r.json.authenticated, true);
+  assert.notEqual(r.json.sessionExpired, true); // undefined/false on the mock ctx (no authExpired) is fine
 });
 
 test('SOW-040: billing + referral routes (the account surface) work in the extension host', async () => {

@@ -77,7 +77,7 @@ const RAIL_WORKBENCH = [
   { group: 'Activity' },
   { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests', sub: 'Proposed + accepted' },
   { key: 'saved', href: 'workspace.html#tab=saved', ico: 'bookmark', nm: 'Saved', sub: 'Favorites + collections' },
-  { key: 'subs', href: 'workspace.html#tab=subs', ico: 'users', nm: 'Subscriptions', sub: 'Who you follow' },
+  { key: 'subs', href: 'workspace.html#tab=subs', ico: 'users', nm: 'Following', sub: 'Members + news channels' },
   { key: 'earnings', href: 'workspace.html#tab=earnings', ico: 'coin', nm: 'Earnings', sub: 'Referrals + rewards' },
   { div: true },
   { key: 'settings', href: 'account.html', ico: 'gear', nm: 'Settings', sub: 'Membership + account' },
@@ -199,9 +199,14 @@ export function shouldGate(status) {
   return !(status?.authenticated && status?.identity?.login);
 }
 
+// The last raw /api/status, kept so the gate can tell an EXPIRED session (token died) from a never-signed-in one
+// and label the splash accordingly. Not exported; read only by initShell's gate handler.
+let _lastStatus = null;
+
 /** Load /api/status and reflect it into the account control. Returns the status (or null when not signed in). */
 export async function loadShellAccount(root = document.querySelector('[data-shell]')) {
   const status = await api('/api/status');
+  _lastStatus = status;
   const signedIn = !shouldGate(status);
   if (root) applyAccount(root, signedIn ? status : null);
   return signedIn ? status : null;
@@ -222,13 +227,14 @@ function shellLogin(onPrompt) {
 /** SOW-048: the forced-sign-in gate. With no token, hide the app (data-unauth) and overlay ONLY the dual-purpose
  *  <gbti-welcome> login splash. Its Sign in button runs the device flow; on success we reload into the signed-in
  *  app (initShell re-runs, now signed in, no gate). Idempotent. */
-function mountAuthGate(root) {
+function mountAuthGate(root, { expired = false } = {}) {
   if (!root || document.querySelector('.gbti-authwrap')) return;
   document.documentElement.setAttribute('data-unauth', '1');
   const wrap = document.createElement('div');
   wrap.className = 'gbti-authwrap';
   const el = document.createElement('gbti-welcome');
   el.setAttribute('auth-gate', '');
+  if (expired) el.setAttribute('expired', ''); // SOW: token-expiry detected -> the splash explains the re-sign-in
   wrap.appendChild(el);
   root.appendChild(wrap);
   let signingIn = false; // guard against click-spam starting parallel device flows (+ leaking login-prompt listeners)
@@ -331,6 +337,6 @@ export function initShell({ active = null, nav = 'feed' } = {}) {
   wireCompose(root);
   // SOW-048: gate AFTER the status round-trip. Signed in -> the app stays; signed out -> the login splash overlays
   // it (data-unauth hides the rest). Kept off the synchronous path so initShell's return shape is unchanged.
-  loadShellAccount(root).then((status) => { if (!status) mountAuthGate(root); });
+  loadShellAccount(root).then((status) => { if (!status) mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true }); });
   return { ico, loadShellAccount: () => loadShellAccount(root) };
 }

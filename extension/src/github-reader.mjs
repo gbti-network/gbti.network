@@ -39,14 +39,26 @@ function safeRel(relPath) {
  * @param {string} [a.ref]      branch/ref to read (default the repo default branch via 'HEAD').
  * @param {Function} [a.fetch]  injected for tests.
  */
-export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = globalThis.fetch } = {}) {
+export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = globalThis.fetch, onAuthError } = {}) {
   const [owner, repo] = String(upstream || '').split('/');
   const headers = { Accept: 'application/vnd.github+json' };
   if (token) headers.Authorization = `Bearer ${token}`;
 
+  // Expired-session detection: GitHub returns 401 ("Bad credentials") for ANY request carrying an invalid/expired
+  // token, even on public content. So a 401 WHILE we sent a token means the member's token has died (GitHub App
+  // user tokens expire), not that the resource is private. Fire `onAuthError` ONCE so the host can clear the dead
+  // session and force re-auth, instead of every read silently failing to null (which reads as "you have no
+  // content"). A 401 with NO token is just an auth-required resource, not an expired session, so we never fire then.
+  let signaled = false;
+  async function ghFetch(url) {
+    const res = await fetch(url, { headers });
+    if (res.status === 401 && token && onAuthError && !signaled) { signaled = true; try { onAuthError(); } catch { /* never let the signal throw */ } }
+    return res;
+  }
+
   async function contents(relPath) {
     const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURI(relPath)}?ref=${encodeURIComponent(ref)}`;
-    const res = await fetch(url, { headers });
+    const res = await ghFetch(url);
     if (!res.ok) return null;
     return res.json();
   }
@@ -56,7 +68,7 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
   // listMembersOnly was deferred). Returns { tree: [{ path, type }], truncated } or null.
   async function tree() {
     const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
-    const res = await fetch(url, { headers });
+    const res = await ghFetch(url);
     if (!res.ok) return null;
     return res.json();
   }

@@ -21,7 +21,7 @@ const TABS = [
   { id: 'prs', label: 'Pull requests' },
   { id: 'inbox', label: 'Inbox' },
   { id: 'saved', label: 'Saved' }, // SOW-037: favorites + collections
-  { id: 'subs', label: 'Subscriptions' }, // SOW-037: follows + membership
+  { id: 'subs', label: 'Following' }, // SOW-037: follows + membership (network members + news channels)
   { id: 'earnings', label: 'Earnings' }, // SOW-052: placeholder for referrals + rewards (SOW-007/008)
 ];
 
@@ -104,7 +104,10 @@ class GbtiWorkspace extends GbtiElement {
   // SOW-052: load the overview hub data — content counts (+ drafts), PR + saved + follow counts, membership, and
   // the "needs attention" PR list. Fail-soft: every read defaults to 0/empty, never throws. Reuses _cache/_prs.
   async _ensureOverview() {
-    if (this._overview) return;
+    // Re-fetch if the cached snapshot was built while the session looked UNAUTHENTICATED. Caching that empty
+    // "Not signed in / 0" state permanently (e.g. it first rendered under a momentarily-dead token) was the
+    // WorkBench-shows-nothing bug: the data layer recovered but the frozen snapshot never did.
+    if (this._overview && this._overview._trusted) return;
     const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null); // tolerate a missing client method (undefined)
     const [post, prompt, product, prs, activity, follows, status] = await Promise.all([
       num(this.client?.listContent?.({ type: 'post' })),
@@ -126,13 +129,23 @@ class GbtiWorkspace extends GbtiElement {
       .filter(({ pr, c }) => c.label === 'Declined' || (pr.state !== 'closed' && pr.merged !== true)) // declined or still open
       .slice(0, 6)
       .map(({ pr, c }) => ({ title: pr.title || `PR #${pr.number}`, url: pr.html_url || '', label: c.label, tone: c.tone }));
+    // `_trusted` = the status read came back authenticated. Only a trusted snapshot is cached permanently; an
+    // untrusted one renders once (so the hub is not blank) but is re-fetched on the next call + the retry below.
+    const trusted = !!(status && status.authenticated !== false);
     this._overview = {
       membership: status?.membership || 'unknown',
       role: status?.role || 'member',
       counts: { post: items(post).length, prompt: items(prompt).length, product: items(product).length, prs: (this._prs || []).length, saved: favs, subs: followN, drafts },
       attention,
+      _trusted: trusted,
     };
     if (this._tab === 'overview' && !this._editing) this.render();
+    // Self-heal: if the session looked unauthenticated (a token that may have since recovered/refreshed), retry
+    // ONCE shortly so the hub fills in without a manual page refresh.
+    if (!trusted && !this._overviewRetried) {
+      this._overviewRetried = true;
+      setTimeout(() => { this._overview = null; this._ensureOverview(); }, 2000);
+    }
   }
 
   // SOW-028 P5: poll the incoming-contribution count on open (batch-first, like the rest of the client) so the
@@ -272,7 +285,7 @@ class GbtiWorkspace extends GbtiElement {
       { nm: 'Products', href: 'workspace.html#tab=product', n: c.product },
       { nm: 'Pull requests', href: 'workspace.html#tab=prs', n: c.prs },
       { nm: 'Saved', href: 'workspace.html#tab=saved', n: c.saved },
-      { nm: 'Subscriptions', href: 'workspace.html#tab=subs', n: c.subs },
+      { nm: 'Following', href: 'workspace.html#tab=subs', n: c.subs },
       { nm: 'Earnings', href: 'workspace.html#tab=earnings', n: null },
       { nm: 'Settings', href: 'account.html', n: null },
       ...(isStaff ? [{ nm: 'Admin tools', href: 'admin.html', n: null }] : []),

@@ -65,3 +65,38 @@ test('listMembersOnly: deferred to the npm host portal (returns [])', async () =
   const { reader } = readerWith([]);
   assert.deepEqual(await reader.listMembersOnly(), []);
 });
+
+// Expired-token detection: a 401 carrying our token means the GitHub App user token died; the reader fires
+// onAuthError ONCE so the host clears the dead session and forces re-auth (instead of every read failing to null,
+// which reads as "you have no content"). A 401 WITHOUT a token, or a 404, is not an expired session.
+const unauthorized = { ok: false, status: 401, json: async () => ({ message: 'Bad credentials' }) };
+
+test('onAuthError fires on a 401 carrying a token (expired session), read still fails soft to null', async () => {
+  let fired = 0;
+  const reader = createGithubReader({ upstream: 'gbti-network/gbti.network', token: 'dead', fetch: async () => unauthorized, onAuthError: () => { fired++; } });
+  assert.equal(await reader.readFile('members/alice/profile.md'), null);
+  assert.equal(fired, 1, 'a 401 with a token signals the expiry exactly once');
+});
+
+test('onAuthError fires at most once across many 401 reads from one reader', async () => {
+  let fired = 0;
+  const reader = createGithubReader({ upstream: 'gbti-network/gbti.network', token: 'dead', fetch: async () => unauthorized, onAuthError: () => { fired++; } });
+  await reader.list('alice', 'post');     // a dir read (401)
+  await reader.readFile('house/roles.yml'); // another 401
+  await reader.listShares(5);             // tree() 401 too
+  assert.equal(fired, 1, 'one signal per reader, not one per request');
+});
+
+test('onAuthError does NOT fire on a 401 with no token (auth-required resource, not an expiry)', async () => {
+  let fired = 0;
+  const reader = createGithubReader({ upstream: 'gbti-network/gbti.network', fetch: async () => unauthorized, onAuthError: () => { fired++; } });
+  await reader.readFile('members/alice/profile.md');
+  assert.equal(fired, 0);
+});
+
+test('onAuthError does NOT fire on a 404 (missing file with a valid token)', async () => {
+  let fired = 0;
+  const reader = createGithubReader({ upstream: 'gbti-network/gbti.network', token: 'good', fetch: async () => notFound, onAuthError: () => { fired++; } });
+  await reader.readFile('members/alice/posts/none/index.md');
+  assert.equal(fired, 0);
+});

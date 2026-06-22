@@ -51,6 +51,32 @@ export async function githubExchangeCode({ clientId, clientSecret, code, redirec
   return data.access_token;
 }
 
+/**
+ * SOW: refresh a GitHub App user-to-server access token using its refresh token. GitHub App user tokens expire
+ * (~8h) and the device flow hands back a `refresh_token` (valid ~6 months) we use to mint a fresh access token
+ * WITHOUT another sign-in. Refreshing requires the App's client_id + client_secret, so it runs here on the Worker
+ * (the extension is secretless). The refresh token ROTATES on each use, so the caller MUST persist the new one.
+ * Returns { accessToken, refreshToken, expiresIn, refreshTokenExpiresIn }.
+ */
+export async function githubRefreshToken({ clientId, clientSecret, refreshToken }, fetchImpl = globalThis.fetch) {
+  if (!refreshToken) throw new Error('githubRefreshToken: refreshToken is required');
+  const res = await fetchImpl(GITHUB_TOKEN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+    body: form({ client_id: clientId, client_secret: clientSecret, grant_type: 'refresh_token', refresh_token: refreshToken }).toString(),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`github token refresh failed ${res.status}: ${text}`);
+  const data = JSON.parse(text);
+  if (data.error || !data.access_token) throw new Error(`github token refresh error: ${data.error || 'no access_token'}`);
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || '',
+    expiresIn: Number(data.expires_in) || 0,
+    refreshTokenExpiresIn: Number(data.refresh_token_expires_in) || 0,
+  };
+}
+
 /** Fetch the GitHub user. Returns { githubId, githubLogin }. github_id is the immutable primary key. */
 export async function githubFetchUser(accessToken, fetchImpl = globalThis.fetch) {
   const res = await fetchImpl(GITHUB_USER, {

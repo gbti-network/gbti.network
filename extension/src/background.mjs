@@ -12,6 +12,7 @@ import { createRepoClient } from '../../client/src/github-repo.mjs';
 import { resolveMembership } from '../../client/src/membership.mjs';
 import { GITHUB_CLIENT_ID, activeClientId, activeScope } from '../../client/src/signup-base.mjs';
 import { resolveOpenPage } from './open-page.mjs';
+import { needsRefresh, refreshPatch } from './token-refresh.mjs';
 
 // GITHUB_CLIENT_ID is the PUBLIC device-flow OAuth app client id, single-sourced in signup-base.mjs (device flow
 // has no client secret, so it is safe to bundle). Baked into the extension at build time.
@@ -31,7 +32,7 @@ function getStore() {
 }
 
 async function handleLogin(store) {
-  const { accessToken } = await deviceFlowLogin({
+  const { accessToken, refreshToken, expiresIn } = await deviceFlowLogin({
     // SOW-026: classic mode = the public_repo OAuth app (account-wide); app mode = the GitHub App (fork-scoped,
     // no scope, GitHub Apps ignore it). The token only ever reaches GitHub; app mode shrinks its capability to
     // the member's single fork. The MV3 worker has no process.env, so AUTH_MODE defaults to classic until the
@@ -48,7 +49,15 @@ async function handleLogin(store) {
   });
   const repo = createRepoClient({ token: accessToken, upstream: UPSTREAM });
   const u = await repo.getAuthUser();
-  store.set({ githubToken: accessToken, identity: { login: u.login, githubId: String(u.id), username: String(u.login).toLowerCase() } });
+  // SOW: persist the refresh token + access-token expiry so the background can refresh silently (GitHub App user
+  // tokens expire ~8h). A classic OAuth token returns no refresh_token/expires_in -> these are null and the token
+  // simply never refreshes (it does not expire). expiresIn is seconds; we store an absolute ms deadline.
+  store.set({
+    githubToken: accessToken,
+    githubRefreshToken: refreshToken || null,
+    githubTokenExpiresAt: expiresIn ? Date.now() + expiresIn * 1000 : null,
+    identity: { login: u.login, githubId: String(u.id), username: String(u.login).toLowerCase() },
+  });
 
   // SOW-011: resolve + cache the effective membership so the in-page editor can show the "membership required
   // to publish" notice and block a trial publish. Best-effort: any failure leaves it 'unknown' (fails OPEN to
@@ -61,6 +70,39 @@ async function handleLogin(store) {
     // leave membership unset (treated as 'unknown')
   }
   return { ok: true, login: u.login };
+}
+
+// SOW: refresh the GitHub App access token via the Worker (which holds the App client secret; the extension only
+// sends its rotating refresh_token). Returns the parsed response or throws. The token never goes to a page.
+async function refreshViaWorker(refreshToken) {
+  const res = await fetch(`${SIGNUP_BASE}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken }),
+  });
+  if (!res.ok) throw new Error(`refresh failed: ${res.status}`);
+  return res.json();
+}
+
+// Single-flight proactive refresh: when the access token is at/near expiry, swap in a fresh one BEFORE the request
+// runs, so no read ever 401s on a merely-expired token. Concurrent api calls share ONE in-flight refresh (the
+// refresh token rotates, so parallel refreshes would invalidate each other). A failed refresh is swallowed: the
+// request proceeds with the stale token, and the reader's 401 -> onAuthError -> re-sign-in splash is the fallback.
+let _refreshing = null;
+async function ensureFreshToken(store) {
+  const state = { githubToken: store.get('githubToken'), githubRefreshToken: store.get('githubRefreshToken'), githubTokenExpiresAt: store.get('githubTokenExpiresAt') };
+  if (!needsRefresh(state)) return;
+  if (!_refreshing) {
+    const old = state.githubRefreshToken;
+    _refreshing = (async () => {
+      try {
+        const patch = refreshPatch(await refreshViaWorker(old), old);
+        if (patch) store.set(patch);
+      } catch { /* leave the session as-is; a 401 then trips the re-auth fallback */ }
+      finally { _refreshing = null; }
+    })();
+  }
+  return _refreshing;
 }
 
 // SOW-026: the toolbar icon has NO default_popup, so clicking it fires this handler instead of opening a popup.
@@ -114,6 +156,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const store = await getStore();
     try {
       if (msg?.type === 'api') {
+        await ensureFreshToken(store); // SOW: refresh an about-to-expire token before the request reads GitHub
         sendResponse(await dispatch(buildExtContext(store), msg.req || {}));
       } else if (msg?.type === 'login') {
         const res = await handleLogin(store);
@@ -122,7 +165,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (res?.ok) { broadcastAuthChanged(); await focusTab(sender?.tab?.id, sender?.tab?.windowId); }
         sendResponse(res);
       } else if (msg?.type === 'signout') {
-        store.set({ githubToken: null, identity: null });
+        store.set({ githubToken: null, githubRefreshToken: null, githubTokenExpiresAt: null, identity: null });
         broadcastAuthChanged();
         sendResponse({ ok: true });
       } else if (msg?.type === 'open-page') {

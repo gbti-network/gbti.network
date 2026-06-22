@@ -43,6 +43,31 @@ test('deviceFlowLogin: prompts, polls past pending, returns the token', async ()
   assert.equal(prompted.verificationUri, 'https://github.com/login/device');
 });
 
+test('deviceFlowLogin: captures the refresh token + expiries (GitHub App expiring tokens)', async () => {
+  const out = await deviceFlowLogin({
+    clientId: 'Iv1.app',
+    fetch: fakeFetch([{ access_token: 'gho_z', refresh_token: 'ghr_z', expires_in: 28800, refresh_token_expires_in: 15897600 }]),
+    sleep: noSleep,
+    now: () => 1000,
+  });
+  assert.equal(out.accessToken, 'gho_z');
+  assert.equal(out.refreshToken, 'ghr_z');
+  assert.equal(out.expiresIn, 28800);
+  assert.equal(out.refreshTokenExpiresIn, 15897600);
+});
+
+test('deviceFlowLogin: a classic (non-expiring) token has no refresh token / zero expiry', async () => {
+  const out = await deviceFlowLogin({
+    clientId: 'Ov23.classic',
+    fetch: fakeFetch([{ access_token: 'gho_classic', scope: 'public_repo' }]),
+    sleep: noSleep,
+    now: () => 1000,
+  });
+  assert.equal(out.accessToken, 'gho_classic');
+  assert.equal(out.refreshToken, undefined);
+  assert.equal(out.expiresIn, 0);
+});
+
 test('deviceFlowLogin: slow_down is tolerated and still completes', async () => {
   const out = await deviceFlowLogin({
     clientId: 'Iv1.abc',

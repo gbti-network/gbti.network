@@ -39,7 +39,9 @@ const defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * Drive the full device-flow login: request a code, surface it via onPrompt, then poll until GitHub
  * returns a token, the user denies, or the code expires. Honors GitHub's `interval` and `slow_down`.
  *
- * @returns {Promise<{accessToken:string, scope?:string}>}
+ * @returns {Promise<{accessToken:string, scope?:string, refreshToken?:string, expiresIn?:number, refreshTokenExpiresIn?:number}>}
+ *   For a GitHub App with user-token expiration enabled, GitHub also returns a `refresh_token` (+ expiries); the
+ *   host persists it so the background can refresh the short-lived access token without another sign-in.
  * @throws on denial ('access_denied'), expiry ('expired_token' / deadline), or an unexpected error.
  */
 export async function deviceFlowLogin({
@@ -62,7 +64,15 @@ export async function deviceFlowLogin({
     if (now() >= deadline) throw new Error('device flow expired before authorization');
     await sleep(interval);
     const r = await pollForToken({ clientId, deviceCode: dc.device_code, fetch });
-    if (r.access_token) return { accessToken: r.access_token, scope: r.scope };
+    if (r.access_token) {
+      return {
+        accessToken: r.access_token,
+        scope: r.scope,
+        refreshToken: r.refresh_token,                                 // present only when the App expires user tokens
+        expiresIn: Number(r.expires_in) || 0,                          // seconds until the access token dies (~28800 = 8h)
+        refreshTokenExpiresIn: Number(r.refresh_token_expires_in) || 0, // ~15897600 = 6mo
+      };
+    }
     switch (r.error) {
       case 'authorization_pending':
         break;
