@@ -14,6 +14,7 @@ import yaml from 'js-yaml';
 import { OperationError } from './operations.mjs';
 import { canModerate, canBanGrandfather, canManageRoles } from './roles.mjs';
 import { ban, unban, grandfather, revokeGrandfather, grantRole, SuperadminActionError } from '../../membership/superadmin-actions.mjs';
+import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs';
 import { parseContentFile } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 
@@ -180,4 +181,57 @@ export async function removeContent(ctx, { path: rel } = {}) {
   const { repo } = requireRepo(ctx);
   requireMemberContentPath(rel);
   return publishFiles({ repo, branch: `gbti/remove-${slugOf(rel)}`, files: [{ path: rel, content: null }], message: `Remove ${rel}`, title: `Remove ${rel}`, body: 'Moderation: remove content.' });
+}
+
+// ---- admin: category manager (house/taxonomy.yml) — SOW-055 v1 (add + rename-label, the safe ops) ----
+
+const TAXONOMY_PATH = 'house/taxonomy.yml';
+// yaml.dump drops comments; taxonomy.yml carries a load-bearing documentation header (the SOW-012 contract), so
+// preserve the leading comment block and re-prepend it on write.
+function leadingComment(raw) {
+  const out = [];
+  for (const line of String(raw || '').split('\n')) {
+    if (/^\s*#/.test(line) || line.trim() === '') out.push(line);
+    else break;
+  }
+  const block = out.join('\n').replace(/\s+$/, '');
+  return block ? `${block}\n` : '';
+}
+
+/** Read the current canonical taxonomy ({ tree }) for the category-manager UI. Public data; read-only. */
+export async function getTaxonomy(ctx) {
+  const raw = (await ctx.reader?.readFile?.(TAXONOMY_PATH)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  return { tree: parsed.tree || {} };
+}
+
+export async function addContentCategory(ctx, { parentPath, key, label } = {}) {
+  requireRole(ctx, canBanGrandfather, 'admin'); // house/taxonomy.yml is admin-owned (CODEOWNERS); the gate is the real boundary
+  const { repo } = requireRepo(ctx);
+  const raw = (await ctx.reader?.readFile?.(TAXONOMY_PATH)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  let result;
+  try { result = addCategoryEdit(parsed, { parentPath, key, label }, actionCtx(ctx)); }
+  catch (err) { if (err instanceof TaxonomyEditError) throw new OperationError('bad-request', err.message); throw err; }
+  const fullPath = [...(Array.isArray(parentPath) ? parentPath : []), key].filter(Boolean);
+  if (!result.changed) return noop(`category already exists: ${fullPath.join(' > ')}`, result.audit);
+  const pr = await publishFiles({ repo, branch: `gbti/category-add-${slugOf(fullPath.join('-'))}`, files: [{ path: TAXONOMY_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message: `Add category ${fullPath.join('/')}`, title: `Add category: ${label}`, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
+}
+
+export async function renameContentCategoryLabel(ctx, { path, label } = {}) {
+  requireRole(ctx, canBanGrandfather, 'admin');
+  const { repo } = requireRepo(ctx);
+  const raw = (await ctx.reader?.readFile?.(TAXONOMY_PATH)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  let result;
+  try { result = renameLabelEdit(parsed, { path, label }, actionCtx(ctx)); }
+  catch (err) { if (err instanceof TaxonomyEditError) throw new OperationError('bad-request', err.message); throw err; }
+  const p = Array.isArray(path) ? path : [];
+  if (!result.changed) return noop(`label unchanged: ${p.join(' > ')}`, result.audit);
+  const pr = await publishFiles({ repo, branch: `gbti/category-rename-${slugOf(p.join('-'))}`, files: [{ path: TAXONOMY_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message: `Rename category ${p.join('/')} -> ${label}`, title: `Rename category: ${label}`, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
 }

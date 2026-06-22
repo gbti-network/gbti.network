@@ -19438,6 +19438,82 @@ function revokeGrandfather(parsedGf, { githubId, login }, ctx = {}) {
   return { next: { ...parsedGf || {}, grandfathered: next }, changed: next.length !== list.length, audit: audit({ ...ctx, action: "grandfather.revoke", target: { githubId: id, login } }) };
 }
 
+// membership/taxonomy-edits.mjs
+var TaxonomyEditError = class extends Error {
+};
+var KEY_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+var MAX_LABEL = 60;
+function isoOf2(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new TaxonomyEditError("invalid timestamp");
+  return d.toISOString();
+}
+function auditEntry(ctx, action, path, detail) {
+  const a = ctx?.actor || null;
+  return {
+    at: isoOf2(ctx?.now),
+    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+    action,
+    target: { path: [...path] },
+    detail: detail ?? null
+  };
+}
+function nodeAt(taxonomy, path) {
+  if (!Array.isArray(path) || path.length === 0) return null;
+  let map2 = taxonomy?.tree;
+  let node = null;
+  for (const key of path) {
+    if (!map2 || typeof map2 !== "object") return null;
+    node = map2[key];
+    if (!node || typeof node !== "object") return null;
+    map2 = node.children;
+  }
+  return node;
+}
+function cleanLabel(label) {
+  const lab = typeof label === "string" ? label.trim() : "";
+  if (!lab) throw new TaxonomyEditError("a category label is required");
+  return lab.slice(0, MAX_LABEL);
+}
+function cleanTaxonomy(taxonomy) {
+  const tx = structuredClone(taxonomy && typeof taxonomy === "object" ? taxonomy : {});
+  if (!tx.tree || typeof tx.tree !== "object" || Array.isArray(tx.tree)) tx.tree = {};
+  return tx;
+}
+function addCategory(taxonomy, { parentPath = [], key, label } = {}, ctx = {}) {
+  const tx = cleanTaxonomy(taxonomy);
+  const k = typeof key === "string" ? key.trim() : "";
+  if (!KEY_RE.test(k)) throw new TaxonomyEditError("a category key must be kebab-case (lowercase letters, digits, single hyphens)");
+  const lab = cleanLabel(label);
+  let childrenMap;
+  if (Array.isArray(parentPath) && parentPath.length) {
+    const parent = nodeAt(tx, parentPath);
+    if (!parent) throw new TaxonomyEditError(`parent category not found: ${parentPath.join(" > ")}`);
+    if (!parent.children || typeof parent.children !== "object" || Array.isArray(parent.children)) parent.children = {};
+    childrenMap = parent.children;
+  } else {
+    childrenMap = tx.tree;
+  }
+  const fullPath = [...Array.isArray(parentPath) ? parentPath : [], k];
+  const existing = childrenMap[k];
+  if (existing) {
+    if ((existing.label ?? "") === lab) return { next: tx, changed: false, audit: auditEntry(ctx, "taxonomy.add", fullPath, { label: lab, noop: true }) };
+    throw new TaxonomyEditError(`a category "${k}" already exists here; use rename to change its label`);
+  }
+  childrenMap[k] = { label: lab };
+  return { next: tx, changed: true, audit: auditEntry(ctx, "taxonomy.add", fullPath, { label: lab }) };
+}
+function renameLabel(taxonomy, { path, label } = {}, ctx = {}) {
+  const tx = cleanTaxonomy(taxonomy);
+  if (!Array.isArray(path) || path.length === 0) throw new TaxonomyEditError("a category path is required");
+  const lab = cleanLabel(label);
+  const node = nodeAt(tx, path);
+  if (!node) throw new TaxonomyEditError(`category not found: ${path.join(" > ")}`);
+  if ((node.label ?? "") === lab) return { next: tx, changed: false, audit: auditEntry(ctx, "taxonomy.rename", path, { label: lab, noop: true }) };
+  node.label = lab;
+  return { next: tx, changed: true, audit: auditEntry(ctx, "taxonomy.rename", path, { label: lab }) };
+}
+
 // client/src/admin-ops.mjs
 function requireRole(ctx, check2, need) {
   const role = ctx.role?.() ?? "member";
@@ -19466,13 +19542,13 @@ function actionCtx(ctx) {
     now: ctx.now ? ctx.now() : void 0
   };
 }
-function prBody(reason, auditEntry) {
+function prBody(reason, auditEntry2) {
   const head = reason ? `Reason: ${reason}
 
 ` : "";
-  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry)} -->`;
+  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry2)} -->`;
 }
-var noop = (message, auditEntry) => ({ changed: false, noop: true, message, audit: auditEntry });
+var noop = (message, auditEntry2) => ({ changed: false, noop: true, message, audit: auditEntry2 });
 function requireId(githubId) {
   if (githubId === void 0 || githubId === null || String(githubId).trim() === "") {
     throw new OperationError("bad-request", "githubId is required");
@@ -19576,9 +19652,74 @@ async function removeContent(ctx, { path: rel } = {}) {
   requireMemberContentPath(rel);
   return publishFiles({ repo, branch: `gbti/remove-${slugOf(rel)}`, files: [{ path: rel, content: null }], message: `Remove ${rel}`, title: `Remove ${rel}`, body: "Moderation: remove content." });
 }
+var TAXONOMY_PATH = "house/taxonomy.yml";
+function leadingComment(raw) {
+  const out = [];
+  for (const line of String(raw || "").split("\n")) {
+    if (/^\s*#/.test(line) || line.trim() === "") out.push(line);
+    else break;
+  }
+  const block = out.join("\n").replace(/\s+$/, "");
+  return block ? `${block}
+` : "";
+}
+async function getTaxonomy(ctx) {
+  const raw = await ctx.reader?.readFile?.(TAXONOMY_PATH) || "";
+  let parsed;
+  try {
+    parsed = index_vite_proxy_tmp_default.load(raw) || {};
+  } catch {
+    parsed = {};
+  }
+  return { tree: parsed.tree || {} };
+}
+async function addContentCategory(ctx, { parentPath, key, label } = {}) {
+  requireRole(ctx, canBanGrandfather, "admin");
+  const { repo } = requireRepo2(ctx);
+  const raw = await ctx.reader?.readFile?.(TAXONOMY_PATH) || "";
+  let parsed;
+  try {
+    parsed = index_vite_proxy_tmp_default.load(raw) || {};
+  } catch {
+    parsed = {};
+  }
+  let result;
+  try {
+    result = addCategory(parsed, { parentPath, key, label }, actionCtx(ctx));
+  } catch (err) {
+    if (err instanceof TaxonomyEditError) throw new OperationError("bad-request", err.message);
+    throw err;
+  }
+  const fullPath = [...Array.isArray(parentPath) ? parentPath : [], key].filter(Boolean);
+  if (!result.changed) return noop(`category already exists: ${fullPath.join(" > ")}`, result.audit);
+  const pr = await publishFiles({ repo, branch: `gbti/category-add-${slugOf(fullPath.join("-"))}`, files: [{ path: TAXONOMY_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message: `Add category ${fullPath.join("/")}`, title: `Add category: ${label}`, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
+}
+async function renameContentCategoryLabel(ctx, { path, label } = {}) {
+  requireRole(ctx, canBanGrandfather, "admin");
+  const { repo } = requireRepo2(ctx);
+  const raw = await ctx.reader?.readFile?.(TAXONOMY_PATH) || "";
+  let parsed;
+  try {
+    parsed = index_vite_proxy_tmp_default.load(raw) || {};
+  } catch {
+    parsed = {};
+  }
+  let result;
+  try {
+    result = renameLabel(parsed, { path, label }, actionCtx(ctx));
+  } catch (err) {
+    if (err instanceof TaxonomyEditError) throw new OperationError("bad-request", err.message);
+    throw err;
+  }
+  const p = Array.isArray(path) ? path : [];
+  if (!result.changed) return noop(`label unchanged: ${p.join(" > ")}`, result.audit);
+  const pr = await publishFiles({ repo, branch: `gbti/category-rename-${slugOf(p.join("-"))}`, files: [{ path: TAXONOMY_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message: `Rename category ${p.join("/")} -> ${label}`, title: `Rename category: ${label}`, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
+}
 
 // extension/src/ext-dispatch.mjs
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -19700,6 +19841,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await reviewContribution(ctx, body));
       case "/api/overrides":
         return ok(await getOverridesRoster(ctx));
+      case "/api/taxonomy":
+        return ok(await getTaxonomy(ctx));
       case "/api/open-pulls":
         return ok(await getOpenPulls(ctx));
       case "/api/admin-ops":

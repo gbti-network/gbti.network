@@ -47,6 +47,7 @@ import { fieldsFor } from './form-fields.mjs';
 import { renderMarkdown } from './markdown.mjs';
 import {
   banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent,
+  getTaxonomy, addContentCategory, renameContentCategoryLabel,
 } from './admin-ops.mjs';
 
 export { CLIENT_VERSION } from './operations.mjs';
@@ -59,6 +60,8 @@ const ADMIN_ACTIONS = {
   role: setMemberRole,
   deplatform: deplatformContent,
   remove: removeContent,
+  'category-add': addContentCategory, // SOW-055: category manager (add a category/subcategory)
+  'category-rename': renameContentCategoryLabel, // SOW-055: rename a category's display label
 };
 
 const STATUS_FOR = {
@@ -139,6 +142,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/billing') return run(() => getBilling(ctx));
   if (method === 'GET' && pathname === '/api/referral') return run(() => getReferral(ctx));
   if (method === 'GET' && pathname === '/api/overrides') return run(() => getOverridesRoster(ctx)); // SOW-038 P2: superadmin dashboard roster (admin-gated)
+  if (method === 'GET' && pathname === '/api/taxonomy') return run(() => getTaxonomy(ctx)); // SOW-055: the canonical category tree for the manager UI
   if (method === 'GET' && pathname === '/api/open-pulls') return run(() => getOpenPulls(ctx)); // SOW-038 P2: open content-PR queue (admin-gated)
   if (method === 'POST' && pathname === '/api/admin-ops') return run(() => triggerAdminOp(ctx, body ?? {})); // SOW-038 P3: reconcile/E2E trigger
 

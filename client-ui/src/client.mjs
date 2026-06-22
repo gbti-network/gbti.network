@@ -113,6 +113,9 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     getReferral: () => request('GET', '/api/referral'),
     admin: (action, args = {}) => request('POST', '/api/admin', { action, ...args }),
     overrides: () => request('GET', '/api/overrides'), // SOW-038 P2: admin-gated roster { roster, summary }
+    taxonomy: () => request('GET', '/api/taxonomy'), // SOW-055: the canonical category tree { tree } for the manager
+    addCategory: ({ parentPath, key, label }) => request('POST', '/api/admin', { action: 'category-add', parentPath, key, label }), // SOW-055
+    renameCategory: ({ path, label }) => request('POST', '/api/admin', { action: 'category-rename', path, label }), // SOW-055
     openPulls: () => request('GET', '/api/open-pulls'), // SOW-038 P2: admin-gated open content-PR queue { pulls }
     adminOp: (action) => request('POST', '/api/admin-ops', { action }), // SOW-038 P3: trigger reconcile / e2e -> { ok, triggered }
   };
