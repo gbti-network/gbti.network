@@ -4955,6 +4955,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .btn { font:inherit; font-weight:600; font-size:13px; padding:6px 12px; border:0; border-radius:2px; background:var(--accent); color:#fff; cursor:pointer; }
   .lk { font:inherit; font-size:12.5px; font-weight:600; color:var(--accent); background:none; border:0; cursor:pointer; padding:4px 6px; border-radius:2px; }
   .lk:hover { background:var(--hover); }
+  .lk.danger { color:var(--danger); }
   ul.tree { list-style:none; margin:0; padding:0 0 0 16px; } ul.tree.root { padding-left:0; }
   .node { border-top:1px solid var(--line); }
   .node:first-child { border-top:0; }
@@ -5013,8 +5014,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <div class="row">
           <code class="key">${esc(key)}</code>
           <input class="lab" data-path="${esc(ps)}" type="text" value="${esc(node && node.label || "")}" />
-          <button class="lk" type="button" data-rename="${esc(ps)}">Rename</button>
+          <button class="lk" type="button" data-rename="${esc(ps)}">Label</button>
           <button class="lk" type="button" data-addsub="${esc(ps)}">+ Sub</button>
+          <button class="lk" type="button" data-key="${esc(ps)}">Key</button>
+          <button class="lk" type="button" data-move="${esc(ps)}">Move</button>
+          <button class="lk danger" type="button" data-remove="${esc(ps)}">Remove</button>
         </div>
         ${kids ? `<ul class="tree">${kids}</ul>` : ""}
       </li>`;
@@ -5039,6 +5043,35 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (!label.trim()) return;
         this._run(() => this.client.addCategory({ parentPath: ps.split("/"), key: key.trim(), label: label.trim() }));
       }));
+      this.$$("[data-key]").forEach((b) => b.addEventListener("click", () => {
+        const ps = b.dataset.key;
+        const newKey = (typeof prompt === "function" ? prompt(`Rename the KEY of "${ps}" (kebab-case). This rewrites every content item under it.`) : "") || "";
+        if (newKey.trim()) this._migrate("rename", ps, { newKey: newKey.trim() });
+      }));
+      this.$$("[data-move]").forEach((b) => b.addEventListener("click", () => {
+        const ps = b.dataset.move;
+        const toParent = typeof prompt === "function" ? prompt(`Move "${ps}" under which parent path? (slash-joined, blank = top level). This rewrites content under it.`) : null;
+        if (toParent !== null) this._migrate("move", ps, { toParent: toParent.trim() });
+      }));
+      this.$$("[data-remove]").forEach((b) => b.addEventListener("click", () => {
+        const ps = b.dataset.remove;
+        if (typeof confirm === "function" && !confirm(`Remove "${ps}"? If content uses it, the migration is REFUSED unless you reassign.`)) return;
+        const reassign = typeof confirm === "function" ? confirm("Reassign affected content to the PARENT category? OK = reassign, Cancel = only remove if nothing uses it.") : false;
+        this._migrate("remove", ps, { reassign });
+      }));
+    }
+    async _migrate(action, ps, extra) {
+      this._busy = true;
+      this._msg = "";
+      this.render();
+      try {
+        await this.client.adminOp("category-migrate", { action, from: ps, ...extra, apply: true });
+        this._msg = `Migration triggered (${action} ${ps}). A review-gated PR opens via CI (merge it once content-check is green; it is not auto-merged). A would-orphan remove is refused — see the repo Actions tab. The tree updates after the PR merges.`;
+      } catch (err) {
+        this._msg = err?.message || "Could not trigger the migration.";
+      }
+      this._busy = false;
+      this.render();
     }
     async _run(fn) {
       this._busy = true;
@@ -8204,8 +8237,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-055
       openPulls: () => request("GET", "/api/open-pulls"),
       // SOW-038 P2: admin-gated open content-PR queue { pulls }
-      adminOp: (action) => request("POST", "/api/admin-ops", { action })
-      // SOW-038 P3: trigger reconcile / e2e -> { ok, triggered }
+      adminOp: (action, params) => request("POST", "/api/admin-ops", params ? { action, params } : { action })
+      // SOW-038 P3 (reconcile/e2e); SOW-055 category-migrate carries params
     };
   }
 

@@ -104,3 +104,93 @@ export function renameLabel(taxonomy, { path, label } = {}, ctx = {}) {
   node.label = lab;
   return { next: tx, changed: true, audit: auditEntry(ctx, 'taxonomy.rename', path, { label: lab }) };
 }
+
+// ---- SOW-055 Phase 2: the PATH-CHANGING ops (rename-key / move / remove) + the content-categories migration ----
+// These change a category's PATH, so every content item whose `categories` starts with the old path must be
+// rewritten (or, for a remove with no reassignment, would be orphaned). The pure functions below compute the tree
+// edit + a `pathChange` descriptor; the caller (scripts/migrate-category.mjs) scans ALL content and applies
+// rewriteCategories() to each affected item, committing the taxonomy edit + the rewrites in ONE PR.
+
+const samePath = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((s, i) => s === b[i]);
+/** Does a content path START WITH a category path (so it is affected by a change to that category)? */
+export const pathStartsWith = (cats, prefix) => Array.isArray(cats) && Array.isArray(prefix) && cats.length >= prefix.length && prefix.every((s, i) => cats[i] === s);
+
+/** Resolve { childrenMap, key, parentPath } for a path, or null if the node is missing. childrenMap[key] is the node. */
+function locate(tx, path) {
+  const key = path[path.length - 1];
+  const parentPath = path.slice(0, -1);
+  const childrenMap = parentPath.length === 0 ? tx.tree : nodeAt(tx, parentPath)?.children;
+  if (!childrenMap || typeof childrenMap !== 'object' || !childrenMap[key]) return null;
+  return { childrenMap, key, parentPath };
+}
+
+/** RENAME a node's KEY/slug. The PATH changes (the last segment), so content under it must be migrated. */
+export function renameKey(taxonomy, { path, newKey } = {}, ctx = {}) {
+  const tx = cleanTaxonomy(taxonomy);
+  if (!Array.isArray(path) || path.length === 0) throw new TaxonomyEditError('a category path is required');
+  const nk = typeof newKey === 'string' ? newKey.trim() : '';
+  if (!KEY_RE.test(nk)) throw new TaxonomyEditError('the new key must be kebab-case (lowercase letters, digits, single hyphens)');
+  const loc = locate(tx, path);
+  if (!loc) throw new TaxonomyEditError(`category not found: ${path.join(' > ')}`);
+  if (nk === loc.key) return { next: tx, changed: false, audit: auditEntry(ctx, 'taxonomy.rename-key', path, { newKey: nk, noop: true }), pathChange: null };
+  if (loc.childrenMap[nk]) throw new TaxonomyEditError(`a sibling category "${nk}" already exists here`);
+  // Rebuild the children map preserving INSERTION ORDER, swapping the one key (delete+add would move it to the end).
+  const rebuilt = {};
+  for (const [k, v] of Object.entries(loc.childrenMap)) rebuilt[k === loc.key ? nk : k] = v;
+  if (loc.parentPath.length === 0) tx.tree = rebuilt; else nodeAt(tx, loc.parentPath).children = rebuilt;
+  const to = [...path.slice(0, -1), nk];
+  return { next: tx, changed: true, audit: auditEntry(ctx, 'taxonomy.rename-key', path, { to }), pathChange: { kind: 'rename', from: path, to } };
+}
+
+/** MOVE (reparent) a node. Its key is unchanged but its PATH changes, so content under it must be migrated. */
+export function moveCategory(taxonomy, { fromPath, toParentPath = [] } = {}, ctx = {}) {
+  const tx = cleanTaxonomy(taxonomy);
+  if (!Array.isArray(fromPath) || fromPath.length === 0) throw new TaxonomyEditError('a source category path is required');
+  if (!Array.isArray(toParentPath)) throw new TaxonomyEditError('a valid destination parent path is required');
+  const loc = locate(tx, fromPath);
+  if (!loc) throw new TaxonomyEditError(`category not found: ${fromPath.join(' > ')}`);
+  const key = loc.key;
+  const to = [...toParentPath, key];
+  if (samePath(fromPath.slice(0, -1), toParentPath)) return { next: tx, changed: false, audit: auditEntry(ctx, 'taxonomy.move', fromPath, { to, noop: true }), pathChange: null };
+  // Cannot move a node under itself or one of its own descendants (would detach the subtree from the tree).
+  if (pathStartsWith(toParentPath, fromPath)) throw new TaxonomyEditError('cannot move a category under itself or its descendant');
+  let destMap;
+  if (toParentPath.length === 0) destMap = tx.tree;
+  else {
+    const destParent = nodeAt(tx, toParentPath);
+    if (!destParent) throw new TaxonomyEditError(`destination parent not found: ${toParentPath.join(' > ')}`);
+    if (!destParent.children || typeof destParent.children !== 'object') destParent.children = {};
+    destMap = destParent.children;
+  }
+  if (destMap[key]) throw new TaxonomyEditError(`a category "${key}" already exists at the destination`);
+  const node = loc.childrenMap[key];
+  delete loc.childrenMap[key];
+  destMap[key] = node;
+  return { next: tx, changed: true, audit: auditEntry(ctx, 'taxonomy.move', fromPath, { to }), pathChange: { kind: 'move', from: fromPath, to } };
+}
+
+/** REMOVE a node (and its subtree). With reassignToParent, affected content reattaches to the parent; otherwise
+ *  affected content would be ORPHANED, so the caller must refuse unless there are no references. */
+export function removeCategory(taxonomy, { path, reassignToParent = false } = {}, ctx = {}) {
+  const tx = cleanTaxonomy(taxonomy);
+  if (!Array.isArray(path) || path.length === 0) throw new TaxonomyEditError('a category path is required');
+  const loc = locate(tx, path);
+  if (!loc) throw new TaxonomyEditError(`category not found: ${path.join(' > ')}`);
+  delete loc.childrenMap[loc.key];
+  const to = reassignToParent ? path.slice(0, -1) : null;
+  return { next: tx, changed: true, audit: auditEntry(ctx, 'taxonomy.remove', path, { reassignToParent }), pathChange: { kind: 'remove', from: path, to } };
+}
+
+/**
+ * Rewrite ONE content item's `categories` for a pathChange. Returns:
+ *   - undefined : the item is NOT under the changed path (leave it alone).
+ *   - an array  : the new `categories` (move/rename relocate the prefix preserving deeper segments; a remove with
+ *                 reassignToParent reattaches the whole affected subtree to the parent).
+ *   - null      : the item is ORPHANED (a remove with no reassignment) — the caller must refuse the migration.
+ */
+export function rewriteCategories(categories, pathChange) {
+  if (!pathChange || !pathStartsWith(categories, pathChange.from)) return undefined;
+  const { kind, from, to } = pathChange;
+  if (kind === 'remove') return to === null ? null : [...to];
+  return [...to, ...categories.slice(from.length)]; // move | rename
+}

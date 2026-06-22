@@ -1,0 +1,49 @@
+name: Category migration
+
+# SOW-055 Phase 2: run scripts/migrate-category.mjs in a FULL CLONE (the only place a complete content scan,
+# including drafts, is reliable) to move / rename-key / remove a taxonomy category and rewrite every affected
+# content item's `categories` in ONE auto-merged PR. Triggered manually (workflow_dispatch inputs) or from the
+# extension category manager via the SOW-038 admin-ops repository_dispatch (type category-migrate). Dry-run by
+# default; set apply=true to open + merge the PR. A remove that would orphan content is REFUSED unless reassign=true.
+
+on:
+  workflow_dispatch:
+    inputs:
+      action: { description: 'move | rename | remove', required: true, type: choice, options: [move, rename, remove] }
+      from: { description: 'source category path, slash-joined (e.g. devops/frameworks)', required: true, type: string }
+      to_parent: { description: '(move) destination parent path, slash-joined ("" = top level)', required: false, type: string, default: '' }
+      new_key: { description: '(rename) the new kebab key', required: false, type: string, default: '' }
+      reassign: { description: '(remove) reattach affected content to the parent', required: false, type: boolean, default: false }
+      apply: { description: 'apply (open + merge the PR); false = dry-run preview in the log', required: false, type: boolean, default: false }
+  repository_dispatch:
+    types: [category-migrate]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: category-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - name: Run the category migration
+        run: node scripts/migrate-category.mjs $([ "$APPLY" = "true" ] && echo --apply)
+        env:
+          # workflow_dispatch inputs OR the repository_dispatch client_payload, whichever fired.
+          MIGRATE_ACTION: ${{ github.event.inputs.action || github.event.client_payload.action }}
+          MIGRATE_FROM: ${{ github.event.inputs.from || github.event.client_payload.from }}
+          MIGRATE_TO_PARENT: ${{ github.event.inputs.to_parent || github.event.client_payload.to_parent }}
+          MIGRATE_NEW_KEY: ${{ github.event.inputs.new_key || github.event.client_payload.new_key }}
+          MIGRATE_REASSIGN: ${{ github.event.inputs.reassign || github.event.client_payload.reassign }}
+          MIGRATE_BY: ${{ github.event.client_payload.by || github.actor }}
+          APPLY: ${{ github.event.inputs.apply || github.event.client_payload.apply }}
+          GITHUB_BOT_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          GITHUB_CONTENT_REPO: gbti-network/gbti.network

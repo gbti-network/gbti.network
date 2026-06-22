@@ -699,12 +699,12 @@ export async function getOpenPulls(ctx) {
 // SOW-038 P3: trigger an allow-listed superadmin OPERATION (reconcile / e2e) via the Worker's dispatch endpoint.
 // Admin-gated locally (UX, fail-closed) AND by the Worker (the authority + the dispatch token). Returns
 // { ok, triggered } or throws OperationError.
-export async function triggerAdminOp(ctx, { action } = {}) {
+export async function triggerAdminOp(ctx, { action, params } = {}) {
   await requireAdmin(ctx);
   const token = ctx.store?.get?.('githubToken');
   if (!token) throw new OperationError('not-authenticated', 'sign in first');
   try {
-    return await workerTriggerAdminOp({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, action });
+    return await workerTriggerAdminOp({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, action, params }); // SOW-055: params for category-migrate
   } catch (err) {
     throw new OperationError('admin-op-failed', err?.message || 'could not trigger the operation');
   }
