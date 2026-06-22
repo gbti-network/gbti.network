@@ -30,6 +30,9 @@ node_modules/
 .data/
 .snapshots/
 
+# Local Claude Code agent config (permissions, settings). Stays local, never in the repo.
+.claude/
+
 # Internal project guide (architecture + the email -> github_id mapping). Stays local, never in the repo.
 CLAUDE.md
 
