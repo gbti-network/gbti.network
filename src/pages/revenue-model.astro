@@ -1,0 +1,704 @@
+---
+// SOW: Revenue Model lander (imported from the owner's "GBTI Revenue Model" Claude Design handoff).
+// Built on the shared V3 design system (BaseLayout supplies the V3 header/footer, fonts, and gbti-v3.css
+// tokens). The page-scoped styles + a namespaced local icon sprite (rm-ico-*) keep it self-contained so it
+// never collides with the global IconSprite. The split percentages (30/10/5/55) and the $150 worked example
+// are the model as designed; they are page copy, not yet single-sourced from lib/membership.
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+<BaseLayout
+  title="Revenue Model"
+  description="How the GBTI Network shares membership revenue with the members whose work brings people in: 30% to the first touch, 10% to the last touch, a 5% collaboration pool, on a 90-day window."
+>
+  {/* page-local icon sprite, namespaced rm-ico-* so it never collides with the global IconSprite */}
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <g id="rm-ico-arrow"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g id="rm-ico-check"><path d="M5 12.5l4.5 4.5L19 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g id="rm-ico-pencil"><path d="M4 20h4L19 9a2 2 0 0 0-3-3L5 17v3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.8"/></g>
+      <g id="rm-ico-box"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></g>
+      <g id="rm-ico-flag"><path d="M6 21V4M6 4h11l-2 3.5L17 11H6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></g>
+      <g id="rm-ico-user"><circle cx="12" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 20a7 7 0 0 1 14 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g id="rm-ico-clock"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5.2l3.2 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g id="rm-ico-hold"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10 9v6M14 9v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g id="rm-ico-camera"><rect x="3.5" y="7" width="17" height="12.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="13.2" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 7l1.5-2.5h4L15.5 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></g>
+      <g id="rm-ico-plus-pt"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8.5v7M8.5 12h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g id="rm-ico-noself"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6.5 6.5l11 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g id="rm-ico-refund"><path d="M5 11a7 7 0 1 1 1.5 4.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M5 16v-4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g id="rm-ico-card"><rect x="3" y="5.5" width="18" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M7 14.5h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g id="rm-ico-chat"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4H6.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></g>
+      <g id="rm-ico-merge"><circle cx="7" cy="6" r="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="7" cy="18" r="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="17" cy="9" r="2.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 8.4v7.2M16.8 9.7c-.3 3-2.4 4.3-6.1 4.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g id="rm-ico-spark"><path d="M12 3l1.8 6.2L20 11l-6.2 1.8L12 19l-1.8-6.2L4 11l6.2-1.8L12 3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></g>
+      <g id="rm-ico-home"><path d="M4 11.5 12 4l8 7.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 10.5V20h12v-9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20v-5h4v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></g>
+      <g id="rm-ico-bot"><rect x="5" y="8" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8V4.5M12 4.5h-1.5M9 13h.01M15 13h.01M9.5 16.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g id="rm-ico-coin"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.3c-.6-.7-1.5-1-2.5-1-1.4 0-2.5.7-2.5 1.9 0 2.6 5 1.4 5 4 0 1.2-1.1 2-2.5 2-1 0-2-.4-2.6-1.1" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></g>
+      <g id="rm-ico-users"><circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g id="rm-ico-calendar"><rect x="4" y="5.5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4 10h16M8 3.5v4M16 3.5v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g id="rm-ico-lock"><rect x="5" y="11" width="14" height="9" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></g>
+      <g id="rm-ico-mega"><path d="M4 10v4a1 1 0 0 0 1 1h2l8 4V5L7 9H5a1 1 0 0 0-1 1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M18 9a4 4 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+      <g id="rm-ico-puzzle"><path d="M9 4.5a1.8 1.8 0 0 1 3.6 0c0 .5.4.9.9.9H16a1 1 0 0 1 1 1v2.5c0 .5.4.9.9.9a1.8 1.8 0 0 1 0 3.6c-.5 0-.9.4-.9.9V17a1 1 0 0 1-1 1h-2.6c-.5 0-.9.4-.9.9a1.8 1.8 0 0 1-3.6 0c0-.5-.4-.9-.9-.9H5a1 1 0 0 1-1-1v-2.4c0-.5-.4-.9-.9-.9a1.8 1.8 0 0 1 0-3.6c.5 0 .9-.4.9-.9V6.4a1 1 0 0 1 1-1h3.1c.5 0 .9-.4.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></g>
+      <g id="rm-ico-heart"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></g>
+      <g id="rm-ico-news"><rect x="3.5" y="5.5" width="13" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M16.5 9H20a1 1 0 0 1 1 1v7a1.5 1.5 0 0 1-3 0V5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M6 9h6M6 12h6M6 15h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></g>
+    </defs>
+  </svg>
+
+  <div class="rm">
+    <!-- ============ HERO (centered) ============ -->
+    <section class="rm-top">
+      <div class="wrap">
+        <div class="chip"><span class="chip-dot"></span> The publishing network</div>
+        <h1 class="h1">A professional publishing network with shared upside</h1>
+        <p class="lead">GBTI gives members a place to publish useful work, discuss what they are building, create gated resources, and grow alongside other professionals. A portion of member dues is shared back when that work helps grow the network.</p>
+        <div class="hero-btns">
+          <a href="#flow" class="btn btn-primary btn-lg">Explore the model <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#rm-ico-arrow"/></svg></a>
+          <a href="/membership/" class="btn btn-ghost btn-lg">Become a member</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ WHY A NETWORK ============ -->
+    <section class="band tint">
+      <div class="wrap">
+        <div class="sec-head center">
+          <p class="eyebrow">Why a network</p>
+          <h2 class="h2 mt12">Creators need a home for their work</h2>
+          <p class="lead">Most independent creators want to publish and be found, without standing up a CMS or paying to host and maintain a site. The network handles that, surfaces work to AI assistants, and adds the one thing most publishing collectives leave out.</p>
+        </div>
+        <div class="why-grid">
+          <div class="why-card">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-home"/></svg></span>
+            <h3 class="h3">No site to host or maintain</h3>
+            <p>Publish without a CMS, hosting bills, or upkeep. Your work lives on the network and renders on your member profile.</p>
+          </div>
+          <div class="why-card">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-bot"/></svg></span>
+            <h3 class="h3">Built for AI recommendations</h3>
+            <p>Content is structured so AI assistants can read and recommend it, which lifts how often your work gets surfaced.</p>
+          </div>
+          <div class="why-card">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-coin"/></svg></span>
+            <h3 class="h3">Publishing with an earning path</h3>
+            <p>Most collectives stop at distribution. Here, the work that brings members in earns a share for the people who made it.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ WHY MEMBERS JOIN ============ -->
+    <section class="band">
+      <div class="wrap">
+        <div class="sec-head center">
+          <p class="eyebrow">Why members join</p>
+          <h2 class="h2 mt12">What membership gives you</h2>
+          <p class="lead">Membership is built for professionals who want a place to publish useful work, improve alongside other members, and belong to a network that rewards contribution.</p>
+        </div>
+        <div class="perks-grid">
+          <div class="perk">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-chat"/></svg></span>
+            <div class="perk-t">Private member community</div>
+            <p>A private Discord where professionals talk through ideas, share work in progress, ask questions, and build relationships away from public social noise.</p>
+          </div>
+          <div class="perk">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-calendar"/></svg></span>
+            <div class="perk-t">Weekly shop talk</div>
+            <p>A recurring two-hour session on product development, publishing, business progress, technical decisions, and member coaching.</p>
+          </div>
+          <div class="perk">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-users"/></svg></span>
+            <div class="perk-t">Joint venture opportunities</div>
+            <p>Discover aligned projects and combine skills. One member brings the idea, another the technical depth, another the distribution.</p>
+          </div>
+          <div class="perk">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-lock"/></svg></span>
+            <div class="perk-t">Gated member content</div>
+            <p>Create gated articles, products, prompts, downloads, and resources that enrich the network and give new members a reason to join.</p>
+          </div>
+          <div class="perk">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-mega"/></svg></span>
+            <div class="perk-t">Network syndication</div>
+            <p>The network distributes and promotes member work across social channels, so useful work travels further than it would from a private account.</p>
+          </div>
+          <div class="perk">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-news"/></svg></span>
+            <div class="perk-t">Curated news and context</div>
+            <p>Curated updates and signals relevant to the network's professional interests, tuned to cut noise and surface what helps you build.</p>
+          </div>
+          <div class="perk">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-puzzle"/></svg></span>
+            <div class="perk-t">Specialized member tools</div>
+            <p>A Chrome extension and other tools that make the gated parts of the network smoother to access and use.</p>
+          </div>
+          <div class="perk">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-heart"/></svg></span>
+            <div class="perk-t">A professional place to belong</div>
+            <p>A shared home for publishing, discussion, collaboration, and belonging among people who take the work seriously.</p>
+          </div>
+          <div class="perk">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-coin"/></svg></span>
+            <div class="perk-t">Shared member upside</div>
+            <p>A portion of membership revenue can be shared back with members whose published work, comments, and contributions help grow the network.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ THE VALUE PATH (flow) ============ -->
+    <section class="band tint" id="flow">
+      <div class="wrap">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">How value flows</p>
+            <h2 class="h2 mt12">Member work creates value at every touch</h2>
+            <p class="lead">A reader might discover the network through an article, come back through a product, read the comments, and notice what members improved before they join. <strong>In this network, those touches matter,</strong> and each one can earn.</p>
+            <a href="#split" class="link mt24">See the full split <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#rm-ico-arrow"/></svg></a>
+          </div>
+
+          <div class="vpath">
+            <div class="vpath-h"><span class="t">The value path</span><span class="s">per new member</span></div>
+            <div class="vstep v-first">
+              <span class="vnode"><svg viewBox="0 0 24 24"><use href="#rm-ico-spark"/></svg></span>
+              <div class="vmeta"><div class="k">Article, product, prompt, or link</div><div class="t">First touch</div></div>
+              <div class="vreward"><div class="pct">30%</div><div class="rl">discovery</div></div>
+            </div>
+            <div class="vconn"></div>
+            <div class="vstep v-collab">
+              <span class="vnode"><svg viewBox="0 0 24 24"><use href="#rm-ico-chat"/></svg></span>
+              <div class="vmeta"><div class="k">Comments on either item</div><div class="t">Discussion</div></div>
+              <div class="vreward"><span class="vchip">part of 5%</span></div>
+            </div>
+            <div class="vconn"></div>
+            <div class="vstep v-collab">
+              <span class="vnode"><svg viewBox="0 0 24 24"><use href="#rm-ico-merge"/></svg></span>
+              <div class="vmeta"><div class="k">Contributions to either item</div><div class="t">Improvements</div></div>
+              <div class="vreward"><span class="vchip">part of 5%</span></div>
+            </div>
+            <div class="vconn"></div>
+            <div class="vstep v-last">
+              <span class="vnode"><svg viewBox="0 0 24 24"><use href="#rm-ico-flag"/></svg></span>
+              <div class="vmeta"><div class="k">Any member work they touch</div><div class="t">Last touch</div></div>
+              <div class="vreward"><div class="pct">10%</div><div class="rl">conversion</div></div>
+            </div>
+            <div class="vconn"></div>
+            <div class="vstep v-join">
+              <span class="vnode"><svg viewBox="0 0 24 24"><use href="#rm-ico-check"/></svg></span>
+              <div class="vmeta"><div class="k">The visitor</div><div class="t">Becomes a member</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ THE SPLIT (donut) ============ -->
+    <section class="band" id="split">
+      <div class="wrap">
+        <div class="sec-head center">
+          <p class="eyebrow">The split</p>
+          <h2 class="h2 mt12">Revenue growth divided four ways</h2>
+          <p class="lead">Every conversion is distributed the same way. Content owners do not decide what counts. If a contribution is accepted or a comment is published, the model pays it automatically.</p>
+        </div>
+
+        <div class="split-grid">
+          <div class="donut-wrap">
+            <svg viewBox="0 0 200 200" role="img" aria-label="Revenue split: 30% first touch, 10% last touch, 5% collaboration, 55% platform">
+              <circle class="donut-seg" cx="100" cy="100" r="80" stroke="var(--c-first)"  stroke-dasharray="147.8 354.85" stroke-dashoffset="0"/>
+              <circle class="donut-seg" cx="100" cy="100" r="80" stroke="var(--c-last)"   stroke-dasharray="47.27 455.38" stroke-dashoffset="-150.8"/>
+              <circle class="donut-seg" cx="100" cy="100" r="80" stroke="var(--c-collab)" stroke-dasharray="22.13 480.52" stroke-dashoffset="-201.06"/>
+              <circle class="donut-seg" cx="100" cy="100" r="80" stroke="var(--c-retain)" stroke-dasharray="273.46 229.19" stroke-dashoffset="-226.19"/>
+            </svg>
+            <div class="donut-center">
+              <b>100%</b>
+              <span>of membership revenue</span>
+            </div>
+          </div>
+
+          <div class="split-cards">
+            <div class="scard first">
+              <div class="pct">30%</div>
+              <div class="nm">First touch</div>
+              <p class="ds">The owner of the first eligible article, product, or prompt the member touched inside the attribution window.</p>
+            </div>
+            <div class="scard last">
+              <div class="pct">10%</div>
+              <div class="nm">Last touch</div>
+              <p class="ds">The owner of the final eligible item they touched before they converted to a paying member.</p>
+            </div>
+            <div class="scard collab">
+              <div class="pct">5%</div>
+              <div class="nm">Collaboration pool</div>
+              <p class="ds">Split evenly among members who commented on or contributed to the first-touch and last-touch items.</p>
+            </div>
+            <div class="scard retain">
+              <div class="pct">55%</div>
+              <div class="nm">Platform &amp; community</div>
+              <p class="ds">Funds hosting, tooling, weekly sessions, and the shared work of running the network.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ATTRIBUTION JOURNEY ============ -->
+    <section class="band tint">
+      <div class="wrap">
+        <div class="sec-head center">
+          <p class="eyebrow">Discovery and closing</p>
+          <h2 class="h2 mt12">First touch and last touch</h2>
+          <p class="lead">A conversion only uses eligible touches inside a 90-day window. The earliest touch earns the discovery share. The final touch before signup earns the closing share.</p>
+        </div>
+
+        <div class="journey">
+          <div class="jwindow">
+            <span class="lbl">conversion window</span>
+            <div class="bracket"></div>
+            <span class="lbl">90 days</span>
+          </div>
+
+          <div class="jrow">
+            <div class="jnode j-enter">
+              <div class="jdisc"><svg viewBox="0 0 24 24"><use href="#rm-ico-user"/></svg></div>
+              <div class="dotline"></div>
+              <div class="who">A visitor arrives</div>
+              <div class="what">not a member yet</div>
+            </div>
+            <div class="jnode j-first">
+              <div class="jdisc"><svg viewBox="0 0 24 24"><use href="#rm-ico-pencil"/></svg></div>
+              <div class="dotline"></div>
+              <span class="badge">First touch</span>
+              <div class="who">Alice's article</div>
+              <div class="what">brought them in</div>
+              <div class="pay">30%</div>
+            </div>
+            <div class="jnode j-skip">
+              <div class="jdisc"><svg viewBox="0 0 24 24"><use href="#rm-ico-box"/></svg></div>
+              <div class="dotline"></div>
+              <span class="badge">In between</span>
+              <div class="who">Clara's product</div>
+              <div class="what">part of the journey</div>
+              <div class="pay">no share</div>
+            </div>
+            <div class="jnode j-last">
+              <div class="jdisc"><svg viewBox="0 0 24 24"><use href="#rm-ico-flag"/></svg></div>
+              <div class="dotline"></div>
+              <span class="badge">Last touch</span>
+              <div class="who">Bob's prompt</div>
+              <div class="what">closed the signup</div>
+              <div class="pay">10%</div>
+            </div>
+            <div class="jnode j-join">
+              <div class="jdisc"><svg viewBox="0 0 24 24"><use href="#rm-ico-check"/></svg></div>
+              <div class="who">They join</div>
+              <div class="what">split is frozen</div>
+            </div>
+          </div>
+
+          <div class="jnote" style="margin-left:auto;margin-right:auto">
+            <svg viewBox="0 0 24 24"><use href="#rm-ico-clock"/></svg>
+            <p>In-between touches matter to the member's journey, but they do not earn a share. If the same item is both the first and last touch, that one owner earns both shares, for 40%.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ COLLABORATION POOL ============ -->
+    <section class="band">
+      <div class="wrap">
+        <div class="pool-grid">
+          <div>
+            <p class="eyebrow">Participation</p>
+            <h2 class="h2 mt12">The 5% collaboration pool</h2>
+            <p class="lead mt16">Every accepted contribution and every published comment on the first-touch or last-touch item counts as one point. The pool splits evenly across all points.</p>
+            <p class="body-sm muted mt20">A spelling fix counts the same as a new section. A published comment counts the same as a merged pull request. Owners do not decide which participation is revenue-bearing. If it is accepted or published, it counts.</p>
+          </div>
+
+          <div class="pool-vis">
+            <div class="pool-top">
+              <span class="pool-chip"><b>5%</b><span>pool</span></span>
+              <span class="pool-div">÷ 4 points = 1.25% each</span>
+            </div>
+            <div class="pool-points">
+              <div class="ppt">
+                <span class="ppt-ic" style="background:var(--c-collab)"><svg viewBox="0 0 24 24"><use href="#rm-ico-merge"/></svg></span>
+                <div class="act">Spelling fix</div>
+                <div class="sh">1.25%</div>
+              </div>
+              <div class="ppt">
+                <span class="ppt-ic" style="background:var(--c-collab)"><svg viewBox="0 0 24 24"><use href="#rm-ico-merge"/></svg></span>
+                <div class="act">New section</div>
+                <div class="sh">1.25%</div>
+              </div>
+              <div class="ppt">
+                <span class="ppt-ic" style="background:var(--c-collab)"><svg viewBox="0 0 24 24"><use href="#rm-ico-chat"/></svg></span>
+                <div class="act">Comment</div>
+                <div class="sh">1.25%</div>
+              </div>
+              <div class="ppt">
+                <span class="ppt-ic" style="background:var(--c-collab)"><svg viewBox="0 0 24 24"><use href="#rm-ico-chat"/></svg></span>
+                <div class="act">Comment</div>
+                <div class="sh">1.25%</div>
+              </div>
+            </div>
+            <p class="pool-eq">One member with two accepted points earns two shares of the pool.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ WORKED EXAMPLE ============ -->
+    <section class="band tint">
+      <div class="wrap">
+        <div class="sec-head center">
+          <p class="eyebrow">A worked example</p>
+          <h2 class="h2 mt12">The same split in dollars</h2>
+          <p class="lead">Take one conversion where four members commented on or improved the first-touch and last-touch items. Using today's $150 membership, the split lands like this.</p>
+        </div>
+
+        <div class="stackbar" aria-hidden="true">
+          <span style="flex:30;background:var(--c-first)"><b>30%</b><small>First touch</small></span>
+          <span style="flex:10;background:var(--c-last)"><b>10%</b><small>Last touch</small></span>
+          <span style="flex:5;background:var(--c-collab)"><b>5%</b><small>Collaboration</small></span>
+          <span style="flex:55;background:var(--c-retain);color:var(--c-retain-ink)"><b>55%</b><small>Platform</small></span>
+        </div>
+
+        <div class="we-legend">
+          <div class="we-lrow"><i style="background:var(--c-first)"></i><span class="nm">First-touch owner</span><span class="pc" style="color:var(--c-first)">30%</span><span class="dl">$45.00</span></div>
+          <div class="we-lrow"><i style="background:var(--c-last)"></i><span class="nm">Last-touch owner</span><span class="pc" style="color:var(--c-last)">10%</span><span class="dl">$15.00</span></div>
+          <div class="we-lrow"><i style="background:var(--c-collab)"></i><span class="nm">Collaboration pool <span>&middot; 4 points, split evenly</span></span><span class="pc" style="color:var(--c-collab)">5%</span><span class="dl">$7.50</span></div>
+          <div class="we-lrow"><i style="background:var(--c-retain)"></i><span class="nm">Platform &amp; community</span><span class="pc" style="color:var(--c-retain-ink)">55%</span><span class="dl">$82.50</span></div>
+          <div class="we-lrow" style="border-bottom:0"><i style="background:transparent"></i><span class="nm" style="font-weight:700">Membership</span><span class="pc">100%</span><span class="dl">$150.00</span></div>
+        </div>
+        <p class="mono muted mt24" style="font-size:12px">Dollar figures use today's $150 annual membership. Percentages are fixed; the dollar amount follows the membership price.</p>
+      </div>
+    </section>
+
+    <!-- ============ RULES & SAFEGUARDS ============ -->
+    <section class="band">
+      <div class="wrap">
+        <div class="sec-head center">
+          <p class="eyebrow">In plain terms</p>
+          <h2 class="h2 mt12">The rules that keep it fair</h2>
+          <p class="lead">Members are trusted by default. These guardrails keep the split honest without putting an editor between you and your payout.</p>
+        </div>
+
+        <div class="rules-grid">
+          <div class="rule">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-clock"/></svg></span>
+            <h4 class="h4">90-day window</h4>
+            <p>Only touches within 90 days of conversion count. Older touches expire and the next eligible one takes over.</p>
+          </div>
+          <div class="rule">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-hold"/></svg></span>
+            <h4 class="h4">90-day hold</h4>
+            <p>Payouts wait through a hold period that protects against refunds, chargebacks, and fraud.</p>
+          </div>
+          <div class="rule">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-camera"/></svg></span>
+            <h4 class="h4">Frozen at conversion</h4>
+            <p>The split is snapshotted when the member joins. Later edits or comments do not change a past payout.</p>
+          </div>
+          <div class="rule">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-plus-pt"/></svg></span>
+            <h4 class="h4">One point each</h4>
+            <p>Every accepted contribution and every published comment is worth exactly one collaboration point.</p>
+          </div>
+          <div class="rule">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-noself"/></svg></span>
+            <h4 class="h4">No self-dealing</h4>
+            <p>Your own comments and edits on your own content do not earn from the collaboration pool.</p>
+          </div>
+          <div class="rule">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-refund"/></svg></span>
+            <h4 class="h4">Refunds do not pay</h4>
+            <p>Reversed, refunded, or charged-back revenue produces no distribution.</p>
+          </div>
+          <div class="rule">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-user"/></svg></span>
+            <h4 class="h4">Eligible at payout</h4>
+            <p>Banned, suspended, or inactive members forfeit their share. It returns to the platform.</p>
+          </div>
+          <div class="rule">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-card"/></svg></span>
+            <h4 class="h4">Paid via Stripe</h4>
+            <p>Eligible recipients are paid through Stripe Connect once the hold period clears.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ FAQ ============ -->
+    <section class="band tint">
+      <div class="wrap">
+        <div class="sec-head center">
+          <p class="eyebrow">Questions and answers</p>
+          <h2 class="h2 mt12">Membership and revenue questions</h2>
+          <p class="lead">Straight answers on what membership includes, how revenue sharing works, and what this network is not.</p>
+        </div>
+        <div class="faq">
+          <details open>
+            <summary>What is GBTI? <span class="pm"></span></summary>
+            <div class="ans"><p>GBTI is a professional publishing network where members publish articles, products, prompts, tools, and gated resources. It combines a private community, recurring shop talk, curated news, distribution support, and a revenue-sharing model for member-created value.</p></div>
+          </details>
+          <details>
+            <summary>What do members get? <span class="pm"></span></summary>
+            <div class="ans"><p>Access to the private Discord community, weekly two-hour shop talk sessions, curated news, gated member content, specialized network tools, and opportunities to collaborate with other professionals. Members can also publish their own work and participate in the value it creates when it helps grow membership.</p></div>
+          </details>
+          <details>
+            <summary>What happens during weekly shop talk? <span class="pm"></span></summary>
+            <div class="ans"><p>Shop talk is a recurring two-hour member meeting covering product development, business decisions, publishing plans, technical questions, and current challenges. It is part working session, part coaching space, and part professional accountability room.</p></div>
+          </details>
+          <details>
+            <summary>Can members create gated content? <span class="pm"></span></summary>
+            <div class="ans"><p>Yes. Members can create gated articles, products, prompts, downloads, and resources for other members. Gated content gives current members more value and gives prospective members a stronger reason to join.</p></div>
+          </details>
+          <details>
+            <summary>What is the network syndicate? <span class="pm"></span></summary>
+            <div class="ans"><p>The network syndicate helps distribute and promote member-created material across social networks and public channels, so useful member work reaches more people than it would from a private account alone.</p></div>
+          </details>
+          <details>
+            <summary>Can members work together on projects? <span class="pm"></span></summary>
+            <div class="ans"><p>Yes. GBTI is designed to create opportunities for joint ventures. Members can meet collaborators, test ideas, combine skills, and build projects together when there is mutual interest and fit.</p></div>
+          </details>
+          <details>
+            <summary>How does revenue sharing work? <span class="pm"></span></summary>
+            <div class="ans"><p>When a new member joins after interacting with member-owned content, part of that member's dues may be distributed to the members who helped create the value path.</p><p>The first eligible member-owned item in the path can receive 30%. The last eligible item before signup can receive 10%. A 5% collaboration pool can be shared by members who commented on or contributed to those first-touch and last-touch items.</p></div>
+          </details>
+          <details>
+            <summary>Do comments and small contributions count? <span class="pm"></span></summary>
+            <div class="ans"><p>Yes. The network is designed to reward participation. A useful comment can count. An accepted spelling fix can count. A formatting improvement, correction, added example, or accepted contribution can count. The goal is to make participation easy, not to turn every contribution into a negotiation.</p></div>
+          </details>
+          <details>
+            <summary>Can content owners block contributors from revenue sharing? <span class="pm"></span></summary>
+            <div class="ans"><p>No. If a contribution is accepted, it can count. If a member comment is published and remains valid, it can count. Content owners do not decide whether accepted participation is revenue-bearing.</p></div>
+          </details>
+          <details>
+            <summary>Is this a referral program? <span class="pm"></span></summary>
+            <div class="ans"><p>Partly. Members can invite people directly and earn a commission when an invite becomes a paying member, and member-owned content, comments, and contributions also earn through the value path. Neither path is about recruiting for its own sake. Both reward helping new members discover and join a community with genuine membership value.</p></div>
+          </details>
+          <details>
+            <summary>Do members earn for inviting people? <span class="pm"></span></summary>
+            <div class="ans"><p>Yes. Members get a personal invite link and earn a commission when someone they invite becomes a paying member. It is a flat one-time commission on that signup, paid to the inviting member only. There is no downline, and nothing is earned on anyone the new member later invites.</p></div>
+          </details>
+          <details>
+            <summary>Why are member dues shared back? <span class="pm"></span></summary>
+            <div class="ans"><p>Member dues fund the network, support gated infrastructure, reduce abuse, and create a healthier publishing environment than platforms where all member activity benefits only the platform. GBTI shares part of the upside because the network becomes more valuable when members publish, comment, contribute, and help useful work travel.</p></div>
+          </details>
+          <details>
+            <summary>Why have member dues at all? <span class="pm"></span></summary>
+            <div class="ans"><p>GBTI is a closed network and a private club. Dues are what maintain and grow it, the same way a country club or a makers shop runs on membership. They fund the infrastructure, keep the community private, reduce spam, and discourage low-effort participation.</p><p>A paid membership also gives the network a revenue base that can be shared back with members who help create value.</p></div>
+          </details>
+          <details>
+            <summary>What is the Chrome extension for? <span class="pm"></span></summary>
+            <div class="ans"><p>The Chrome extension is a specialized member tool that improves the gated infrastructure experience. It helps members access and use the parts of the network built specifically for the private member layer.</p></div>
+          </details>
+          <details>
+            <summary>Who should join? <span class="pm"></span></summary>
+            <div class="ans"><p>GBTI is for professionals, builders, writers, developers, operators, and product-minded creators who want a place to publish useful work, improve with others, and participate in a community where contribution is visible.</p></div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CTA ============ -->
+    <section class="band-lg dark rm-cta">
+      <div class="wrap">
+        <p class="eyebrow">Publish, and share in what it earns</p>
+        <h2 class="h1 mt12" style="color:#fff">Your work keeps paying after you ship it.</h2>
+        <p class="lead mt16" style="color:var(--on-dark-soft);margin-left:auto;margin-right:auto">Start with a 90-day trial. No card required. Publish and become eligible for the split when you join.</p>
+        <div class="rm-cta-btns">
+          <a href="/membership/" class="btn btn-primary btn-lg">See membership <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#rm-ico-arrow"/></svg></a>
+          <a href="/products/" class="btn btn-ghost btn-lg">Browse member work</a>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <style>
+    /* ===== page-scoped: four-way split palette + charts ===== */
+    .rm {
+      --c-first:  #1f9e5f;   /* first touch · discovery */
+      --c-last:   #2f8f86;   /* last touch · closing */
+      --c-collab: #6d52c0;   /* collaboration pool */
+      --c-retain: #cbc6bf;   /* platform retained */
+      --c-retain-ink: #6f6b73;
+      --paper-3: var(--tint);   /* subtle layer (the design system stops at --paper-2) */
+    }
+
+    /* ---------- top hero (centered positioning) ---------- */
+    .rm-top { padding: 92px 0 78px; text-align: center; }
+    .rm-top .wrap { max-width: 820px; }
+    .rm-top .chip { margin: 0 auto; }
+    .rm-top h1 { margin-top: 20px; }
+    .rm-top .lead { margin: 20px auto 0; max-width: 620px; }
+    .rm-top .hero-btns { justify-content: center; }
+
+    /* ---------- why a network ---------- */
+    .why-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .why-card { background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 28px 26px; box-shadow: var(--sh-sm); }
+    .why-card .ic { width: 52px; height: 52px; border-radius: 11px; background: var(--green-tint); color: var(--green-700); border: 1.5px solid var(--green-tint-2); display: flex; align-items: center; justify-content: center; }
+    .why-card .ic svg { width: 25px; height: 25px; }
+    .why-card h3 { margin-top: 18px; }
+    .why-card p { font-size: 14.5px; color: var(--fg-soft); margin-top: 10px; line-height: 1.55; }
+
+    /* ---------- perks (why members join) ---------- */
+    .perks-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .perk { background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 26px 24px; box-shadow: var(--sh-sm); }
+    .perk .ic { width: 50px; height: 50px; border-radius: 11px; background: var(--green-tint); color: var(--green-700); border: 1.5px solid var(--green-tint-2); display: flex; align-items: center; justify-content: center; }
+    .perk .ic svg { width: 24px; height: 24px; }
+    .perk-t { font-family: var(--f-display); font-weight: 700; font-size: 18px; margin-top: 16px; letter-spacing: -.005em; }
+    .perk p { font-size: 14px; color: var(--fg-soft); margin-top: 9px; line-height: 1.55; }
+
+    /* ---------- faq ---------- */
+    .faq { max-width: 820px; margin: 0 auto; }
+    .faq details { background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r); margin-bottom: 12px; }
+    .faq summary { list-style: none; cursor: pointer; padding: 20px 24px; display: flex; align-items: center; justify-content: space-between; gap: 18px; font-family: var(--f-display); font-weight: 700; font-size: 18px; line-height: 1.3; }
+    .faq summary::-webkit-details-marker { display: none; }
+    .faq summary .pm { width: 20px; height: 20px; flex: none; position: relative; color: var(--green-700); }
+    .faq summary .pm::before, .faq summary .pm::after { content: ""; position: absolute; background: currentColor; border-radius: 2px; }
+    .faq summary .pm::before { left: 0; right: 0; top: 9px; height: 2px; }
+    .faq summary .pm::after { top: 0; bottom: 0; left: 9px; width: 2px; transition: opacity .2s; }
+    .faq details[open] summary .pm::after { opacity: 0; }
+    .faq .ans { padding: 0 24px 22px; color: var(--fg-soft); font-size: 15px; line-height: 1.6; }
+    .faq .ans p + p { margin-top: 12px; }
+
+    /* ---------- value path flow (two-col) ---------- */
+    .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 60px; align-items: center; }
+    .hero-copy h1 { margin-top: 18px; }
+    .hero-copy .lead { margin-top: 20px; max-width: 520px; }
+    .hero-copy .lead strong { color: var(--fg); font-weight: 700; }
+    .hero-btns { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 32px; }
+
+    /* value path */
+    .vpath { background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-xl); padding: 24px 28px; box-shadow: var(--sh); }
+    .vpath-h { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 8px; }
+    .vpath-h .t { font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-mute); }
+    .vpath-h .s { font-family: var(--f-mono); font-size: 11px; color: var(--fg-mute); }
+    .vstep { display: flex; align-items: center; gap: 16px; }
+    .vnode { width: 46px; height: 46px; border-radius: 12px; flex: none; display: flex; align-items: center; justify-content: center; border: 1.5px solid; }
+    .vnode svg { width: 22px; height: 22px; }
+    .vmeta { flex: 1; min-width: 0; }
+    .vmeta .k { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--fg-mute); }
+    .vmeta .t { font-weight: 700; font-size: 16px; margin-top: 2px; }
+    .vreward { text-align: right; flex: none; }
+    .vreward .pct { font-family: var(--f-display); font-weight: 800; font-size: 26px; line-height: 1; }
+    .vreward .rl { font-family: var(--f-mono); font-size: 10px; color: var(--fg-mute); margin-top: 3px; }
+    .vchip { display: inline-flex; align-items: center; font-family: var(--f-mono); font-size: 10.5px; font-weight: 600; color: var(--c-collab); background: #efebfb; border: 1.5px solid #ddd5f4; border-radius: var(--r-pill); padding: 4px 10px; }
+    .vconn { height: 13px; margin-left: 23px; border-left: 2px dashed var(--line-2); }
+    .v-first .vnode { border-color: var(--c-first); background: var(--green-tint); color: var(--c-first); } .v-first .pct { color: var(--c-first); }
+    .v-collab .vnode { border-color: var(--c-collab); background: #efebfb; color: var(--c-collab); }
+    .v-last .vnode { border-color: var(--c-last); background: #e3f1ef; color: var(--c-last); } .v-last .pct { color: var(--c-last); }
+    .v-join .vnode { border-color: var(--ink); background: var(--ink); color: #fff; }
+    .v-join .vmeta .t { color: var(--fg); }
+
+    /* ---------- the split: donut + cards ---------- */
+    .split-grid { display: grid; grid-template-columns: 360px 1fr; gap: 56px; align-items: center; }
+    .donut-wrap { position: relative; width: 300px; height: 300px; margin: 0 auto; }
+    .donut-wrap svg { width: 100%; height: 100%; display: block; transform: rotate(-90deg); }
+    .donut-seg { fill: none; stroke-width: 30; transition: stroke-width .2s; }
+    .donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .donut-center b { font-family: var(--f-display); font-weight: 800; font-size: 52px; line-height: 1; color: var(--fg); }
+    .donut-center span { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-mute); margin-top: 8px; }
+
+    .split-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .scard { background: var(--paper); border: 1.5px solid var(--line); border-left-width: 4px; border-radius: 0; padding: 22px 22px 20px; box-shadow: var(--sh-sm); }
+    .scard .pct { font-family: var(--f-display); font-weight: 800; font-size: 38px; line-height: 1; letter-spacing: -.02em; }
+    .scard .nm { font-weight: 700; font-size: 17px; margin-top: 8px; }
+    .scard .ds { font-size: 14px; color: var(--fg-soft); margin-top: 8px; line-height: 1.5; }
+    .scard.first  { border-left-color: var(--c-first); }  .scard.first .pct  { color: var(--c-first); }
+    .scard.last   { border-left-color: var(--c-last); }   .scard.last .pct   { color: var(--c-last); }
+    .scard.collab { border-left-color: var(--c-collab); } .scard.collab .pct { color: var(--c-collab); }
+    .scard.retain { border-left-color: var(--c-retain); } .scard.retain .pct { color: var(--c-retain-ink); }
+
+    /* ---------- attribution journey ---------- */
+    .journey { position: relative; margin-top: 30px; }
+    .jwindow { display: flex; align-items: center; gap: 12px; justify-content: center; margin-bottom: 26px; }
+    .jwindow .bracket { flex: 1; max-width: 520px; height: 26px; border: 1.5px solid var(--line-2); border-bottom: 0; border-radius: 10px 10px 0 0; position: relative; }
+    .jwindow .lbl { font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); white-space: nowrap; }
+    .jrow { display: grid; grid-template-columns: auto repeat(3, 1fr) auto; align-items: stretch; gap: 0; }
+    .jnode { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 0 10px; position: relative; }
+    .jnode .dotline { position: absolute; top: 31px; left: 50%; width: 100%; height: 2px; background: repeating-linear-gradient(90deg, var(--line-2) 0 6px, transparent 6px 12px); z-index: 0; }
+    .jnode:last-child .dotline { display: none; }
+    .jdisc { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: none; position: relative; z-index: 1; border: 2px solid; background: var(--paper); }
+    .jdisc svg { width: 28px; height: 28px; }
+    .jnode .badge { font-family: var(--f-mono); font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 3px 9px; border-radius: var(--r-pill); margin-top: 14px; }
+    .jnode .who { font-weight: 700; font-size: 15px; margin-top: 10px; }
+    .jnode .what { font-size: 13px; color: var(--fg-mute); margin-top: 3px; }
+    .jnode .pay { font-family: var(--f-display); font-weight: 800; font-size: 22px; margin-top: 10px; }
+
+    .j-first .jdisc { border-color: var(--c-first); color: var(--c-first); }
+    .j-first .badge { background: var(--green-tint); color: var(--green-700); }
+    .j-first .pay { color: var(--c-first); }
+    .j-last .jdisc { border-color: var(--c-last); color: var(--c-last); }
+    .j-last .badge { background: #e3f1ef; color: #1d6e66; }
+    .j-last .pay { color: var(--c-last); }
+    .j-skip .jdisc { border-color: var(--line-2); color: var(--fg-mute); border-style: dashed; }
+    .j-skip .badge { background: var(--paper-3); color: var(--fg-mute); }
+    .j-skip .pay { color: var(--fg-mute); font-size: 14px; font-family: var(--f-mono); font-weight: 500; }
+    .j-enter .jdisc, .j-join .jdisc { width: 54px; height: 54px; border-color: var(--ink); color: var(--ink); }
+    .j-enter, .j-join { justify-content: flex-start; }
+    .j-join .jdisc { background: var(--ink); color: #fff; }
+    .j-enter .who, .j-join .who { margin-top: 14px; }
+
+    .jnote { display: flex; align-items: flex-start; gap: 10px; margin-top: 30px; padding: 16px 20px; background: var(--paper-3); border-radius: var(--r); max-width: 720px; }
+    .jnote svg { width: 20px; height: 20px; color: var(--fg-mute); flex: none; margin-top: 1px; }
+    .jnote p { font-size: 14.5px; color: var(--fg-soft); }
+
+    /* ---------- collaboration pool ---------- */
+    .pool-grid { display: grid; grid-template-columns: 1fr 1.05fr; gap: 56px; align-items: center; }
+    .pool-vis { background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-xl); padding: 32px; box-shadow: var(--sh-sm); }
+    .pool-top { display: flex; align-items: center; justify-content: space-between; }
+    .pool-chip { display: inline-flex; align-items: baseline; gap: 7px; background: var(--c-collab); color: #fff; padding: 9px 16px; border-radius: var(--r); font-family: var(--f-display); font-weight: 800; }
+    .pool-chip b { font-size: 26px; line-height: 1; } .pool-chip span { font-family: var(--f-mono); font-weight: 500; font-size: 11px; }
+    .pool-div { font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); }
+    .pool-points { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 24px; }
+    .ppt { border: 1.5px solid var(--line); border-radius: var(--r); padding: 14px 10px; text-align: center; background: var(--paper-2); }
+    .ppt .ppt-ic { width: 34px; height: 34px; border-radius: 9px; margin: 0 auto; display: flex; align-items: center; justify-content: center; color: #fff; }
+    .ppt .ppt-ic svg { width: 18px; height: 18px; }
+    .ppt .act { font-family: var(--f-mono); font-size: 10px; color: var(--fg-mute); margin-top: 9px; text-transform: uppercase; letter-spacing: .04em; }
+    .ppt .sh { font-family: var(--f-display); font-weight: 800; font-size: 18px; color: var(--c-collab); margin-top: 4px; }
+    .pool-eq { text-align: center; font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); margin-top: 20px; }
+
+    /* ---------- worked example: stacked bar ---------- */
+    .stackbar { display: flex; height: 72px; border-radius: 12px; overflow: hidden; box-shadow: var(--sh); border: 1.5px solid var(--line); }
+    .stackbar > span { display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; min-width: 0; padding: 0 4px; }
+    .stackbar > span b { font-family: var(--f-display); font-weight: 800; font-size: 18px; line-height: 1; }
+    .stackbar > span small { font-family: var(--f-mono); font-size: 9.5px; margin-top: 4px; opacity: .92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .we-legend { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px 40px; margin-top: 26px; max-width: 720px; }
+    .we-lrow { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+    .we-lrow i { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+    .we-lrow .nm { font-weight: 600; font-size: 14.5px; flex: 1; }
+    .we-lrow .nm span { color: var(--fg-mute); font-weight: 400; }
+    .we-lrow .pc { font-family: var(--f-mono); font-weight: 600; font-size: 14px; }
+    .we-lrow .dl { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); width: 64px; text-align: right; }
+
+    /* ---------- rules grid ---------- */
+    .rules-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .rule { background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); padding: 22px; }
+    .rule .ic { width: 44px; height: 44px; border-radius: 9px; background: var(--green-tint); color: var(--green-700); border: 1.5px solid var(--green-tint-2); display: flex; align-items: center; justify-content: center; }
+    .rule .ic svg { width: 22px; height: 22px; }
+    .rule h4 { margin-top: 16px; }
+    .rule p { font-size: 13.5px; color: var(--fg-soft); margin-top: 7px; line-height: 1.5; }
+
+    /* ---------- dark cta ---------- */
+    .rm-cta { text-align: center; }
+    .rm-cta .wrap { max-width: 720px; }
+    .rm-cta-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
+
+    @media (max-width: 1000px) {
+      .hero-grid, .split-grid, .pool-grid { grid-template-columns: 1fr; gap: 40px; }
+      .perks-grid { grid-template-columns: repeat(2, 1fr); }
+      .rules-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 760px) {
+      .split-cards { grid-template-columns: 1fr; }
+      .jrow { grid-template-columns: 1fr 1fr; gap: 28px 0; }
+      .jnode .dotline { display: none; }
+      .we-legend { grid-template-columns: 1fr; }
+      .why-grid { grid-template-columns: 1fr; }
+      .perks-grid { grid-template-columns: 1fr; }
+      .pool-points { grid-template-columns: repeat(2, 1fr); }
+      .stackbar > span small { display: none; }
+    }
+    @media (max-width: 480px) {
+      .jrow { grid-template-columns: 1fr; }
+    }
+  </style>
+</BaseLayout>
