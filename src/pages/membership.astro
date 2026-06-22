@@ -38,7 +38,7 @@ const faqs = [
   },
   {
     q: 'What does the trial include?',
-    a: 'Read access to the Discord community and weekly build sessions, plus the ability to author and stage drafts on your own fork. Publishing to the network is paid only.',
+    a: 'View-only access to the Discord community (read the channels) and the GBTI extension hub to follow news, member activity, and shares, plus the ability to author and stage drafts on your own fork. The weekly build sessions, publishing, your public profile and member directory listing, commenting, and member-only content are all paid-member only.',
   },
   {
     q: 'What happens when the trial ends?',
@@ -126,10 +126,10 @@ const faqs = [
       <div class="sec-head center">
         <p class="eyebrow">Compare plans</p>
         <h2 class="h2 mt12">Visitor, trial, and paid</h2>
-        <p class="lead mt16" style="max-width:600px;margin-left:auto;margin-right:auto">Browsing is free for everyone. The trial unlocks the community. Paid unlocks your public presence and revenue share.</p>
+        <p class="lead mt16" style="max-width:640px;margin-left:auto;margin-right:auto">Browsing is free for everyone. The {TRIAL_DAYS_SITE}-day trial lets you read the community and stage drafts. Publishing, your public profile and member directory listing, commenting, member-only content, the weekly sessions, and revenue share are all paid-member features.</p>
       </div>
-      <div class="tbl mt32" style="max-width:860px;margin-left:auto;margin-right:auto">
-        <TierTable />
+      <div class="tbl mt32" style="max-width:940px;margin-left:auto;margin-right:auto">
+        <TierTable detailed />
       </div>
     </div>
   </section>
