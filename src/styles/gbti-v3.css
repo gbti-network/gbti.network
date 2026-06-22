@@ -289,6 +289,10 @@ section { position: relative; }
 .hero .lav { border-color: #2a2832; }
 .hero .hero-c-members .muted { color: var(--on-dark-soft); }
 .hero .hero-c-members strong { color: #fff !important; }
+/* The hero band is always dark (it recolors its own children rather than using .dark), so a ghost button
+   inside it needs the light-on-dark treatment in both themes, otherwise its text is invisible. */
+.hero .btn-ghost { color: var(--on-dark); border-color: var(--line-dark-2); }
+.hero .btn-ghost:hover { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.4); }
 .hero-c { text-align: center; padding: 80px 0 92px; }
 .hero-c .chip { display: inline-flex; }
 .hero-c .h-hero { max-width: 900px; margin: 18px auto 0; }
