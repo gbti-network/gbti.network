@@ -31,6 +31,15 @@ export const TURNSTILE_SITE_KEY = '0x4AAAAAADg66MO1G3WyZDcL';
 export const SIGNUP_BASE = 'https://signup.gbti.network';
 
 export const pct = (n: number): string => `${Math.round(n * 100)}%`;
+// SOW-007/008 (superseded) constants — still consumed by the not-yet-migrated attribution code. Site COPY now
+// uses the SOW-059 constants below.
 export const REFERRAL_PCT = pct(REFERRAL_RATE); // "30%"
 export const CONTRIBUTION_PCT = pct(CONTRIBUTION_CAP); // "7%"
 export const COMMENT_PCT = pct(COMMENT_CAP); // "3%"
+
+// SOW-059: the SIMPLIFIED revenue model (spec: .data/ops/revenue-ops/README.md). Touch-based + fixed + automatic:
+// the first content that brought a member in earns its author 30%, the last content before they joined earns 10%,
+// and a fixed 5% pool is shared automatically by members who commented on or contributed to those two items.
+export const FIRST_TOUCH_PCT = '30%';
+export const LAST_TOUCH_PCT = '10%';
+export const COLLAB_POOL_PCT = '5%';

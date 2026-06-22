@@ -4,42 +4,52 @@ title: "Referral Terms"
 slug: referral-terms
 status: published
 visibility: public
-description: "How the GBTI Network referral revenue-share works: 30 percent of a referred member's paid membership, a 90-day settlement hold, an active-member requirement, payout by Stripe Connect, and the rules on clawbacks and self-referral."
-updatedAt: 2026-06-03
+description: "How the GBTI Network revenue-share works: the content that brings a member in earns 30 percent, the content that closes the signup earns 10 percent, a fixed 5 percent collaboration pool is shared automatically, all on a 90-day settlement hold, paid by Stripe Connect."
+updatedAt: 2026-06-22
 ---
 
-The GBTI Network shares revenue with members who bring new paying members to the community. This page states the terms. By participating you agree to them. We may update these terms, and any change applies to commissions accrued after the change takes effect.
+The GBTI Network shares revenue with the members whose content brings new paying members in, and the members who improve or discuss that content. The distribution is fixed and automatic. Content owners do not choose it. This page states the terms. By participating you agree to them. We may update these terms, and any change applies to revenue distributed after the change takes effect.
 
 ## What you earn
 
-You earn **30 percent of the paid membership revenue** of each member you refer, for as long as that member keeps paying and you remain an active member. The commission is calculated on the gross amount of each paid invoice, before fees.
+When a visitor becomes a paying member, the network looks at the content that brought them in and the content that closed the signup, and distributes a fixed share of that member's paid membership revenue:
 
-A referral is recorded two ways:
+- **Discovery share, 30 percent.** The author of the first eligible member-owned article, product, or prompt the visitor viewed earns 30 percent.
+- **Closing share, 10 percent.** The author of the last eligible item the visitor viewed before joining earns 10 percent. If the same item was both the first and the last, that author earns the full 40 percent.
+- **Collaboration pool, 5 percent.** A fixed 5 percent pool is shared, automatically and equally, by the members who commented on or contributed to those first-touch and last-touch items before the signup. Every accepted contribution and every valid comment counts as one equal point; if there are no qualifying points, the pool is retained by the community.
 
-- **A shared link.** Your referral link carries your referral code. A visitor who signs up after following it is attributed to you.
-- **Your published content.** Every published post and product you author shows a join call to action that carries your referral code. A visitor who arrives through your content and joins is attributed to you.
+Percentages are calculated on the gross amount of each paid invoice, before fees. The remainder is retained by the platform and community. Owners do not decide whether an accepted contribution or a published comment is revenue-bearing.
 
-Attribution is **first-touch**: the first member whose link or content a visitor arrives through is credited, and that attribution does not change afterward. **Self-referral is not allowed**: you cannot earn a commission on your own membership.
+## How attribution works
+
+Attribution is **touch-based**, inside a **90-day window**:
+
+- The **first touch** is the earliest eligible member-owned item viewed within the 90 days before the signup. A touch older than the window expires, and the next eligible touch inside the window becomes the first touch.
+- The **last touch** is the final eligible item viewed before the signup. Views after the signup do not change it.
+- The distribution is **frozen at the moment of conversion**. Later comments, later contributions, edits, or ownership changes do not change the split for a member who has already converted; they may matter for future signups.
+- **Self-dealing does not pay.** You cannot earn on your own membership, and a content owner's own comments or edits on their own item (including the pinned "from the author" note) never count toward the collaboration pool.
+
+To attribute touches, the network records which eligible content a visitor viewed. This happens only with the visitor's consent, the record is kept no longer than the attribution window, and it is deleted on request. See the Privacy Policy.
 
 ## When you get paid
 
-Each commission is **held for 90 days** before it becomes payable. This settlement hold covers the refund and chargeback window, so a commission is only paid once the underlying payment is settled.
+Each distribution is **held for 90 days** before it becomes payable. This settlement hold covers the refund and chargeback window, so a share is only paid once the underlying payment is settled.
 
 To receive a payout you must:
 
-1. Be an **active paying member** at the time the referred member's payment is made. If your membership lapses, you stop accruing new commissions, and resubscribing resumes accrual. Commissions you already earned while you were active remain payable.
-2. Complete **Stripe Connect onboarding**. Payouts are sent through Stripe Connect, which handles identity verification, bank payout, and tax forms. Until you onboard, your commissions accrue and wait, but nothing is transferred.
+1. Be an **active paying member** when the payout is made. If your membership lapses you stop earning new shares, and resubscribing resumes it; shares you earned while active remain payable. A member who is not eligible at payout time has that share returned to the community.
+2. Complete **Stripe Connect onboarding**. Payouts are sent through Stripe Connect, which handles identity verification, bank payout, and tax forms. Until you onboard, your shares accrue and wait, but nothing is transferred.
 
 Payouts are sent in cash through Stripe Connect. Account credit is not offered at this time.
 
 ## Clawbacks
 
-If a referred member's payment is **refunded or charged back**, the commission for that payment is **voided**. Because of the 90-day hold, a voided commission is cancelled before it is ever paid out. We do not claw back money that has already been transferred to you; the hold exists so that we do not have to.
+If a member's payment is **refunded or charged back**, the distribution for that payment is **voided**. Because of the 90-day hold, a voided share is cancelled before it is ever paid out. We do not claw back money that has already been transferred to you; the hold exists so that we do not have to.
 
 ## Abuse
 
-Commissions are earned on **paid revenue only**. Trials and refunded payments earn nothing. Self-referral is rejected, and accounts created to game referrals are removed. A banned member forfeits all unpaid commissions.
+Shares are earned on **paid revenue only**. Trials and refunded payments earn nothing. Manipulated attribution, bad-faith comment or contribution farming, bot activity, and self-dealing are excluded by admin action, and a banned member forfeits all unpaid shares.
 
 ## Questions
 
-The amounts you are owed are always derived from the underlying Stripe records, so your earnings reconcile exactly to real payments. If you have a question about a commission, reach out to the team in the community Discord.
+The amounts you are owed are always derived from the underlying Stripe records, so your earnings reconcile exactly to real payments. If you have a question about a distribution, reach out to the team in the community Discord.

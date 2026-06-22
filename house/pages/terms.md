@@ -43,10 +43,10 @@ You may cancel your membership at any time, which prevents the next renewal. Exc
 
 ## Revenue share
 
-GBTI shares revenue with the members who help the network grow.
+GBTI shares revenue with the members whose content brings new paying members in, and the members who improve or discuss that content. The distribution is fixed and automatic; content owners do not choose it.
 
-- **Referrals.** When a member you referred becomes a paid member, you may earn 30 percent of their paid membership revenue for the life of their membership, subject to a settlement hold and active-member requirements. See the referral terms for details.
-- **Contributions.** A share of the revenue a published work generates may be distributed to the members who improved it and to its commenters, up to a defined cap set by the content owner.
+- **Discovery and closing.** When a visitor becomes a paid member, the first eligible member-owned item they viewed earns its author 30 percent of that member's paid membership revenue, and the last eligible item they viewed before joining earns its author 10 percent (40 percent if the same item did both). This is subject to a settlement hold and active-member requirements. See the referral terms for details.
+- **Collaboration.** A fixed 5 percent pool is shared, automatically and equally, by the members who commented on or contributed to those first-touch and last-touch items before the signup. Every accepted contribution and every valid comment counts; content owners do not decide what is revenue-bearing.
 
 Payouts are made in USD. Recipients of more than 600 USD in a year may be required to complete tax forms that satisfy legal requirements before payout.
 
