@@ -301,14 +301,14 @@ if (stamps.length) {
       <a href="/articles/" class="link">Browse everything <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
     </div>
     <div class="filter-row">
-      <button type="button" class="chip filter on" aria-pressed="true">All</button>
-      <button type="button" class="chip filter" aria-pressed="false">Articles</button>
-      <button type="button" class="chip filter" aria-pressed="false">Products</button>
-      <button type="button" class="chip filter" aria-pressed="false">Prompts</button>
+      <button type="button" class="chip filter on" aria-pressed="true" data-filter="all">All</button>
+      <button type="button" class="chip filter" aria-pressed="false" data-filter="Article">Articles</button>
+      <button type="button" class="chip filter" aria-pressed="false" data-filter="Product">Products</button>
+      <button type="button" class="chip filter" aria-pressed="false" data-filter="Prompt">Prompts</button>
     </div>
     <div class="works-grid">
       {featured && (
-        <article class="card card-hover work-feat">
+        <article class="card card-hover work-feat" data-type="Article">
           <a href={`/articles/${featured.data.slug}/`} class="cover" aria-label={featured.data.title}>
             {featured.data.coverImage
               ? <Image src={featured.data.coverImage} width={620} height={420} alt="" />
@@ -326,7 +326,7 @@ if (stamps.length) {
         </article>
       )}
       {featuredProducts.length > 0 && (
-        <div class="work-col">
+        <div class="work-col" data-type="Product">
           {featuredProducts.map((fp) => (
             <article class="card card-hover work-card">
               <Image src={fp.data.icon} width={152} height={152} alt="" class="work-icon" style="object-fit:cover;border-radius:8px" />
@@ -343,7 +343,7 @@ if (stamps.length) {
       )}
       {minis.map((m) => (
         m.kind === 'Article' ? (
-          <a class="card card-hover work-mini work-mini-img" href={m.href}>
+          <a class="card card-hover work-mini work-mini-img" href={m.href} data-type={m.kind}>
             {m.img ? (
               <Image src={m.img} width={400} height={220} alt="" class="work-mini-cover" />
             ) : (
@@ -352,7 +352,7 @@ if (stamps.length) {
             <div class="work-mini-meta"><span class="chip" style="padding:3px 9px">{m.kind}</span><p class="body-sm mt8" style="font-weight:600;color:var(--fg)">{m.title}</p><div class="mini-byline"><Avatar item={authorItem(m.author, avatarIndex)} class="mini-av" size={22} /><span><strong>{authorDisplay(m.author)}</strong> · {formatDate(m.date)}</span></div></div>
           </a>
         ) : (
-          <a class="card card-hover work-mini work-mini-img" href={m.href}>
+          <a class="card card-hover work-mini work-mini-img" href={m.href} data-type={m.kind}>
             <div class="work-mini-splash"><svg viewBox="0 0 640 512" aria-hidden="true"><path fill="currentColor" d="M320 0c17.7 0 32 14.3 32 32v64h120c39.8 0 72 32.2 72 72v272c0 39.8-32.2 72-72 72H168c-39.8 0-72-32.2-72-72V168c0-39.8 32.2-72 72-72h120V32c0-17.7 14.3-32 32-32M208 384c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16s-7.2-16-16-16zm96 0c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16s-7.2-16-16-16zm96 0c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16s-7.2-16-16-16zM264 256a40 40 0 1 0-80 0a40 40 0 1 0 80 0m152 40a40 40 0 1 0 0-80a40 40 0 1 0 0 80M48 224h16v192H48c-26.5 0-48-21.5-48-48v-96c0-26.5 21.5-48 48-48m544 0c26.5 0 48 21.5 48 48v96c0 26.5-21.5 48-48 48h-16V224z"/></svg></div>
             <div class="work-mini-meta"><span class="chip" style="padding:3px 9px">{m.kind === 'Prompt' ? 'AI Prompt' : m.kind}</span><p class="body-sm mt8" style="font-weight:600;color:var(--fg)">{m.title}</p>{m.desc && <p class="body-sm muted mt8" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{m.desc}</p>}<div class="mini-byline"><Avatar item={authorItem(m.author, avatarIndex)} class="mini-av" size={22} /><span><strong>{authorDisplay(m.author)}</strong> · {formatDate(m.date)}</span></div></div>
           </a>
@@ -463,15 +463,27 @@ if (stamps.length) {
   // The contribution heatmap is server-rendered from real publish dates. The filter chips below need
   // client behavior, scoped per section so the directories and the "Recent Activity" row do not clash.
   (function () {
-    // "Recent Activity" chips are visual only (that section shows a curated mix, not a filtered grid).
+    // "Recent Activity" chips filter the grid by content type. Each top-level card in .works-grid
+    // carries a data-type (Article | Product | Prompt); each chip a data-filter ("all" or a type).
     var row = document.querySelector('.filter-row');
-    if (row) {
+    var grid = document.querySelector('.works-grid');
+    if (row && grid) {
       var rowChips = row.querySelectorAll('.filter');
+      var cards = grid.querySelectorAll('[data-type]');
+      function applyFilter(type) {
+        cards.forEach(function (c) {
+          var show = type === 'all' || c.getAttribute('data-type') === type;
+          // Inline display beats the .work-* { display:flex } class rules; hidden is for a11y.
+          c.style.display = show ? '' : 'none';
+          c.hidden = !show;
+        });
+      }
       rowChips.forEach(function (f) {
         f.addEventListener('click', function () {
           rowChips.forEach(function (x) { x.classList.remove('on'); x.setAttribute('aria-pressed', 'false'); });
           f.classList.add('on');
           f.setAttribute('aria-pressed', 'true');
+          applyFilter(f.getAttribute('data-filter') || 'all');
         });
       });
     }
