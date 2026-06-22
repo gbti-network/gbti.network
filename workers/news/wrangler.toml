@@ -58,10 +58,13 @@ head_sampling_rate = 1
 ENVIRONMENT = "sandbox"
 # Keep this many days of content (day-shards older than this are pruned each run).
 RETENTION_DAYS = "30"
-# Max sources to fetch per hourly run (round-robin across runs) to stay under the free 50-subrequest
-# limit. With ~80 sources, 20/run => the full catalog is refreshed over ~4 hourly runs.
-# 0 = no limit (fetch all every run).
-SOURCE_CHUNK = "20"
+# Max sources to fetch per hourly run, rotated by a SEQUENTIAL KV cursor (SOW-056) so the full pool is covered
+# over a cycle, never repeating last round. Budget: chunk fetches + MAX_CLASSIFY AI + ~13 KV/artifact ops < 50 on
+# the free plan. 121 sources at 16/run => full cycle ~8 runs (~3x/day). 0 = fetch the whole pool every run.
+SOURCE_CHUNK = "16"
+# SOW-056: the published source pool the worker polls (house/news-sources.yml -> the site build -> this URL). A
+# cloned network repoints this at its own site's /news-sources.json. Unset => fall back to the bundled config seed.
+NEWS_SOURCES_URL = "https://gbti.network/news-sources.json"
 # Max AI classifications per run (fetches + AI + KV ops must stay < 50 subrequests on the free plan).
 # Overflow items get a keyword/default label now and are reclassified on later runs.
 MAX_CLASSIFY = "16"
@@ -85,11 +88,12 @@ name = "gbti-news"
 [env.production.vars]
 ENVIRONMENT = "production"
 RETENTION_DAYS = "30"
-SOURCE_CHUNK = "20"
+SOURCE_CHUNK = "16"
 MAX_CLASSIFY = "16"
 AI_MODEL = "@cf/meta/llama-3.2-3b-instruct"
 MAX_IMAGE_BACKFILL = "12"
 IMAGE_BACKFILL_CRON = "30 * * * *"
+NEWS_SOURCES_URL = "https://gbti.network/news-sources.json"
 
 # Named envs do not inherit top-level [triggers], so the production deploy path (`--env production`) needs both
 # schedules redefined here (ingest at :00 + the SOW-050 image backfill at :30).

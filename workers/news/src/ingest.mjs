@@ -6,11 +6,11 @@
 // feed can never abort the run. Classification failures fall back gracefully (see classify.mjs) and
 // leave the item flagged `classified:false` so a later run retries it.
 
-import { SOURCES } from '../config/sources.mjs';
 import { DEFAULT_CATEGORY } from '../config/categories.mjs';
 import { parseFeed, contentRichness } from './feeds.mjs';
 import { classifyItem, analyzeItem, keywordCategory } from './classify.mjs';
 import { loadIndex, loadGuids, loadDay, dayOf, commitIngest } from './store.mjs';
+import { loadSourceList, nextChunk } from './sources.mjs'; // SOW-056: git-native pool + sequential KV cursor
 
 const FETCH_TIMEOUT_MS = 8000;
 // Free Workers plan allows 50 subrequests per invocation, and fetches + AI calls + KV ops all count.
@@ -59,14 +59,6 @@ async function mapWithConcurrency(items, limit, fn) {
   return out;
 }
 
-/** Pick which sources to fetch this run (round-robin chunking when SOURCE_CHUNK > 0). */
-function selectSources(now, chunkSize) {
-  if (!chunkSize || chunkSize <= 0 || chunkSize >= SOURCES.length) return SOURCES;
-  const chunks = Math.ceil(SOURCES.length / chunkSize);
-  const idx = Math.floor(now / 3600) % chunks; // hour-of-epoch rotates the window
-  return SOURCES.slice(idx * chunkSize, idx * chunkSize + chunkSize);
-}
-
 /**
  * Run one ingest cycle. `now` is epoch seconds (inject in tests; defaults to wall clock).
  * Returns a summary object (also logged) describing what happened.
@@ -80,8 +72,10 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
   const index = await loadIndex(env);
   const guids = await loadGuids(env); // { guid: dayString } across the whole retention window
 
-  // 1. Fetch + parse the selected sources in parallel (allSettled => one failure can't abort).
-  const sources = selectSources(now, chunkSize);
+  // 1. Resolve the live pool (git-native artifact -> KV cache -> bundled seed) and pick the next sequential chunk
+  //    via the persisted cursor, then fetch + parse in parallel (allSettled => one failure can't abort).
+  const { sources: pool, origin: sourcesOrigin } = await loadSourceList(env);
+  const sources = await nextChunk(env, pool, chunkSize);
   const settled = await Promise.allSettled(sources.map((s) => fetchSource(s)));
   const parsed = settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
 
@@ -146,6 +140,8 @@ export async function ingest(env, { now = Math.floor(Date.now() / 1000) } = {}) 
     at: 'ingest',
     now,
     sources: sources.length,
+    pool: pool.length, // SOW-056: total live pool size + where it came from (remote artifact / KV cache / bundled)
+    sourcesOrigin,
     parsed: parsed.length,
     new: fresh.length,
     classifiedOk: classified.filter((it) => it.classified).length,

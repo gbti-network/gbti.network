@@ -1,0 +1,612 @@
+# SOW-056: the canonical news source pool (git-native, portable). This file IS the curation: a fork that
+# clones this repo carries its sources, and points its news worker at its own published /news-sources.json.
+# Admin-CODEOWNED (house/**). The Astro build emits src/pages/news-sources.json.ts from this; the gbti-news
+# worker fetches that artifact each cron (NEWS_SOURCES_URL) and rotates through the enabled set via a KV cursor.
+# Each entry: { id (stable, unique), name, url (RSS/Atom feed), description (shown in the reader), enabled }.
+# Disable a noisy source with enabled: false (kept for history) instead of deleting it.
+sources:
+  - id: the-next-web
+    name: The Next Web
+    url: https://thenextweb.com/feed/
+    description: thenextweb.com
+    enabled: true
+  - id: bleepingcomputer
+    name: BleepingComputer
+    url: https://www.bleepingcomputer.com/feed/
+    description: www.bleepingcomputer.com
+    enabled: true
+  - id: dark-reading
+    name: Dark Reading
+    url: https://www.darkreading.com/rss.xml
+    description: www.darkreading.com
+    enabled: true
+  - id: phoronix
+    name: Phoronix
+    url: https://www.phoronix.com/rss.php
+    description: www.phoronix.com
+    enabled: true
+  - id: orca-security-blog
+    name: Orca Security Blog
+    url: https://orca.security/feed/
+    description: orca.security
+    enabled: true
+  - id: ars-technica
+    name: Ars Technica
+    url: https://arstechnica.com/feed/
+    description: arstechnica.com
+    enabled: true
+  - id: cso-online
+    name: CSO Online
+    url: https://www.csoonline.com/feed/
+    description: www.csoonline.com
+    enabled: true
+  - id: hackaday
+    name: Hackaday
+    url: https://hackaday.com/feed/
+    description: hackaday.com
+    enabled: true
+  - id: unit-42
+    name: Unit 42
+    url: https://unit42.paloaltonetworks.com/feed/
+    description: unit42.paloaltonetworks.com
+    enabled: true
+  - id: securelist
+    name: Securelist
+    url: https://securelist.com/feed/
+    description: securelist.com
+    enabled: true
+  - id: latest-hacking-news
+    name: Latest Hacking News
+    url: https://latesthackingnews.com/feed/
+    description: latesthackingnews.com
+    enabled: true
+  - id: dfir-ch
+    name: dfir.ch
+    url: https://dfir.ch/index.xml
+    description: dfir.ch
+    enabled: true
+  - id: socket
+    name: Socket
+    url: https://socket.dev/api/blog/feed.atom
+    description: socket.dev
+    enabled: true
+  - id: aws
+    name: AWS
+    url: https://aws.amazon.com/rss
+    description: aws.amazon.com
+    enabled: true
+  - id: the-register
+    name: The Register
+    url: https://www.theregister.com/feed/
+    description: www.theregister.com
+    enabled: true
+  - id: techcentral
+    name: TechCentral
+    url: https://techcentral.co.za/feed/
+    description: techcentral.co.za
+    enabled: true
+  - id: infoq
+    name: InfoQ
+    url: https://www.infoq.com/feed/
+    description: www.infoq.com
+    enabled: true
+  - id: techcrunch
+    name: TechCrunch
+    url: https://techcrunch.com/feed/
+    description: techcrunch.com
+    enabled: true
+  - id: schneier-on-security
+    name: Schneier on Security
+    url: https://www.schneier.com/feed/
+    description: www.schneier.com
+    enabled: true
+  - id: reid-burke
+    name: Reid Burke
+    url: https://security.apple.com/blog/feed.rss
+    description: security.apple.com
+    enabled: true
+  - id: about-fb-com
+    name: about.fb.com
+    url: https://about.fb.com/feed/
+    description: about.fb.com
+    enabled: true
+  - id: omg-ubuntu
+    name: omg! ubuntu!
+    url: https://www.omgubuntu.co.uk/feed
+    description: www.omgubuntu.co.uk
+    enabled: true
+  - id: dev-to
+    name: dev.to
+    url: https://dev.to/feed
+    description: dev.to
+    enabled: true
+  - id: mozilla
+    name: Mozilla
+    url: https://blog.mozilla.org/en/feed/
+    description: blog.mozilla.org
+    enabled: true
+  - id: mdn-blog
+    name: MDN Blog
+    url: https://developer.mozilla.org/en-US/blog/rss.xml
+    description: developer.mozilla.org
+    enabled: true
+  - id: xda-developers
+    name: XDA Developers
+    url: https://www.xda-developers.com/feed/
+    description: www.xda-developers.com
+    enabled: true
+  - id: elixir-forum
+    name: Elixir Forum
+    url: https://elixirforum.com/posts.rss
+    description: elixirforum.com
+    enabled: true
+  - id: devops-com
+    name: DevOps.com
+    url: https://devops.com/feed/
+    description: devops.com
+    enabled: true
+  - id: visual-studio-blog
+    name: Visual Studio Blog
+    url: https://devblogs.microsoft.com/feed/
+    description: devblogs.microsoft.com
+    enabled: true
+  - id: bytecodealliance-org
+    name: bytecodealliance.org
+    url: https://bytecodealliance.org/feed.xml
+    description: bytecodealliance.org
+    enabled: true
+  - id: node-js
+    name: Node.js
+    url: https://nodejs.org/en/feed/blog.xml
+    description: nodejs.org
+    enabled: true
+  - id: webkit
+    name: WebKit
+    url: https://webkit.org/feed/
+    description: webkit.org
+    enabled: true
+  - id: github-changelog
+    name: GitHub Changelog
+    url: https://github.blog/feed/
+    description: github.blog
+    enabled: true
+  - id: thehackernews-com
+    name: thehackernews.com
+    url: https://feeds.feedburner.com/TheHackersNews
+    description: thehackernews.com
+    enabled: true
+  - id: lobsters
+    name: Lobsters
+    url: https://servo.org/blog/feed.xml
+    description: servo.org
+    enabled: true
+  - id: visual-studio-code
+    name: Visual Studio Code
+    url: https://code.visualstudio.com/feed.xml
+    description: code.visualstudio.com
+    enabled: true
+  - id: angular
+    name: Angular
+    url: https://blog.angular.dev/feed
+    description: blog.angular.dev
+    enabled: true
+  - id: the-new-stack
+    name: The New Stack
+    url: https://thenewstack.io/blog/feed/
+    description: thenewstack.io
+    enabled: true
+  - id: lobsters-2
+    name: Lobsters
+    url: https://www.iroh.computer/rss.xml
+    description: www.iroh.computer
+    enabled: true
+  - id: rubyland
+    name: RUBYLAND
+    url: https://andre.arko.net/index.xml
+    description: andre.arko.net
+    enabled: true
+  - id: aikido-security
+    name: Aikido Security
+    url: https://www.aikido.dev/blog/rss.xml
+    description: www.aikido.dev
+    enabled: true
+  - id: blog-gitbutler-com
+    name: blog.gitbutler.com
+    url: https://blog.gitbutler.com/rss
+    description: blog.gitbutler.com
+    enabled: true
+  - id: jetbrains
+    name: JetBrains
+    url: https://blog.jetbrains.com/feed/
+    description: blog.jetbrains.com
+    enabled: true
+  - id: railway-blog
+    name: Railway Blog
+    url: https://blog.railway.com/rss.xml
+    description: blog.railway.com
+    enabled: true
+  - id: rust
+    name: Rust
+    url: https://blog.rust-lang.org/feed.xml
+    description: blog.rust-lang.org
+    enabled: true
+  - id: lwn-net
+    name: LWN.net
+    url: https://lwn.net/headlines/rss
+    description: lwn.net
+    enabled: true
+  - id: tokio
+    name: Tokio
+    url: https://tokio.rs/blog/index.xml
+    description: tokio.rs
+    enabled: true
+  - id: drew-devault
+    name: Drew DeVault
+    url: https://drewdevault.com/blog/index.xml
+    description: drewdevault.com
+    enabled: true
+  - id: react-blog
+    name: React Blog
+    url: https://react.dev/rss.xml
+    description: react.dev
+    enabled: true
+  - id: the-vue-point
+    name: The Vue Point
+    url: https://blog.vuejs.org/feed.rss
+    description: blog.vuejs.org
+    enabled: true
+  - id: svelte-dev
+    name: svelte.dev
+    url: https://svelte.dev/blog/rss.xml
+    description: svelte.dev
+    enabled: true
+  - id: next-js-blog
+    name: Next.js Blog
+    url: https://nextjs.org/feed.xml
+    description: nextjs.org
+    enabled: true
+  - id: djangoproject-com
+    name: djangoproject.com
+    url: https://www.djangoproject.com/rss/weblog/
+    description: www.djangoproject.com
+    enabled: true
+  - id: laravel-news
+    name: Laravel News
+    url: https://laravel-news.com/feed
+    description: laravel-news.com
+    enabled: true
+  - id: spring-io
+    name: spring.io
+    url: https://spring.io/blog.atom
+    description: spring.io
+    enabled: true
+  - id: kubernetes-io
+    name: kubernetes.io
+    url: https://kubernetes.io/feed.xml
+    description: kubernetes.io
+    enabled: true
+  - id: deno
+    name: Deno
+    url: https://deno.com/feed
+    description: deno.com
+    enabled: true
+  - id: the-astro-blog
+    name: The Astro Blog
+    url: https://astro.build/rss.xml
+    description: astro.build
+    enabled: true
+  - id: css-tricks
+    name: CSS-Tricks
+    url: https://css-tricks.com/feed/
+    description: css-tricks.com
+    enabled: true
+  - id: articles-on-smashing-magazine-for-web-de
+    name: Articles on Smashing Magazine — For Web Designers And Developers
+    url: https://www.smashingmagazine.com/feed/
+    description: www.smashingmagazine.com
+    enabled: true
+  - id: stack-overflow-blog
+    name: Stack Overflow Blog
+    url: https://stackoverflow.blog/feed/
+    description: stackoverflow.blog
+    enabled: true
+  - id: coindesk-bitcoin-ethereum-crypto-news-an
+    name: 'CoinDesk: Bitcoin, Ethereum, Crypto News and Price Data'
+    url: https://www.coindesk.com/arc/outboundfeeds/rss/
+    description: www.coindesk.com
+    enabled: true
+  - id: cointelegraph-com-news
+    name: Cointelegraph.com News
+    url: https://cointelegraph.com/rss
+    description: cointelegraph.com
+    enabled: true
+  - id: decrypt
+    name: Decrypt
+    url: https://decrypt.co/feed
+    description: decrypt.co
+    enabled: true
+  - id: the-block
+    name: The Block
+    url: https://www.theblock.co/rss.xml
+    description: www.theblock.co
+    enabled: true
+  - id: ethereum-foundation-blog
+    name: Ethereum Foundation Blog
+    url: https://blog.ethereum.org/feed.xml
+    description: blog.ethereum.org
+    enabled: true
+  - id: bitcoin-magazine
+    name: Bitcoin Magazine
+    url: https://bitcoinmagazine.com/feed
+    description: bitcoinmagazine.com
+    enabled: true
+  - id: object-object
+    name: The Verge
+    url: https://www.theverge.com/rss/index.xml
+    description: www.theverge.com
+    enabled: true
+  - id: wired
+    name: WIRED
+    url: https://www.wired.com/feed/rss
+    description: www.wired.com
+    enabled: true
+  - id: engadget-technology-news-expert-reviews
+    name: Engadget - Technology News & Expert Reviews
+    url: https://www.engadget.com/rss.xml
+    description: www.engadget.com
+    enabled: true
+  - id: mit-technology-review
+    name: MIT Technology Review
+    url: https://www.technologyreview.com/feed/
+    description: www.technologyreview.com
+    enabled: true
+  - id: techspot
+    name: TechSpot
+    url: https://www.techspot.com/backend.xml
+    description: www.techspot.com
+    enabled: true
+  - id: latest-from-tom-s-hardware
+    name: Latest from Tom's Hardware
+    url: https://www.tomshardware.com/feeds/all
+    description: www.tomshardware.com
+    enabled: true
+  - id: servethehome
+    name: ServeTheHome
+    url: https://www.servethehome.com/feed/
+    description: www.servethehome.com
+    enabled: true
+  - id: ieee-spectrum
+    name: IEEE Spectrum
+    url: https://spectrum.ieee.org/feeds/feed.rss
+    description: spectrum.ieee.org
+    enabled: true
+  - id: electrek
+    name: Electrek
+    url: https://electrek.co/feed/
+    description: electrek.co
+    enabled: true
+  - id: cleantechnica
+    name: CleanTechnica
+    url: https://cleantechnica.com/feed/
+    description: cleantechnica.com
+    enabled: true
+  - id: pv-magazine-global
+    name: pv magazine Global
+    url: https://www.pv-magazine.com/feed/
+    description: www.pv-magazine.com
+    enabled: true
+  - id: canary-media
+    name: Canary Media
+    url: https://www.canarymedia.com/feed
+    description: www.canarymedia.com
+    enabled: true
+  - id: insideevs-articles
+    name: InsideEVs - Articles
+    url: https://insideevs.com/rss/articles/all/
+    description: insideevs.com
+    enabled: true
+  - id: stephen-wolfram-writings
+    name: Stephen Wolfram Writings
+    url: https://writings.stephenwolfram.com/feed/
+    description: writings.stephenwolfram.com
+    enabled: true
+  - id: newsletter-pragmaticengineer-com
+    name: newsletter.pragmaticengineer.com
+    url: https://newsletter.pragmaticengineer.com/feed
+    description: newsletter.pragmaticengineer.com
+    enabled: true
+  - id: where-s-your-ed-at
+    name: Where's Your Ed At
+    url: https://www.wheresyoured.at/rss/
+    description: www.wheresyoured.at
+    enabled: true
+  - id: abit-ee
+    name: abit.ee
+    url: https://abit.ee/en/?format=feed&amp;type=rss
+    description: abit.ee
+    enabled: true
+  - id: watchtowr-labs
+    name: watchTowr Labs
+    url: https://labs.watchtowr.com/rss/
+    description: labs.watchtowr.com
+    enabled: true
+  - id: gamesindustry-biz
+    name: GamesIndustry.biz
+    url: https://www.gamesindustry.biz/feed
+    description: www.gamesindustry.biz
+    enabled: true
+  - id: docker
+    name: Docker
+    url: https://www.docker.com/feed/
+    description: www.docker.com
+    enabled: true
+  - id: we-are-net
+    name: We Are .NET
+    url: https://daily-devops.net/feed.rss
+    description: daily-devops.net
+    enabled: true
+  - id: sd-times
+    name: SD Times
+    url: https://sdtimes.com/feed/
+    description: sdtimes.com
+    enabled: true
+  - id: databricks
+    name: databricks
+    url: https://www.databricks.com/feed/
+    description: www.databricks.com
+    enabled: true
+  - id: devops-daily-com
+    name: devops-daily.com
+    url: https://devops-daily.com/feed.xml
+    description: devops-daily.com
+    enabled: true
+  - id: cloudflare
+    name: Cloudflare
+    url: https://blog.cloudflare.com/rss
+    description: blog.cloudflare.com
+    enabled: true
+  - id: clickhouse
+    name: ClickHouse
+    url: https://clickhouse.com/rss.xml
+    description: clickhouse.com
+    enabled: true
+  - id: lobsters-3
+    name: Lobsters
+    url: https://lantian.pub/rss2.xml
+    description: lantian.pub
+    enabled: true
+  - id: cyble
+    name: Cyble
+    url: https://cyble.com/feed/
+    description: cyble.com
+    enabled: true
+  - id: cncf
+    name: CNCF
+    url: https://www.cncf.io/feed/
+    description: www.cncf.io
+    enabled: true
+  - id: infoworld
+    name: InfoWorld
+    url: https://www.infoworld.com/feed/
+    description: www.infoworld.com
+    enabled: true
+  - id: blog-trailofbits-com
+    name: blog.trailofbits.com
+    url: https://blog.trailofbits.com/feed/
+    description: blog.trailofbits.com
+    enabled: true
+  - id: wawandco
+    name: Wawandco
+    url: https://wawand.co/index.xml
+    description: wawand.co
+    enabled: true
+  - id: gitlab
+    name: GitLab
+    url: https://about.gitlab.com/releases.xml
+    description: about.gitlab.com
+    enabled: true
+  - id: devclass
+    name: DEVCLASS
+    url: https://www.devclass.com/feed/
+    description: www.devclass.com
+    enabled: true
+  - id: astral
+    name: Astral
+    url: https://astral.sh/blog/rss.xml
+    description: astral.sh
+    enabled: true
+  - id: bite-code
+    name: Bite Code
+    url: https://www.bitecode.dev/feed
+    description: www.bitecode.dev
+    enabled: true
+  - id: simon-willison
+    name: Simon Willison
+    url: https://simonwillison.net/atom/everything/
+    description: simonwillison.net
+    enabled: true
+  - id: google-developers
+    name: Google Developers
+    url: https://developers.googleblog.com/feed/
+    description: developers.googleblog.com
+    enabled: true
+  - id: pytorch
+    name: PyTorch
+    url: https://pytorch.org/feed/
+    description: pytorch.org
+    enabled: true
+  - id: python-insider
+    name: Python Insider
+    url: https://blog.python.org/rss.xml
+    description: blog.python.org
+    enabled: true
+  - id: planet-python
+    name: Planet Python
+    url: https://www.pypy.org/rss.xml
+    description: www.pypy.org
+    enabled: true
+  - id: planet-python-2
+    name: Planet Python
+    url: https://grahamdumpleton.me/feed
+    description: grahamdumpleton.me
+    enabled: true
+  - id: planet-python-3
+    name: Planet Python
+    url: https://nuitka.net/blog/atom.xml
+    description: nuitka.net
+    enabled: true
+  - id: flink
+    name: Flink
+    url: https://flink.apache.org/index.xml
+    description: flink.apache.org
+    enabled: true
+  - id: python-software-foundation
+    name: Python Software Foundation
+    url: https://pyfound.blogspot.com/feeds/posts/default
+    description: pyfound.blogspot.com
+    enabled: true
+  - id: openssf
+    name: OpenSSF
+    url: https://openssf.org/feed/
+    description: openssf.org
+    enabled: true
+  - id: zero-to-mastery-april-2026
+    name: Zero To Mastery - April 2026
+    url: https://safedep.io/rss.xml
+    description: safedep.io
+    enabled: true
+  - id: rust-foundation
+    name: Rust Foundation
+    url: https://rustfoundation.org/feed/
+    description: rustfoundation.org
+    enabled: true
+  - id: fedora-magazine
+    name: Fedora Magazine
+    url: https://fedoramagazine.org/feed/
+    description: fedoramagazine.org
+    enabled: true
+  - id: godot
+    name: Godot
+    url: https://godotengine.org/rss.xml
+    description: godotengine.org
+    enabled: true
+  - id: brew-sh
+    name: brew.sh
+    url: https://brew.sh/atom.xml
+    description: brew.sh
+    enabled: true
+  - id: andrew-nesbitt
+    name: Andrew Nesbitt
+    url: https://nesbitt.io/feed.xml
+    description: nesbitt.io
+    enabled: true
+  - id: rubyland-2
+    name: RUBYLAND
+    url: https://rubycentral.org/news/rss/
+    description: rubycentral.org
+    enabled: true
+  - id: lobsters-4
+    name: Lobsters
+    url: https://alpinelinux.org/atom.xml
+    description: alpinelinux.org
+    enabled: true

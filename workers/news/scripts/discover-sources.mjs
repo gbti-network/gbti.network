@@ -169,7 +169,7 @@ const seenUrl = new Set(existing.map((s) => s.url));
 const imported = found.filter(Boolean).filter((f) => !seenUrl.has(f.url)).map((f) => ({
   id: slug(f.name, f.host),
   name: f.name,
-  description: `Discovered via daily.dev highlights — ${f.host}`,
+  description: f.host, // the source domain (we poll the feed directly); no attribution prefix
   url: f.url,
 }));
 const all = [...existing, ...imported];
