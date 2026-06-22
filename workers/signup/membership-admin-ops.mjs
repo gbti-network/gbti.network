@@ -9,7 +9,8 @@ import { authorizeAdmin } from './membership-admin.mjs';
 
 // action -> the repository_dispatch event_type the matching workflow listens for. The ONLY operations a caller can
 // trigger; anything else 400s. (reconcile.yml: types [regate, admin-reconcile]; e2e-smoke.yml: types [admin-e2e].)
-const OPS = Object.freeze({ reconcile: 'admin-reconcile', e2e: 'admin-e2e' });
+const OPS = Object.freeze({ reconcile: 'admin-reconcile', e2e: 'admin-e2e', 'category-migrate': 'category-migrate' }); // SOW-055
+const MIGRATE_ACTIONS = new Set(['move', 'rename', 'remove']);
 
 /** POST /membership/admin/ops { action } -> fires the mapped repository_dispatch (admin/superadmin only). */
 export async function membershipAdminOps(request, env, { authorize = authorizeAdmin, fetch = globalThis.fetch, ...deps } = {}) {
@@ -22,12 +23,33 @@ export async function membershipAdminOps(request, env, { authorize = authorizeAd
   const eventType = OPS[action];
   if (!eventType) return { status: 400, body: { error: 'bad_request', message: 'unknown operation' } };
 
+  // SOW-055: category-migrate forwards the (validated) migration params in client_payload; reconcile/e2e carry
+  // only `by`. The migration params name a path-changing taxonomy op; the migrate-category Action + the pure core
+  // re-validate, so the Worker only checks the shape (a known inner action + a non-empty source path).
+  let clientPayload = { by: auth.githubId };
+  if (action === 'category-migrate') {
+    const p = (body && body.params) || {};
+    if (!MIGRATE_ACTIONS.has(String(p.action)) || !String(p.from || '').trim()) {
+      return { status: 400, body: { error: 'bad_request', message: 'category-migrate requires params { action: move|rename|remove, from }' } };
+    }
+    const bool = (v) => (v === true || v === 'true' ? 'true' : 'false');
+    clientPayload = {
+      by: auth.githubId,
+      action: String(p.action),
+      from: String(p.from).trim(),
+      to_parent: String(p.toParent ?? p.to_parent ?? '').trim(),
+      new_key: String(p.newKey ?? p.new_key ?? '').trim(),
+      reassign: bool(p.reassign),
+      apply: bool(p.apply),
+    };
+  }
+
   const token = env.REGATE_DISPATCH_TOKEN;
   const repo = env.GITHUB_CONTENT_REPO;
   if (!token || !repo) return { status: 500, body: { error: 'misconfigured', message: 'operations dispatch is not configured yet' } };
 
-  // NOTE: client_payload carries `by` (the actor), NOT `github_id` — reconcile's targetedGithubId only narrows to a
-  // single member when client_payload.github_id is present, so admin-reconcile runs a FULL --apply reconcile.
+  // NOTE: for reconcile, client_payload carries `by` (the actor), NOT `github_id` — reconcile's targetedGithubId
+  // only narrows to a single member when client_payload.github_id is present, so admin-reconcile runs a FULL --apply.
   try {
     const res = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
       method: 'POST',
@@ -38,7 +60,7 @@ export async function membershipAdminOps(request, env, { authorize = authorizeAd
         'User-Agent': 'gbti-network-signup',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ event_type: eventType, client_payload: { by: auth.githubId } }),
+      body: JSON.stringify({ event_type: eventType, client_payload: clientPayload }),
     });
     if (res.status === 204) return { status: 200, body: { ok: true, triggered: action } };
     return { status: 502, body: { error: 'dispatch_failed', message: `GitHub returned ${res.status}` } };

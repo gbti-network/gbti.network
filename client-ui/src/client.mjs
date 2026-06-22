@@ -117,7 +117,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     addCategory: ({ parentPath, key, label }) => request('POST', '/api/admin', { action: 'category-add', parentPath, key, label }), // SOW-055
     renameCategory: ({ path, label }) => request('POST', '/api/admin', { action: 'category-rename', path, label }), // SOW-055
     openPulls: () => request('GET', '/api/open-pulls'), // SOW-038 P2: admin-gated open content-PR queue { pulls }
-    adminOp: (action) => request('POST', '/api/admin-ops', { action }), // SOW-038 P3: trigger reconcile / e2e -> { ok, triggered }
+    adminOp: (action, params) => request('POST', '/api/admin-ops', params ? { action, params } : { action }), // SOW-038 P3 (reconcile/e2e); SOW-055 category-migrate carries params
   };
 }
 

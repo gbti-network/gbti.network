@@ -18487,12 +18487,13 @@ async function getRosterStatuses({ token, signupBase, fetch = globalThis.fetch }
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin statuses request failed (${res.status})`);
   return data?.statuses ?? {};
 }
-async function triggerAdminOp({ token, signupBase, fetch = globalThis.fetch, action }) {
+async function triggerAdminOp({ token, signupBase, fetch = globalThis.fetch, action, params }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch(trimBase4(signupBase) + "/membership/admin/ops", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ action })
+    body: JSON.stringify(params ? { action, params } : { action })
+    // SOW-055: category-migrate carries params
   });
   let data = null;
   try {
@@ -18990,12 +18991,12 @@ async function getOpenPulls(ctx) {
   const repo = requireRepo(ctx);
   return { pulls: await repo.listOpenPulls() };
 }
-async function triggerAdminOp2(ctx, { action } = {}) {
+async function triggerAdminOp2(ctx, { action, params } = {}) {
   await requireAdmin(ctx);
   const token = ctx.store?.get?.("githubToken");
   if (!token) throw new OperationError("not-authenticated", "sign in first");
   try {
-    return await triggerAdminOp({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, action });
+    return await triggerAdminOp({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, action, params });
   } catch (err) {
     throw new OperationError("admin-op-failed", err?.message || "could not trigger the operation");
   }

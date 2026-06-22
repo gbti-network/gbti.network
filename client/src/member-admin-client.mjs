@@ -23,12 +23,12 @@ export async function getRosterStatuses({ token, signupBase, fetch = globalThis.
 /** SOW-038 P3: trigger an allow-listed superadmin operation (reconcile / e2e) via the Worker's
  *  POST /membership/admin/ops. Admin-only (the Worker re-checks + holds the dispatch token). Returns
  *  { ok, triggered } or throws AdminClientError. */
-export async function triggerAdminOp({ token, signupBase, fetch = globalThis.fetch, action }) {
+export async function triggerAdminOp({ token, signupBase, fetch = globalThis.fetch, action, params }) {
   if (!token || !signupBase) throw new AdminClientError('not signed in');
   const res = await fetch(trimBase(signupBase) + '/membership/admin/ops', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action }),
+    body: JSON.stringify(params ? { action, params } : { action }), // SOW-055: category-migrate carries params
   });
   let data = null;
   try { data = await res.json(); } catch { /* ignore */ }

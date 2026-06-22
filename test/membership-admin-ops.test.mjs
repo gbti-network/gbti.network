@@ -55,3 +55,23 @@ test('admin-ops: a GitHub non-204 / network error -> 502', async () => {
   assert.equal((await membershipAdminOps(req({ action: 'reconcile' }), ENV, { authorize: okAuth, fetch: async () => ({ status: 422 }) })).status, 502);
   assert.equal((await membershipAdminOps(req({ action: 'reconcile' }), ENV, { authorize: okAuth, fetch: async () => { throw new Error('net'); } })).status, 502);
 });
+
+test('admin-ops: category-migrate forwards validated migration params as client_payload (SOW-055)', async () => {
+  let sent = null;
+  const fetch = async (_u, init) => { sent = JSON.parse(init.body); return { status: 204 }; };
+  const r = await membershipAdminOps(req({ action: 'category-migrate', params: { action: 'move', from: 'devops/frameworks', toParent: '', apply: true } }), ENV, { authorize: okAuth, fetch });
+  assert.equal(r.status, 200);
+  assert.equal(sent.event_type, 'category-migrate');
+  assert.equal(sent.client_payload.action, 'move');
+  assert.equal(sent.client_payload.from, 'devops/frameworks');
+  assert.equal(sent.client_payload.apply, 'true');
+  assert.equal(sent.client_payload.by, '1');
+});
+
+test('admin-ops: category-migrate with bad params -> 400, no dispatch', async () => {
+  let called = false;
+  const bad = (p) => membershipAdminOps(req({ action: 'category-migrate', params: p }), ENV, { authorize: okAuth, fetch: async () => { called = true; return { status: 204 }; } });
+  assert.equal((await bad({ action: 'nope', from: 'x' })).status, 400); // unknown inner action
+  assert.equal((await bad({ action: 'move' })).status, 400);            // missing from
+  assert.equal(called, false);
+});
