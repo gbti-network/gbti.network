@@ -4,8 +4,8 @@
 //   - NETWORK MEMBERS: the follow graph (SOW-023) from client.getFollows(), with an unfollow control per member.
 //   - NEWS CHANNELS: the news sources the member follows (SOW-046), from client.getNewsSources() filtered by
 //     client.getPrefs().followedChannels, with an unfollow control per channel.
-// Follows + channel-follows are effective-paid (the Worker is the authority, fail-closed); a non-paid caller sees
-// the become-a-member state. Host-agnostic + inert in public.
+// SOW-060: follows + channel-follows are a FREE-tier perk (any signed-in non-banned member; the Worker is the
+// authority, fail-closed). A failed read is a transient error, not a paywall. Host-agnostic + inert in public.
 import { GbtiElement, define, esc } from '../base.mjs';
 
 const SITE = 'https://gbti.network';
@@ -67,7 +67,7 @@ class GbtiSubscriptions extends GbtiElement {
     try {
       this._follows = followList(await this.client.getFollows()).filter((f) => f && f.username);
     } catch {
-      this._follows = null; // the paid-only Worker denied the read (trial/visitor), or it was unreachable
+      this._follows = null; // SOW-060: a free-tier read failed (unreachable, or a banned/unknown account)
     }
     if (rerender) this.render();
   }
@@ -131,7 +131,7 @@ class GbtiSubscriptions extends GbtiElement {
 
   _membersHtml() {
     if (this._follows === null) {
-      return `<p class="muted">Following is a paid member feature. <a href="${SITE}/membership/" style="color:var(--accent)">Become a member</a> to follow other members.</p>`;
+      return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
     }
     if (!this._follows.length) {
       return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;

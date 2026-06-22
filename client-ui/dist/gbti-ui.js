@@ -6466,7 +6466,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _membersHtml() {
       if (this._follows === null) {
-        return `<p class="muted">Following is a paid member feature. <a href="${SITE6}/membership/" style="color:var(--accent)">Become a member</a> to follow other members.</p>`;
+        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE6}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       if (!this._follows.length) {
         return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE6}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
