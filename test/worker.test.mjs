@@ -692,3 +692,58 @@ test('handleStripeEvent is a no-op on annual RENEWAL invoices (FIX 3)', async ()
   assert.equal(discord.calls.addRole.length, 0, 'no role swap on renewal');
   assert.equal(discord.calls.removeRole.length, 0, 'no role swap on renewal');
 });
+
+// SOW: POST /auth/refresh — the secretless token-refresh endpoint. The extension sends only its rotating
+// refresh_token; the Worker adds the App client_id+secret and returns fresh tokens. githubRefreshToken (oauth.mjs)
+// uses globalThis.fetch, so we stub it for the GitHub round-trip.
+import { githubRefreshToken } from '../workers/signup/oauth.mjs';
+
+function refreshReq(body) {
+  return new Request('https://signup.gbti.network/auth/refresh', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
+}
+const REFRESH_ENV = { GITHUB_PUBLISHER_CLIENT_ID: 'Iv1.app', GITHUB_PUBLISHER_CLIENT_SECRET: 'sec' };
+
+test('githubRefreshToken: posts grant_type=refresh_token and maps the rotated response', async () => {
+  let sent;
+  const fetchImpl = async (url, opts) => { sent = { url, body: opts.body }; return { ok: true, status: 200, text: async () => JSON.stringify({ access_token: 'gho_new', refresh_token: 'ghr_new', expires_in: 28800, refresh_token_expires_in: 15897600 }) }; };
+  const r = await githubRefreshToken({ clientId: 'Iv1.app', clientSecret: 'sec', refreshToken: 'ghr_old' }, fetchImpl);
+  assert.match(sent.url, /login\/oauth\/access_token/);
+  assert.match(sent.body, /grant_type=refresh_token/);
+  assert.match(sent.body, /refresh_token=ghr_old/);
+  assert.deepEqual(r, { accessToken: 'gho_new', refreshToken: 'ghr_new', expiresIn: 28800, refreshTokenExpiresIn: 15897600 });
+});
+
+test('POST /auth/refresh: returns fresh tokens on success', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ access_token: 'gho_new', refresh_token: 'ghr_new', expires_in: 28800, refresh_token_expires_in: 15897600 }) });
+  try {
+    const res = await worker.fetch(refreshReq({ refresh_token: 'ghr_old' }), REFRESH_ENV, {});
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.access_token, 'gho_new');
+    assert.equal(body.refresh_token, 'ghr_new');
+    assert.equal(body.expires_in, 28800);
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test('POST /auth/refresh: 501 when the App secret is not configured', async () => {
+  const res = await worker.fetch(refreshReq({ refresh_token: 'x' }), { GITHUB_PUBLISHER_CLIENT_ID: 'Iv1.app' }, {});
+  assert.equal(res.status, 501);
+});
+
+test('POST /auth/refresh: 400 without a refresh_token', async () => {
+  const res = await worker.fetch(refreshReq({}), REFRESH_ENV, {});
+  assert.equal(res.status, 400);
+});
+
+test('POST /auth/refresh: 401 when GitHub rejects the refresh token (expired/revoked)', async () => {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ error: 'bad_refresh_token' }) });
+  try {
+    const res = await worker.fetch(refreshReq({ refresh_token: 'dead' }), REFRESH_ENV, {});
+    assert.equal(res.status, 401);
+  } finally { globalThis.fetch = realFetch; }
+});

@@ -1,0 +1,12 @@
+# SOW-057: aggregate share upvote counts, member-identity-free.
+#
+# The upvotes THEMSELVES (who upvoted what) live in the deletable edge store (Cloudflare KV), keyed by github_id
+# (the per-member activity: record), so a member's right to erasure is a hard delete and no behavioral personal
+# data is committed to the immutable public repo.
+#
+# This file is a flat map of "share:<author>/<id>" -> count, with NO member identity. The per-target voter sets
+# that drive the SOW-058 syndication threshold are a separate KV structure and are never written here.
+#
+# Auto-generated: written by `npm run reconcile --apply` from the edge store. Hand edits are overwritten.
+# Empty pre-launch.
+counts: {}

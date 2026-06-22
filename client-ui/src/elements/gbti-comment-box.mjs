@@ -35,7 +35,7 @@ const CSS = `
 class GbtiCommentBox extends GbtiElement {
   get _editId() { return this.dataset?.gbtiCommentId || this.getAttribute?.('data-gbti-comment-id') || null; }
   get _editAuthor() { return this.dataset?.gbtiCommentAuthor || this.getAttribute?.('data-gbti-comment-author') || null; }
-  get _target() {
+  _target() {
     return { type: this.dataset?.gbtiTargetType || this.getAttribute?.('data-gbti-target-type'), slug: this.dataset?.gbtiTargetSlug || this.getAttribute?.('data-gbti-target-slug') };
   }
 

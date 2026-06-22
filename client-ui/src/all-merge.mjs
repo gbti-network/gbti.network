@@ -42,7 +42,7 @@ export function shareToItem(it) {
     type: 'share',
     title: shareTitle(it),
     excerpt: it.title ? (it.shortDescription || '') : '',
-    thumb: null,
+    thumb: it.image || null, // SOW-057: the featured image drives the unified card thumbnail
     createdAt: it.createdAt,
   };
 }

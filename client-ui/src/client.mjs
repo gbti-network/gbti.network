@@ -95,6 +95,14 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
       const favs = (r && r.activity && r.activity.favorites) || [];
       return { favorited: favs.some((f) => f.type === targetType && f.slug === targetSlug) };
     },
+    // SOW-057: upvote a share (effective-paid; two distinct non-author upvotes enqueue it for syndication). The
+    // count is the live per-target distinct count returned by the Worker.
+    toggleUpvote: async ({ targetType = 'share', targetSlug, on }) => {
+      const r = await request('POST', '/api/upvote', { type: targetType, slug: targetSlug, on });
+      return { upvoted: !!r?.upvoted, count: r?.upvoteCount };
+    },
+    // SOW-057: a link's OpenGraph preview ({ image, title, description }), fetched server-side (SSRF-guarded).
+    ogPreview: ({ url }) => request('POST', '/api/og-preview', { url }),
     // SOW-024: member activity (favorites + collections) in the deletable edge store.
     getActivity: ({ types } = {}) => request('GET', `/api/activity${qs({ types: Array.isArray(types) && types.length ? types.join(',') : undefined })}`), // returns { favorites, collections }; SOW-050 P2 optional type filter
     createCollection: ({ name }) => request('POST', '/api/activity', { action: 'collection.create', name }), // returns { id, activity }
@@ -117,6 +125,8 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     addCategory: ({ parentPath, key, label }) => request('POST', '/api/admin', { action: 'category-add', parentPath, key, label }), // SOW-055
     renameCategory: ({ path, label }) => request('POST', '/api/admin', { action: 'category-rename', path, label }), // SOW-055
     openPulls: () => request('GET', '/api/open-pulls'), // SOW-038 P2: admin-gated open content-PR queue { pulls }
+    syndicationQueue: () => request('GET', '/api/syndication'), // SOW-058: superadmin tracker { pending, sent, cancelled, failed }
+    cancelSyndication: ({ id }) => request('POST', '/api/syndication/cancel', { id }), // SOW-058: superadmin cancel within the hold
     adminOp: (action, params) => request('POST', '/api/admin-ops', params ? { action, params } : { action }), // SOW-038 P3 (reconcile/e2e); SOW-055 category-migrate carries params
   };
 }

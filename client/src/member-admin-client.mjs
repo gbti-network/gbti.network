@@ -35,3 +35,27 @@ export async function triggerAdminOp({ token, signupBase, fetch = globalThis.fet
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `operation failed (${res.status})`);
   return data;
 }
+
+/** SOW-058: the superadmin syndication queue (admin-gated read) -> { pending, sent, cancelled, failed }. */
+export async function getSyndicationQueue({ token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/syndication', { method: 'GET', headers: { Authorization: 'Bearer ' + token } });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndication queue request failed (${res.status})`);
+  return data;
+}
+
+/** SOW-058: cancel a pending syndication item within the hold window (SUPERADMIN only; the Worker enforces it). */
+export async function cancelSyndication({ id, token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/syndication/cancel', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }),
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `cancel request failed (${res.status})`);
+  return data;
+}

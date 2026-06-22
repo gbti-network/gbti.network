@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  deleteKvKey, eraseActivity, eraseFollows, eraseLookupCache, planErasure, runErasure,
+  deleteKvKey, eraseActivity, eraseFollows, eraseLookupCache, eraseShareVotes, planErasure, runErasure,
   eraseDiscordRoles, eraseContent, eraseStripeCustomer, ACTIVITY_KEY, FOLLOWS_KEY, LOOKUP_KEY, MEMBERS_INDEX_PATH,
 } from '../scripts/lib/erase-member.mjs';
 import { parseArgs } from '../scripts/erase-member.mjs';
@@ -205,6 +205,35 @@ test('runErasure skips the Stripe step unless --delete-stripe (deleteStripe) is 
   const withFlag = await runErasure({ githubId: '9', apply: true, env: CF, fetchImpl, clients, deleteStripe: true });
   assert.equal(withFlag.steps.find((s) => s.step === 'stripe').outcome, 'deleted');
   assert.equal(stripeDeleted, true);
+});
+
+test('SOW-057: eraseShareVotes scrubs the github_id from every per-target voter set', async () => {
+  const puts = [];
+  const fetchImpl = async (url, init) => {
+    if (url.includes('/keys')) {
+      return { ok: true, json: async () => ({ result: [{ name: 'upvotes:share:alice/x' }, { name: 'upvotes:share:bob/y' }], result_info: { cursor: '' } }) };
+    }
+    if ((init?.method || 'GET') === 'GET' && url.includes('/values/')) {
+      const key = decodeURIComponent(url.split('/values/')[1]);
+      const store = {
+        'upvotes:share:alice/x': { voters: ['9', 'v2'], author: null, enqueuedAt: null },
+        'upvotes:share:bob/y': { voters: ['v3'], author: null, enqueuedAt: 5 }, // does not include 9 -> unchanged
+      };
+      return { ok: true, json: async () => store[key] };
+    }
+    if (init?.method === 'PUT') { puts.push({ url, body: JSON.parse(init.body) }); return { ok: true }; }
+    return { ok: true };
+  };
+  const r = await eraseShareVotes({ githubId: '9', env: CF, fetchImpl });
+  assert.equal(r.scrubbed, 1); // only alice/x contained '9'
+  assert.equal(puts.length, 1);
+  assert.ok(!puts[0].body.voters.includes('9'), 'the erased id is removed from the voter set');
+  assert.deepEqual(puts[0].body.voters, ['v2']);
+});
+
+test('eraseShareVotes is a reported no-op without CF credentials', async () => {
+  const r = await eraseShareVotes({ githubId: '9', env: {}, fetchImpl: () => { throw new Error('no fetch'); } });
+  assert.equal(r.skipped, true);
 });
 
 test('planErasure marks the auto-driven steps auto and keeps the irreversible ones manual', () => {

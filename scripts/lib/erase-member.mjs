@@ -16,6 +16,7 @@
 import yaml from 'js-yaml';
 import { flipStatus } from '../reconcile.mjs';
 import { buildAuditRecord, storeAuditRecord } from './erase-audit.mjs';
+import { scrubVoter } from '../../membership/share-votes.mjs';
 
 export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
 export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`; // SOW-023 subscription graph
@@ -71,6 +72,70 @@ export async function eraseLookupCache({ githubId, env = process.env, fetchImpl 
   return deleteKvKey({ key: LOOKUP_KEY(String(githubId)), env, fetchImpl });
 }
 
+/** List KV entries (key + parsed JSON value) under a prefix via the REST API. Missing creds = a reported no-op. */
+export async function listKvByPrefix({ prefix, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  const accountId = env.CF_ACCOUNT_ID;
+  const namespaceId = env.CF_KV_NAMESPACE_ID;
+  const apiToken = env.CF_API_TOKEN;
+  if (!accountId || !namespaceId || !apiToken) return { available: false, reason: 'CF creds not set', entries: [] };
+  const apiBase = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}`;
+  const headers = { Authorization: `Bearer ${apiToken}` };
+  const keys = [];
+  let cursor = '';
+  for (let page = 0; page < 100000; page++) {
+    const url = `${apiBase}/keys?prefix=${encodeURIComponent(prefix)}&limit=1000${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+    const res = await fetchImpl(url, { headers });
+    if (!res || !res.ok) throw new Error(`KV key list failed: ${res ? res.status : 'no response'}`);
+    const json = await res.json();
+    for (const k of json?.result ?? []) if (k?.name) keys.push(k.name);
+    cursor = json?.result_info?.cursor || '';
+    if (!cursor) break;
+  }
+  const entries = [];
+  for (const key of keys) {
+    const res = await fetchImpl(`${apiBase}/values/${encodeURIComponent(key)}`, { headers });
+    if (!res || !res.ok) continue;
+    let value = null;
+    try { value = await res.json(); } catch { value = null; }
+    if (value && typeof value === 'object') entries.push({ key, value });
+  }
+  return { available: true, entries };
+}
+
+/** PUT a KV value via the REST API. Missing creds = a reported no-op. */
+export async function putKvValue({ key, value, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  const accountId = env.CF_ACCOUNT_ID;
+  const namespaceId = env.CF_KV_NAMESPACE_ID;
+  const apiToken = env.CF_API_TOKEN;
+  if (!accountId || !namespaceId || !apiToken) return { written: false, reason: 'CF creds not set' };
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
+  const res = await fetchImpl(url, { method: 'PUT', headers: { Authorization: `Bearer ${apiToken}` }, body: typeof value === 'string' ? value : JSON.stringify(value) });
+  if (!res || !res.ok) throw new Error(`KV put failed: ${res ? res.status : 'no response'}`);
+  return { written: true, key };
+}
+
+/**
+ * SOW-057 GDPR: scrub the member's github_id from every per-target share-vote set (`upvotes:share:*`). These sets
+ * are keyed by TARGET (not by member), so the per-member activity: delete does not reach them. Removing the id
+ * (and clearing it as the cached author when it matches) is the erasure for the behavioral upvote data. The
+ * syndication queue items (synd:item:*) reference the author by public username + auto-expire via TTL, so they
+ * are not scrubbed here. Reported no-op without CF creds.
+ */
+export async function eraseShareVotes({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (!githubId) throw new Error('a github_id is required');
+  const listed = await listKvByPrefix({ prefix: 'upvotes:share:', env, fetchImpl });
+  if (!listed.available) return { skipped: true, reason: listed.reason };
+  let scrubbed = 0;
+  for (const { key, value } of listed.entries) {
+    const { record, changed } = scrubVoter(value, String(githubId));
+    if (changed) {
+      await putKvValue({ key, value: JSON.stringify(record), env, fetchImpl });
+      scrubbed++;
+    }
+  }
+  return { scrubbed };
+}
+
 /**
  * The ordered erasure runbook for a member (SOW-024). `auto: true` steps this tool performs on --apply; the
  * rest are the operator checklist (composed from reconcile + the SOW-016 rotation), printed so nothing is
@@ -82,6 +147,7 @@ export function planErasure({ githubId, username } = {}) {
     { step: 'content', auto: true, tool: 'erase-member.mjs --apply', action: `Flip ${who} content status -> draft via an auto-merged PR (reversible; history persists).` },
     { step: 'activity', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the edge-store keys ${ACTIVITY_KEY(githubId)} (favorites + collections) and ${FOLLOWS_KEY(githubId)} (the follow graph).` },
     { step: 'lookup-cache', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the lookup-cache key ${LOOKUP_KEY(githubId)} (github_id -> Stripe customer_id).` },
+    { step: 'share-votes', auto: true, tool: 'erase-member.mjs --apply', action: `Scrub github_id ${githubId} from every per-target share-vote set (upvotes:share:*); syndication queue items auto-expire via TTL.` },
     { step: 'discord', auto: true, tool: 'erase-member.mjs --apply', action: 'Remove the member\'s managed Discord roles (Member/Trial/Locked).' },
     { step: 'members-index', auto: true, tool: 'erase-member.mjs --apply', action: 'Remove the members-index.yml entry (bundled into the content erasure PR).' },
     { step: 'crypto-shred', auto: false, tool: 'scripts/rotate-member-key.mjs', action: 'Rotate the SOW-016 member-content key (global) so the public-history ciphertext becomes keyless.' },
@@ -99,6 +165,7 @@ function summarizeStep(step, res) {
   if (res?.deleted === false) return { step, outcome: 'skipped', detail: res.reason };
   if (res?.deleted === true) return { step, outcome: 'deleted' };
   if (res?.deletedCustomer) return { step, outcome: 'deleted' };
+  if (typeof res?.scrubbed === 'number') return { step, outcome: res.scrubbed ? 'deleted' : 'skipped', detail: res.scrubbed ? `votes:${res.scrubbed}` : 'none' };
   if (typeof res?.flipped === 'number') return { step, outcome: 'drafted', detail: `pr#${res.pr} flipped:${res.flipped} index:${res.indexRemoved ? 'removed' : 'kept'}` };
   if (Array.isArray(res?.removed)) return { step, outcome: res.removed.length ? 'removed' : 'skipped', detail: res.removed.length ? res.removed.join('+') : (res.reason || 'no roles held') };
   return { step, outcome: 'ok' };
@@ -260,6 +327,7 @@ export async function runErasure({
   await runStep('follows', () => eraseFollows({ githubId, env, fetchImpl }));
   await runStep('prefs', () => erasePrefs({ githubId, env, fetchImpl })); // SOW-046: categories + followed news channels
   await runStep('lookup-cache', () => eraseLookupCache({ githubId, env, fetchImpl }));
+  await runStep('share-votes', () => eraseShareVotes({ githubId, env, fetchImpl })); // SOW-057: per-target voter sets
   await runStep('discord', () => eraseDiscordRoles({ githubId, stripe, discord, env }));
   await runStep('content', () => eraseContent({ github, githubId, username, files, now }));
   if (deleteStripe) await runStep('stripe', () => eraseStripeCustomer({ githubId, stripe }));

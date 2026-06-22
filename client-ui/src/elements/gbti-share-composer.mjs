@@ -39,6 +39,11 @@ const CSS = `
   .notice a { color:var(--brand); font-weight:600; }
   .lock { font-size:22px; line-height:1; }
   .busy { opacity:.55; pointer-events:none; }
+  .og { margin-top:10px; }
+  .og .ogmsg { font-size:12.5px; color:var(--muted); }
+  .og .ogimg { display:block; max-width:100%; max-height:200px; object-fit:cover; border-radius:10px; border:1px solid var(--line); }
+  .og .ogclear { margin-top:6px; font:inherit; font-size:12px; background:none; border:0; color:var(--muted); cursor:pointer; padding:0; }
+  .og .ogclear:hover { color:var(--brand); text-decoration:underline; }
 `;
 
 class GbtiShareComposer extends GbtiElement {
@@ -102,12 +107,38 @@ class GbtiShareComposer extends GbtiElement {
             <option value="public">Public</option>
           </select>
         </div>
+        <div class="og" data-og hidden></div>
         <div class="actions">
           <span class="msg" aria-live="polite"></span>
           <button class="post" type="button">Post Share</button>
         </div>
       </div>`);
+    this._image = null;
     this.on('.post', 'click', () => this._post());
+    // SOW-057: fetch the link's OpenGraph preview on blur/enter so we can attach a featured image + soft-prefill.
+    this.on('input[type=url]', 'change', () => this._fetchPreview());
+  }
+
+  // Fetch the link preview server-side (the Worker is SSRF-guarded). Updates ONLY the preview area + soft-prefills
+  // EMPTY title/desc fields (never clobbering author text), so it does not re-render the composer.
+  async _fetchPreview() {
+    const url = (this.$('input[type=url]')?.value || '').trim();
+    const box = this.$('[data-og]');
+    if (!box) return;
+    if (!/^https?:\/\//i.test(url) || !this.client?.ogPreview) { this._image = null; box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    box.innerHTML = `<span class="ogmsg">Fetching preview…</span>`;
+    try {
+      const og = await this.client.ogPreview({ url });
+      const t = this.$('input.title'); if (t && !t.value.trim() && og?.title) t.value = String(og.title).slice(0, 80);
+      const d = this.$('input.desc'); if (d && !d.value.trim() && og?.description) d.value = String(og.description).slice(0, 200);
+      this._image = og?.image || null;
+      if (this._image) {
+        box.innerHTML = `<img class="ogimg" src="${esc(this._image)}" alt="" /><button class="ogclear" type="button" data-ogclear>Remove image</button>`;
+        const clr = box.querySelector('[data-ogclear]');
+        if (clr) clr.addEventListener('click', () => { this._image = null; box.hidden = true; box.innerHTML = ''; });
+      } else { box.hidden = true; box.innerHTML = ''; }
+    } catch { this._image = null; box.hidden = true; box.innerHTML = ''; }
   }
 
   async _post() {
@@ -125,9 +156,12 @@ class GbtiShareComposer extends GbtiElement {
       if (title) input.title = title;
       if (shortDescription) input.shortDescription = shortDescription;
       if (url) input.url = url;
+      if (this._image) input.image = this._image; // SOW-057: the featured image (OG-fetched, author-clearable)
       const res = await this.client.postShare({ input, body });
       this._say(msg, res?.encrypted ? 'Posted (members-only).' : 'Posted.', 'ok');
       for (const sel of ['input.title', 'input.desc', 'textarea', 'input[type=url]']) { const el = this.$(sel); if (el) el.value = ''; }
+      this._image = null;
+      const ogBox = this.$('[data-og]'); if (ogBox) { ogBox.hidden = true; ogBox.innerHTML = ''; }
       this.emit('gbti-share-posted', res);
     } catch (err) {
       if (err?.code === 'membership-required') {

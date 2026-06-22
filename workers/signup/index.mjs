@@ -37,6 +37,7 @@ import { signSession, verifySession, sessionCookieHeader, readSessionCookie } fr
 import {
   githubAuthorizeUrl,
   githubExchangeCode,
+  githubRefreshToken,
   githubFetchUser,
   discordAuthorizeUrl,
   discordExchangeCode,
@@ -52,6 +53,10 @@ import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { membershipAdminStatuses } from './membership-admin.mjs';
 import { membershipAdminOps } from './membership-admin-ops.mjs'; // SOW-038 P3: admin-gated reconcile/E2E dispatch
 import { handleActivity } from './membership-activity.mjs';
+import { handleUpvote } from './membership-upvote.mjs';
+import { handleOgPreview } from './membership-og.mjs';
+import { handleSyndicationTracker, handleSyndicationCancel } from './syndication-admin.mjs';
+import { drainSyndication } from './syndication-drain.mjs';
 import { handleFollows } from './membership-follows.mjs';
 import { membershipNews, membershipNewsCategories, membershipNewsSources } from './membership-news.mjs'; // SOW-043/046: members-only news proxy
 import { handlePrefs } from './membership-prefs.mjs'; // SOW-046: member prefs (categories + followed news channels)
@@ -346,6 +351,29 @@ export default {
     try {
       if (method === 'GET' && pathname === '/healthz') return json({ ok: true });
 
+      // SOW: refresh a GitHub App user token. The extension is secretless, so it POSTs only its (rotating)
+      // refresh_token here; the Worker adds the App client_id + secret and returns the fresh tokens. The
+      // refresh_token IS the credential, so no bearer is needed; we never log it. A dead refresh token -> 401, and
+      // the extension clears the session + re-signs-in. Called by the MV3 background (host-permission fetch), but
+      // CORS is added so a future page-context caller works too.
+      if (pathname === '/auth/refresh') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBER_CONTENT_CORS });
+        if (method !== 'POST') return json({ error: 'method_not_allowed' }, 405, MEMBER_CONTENT_CORS);
+        const clientId = env.GITHUB_PUBLISHER_CLIENT_ID;
+        const clientSecret = env.GITHUB_PUBLISHER_CLIENT_SECRET;
+        if (!clientId || !clientSecret) return json({ error: 'refresh_not_configured' }, 501, MEMBER_CONTENT_CORS);
+        let reqBody;
+        try { reqBody = await request.json(); } catch { return json({ error: 'bad_request' }, 400, MEMBER_CONTENT_CORS); }
+        const refreshToken = reqBody?.refresh_token;
+        if (!refreshToken || typeof refreshToken !== 'string') return json({ error: 'refresh_token_required' }, 400, MEMBER_CONTENT_CORS);
+        try {
+          const r = await githubRefreshToken({ clientId, clientSecret, refreshToken });
+          return json({ access_token: r.accessToken, refresh_token: r.refreshToken, expires_in: r.expiresIn, refresh_token_expires_in: r.refreshTokenExpiresIn }, 200, MEMBER_CONTENT_CORS);
+        } catch {
+          return json({ error: 'refresh_failed' }, 401, MEMBER_CONTENT_CORS); // expired/revoked -> caller re-auths
+        }
+      }
+
       if (method === 'GET' && pathname === '/signup/start') return await handleStart(request, env);
       if (method === 'GET' && pathname === '/signup/github/callback') return await handleGithubCallback(request, env);
       if (method === 'GET' && pathname === '/signup/discord/callback') return await handleDiscordCallback(request, env);
@@ -391,6 +419,26 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET' || method === 'POST') {
           const r = await handleActivity(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-057: a paid member upvotes a share. Effective-paid gated (ban-aware, fail-closed); two distinct
+      // non-author upvotes enqueue the share for SOW-058 syndication. Per-token body, never cached.
+      if (pathname === '/membership/upvote') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'POST') {
+          const r = await handleUpvote(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-057: server-side OpenGraph preview for the share composer. Authenticated (any signed-in member),
+      // SSRF-guarded, bounded, never cached, varied on the bearer.
+      if (pathname === '/membership/og-preview') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'POST') {
+          const r = await handleOgPreview(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }
@@ -533,6 +581,23 @@ export default {
         }
       }
 
+      // SOW-058: the superadmin syndication tracker (admin read) + cancel (superadmin only). Fail-closed via the
+      // overrides mirror; never cached, varied on the bearer.
+      if (pathname === '/membership/syndication') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = await handleSyndicationTracker(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+      if (pathname === '/membership/syndication/cancel') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'POST') {
+          const r = await handleSyndicationCancel(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
       // On-demand Discord guild invite for the welcome view. The bot mints a real invite (token never leaves the
       // Worker), cached in KV so we do not spam Discord; fail-closed to the static DISCORD_INVITE_URL. Auth = a
       // verified GitHub token; channel access is still governed by the reconcile role sync.
@@ -554,5 +619,16 @@ export default {
       console.error('signup worker error', pathname, err?.message);
       return json({ error: 'internal_error' }, 500);
     }
+  },
+
+  // SOW-058: the syndication drain. Each cron tick posts items past the one-hour hold to every ready channel.
+  // Fail-closed (disabled unless the config mirror enables it) and best-effort (a failure never breaks the cron).
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(
+      drainSyndication(env).then(
+        (r) => console.log('syndication drain', JSON.stringify(r)),
+        (e) => console.error('syndication drain failed', e?.message ?? e),
+      ),
+    );
   },
 };

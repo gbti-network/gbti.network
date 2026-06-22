@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  emptyActivity, normalizeActivity, applyFavorite, createCollection, renameCollection,
+  emptyActivity, normalizeActivity, applyFavorite, applyUpvote, createCollection, renameCollection,
   deleteCollection, setCollectionItem, filterActivity, ActivityError, MAX_NAME_LEN,
 } from '../membership/member-activity.mjs';
 import { handleActivity, eraseMemberActivity, ACTIVITY_KEY } from '../workers/signup/membership-activity.mjs';
@@ -30,6 +30,26 @@ test('applyFavorite toggles, dedupes, and validates the target', () => {
   // invalid target -> ActivityError
   assert.throws(() => applyFavorite(emptyActivity(), { type: 'banana', slug: 'x', on: true }), ActivityError);
   assert.throws(() => applyFavorite(emptyActivity(), { type: 'prompt', slug: 'Bad Slug!', on: true }), ActivityError);
+});
+
+test('SOW-057: applyUpvote toggles, dedupes, validates, and is independent of favorites', () => {
+  let a = applyUpvote(emptyActivity(), { type: 'share', slug: 'hudson/note', on: true }, { now: clock });
+  assert.equal(a.upvotes.length, 1);
+  assert.deepEqual(a.upvotes[0], { type: 'share', slug: 'hudson/note', addedAt: 1000 });
+  assert.equal(a.favorites.length, 0); // upvotes do not touch favorites
+  // idempotent add, then remove
+  a = applyUpvote(a, { type: 'share', slug: 'hudson/note', on: true }, { now: clock });
+  assert.equal(a.upvotes.length, 1);
+  a = applyUpvote(a, { type: 'share', slug: 'hudson/note', on: false }, { now: clock });
+  assert.equal(a.upvotes.length, 0);
+  // invalid target -> ActivityError
+  assert.throws(() => applyUpvote(emptyActivity(), { type: 'banana', slug: 'x', on: true }), ActivityError);
+  // normalizeActivity coerces a malformed upvotes array
+  const n = normalizeActivity({ upvotes: [{ type: 'share', slug: 'a/b' }, { type: 'x', slug: 'bad' }, { type: 'share', slug: 'a/b' }] });
+  assert.equal(n.upvotes.length, 1); // bad + dup dropped
+  // filterActivity narrows upvotes too
+  const mixed = { favorites: [], upvotes: [{ type: 'share', slug: 'a/b' }, { type: 'post', slug: 'c' }], collections: [] };
+  assert.deepEqual(filterActivity(mixed, ['share']).upvotes.map((u) => u.slug), ['a/b']);
 });
 
 test('collections: create returns an id, rename, add/remove items, delete', () => {

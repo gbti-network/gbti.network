@@ -8,7 +8,7 @@
 
 import { buildContentFile, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, parseContentFile, ContentValidationError } from './content-ops.mjs';
 import { publishContent, publishFiles, branchName } from './publish.mjs';
-import { canPublish, isBlockedFromPublishing } from './membership.mjs';
+import { canPublish, isBlockedFromPublishing, canSeeNews, canFollow, canSave, canBrowse } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, decryptViaWorker, MemberContentLockedError } from './member-content.mjs';
 import {
   getActivity as workerGetActivity, setFavorite as workerSetFavorite, createCollection as workerCreateCollection,
@@ -16,6 +16,8 @@ import {
   setCollectionItem as workerSetCollectionItem, ActivityClientError,
 } from './member-activity-client.mjs';
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
+import { upvote as workerUpvote, UpvoteClientError } from './member-upvote-client.mjs'; // SOW-057
+import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.mjs'; // SOW-057
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
 import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, NewsClientError } from './news-client.mjs'; // SOW-043/046: members-only news proxy + prefs + curator publish + discussion reflect
 import { probeReadiness } from './github-app-probe.mjs';
@@ -29,7 +31,7 @@ import yaml from 'js-yaml';
 import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, triggerAdminOp as workerTriggerAdminOp } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication } from './member-admin-client.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
 
@@ -68,6 +70,11 @@ export function getStatus(ctx) {
     mcpEnabled: ctx.store?.get('mcpEnabled') ?? null,
     membership,
     canPublish: canPublish(membership),
+    // SOW-060: the free-tier perks (browse / news / save / follow) need only a signed-in identity, not paid.
+    canSeeNews: canSeeNews(membership),
+    canFollow: canFollow(membership),
+    canSave: canSave(membership),
+    canBrowse: canBrowse(membership),
     canCurate: ctx.canCurate?.() ?? false, // SOW-046 C: news -> Discord publish (UX hint; Worker re-checks)
   };
 }
@@ -525,6 +532,46 @@ export async function setFollow(ctx, { username, on = true } = {}) {
   } catch (err) {
     throw mapFollowsError(err);
   }
+}
+
+/** SOW-057: toggle the caller's upvote on a share (effective-paid; the Worker enqueues syndication at the
+ *  threshold). Returns { upvoted, upvoteCount, enqueued }. */
+export async function upvoteContent(ctx, { type = 'share', slug, on = true } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try {
+    const r = await workerUpvote({ type, slug, on, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    return { upvoted: !!r?.upvoted, upvoteCount: r?.upvoteCount, enqueued: !!r?.enqueued };
+  } catch (err) {
+    if (err instanceof UpvoteClientError) throw new OperationError('upvote-failed', err.message);
+    throw err;
+  }
+}
+
+/** SOW-057: fetch a link's OpenGraph preview ({ image, title, description }) via the Worker (SSRF-guarded). */
+export async function ogPreview(ctx, { url } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try {
+    return await workerOgPreview({ url, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    if (err instanceof OgClientError) throw new OperationError('og-preview-failed', err.message);
+    throw err;
+  }
+}
+
+/** SOW-058: the superadmin syndication queue (admin-gated; the Worker enforces). Returns { pending, sent, cancelled, failed }. */
+export async function getSyndicationQueue(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  return workerGetSyndicationQueue({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+
+/** SOW-058: cancel a pending syndication item (SUPERADMIN only; the Worker enforces). */
+export async function cancelSyndication(ctx, { id } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  return workerCancelSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 
 /**

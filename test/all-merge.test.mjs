@@ -66,6 +66,14 @@ test('shareToItem projects a raw Share onto the card shape, carrying the full Sh
   assert.equal(it.author, 'hudson');
 });
 
+test('SOW-057: a Share featured image becomes the card thumbnail', () => {
+  const withImg = shareToItem(share('s2', '2026-06-15T00:00:00Z', { title: 'Hi', image: 'https://example.com/og.jpg' }));
+  assert.equal(withImg.thumb, 'https://example.com/og.jpg');
+  // no image still yields a null thumb (the glyph fallback)
+  const noImg = shareToItem(share('s3', '2026-06-15T00:00:00Z', { title: 'Hi' }));
+  assert.equal(noImg.thumb, null);
+});
+
 test('shareTitle falls back to short description, then the link host, then a default', () => {
   assert.equal(shareTitle({ title: 'T' }), 'T');
   assert.equal(shareTitle({ shortDescription: 'D' }), 'D');

@@ -17114,6 +17114,8 @@ var shareSchema = external_exports.object({
   shortDescription: external_exports.string().max(200).optional(),
   // SOW-032: optional one-line blurb (mirrors src/content.config.ts)
   url: external_exports.string().url().optional(),
+  image: external_exports.string().optional(),
+  // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
   tags: external_exports.array(external_exports.string()).default([]),
   createdAt: external_exports.coerce.date(),
   updatedAt: external_exports.coerce.date().optional()
@@ -17241,6 +17243,8 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     shortDescription: fm.shortDescription ?? null,
     // SOW-032
     url: fm.url ?? null,
+    image: typeof fm.image === "string" && fm.image.trim() ? fm.image.trim() : null,
+    // SOW-057: featured image
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? "members",
     status: fm.status ?? null,
@@ -17338,19 +17342,31 @@ function decodeBase64Utf8(b64) {
 function safeRel(relPath) {
   return typeof relPath === "string" && relPath.length > 0 && !relPath.includes("..") && !relPath.includes("\\") && !relPath.startsWith("/");
 }
-function createGithubReader({ upstream, token, ref = "HEAD", fetch = globalThis.fetch } = {}) {
+function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = globalThis.fetch, onAuthError } = {}) {
   const [owner, repo] = String(upstream || "").split("/");
   const headers = { Accept: "application/vnd.github+json" };
   if (token) headers.Authorization = `Bearer ${token}`;
+  let signaled = false;
+  async function ghFetch(url2) {
+    const res = await fetch2(url2, { headers });
+    if (res.status === 401 && token && onAuthError && !signaled) {
+      signaled = true;
+      try {
+        onAuthError();
+      } catch {
+      }
+    }
+    return res;
+  }
   async function contents(relPath) {
     const url2 = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURI(relPath)}?ref=${encodeURIComponent(ref)}`;
-    const res = await fetch(url2, { headers });
+    const res = await ghFetch(url2);
     if (!res.ok) return null;
     return res.json();
   }
   async function tree() {
     const url2 = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
-    const res = await fetch(url2, { headers });
+    const res = await ghFetch(url2);
     if (!res.ok) return null;
     return res.json();
   }
@@ -17533,12 +17549,12 @@ function interpretGateState(state) {
       return "unknown";
   }
 }
-function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl = "https://api.github.com", appMode = isAppMode(), signupBase = SIGNUP_BASE }) {
+function createRepoClient({ token, upstream, fetch: fetch2 = globalThis.fetch, baseUrl = "https://api.github.com", appMode = isAppMode(), signupBase = SIGNUP_BASE }) {
   if (!token) throw new Error("createRepoClient: token is required");
   if (!upstream) throw new Error('createRepoClient: upstream ("owner/name") is required');
   const GATE_CONTEXT = "membership-gate";
   async function req(method, path, body) {
-    const res = await fetch(baseUrl + path, {
+    const res = await fetch2(baseUrl + path, {
       method,
       headers: {
         Authorization: `Bearer ${token}`,
@@ -17555,7 +17571,7 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
     return text ? JSON.parse(text) : null;
   }
   async function callWorker(method, path, body) {
-    const res = await fetch(`${String(signupBase).replace(/\/$/, "")}${path}`, {
+    const res = await fetch2(`${String(signupBase).replace(/\/$/, "")}${path}`, {
       method,
       headers: { Authorization: `Bearer ${token}`, ...body ? { "Content-Type": "application/json" } : {} },
       ...body ? { body: JSON.stringify(body) } : {}
@@ -17795,9 +17811,15 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
 var UPSTREAM = "gbti-network/gbti.network";
 function buildExtContext(store) {
   const token = store.get("githubToken");
+  let authExpired = false;
+  const onAuthError = () => {
+    authExpired = true;
+    store.set({ githubToken: null, githubRefreshToken: null, githubTokenExpiresAt: null, identity: null });
+  };
   return {
     store,
-    reader: createGithubReader({ upstream: UPSTREAM, token }),
+    reader: createGithubReader({ upstream: UPSTREAM, token, onAuthError }),
+    authExpired: () => authExpired,
     getRepoClient() {
       const t = store.get("githubToken");
       return t ? createRepoClient({ token: t, upstream: UPSTREAM }) : null;
@@ -17962,13 +17984,26 @@ function effectiveMembership({ githubId, stripeStatus = "unknown", roles = /* @_
   if (grandfatherActive(grandfathers.get(id), now)) return "paid";
   return stripeStatus || "unknown";
 }
+var FREE_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none"]);
+function canSeeNews(membership) {
+  return FREE_TIER.has(membership);
+}
+function canFollow(membership) {
+  return FREE_TIER.has(membership);
+}
+function canSave(membership) {
+  return FREE_TIER.has(membership);
+}
+function canBrowse(membership) {
+  return FREE_TIER.has(membership);
+}
 function isBlockedFromPublishing(membership) {
   return NON_PUBLISHABLE.has(membership);
 }
-async function fetchStripeStatus({ token, signupBase, fetch = globalThis.fetch } = {}) {
+async function fetchStripeStatus({ token, signupBase, fetch: fetch2 = globalThis.fetch } = {}) {
   if (!token || !signupBase) return "unknown";
   try {
-    const res = await fetch(`${String(signupBase).replace(/\/$/, "")}/membership/status`, {
+    const res = await fetch2(`${String(signupBase).replace(/\/$/, "")}/membership/status`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (!res.ok) return "unknown";
@@ -17986,8 +18021,8 @@ async function readSafe(readFile, p) {
     return null;
   }
 }
-async function resolveMembership({ githubId, token, signupBase, readFile, fetch = globalThis.fetch, now = Date.now() } = {}) {
-  const stripeStatus = await fetchStripeStatus({ token, signupBase, fetch });
+async function resolveMembership({ githubId, token, signupBase, readFile, fetch: fetch2 = globalThis.fetch, now = Date.now() } = {}) {
+  const stripeStatus = await fetchStripeStatus({ token, signupBase, fetch: fetch2 });
   const roles = rolesFromText(await readSafe(readFile, "house/roles.yml"));
   const banned = bannedIdsFromText(await readSafe(readFile, "house/bans.yml"));
   const grandfathers = grandfathersFromText(await readSafe(readFile, "house/grandfathered.yml"));
@@ -18002,9 +18037,9 @@ var MemberContentLockedError = class extends Error {
   }
 };
 var base = (signupBase) => String(signupBase || "").replace(/\/$/, "");
-async function decryptViaWorker({ envelope, token, signupBase, fetch = globalThis.fetch }) {
+async function decryptViaWorker({ envelope, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new MemberContentLockedError("not signed in");
-  const res = await fetch(base(signupBase) + "/membership/decrypt", {
+  const res = await fetch2(base(signupBase) + "/membership/decrypt", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(envelope)
@@ -18015,9 +18050,9 @@ async function decryptViaWorker({ envelope, token, signupBase, fetch = globalThi
   if (!data || data.ok !== true || typeof data.text !== "string") throw new Error("decrypt: malformed response");
   return data.text;
 }
-async function encryptViaWorker({ plaintext, assetId, token, signupBase, fetch = globalThis.fetch }) {
+async function encryptViaWorker({ plaintext, assetId, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new MemberContentLockedError("not signed in");
-  const res = await fetch(base(signupBase) + "/membership/encrypt", {
+  const res = await fetch2(base(signupBase) + "/membership/encrypt", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ plaintext, assetId })
@@ -18048,9 +18083,9 @@ function encAssetFor(type, username, slug) {
 var trimBase = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var ActivityClientError = class extends Error {
 };
-async function call(method, body, { token, signupBase, fetch = globalThis.fetch }) {
+async function call(method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new ActivityClientError("not signed in");
-  const res = await fetch(trimBase(signupBase) + "/membership/activity", {
+  const res = await fetch2(trimBase(signupBase) + "/membership/activity", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -18086,9 +18121,9 @@ async function setCollectionItem({ id, targetType, targetSlug, on = true, ...opt
 var trimBase2 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var FollowsClientError = class extends Error {
 };
-async function call2(method, body, { token, signupBase, fetch = globalThis.fetch }) {
+async function call2(method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new FollowsClientError("not signed in");
-  const res = await fetch(trimBase2(signupBase) + "/membership/follows", {
+  const res = await fetch2(trimBase2(signupBase) + "/membership/follows", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -18108,13 +18143,53 @@ async function setFollow({ username, on = true, ...opts }) {
   return call2("POST", { username, on }, opts);
 }
 
-// client/src/member-invite-client.mjs
+// client/src/member-upvote-client.mjs
 var trimBase3 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var UpvoteClientError = class extends Error {
+};
+async function upvote({ type = "share", slug, on = true, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new UpvoteClientError("not signed in");
+  const res = await fetch2(trimBase3(signupBase) + "/membership/upvote", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ type, slug, on })
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new UpvoteClientError(data?.message || data?.error || `upvote request failed (${res.status})`);
+  return data;
+}
+
+// client/src/member-og-client.mjs
+var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var OgClientError = class extends Error {
+};
+async function ogPreview({ url: url2, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new OgClientError("not signed in");
+  const res = await fetch2(trimBase4(signupBase) + "/membership/og-preview", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ url: url2 })
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new OgClientError(data?.message || data?.error || `og-preview request failed (${res.status})`);
+  return data;
+}
+
+// client/src/member-invite-client.mjs
+var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var InviteClientError = class extends Error {
 };
-async function getDiscordInvite({ token, signupBase, fetch = globalThis.fetch }) {
+async function getDiscordInvite({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new InviteClientError("not signed in");
-  const res = await fetch(trimBase3(signupBase) + "/membership/discord-invite", {
+  const res = await fetch2(trimBase5(signupBase) + "/membership/discord-invite", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -18137,53 +18212,53 @@ var qs = (params = {}) => {
   const s = p.toString();
   return s ? `?${s}` : "";
 };
-async function workerGetNews({ token, signupBase, fetch = globalThis.fetch, category, since, limit } = {}) {
+async function workerGetNews({ token, signupBase, fetch: fetch2 = globalThis.fetch, category, since, limit } = {}) {
   if (!token || !signupBase) throw new NewsClientError("not signed in");
-  const res = await fetch(`${base2(signupBase)}/membership/news${qs({ category, since, limit })}`, { headers: { Authorization: "Bearer " + token } });
-  if (res.status === 401 || res.status === 403) throw new NewsClientError("news requires a paid membership");
+  const res = await fetch2(`${base2(signupBase)}/membership/news${qs({ category, since, limit })}`, { headers: { Authorization: "Bearer " + token } });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("news requires sign-in");
   if (!res.ok) throw new NewsClientError("news unavailable (" + res.status + ")");
   const data = await res.json();
   return { items: Array.isArray(data?.items) ? data.items : [], updatedAt: data?.updatedAt ?? null };
 }
-async function workerGetNewsSources({ token, signupBase, fetch = globalThis.fetch } = {}) {
+async function workerGetNewsSources({ token, signupBase, fetch: fetch2 = globalThis.fetch } = {}) {
   if (!token || !signupBase) throw new NewsClientError("not signed in");
-  const res = await fetch(`${base2(signupBase)}/membership/news-sources`, { headers: { Authorization: "Bearer " + token } });
-  if (res.status === 401 || res.status === 403) throw new NewsClientError("news requires a paid membership");
+  const res = await fetch2(`${base2(signupBase)}/membership/news-sources`, { headers: { Authorization: "Bearer " + token } });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("news requires sign-in");
   if (!res.ok) throw new NewsClientError("news sources unavailable (" + res.status + ")");
   const data = await res.json();
   return { sources: Array.isArray(data?.sources) ? data.sources : [] };
 }
-async function workerGetPrefs({ token, signupBase, fetch = globalThis.fetch } = {}) {
+async function workerGetPrefs({ token, signupBase, fetch: fetch2 = globalThis.fetch } = {}) {
   if (!token || !signupBase) throw new NewsClientError("not signed in");
-  const res = await fetch(`${base2(signupBase)}/membership/prefs`, { headers: { Authorization: "Bearer " + token } });
-  if (res.status === 401 || res.status === 403) throw new NewsClientError("prefs require a paid membership");
+  const res = await fetch2(`${base2(signupBase)}/membership/prefs`, { headers: { Authorization: "Bearer " + token } });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("prefs require sign-in");
   if (!res.ok) throw new NewsClientError("prefs unavailable (" + res.status + ")");
   const data = await res.json();
   return data?.prefs ?? { categories: [], followedChannels: [] };
 }
-async function workerSetPrefs({ token, signupBase, fetch = globalThis.fetch, patch } = {}) {
+async function workerSetPrefs({ token, signupBase, fetch: fetch2 = globalThis.fetch, patch } = {}) {
   if (!token || !signupBase) throw new NewsClientError("not signed in");
-  const res = await fetch(`${base2(signupBase)}/membership/prefs`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(patch || {}) });
-  if (res.status === 401 || res.status === 403) throw new NewsClientError("prefs require a paid membership");
+  const res = await fetch2(`${base2(signupBase)}/membership/prefs`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(patch || {}) });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("prefs require sign-in");
   if (!res.ok) throw new NewsClientError("could not save prefs (" + res.status + ")");
   const data = await res.json();
   return data?.prefs ?? { categories: [], followedChannels: [] };
 }
-async function workerPublishNews({ token, signupBase, fetch = globalThis.fetch, item } = {}) {
+async function workerPublishNews({ token, signupBase, fetch: fetch2 = globalThis.fetch, item } = {}) {
   if (!token || !signupBase) throw new NewsClientError("not signed in");
   const guid3 = String(item?.guid || "").trim();
   if (!guid3) throw new NewsClientError("a news item is required");
   const payload = { guid: guid3, source: item?.source ?? "" };
-  const res = await fetch(`${base2(signupBase)}/membership/news-publish`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const res = await fetch2(`${base2(signupBase)}/membership/news-publish`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
   if (res.status === 401 || res.status === 403) throw new NewsClientError("publishing to Discord requires a news curator role");
   if (!res.ok) throw new NewsClientError("could not publish to Discord (" + res.status + ")");
   return res.json();
 }
-async function workerNewsDiscussed({ token, signupBase, fetch = globalThis.fetch, guid: guid3 } = {}) {
+async function workerNewsDiscussed({ token, signupBase, fetch: fetch2 = globalThis.fetch, guid: guid3 } = {}) {
   if (!token || !signupBase) throw new NewsClientError("not signed in");
   const g = String(guid3 || "").trim();
   if (!g) throw new NewsClientError("a news item is required");
-  const res = await fetch(`${base2(signupBase)}/membership/news-discussed`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ guid: g }) });
+  const res = await fetch2(`${base2(signupBase)}/membership/news-discussed`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ guid: g }) });
   if (res.status === 401 || res.status === 403) throw new NewsClientError("news discussion requires a paid membership");
   if (!res.ok) throw new NewsClientError("could not reflect the discussion (" + res.status + ")");
   return res.json();
@@ -18193,47 +18268,47 @@ async function workerNewsDiscussed({ token, signupBase, fetch = globalThis.fetch
 var GH = "https://api.github.com";
 var ghHeaders = (token) => ({ Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "gbti-network" });
 var repoName = (login, upstream) => `${String(login).toLowerCase()}/${upstream.split("/")[1]}`;
-async function getAuthedUser({ token, fetch = globalThis.fetch }) {
-  const res = await fetch(`${GH}/user`, { headers: ghHeaders(token) });
+async function getAuthedUser({ token, fetch: fetch2 = globalThis.fetch }) {
+  const res = await fetch2(`${GH}/user`, { headers: ghHeaders(token) });
   if (res.status === 401) return null;
   if (!res.ok) throw new Error(`github /user ${res.status}`);
   const u = await res.json();
   return { login: String(u.login), githubId: String(u.id) };
 }
-async function forkReady({ token, login, upstream, fetch = globalThis.fetch }) {
-  const res = await fetch(`${GH}/repos/${repoName(login, upstream)}`, { headers: ghHeaders(token) });
+async function forkReady({ token, login, upstream, fetch: fetch2 = globalThis.fetch }) {
+  const res = await fetch2(`${GH}/repos/${repoName(login, upstream)}`, { headers: ghHeaders(token) });
   if (!res.ok) return false;
   const r = await res.json();
   return r.fork === true && String(r.parent?.full_name || "").toLowerCase() === upstream.toLowerCase();
 }
-async function appInstallStatus({ token, login, appSlug, upstream, fetch = globalThis.fetch }) {
+async function appInstallStatus({ token, login, appSlug, upstream, fetch: fetch2 = globalThis.fetch }) {
   const fork = repoName(login, upstream);
-  const res = await fetch(`${GH}/user/installations`, { headers: ghHeaders(token) });
+  const res = await fetch2(`${GH}/user/installations`, { headers: ghHeaders(token) });
   if (!res.ok) return { installed: false, allRepos: false };
   const data = await res.json();
   const insts = (data.installations || []).filter((i) => String(i.app_slug || "").toLowerCase() === appSlug.toLowerCase());
   const inst = insts.find((i) => String(i.account?.login || "").toLowerCase() === String(login).toLowerCase()) || insts[0];
   if (!inst) return { installed: false, allRepos: false };
   if (inst.repository_selection === "all") return { installed: false, allRepos: true };
-  const rres = await fetch(`${GH}/user/installations/${inst.id}/repositories?per_page=100`, { headers: ghHeaders(token) });
+  const rres = await fetch2(`${GH}/user/installations/${inst.id}/repositories?per_page=100`, { headers: ghHeaders(token) });
   if (!rres.ok) return { installed: false, allRepos: false };
   const rd = await rres.json();
   const has = (rd.repositories || []).some((r) => String(r.full_name || "").toLowerCase() === fork);
   return { installed: has, allRepos: false };
 }
-async function probeReadiness({ token, appSlug, upstream, fetch = globalThis.fetch }) {
+async function probeReadiness({ token, appSlug, upstream, fetch: fetch2 = globalThis.fetch }) {
   if (!token) return { signedIn: false, forkReady: false, installReady: false, reachedGithub: true };
   let user;
   try {
-    user = await getAuthedUser({ token, fetch });
+    user = await getAuthedUser({ token, fetch: fetch2 });
   } catch {
     return { signedIn: false, forkReady: false, installReady: false, reachedGithub: false };
   }
   if (!user) return { signedIn: false, forkReady: false, installReady: false, reachedGithub: true };
   try {
-    const fork = await forkReady({ token, login: user.login, upstream, fetch });
+    const fork = await forkReady({ token, login: user.login, upstream, fetch: fetch2 });
     let install = { installed: false, allRepos: false };
-    if (fork) install = await appInstallStatus({ token, login: user.login, appSlug, upstream, fetch });
+    if (fork) install = await appInstallStatus({ token, login: user.login, appSlug, upstream, fetch: fetch2 });
     return { signedIn: true, login: user.login, githubId: user.githubId, forkReady: fork, installReady: install.installed, allReposGrant: install.allRepos, reachedGithub: true };
   } catch {
     return { signedIn: true, login: user.login, githubId: user.githubId, forkReady: false, installReady: false, reachedGithub: false };
@@ -18420,23 +18495,28 @@ var SLUG_RE = /^[a-z0-9-]+$/;
 var SHARE_SLUG_RE = /^[a-z0-9-]+\/[a-z0-9-]+$/;
 var slugOk = (type, slug) => (type === "share" ? SHARE_SLUG_RE : SLUG_RE).test(slug);
 function emptyActivity() {
-  return { favorites: [], collections: [], updatedAt: null };
+  return { favorites: [], upvotes: [], collections: [], updatedAt: null };
+}
+function normalizeTargetList(raw) {
+  const out = [];
+  if (!Array.isArray(raw)) return out;
+  const seen = /* @__PURE__ */ new Set();
+  for (const f2 of raw) {
+    if (!f2 || !isTarget(f2.type, f2.slug)) continue;
+    const k = targetKey(f2);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ type: f2.type, slug: f2.slug, addedAt: Number(f2.addedAt) || 0 });
+  }
+  return out;
 }
 var isTarget = (type, slug) => CONTENT_TYPES.has(type) && typeof slug === "string" && slugOk(type, slug);
 var targetKey = (t) => `${t.type}:${t.slug}`;
 function normalizeActivity(raw) {
   const a = emptyActivity();
   if (!raw || typeof raw !== "object") return a;
-  if (Array.isArray(raw.favorites)) {
-    const seen = /* @__PURE__ */ new Set();
-    for (const f2 of raw.favorites) {
-      if (!f2 || !isTarget(f2.type, f2.slug)) continue;
-      const k = targetKey(f2);
-      if (seen.has(k)) continue;
-      seen.add(k);
-      a.favorites.push({ type: f2.type, slug: f2.slug, addedAt: Number(f2.addedAt) || 0 });
-    }
-  }
+  a.favorites = normalizeTargetList(raw.favorites);
+  a.upvotes = normalizeTargetList(raw.upvotes);
   if (Array.isArray(raw.collections)) {
     const seenIds = /* @__PURE__ */ new Set();
     for (const c of raw.collections) {
@@ -18465,17 +18545,18 @@ function filterActivity(activity, types2) {
   if (!Array.isArray(types2) || types2.length === 0) return a;
   const allow = new Set(types2);
   a.favorites = a.favorites.filter((f2) => allow.has(f2.type));
+  a.upvotes = a.upvotes.filter((u) => allow.has(u.type));
   a.collections = a.collections.map((c) => ({ ...c, items: c.items.filter((it) => allow.has(it.type)) }));
   return a;
 }
 
 // client/src/member-admin-client.mjs
-var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var AdminClientError = class extends Error {
 };
-async function getRosterStatuses({ token, signupBase, fetch = globalThis.fetch }) {
+async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch(trimBase4(signupBase) + "/membership/admin/statuses", {
+  const res = await fetch2(trimBase6(signupBase) + "/membership/admin/statuses", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -18487,9 +18568,9 @@ async function getRosterStatuses({ token, signupBase, fetch = globalThis.fetch }
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin statuses request failed (${res.status})`);
   return data?.statuses ?? {};
 }
-async function triggerAdminOp({ token, signupBase, fetch = globalThis.fetch, action, params }) {
+async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, params }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch(trimBase4(signupBase) + "/membership/admin/ops", {
+  const res = await fetch2(trimBase6(signupBase) + "/membership/admin/ops", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(params ? { action, params } : { action })
@@ -18501,6 +18582,32 @@ async function triggerAdminOp({ token, signupBase, fetch = globalThis.fetch, act
   } catch {
   }
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `operation failed (${res.status})`);
+  return data;
+}
+async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase6(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndication queue request failed (${res.status})`);
+  return data;
+}
+async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase6(signupBase) + "/membership/syndication/cancel", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ id })
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `cancel request failed (${res.status})`);
   return data;
 }
 
@@ -18854,6 +18961,37 @@ async function setFollow2(ctx, { username, on = true } = {}) {
   } catch (err) {
     throw mapFollowsError(err);
   }
+}
+async function upvoteContent(ctx, { type = "share", slug, on = true } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    const r = await upvote({ type, slug, on, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    return { upvoted: !!r?.upvoted, upvoteCount: r?.upvoteCount, enqueued: !!r?.enqueued };
+  } catch (err) {
+    if (err instanceof UpvoteClientError) throw new OperationError("upvote-failed", err.message);
+    throw err;
+  }
+}
+async function ogPreview2(ctx, { url: url2 } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await ogPreview({ url: url2, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    if (err instanceof OgClientError) throw new OperationError("og-preview-failed", err.message);
+    throw err;
+  }
+}
+async function getSyndicationQueue2(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  return getSyndicationQueue({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+async function cancelSyndication2(ctx, { id } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  return cancelSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -19756,14 +19894,21 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/status") {
       const membership = ctx.membership?.() ?? "unknown";
       const { role, canCurate } = await computeRoleAndCurate(ctx);
+      const live = Boolean(ctx.store?.get("githubToken"));
       return ok({
         version: "0.1.0",
-        identity: id ?? null,
+        identity: live ? id ?? null : null,
         role,
-        authenticated: Boolean(ctx.store?.get("githubToken")),
+        authenticated: live,
         membership,
         canPublish: membership === "paid",
-        canCurate
+        // SOW-060: free-tier perks (browse / news / save / follow) need only a signed-in identity, not paid.
+        canSeeNews: canSeeNews(membership),
+        canFollow: canFollow(membership),
+        canSave: canSave(membership),
+        canBrowse: canBrowse(membership),
+        canCurate,
+        sessionExpired: ctx.authExpired?.() === true
       });
     }
     if (pathname === "/api/onboarding-status") return ok(await getOnboardingStatus(ctx));
@@ -19816,6 +19961,10 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(method === "POST" ? await mutateMemberActivity(ctx, body) : await getMemberActivity(ctx));
       case "/api/follows":
         return ok(method === "POST" ? await setFollow2(ctx, body) : await getFollows2(ctx));
+      case "/api/upvote":
+        return ok(await upvoteContent(ctx, body ?? {}));
+      case "/api/og-preview":
+        return ok(await ogPreview2(ctx, body ?? {}));
       case "/api/discord-invite":
         return ok(await getDiscordInvite2(ctx));
       case "/api/news":
@@ -19846,6 +19995,10 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getTaxonomy(ctx));
       case "/api/open-pulls":
         return ok(await getOpenPulls(ctx));
+      case "/api/syndication":
+        return ok(await getSyndicationQueue2(ctx));
+      case "/api/syndication/cancel":
+        return ok(await cancelSyndication2(ctx, body ?? {}));
       case "/api/admin-ops":
         return ok(await triggerAdminOp2(ctx, body ?? {}));
       case "/api/pr-status": {
@@ -19872,9 +20025,9 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
 // client/src/auth-device.mjs
 var GITHUB = "https://github.com";
 var FORM = { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" };
-async function requestDeviceCode({ clientId, scope = "public_repo read:user", fetch = globalThis.fetch }) {
+async function requestDeviceCode({ clientId, scope = "public_repo read:user", fetch: fetch2 = globalThis.fetch }) {
   if (!clientId) throw new Error("requestDeviceCode: clientId is required");
-  const res = await fetch(`${GITHUB}/login/device/code`, {
+  const res = await fetch2(`${GITHUB}/login/device/code`, {
     method: "POST",
     headers: FORM,
     body: new URLSearchParams({ client_id: clientId, scope }).toString()
@@ -19882,8 +20035,8 @@ async function requestDeviceCode({ clientId, scope = "public_repo read:user", fe
   if (!res.ok) throw new Error(`device code request failed: ${res.status}`);
   return res.json();
 }
-async function pollForToken({ clientId, deviceCode, fetch = globalThis.fetch }) {
-  const res = await fetch(`${GITHUB}/login/oauth/access_token`, {
+async function pollForToken({ clientId, deviceCode, fetch: fetch2 = globalThis.fetch }) {
+  const res = await fetch2(`${GITHUB}/login/oauth/access_token`, {
     method: "POST",
     headers: FORM,
     body: new URLSearchParams({
@@ -19898,12 +20051,12 @@ var defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function deviceFlowLogin({
   clientId,
   scope,
-  fetch = globalThis.fetch,
+  fetch: fetch2 = globalThis.fetch,
   onPrompt,
   sleep = defaultSleep,
   now = () => Date.now()
 }) {
-  const dc = await requestDeviceCode({ clientId, scope, fetch });
+  const dc = await requestDeviceCode({ clientId, scope, fetch: fetch2 });
   if (typeof onPrompt === "function") {
     onPrompt({ userCode: dc.user_code, verificationUri: dc.verification_uri, expiresIn: dc.expires_in });
   }
@@ -19912,8 +20065,19 @@ async function deviceFlowLogin({
   for (; ; ) {
     if (now() >= deadline) throw new Error("device flow expired before authorization");
     await sleep(interval);
-    const r = await pollForToken({ clientId, deviceCode: dc.device_code, fetch });
-    if (r.access_token) return { accessToken: r.access_token, scope: r.scope };
+    const r = await pollForToken({ clientId, deviceCode: dc.device_code, fetch: fetch2 });
+    if (r.access_token) {
+      return {
+        accessToken: r.access_token,
+        scope: r.scope,
+        refreshToken: r.refresh_token,
+        // present only when the App expires user tokens
+        expiresIn: Number(r.expires_in) || 0,
+        // seconds until the access token dies (~28800 = 8h)
+        refreshTokenExpiresIn: Number(r.refresh_token_expires_in) || 0
+        // ~15897600 = 6mo
+      };
+    }
     switch (r.error) {
       case "authorization_pending":
         break;
@@ -19949,6 +20113,21 @@ function resolveOpenPage({ page, hash: hash2 } = {}) {
   return `${page}#${h}`;
 }
 
+// extension/src/token-refresh.mjs
+var SKEW_MS = 6e4;
+function needsRefresh(s = {}, now = Date.now(), skewMs = SKEW_MS) {
+  if (!s.githubToken || !s.githubRefreshToken || !s.githubTokenExpiresAt) return false;
+  return now >= Number(s.githubTokenExpiresAt) - skewMs;
+}
+function refreshPatch(resp, oldRefreshToken, now = Date.now()) {
+  if (!resp || !resp.access_token) return null;
+  return {
+    githubToken: resp.access_token,
+    githubRefreshToken: resp.refresh_token || oldRefreshToken || null,
+    githubTokenExpiresAt: now + (Number(resp.expires_in) || 0) * 1e3
+  };
+}
+
 // extension/src/background.mjs
 var SIGNUP_BASE2 = "https://signup.gbti.network";
 var storePromise = null;
@@ -19961,7 +20140,7 @@ function getStore() {
   return storePromise;
 }
 async function handleLogin(store) {
-  const { accessToken } = await deviceFlowLogin({
+  const { accessToken, refreshToken, expiresIn } = await deviceFlowLogin({
     // SOW-026: classic mode = the public_repo OAuth app (account-wide); app mode = the GitHub App (fork-scoped,
     // no scope, GitHub Apps ignore it). The token only ever reaches GitHub; app mode shrinks its capability to
     // the member's single fork. The MV3 worker has no process.env, so AUTH_MODE defaults to classic until the
@@ -19975,7 +20154,12 @@ async function handleLogin(store) {
   });
   const repo = createRepoClient({ token: accessToken, upstream: UPSTREAM });
   const u = await repo.getAuthUser();
-  store.set({ githubToken: accessToken, identity: { login: u.login, githubId: String(u.id), username: String(u.login).toLowerCase() } });
+  store.set({
+    githubToken: accessToken,
+    githubRefreshToken: refreshToken || null,
+    githubTokenExpiresAt: expiresIn ? Date.now() + expiresIn * 1e3 : null,
+    identity: { login: u.login, githubId: String(u.id), username: String(u.login).toLowerCase() }
+  });
   try {
     const reader = createGithubReader({ upstream: UPSTREAM, token: accessToken });
     const { stripeStatus, membership } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE2, readFile: (p) => reader.readFile(p) });
@@ -19983,6 +20167,33 @@ async function handleLogin(store) {
   } catch {
   }
   return { ok: true, login: u.login };
+}
+async function refreshViaWorker(refreshToken) {
+  const res = await fetch(`${SIGNUP_BASE2}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: refreshToken })
+  });
+  if (!res.ok) throw new Error(`refresh failed: ${res.status}`);
+  return res.json();
+}
+var _refreshing = null;
+async function ensureFreshToken(store) {
+  const state = { githubToken: store.get("githubToken"), githubRefreshToken: store.get("githubRefreshToken"), githubTokenExpiresAt: store.get("githubTokenExpiresAt") };
+  if (!needsRefresh(state)) return;
+  if (!_refreshing) {
+    const old = state.githubRefreshToken;
+    _refreshing = (async () => {
+      try {
+        const patch = refreshPatch(await refreshViaWorker(old), old);
+        if (patch) store.set(patch);
+      } catch {
+      } finally {
+        _refreshing = null;
+      }
+    })();
+  }
+  return _refreshing;
 }
 var ONBOARDING_PAGE = "onboarding.html";
 async function openOnboardingTab() {
@@ -20031,6 +20242,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const store = await getStore();
     try {
       if (msg?.type === "api") {
+        await ensureFreshToken(store);
         sendResponse(await dispatch(buildExtContext(store), msg.req || {}));
       } else if (msg?.type === "login") {
         const res = await handleLogin(store);
@@ -20040,7 +20252,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         sendResponse(res);
       } else if (msg?.type === "signout") {
-        store.set({ githubToken: null, identity: null });
+        store.set({ githubToken: null, githubRefreshToken: null, githubTokenExpiresAt: null, identity: null });
         broadcastAuthChanged();
         sendResponse({ ok: true });
       } else if (msg?.type === "open-page") {

@@ -17169,6 +17169,8 @@ var shareSchema = external_exports.object({
   shortDescription: external_exports.string().max(200).optional(),
   // SOW-032: optional one-line blurb (mirrors src/content.config.ts)
   url: external_exports.string().url().optional(),
+  image: external_exports.string().optional(),
+  // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
   tags: external_exports.array(external_exports.string()).default([]),
   createdAt: external_exports.coerce.date(),
   updatedAt: external_exports.coerce.date().optional()
@@ -17276,6 +17278,8 @@ function shareSummary(relPath, frontmatter = {}, body = "") {
     shortDescription: fm.shortDescription ?? null,
     // SOW-032
     url: fm.url ?? null,
+    image: typeof fm.image === "string" && fm.image.trim() ? fm.image.trim() : null,
+    // SOW-057: featured image
     tags: Array.isArray(fm.tags) ? fm.tags : [],
     visibility: fm.visibility ?? "members",
     status: fm.status ?? null,
@@ -18066,6 +18070,19 @@ function effectiveMembership({ githubId, stripeStatus = "unknown", roles = /* @_
 function canPublish(membership) {
   return membership === "paid";
 }
+var FREE_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none"]);
+function canSeeNews(membership) {
+  return FREE_TIER.has(membership);
+}
+function canFollow(membership) {
+  return FREE_TIER.has(membership);
+}
+function canSave(membership) {
+  return FREE_TIER.has(membership);
+}
+function canBrowse(membership) {
+  return FREE_TIER.has(membership);
+}
 function isBlockedFromPublishing(membership) {
   return NON_PUBLISHABLE.has(membership);
 }
@@ -18192,6 +18209,11 @@ function getStatus(ctx2) {
     mcpEnabled: ctx2.store?.get("mcpEnabled") ?? null,
     membership,
     canPublish: canPublish(membership),
+    // SOW-060: the free-tier perks (browse / news / save / follow) need only a signed-in identity, not paid.
+    canSeeNews: canSeeNews(membership),
+    canFollow: canFollow(membership),
+    canSave: canSave(membership),
+    canBrowse: canBrowse(membership),
     canCurate: ctx2.canCurate?.() ?? false
     // SOW-046 C: news -> Discord publish (UX hint; Worker re-checks)
   };

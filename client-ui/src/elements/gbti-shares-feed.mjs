@@ -7,10 +7,12 @@
 // A Locked account gets a splash; the key never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { shareToItem, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + link-host helper
+import { resolveAsset } from '../assets.mjs'; // SOW-057: resolve the share featured image URL
 import './gbti-card-list.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the shared thread engine (factored out of this file)
 import './gbti-favorite.mjs'; // SOW-050 P3: Shares are first-class — favorite + collect them like every other type
 import './gbti-collection.mjs';
+import './gbti-upvote.mjs'; // SOW-057: upvote a share (two votes enqueue syndication)
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -90,7 +92,7 @@ class GbtiSharesFeed extends GbtiElement {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client to read Shares.</p>`); return; }
     this.set(this.css(CSS) + `<p class="muted">Loading the co-op stream…</p>`);
     let membership = 'unknown';
-    try { const st = await this.client.status(); membership = st?.membership ?? 'unknown'; this._role = st?.role ?? 'member'; } catch { membership = 'unknown'; this._role = 'member'; }
+    try { const st = await this.client.status(); membership = st?.membership ?? 'unknown'; this._role = st?.role ?? 'member'; this._me = String(st?.identity?.username || st?.identity?.login || '').toLowerCase(); } catch { membership = 'unknown'; this._role = 'member'; this._me = ''; }
     this._locked = LOCKED.has(membership);
     if (this._locked) return this._splash();
     try { this._items = (await this.client.listShares())?.items ?? []; }
@@ -130,11 +132,17 @@ class GbtiSharesFeed extends GbtiElement {
     const badge = share.visibility === 'members' ? `<span class="badge">Members</span>` : '';
     const title = share.title ? `<div class="title">${esc(share.title)}</div>` : '';
     const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : '';
-    const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">🔗 ${esc(hostOf(share.url))}</a>` : '';
+    // SOW-057: "Read article on <domain>" + the featured image beneath it (single-column feed).
+    const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf(share.url))}</a>` : '';
+    const heroUrl = share.image ? resolveAsset(share.image) : '';
+    const hero = heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : '';
     const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
-    // SOW-050 P3: the same Favorite + Collection cluster every content type carries. A Share keys on its composite
-    // "<author>/<id>" slug (the comment system's targetSlug), so favorites + collections round-trip it identically.
+    // SOW-050 P3 + SOW-057: the Favorite + Collection cluster, plus an Upvote (hidden for the share's own author,
+    // whose vote never counts). A Share keys on its composite "<author>/<id>" slug.
+    const isAuthor = !!this._me && this._me === String(share.author || '').toLowerCase();
+    const upvote = (slug && !isAuthor) ? `<gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote>` : '';
     const actions = slug ? `<div class="actions">
+      ${upvote}
       <gbti-favorite data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-favorite>
       <gbti-collection data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-collection>
     </div>` : '';
@@ -148,7 +156,7 @@ class GbtiSharesFeed extends GbtiElement {
         <div class="who"><span class="name">${esc(authorName(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
         <div class="body" data-body><p class="empty">Loading…</p></div>
-        ${link}${tags}${discussion}
+        ${link}${hero}${tags}${discussion}
       </article>`);
     this.on('[data-back]', 'click', () => { this._reading = null; this.render(); });
     this.on('[data-hide]', 'click', () => this._hide(share));

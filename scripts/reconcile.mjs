@@ -30,6 +30,7 @@ import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
 import { buildOverridesMirror, mirrorOverridesToKv } from './lib/kv-mirror.mjs';
 import { syncFavoriteCounts, readCountsFromDisk } from './lib/favorite-counts.mjs';
+import { syncUpvoteCounts, readCountsFromDisk as readUpvoteCountsFromDisk } from './lib/upvote-counts.mjs';
 import { mergeState, alreadyLabeled, conflictComment, CONFLICT_LABEL } from './lib/pr-conflict.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
@@ -536,6 +537,23 @@ async function main() {
       );
     } catch (e) {
       console.error('reconcile: favorite-counts sync FAILED:', e?.message ?? e);
+      process.exitCode = 1;
+    }
+  }
+
+  // SOW-057: sync the member-identity-free share upvote counts (house/upvote-counts.yml) from KV, same model.
+  if (dryRun) {
+    console.log('reconcile: DRY RUN would sync share upvote counts from KV -> house/upvote-counts.yml (requires CF creds + a GitHub PR).');
+  } else {
+    try {
+      const r = await syncUpvoteCounts({ env, github, now, readCurrentCounts: () => readUpvoteCountsFromDisk(ROOT) });
+      console.log(
+        r.synced
+          ? `reconcile: synced share upvote counts (PR #${r.prNumber}, ${r.total} target(s)).`
+          : `reconcile: upvote-counts sync SKIPPED (${r.reason}).`,
+      );
+    } catch (e) {
+      console.error('reconcile: upvote-counts sync FAILED:', e?.message ?? e);
       process.exitCode = 1;
     }
   }

@@ -199,6 +199,7 @@ export const shareSchema = z.object({
   title: z.string().optional(),
   shortDescription: z.string().max(200).optional(), // SOW-032: optional one-line blurb (mirrors src/content.config.ts)
   url: z.string().url().optional(),
+  image: z.string().optional(), // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
   tags: z.array(z.string()).default([]),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date().optional(),

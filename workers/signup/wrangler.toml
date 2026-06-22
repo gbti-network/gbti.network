@@ -39,6 +39,11 @@ STRIPE_PRICE_ID = "price_1TeI3RBUci7L4JnwPYzZfspC"
 GITHUB_OAUTH_CLIENT_ID = "Ov23liG561w3RA8gPSJN"
 DISCORD_OAUTH_CLIENT_ID = "1511795875788357632"
 
+# SOW: device-flow GitHub App client id for the /auth/refresh endpoint (the App the EXTENSION signs in with,
+# `gbti-network-publisher`). Public (no secret in the client id). The paired GITHUB_PUBLISHER_CLIENT_SECRET is a
+# SECRET set via `wrangler secret put`. Override the sandbox value in [env.production.vars] if the App differs.
+GITHUB_PUBLISHER_CLIENT_ID = "Iv23lis8jbx62zI7cwE8"
+
 # Public content repo ("owner/name") for the re-gate / disable dispatch (SOW-005 signal).
 GITHUB_CONTENT_REPO = "gbti-network/gbti.network"
 
@@ -67,10 +72,19 @@ binding = "SIGNUP_KV"
 id = "49432379e11844ac81b6fdaf22d3937a"
 preview_id = "09ca7e156ea04e62b9f4c8716e2a83c9"
 
+# SOW-058: the syndication drain cron. The one-hour hold is the deliberate delay, so a 5-minute tick adds at most
+# 5 minutes past the hour and is far cheaper than per-minute. Wrangler does NOT inherit triggers into named envs,
+# so the same crons are repeated under [env.production.triggers].
+[triggers]
+crons = ["*/5 * * * *"]
+
 # Secrets set out-of-band (wrangler secret put / .dev.vars), listed here for documentation only:
 #   STRIPE_SECRET_KEY            restricted: create-customer + checkout only (least privilege)
 #   STRIPE_WEBHOOK_SECRET        for the optional webhook signature verification
 #   GITHUB_OAUTH_CLIENT_SECRET
+#   GITHUB_PUBLISHER_CLIENT_SECRET  SOW: the gbti-network-publisher App's client secret, for POST /auth/refresh
+#                                   (refreshes the extension's expiring user token). Until set, /auth/refresh
+#                                   returns 501 and tokens just expire (the extension then forces re-sign-in).
 #   DISCORD_OAUTH_CLIENT_SECRET
 #   DISCORD_BOT_TOKEN            bot with Manage Roles; its role must sit above Trial + Member
 #   SESSION_SECRET               HMAC key for the signed session + OAuth state
@@ -86,6 +100,11 @@ preview_id = "09ca7e156ea04e62b9f4c8716e2a83c9"
 #   MEMBER_CONTENT_KEYS          SOW-016 (optional): JSON map { "<kid>": "<base64 key>" } of retired epochs
 #                                kept ONLY for the brief CDN-propagation overlap, then removed (the old key is
 #                                destroyed so the old git-history ciphertext becomes keyless).
+#   --- SOW-058 syndication channel secrets (each channel is SKIPPED until its secrets exist) ---
+#   DISCORD_CHANNEL_POSTS/PRODUCTS/PROMPTS/SHARES  per-type channel ids the drain posts to (non-secret; may live
+#                                in [vars]). MASTODON_BASE_URL + MASTODON_ACCESS_TOKEN; BLUESKY_HANDLE +
+#                                BLUESKY_APP_PASSWORD; X_API_KEY/X_API_SECRET/X_ACCESS_TOKEN/X_ACCESS_SECRET;
+#                                LINKEDIN_ACCESS_TOKEN + LINKEDIN_ORG_URN. Optional MAX_DRAIN_PER_TICK (default 10).
 #
 # The reconcile (scripts/reconcile.mjs) writes the overrides:mirror KV key this endpoint reads. It needs
 # CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN in its OWN env (a GitHub Action secret, not a Worker
@@ -122,6 +141,7 @@ NEWS_CHANNELS = "{\"channels\":[]}"
 # LIVE-only values: fill before the production deploy.
 STRIPE_PRICE_ID = "price_1Tg5NHBFxyhSkuibXFrQyqaN"            # the live $150/yr recurring price (prod_UfQDvczTRPCOOq)
 GITHUB_OAUTH_CLIENT_ID = "Ov23li18yffp7NHSM6l6"
+GITHUB_PUBLISHER_CLIENT_ID = "Iv23lis8jbx62zI7cwE8"           # SOW: the gbti-network-publisher App (same App in sandbox + prod) for /auth/refresh
 DISCORD_OAUTH_CLIENT_ID = "1511795875788357632"
 DISCORD_GUILD_ID = "1073029070411006053"
 DISCORD_TRIAL_ROLE_ID = "1511800465107583198"
@@ -145,3 +165,7 @@ custom_domain = true
 [[env.production.kv_namespaces]]
 binding = "SIGNUP_KV"
 id = "49432379e11844ac81b6fdaf22d3937a"
+
+# SOW-058: the syndication drain cron for production (wrangler does not inherit the top-level [triggers]).
+[env.production.triggers]
+crons = ["*/5 * * * *"]

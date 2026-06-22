@@ -30,6 +30,8 @@ import {
   mutateMemberActivity,
   getFollows,
   setFollow,
+  upvoteContent,
+  ogPreview,
   getDiscordInvite,
   getNews,
   getNewsSources,
@@ -113,6 +115,8 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/activity') return run(() => mutateMemberActivity(ctx, body ?? {})); // SOW-024
   if (method === 'GET' && pathname === '/api/follows') return run(() => getFollows(ctx)); // SOW-023
   if (method === 'POST' && pathname === '/api/follows') return run(() => setFollow(ctx, body ?? {})); // SOW-023
+  if (method === 'POST' && pathname === '/api/upvote') return run(() => upvoteContent(ctx, body ?? {})); // SOW-057
+  if (method === 'POST' && pathname === '/api/og-preview') return run(() => ogPreview(ctx, body ?? {})); // SOW-057
   if (method === 'GET' && pathname === '/api/discord-invite') return run(() => getDiscordInvite(ctx)); // on-demand Discord invite
   if (method === 'GET' && pathname === '/api/news') return run(() => getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || undefined })); // SOW-043 members-only news
   if (method === 'GET' && pathname === '/api/news-sources') return run(() => getNewsSources(ctx)); // SOW-046: followable news channels
@@ -144,6 +148,8 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/overrides') return run(() => getOverridesRoster(ctx)); // SOW-038 P2: superadmin dashboard roster (admin-gated)
   if (method === 'GET' && pathname === '/api/taxonomy') return run(() => getTaxonomy(ctx)); // SOW-055: the canonical category tree for the manager UI
   if (method === 'GET' && pathname === '/api/open-pulls') return run(() => getOpenPulls(ctx)); // SOW-038 P2: open content-PR queue (admin-gated)
+  if (method === 'GET' && pathname === '/api/syndication') return run(() => getSyndicationQueue(ctx)); // SOW-058: superadmin syndication tracker
+  if (method === 'POST' && pathname === '/api/syndication/cancel') return run(() => cancelSyndication(ctx, body ?? {})); // SOW-058: superadmin cancel
   if (method === 'POST' && pathname === '/api/admin-ops') return run(() => triggerAdminOp(ctx, body ?? {})); // SOW-038 P3: reconcile/E2E trigger
 
   // Role-gated admin/superadmin actions (the operations enforce the capability; the gate is authoritative).
