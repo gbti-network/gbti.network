@@ -1,0 +1,46 @@
+name: Deploy to Cloudflare Pages
+
+# Builds the site and deploys it to the gbti-network Pages project on every push to main, so a push lands on
+# production automatically. The Pages project is a DIRECT-UPLOAD project (Git provider: none) — that is why
+# pushes never deployed before: there was no automation, only an occasional manual `wrangler pages deploy`.
+# This workflow is that automation.
+#
+# Setup (one time, owner): add a repository secret CLOUDFLARE_API_TOKEN = a Cloudflare API token scoped to
+#   "Account > Cloudflare Pages > Edit" on the Gbti.labs account. The account id below is not a secret (it is in
+#   every dashboard URL). Optionally add MEMBER_CONTENT_KEY so the dist key-scan can assert that value never
+#   leaked into the build (the build does not require it).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# One production deploy at a time; never cancel an in-flight upload mid-flight.
+concurrency:
+  group: pages-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Full install (not --ignore-scripts): the astro build needs sharp's native binary for image optimization.
+      - run: npm ci
+      # build:pages = repackage the extension zip, astro build (emits the index JSONs + optimized images), then
+      # verify:dist (key-scan + redirects + extension-distribution guards). A guard failure fails the deploy.
+      - name: Build the site
+        run: npm run build:pages
+        env:
+          # Opt-in defense in depth: when set, check-build-secrets scans dist for this value. Not required to build.
+          MEMBER_CONTENT_KEY: ${{ secrets.MEMBER_CONTENT_KEY }}
+      - name: Deploy dist to Cloudflare Pages (production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: d42b12e969229c5187ad0f7289536487
+          command: pages deploy dist --project-name=gbti-network --branch=main
