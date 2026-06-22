@@ -338,7 +338,7 @@ section { position: relative; }
 .pr-status { display: inline-flex; align-items: center; gap: 7px; flex: none; width: 104px; }
 .pr-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .pr-dot.merged { background: var(--green); } .pr-dot.open { background: transparent; border: 2px solid var(--fg-mute); }
-.pr-num { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); flex: none; width: 40px; }
+.pr-num { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); flex: none; width: 64px; white-space: nowrap; }
 .pr-title { flex: 1; min-width: 0; font-size: 14.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pr-when { font-family: var(--f-mono); font-size: 11.5px; color: var(--fg-mute); flex: none; }
 .pr-av { width: 26px; height: 26px; flex: none; }

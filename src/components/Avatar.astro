@@ -8,8 +8,10 @@ interface Props {
   item: { name: string; avatar?: string };
   class?: string;
   size?: number;
+  /** Optional native hover tooltip (e.g. the member's display name). */
+  title?: string;
 }
-const { item, class: cls = '', size } = Astro.props;
+const { item, class: cls = '', size, title } = Astro.props;
 const name = (item?.name || '?').trim();
 const initial = name.charAt(0).toUpperCase() || '?';
 
@@ -38,6 +40,7 @@ const fontSize = size ? `font-size:${Math.round(size * 0.42)}px;` : '';
 ---
 <span
   class:list={[cls]}
+  title={title}
   style={`position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;background:${bg};color:#fff;font-family:var(--f-display);font-weight:700;${dim}${fontSize}`}
 >
   <span aria-hidden="true">{initial}</span>
