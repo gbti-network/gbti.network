@@ -8607,6 +8607,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const top = nav === "feed" ? feedControlsHtml() : "";
     return `<nav class="nt-rail">${brandHtml()}${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE12}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;
   }
+  function applyHeadingIcon(key) {
+    const h1 = document.querySelector("[data-topbar] h1");
+    if (!h1) return;
+    const icoKey = key ? document.querySelector(`.nt-rail .nav-i[data-key="${key}"] [data-ico]`)?.dataset.ico : null;
+    let holder = h1.querySelector(".head-ico");
+    if (!icoKey) {
+      holder?.remove();
+      return;
+    }
+    if (!holder) {
+      holder = document.createElement("span");
+      holder.className = "head-ico";
+      holder.setAttribute("aria-hidden", "true");
+      h1.prepend(holder);
+    }
+    holder.innerHTML = ico(icoKey);
+  }
   async function api(pathname, query = {}) {
     try {
       const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname, query } });
@@ -8945,6 +8962,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     root.querySelectorAll("[data-ico]").forEach((el) => {
       el.innerHTML = ico(el.dataset.ico);
     });
+    applyHeadingIcon(active);
     const themeBtn = root.querySelector("[data-theme-toggle]");
     if (themeBtn) {
       themeBtn.innerHTML = ico(document.documentElement.getAttribute("data-theme") === "dark" ? "sun" : "moon");

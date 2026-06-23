@@ -160,6 +160,21 @@ function railHtml(active, nav = 'feed') {
  *  left rail in lockstep with the chips + feed. */
 export function setRailActive(key) {
   document.querySelectorAll('.nt-rail .nav-i').forEach((a) => a.classList.toggle('on', a.dataset.key === key));
+  applyHeadingIcon(key);
+}
+
+// SOW-064: prefix the page's main heading (the [data-topbar] <h1>) with the ACTIVE rail item's icon, sized to the
+// heading, so the section the member is in is echoed at the start of the welcome/heading line. The icon key is read
+// from the active rail item in the DOM, so this is nav-agnostic and follows the selection (initShell sets it once;
+// setRailActive updates it when the new-tab feed switches Activity <-> News, etc.).
+function applyHeadingIcon(key) {
+  const h1 = document.querySelector('[data-topbar] h1');
+  if (!h1) return;
+  const icoKey = key ? document.querySelector(`.nt-rail .nav-i[data-key="${key}"] [data-ico]`)?.dataset.ico : null;
+  let holder = h1.querySelector('.head-ico');
+  if (!icoKey) { holder?.remove(); return; }
+  if (!holder) { holder = document.createElement('span'); holder.className = 'head-ico'; holder.setAttribute('aria-hidden', 'true'); h1.prepend(holder); }
+  holder.innerHTML = ico(icoKey);
 }
 
 /** GET /api/* via the background worker; null on any failure. */
@@ -454,6 +469,7 @@ export function initShell({ active = null, nav = 'feed' } = {}) {
   }
   // Fill the inline-SVG glyphs (rail + controls + any static [data-ico] in the page main). Trusted constants.
   root.querySelectorAll('[data-ico]').forEach((el) => { el.innerHTML = ico(el.dataset.ico); });
+  applyHeadingIcon(active); // SOW-064: lead the page heading with the active section's icon
   const themeBtn = root.querySelector('[data-theme-toggle]');
   if (themeBtn) {
     themeBtn.innerHTML = ico(document.documentElement.getAttribute('data-theme') === 'dark' ? 'sun' : 'moon');

@@ -132,6 +132,10 @@ html[data-unauth] .compose-modal { display: none !important; }
 .compose-x:hover { background: var(--paper-3); color: var(--fg); }
 .compose-x svg { width: 18px; height: 18px; }
 
+/* SOW-064: the active section's icon leading the page heading (sized to the heading via 1em). */
+.head-ico { display: inline-flex; align-items: center; vertical-align: -.15em; margin-right: .42em; color: var(--green); }
+.head-ico svg { width: 1em; height: 1em; }
+
 /* SOW-064: the "+" create popup, following the "Content Creation Popup" Claude Design — a centered, dimmed modal
    with a header, four COLOR-CODED format cards in one row (Share pre-selected), a workbench search, and a Recent
    drafts list. Surfaces use the shell tokens; the per-type tile colors follow the design (light + dark). */
