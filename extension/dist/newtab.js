@@ -3765,15 +3765,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     overlay.querySelector("gbti-share-composer")?.querySelector?.("input, textarea")?.focus?.();
   }
   var CREATE_CARDS = [
+    { type: "share", ico: "mega", t: "New Share", s: "A quick update" },
     { type: "post", ico: "article", t: "New article", s: "Write a post" },
     { type: "prompt", ico: "prompt", t: "New prompt", s: "Share a prompt" },
-    { type: "product", ico: "product", t: "New product", s: "List a product" },
-    { type: "share", ico: "mega", t: "New Share", s: "A quick update" }
+    { type: "product", ico: "product", t: "New product", s: "List a product" }
   ];
   function openCreateModal() {
     if (document.querySelector(".compose-modal")) return;
     const overlay = document.createElement("div");
-    overlay.className = "compose-modal";
+    overlay.className = "compose-modal create-modal";
     const cards = CREATE_CARDS.map((c) => `<button class="cc-card" data-new="${c.type}" type="button"><span class="cc-ico">${ico(c.ico)}</span><span class="cc-t">${c.t}</span><span class="cc-s">${c.s}</span></button>`).join("");
     overlay.innerHTML = `<div class="compose-panel create-panel"><div class="compose-head"><b>Create</b><button class="compose-x" type="button" aria-label="Close">${ico("x")}</button></div><div class="create-grid">${cards}</div></div>`;
     const onEsc = (e) => {
