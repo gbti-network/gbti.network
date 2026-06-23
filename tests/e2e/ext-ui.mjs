@@ -65,13 +65,18 @@ async function main() {
     await nt.waitForSelector('[data-greeting]', { timeout: 10000 });
     const greeting = (await nt.textContent('[data-greeting]')) || '';
     check('new tab renders (greeting)', /morning|afternoon|evening/i.test(greeting), greeting.trim());
-    // Wait for ACTUAL rows (not the initial "Loading..." .muted, which would satisfy an OR-selector prematurely).
-    await nt.waitForSelector('.feed a.row', { timeout: 25000 }).catch(() => {});
-    const rows = await nt.locator('.feed a.row').count();
+    // SOW-039/052: the feed renders through the shared <gbti-card-list> web component (open shadow); every item in
+    // every density mode carries [data-card] (content rows are <div role=button>, only News is an <a>). Playwright
+    // pierces open shadow DOM in CSS locators, so this matches the rows regardless of mode.
+    await nt.waitForSelector('gbti-card-list [data-card]', { timeout: 25000 }).catch(() => {});
+    const rows = await nt.locator('gbti-card-list [data-card]').count();
     check('new tab activity feed loads from the live site', rows > 0, `${rows} rows`);
     if (HAVE_TOKEN) {
-      await nt.waitForFunction(() => /@gbtilabs/i.test(document.querySelector('[data-acct]')?.textContent || ''), { timeout: 12000 }).catch(() => {});
-      const acct = (await nt.textContent('[data-acct]')) || '';
+      // SOW-052: the signed-in identity shows as the greeting suffix ", @login" in [data-greet-name] (the old
+      // [data-acct] control was removed in the headerless redesign). The element is always present, so textContent
+      // resolves immediately (no 30s timeout) whether or not it is populated.
+      await nt.waitForFunction(() => /@gbtilabs/i.test(document.querySelector('[data-greet-name]')?.textContent || ''), { timeout: 12000 }).catch(() => {});
+      const acct = (await nt.textContent('[data-greet-name]')) || '';
       check('new tab shows the signed-in identity', /@gbtilabs/i.test(acct), acct.trim());
     } else skip('new tab shows the signed-in identity', 'no real token');
 

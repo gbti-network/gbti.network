@@ -32,7 +32,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      # No dependencies to install: the harness uses node fetch + a local module.
+      # SOW-035 P4: the admin-cycle imports membership modules (overrides/superadmin) that need js-yaml, so deps
+      # must be installed. The api-smoke + content-cycle steps are fetch-only, but admin-cycle is not.
+      # --ignore-scripts: the API harness needs no build, just node_modules.
+      - run: npm ci --ignore-scripts
       - name: Run the live api-smoke (authenticated as gbtilabs)
         run: node tests/e2e/api-smoke.mjs
         env:
