@@ -39,6 +39,16 @@ test('loadSourceList falls back to the KV cache when the fetch fails', async () 
   assert.deepEqual(r.sources.map((s) => s.id), ['cached']);
 });
 
+test('loadSourceList times out a HUNG artifact fetch and falls back (SOW-056 outage fix)', async () => {
+  const env = kv();
+  env.NEWS_SOURCES_URL = 'https://gbti.network/news-sources.json';
+  // a fetch that never resolves until its AbortController signal fires — simulates the hang that froze ingest.
+  const hung = (_url, opts) => new Promise((_res, reject) => { opts.signal.addEventListener('abort', () => reject(new Error('aborted'))); });
+  const r = await loadSourceList(env, { fetchImpl: hung, timeoutMs: 20 });
+  assert.equal(r.origin, 'bundled'); // the timeout aborted the hang -> fell through to the bundled seed (ingest proceeds)
+  assert.ok(r.sources.length > 50);
+});
+
 test('loadSourceList falls back to the bundled seed with no URL / no cache', async () => {
   const env = kv(); // no NEWS_SOURCES_URL
   const r = await loadSourceList(env, { fetchImpl: async () => { throw new Error('unused'); } });

@@ -34,11 +34,18 @@ export function cleanSources(list) {
  * Resolve the live source pool. Prefers the published artifact (NEWS_SOURCES_URL), caches it to KV for fail-soft,
  * then falls back to the last cache, then the bundled config seed. Returns { sources, origin }.
  */
-export async function loadSourceList(env, { fetchImpl = fetch } = {}) {
+export async function loadSourceList(env, { fetchImpl = fetch, timeoutMs = 8000 } = {}) {
   const url = env?.NEWS_SOURCES_URL;
   if (url) {
     try {
-      const res = await fetchImpl(url, { cf: { cacheTtl: 300, cacheEverything: true } });
+      // SOW-056 FIX: the artifact fetch MUST be timed out (like fetchSource), or a slow/hung response blocks the
+      // whole ingest forever (the cron never reaches the feed fetches -> zero new items). On abort/timeout this
+      // throws and we fall through to the KV cache, then the bundled seed.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let res;
+      try { res = await fetchImpl(url, { signal: controller.signal, cf: { cacheTtl: 300, cacheEverything: true } }); }
+      finally { clearTimeout(timer); }
       if (res && res.ok) {
         const data = await res.json();
         const list = cleanSources(data?.sources);
@@ -66,7 +73,8 @@ export async function nextChunk(env, sources, chunkSize, { save = true } = {}) {
   const n = sources.length;
   if (!n) return [];
   if (!chunkSize || chunkSize <= 0 || chunkSize >= n) return sources;
-  let cursor = Number(await env.NEWS_KV.get(K_CURSOR));
+  let cursor = 0;
+  try { cursor = Number(await env.NEWS_KV.get(K_CURSOR)); } catch { cursor = 0; } // a KV read error must not abort ingest
   if (!Number.isInteger(cursor) || cursor < 0 || cursor >= n) cursor = 0; // unset or stale
   const picked = sources.slice(cursor, cursor + chunkSize);
   const next = cursor + chunkSize >= n ? 0 : cursor + chunkSize;
