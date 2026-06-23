@@ -157,8 +157,13 @@ async function governanceAuthoringCycle() {
   }
 
   const cr = await reg.cleanup(console.log);
+  // The ref delete is eventually consistent: getRef can still 200 for a beat after deleteRef. Poll for the 404
+  // (up to ~5s) so a clean scrub does not flake to branchGone=false on the timing race.
   let branchGone = false;
-  try { await gh.getRef(`heads/${branch}`); } catch (e) { branchGone = e?.status === 404; }
+  for (let i = 0; i < 6 && !branchGone; i++) {
+    try { await gh.getRef(`heads/${branch}`); } catch (e) { if (e?.status === 404) { branchGone = true; break; } }
+    if (!branchGone) await new Promise((r) => setTimeout(r, 1000));
+  }
   let prClosed = !prNumber;
   if (prNumber) { try { const pr = await gh.getPull(prNumber); prClosed = pr?.state === 'closed'; } catch { prClosed = false; } }
   check('governance PR + branch scrubbed (zero leaks)', cr.leaked.length === 0 && branchGone && prClosed, `cleaned=${cr.cleaned} leaked=${cr.leaked.length} branchGone=${branchGone} prClosed=${prClosed}`);
