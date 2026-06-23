@@ -61,6 +61,9 @@ jobs:
           E2E_SITE: https://gbti.network
           E2E_WORKER: https://signup.gbti.network
           GITHUB_CONTENT_REPO: gbti-network/gbti.network
+          # reconcile.mjs reads the GitHub token from GITHUB_BOT_TOKEN (its client), so the dry-run's repo reads
+          # need it under that name (E2E_TOKEN alone is not enough). Dry-run only reads + logs; it never writes.
+          GITHUB_BOT_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
 
   # Phase 3: the Playwright extension-UI smoke. Loads the MV3 extension headed (xvfb), seeds a signed-in state,

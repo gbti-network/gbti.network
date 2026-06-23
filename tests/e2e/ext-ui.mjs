@@ -91,10 +91,13 @@ async function main() {
     const stamp = await site.evaluate(() => document.documentElement.dataset.gbtiExtension || null);
     check('content script stamps gbti.network (extension detected)', !!stamp, stamp ? `version ${stamp}` : 'not stamped');
     if (HAVE_TOKEN) {
-      await site.waitForFunction(() => { const m = document.querySelector('[data-head-me]'); return !!m && !m.hidden; }, { timeout: 15000 }).catch(() => {});
-      const chip = await site.evaluate(() => { const m = document.querySelector('[data-head-me]'); return !!m && !m.hidden; });
+      // SOW-030 bridge: the content script relays the extension's signed-in identity to the page, which fills the
+      // header chip name. Wait on the ACTUAL signal (the @login populating [data-head-me-name]); the old wait on
+      // [data-head-me].hidden was meaningless (the WRAP [data-head-me-wrap] is the hidden element, not the button),
+      // so it returned immediately and read the chip before the async bridge had delivered it.
+      await site.waitForFunction(() => /@gbtilabs/i.test(document.querySelector('[data-head-me-name]')?.textContent || ''), { timeout: 15000 }).catch(() => {});
       const chipText = await site.evaluate(() => document.querySelector('[data-head-me-name]')?.textContent || '');
-      check('site header shows the signed-in chip (SOW-030 bridge)', chip && /@gbtilabs/i.test(chipText), chipText);
+      check('site header shows the signed-in chip (SOW-030 bridge)', /@gbtilabs/i.test(chipText), chipText.trim());
     } else skip('site header shows the signed-in chip (SOW-030 bridge)', 'no real token');
   } catch (e) {
     check('extension UI smoke ran', false, e?.message ?? String(e));
