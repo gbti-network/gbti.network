@@ -155,6 +155,40 @@ async function main() {
       await p.close();
     }
 
+    // 6) The content editor (SOW-062 two-column reimagine) — inject a sample post (incl. canonicalUrl to confirm
+    //    it is hidden) and open it in the editor. formFields is computed locally so it renders without auth.
+    {
+      const p = await context.newPage();
+      p.on('console', (m) => { if (m.type() === 'error') console.log('  [editor err]', m.text()); });
+      await p.goto(`chrome-extension://${extId}/workspace.html#tab=post`, { waitUntil: 'domcontentloaded' });
+      await dismissGate(p);
+      await p.waitForSelector('gbti-workspace', { timeout: 12000 }).catch(() => {});
+      await p.waitForTimeout(600);
+      await p.evaluate(async () => {
+        const el = document.querySelector('gbti-workspace'); if (!el) return;
+        // formFields is identity-gated (the placeholder token can't satisfy it), so stub it with a representative
+        // field set to render the SOW-062 two-column rail + its sections (incl. the hidden canonicalUrl/delegation).
+        const FIELDS = [
+          { key: 'title', label: 'Title', kind: 'text', required: true },
+          { key: 'slug', label: 'Slug', kind: 'text' },
+          { key: 'summary', label: 'Summary', kind: 'textarea' },
+          { key: 'categories', label: 'Categories', kind: 'text' },
+          { key: 'tags', label: 'Tags', kind: 'text' },
+          { key: 'status', label: 'Status', kind: 'enum', options: ['draft', 'published'] },
+          { key: 'visibility', label: 'Visibility', kind: 'enum', options: ['public', 'members'] },
+          { key: 'coverImage', label: 'Cover image', kind: 'image' },
+          { key: 'canonicalUrl', label: 'Canonical URL', kind: 'text' },
+          { key: 'delegation', label: 'Delegation', kind: 'text' },
+        ];
+        el.client.formFields = async () => ({ fields: FIELDS });
+        el._editing = { type: 'post', frontmatter: { title: 'My draft article', slug: 'my-draft', categories: ['ai'], tags: ['demo', 'editor'], status: 'draft', visibility: 'public', canonicalUrl: 'https://example.com/x', delegation: 0.3 }, body: '# Hello\n\nThis is the article body.\n\n<!-- members-only -->\n\nA members-only section below the marker.' };
+        el.render();
+      }).catch(() => {});
+      await p.waitForTimeout(1000); // let the editor formFields load + render the two columns
+      await shoot(p, 'editor');
+      await p.close();
+    }
+
     log(`\nDONE -> ${SHOTS}`);
   } catch (e) {
     log(`ERROR ${e?.message ?? e}`);

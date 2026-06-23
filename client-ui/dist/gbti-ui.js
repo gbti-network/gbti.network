@@ -254,6 +254,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-content-editor.mjs
   var TYPES = ["post", "product", "prompt", "profile"];
+  var HIDDEN_KEYS = /* @__PURE__ */ new Set(["delegation", "canonicalUrl"]);
+  var RAIL_SECTIONS = [
+    { name: "Publishing", keys: ["status", "visibility"] },
+    { name: "Taxonomy", keys: ["categories", "tags"] },
+    { name: "Pricing", keys: ["pricing", "pricingUrl"] },
+    { name: "Links", keys: ["links"] },
+    { name: "Media", keys: ["coverImage", "image", "imageAlt", "alt"] }
+  ];
+  var sectionFor = (key) => RAIL_SECTIONS.find((s) => s.keys.includes(key))?.name || "Details";
   var GbtiContentEditor = class extends GbtiElement {
     constructor() {
       super();
@@ -283,30 +292,65 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const blocked = membership !== "paid" && membership !== "unknown";
       const p = this.preset?.input ?? {};
+      const getValPreset = (k) => this.presetStr(p[k]);
+      const grouped = {};
+      const hiddenFields = [];
+      for (const f of this.fields) {
+        if (HIDDEN_KEYS.has(f.key)) {
+          hiddenFields.push(f);
+          continue;
+        }
+        const sec = sectionFor(f.key);
+        (grouped[sec] = grouped[sec] || []).push(f);
+      }
+      const order = ["Details", ...RAIL_SECTIONS.map((s) => s.name)];
+      const sectionsHtml = order.filter((n) => grouped[n]?.length).map((n) => {
+        const inner = grouped[n].map((f) => this.fieldHtml(f, p[f.key], this.fieldVisible(f, getValPreset))).join("");
+        return `<details open class="sec"><summary>${esc(n)}</summary><div class="grid">${inner}</div></details>`;
+      }).join("");
+      const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join("");
       this.set(
         this.css(`
-        .grid { display: grid; gap: 2px; }
+        .editor { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:22px; align-items:start; }
+        @media (max-width:860px) { .editor { grid-template-columns:1fr; } }
+        .doc { min-width:0; }
+        .doc .body-l { margin-top:0; }
+        #body { width:100%; min-height:58vh; resize:vertical; }
+        .grid { display:grid; gap:2px; }
         .actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
         #out { margin-top:12px; }
         .preview { background:#201e26; border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
         .notice { background:#2a2330; border:1px solid var(--accent); border-radius:8px; padding:10px 14px; margin-bottom:12px; }
         .notice a { color: var(--accent); }
-      `) + `<div class="panel">
-           <h2>Author</h2>
-           ${blocked ? `<div class="notice">Publishing requires a paid membership. You can write and stage your work now; it stays on your fork until you upgrade. <a href="https://gbti.network" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
-           <label>Type</label>
-           <select id="type">${TYPES.map((t) => `<option ${t === this.type ? "selected" : ""}>${t}</option>`).join("")}</select>
-           <div class="grid" id="fields">${this.fields.map((f) => this.fieldHtml(f, p[f.key], this.fieldVisible(f, (k) => this.presetStr(p[k])))).join("")}</div>
-           <label>Body (Markdown)</label>
-           <textarea id="body">${esc(this.preset?.body ?? "")}</textarea>
-           <div class="actions">
-             <button id="preview" class="ghost">Preview</button>
-             <button id="validate" class="ghost">Validate</button>
-             <button id="publish"${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required to publish" : "Publish (open PR)"}</button>
-             <input type="file" id="img" accept="image/*" style="display:none" />
-             <button id="imgbtn" class="ghost">Add image</button>
+        .rail { border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:4px 14px 12px; position:sticky; top:8px; }
+        .rail-h { font-family:var(--font-display, inherit); font-weight:700; font-size:15px; padding:11px 0 2px; }
+        .rail details.sec { border-top:1px solid var(--line); }
+        .rail summary { cursor:pointer; list-style:none; font-weight:600; font-size:13px; padding:10px 0; color:var(--fg); display:flex; justify-content:space-between; align-items:center; }
+        .rail summary::-webkit-details-marker { display:none; }
+        .rail summary::after { content:'⌄'; color:var(--muted); font-size:12px; }
+        .rail details[open] summary::after { content:'⌃'; }
+        .rail .grid { padding-bottom:10px; }
+      `) + `<div class="editor">
+           <div class="doc">
+             ${blocked ? `<div class="notice">Publishing requires a paid membership. You can write and stage your work now; it stays on your fork until you upgrade. <a href="https://gbti.network" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
+             <label class="body-l">Body (Markdown)</label>
+             <textarea id="body">${esc(this.preset?.body ?? "")}</textarea>
+             <div class="actions">
+               <button id="preview" class="ghost">Preview</button>
+               <button id="validate" class="ghost">Validate</button>
+               <button id="publish"${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required to publish" : "Publish (open PR)"}</button>
+               <input type="file" id="img" accept="image/*" style="display:none" />
+               <button id="imgbtn" class="ghost">Add image</button>
+             </div>
+             <div id="out" class="muted"></div>
            </div>
-           <div id="out" class="muted"></div>
+           <aside class="rail">
+             <div class="rail-h">Document</div>
+             <label>Type</label>
+             <select id="type">${TYPES.map((t) => `<option ${t === this.type ? "selected" : ""}>${t}</option>`).join("")}</select>
+             ${sectionsHtml}
+             <div hidden>${hiddenHtml}</div>
+           </aside>
          </div>`
       );
       this.on("#type", "change", (e) => {
