@@ -9,6 +9,7 @@ import './gbti-reader.mjs';
 import './gbti-shares-feed.mjs';
 import './gbti-news.mjs'; // SOW-043: the members-only news section (its own self-loading tab)
 import './gbti-card-list.mjs'; // SOW-041: the shared content-item presentation
+import { primaryChips, subChips, filterByCategoryPath } from '../browse-filter-core.mjs'; // SOW-054: the category drill-down
 
 const SITE = 'https://gbti.network';
 // SOW-042: "All" is the first tab — the UNCAPPED cross-type directory (the three per-type indexes + Shares).
@@ -44,6 +45,13 @@ const CSS = `
   .empty { color:var(--muted); padding:18px 2px; }
   .btn { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; margin:0 0 14px; }
   .btn:hover { border-color:var(--accent); color:var(--accent); }
+  /* SOW-054: the category drill-down chip rows (primary, then subcategory when a primary is selected). */
+  .cchips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
+  .cchips.sub { margin-top:-4px; }
+  .cchip { font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; }
+  .cchip:hover { color:var(--fg); border-color:var(--accent); }
+  .cchip.on { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .cchip .n { opacity:.7; font-variant-numeric:tabular-nums; margin-left:4px; }
 `;
 
 class GbtiBrowse extends GbtiElement {
@@ -58,6 +66,7 @@ class GbtiBrowse extends GbtiElement {
     this._tab = tab && TABS.some((t) => t.id === tab) ? tab : 'all';
     this._openPath = (this._tab !== 'share' && this._tab !== 'all' && this._tab !== 'news') ? read : null; // shares/all/news have no path-addressed reader item
     this._cache = {};
+    this._cat = []; // SOW-054: the selected category drill-down path ([] = All; [primary]; [primary, sub])
     this._shares = null; // SOW-042: raw Shares for the All tab, fetched once (member-gated)
     this._membership = null; // SOW-042: effective status for the Shares-omission policy
     this._reading = null;
@@ -75,7 +84,7 @@ class GbtiBrowse extends GbtiElement {
       const { tab, read } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
       const t = tab && TABS.some((x) => x.id === tab) ? tab : this._tab;
       if (read && t !== 'share' && t !== 'all' && t !== 'news') { this._tab = t; this._reading = (this._cache[t] || []).find((x) => x.path === read) || { type: t, path: read }; this.render(); this._ensure(t); return; }
-      if (t !== this._tab || this._reading) { this._tab = t; this._reading = null; this.render(); this._ensureTab(t); }
+      if (t !== this._tab || this._reading) { this._tab = t; this._cat = []; this._reading = null; this.render(); this._ensureTab(t); }
     };
     if (typeof window !== 'undefined') window.addEventListener('hashchange', this._onHash);
     this._init();
@@ -147,7 +156,7 @@ class GbtiBrowse extends GbtiElement {
     }
     const tabs = TABS.map((t) => `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join('');
     this.set(this.css(CSS) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
-    this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this.render(); this._ensureTab(this._tab); }));
+    this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this._cat = []; this.render(); this._ensureTab(this._tab); }));
     this._renderBody();
   }
 
@@ -161,11 +170,34 @@ class GbtiBrowse extends GbtiElement {
     if (this._tab === 'news') { host.replaceChildren(document.createElement('gbti-news')); return; } // SOW-043: self-loading members-only feed
     const items = this._tab === 'all' ? this._allItems() : this._cache?.[this._tab];
     if (!items) { host.innerHTML = `<p class="empty">Loading...</p>`; return; }
+    // SOW-054: the category drill-down. A primary chip row (and, once a primary is selected, its subcategory row)
+    // sits above the list; the list shows only items whose categories path matches the selection. The labels ride
+    // on the index items (categoryLabels), so no taxonomy lookup is needed in the bundle.
+    const cat = this._cat || [];
+    const primaries = primaryChips(items);
+    const primaryLabel = (primaries.find((p) => p.key === cat[0]) || {}).label || cat[0] || '';
+    const chipRow = (chips, depth, allLabel) =>
+      `<div class="cchips${depth ? ' sub' : ''}">`
+      + `<button class="cchip ${cat.length === depth ? 'on' : ''}" data-cat="${depth}" type="button">${esc(allLabel)}</button>`
+      + chips.map((c) => `<button class="cchip ${cat[depth] === c.key ? 'on' : ''}" data-cat="${depth}" data-key="${esc(c.key)}" type="button">${esc(c.label)}<span class="n">${c.count}</span></button>`).join('')
+      + `</div>`;
+    let chrome = '';
+    if (primaries.length) {
+      chrome += chipRow(primaries, 0, 'All');
+      const subs = cat.length ? subChips(items, cat[0]) : [];
+      if (subs.length) chrome += chipRow(subs, 1, `All ${primaryLabel}`);
+    }
+    host.innerHTML = chrome + `<div data-list></div>`;
+    host.querySelectorAll('[data-cat]').forEach((b) => b.addEventListener('click', () => {
+      const depth = Number(b.dataset.cat);
+      this._cat = 'key' in b.dataset ? cat.slice(0, depth).concat(b.dataset.key) : cat.slice(0, depth);
+      this._renderBody();
+    }));
     const list = document.createElement('gbti-card-list');
     list.mode = 'detailed';
-    list.items = items;
+    list.items = filterByCategoryPath(items, cat);
     list.addEventListener('card-open', (e) => { const it = e.detail?.item; if (it) { this._reading = it; this.render(); } });
-    host.replaceChildren(list);
+    (host.querySelector('[data-list]') || host).replaceChildren(list);
   }
 }
 

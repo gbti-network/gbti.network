@@ -33,8 +33,10 @@ test('toIndexItem: metadata only, derives url + path, never a body', () => {
 test('toIndexItem: carries the top-level category for the UI fallback glyph', () => {
   const it = toIndexItem({ data: { slug: 'p', title: 'P', author: 'gbti', categories: ['ai', 'agents'] } }, 'prompt');
   assert.equal(it.category, 'ai'); // the TOP segment of the categories path
+  assert.deepEqual(it.categories, ['ai', 'agents']); // SOW-054: the full key path for the browse drill-down
   const none = toIndexItem({ data: { slug: 'q', title: 'Q', author: 'gbti' } }, 'prompt');
   assert.equal(none.category, null); // no categories -> null (the UI falls back to a neutral glyph)
+  assert.deepEqual(none.categories, []); // SOW-054: no categories -> empty path
 });
 
 test('thumbOf: per-type field + Astro image()/string normalization, null fallback (SOW-031)', () => {

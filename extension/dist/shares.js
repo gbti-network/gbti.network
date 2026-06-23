@@ -7830,6 +7830,38 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-reader", GbtiReader);
 
+  // client-ui/src/browse-filter-core.mjs
+  function segChips(items, depth, underPrimary) {
+    const map = /* @__PURE__ */ new Map();
+    for (const it of Array.isArray(items) ? items : []) {
+      const cats = Array.isArray(it && it.categories) ? it.categories : [];
+      if (depth === 1 && cats[0] !== underPrimary) continue;
+      const key = cats[depth];
+      if (typeof key !== "string" || !key) continue;
+      const labels = Array.isArray(it && it.categoryLabels) ? it.categoryLabels : [];
+      const label = typeof labels[depth] === "string" && labels[depth] || key;
+      const cur = map.get(key) || { key, label, count: 0 };
+      cur.count += 1;
+      map.set(key, cur);
+    }
+    return [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }
+  function primaryChips(items) {
+    return segChips(items, 0);
+  }
+  function subChips(items, primaryKey) {
+    return primaryKey ? segChips(items, 1, primaryKey) : [];
+  }
+  function filterByCategoryPath(items, path) {
+    const p = (Array.isArray(path) ? path : []).filter((s) => typeof s === "string" && s);
+    const list = Array.isArray(items) ? items : [];
+    if (!p.length) return list;
+    return list.filter((it) => {
+      const cats = Array.isArray(it && it.categories) ? it.categories : [];
+      return p.every((seg, i) => cats[i] === seg);
+    });
+  }
+
   // client-ui/src/elements/gbti-browse.mjs
   var SITE10 = "https://gbti.network";
   var TABS2 = [
@@ -7865,6 +7897,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .empty { color:var(--muted); padding:18px 2px; }
   .btn { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; margin:0 0 14px; }
   .btn:hover { border-color:var(--accent); color:var(--accent); }
+  /* SOW-054: the category drill-down chip rows (primary, then subcategory when a primary is selected). */
+  .cchips { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
+  .cchips.sub { margin-top:-4px; }
+  .cchip { font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 12px; cursor:pointer; }
+  .cchip:hover { color:var(--fg); border-color:var(--accent); }
+  .cchip.on { color:#fff; background:var(--accent); border-color:var(--accent); }
+  .cchip .n { opacity:.7; font-variant-numeric:tabular-nums; margin-left:4px; }
 `;
   var GbtiBrowse = class extends GbtiElement {
     connectedCallback() {
@@ -7872,6 +7911,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._tab = tab && TABS2.some((t) => t.id === tab) ? tab : "all";
       this._openPath = this._tab !== "share" && this._tab !== "all" && this._tab !== "news" ? read : null;
       this._cache = {};
+      this._cat = [];
       this._shares = null;
       this._membership = null;
       this._reading = null;
@@ -7892,6 +7932,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         if (t !== this._tab || this._reading) {
           this._tab = t;
+          this._cat = [];
           this._reading = null;
           this.render();
           this._ensureTab(t);
@@ -7978,6 +8019,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.set(this.css(CSS27) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
+        this._cat = [];
         this.render();
         this._ensureTab(this._tab);
       }));
@@ -8002,9 +8044,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         host.innerHTML = `<p class="empty">Loading...</p>`;
         return;
       }
+      const cat = this._cat || [];
+      const primaries = primaryChips(items);
+      const primaryLabel = (primaries.find((p) => p.key === cat[0]) || {}).label || cat[0] || "";
+      const chipRow = (chips, depth, allLabel) => `<div class="cchips${depth ? " sub" : ""}"><button class="cchip ${cat.length === depth ? "on" : ""}" data-cat="${depth}" type="button">${esc(allLabel)}</button>` + chips.map((c) => `<button class="cchip ${cat[depth] === c.key ? "on" : ""}" data-cat="${depth}" data-key="${esc(c.key)}" type="button">${esc(c.label)}<span class="n">${c.count}</span></button>`).join("") + `</div>`;
+      let chrome2 = "";
+      if (primaries.length) {
+        chrome2 += chipRow(primaries, 0, "All");
+        const subs = cat.length ? subChips(items, cat[0]) : [];
+        if (subs.length) chrome2 += chipRow(subs, 1, `All ${primaryLabel}`);
+      }
+      host.innerHTML = chrome2 + `<div data-list></div>`;
+      host.querySelectorAll("[data-cat]").forEach((b) => b.addEventListener("click", () => {
+        const depth = Number(b.dataset.cat);
+        this._cat = "key" in b.dataset ? cat.slice(0, depth).concat(b.dataset.key) : cat.slice(0, depth);
+        this._renderBody();
+      }));
       const list = document.createElement("gbti-card-list");
       list.mode = "detailed";
-      list.items = items;
+      list.items = filterByCategoryPath(items, cat);
       list.addEventListener("card-open", (e) => {
         const it = e.detail?.item;
         if (it) {
@@ -8012,7 +8070,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this.render();
         }
       });
-      host.replaceChildren(list);
+      (host.querySelector("[data-list]") || host).replaceChildren(list);
     }
   };
   define("gbti-browse", GbtiBrowse);
