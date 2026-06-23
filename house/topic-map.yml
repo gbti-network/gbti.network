@@ -1,0 +1,20 @@
+# SOW-054: the admin-owned TOPIC MAP. Each followed TOPIC (a content-taxonomy PRIMARY key from
+# house/taxonomy.yml: ai, devops, blockchain, ...) maps to the NEWS categories
+# (workers/news/config/categories.mjs) it should surface, so one "followed topics" selection drives BOTH the
+# browse drill-down (content) and the news default. CI-validated by scripts/validate-content.mjs: every topic
+# must be a real taxonomy primary, and every news category must be canonical. Topics with no clear news
+# equivalent (writing, design subtopics, gbti, blog, ...) are simply omitted: following them adds no news bias,
+# they still drive the content browse drill-down. Admin-owned. No em or en dashes, no contractions.
+topics:
+  ai:
+    newsCategories: ["AI/ML"]
+  imagegen:
+    newsCategories: ["AI/ML"]
+  devops:
+    newsCategories: ["DevOps/Cloud", "Frameworks/Libraries", "Programming Languages", "Open Source"]
+  blockchain:
+    newsCategories: ["Blockchain"]
+  business:
+    newsCategories: ["Business/Funding"]
+  design:
+    newsCategories: ["Web Dev"]

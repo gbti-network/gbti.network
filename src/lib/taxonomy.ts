@@ -64,3 +64,17 @@ export function isValidPath(pathArr: string[] | undefined): boolean {
 }
 
 export const TAXONOMY_TREE = TREE;
+
+/** SOW-054: the followed-topic vocabulary = every top-level taxonomy category as {key,label}, sorted by label.
+ *  This is the single "followed topics" vocabulary that drives the browse drill-down and (via house/topic-map.yml)
+ *  the news default. */
+export function topicList(): { key: string; label: string }[] {
+  return Object.keys(TREE)
+    .map((key) => ({ key, label: categoryLabel(key) }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** Display label for a followed-topic key (a top-level category key); falls back to the key. */
+export function topicLabel(key: string): string {
+  return categoryLabel(key);
+}
