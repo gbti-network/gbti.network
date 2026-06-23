@@ -210,6 +210,7 @@ export async function loadShellAccount(root = document.querySelector('[data-shel
   _lastStatus = status;
   const signedIn = !shouldGate(status);
   if (root) applyAccount(root, signedIn ? status : null);
+  if (signedIn) prefetchCreateRecent(); // SOW-064: warm the 24h Recent-drafts cache before the "+" is opened
   return signedIn ? status : null;
 }
 
@@ -349,37 +350,67 @@ function openCreateModal() {
   loadCreateRecent(overlay); // best-effort; populates / hides the Recent drafts list + wires the search filter
 }
 
-// SOW-064: populate the popup's "Recent drafts" from the member's own content (drafts first), and let the search
-// box filter the member's workbench files. Best-effort: any failure just leaves the section hidden. A row opens
-// that type's WorkBench list (where the item can be opened in the editor).
+// SOW-064: the member's WorkBench content powers the popup's Recent drafts + search. It is fetched once and cached
+// in chrome.storage.local for 24h, warmed by prefetchCreateRecent() on shell load, so the "+" popup renders the
+// list instantly. Only a non-empty result is cached, so a signed-out / pre-auth miss never poisons the cache.
+const CREATE_RECENT_KEY = 'gbti:create-recent';
+const CREATE_RECENT_TTL = 24 * 60 * 60 * 1000; // 24h
+function createCacheGet(key) {
+  return new Promise((res) => { try { chrome.storage.local.get(key, (o) => res(o?.[key] ?? null)); } catch { res(null); } });
+}
+function createCacheSet(key, val) {
+  return new Promise((res) => { try { chrome.storage.local.set({ [key]: val }, () => res()); } catch { res(); } });
+}
+async function fetchCreateContent() {
+  const types = ['post', 'prompt', 'product'];
+  const results = await Promise.all(types.map((t) => api('/api/content', { type: t })));
+  const items = [];
+  results.forEach((r, i) => {
+    for (const it of Array.isArray(r?.items) ? r.items : []) {
+      items.push({ type: types[i], title: it.title || it.slug || 'Untitled', status: it.status || '' });
+    }
+  });
+  return items;
+}
+async function getCreateRecent({ force = false } = {}) {
+  try {
+    const c = await createCacheGet(CREATE_RECENT_KEY);
+    if (!force && c && Array.isArray(c.items) && c.items.length && (Date.now() - (c.at || 0)) < CREATE_RECENT_TTL) return c.items;
+  } catch { /* fall through to a fresh fetch */ }
+  const items = await fetchCreateContent();
+  if (items.length) await createCacheSet(CREATE_RECENT_KEY, { at: Date.now(), items });
+  return items;
+}
+/** Warm the 24h cache on shell load (signed-in) so the "+" popup's Recent drafts render instantly. */
+function prefetchCreateRecent() { try { getCreateRecent(); } catch { /* best-effort */ } }
+
+// Populate the popup's "Recent drafts" + wire the workbench search. With no query it shows ALL DRAFTS first, then
+// published; each row is badged with its publish state. Typing filters by title (drafts still first). A row opens
+// that type's WorkBench list. Best-effort: an empty content set leaves the section hidden.
+const CREATE_STATE = (s) => (s === 'draft' ? { cls: 'draft', label: 'Draft' } : (s === 'published' ? { cls: 'pub', label: 'Published' } : null));
 async function loadCreateRecent(overlay) {
   const wrap = overlay.querySelector('[data-create-recent]');
   const list = overlay.querySelector('[data-create-recent-list]');
   const search = overlay.querySelector('[data-create-search]');
   if (!wrap || !list) return;
-  const all = [];
-  try {
-    const types = ['post', 'prompt', 'product'];
-    const results = await Promise.all(types.map((t) => api('/api/content', { type: t })));
-    results.forEach((r, i) => {
-      for (const it of Array.isArray(r?.items) ? r.items : []) {
-        all.push({ type: types[i], title: it.title || it.slug || 'Untitled', status: it.status || '' });
-      }
-    });
-  } catch { /* leave empty -> section stays hidden */ }
+  const all = await getCreateRecent();
   if (!all.length) { wrap.hidden = true; return; }
-  // Drafts first, then the rest; cap the default view.
-  const ranked = all.slice().sort((a, b) => Number(b.status === 'draft') - Number(a.status === 'draft'));
-  const rowHtml = (x) => `<button class="create-row" data-go="${x.type}" type="button">
+  const draftsFirst = (arr) => [...arr.filter((x) => x.status === 'draft'), ...arr.filter((x) => x.status !== 'draft')];
+  const rowHtml = (x) => {
+    const st = CREATE_STATE(x.status);
+    const meta = `${CREATE_TYPE_LABEL[x.type] || ''}${st ? ` <span class="create-state ${st.cls}">${st.label}</span>` : ''}`;
+    return `<button class="create-row" data-go="${x.type}" type="button">
       <span class="create-row-ico">${cSvg(CREATE_FILE_ICO, { size: 15, sw: 1.9 })}</span>
-      <span class="create-row-tx"><span class="create-row-t">${esc(x.title)}</span><span class="create-row-s">${CREATE_TYPE_LABEL[x.type]}${x.status === 'draft' ? ' &middot; draft' : ''}</span></span>
+      <span class="create-row-tx"><span class="create-row-t">${esc(x.title)}</span><span class="create-row-s">${meta}</span></span>
       ${cSvg('<path d="m9 6 6 6-6 6"/>', { size: 17, sw: 2 })}
     </button>`;
+  };
   const wireRows = () => list.querySelectorAll('[data-go]').forEach((b) =>
     b.addEventListener('click', () => { window.location.href = `workspace.html#tab=${b.dataset.go}`; }));
   const render = (q) => {
     const ql = String(q || '').trim().toLowerCase();
-    const rows = (ql ? ranked.filter((x) => x.title.toLowerCase().includes(ql)) : ranked).slice(0, 6);
+    const matched = ql ? all.filter((x) => x.title.toLowerCase().includes(ql)) : all;
+    const rows = draftsFirst(matched).slice(0, 8); // all drafts first, then published
     list.innerHTML = rows.length ? rows.map(rowHtml).join('') : `<div class="create-empty">No matching files.</div>`;
     wireRows();
   };

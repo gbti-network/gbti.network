@@ -8648,6 +8648,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _lastStatus = status;
     const signedIn = !shouldGate(status);
     if (root) applyAccount(root, signedIn ? status : null);
+    if (signedIn) prefetchCreateRecent();
     return signedIn ? status : null;
   }
   function shellLogin(onPrompt) {
@@ -8817,38 +8818,81 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     overlay.querySelector("[data-create-search]")?.focus?.();
     loadCreateRecent(overlay);
   }
+  var CREATE_RECENT_KEY = "gbti:create-recent";
+  var CREATE_RECENT_TTL = 24 * 60 * 60 * 1e3;
+  function createCacheGet(key) {
+    return new Promise((res) => {
+      try {
+        chrome.storage.local.get(key, (o) => res(o?.[key] ?? null));
+      } catch {
+        res(null);
+      }
+    });
+  }
+  function createCacheSet(key, val) {
+    return new Promise((res) => {
+      try {
+        chrome.storage.local.set({ [key]: val }, () => res());
+      } catch {
+        res();
+      }
+    });
+  }
+  async function fetchCreateContent() {
+    const types2 = ["post", "prompt", "product"];
+    const results = await Promise.all(types2.map((t) => api("/api/content", { type: t })));
+    const items = [];
+    results.forEach((r, i) => {
+      for (const it of Array.isArray(r?.items) ? r.items : []) {
+        items.push({ type: types2[i], title: it.title || it.slug || "Untitled", status: it.status || "" });
+      }
+    });
+    return items;
+  }
+  async function getCreateRecent({ force = false } = {}) {
+    try {
+      const c = await createCacheGet(CREATE_RECENT_KEY);
+      if (!force && c && Array.isArray(c.items) && c.items.length && Date.now() - (c.at || 0) < CREATE_RECENT_TTL) return c.items;
+    } catch {
+    }
+    const items = await fetchCreateContent();
+    if (items.length) await createCacheSet(CREATE_RECENT_KEY, { at: Date.now(), items });
+    return items;
+  }
+  function prefetchCreateRecent() {
+    try {
+      getCreateRecent();
+    } catch {
+    }
+  }
+  var CREATE_STATE = (s) => s === "draft" ? { cls: "draft", label: "Draft" } : s === "published" ? { cls: "pub", label: "Published" } : null;
   async function loadCreateRecent(overlay) {
     const wrap = overlay.querySelector("[data-create-recent]");
     const list = overlay.querySelector("[data-create-recent-list]");
     const search = overlay.querySelector("[data-create-search]");
     if (!wrap || !list) return;
-    const all = [];
-    try {
-      const types2 = ["post", "prompt", "product"];
-      const results = await Promise.all(types2.map((t) => api("/api/content", { type: t })));
-      results.forEach((r, i) => {
-        for (const it of Array.isArray(r?.items) ? r.items : []) {
-          all.push({ type: types2[i], title: it.title || it.slug || "Untitled", status: it.status || "" });
-        }
-      });
-    } catch {
-    }
+    const all = await getCreateRecent();
     if (!all.length) {
       wrap.hidden = true;
       return;
     }
-    const ranked = all.slice().sort((a, b) => Number(b.status === "draft") - Number(a.status === "draft"));
-    const rowHtml = (x) => `<button class="create-row" data-go="${x.type}" type="button">
+    const draftsFirst = (arr) => [...arr.filter((x) => x.status === "draft"), ...arr.filter((x) => x.status !== "draft")];
+    const rowHtml = (x) => {
+      const st = CREATE_STATE(x.status);
+      const meta = `${CREATE_TYPE_LABEL[x.type] || ""}${st ? ` <span class="create-state ${st.cls}">${st.label}</span>` : ""}`;
+      return `<button class="create-row" data-go="${x.type}" type="button">
       <span class="create-row-ico">${cSvg(CREATE_FILE_ICO, { size: 15, sw: 1.9 })}</span>
-      <span class="create-row-tx"><span class="create-row-t">${esc2(x.title)}</span><span class="create-row-s">${CREATE_TYPE_LABEL[x.type]}${x.status === "draft" ? " &middot; draft" : ""}</span></span>
+      <span class="create-row-tx"><span class="create-row-t">${esc2(x.title)}</span><span class="create-row-s">${meta}</span></span>
       ${cSvg('<path d="m9 6 6 6-6 6"/>', { size: 17, sw: 2 })}
     </button>`;
+    };
     const wireRows = () => list.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => {
       window.location.href = `workspace.html#tab=${b.dataset.go}`;
     }));
     const render = (q) => {
       const ql = String(q || "").trim().toLowerCase();
-      const rows = (ql ? ranked.filter((x) => x.title.toLowerCase().includes(ql)) : ranked).slice(0, 6);
+      const matched = ql ? all.filter((x) => x.title.toLowerCase().includes(ql)) : all;
+      const rows = draftsFirst(matched).slice(0, 8);
       list.innerHTML = rows.length ? rows.map(rowHtml).join("") : `<div class="create-empty">No matching files.</div>`;
       wireRows();
     };
