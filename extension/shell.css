@@ -46,8 +46,9 @@ html[data-unauth] .compose-modal { display: none !important; }
 /* ============================ control cluster (top-right of content; SOW-052) ============================ */
 /* The page's top row: heading/greeting on the left, the relocated control cluster on the right. The shell appends
    .nt-controls into the page's [data-topbar]; it scrolls with the content (like the old feed header did). */
-[data-topbar] { display: flex; align-items: center; justify-content: space-between; gap: 14px 18px; flex-wrap: wrap; margin-bottom: 18px; }
-[data-topbar] > :first-child { min-width: 0; } /* let the heading block shrink so the controls hold its row longer */
+[data-topbar] { display: flex; align-items: center; justify-content: space-between; gap: 14px 18px; flex-wrap: nowrap; margin-bottom: 18px; }
+[data-topbar] > :first-child { min-width: 0; } /* let the heading block shrink so the controls hold its row */
+[data-topbar] h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* shrink the heading (never wrap the controls below it) until the 650px stack point */
 .nt-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-left: auto; }
 .nt-modes-slot { display: inline-flex; align-items: center; }
 .nt-modes-slot:empty { display: none; }
@@ -191,9 +192,10 @@ html[data-unauth] .compose-modal { display: none !important; }
 /* The left rail is the filter on every NON-mobile screen, so it stays down to 650px; under 650px it gives way to
    the single column + the horizontal type-filter chip-row (newtab.html .nt-types), so there is no width with no
    filter at all. */
-/* Responsive rule: drop the secondary date / subtitle first (before any reflow) so the heading + the controls
-   cluster hold ONE row as far down as possible. */
-@media (max-width: 820px) {
+/* Responsive rule: drop the secondary date / subtitle FIRST (before the heading truncates) so the heading + the
+   controls cluster hold ONE row. The signed-in greeting ("Good afternoon, @name") plus the full controls cluster
+   stop fitting once the 232px rail is shown and the viewport drops under ~1280px, so the date is dropped there. */
+@media (max-width: 1280px) {
   [data-topbar] .date, [data-topbar] .hub-sub { display: none; }
 }
 @media (max-width: 650px) {

@@ -20,11 +20,11 @@ const HAVE_TOKEN = !!TOKEN && !/^REPLACE/i.test(TOKEN) && TOKEN.length >= 40;
 const VIEWPORTS = [
   [375, 667, 'iphone-se'], [390, 844, 'iphone-13'], [430, 932, 'iphone-15-max'],
   [360, 740, 'galaxy-s8'], [412, 915, 'pixel-7'], [768, 1024, 'ipad-mini'],
-  [1024, 1366, 'ipad-pro'], [1280, 720, 'desktop-720'], [1920, 1080, 'desktop-1080'], [2560, 1440, 'desktop-1440'],
+  [1024, 1366, 'ipad-pro'], [1239, 800, 'laptop-1239'], [1280, 720, 'desktop-720'], [1920, 1080, 'desktop-1080'], [2560, 1440, 'desktop-1440'],
 ];
 // To keep a run quick + reviewable, default to a representative subset; pass --all for the full matrix.
 const ALL = process.argv.includes('--all');
-const SET = ALL ? VIEWPORTS : VIEWPORTS.filter(([w]) => [360, 375, 768, 1024, 1280, 1920].includes(w));
+const SET = ALL ? VIEWPORTS : VIEWPORTS.filter(([w]) => [360, 375, 768, 1024, 1239, 1280, 1920].includes(w));
 
 const log = (m) => console.log(m);
 
@@ -36,6 +36,10 @@ async function dismissGate(page) {
   await page.evaluate(() => {
     document.documentElement.removeAttribute('data-unauth');
     document.querySelector('.gbti-authwrap')?.remove();
+    // Simulate the signed-in greeting width (the gate-dismissed run has no identity, but the REAL topbar carries
+    // "Good afternoon, @name" which is what makes the heading + controls compete for the row).
+    const n = document.querySelector('[data-greet-name]');
+    if (n && !n.textContent.trim()) n.textContent = ', @atwellpub';
   }).catch(() => {});
   await page.waitForTimeout(500);
 }
