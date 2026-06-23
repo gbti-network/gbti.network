@@ -7761,6 +7761,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .meta .av { width:24px; height:24px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center; background:var(--hover); color:var(--muted); font-size:11px; font-weight:700; }
   .meta .av img { width:100%; height:100%; object-fit:cover; }
   .meta .who b { color:var(--fg); font-weight:600; }
+  .meta .m-actions { margin-left:auto; display:inline-flex; align-items:center; gap:8px; }
+  .meta gbti-favorite, .meta gbti-collection { display:inline-flex; }
+  .meta .m-act { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:transparent; color:var(--muted); cursor:pointer; }
+  .meta .m-act:hover { color:var(--accent); border-color:var(--accent); }
+  /* Mobile: lift the favorite + collection actions to their own right-justified row ABOVE the author meta. */
+  @media (max-width:650px) { .meta .m-actions { order:-1; width:100%; justify-content:flex-end; margin-left:0; margin-bottom:2px; } }
   .badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent); background:var(--hover); border-radius:999px; padding:2px 9px; }
   .cats { display:flex; gap:6px; flex-wrap:wrap; }
   .cat { font-size:11px; font-weight:600; color:var(--muted); background:var(--hover); border:1px solid var(--line); border-radius:999px; padding:2px 9px; }
@@ -7886,7 +7892,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
       const av = `<span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`;
       const cats = Array.isArray(it.categoryLabels) && it.categoryLabels.length ? `<span class="cats">${it.categoryLabels.map((c) => `<span class="cat">${esc(c)}</span>`).join("")}</span>` : "";
-      return `<div class="meta"><span class="badge">${esc(t)}</span><span class="who">${av}<b>${esc(name)}</b></span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}${cats}</div>`;
+      const slug = it.type === "share" ? "" : targetSlugFor(it);
+      const HEART = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20.3S3.6 15.2 3.6 9.5A4 4 0 0 1 12 7.3a4 4 0 0 1 8.4 2.2c0 5.7-8.4 10.8-8.4 10.8z"/></svg>';
+      const COLL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h11M4 12h9M4 17h6"/><path d="M17 13.5v6M14 16.5h6"/></svg>';
+      const acts = slug ? `<span class="m-actions"><gbti-favorite data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite><gbti-collection data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection></span>` : "";
+      return `<div class="meta"><span class="badge">${esc(t)}</span><span class="who">${av}<b>${esc(name)}</b></span>${when ? `<span>· ${esc(dateStr(when))}</span>` : ""}${cats}${acts}</div>`;
     }
     _authorCardHtml(it) {
       const a = this._author;
