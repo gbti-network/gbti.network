@@ -7282,6 +7282,51 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
   }
 
+  // membership/topic-map.mjs
+  function topicMapFromParsed(parsed) {
+    const out = {};
+    const src = parsed && typeof parsed === "object" ? parsed.topics ?? parsed : {};
+    if (!src || typeof src !== "object" || Array.isArray(src)) return out;
+    for (const [topic, val] of Object.entries(src)) {
+      if (typeof topic !== "string" || !topic) continue;
+      const list = Array.isArray(val) ? val : val && Array.isArray(val.newsCategories) ? val.newsCategories : [];
+      const seen = /* @__PURE__ */ new Set();
+      const cats = [];
+      for (const c of list) {
+        if (typeof c !== "string") continue;
+        const v = c.trim();
+        if (!v || seen.has(v)) continue;
+        seen.add(v);
+        cats.push(v);
+      }
+      out[topic] = cats;
+    }
+    return out;
+  }
+  function newsCategoriesForTopics(topics, map) {
+    const m = topicMapFromParsed(map);
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const t of Array.isArray(topics) ? topics : []) {
+      for (const c of m[t] ?? []) {
+        if (!seen.has(c)) {
+          seen.add(c);
+          out.push(c);
+        }
+      }
+    }
+    return out;
+  }
+  function prioritizeNewsByTopics(items, followedNewsCats) {
+    const set = new Set(Array.isArray(followedNewsCats) ? followedNewsCats : []);
+    const list = Array.isArray(items) ? items : [];
+    if (!set.size) return [...list];
+    const followed = [];
+    const rest = [];
+    for (const it of list) (set.has(it && it.category) ? followed : rest).push(it);
+    return [...followed, ...rest];
+  }
+
   // client-ui/src/elements/gbti-news.mjs
   var SITE9 = "https://gbti.network";
   var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE9}/membership/">Become a member</a> to unlock the news feed.</div>`;
@@ -7364,7 +7409,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       try {
         const { items } = await this.client.getNews({ limit: 60 });
-        this._items = (Array.isArray(items) ? items : []).map(newsToItem);
+        let raw = Array.isArray(items) ? items : [];
+        try {
+          const [prefs, tj] = await Promise.all([
+            this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
+            fetch(`${SITE9}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
+          ]);
+          const map = Object.fromEntries((tj?.topics || []).map((t) => [t.key, t.newsCategories || []]));
+          raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
+        } catch {
+        }
+        this._items = raw.map(newsToItem);
         this._state = "ready";
       } catch (err) {
         this._state = err?.code === "membership-required" ? "locked" : err?.code === "not-authenticated" ? "signin" : "error";

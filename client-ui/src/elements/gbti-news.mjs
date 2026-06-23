@@ -10,6 +10,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { newsToItem, newsTargetSlug } from '../news.mjs';
 import './gbti-card-list.mjs';
+import { newsCategoriesForTopics, prioritizeNewsByTopics } from '../../../membership/topic-map.mjs'; // SOW-054 P4: news defaults to followed topics
 import './gbti-discussion.mjs';
 
 const SITE = 'https://gbti.network';
@@ -93,7 +94,19 @@ class GbtiNews extends GbtiElement {
     try { this._canCurate = Boolean((await this.client.status())?.canCurate); } catch { this._canCurate = false; }
     try {
       const { items } = await this.client.getNews({ limit: 60 });
-      this._items = (Array.isArray(items) ? items : []).map(newsToItem);
+      let raw = Array.isArray(items) ? items : [];
+      // SOW-054 Phase 4: default the news feed to the member's FOLLOWED TOPICS by prioritizing (never hiding) the
+      // matching news to the top. Map prefs.categories (topic keys) -> news categories via /topics.json's per-topic
+      // map. Best-effort: any failure (no prefs, no topics.json) just keeps the upstream newest-first order.
+      try {
+        const [prefs, tj] = await Promise.all([
+          this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
+          fetch(`${SITE}/topics.json`, { cache: 'no-cache' }).then((r) => r.json()),
+        ]);
+        const map = Object.fromEntries((tj?.topics || []).map((t) => [t.key, t.newsCategories || []]));
+        raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
+      } catch { /* no personalization; keep the upstream order */ }
+      this._items = raw.map(newsToItem);
       this._state = 'ready';
     } catch (err) {
       this._state = err?.code === 'membership-required' ? 'locked' : (err?.code === 'not-authenticated' ? 'signin' : 'error');

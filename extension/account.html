@@ -24,6 +24,12 @@
         <div><h1 class="hub-h">Settings</h1><p class="hub-sub">Membership, billing, referrals, and account controls.</p></div>
       </div>
       <gbti-account></gbti-account>
+      <!-- SOW-054 Phase 5: manage followed topics later (the same picker as the onboarding Topics step). -->
+      <section style="max-width:720px;margin:30px auto 0">
+        <h2 class="hub-h" style="font-size:18px">Followed topics</h2>
+        <p class="hub-sub" style="margin:4px 0 14px">Pick the topics you care about. Your activity feed and news default to them. Leave it empty to see everything.</p>
+        <gbti-topic-picker></gbti-topic-picker>
+      </section>
     </main>
   </div>
   <script src="dist/account.js"></script>

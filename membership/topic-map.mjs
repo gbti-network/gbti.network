@@ -52,6 +52,22 @@ export function newsCategoriesForTopics(topics, map) {
 }
 
 /**
+ * SOW-054 Phase 4: reorder news items so those whose `category` is in `followedNewsCats` come FIRST (stable within
+ * each group). NEVER hides: every item is kept (the SOW's "prioritize, never hide" decision). An empty
+ * followedNewsCats (no followed topics) returns the original order. Operates on the RAW news items (which carry the
+ * classifier `category`), so call it before projecting to card items.
+ */
+export function prioritizeNewsByTopics(items, followedNewsCats) {
+  const set = new Set(Array.isArray(followedNewsCats) ? followedNewsCats : []);
+  const list = Array.isArray(items) ? items : [];
+  if (!set.size) return [...list];
+  const followed = [];
+  const rest = [];
+  for (const it of list) (set.has(it && it.category) ? followed : rest).push(it);
+  return [...followed, ...rest];
+}
+
+/**
  * Validate the parsed topic map against the live vocabularies. Returns an array of error strings (empty = valid):
  * every TOPIC key must be a real taxonomy PRIMARY, and every mapped news category must be a canonical news category.
  */

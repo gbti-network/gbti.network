@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
 import yaml from 'js-yaml';
-import { topicMapFromParsed, newsCategoriesForTopics, validateTopicMap } from '../membership/topic-map.mjs';
+import { topicMapFromParsed, newsCategoriesForTopics, validateTopicMap, prioritizeNewsByTopics } from '../membership/topic-map.mjs';
 import { CATEGORY_NAMES } from '../workers/news/config/categories.mjs';
 
 const ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
@@ -61,4 +61,19 @@ test('the real house/topic-map.yml is valid against the live taxonomy primaries 
   assert.deepEqual(errs, [], `house/topic-map.yml has validation errors:\n${errs.join('\n')}`);
   // and it actually resolves SOME news categories (a smoke check that the map is not empty/broken)
   assert.ok(newsCategoriesForTopics(['ai'], parsed).includes('AI/ML'));
+});
+
+// SOW-054 Phase 4: prioritize (never hide) the followed-topic news.
+test('prioritizeNewsByTopics: followed-category items first (stable), every item kept; empty -> unchanged', () => {
+  const items = [
+    { guid: '1', category: 'Security' },
+    { guid: '2', category: 'AI/ML' },
+    { guid: '3', category: 'DevOps/Cloud' },
+    { guid: '4', category: 'AI/ML' },
+  ];
+  assert.deepEqual(prioritizeNewsByTopics(items, ['AI/ML']).map((i) => i.guid), ['2', '4', '1', '3']);
+  assert.deepEqual(prioritizeNewsByTopics(items, ['DevOps/Cloud', 'AI/ML']).map((i) => i.guid), ['2', '3', '4', '1']);
+  assert.deepEqual(prioritizeNewsByTopics(items, []).map((i) => i.guid), ['1', '2', '3', '4']); // no follow -> unchanged
+  assert.equal(prioritizeNewsByTopics(items, ['AI/ML']).length, 4); // never hides
+  assert.deepEqual(prioritizeNewsByTopics(null, ['AI/ML']), []);
 });
