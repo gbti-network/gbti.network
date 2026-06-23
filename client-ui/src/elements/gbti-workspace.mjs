@@ -7,6 +7,7 @@
 // empty state, never throws.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { classifyPull, parseWorkspaceTab, parseWorkspaceNew } from '../workspace-core.mjs';
+import { glyphFor } from '../cat-glyph.mjs'; // SOW-062: the SOW-049 type glyph, reused on the WorkBench list rows
 import './gbti-content-editor.mjs';
 import './gbti-contrib-inbox.mjs';
 import './gbti-contrib-review.mjs';
@@ -41,7 +42,9 @@ const CSS = `
   ul.rows { list-style:none; margin:0; padding:0; }
   .row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 2px; border-top:1px solid var(--line); }
   .row:first-child { border-top:0; }
-  .row .t { min-width:0; overflow:hidden; }
+  .row .t { flex:1; min-width:0; overflow:hidden; }
+  .row .gl { flex:none; width:34px; height:34px; border-radius:9px; display:grid; place-items:center; color:var(--ka, var(--accent)); background:color-mix(in srgb, var(--ka, var(--accent)) 12%, transparent); }
+  .row .gl svg { width:19px; height:19px; }
   .row .t b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row .t .meta { color:var(--muted); font-size:12.5px; }
   .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--hover); font-size:11.5px; color:var(--muted); white-space:nowrap; }
@@ -50,6 +53,10 @@ const CSS = `
   .btn { flex:none; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; }
   .btn:hover { border-color:var(--accent); color:var(--accent); }
   .right { display:flex; align-items:center; gap:8px; flex:none; }
+  .pager { display:flex; align-items:center; justify-content:center; gap:14px; margin:16px 0 2px; }
+  .pager-n { font-size:12.5px; color:var(--muted); font-family:var(--font-mono, monospace); }
+  .btn[disabled] { opacity:.42; cursor:default; }
+  .btn[disabled]:hover { border-color:var(--line); color:var(--fg); }
   .muted { color:var(--muted); }
   .empty { color:var(--muted); padding:18px 2px; }
   .back { margin:0 0 14px; }
@@ -85,6 +92,7 @@ class GbtiWorkspace extends GbtiElement {
     // so the member lands straight in a new article/prompt/product. Empty frontmatter + body = a blank form.
     const newType = (typeof location !== 'undefined' && parseWorkspaceNew(location.hash)) || null;
     this._editing = newType ? { type: newType, frontmatter: {}, body: '' } : null;
+    this._page = 0; // SOW-062: the current content-list page (client-side paging; resets on tab switch)
     this._reviewing = null; // SOW-028: the PR number being reviewed in the drill-in, or null
     this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
     super.connectedCallback?.(); // base now renders the initial view with fields in place
@@ -97,7 +105,7 @@ class GbtiWorkspace extends GbtiElement {
       const nt = (typeof location !== 'undefined' && parseWorkspaceNew(location.hash)) || null;
       if (nt && !this._editing && this._reviewing == null) { this._editing = { type: nt, frontmatter: {}, body: '' }; this.render(); return; }
       const t = (typeof location !== 'undefined' && parseWorkspaceTab(location.hash)) || 'overview';
-      if (t !== this._tab && !this._editing && this._reviewing == null) { this._tab = t; this.render(); this._ensureTab(t); }
+      if (t !== this._tab && !this._editing && this._reviewing == null) { this._tab = t; this._page = 0; this.render(); this._ensureTab(t); }
     };
     if (typeof window !== 'undefined') window.addEventListener('hashchange', this._onHash);
   }
@@ -269,12 +277,26 @@ class GbtiWorkspace extends GbtiElement {
     const items = this._cache?.[tab?.type]; // optional chain: never throw if render runs before init
     if (!items) return `<p class="empty">Loading...</p>`;
     if (items.length === 0) return `<p class="empty">No ${esc(tab.label.toLowerCase())} yet.</p>`;
-    return `<ul class="rows">${items.map((it, i) => {
+    // SOW-062 Phase 1: each row leads with the SOW-049 type glyph; "Open" is now "Manage"; the list pages
+    // client-side (15/page) so a member with many items does not scroll a long flat list.
+    const PAGE = 15;
+    const pages = Math.max(1, Math.ceil(items.length / PAGE));
+    const page = Math.min(this._page || 0, pages - 1);
+    const start = page * PAGE;
+    const rows = items.slice(start, start + PAGE).map((it, j) => {
+      const i = start + j; // absolute index into _cache[type] for data-edit
+      const g = glyphFor(null, it.type);
       const status = it.status ? `<span class="tag ${it.status === 'published' ? 'ok' : ''}">${esc(it.status)}</span>` : '';
       const vis = it.visibility === 'members' ? `<span class="tag">members</span>` : '';
-      return `<li class="row"><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span></span>
-        <span class="right">${status} ${vis}<button class="btn" data-edit="${i}" type="button">Open</button></span></li>`;
-    }).join('')}</ul>`;
+      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
+        + `<span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span></span>`
+        + `<span class="right">${status} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button></span></li>`;
+    }).join('');
+    const pager = pages > 1 ? `<div class="pager">`
+      + `<button class="btn" data-page="${page - 1}" type="button"${page === 0 ? ' disabled' : ''}>&larr; Prev</button>`
+      + `<span class="pager-n">Page ${page + 1} of ${pages}</span>`
+      + `<button class="btn" data-page="${page + 1}" type="button"${page >= pages - 1 ? ' disabled' : ''}>Next &rarr;</button></div>` : '';
+    return `<ul class="rows">${rows}</ul>${pager}`;
   }
 
   // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
@@ -321,6 +343,11 @@ class GbtiWorkspace extends GbtiElement {
       this.$$('[data-edit]').forEach((b) => b.addEventListener('click', () => {
         const it = (this._cache[tab.type] || [])[Number(b.dataset.edit)];
         if (it) this._openItem(it.path, it.type);
+      }));
+      this.$$('[data-page]').forEach((b) => b.addEventListener('click', () => { // SOW-062 Phase 1: client-side paging
+        if (b.hasAttribute('disabled')) return;
+        this._page = Number(b.dataset.page) || 0;
+        this.render(); // re-renders the slice + re-wires via _wireBody
       }));
     }
   }

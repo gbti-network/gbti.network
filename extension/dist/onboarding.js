@@ -6644,7 +6644,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   ul.rows { list-style:none; margin:0; padding:0; }
   .row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:11px 2px; border-top:1px solid var(--line); }
   .row:first-child { border-top:0; }
-  .row .t { min-width:0; overflow:hidden; }
+  .row .t { flex:1; min-width:0; overflow:hidden; }
+  .row .gl { flex:none; width:34px; height:34px; border-radius:9px; display:grid; place-items:center; color:var(--ka, var(--accent)); background:color-mix(in srgb, var(--ka, var(--accent)) 12%, transparent); }
+  .row .gl svg { width:19px; height:19px; }
   .row .t b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row .t .meta { color:var(--muted); font-size:12.5px; }
   .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--hover); font-size:11.5px; color:var(--muted); white-space:nowrap; }
@@ -6653,6 +6655,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .btn { flex:none; border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-weight:600; font-size:13px; padding:6px 13px; cursor:pointer; }
   .btn:hover { border-color:var(--accent); color:var(--accent); }
   .right { display:flex; align-items:center; gap:8px; flex:none; }
+  .pager { display:flex; align-items:center; justify-content:center; gap:14px; margin:16px 0 2px; }
+  .pager-n { font-size:12.5px; color:var(--muted); font-family:var(--font-mono, monospace); }
+  .btn[disabled] { opacity:.42; cursor:default; }
+  .btn[disabled]:hover { border-color:var(--line); color:var(--fg); }
   .muted { color:var(--muted); }
   .empty { color:var(--muted); padding:18px 2px; }
   .back { margin:0 0 14px; }
@@ -6680,6 +6686,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._overview = null;
       const newType = typeof location !== "undefined" && parseWorkspaceNew(location.hash) || null;
       this._editing = newType ? { type: newType, frontmatter: {}, body: "" } : null;
+      this._page = 0;
       this._reviewing = null;
       this._inboxCount = null;
       super.connectedCallback?.();
@@ -6696,6 +6703,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const t = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "overview";
         if (t !== this._tab && !this._editing && this._reviewing == null) {
           this._tab = t;
+          this._page = 0;
           this.render();
           this._ensureTab(t);
         }
@@ -6876,12 +6884,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const items = this._cache?.[tab?.type];
       if (!items) return `<p class="empty">Loading...</p>`;
       if (items.length === 0) return `<p class="empty">No ${esc(tab.label.toLowerCase())} yet.</p>`;
-      return `<ul class="rows">${items.map((it, i) => {
+      const PAGE = 15;
+      const pages = Math.max(1, Math.ceil(items.length / PAGE));
+      const page = Math.min(this._page || 0, pages - 1);
+      const start = page * PAGE;
+      const rows = items.slice(start, start + PAGE).map((it, j) => {
+        const i = start + j;
+        const g = glyphFor(null, it.type);
         const status2 = it.status ? `<span class="tag ${it.status === "published" ? "ok" : ""}">${esc(it.status)}</span>` : "";
         const vis = it.visibility === "members" ? `<span class="tag">members</span>` : "";
-        return `<li class="row"><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span>
-        <span class="right">${status2} ${vis}<button class="btn" data-edit="${i}" type="button">Open</button></span></li>`;
-      }).join("")}</ul>`;
+        return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${status2} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button></span></li>`;
+      }).join("");
+      const pager = pages > 1 ? `<div class="pager"><button class="btn" data-page="${page - 1}" type="button"${page === 0 ? " disabled" : ""}>&larr; Prev</button><span class="pager-n">Page ${page + 1} of ${pages}</span><button class="btn" data-page="${page + 1}" type="button"${page >= pages - 1 ? " disabled" : ""}>Next &rarr;</button></div>` : "";
+      return `<ul class="rows">${rows}</ul>${pager}`;
     }
     // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
     // and the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
@@ -6925,6 +6940,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.$$("[data-edit]").forEach((b) => b.addEventListener("click", () => {
           const it = (this._cache[tab.type] || [])[Number(b.dataset.edit)];
           if (it) this._openItem(it.path, it.type);
+        }));
+        this.$$("[data-page]").forEach((b) => b.addEventListener("click", () => {
+          if (b.hasAttribute("disabled")) return;
+          this._page = Number(b.dataset.page) || 0;
+          this.render();
         }));
       }
     }

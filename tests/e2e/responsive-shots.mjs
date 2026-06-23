@@ -137,10 +137,20 @@ async function main() {
     // 5) The WorkBench
     {
       const p = await context.newPage();
-      await p.goto(`chrome-extension://${extId}/workspace.html`, { waitUntil: 'domcontentloaded' });
+      await p.goto(`chrome-extension://${extId}/workspace.html#tab=post`, { waitUntil: 'domcontentloaded' });
       await dismissGate(p);
       await p.waitForSelector('gbti-workspace', { timeout: 12000 }).catch(() => {});
-      await p.waitForTimeout(800);
+      await p.waitForTimeout(600);
+      // Token-less audit: the content list comes from the worker, so inject sample items to render the SOW-062
+      // list (glyph + Manage + pager). Harmless to a real run (overwritten on the next data load).
+      await p.evaluate(() => {
+        const el = document.querySelector('gbti-workspace'); if (!el) return;
+        const items = [];
+        for (let i = 1; i <= 20; i++) items.push({ type: 'post', title: `Sample article ${i}: a fairly long content title to test truncation`, status: i % 3 ? 'published' : 'draft', visibility: i % 5 ? null : 'members', path: `members/x/posts/sample-${i}.md` });
+        el._cache = Object.assign({}, el._cache, { post: items });
+        el._tab = 'post'; el._page = 0; el.render();
+      }).catch(() => {});
+      await p.waitForTimeout(400);
       await shoot(p, 'workspace');
       await p.close();
     }
