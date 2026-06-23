@@ -125,7 +125,16 @@ function controlsHtml() {
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
     </div>
-    <button class="nt-icobtn" data-compose data-ico="plus" title="New Share" aria-label="Post a new Share"></button>
+    <div class="nt-acctwrap" data-compose-wrap>
+      <button class="nt-icobtn" data-compose data-ico="plus" title="Create" aria-label="Create" aria-haspopup="true" aria-expanded="false"></button>
+      <div class="me-menu" data-compose-menu role="menu" hidden>
+        <button class="mi" role="menuitem" data-new="post" type="button">New article</button>
+        <button class="mi" role="menuitem" data-new="prompt" type="button">New prompt</button>
+        <button class="mi" role="menuitem" data-new="product" type="button">New product</button>
+        <div class="me-sep" role="separator"></div>
+        <button class="mi" role="menuitem" data-new="share" type="button">New Share</button>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -292,8 +301,28 @@ function openComposeModal() {
   document.body.appendChild(overlay);
   overlay.querySelector('gbti-share-composer')?.querySelector?.('input, textarea')?.focus?.();
 }
+// SOW-064: the "+" opens a quick-create menu instead of going straight to the Shares composer. New article/prompt/
+// product navigate to the WorkBench with a #new=<type> deep-link (a blank <gbti-content-editor>); New Share keeps
+// the existing in-place composer modal. Falls back to the composer if the menu markup is absent.
 function wireCompose(root) {
-  root.querySelector('[data-compose]')?.addEventListener('click', () => openComposeModal());
+  const btn = root.querySelector('[data-compose]');
+  const menu = root.querySelector('[data-compose-menu]');
+  if (!btn || !menu) { btn?.addEventListener('click', () => openComposeModal()); return; }
+  const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = menu.hidden;
+    menu.hidden = !willOpen;
+    btn.setAttribute('aria-expanded', String(willOpen));
+  });
+  menu.querySelectorAll('[data-new]').forEach((b) => b.addEventListener('click', () => {
+    close();
+    const t = b.dataset.new;
+    if (t === 'share') openComposeModal();
+    else window.location.href = `workspace.html#new=${t}`; // a blank editor of that type (works from any page)
+  }));
+  document.addEventListener('click', close); // an outside click closes (the button stops its own propagation)
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 }
 
 async function wireApps(root) {

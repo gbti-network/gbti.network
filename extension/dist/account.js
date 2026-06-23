@@ -6232,6 +6232,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
   }
+  var WORKSPACE_NEW_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "product"]);
+  function parseWorkspaceNew(hash) {
+    const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)new=([a-z]+)(?:&|$)/);
+    return m && WORKSPACE_NEW_TYPES.has(m[1]) ? m[1] : null;
+  }
   function classifyPull(pr = {}, status = null) {
     if (pr.merged === true || pr.state === "merged") return { label: "Accepted", tone: "ok" };
     if (pr.state === "closed") return { label: "Declined", tone: "muted" };
@@ -6660,7 +6665,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._cache = {};
       this._prs = null;
       this._overview = null;
-      this._editing = null;
+      const newType = typeof location !== "undefined" && parseWorkspaceNew(location.hash) || null;
+      this._editing = newType ? { type: newType, frontmatter: {}, body: "" } : null;
       this._reviewing = null;
       this._inboxCount = null;
       super.connectedCallback?.();
@@ -6668,6 +6674,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._ensureTab(this._tab);
       this._loadInboxCount();
       this._onHash = () => {
+        const nt = typeof location !== "undefined" && parseWorkspaceNew(location.hash) || null;
+        if (nt && !this._editing && this._reviewing == null) {
+          this._editing = { type: nt, frontmatter: {}, body: "" };
+          this.render();
+          return;
+        }
         const t = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "overview";
         if (t !== this._tab && !this._editing && this._reviewing == null) {
           this._tab = t;
@@ -8571,7 +8583,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
     </div>
-    <button class="nt-icobtn" data-compose data-ico="plus" title="New Share" aria-label="Post a new Share"></button>
+    <div class="nt-acctwrap" data-compose-wrap>
+      <button class="nt-icobtn" data-compose data-ico="plus" title="Create" aria-label="Create" aria-haspopup="true" aria-expanded="false"></button>
+      <div class="me-menu" data-compose-menu role="menu" hidden>
+        <button class="mi" role="menuitem" data-new="post" type="button">New article</button>
+        <button class="mi" role="menuitem" data-new="prompt" type="button">New prompt</button>
+        <button class="mi" role="menuitem" data-new="product" type="button">New product</button>
+        <div class="me-sep" role="separator"></div>
+        <button class="mi" role="menuitem" data-new="share" type="button">New Share</button>
+      </div>
+    </div>
   </div>`;
   }
   function brandHtml() {
@@ -8750,7 +8771,32 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     overlay.querySelector("gbti-share-composer")?.querySelector?.("input, textarea")?.focus?.();
   }
   function wireCompose(root) {
-    root.querySelector("[data-compose]")?.addEventListener("click", () => openComposeModal());
+    const btn = root.querySelector("[data-compose]");
+    const menu = root.querySelector("[data-compose-menu]");
+    if (!btn || !menu) {
+      btn?.addEventListener("click", () => openComposeModal());
+      return;
+    }
+    const close = () => {
+      menu.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    };
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const willOpen = menu.hidden;
+      menu.hidden = !willOpen;
+      btn.setAttribute("aria-expanded", String(willOpen));
+    });
+    menu.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => {
+      close();
+      const t = b.dataset.new;
+      if (t === "share") openComposeModal();
+      else window.location.href = `workspace.html#new=${t}`;
+    }));
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") close();
+    });
   }
   async function wireApps(root) {
     const apps = root.querySelector("[data-apps]");

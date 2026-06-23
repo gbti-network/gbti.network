@@ -6232,6 +6232,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
   }
+  var WORKSPACE_NEW_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "product"]);
+  function parseWorkspaceNew(hash) {
+    const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)new=([a-z]+)(?:&|$)/);
+    return m && WORKSPACE_NEW_TYPES.has(m[1]) ? m[1] : null;
+  }
   function classifyPull(pr = {}, status = null) {
     if (pr.merged === true || pr.state === "merged") return { label: "Accepted", tone: "ok" };
     if (pr.state === "closed") return { label: "Declined", tone: "muted" };
@@ -6660,7 +6665,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._cache = {};
       this._prs = null;
       this._overview = null;
-      this._editing = null;
+      const newType = typeof location !== "undefined" && parseWorkspaceNew(location.hash) || null;
+      this._editing = newType ? { type: newType, frontmatter: {}, body: "" } : null;
       this._reviewing = null;
       this._inboxCount = null;
       super.connectedCallback?.();
@@ -6668,6 +6674,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._ensureTab(this._tab);
       this._loadInboxCount();
       this._onHash = () => {
+        const nt = typeof location !== "undefined" && parseWorkspaceNew(location.hash) || null;
+        if (nt && !this._editing && this._reviewing == null) {
+          this._editing = { type: nt, frontmatter: {}, body: "" };
+          this.render();
+          return;
+        }
         const t = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "overview";
         if (t !== this._tab && !this._editing && this._reviewing == null) {
           this._tab = t;

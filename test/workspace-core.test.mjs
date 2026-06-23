@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull, parseWorkspaceTab } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, parseWorkspaceTab, parseWorkspaceNew } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -37,6 +37,16 @@ test('parseWorkspaceTab reads a valid tab from the hash (leading # optional, ext
   // SOW-037: the Saved + Subscriptions tabs are deep-linkable too.
   assert.equal(parseWorkspaceTab('#tab=saved'), 'saved');
   assert.equal(parseWorkspaceTab('#tab=subs'), 'subs');
+});
+
+test('SOW-064: parseWorkspaceNew reads a valid #new=<type>; null otherwise', () => {
+  assert.equal(parseWorkspaceNew('#new=post'), 'post');
+  assert.equal(parseWorkspaceNew('new=prompt'), 'prompt');
+  assert.equal(parseWorkspaceNew('#new=product&x=1'), 'product');
+  assert.equal(parseWorkspaceNew('#new=profile'), null); // profile is not a quick-create content type
+  assert.equal(parseWorkspaceNew('#new=bogus'), null);
+  assert.equal(parseWorkspaceNew('#tab=post'), null); // a tab hash is not a new-target
+  assert.equal(parseWorkspaceNew(''), null);
 });
 
 test('parseWorkspaceTab returns null for an absent / unknown / malformed tab (caller defaults to post)', () => {

@@ -15,6 +15,15 @@ export function parseWorkspaceTab(hash) {
   return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
 }
 
+// SOW-064: the quick-create deep-link. The "+" menu opens workspace.html#new=<type>; <gbti-workspace> reads it on
+// connect to open a BLANK content editor for that type (start a new article/prompt/product). Returns a valid
+// content type, or null when the hash carries no/unknown new-target.
+const WORKSPACE_NEW_TYPES = new Set(['post', 'prompt', 'product']);
+export function parseWorkspaceNew(hash) {
+  const m = String(hash || '').replace(/^#/, '').match(/(?:^|&)new=([a-z]+)(?:&|$)/);
+  return m && WORKSPACE_NEW_TYPES.has(m[1]) ? m[1] : null;
+}
+
 export function classifyPull(pr = {}, status = null) {
   if (pr.merged === true || pr.state === 'merged') return { label: 'Accepted', tone: 'ok' };
   if (pr.state === 'closed') return { label: 'Declined', tone: 'muted' };

@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { classifyPull, parseWorkspaceTab } from '../workspace-core.mjs';
+import { classifyPull, parseWorkspaceTab, parseWorkspaceNew } from '../workspace-core.mjs';
 import './gbti-content-editor.mjs';
 import './gbti-contrib-inbox.mjs';
 import './gbti-contrib-review.mjs';
@@ -81,7 +81,10 @@ class GbtiWorkspace extends GbtiElement {
     this._cache = {};   // type -> items[]
     this._prs = null;   // { prs }
     this._overview = null; // SOW-052: { membership, role, counts, attention[] }
-    this._editing = null;
+    // SOW-064: a #new=<type> deep-link (from the "+" quick-create menu) opens a BLANK editor for that content type,
+    // so the member lands straight in a new article/prompt/product. Empty frontmatter + body = a blank form.
+    const newType = (typeof location !== 'undefined' && parseWorkspaceNew(location.hash)) || null;
+    this._editing = newType ? { type: newType, frontmatter: {}, body: '' } : null;
     this._reviewing = null; // SOW-028: the PR number being reviewed in the drill-in, or null
     this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
     super.connectedCallback?.(); // base now renders the initial view with fields in place
@@ -90,6 +93,9 @@ class GbtiWorkspace extends GbtiElement {
     this._loadInboxCount();
     // SOW-052: the WorkBench rail deep-links to #tab=<id>; switch the tab on a same-document hash change.
     this._onHash = () => {
+      // SOW-064: a #new=<type> deep-link opens a blank editor (unless one is already open).
+      const nt = (typeof location !== 'undefined' && parseWorkspaceNew(location.hash)) || null;
+      if (nt && !this._editing && this._reviewing == null) { this._editing = { type: nt, frontmatter: {}, body: '' }; this.render(); return; }
       const t = (typeof location !== 'undefined' && parseWorkspaceTab(location.hash)) || 'overview';
       if (t !== this._tab && !this._editing && this._reviewing == null) { this._tab = t; this.render(); this._ensureTab(t); }
     };
