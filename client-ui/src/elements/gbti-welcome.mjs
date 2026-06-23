@@ -9,13 +9,14 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { phaseLabel, shuffle, excludeSelf, paginate } from '../welcome-core.mjs';
 import { DISCORD_INVITE_URL } from '../discord.mjs';
+import './gbti-topic-picker.mjs'; // SOW-054: the followed-topics step control
 
 const SITE = 'https://gbti.network';
 const PAGE_SIZE = 10;
 const DISCORD_DONE_KEY = 'gbti-welcome-discord-joined';
-// The welcome flow is a stepper: one to-do per screen (SOW-029 originally showed them stacked). SOW-041 adds a
-// 'categories' step here; keep this list as the single source of step order.
-const STEPS = ['discord', 'follow'];
+// The welcome flow is a stepper: one to-do per screen (SOW-029 originally showed them stacked). SOW-054 adds the
+// 'topics' step (follow content topics, drives the feed + news default); keep this list as the single source of step order.
+const STEPS = ['discord', 'follow', 'topics'];
 
 const lc = (s) => String(s || '').toLowerCase();
 const check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -181,7 +182,7 @@ class GbtiWelcome extends GbtiElement {
     if (this._step < 0) this._step = 0;
     if (this._step > STEPS.length - 1) this._step = STEPS.length - 1;
     const step = STEPS[this._step];
-    const card = step === 'discord' ? this._discordCard() : this._followCard();
+    const card = step === 'discord' ? this._discordCard() : step === 'topics' ? this._topicsCard() : this._followCard();
     const isLast = this._step >= STEPS.length - 1;
     const nav = `<div class="stepnav">
       ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
@@ -231,6 +232,17 @@ class GbtiWelcome extends GbtiElement {
       <p class="sub">The community is the heart of the co-op: weekly sessions, help, and the people you build with. If you have not joined yet, hop in.</p>
       <button class="btn" data-discord-join type="button">${discordIco} Join the Discord</button>
       <label class="check"><input type="checkbox" data-discord-cb ${done} /> I have joined the Discord</label>
+    </div>`;
+  }
+
+  // SOW-054: the Topics step. The shared <gbti-topic-picker> fetches the vocabulary + the member's current
+  // selection and self-persists each toggle via setPrefs; the step is skippable (an empty selection = the feed and
+  // news show everything, the current default).
+  _topicsCard() {
+    return `<div class="card">
+      <h3>${megaIco} Follow topics</h3>
+      <p class="sub">Pick the topics you care about. Your activity feed and news default to them, and you can change this any time in Settings. Skip to see everything.</p>
+      <gbti-topic-picker></gbti-topic-picker>
     </div>`;
   }
 

@@ -35,6 +35,7 @@ import './elements/gbti-welcome.mjs';
 import './elements/gbti-workspace.mjs';
 import './elements/gbti-saved.mjs';
 import './elements/gbti-subscriptions.mjs';
+import './elements/gbti-topic-picker.mjs'; // SOW-054: the followed-topics control (onboarding + settings)
 import './elements/gbti-card-list.mjs';
 import './elements/gbti-activity-bell.mjs';
 import './elements/gbti-news.mjs';
