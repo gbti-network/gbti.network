@@ -36,6 +36,7 @@ export const SVG = {
   mCard: '<rect x="4" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="4" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="4" y="13" width="7" height="7" rx="1.3" fill="currentColor"/><rect x="13" y="13" width="7" height="7" rx="1.3" fill="currentColor"/>',
   plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  mega: '<path d="M4 10v4a1 1 0 0 0 1 1h2l5 3.5V5.5L7 9H5a1 1 0 0 0-1 1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M16 9.2a4 4 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>', // megaphone (Share)
   // SOW-052: the WorkBench rail glyphs.
   bookmark: '<path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
   users: '<circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a3 3 0 0 1 0 5.6M16.5 13.5a5.5 5.5 0 0 1 4 5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
@@ -125,16 +126,7 @@ function controlsHtml() {
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
     </div>
-    <div class="nt-acctwrap" data-compose-wrap>
-      <button class="nt-icobtn" data-compose data-ico="plus" title="Create" aria-label="Create" aria-haspopup="true" aria-expanded="false"></button>
-      <div class="me-menu" data-compose-menu role="menu" hidden>
-        <button class="mi" role="menuitem" data-new="post" type="button">New article</button>
-        <button class="mi" role="menuitem" data-new="prompt" type="button">New prompt</button>
-        <button class="mi" role="menuitem" data-new="product" type="button">New product</button>
-        <div class="me-sep" role="separator"></div>
-        <button class="mi" role="menuitem" data-new="share" type="button">New Share</button>
-      </div>
-    </div>
+    <button class="nt-icobtn" data-compose data-ico="plus" title="Create" aria-label="Create" aria-haspopup="dialog"></button>
   </div>`;
 }
 
@@ -301,28 +293,37 @@ function openComposeModal() {
   document.body.appendChild(overlay);
   overlay.querySelector('gbti-share-composer')?.querySelector?.('input, textarea')?.focus?.();
 }
-// SOW-064: the "+" opens a quick-create menu instead of going straight to the Shares composer. New article/prompt/
-// product navigate to the WorkBench with a #new=<type> deep-link (a blank <gbti-content-editor>); New Share keeps
-// the existing in-place composer modal. Falls back to the composer if the menu markup is absent.
-function wireCompose(root) {
-  const btn = root.querySelector('[data-compose]');
-  const menu = root.querySelector('[data-compose-menu]');
-  if (!btn || !menu) { btn?.addEventListener('click', () => openComposeModal()); return; }
-  const close = () => { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const willOpen = menu.hidden;
-    menu.hidden = !willOpen;
-    btn.setAttribute('aria-expanded', String(willOpen));
-  });
-  menu.querySelectorAll('[data-new]').forEach((b) => b.addEventListener('click', () => {
+// SOW-064: the "+" opens a CENTERED create popup with large icon cards (not an anchored dropdown). Article/prompt/
+// product navigate to the WorkBench (#new=<type>, a blank <gbti-content-editor>); Share opens the in-place composer
+// modal. Reuses the .compose-modal overlay (centered, backdrop + Esc to close).
+const CREATE_CARDS = [
+  { type: 'post', ico: 'article', t: 'New article', s: 'Write a post' },
+  { type: 'prompt', ico: 'prompt', t: 'New prompt', s: 'Share a prompt' },
+  { type: 'product', ico: 'product', t: 'New product', s: 'List a product' },
+  { type: 'share', ico: 'mega', t: 'New Share', s: 'A quick update' },
+];
+function openCreateModal() {
+  if (document.querySelector('.compose-modal')) return; // already open
+  const overlay = document.createElement('div');
+  overlay.className = 'compose-modal';
+  const cards = CREATE_CARDS.map((c) => `<button class="cc-card" data-new="${c.type}" type="button"><span class="cc-ico">${ico(c.ico)}</span><span class="cc-t">${c.t}</span><span class="cc-s">${c.s}</span></button>`).join('');
+  overlay.innerHTML = `<div class="compose-panel create-panel"><div class="compose-head"><b>Create</b><button class="compose-x" type="button" aria-label="Close">${ico('x')}</button></div><div class="create-grid">${cards}</div></div>`;
+  const onEsc = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onEsc); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); }); // backdrop click
+  overlay.querySelector('.compose-x')?.addEventListener('click', close);
+  overlay.querySelectorAll('[data-new]').forEach((b) => b.addEventListener('click', () => {
     close();
     const t = b.dataset.new;
     if (t === 'share') openComposeModal();
     else window.location.href = `workspace.html#new=${t}`; // a blank editor of that type (works from any page)
   }));
-  document.addEventListener('click', close); // an outside click closes (the button stops its own propagation)
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  document.addEventListener('keydown', onEsc);
+  document.body.appendChild(overlay);
+}
+
+function wireCompose(root) {
+  root.querySelector('[data-compose]')?.addEventListener('click', () => openCreateModal());
 }
 
 async function wireApps(root) {

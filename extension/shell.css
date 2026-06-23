@@ -132,6 +132,18 @@ html[data-unauth] .compose-modal { display: none !important; }
 .compose-x:hover { background: var(--paper-3); color: var(--fg); }
 .compose-x svg { width: 18px; height: 18px; }
 
+/* SOW-064: the centered "+" create popup — large icon cards in a grid. */
+.create-panel { max-width: 480px; }
+.create-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cc-card { display: flex; flex-direction: column; align-items: center; gap: 9px; text-align: center; padding: 22px 14px; border: 1.5px solid var(--line-2); border-radius: var(--r-lg); background: var(--paper-2); color: var(--fg); cursor: pointer; transition: border-color .12s, background .12s, transform .06s; }
+.cc-card:hover { border-color: var(--green); background: var(--paper-3); }
+.cc-card:active { transform: translateY(1px); }
+.cc-ico { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--green-tint); color: var(--green-700); }
+.cc-ico svg { width: 28px; height: 28px; }
+.cc-t { font-family: var(--f-display); font-weight: 700; font-size: 15px; }
+.cc-s { font-size: 12.5px; color: var(--fg-mute); }
+@media (max-width: 460px) { .create-grid { grid-template-columns: 1fr; } }
+
 /* ============================ main column ============================ */
 .nt-main { min-width: 0; padding: 26px 34px 60px; overflow-y: auto; }
 
