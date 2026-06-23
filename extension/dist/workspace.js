@@ -8881,7 +8881,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const render = (q) => {
       const ql = String(q || "").trim().toLowerCase();
       const matched = ql ? all.filter((x) => x.title.toLowerCase().includes(ql)) : all;
-      const rows = draftsFirst(matched).slice(0, 8);
+      const rows = draftsFirst(matched).slice(0, 3);
       list.innerHTML = rows.length ? rows.map(rowHtml).join("") : `<div class="create-empty">No matching files.</div>`;
       wireRows();
     };

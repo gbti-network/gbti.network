@@ -425,7 +425,7 @@ async function loadCreateRecent(overlay) {
   const render = (q) => {
     const ql = String(q || '').trim().toLowerCase();
     const matched = ql ? all.filter((x) => x.title.toLowerCase().includes(ql)) : all;
-    const rows = draftsFirst(matched).slice(0, 8); // all drafts first, then published
+    const rows = draftsFirst(matched).slice(0, 3); // show at most three (drafts first, then published)
     list.innerHTML = rows.length ? rows.map(rowHtml).join('') : `<div class="create-empty">No matching files.</div>`;
     wireRows();
   };
