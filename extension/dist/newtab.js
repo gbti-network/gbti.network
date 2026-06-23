@@ -3608,9 +3608,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function setRailActive(key) {
     document.querySelectorAll(".nt-rail .nav-i").forEach((a) => a.classList.toggle("on", a.dataset.key === key));
   }
-  async function api(pathname) {
+  async function api(pathname, query = {}) {
     try {
-      const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname, query: {} } });
+      const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname, query } });
       return r?.json ?? null;
     } catch {
       return null;
@@ -3764,18 +3764,38 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     document.body.appendChild(overlay);
     overlay.querySelector("gbti-share-composer")?.querySelector?.("input, textarea")?.focus?.();
   }
+  var cSvg = (inner, { size = 21, sw = 1.75 } = {}) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
   var CREATE_CARDS = [
-    { type: "share", ico: "mega", t: "New Share", s: "A quick update" },
-    { type: "post", ico: "article", t: "New article", s: "Write a post" },
-    { type: "prompt", ico: "prompt", t: "New prompt", s: "Share a prompt" },
-    { type: "product", ico: "product", t: "New product", s: "List a product" }
+    { type: "share", cls: "share", t: "New Share", s: "A quick update", svg: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>' },
+    { type: "post", cls: "article", t: "New article", s: "Write a post", svg: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>' },
+    { type: "prompt", cls: "prompt", t: "New prompt", s: "Share a prompt", svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
+    { type: "product", cls: "product", t: "New product", s: "List a product", svg: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' }
   ];
+  var CREATE_FILE_ICO = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>';
+  var CREATE_TYPE_LABEL = { post: "Article", prompt: "Prompt", product: "Product" };
   function openCreateModal() {
     if (document.querySelector(".compose-modal")) return;
     const overlay = document.createElement("div");
     overlay.className = "compose-modal create-modal";
-    const cards = CREATE_CARDS.map((c) => `<button class="cc-card" data-new="${c.type}" type="button"><span class="cc-ico">${ico(c.ico)}</span><span class="cc-t">${c.t}</span><span class="cc-s">${c.s}</span></button>`).join("");
-    overlay.innerHTML = `<div class="compose-panel create-panel"><button class="create-x" type="button" aria-label="Close">${ico("x")}</button><div class="create-grid">${cards}</div></div>`;
+    const cards = CREATE_CARDS.map((c, i) => `<button class="cc-card${i === 0 ? " sel" : ""}" data-new="${c.type}" type="button">
+      <span class="cc-ico ${c.cls}">${cSvg(c.svg)}</span>
+      <span class="cc-tx"><span class="cc-t">${c.t}</span><span class="cc-s">${c.s}</span></span>
+    </button>`).join("");
+    overlay.innerHTML = `<div class="compose-panel create-panel">
+    <button class="create-x" type="button" aria-label="Close">${cSvg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', { size: 17, sw: 2 })}</button>
+    <div class="create-eyebrow">Create</div>
+    <h2 class="create-h2">What would you like to create today?</h2>
+    <p class="create-sub">Choose a format to start a new post.</p>
+    <div class="create-grid">${cards}</div>
+    <div class="create-search">${cSvg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.4-3.4"/>', { size: 17, sw: 2 })}
+      <input type="text" placeholder="Search through my workbench files to find my content quickly." data-create-search aria-label="Search my workbench" />
+      <span class="create-kbd">&#8984;K</span>
+    </div>
+    <div class="create-recent" data-create-recent hidden>
+      <div class="create-recent-h">Recent drafts</div>
+      <div data-create-recent-list></div>
+    </div>
+  </div>`;
     const onEsc = (e) => {
       if (e.key === "Escape") close();
     };
@@ -3795,6 +3815,47 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }));
     document.addEventListener("keydown", onEsc);
     document.body.appendChild(overlay);
+    overlay.querySelector("[data-create-search]")?.focus?.();
+    loadCreateRecent(overlay);
+  }
+  async function loadCreateRecent(overlay) {
+    const wrap = overlay.querySelector("[data-create-recent]");
+    const list = overlay.querySelector("[data-create-recent-list]");
+    const search = overlay.querySelector("[data-create-search]");
+    if (!wrap || !list) return;
+    const all = [];
+    try {
+      const types2 = ["post", "prompt", "product"];
+      const results = await Promise.all(types2.map((t) => api("/api/content", { type: t })));
+      results.forEach((r, i) => {
+        for (const it of Array.isArray(r?.items) ? r.items : []) {
+          all.push({ type: types2[i], title: it.title || it.slug || "Untitled", status: it.status || "" });
+        }
+      });
+    } catch {
+    }
+    if (!all.length) {
+      wrap.hidden = true;
+      return;
+    }
+    const ranked = all.slice().sort((a, b) => Number(b.status === "draft") - Number(a.status === "draft"));
+    const rowHtml = (x) => `<button class="create-row" data-go="${x.type}" type="button">
+      <span class="create-row-ico">${cSvg(CREATE_FILE_ICO, { size: 15, sw: 1.9 })}</span>
+      <span class="create-row-tx"><span class="create-row-t">${esc2(x.title)}</span><span class="create-row-s">${CREATE_TYPE_LABEL[x.type]}${x.status === "draft" ? " &middot; draft" : ""}</span></span>
+      ${cSvg('<path d="m9 6 6 6-6 6"/>', { size: 17, sw: 2 })}
+    </button>`;
+    const wireRows = () => list.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => {
+      window.location.href = `workspace.html#tab=${b.dataset.go}`;
+    }));
+    const render = (q) => {
+      const ql = String(q || "").trim().toLowerCase();
+      const rows = (ql ? ranked.filter((x) => x.title.toLowerCase().includes(ql)) : ranked).slice(0, 6);
+      list.innerHTML = rows.length ? rows.map(rowHtml).join("") : `<div class="create-empty">No matching files.</div>`;
+      wireRows();
+    };
+    wrap.hidden = false;
+    render("");
+    search?.addEventListener("input", () => render(search.value));
   }
   function wireCompose(root) {
     root.querySelector("[data-compose]")?.addEventListener("click", () => openCreateModal());

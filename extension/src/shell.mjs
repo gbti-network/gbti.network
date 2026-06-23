@@ -163,9 +163,9 @@ export function setRailActive(key) {
 }
 
 /** GET /api/* via the background worker; null on any failure. */
-async function api(pathname) {
+async function api(pathname, query = {}) {
   try {
-    const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname, query: {} } });
+    const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname, query } });
     return r?.json ?? null;
   } catch { return null; }
 }
@@ -293,21 +293,46 @@ function openComposeModal() {
   document.body.appendChild(overlay);
   overlay.querySelector('gbti-share-composer')?.querySelector?.('input, textarea')?.focus?.();
 }
-// SOW-064: the "+" opens a CENTERED create popup with large icon cards (not an anchored dropdown). Article/prompt/
-// product navigate to the WorkBench (#new=<type>, a blank <gbti-content-editor>); Share opens the in-place composer
-// modal. Reuses the .compose-modal overlay (centered, backdrop + Esc to close).
+// SOW-064: the "+" opens a CENTERED create popup, following the "Content Creation Popup" Claude Design: a header
+// ("Create" eyebrow + "What would you like to create today?" + sub), four COLOR-CODED format cards in one row
+// (Share=green, article=blue, prompt=purple, product=amber) with Share pre-selected, a workbench search input, and
+// a "Recent drafts" list loaded from the member's content. Cards: Share -> the composer modal; the others navigate
+// to the WorkBench (#new=<type>, a blank <gbti-content-editor>). Reuses the .compose-modal overlay (centered,
+// backdrop + Esc).
+const cSvg = (inner, { size = 21, sw = 1.75 } = {}) =>
+  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
 const CREATE_CARDS = [
-  { type: 'share', ico: 'mega', t: 'New Share', s: 'A quick update' },
-  { type: 'post', ico: 'article', t: 'New article', s: 'Write a post' },
-  { type: 'prompt', ico: 'prompt', t: 'New prompt', s: 'Share a prompt' },
-  { type: 'product', ico: 'product', t: 'New product', s: 'List a product' },
+  { type: 'share', cls: 'share', t: 'New Share', s: 'A quick update', svg: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>' },
+  { type: 'post', cls: 'article', t: 'New article', s: 'Write a post', svg: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>' },
+  { type: 'prompt', cls: 'prompt', t: 'New prompt', s: 'Share a prompt', svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
+  { type: 'product', cls: 'product', t: 'New product', s: 'List a product', svg: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' },
 ];
+const CREATE_FILE_ICO = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>';
+const CREATE_TYPE_LABEL = { post: 'Article', prompt: 'Prompt', product: 'Product' };
+
 function openCreateModal() {
   if (document.querySelector('.compose-modal')) return; // already open
   const overlay = document.createElement('div');
   overlay.className = 'compose-modal create-modal';
-  const cards = CREATE_CARDS.map((c) => `<button class="cc-card" data-new="${c.type}" type="button"><span class="cc-ico">${ico(c.ico)}</span><span class="cc-t">${c.t}</span><span class="cc-s">${c.s}</span></button>`).join('');
-  overlay.innerHTML = `<div class="compose-panel create-panel"><button class="create-x" type="button" aria-label="Close">${ico('x')}</button><div class="create-grid">${cards}</div></div>`;
+  const cards = CREATE_CARDS.map((c, i) => `<button class="cc-card${i === 0 ? ' sel' : ''}" data-new="${c.type}" type="button">
+      <span class="cc-ico ${c.cls}">${cSvg(c.svg)}</span>
+      <span class="cc-tx"><span class="cc-t">${c.t}</span><span class="cc-s">${c.s}</span></span>
+    </button>`).join('');
+  overlay.innerHTML = `<div class="compose-panel create-panel">
+    <button class="create-x" type="button" aria-label="Close">${cSvg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', { size: 17, sw: 2 })}</button>
+    <div class="create-eyebrow">Create</div>
+    <h2 class="create-h2">What would you like to create today?</h2>
+    <p class="create-sub">Choose a format to start a new post.</p>
+    <div class="create-grid">${cards}</div>
+    <div class="create-search">${cSvg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.4-3.4"/>', { size: 17, sw: 2 })}
+      <input type="text" placeholder="Search through my workbench files to find my content quickly." data-create-search aria-label="Search my workbench" />
+      <span class="create-kbd">&#8984;K</span>
+    </div>
+    <div class="create-recent" data-create-recent hidden>
+      <div class="create-recent-h">Recent drafts</div>
+      <div data-create-recent-list></div>
+    </div>
+  </div>`;
   const onEsc = (e) => { if (e.key === 'Escape') close(); };
   const close = () => { overlay.remove(); document.removeEventListener('keydown', onEsc); };
   overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); }); // backdrop click
@@ -320,6 +345,47 @@ function openCreateModal() {
   }));
   document.addEventListener('keydown', onEsc);
   document.body.appendChild(overlay);
+  overlay.querySelector('[data-create-search]')?.focus?.();
+  loadCreateRecent(overlay); // best-effort; populates / hides the Recent drafts list + wires the search filter
+}
+
+// SOW-064: populate the popup's "Recent drafts" from the member's own content (drafts first), and let the search
+// box filter the member's workbench files. Best-effort: any failure just leaves the section hidden. A row opens
+// that type's WorkBench list (where the item can be opened in the editor).
+async function loadCreateRecent(overlay) {
+  const wrap = overlay.querySelector('[data-create-recent]');
+  const list = overlay.querySelector('[data-create-recent-list]');
+  const search = overlay.querySelector('[data-create-search]');
+  if (!wrap || !list) return;
+  const all = [];
+  try {
+    const types = ['post', 'prompt', 'product'];
+    const results = await Promise.all(types.map((t) => api('/api/content', { type: t })));
+    results.forEach((r, i) => {
+      for (const it of Array.isArray(r?.items) ? r.items : []) {
+        all.push({ type: types[i], title: it.title || it.slug || 'Untitled', status: it.status || '' });
+      }
+    });
+  } catch { /* leave empty -> section stays hidden */ }
+  if (!all.length) { wrap.hidden = true; return; }
+  // Drafts first, then the rest; cap the default view.
+  const ranked = all.slice().sort((a, b) => Number(b.status === 'draft') - Number(a.status === 'draft'));
+  const rowHtml = (x) => `<button class="create-row" data-go="${x.type}" type="button">
+      <span class="create-row-ico">${cSvg(CREATE_FILE_ICO, { size: 15, sw: 1.9 })}</span>
+      <span class="create-row-tx"><span class="create-row-t">${esc(x.title)}</span><span class="create-row-s">${CREATE_TYPE_LABEL[x.type]}${x.status === 'draft' ? ' &middot; draft' : ''}</span></span>
+      ${cSvg('<path d="m9 6 6 6-6 6"/>', { size: 17, sw: 2 })}
+    </button>`;
+  const wireRows = () => list.querySelectorAll('[data-go]').forEach((b) =>
+    b.addEventListener('click', () => { window.location.href = `workspace.html#tab=${b.dataset.go}`; }));
+  const render = (q) => {
+    const ql = String(q || '').trim().toLowerCase();
+    const rows = (ql ? ranked.filter((x) => x.title.toLowerCase().includes(ql)) : ranked).slice(0, 6);
+    list.innerHTML = rows.length ? rows.map(rowHtml).join('') : `<div class="create-empty">No matching files.</div>`;
+    wireRows();
+  };
+  wrap.hidden = false;
+  render('');
+  search?.addEventListener('input', () => render(search.value));
 }
 
 function wireCompose(root) {

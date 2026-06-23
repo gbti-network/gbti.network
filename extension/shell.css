@@ -132,22 +132,48 @@ html[data-unauth] .compose-modal { display: none !important; }
 .compose-x:hover { background: var(--paper-3); color: var(--fg); }
 .compose-x svg { width: 18px; height: 18px; }
 
-/* SOW-064: the "+" create popup — a centered (H+V), strongly dimmed modal of large icon cards. No header; the
-   close button floats in the panel's top-right corner. The .create-modal class overrides the shared .compose-modal. */
-.create-modal { align-items: center; padding: 24px; background: rgba(8,6,12,.7); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
-.create-panel { position: relative; max-width: 640px; padding: 18px; }
-.create-x { position: absolute; top: 14px; right: 14px; z-index: 2; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: var(--fg-mute); cursor: pointer; }
+/* SOW-064: the "+" create popup, following the "Content Creation Popup" Claude Design — a centered, dimmed modal
+   with a header, four COLOR-CODED format cards in one row (Share pre-selected), a workbench search, and a Recent
+   drafts list. Surfaces use the shell tokens; the per-type tile colors follow the design (light + dark). */
+.create-modal { align-items: center; padding: 24px; background: rgba(8,6,12,.66); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.create-panel { position: relative; max-width: 600px; padding: 26px; }
+.create-x { position: absolute; top: 18px; right: 18px; z-index: 2; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 10px; background: var(--paper-2); color: var(--fg-mute); cursor: pointer; transition: background .12s, color .12s; }
 .create-x:hover { background: var(--paper-3); color: var(--fg); }
-.create-x svg { width: 20px; height: 20px; }
-.create-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.cc-card { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; padding: 34px 20px; border: 1.5px solid var(--line-2); border-radius: var(--r-lg); background: var(--paper-2); color: var(--fg); cursor: pointer; transition: border-color .12s, background .12s, transform .06s; }
-.cc-card:hover { border-color: var(--green); background: var(--paper-3); }
-.cc-card:active { transform: translateY(1px); }
-.cc-ico { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 18px; background: var(--green-tint); color: var(--green-700); }
-.cc-ico svg { width: 38px; height: 38px; }
-.cc-t { font-family: var(--f-display); font-weight: 700; font-size: 18px; }
-.cc-s { font-size: 13.5px; color: var(--fg-mute); }
-@media (max-width: 540px) { .create-grid { grid-template-columns: 1fr; } }
+.create-eyebrow { font: 700 11px/1 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--green); margin-bottom: 12px; }
+.create-h2 { margin: 0; font-family: var(--f-display); font-weight: 800; font-size: 22px; line-height: 1.15; letter-spacing: -.015em; color: var(--fg); padding-right: 40px; }
+.create-sub { margin: 7px 0 20px; font-size: 14px; line-height: 1.4; color: var(--fg-mute); }
+.create-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.cc-card { display: flex; flex-direction: column; align-items: flex-start; gap: 11px; text-align: left; padding: 15px; border-radius: 16px; border: 1.5px solid var(--line-2); background: var(--paper-2); color: var(--fg); cursor: pointer; transition: border-color .12s, background .12s, transform .08s, box-shadow .12s; }
+.cc-card:hover { border-color: var(--line); transform: translateY(-2px); box-shadow: var(--sh-sm); }
+.cc-card.sel { border-color: var(--green); box-shadow: 0 0 0 3px var(--green-tint); }
+.cc-ico { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 12px; flex: none; }
+.cc-ico svg { width: 21px; height: 21px; }
+.cc-ico.share { background: #e3f0e8; color: #1c7a4d; }
+.cc-ico.article { background: #e4ecf7; color: #2f6bc4; }
+.cc-ico.prompt { background: #ece6f6; color: #6b4fc0; }
+.cc-ico.product { background: #f6edda; color: #a87c1c; }
+[data-theme="dark"] .cc-ico.share { background: #16291f; color: #43c77b; }
+[data-theme="dark"] .cc-ico.article { background: #1b2a22; color: #6fa4f0; }
+[data-theme="dark"] .cc-ico.prompt { background: #1b2a22; color: #a98cf0; }
+[data-theme="dark"] .cc-ico.product { background: #1b2a22; color: #e0b454; }
+.cc-tx { display: block; }
+.cc-t { display: block; font-family: var(--f-display); font-weight: 700; font-size: 14.5px; line-height: 1.2; color: var(--fg); }
+.cc-s { display: block; margin-top: 3px; font-size: 12.5px; line-height: 1.3; color: var(--fg-mute); }
+.create-search { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border: 1.5px solid var(--line-2); border-radius: 13px; margin-top: 18px; background: var(--paper-3); color: var(--fg-soft); }
+.create-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font: 500 14px var(--f-sans); color: var(--fg); }
+.create-search input::placeholder { color: var(--fg-soft); }
+.create-kbd { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border-radius: 6px; background: var(--paper); border: 1px solid var(--line-2); font: 600 11px var(--f-mono); color: var(--fg-mute); }
+.create-recent { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.create-recent-h { font: 700 11px/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--fg-soft); margin-bottom: 4px; }
+.create-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 10px; border: 0; border-radius: 11px; background: transparent; color: var(--fg); cursor: pointer; text-align: left; }
+.create-row:hover { background: var(--green-tint); }
+.create-row-ico { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 9px; background: var(--paper-2); color: var(--fg-mute); flex: none; }
+.create-row-tx { flex: 1; min-width: 0; }
+.create-row-t { display: block; font-family: var(--f-display); font-weight: 600; font-size: 13.5px; line-height: 1.2; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.create-row-s { display: block; margin-top: 1px; font-size: 12px; color: var(--fg-mute); }
+.create-row > svg:last-child { color: var(--line); flex: none; }
+.create-empty { padding: 12px 10px; font-size: 13px; color: var(--fg-mute); }
+@media (max-width: 560px) { .create-grid { grid-template-columns: 1fr 1fr; } }
 
 /* ============================ main column ============================ */
 .nt-main { min-width: 0; padding: 26px 34px 60px; overflow-y: auto; }
