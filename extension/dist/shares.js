@@ -2576,6 +2576,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .row-d[data-type]:not([data-type="news"]):hover { background:color-mix(in srgb, var(--cbar) 14%, transparent); }
   .card-i[data-type]:not([data-type="news"]) { background:color-mix(in srgb, var(--cbar) 7%, var(--panel)); }
   [data-type]:not([data-type="news"]) .chip { color:var(--cbar); background:color-mix(in srgb, var(--cbar) 13%, transparent); border-color:color-mix(in srgb, var(--cbar) 26%, transparent); }
+
+  /* Phones (responsive rule: shrink/drop the competing secondary metadata before the title loses its room). The
+     compact + detailed rows otherwise crush the title to a few characters because the avatar + relative date hold
+     fixed width. Below 560px: drop the "x days ago", tighten gaps/padding, shrink the glyph + avatar + chip. */
+  @media (max-width: 560px) {
+    .row-c { gap:9px; padding:11px 10px 11px 12px; }
+    .row-c .media { width:34px; height:34px; }
+    .row-d { grid-template-columns:52px 1fr; gap:12px; padding:12px 10px 12px 14px; }
+    .row-d .media { width:52px; height:52px; }
+    .row-c .ago, .row-d .ago { display:none; }
+    .av { width:18px; height:18px; }
+    .chip { font-size:10px; padding:3px 6px; }
+  }
 `;
   var GbtiCardList = class extends GbtiElement {
     set items(v) {
