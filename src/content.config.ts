@@ -114,6 +114,7 @@ const post = defineCollection({
     categories: z.array(z.string()).default([]),
     tags: z.array(z.string()).default([]),
     coverImage: image().optional(),
+    coverAlt: z.string().max(250).optional(), // SOW-062 P3: cover-image alt text (accessibility)
     video: z.string().optional(), // YouTube/Vimeo URL or ID — embed only
     featured: z.boolean().default(false),
     canonicalUrl: z.string().url().optional(),

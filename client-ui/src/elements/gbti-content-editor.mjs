@@ -6,6 +6,7 @@
 
 import { GbtiElement, define, esc } from '../base.mjs';
 import { gatherInput } from '../form.mjs';
+import { resolveAsset } from '../assets.mjs'; // SOW-062 P3: resolve an existing coverImage path to a preview URL
 
 const TYPES = ['post', 'product', 'prompt', 'profile'];
 
@@ -20,7 +21,7 @@ const RAIL_SECTIONS = [
   { name: 'Taxonomy', keys: ['categories', 'tags'] },
   { name: 'Pricing', keys: ['pricing', 'pricingUrl'] },
   { name: 'Links', keys: ['links'] },
-  { name: 'Media', keys: ['coverImage', 'image', 'imageAlt', 'alt'] },
+  { name: 'Media', keys: ['coverImage', 'coverAlt', 'image', 'imageAlt', 'alt', 'video'] },
 ];
 const sectionFor = (key) => RAIL_SECTIONS.find((s) => s.keys.includes(key))?.name || 'Details';
 
@@ -87,7 +88,8 @@ class GbtiContentEditor extends GbtiElement {
         .preview { background:#201e26; border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
         .notice { background:#2a2330; border:1px solid var(--accent); border-radius:8px; padding:10px 14px; margin-bottom:12px; }
         .notice a { color: var(--accent); }
-        .rail { border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:4px 14px 12px; position:sticky; top:8px; }
+        .rail { border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:4px 14px 12px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
+        @media (max-width:860px) { .rail { position:static; max-height:none; } }
         .rail-h { font-family:var(--font-display, inherit); font-weight:700; font-size:15px; padding:11px 0 2px; }
         .rail details.sec { border-top:1px solid var(--line); }
         .rail summary { cursor:pointer; list-style:none; font-weight:600; font-size:13px; padding:10px 0; color:var(--fg); display:flex; justify-content:space-between; align-items:center; }
@@ -95,6 +97,14 @@ class GbtiContentEditor extends GbtiElement {
         .rail summary::after { content:'⌄'; color:var(--muted); font-size:12px; }
         .rail details[open] summary::after { content:'⌃'; }
         .rail .grid { padding-bottom:10px; }
+        .cover-frames { display:flex; gap:12px; align-items:flex-end; margin:6px 0 10px; }
+        .cover-frames.empty { display:none; }
+        .cf { margin:0; }
+        .cf img { display:block; background:var(--hover); border:1px solid var(--line); border-radius:8px; }
+        .cf-43 img { width:116px; aspect-ratio:4/3; object-fit:cover; }
+        .cf-hero img { width:184px; height:auto; max-height:150px; object-fit:contain; }
+        .cf figcaption { font-size:11px; color:var(--muted); margin-top:4px; text-align:center; }
+        .cover-actions { display:flex; gap:8px; }
       `) +
         `<div class="editor">
            <div class="doc">
@@ -131,6 +141,14 @@ class GbtiContentEditor extends GbtiElement {
     this.on('#imgbtn', 'click', () => this.$('#img').click());
     this.on('#img', 'change', (e) => this.doImage(e.target.files?.[0]));
 
+    // SOW-062 P3: the rich cover-image control(s) — preview + Choose/Replace/Remove (the kind:'image' field).
+    this.$$('[data-cover]').forEach((c) => {
+      const file = c.querySelector('[data-cover-file]');
+      c.querySelector('[data-cover-pick]')?.addEventListener('click', () => file?.click());
+      file?.addEventListener('change', (e) => this.doCoverImage(e.target.files?.[0], c));
+      c.querySelector('[data-cover-clear]')?.addEventListener('click', () => this.clearCover(c));
+    });
+
     // Live-toggle conditional fields (e.g. the image-gen-only result image) as their dependency changes.
     const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));
     for (const dep of deps) {
@@ -143,6 +161,25 @@ class GbtiContentEditor extends GbtiElement {
     const v = value == null ? '' : Array.isArray(value) ? value.join(', ') : typeof value === 'object' ? JSON.stringify(value) : String(value);
     const label = `<label>${esc(f.label || f.key)}${f.required ? ' *' : ''}</label>`;
     let control;
+    if (f.kind === 'image') {
+      // SOW-062 P3: a rich cover-image control — a 4:3 (card) + a full (reader hero) framing preview, Choose/Replace
+      // + Remove, and a hidden input carrying the staged path (so gather() reads it like any field).
+      const url = v ? resolveAsset(v) : '';
+      const has = !!url;
+      return `<div class="field cover-field" data-fkey="${f.key}"${visible ? '' : ' hidden'}>${label}
+        <div class="cover" data-cover>
+          <div class="cover-frames${has ? '' : ' empty'}">
+            <figure class="cf cf-43"><img data-cimg src="${esc(url)}" alt="" /><figcaption>4:3 card</figcaption></figure>
+            <figure class="cf cf-hero"><img data-cimg src="${esc(url)}" alt="" /><figcaption>Hero (full)</figcaption></figure>
+          </div>
+          <input type="file" accept="image/*" hidden data-cover-file />
+          <div class="cover-actions">
+            <button type="button" class="ghost" data-cover-pick>${has ? 'Replace image' : 'Choose image'}</button>
+            <button type="button" class="ghost" data-cover-clear${has ? '' : ' hidden'}>Remove</button>
+          </div>
+          <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc(v)}" />
+        </div></div>`;
+    }
     if (f.kind === 'enum') {
       control = `<select data-key="${f.key}">${(f.options || []).map((o) => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
     } else if (f.kind === 'boolean') {
@@ -262,6 +299,37 @@ class GbtiContentEditor extends GbtiElement {
       this.out(esc(err.message), 'danger');
     }
   }
+
+  // SOW-062 P3: stage a picked cover image — update both framing previews from the file immediately, then stage it
+  // and drop the returned repo path into the field's hidden input (gather() picks it up like any field).
+  async doCoverImage(file, control) {
+    if (!file || !control) return;
+    const dataUrl = await fileToDataUrl(file);
+    control.querySelectorAll('[data-cimg]').forEach((img) => { img.src = dataUrl; });
+    control.querySelector('.cover-frames')?.classList.remove('empty');
+    control.querySelector('[data-cover-clear]')?.removeAttribute('hidden');
+    const pick = control.querySelector('[data-cover-pick]');
+    if (pick) pick.textContent = 'Replace image';
+    try {
+      const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(',')[1] || '' });
+      const el = control.querySelector('[data-key]');
+      if (el) el.value = res.path;
+      this.out(`Cover image staged: <code>${esc(res.path)}</code>`);
+    } catch (err) {
+      this.out(esc(err.message), 'danger');
+    }
+  }
+
+  clearCover(control) {
+    if (!control) return;
+    const el = control.querySelector('[data-key]');
+    if (el) el.value = '';
+    control.querySelectorAll('[data-cimg]').forEach((img) => { img.removeAttribute('src'); });
+    control.querySelector('.cover-frames')?.classList.add('empty');
+    control.querySelector('[data-cover-clear]')?.setAttribute('hidden', '');
+    const pick = control.querySelector('[data-cover-pick]');
+    if (pick) pick.textContent = 'Choose image';
+  }
 }
 
 /** Normalize a model/target string to lowercase alphanumerics (mirrors client/src/image-models.mjs). */
@@ -288,6 +356,16 @@ function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(new Error('could not read file'));
+    r.readAsDataURL(file);
+  });
+}
+
+// SOW-062 P3: the full data: URL (for an immediate cover-image preview before the staged path is published).
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result || ''));
     r.onerror = () => reject(new Error('could not read file'));
     r.readAsDataURL(file);
   });

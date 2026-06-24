@@ -177,6 +177,7 @@ async function main() {
           { key: 'status', label: 'Status', kind: 'enum', options: ['draft', 'published'] },
           { key: 'visibility', label: 'Visibility', kind: 'enum', options: ['public', 'members'] },
           { key: 'coverImage', label: 'Cover image', kind: 'image' },
+          { key: 'coverAlt', label: 'Cover image alt text', kind: 'text' },
           { key: 'canonicalUrl', label: 'Canonical URL', kind: 'text' },
           { key: 'delegation', label: 'Delegation', kind: 'text' },
         ];
@@ -184,8 +185,22 @@ async function main() {
         el._editing = { type: 'post', frontmatter: { title: 'My draft article', slug: 'my-draft', categories: ['ai'], tags: ['demo', 'editor'], status: 'draft', visibility: 'public', canonicalUrl: 'https://example.com/x', delegation: 0.3 }, body: '# Hello\n\nThis is the article body.\n\n<!-- members-only -->\n\nA members-only section below the marker.' };
         el.render();
       }).catch(() => {});
-      await p.waitForTimeout(1000); // let the editor formFields load + render the two columns
+      // Wait for the cover control to exist in the editor shadow, then populate both framing previews with a base64
+      // PNG so the 4:3 + hero previews render (and scroll the rail to the Media section).
+      await p.waitForFunction(() => document.querySelector('gbti-content-editor')?.shadowRoot?.querySelector('[data-cover] [data-cimg]'), { timeout: 8000 }).catch(() => {});
+      await p.evaluate(() => {
+        const ed = document.querySelector('gbti-content-editor'); const cov = ed?.shadowRoot?.querySelector('[data-cover]'); if (!cov) return;
+        const IMG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mNk+M9Qz0BkYBxVSF8FAGW9Av9I2GZ0AAAAAElFTkSuQmCC';
+        cov.querySelectorAll('[data-cimg]').forEach((img) => { img.src = IMG; });
+        cov.querySelector('.cover-frames')?.classList.remove('empty');
+        cov.querySelector('[data-cover-clear]')?.removeAttribute('hidden');
+        const pick = cov.querySelector('[data-cover-pick]'); if (pick) pick.textContent = 'Replace image';
+        const rail = ed.shadowRoot?.querySelector('.rail'); if (rail) rail.scrollTop = rail.scrollHeight;
+      }).catch(() => {});
+      await p.waitForTimeout(400);
       await shoot(p, 'editor');
+      // Definitive: an element screenshot of the cover-image control (4:3 + hero framing previews + buttons).
+      await p.locator('gbti-content-editor [data-cover]').screenshot({ path: path.join(SHOTS, 'editor-cover-control.png') }).catch((e) => log('  cover-control shot failed: ' + e.message));
       await p.close();
     }
 

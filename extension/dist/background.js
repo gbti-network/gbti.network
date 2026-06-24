@@ -17000,6 +17000,8 @@ var postSchema = external_exports.object({
   categories: external_exports.array(external_exports.string()).default([]),
   tags: external_exports.array(external_exports.string()).default([]),
   coverImage: external_exports.string().optional(),
+  coverAlt: external_exports.string().max(250).optional(),
+  // SOW-062 P3: cover-image alt text (accessibility)
   video: external_exports.string().optional(),
   featured: external_exports.boolean().default(false),
   canonicalUrl: external_exports.string().url().optional(),
@@ -19298,6 +19300,7 @@ var FIELDS = Object.freeze({
     f("categories", "Categories", "array"),
     TAGS,
     f("coverImage", "Cover image", "image"),
+    f("coverAlt", "Cover image alt text", "text", { placeholder: "Describe the image for screen readers" }),
     f("video", "Video (YouTube/Vimeo URL)", "text"),
     f("featured", "Featured", "boolean"),
     f("publishedAt", "Published at", "date"),

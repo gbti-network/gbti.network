@@ -28,6 +28,7 @@ export const FIELDS = Object.freeze({
     f('categories', 'Categories', 'array'),
     TAGS,
     f('coverImage', 'Cover image', 'image'),
+    f('coverAlt', 'Cover image alt text', 'text', { placeholder: 'Describe the image for screen readers' }),
     f('video', 'Video (YouTube/Vimeo URL)', 'text'),
     f('featured', 'Featured', 'boolean'),
     f('publishedAt', 'Published at', 'date'),

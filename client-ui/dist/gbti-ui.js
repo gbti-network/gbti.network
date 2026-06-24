@@ -252,6 +252,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return input;
   }
 
+  // client-ui/src/assets.mjs
+  var SITE = "https://gbti.network";
+  function resolveAsset(thumb, site = SITE) {
+    if (!thumb || typeof thumb !== "string") return null;
+    if (/^https?:\/\//.test(thumb)) return thumb;
+    if (/^\/\//.test(thumb)) return `https:${thumb}`;
+    return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
+  }
+
   // client-ui/src/elements/gbti-content-editor.mjs
   var TYPES = ["post", "product", "prompt", "profile"];
   var HIDDEN_KEYS = /* @__PURE__ */ new Set(["delegation", "canonicalUrl"]);
@@ -260,7 +269,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { name: "Taxonomy", keys: ["categories", "tags"] },
     { name: "Pricing", keys: ["pricing", "pricingUrl"] },
     { name: "Links", keys: ["links"] },
-    { name: "Media", keys: ["coverImage", "image", "imageAlt", "alt"] }
+    { name: "Media", keys: ["coverImage", "coverAlt", "image", "imageAlt", "alt", "video"] }
   ];
   var sectionFor = (key) => RAIL_SECTIONS.find((s) => s.keys.includes(key))?.name || "Details";
   var GbtiContentEditor = class extends GbtiElement {
@@ -322,7 +331,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .preview { background:#201e26; border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
         .notice { background:#2a2330; border:1px solid var(--accent); border-radius:8px; padding:10px 14px; margin-bottom:12px; }
         .notice a { color: var(--accent); }
-        .rail { border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:4px 14px 12px; position:sticky; top:8px; }
+        .rail { border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:4px 14px 12px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
+        @media (max-width:860px) { .rail { position:static; max-height:none; } }
         .rail-h { font-family:var(--font-display, inherit); font-weight:700; font-size:15px; padding:11px 0 2px; }
         .rail details.sec { border-top:1px solid var(--line); }
         .rail summary { cursor:pointer; list-style:none; font-weight:600; font-size:13px; padding:10px 0; color:var(--fg); display:flex; justify-content:space-between; align-items:center; }
@@ -330,6 +340,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .rail summary::after { content:'⌄'; color:var(--muted); font-size:12px; }
         .rail details[open] summary::after { content:'⌃'; }
         .rail .grid { padding-bottom:10px; }
+        .cover-frames { display:flex; gap:12px; align-items:flex-end; margin:6px 0 10px; }
+        .cover-frames.empty { display:none; }
+        .cf { margin:0; }
+        .cf img { display:block; background:var(--hover); border:1px solid var(--line); border-radius:8px; }
+        .cf-43 img { width:116px; aspect-ratio:4/3; object-fit:cover; }
+        .cf-hero img { width:184px; height:auto; max-height:150px; object-fit:contain; }
+        .cf figcaption { font-size:11px; color:var(--muted); margin-top:4px; text-align:center; }
+        .cover-actions { display:flex; gap:8px; }
       `) + `<div class="editor">
            <div class="doc">
              ${blocked ? `<div class="notice">Publishing requires a paid membership. You can write and stage your work now; it stays on your fork until you upgrade. <a href="https://gbti.network" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
@@ -363,6 +381,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.on("#publish", "click", () => this.doPublish());
       this.on("#imgbtn", "click", () => this.$("#img").click());
       this.on("#img", "change", (e) => this.doImage(e.target.files?.[0]));
+      this.$$("[data-cover]").forEach((c) => {
+        const file = c.querySelector("[data-cover-file]");
+        c.querySelector("[data-cover-pick]")?.addEventListener("click", () => file?.click());
+        file?.addEventListener("change", (e) => this.doCoverImage(e.target.files?.[0], c));
+        c.querySelector("[data-cover-clear]")?.addEventListener("click", () => this.clearCover(c));
+      });
       const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));
       for (const dep of deps) {
         const el = this.$(`[data-key="${dep}"]`);
@@ -376,6 +400,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const v = value == null ? "" : Array.isArray(value) ? value.join(", ") : typeof value === "object" ? JSON.stringify(value) : String(value);
       const label = `<label>${esc(f.label || f.key)}${f.required ? " *" : ""}</label>`;
       let control;
+      if (f.kind === "image") {
+        const url = v ? resolveAsset(v) : "";
+        const has = !!url;
+        return `<div class="field cover-field" data-fkey="${f.key}"${visible ? "" : " hidden"}>${label}
+        <div class="cover" data-cover>
+          <div class="cover-frames${has ? "" : " empty"}">
+            <figure class="cf cf-43"><img data-cimg src="${esc(url)}" alt="" /><figcaption>4:3 card</figcaption></figure>
+            <figure class="cf cf-hero"><img data-cimg src="${esc(url)}" alt="" /><figcaption>Hero (full)</figcaption></figure>
+          </div>
+          <input type="file" accept="image/*" hidden data-cover-file />
+          <div class="cover-actions">
+            <button type="button" class="ghost" data-cover-pick>${has ? "Replace image" : "Choose image"}</button>
+            <button type="button" class="ghost" data-cover-clear${has ? "" : " hidden"}>Remove</button>
+          </div>
+          <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc(v)}" />
+        </div></div>`;
+      }
       if (f.kind === "enum") {
         control = `<select data-key="${f.key}">${(f.options || []).map((o) => `<option ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
       } else if (f.kind === "boolean") {
@@ -479,6 +520,39 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.out(esc(err.message), "danger");
       }
     }
+    // SOW-062 P3: stage a picked cover image — update both framing previews from the file immediately, then stage it
+    // and drop the returned repo path into the field's hidden input (gather() picks it up like any field).
+    async doCoverImage(file, control) {
+      if (!file || !control) return;
+      const dataUrl = await fileToDataUrl(file);
+      control.querySelectorAll("[data-cimg]").forEach((img) => {
+        img.src = dataUrl;
+      });
+      control.querySelector(".cover-frames")?.classList.remove("empty");
+      control.querySelector("[data-cover-clear]")?.removeAttribute("hidden");
+      const pick = control.querySelector("[data-cover-pick]");
+      if (pick) pick.textContent = "Replace image";
+      try {
+        const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(",")[1] || "" });
+        const el = control.querySelector("[data-key]");
+        if (el) el.value = res.path;
+        this.out(`Cover image staged: <code>${esc(res.path)}</code>`);
+      } catch (err) {
+        this.out(esc(err.message), "danger");
+      }
+    }
+    clearCover(control) {
+      if (!control) return;
+      const el = control.querySelector("[data-key]");
+      if (el) el.value = "";
+      control.querySelectorAll("[data-cimg]").forEach((img) => {
+        img.removeAttribute("src");
+      });
+      control.querySelector(".cover-frames")?.classList.add("empty");
+      control.querySelector("[data-cover-clear]")?.setAttribute("hidden", "");
+      const pick = control.querySelector("[data-cover-pick]");
+      if (pick) pick.textContent = "Choose image";
+    }
   };
   function normTok(s) {
     return String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -496,6 +570,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return new Promise((resolve, reject) => {
       const r = new FileReader();
       r.onload = () => resolve(String(r.result).split(",")[1] || "");
+      r.onerror = () => reject(new Error("could not read file"));
+      r.readAsDataURL(file);
+    });
+  }
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result || ""));
       r.onerror = () => reject(new Error("could not read file"));
       r.readAsDataURL(file);
     });
@@ -930,7 +1012,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-settings", GbtiSettings);
 
   // client-ui/src/elements/gbti-account.mjs
-  var SITE = "https://gbti.network";
+  var SITE2 = "https://gbti.network";
   var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var WELCOME_PREFIX = "gbti-welcome";
   var STATUS_LABEL = {
@@ -1020,7 +1102,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS3) + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS3) + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE2}/membership/">Become a member</a>.</div>`);
         return;
       }
       this.set(this.css(CSS3) + this._account() + this._billingSec() + this._referrals() + this._dangerZone());
@@ -1049,7 +1131,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _referrals() {
       const r = this._referral || {};
-      const canonical = r.link || (r.code ? `${SITE}/join?ref=${r.code}` : null);
+      const canonical = r.link || (r.code ? `${SITE2}/join?ref=${r.code}` : null);
       const invite = this._invite?.url || null;
       const copyField = (id, value, label) => `<div class="row"><span class="lbl">${esc(label)}</span><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div>`;
       return `<section class="sec">
@@ -1272,7 +1354,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-superadmin-dashboard.mjs
-  var SITE2 = "https://gbti.network";
+  var SITE3 = "https://gbti.network";
   var CSS4 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
@@ -1331,7 +1413,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const counts = {};
       await Promise.all(SAVED_TYPES.map(async (t) => {
         try {
-          const res = await fetch(`${SITE2}/${indexFileFor(t)}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE3}/${indexFileFor(t)}`, { cache: "no-cache" });
           const items = res.ok ? (await res.json()).items || [] : [];
           for (const it of items) {
             const a = String(it?.author || "").toLowerCase();
@@ -2470,15 +2552,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       for (const s of shares) out.push(shareToItem(s));
     }
     return out.sort((a, b) => toMs(b.createdAt ?? b.publishedAt) - toMs(a.createdAt ?? a.publishedAt));
-  }
-
-  // client-ui/src/assets.mjs
-  var SITE3 = "https://gbti.network";
-  function resolveAsset(thumb, site = SITE3) {
-    if (!thumb || typeof thumb !== "string") return null;
-    if (/^https?:\/\//.test(thumb)) return thumb;
-    if (/^\/\//.test(thumb)) return `https:${thumb}`;
-    return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
   }
 
   // client-ui/src/cat-glyph.mjs
