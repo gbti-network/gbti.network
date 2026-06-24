@@ -149,6 +149,13 @@ DISCORD_MEMBER_ROLE_ID = "1511810502970441900"
 DISCORD_LOCKED_ROLE_ID = "1512558475341987990"
 DISCORD_INVITE_CHANNEL_ID = "1073029071602204804"
 DISCORD_INVITE_URL = "https://discord.gg/cCs952QJJs"   # real permanent fallback invite (no guild vanity URL)
+# SOW-058: per-type Discord channel ids the syndication drain posts APPROVED items to (non-secret; the bot token is
+# the secret). Safe to set now: syndication ships disabled (house/syndication-config.yml enabled:false) and is
+# approval-gated, so nothing posts until enabled:true + `reconcile --apply` + a superadmin approval in the tracker.
+DISCORD_CHANNEL_POSTS = "1074035424625954877"
+DISCORD_CHANNEL_PRODUCTS = "1516431096789733456"
+DISCORD_CHANNEL_PROMPTS = "1516430200940789842"
+DISCORD_CHANNEL_SHARES = "1084632127657746452"
 
 # Custom domain: attach signup.gbti.network to this production worker. wrangler provisions the domain + the
 # managed DNS record on the gbti.network zone (same account) on deploy. This is the host the client/extension
