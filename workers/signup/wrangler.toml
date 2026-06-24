@@ -72,6 +72,13 @@ binding = "SIGNUP_KV"
 id = "49432379e11844ac81b6fdaf22d3937a"
 preview_id = "09ca7e156ea04e62b9f4c8716e2a83c9"
 
+# SOW-061: Workers Analytics Engine dataset for extension usage by tier. Aggregate-only, no PII, no extra latency
+# (writeDataPoint is fire-and-forget). recordUsage no-ops until this binding exists. Wrangler does NOT inherit
+# bindings into named envs, so it is repeated under [env.production].
+[[analytics_engine_datasets]]
+binding = "EXT_ANALYTICS"
+dataset = "gbti_ext_usage"
+
 # SOW-058: the syndication drain cron. The one-hour hold is the deliberate delay, so a 5-minute tick adds at most
 # 5 minutes past the hour and is far cheaper than per-minute. Wrangler does NOT inherit triggers into named envs,
 # so the same crons are repeated under [env.production.triggers].
@@ -172,6 +179,11 @@ custom_domain = true
 [[env.production.kv_namespaces]]
 binding = "SIGNUP_KV"
 id = "49432379e11844ac81b6fdaf22d3937a"
+
+# SOW-061: the Analytics Engine dataset for production (wrangler does not inherit top-level bindings into named envs).
+[[env.production.analytics_engine_datasets]]
+binding = "EXT_ANALYTICS"
+dataset = "gbti_ext_usage"
 
 # SOW-058: the syndication drain cron for production (wrangler does not inherit the top-level [triggers]).
 [env.production.triggers]
