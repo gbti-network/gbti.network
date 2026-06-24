@@ -62,6 +62,24 @@ export function shouldAutoClose(label, stripeHealthy) {
 }
 
 /**
+ * SOW-072: pure decision for the auto-merge actuator. The gate computes autoMerge (paid/admin own-folder content)
+ * but nothing acted on it, so passing member PRs sat open. We auto-merge ONLY when the gate passed AND autoMerge is
+ * set AND every changed path is under members/ — a defense-in-depth floor so a protected-path PR (house/**,
+ * .github/**, root) is NEVER machine-merged even if a future bug set the flag; those always require CODEOWNER
+ * review. The caller merges directly (main has no branch protection, so a "clean" PR cannot use GitHub native
+ * auto-merge); it is fail-open-safe, so a merge error just leaves the PR open for a manual merge.
+ */
+export function shouldAutoMerge(decision, paths) {
+  return (
+    decision?.check === 'pass' &&
+    decision?.autoMerge === true &&
+    Array.isArray(paths) &&
+    paths.length > 0 &&
+    paths.every((p) => typeof p === 'string' && p.startsWith('members/'))
+  );
+}
+
+/**
  * Pure core: decide the gate verdict for one PR from already-resolved inputs.
  * No GitHub, no environment, no I/O. The runnable wrapper below feeds it real clients; the test
  * feeds it fakes.
@@ -216,6 +234,30 @@ async function main() {
       } else {
         console.error(`[pr-gate] membership lookup unavailable; leaving PR #${number} red but NOT auto-closing`);
       }
+    }
+
+    // SOW-072: actuate auto-merge. main has no branch protection today, so a passing own-folder member PR is landed
+    // by a direct squash merge (a "clean" PR cannot use GitHub native auto-merge — that path errors until required
+    // checks exist). Fail-OPEN-SAFE: any merge error leaves the green check + the PR open for a manual merge (never
+    // worse than before, never a forced merge). When branch protection requiring this gate (+ content-check) is
+    // added, switch to native auto-merge (the GraphQL enablePullRequestAutoMerge mutation) so the merge waits for
+    // the other required checks. A GitHub draft PR refuses to merge, so SOW-035's draft E2E cycle is unaffected.
+    if (shouldAutoMerge(d, paths)) {
+      try {
+        await gh.mergePull(number, { method: 'squash' });
+        console.log(`[pr-gate] auto-merged PR #${number} (own-folder ${d.label} content)`);
+      } catch (mergeErr) {
+        // A 405 means GitHub REFUSED the merge: a draft PR, a conflict, or — once branch protection requiring
+        // checks is added — required checks not yet passed (the case that needs the native auto-merge migration
+        // noted above). Flag it distinctly so it is never mistaken for a transient network error and silently
+        // leaves member PRs sitting open.
+        const hint = mergeErr?.status === 405
+          ? ' (GitHub refused the merge: draft, conflict, or pending required checks — if branch protection was just added, migrate this to native auto-merge)'
+          : '';
+        console.error(`[pr-gate] could not auto-merge PR #${number}${hint}: ${mergeErr?.message ?? mergeErr}`);
+      }
+    } else if (d.check === 'pass' && d.autoMerge === true) {
+      console.error(`[pr-gate] PR #${number} flagged autoMerge but failed the own-folder path guard; NOT auto-merging`);
     }
 
     console.log(

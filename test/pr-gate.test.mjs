@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluatePR, STATUS_CONTEXT, shouldAutoClose, CLOSE_LABELS, CLOSE_NUDGE } from '../scripts/pr-gate.mjs';
+import { evaluatePR, STATUS_CONTEXT, shouldAutoClose, shouldAutoMerge, CLOSE_LABELS, CLOSE_NUDGE } from '../scripts/pr-gate.mjs';
 
 // ---- fixtures --------------------------------------------------------------
 
@@ -159,6 +159,22 @@ test('admin disabling another member (status flip) -> success', async () => {
   assert.equal(d.role, 'admin');
 });
 
+test('admin editing only their OWN folder -> success + auto-merge (staff own-folder content)', async () => {
+  const ev = event({ authorId: 900 });
+  const paths = ['members/adminuser/posts/hello/index.md'];
+  const d = await evaluatePR({
+    author: ev.pull_request.user.id,
+    paths,
+    overrides: overrides(),
+    stripe: fakeStripe({}), // admin has no Stripe customer; staff is paid-equivalent
+    now: NOW,
+  });
+  assert.equal(d.check, 'pass');
+  assert.equal(d.autoMerge, true); // own-folder staff content is auto-merge eligible
+  assert.equal(d.role, 'admin');
+  assert.equal(shouldAutoMerge(d, paths), true); // ...and the actuator fires for it
+});
+
 test('Stripe lookup throws -> failure (fail closed, treated as unpaid)', async () => {
   const ev = event({ authorId: 100 });
   const d = await evaluatePR({
@@ -225,6 +241,22 @@ test('shouldAutoClose closes a non-member OR a non-paid trial content PR, only o
   assert.equal(shouldAutoClose('rejected-not-paid', false), false); // outage: never close
   assert.equal(shouldAutoClose('contribution-pending-owner', true), false); // a held PAID contribution is never closed
   assert.equal(shouldAutoClose('paid', true), false);
+});
+
+test('shouldAutoMerge: a passing own-folder member PR auto-merges; a protected-path or non-pass PR never does', () => {
+  const ownFolder = ['members/alice/posts/hello/index.md', 'members/alice/_enc/hello-body.enc'];
+  // passing own-folder paid/admin content -> auto-merge
+  assert.equal(shouldAutoMerge({ check: 'pass', autoMerge: true }, ownFolder), true);
+  // defense-in-depth: autoMerge flagged but a path escapes members/ -> NEVER machine-merge (protected paths must be reviewed)
+  assert.equal(shouldAutoMerge({ check: 'pass', autoMerge: true }, ['members/alice/profile.md', 'house/roles.yml']), false);
+  assert.equal(shouldAutoMerge({ check: 'pass', autoMerge: true }, ['.github/workflows/x.yml']), false);
+  // not flagged for auto-merge (a held contribution, a rejected trial) -> never
+  assert.equal(shouldAutoMerge({ check: 'pass', autoMerge: false }, ownFolder), false);
+  // a failing gate never auto-merges, even if autoMerge were somehow set
+  assert.equal(shouldAutoMerge({ check: 'fail', autoMerge: true }, ownFolder), false);
+  // empty / missing paths -> never (cannot prove own-folder)
+  assert.equal(shouldAutoMerge({ check: 'pass', autoMerge: true }, []), false);
+  assert.equal(shouldAutoMerge({ check: 'pass', autoMerge: true }, undefined), false);
 });
 
 test('CLOSE_NUDGE distinguishes the non-member sign-up nudge from the trial upgrade nudge', () => {
