@@ -79,8 +79,11 @@ jobs:
           SYNDICATE_ADDED: ${{ steps.diff.outputs.added }}
           # The KV REST creds let Actions write the same SIGNUP_KV namespace the Worker drains. The drain (in the
           # Worker) holds the Discord/social tokens now, so this job no longer needs DISCORD_BOT_TOKEN or channel ids.
-          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          # CF_ACCOUNT_ID + CF_KV_NAMESPACE_ID are non-secret identifiers, inlined exactly like reconcile.yml /
+          # sync-overrides-mirror.yml; only CF_API_TOKEN (Workers KV Storage Edit on this namespace) is a real secret
+          # (already set for reconcile). CF_KV_NAMESPACE_ID MUST equal the production Worker's SIGNUP_KV id.
+          CF_ACCOUNT_ID: "d42b12e969229c5187ad0f7289536487"
+          CF_KV_NAMESPACE_ID: "49432379e11844ac81b6fdaf22d3937a"
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           # Enables real @mentions: resolve author -> github_id (members-index) -> Stripe customer.discord_user_id,
           # stamped on the queue item at enqueue so the drain stays network-free for identity.
