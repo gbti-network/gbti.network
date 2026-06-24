@@ -9,7 +9,7 @@
 # channel switched on here still also requires its secret to be configured at drain time (otherwise it is
 # recorded "skipped", never "failed").
 syndication:
-  enabled: false           # master switch; ships disabled (fail-closed). Flip true at go-live.
+  enabled: true            # ACTIVE 2026-06-24. Approval-gated: nothing posts until a superadmin approves it.
   require_approval: true    # SOW-058: opt-IN. NOTHING posts until a superadmin approves it in the tracker.
   hold_minutes: 60          # legacy auto-hold; IGNORED while require_approval is true (approval is the gate)
   upvote_threshold: 2       # SOW-057: distinct non-author members required to ENQUEUE a share (the author is excluded)
