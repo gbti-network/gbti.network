@@ -13,10 +13,13 @@
 //   node scripts/sync-overrides-mirror.mjs            # write (needs CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN)
 //   node scripts/sync-overrides-mirror.mjs --dry-run  # report what it would write, touch nothing
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import yaml from 'js-yaml';
 import { loadOverridesRaw } from '../membership/overrides.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv } from './lib/kv-mirror.mjs';
+import { toSyndicationMirror } from '../membership/syndication-config.mjs';
 
 /**
  * Build the overrides mirror from the repo's house/ files and write it to KV. Pure over its injected deps
@@ -32,28 +35,42 @@ export async function syncOverridesMirror({ root, env = process.env, fetchImpl, 
   return mirrorOverridesToKv({ raw, env, now, ...(fetchImpl ? { fetchImpl } : {}) });
 }
 
+/**
+ * SOW-058: mirror house/syndication-config.yml -> KV synd:config so the Worker drain reads the live channel
+ * switches, require_approval, hold, and threshold. Stripe-free (only CF creds), so it rides this lightweight job
+ * (and its 6h cron) instead of forcing a full reconcile to enable/adjust syndication.
+ */
+export async function syncSyndicationConfigMirror({ root, env = process.env, fetchImpl, dryRun = false } = {}) {
+  let raw = {};
+  try { raw = yaml.load(fs.readFileSync(path.join(root, 'house', 'syndication-config.yml'), 'utf8')) || {}; } catch { raw = {}; }
+  if (dryRun) {
+    const m = toSyndicationMirror(raw);
+    return { dryRun: true, enabled: m.enabled, require_approval: m.require_approval, channels: m.channels };
+  }
+  return mirrorSyndicationConfigToKv({ raw, env, ...(fetchImpl ? { fetchImpl } : {}) });
+}
+
 // CLI
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
   const dryRun = process.argv.includes('--dry-run');
-  syncOverridesMirror({ root: ROOT, dryRun })
-    .then((r) => {
-      if (r.dryRun) {
-        console.log(`sync-mirror: DRY RUN would write overrides:mirror (${r.bytes} bytes, ${r.roles} role section${r.roles === 1 ? '' : 's'}, generatedAt ${r.generatedAt}).`);
-        return;
-      }
-      if (r.written) {
-        console.log(`sync-mirror: wrote overrides:mirror (${r.bytes} bytes).`);
-        return;
-      }
-      // A SKIP means the CF credentials are missing/incomplete — the exact silent-no-op that let the mirror go
-      // stale before. Fail LOUD so a misconfigured scheduled run is noticed (a red Action) instead of quietly
-      // starving the gate.
-      console.error(`sync-mirror: NOT written (${r.reason}). Set CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN.`);
-      process.exitCode = 1;
-    })
-    .catch((e) => {
-      console.error('sync-mirror: FAILED:', e?.message ?? e);
-      process.exitCode = 1;
-    });
+  (async () => {
+    // 1) overrides:mirror — the effective-paid gate; must stay fresh (the original purpose of this job).
+    try {
+      const r = await syncOverridesMirror({ root: ROOT, dryRun });
+      if (r.dryRun) console.log(`sync-mirror: DRY RUN would write overrides:mirror (${r.bytes} bytes, ${r.roles} role section${r.roles === 1 ? '' : 's'}, generatedAt ${r.generatedAt}).`);
+      else if (r.written) console.log(`sync-mirror: wrote overrides:mirror (${r.bytes} bytes).`);
+      // A SKIP means the CF credentials are missing/incomplete — the silent-no-op that let the mirror go stale.
+      // Fail LOUD so a misconfigured run is noticed (a red Action) instead of quietly starving the gate.
+      else { console.error(`sync-mirror: overrides:mirror NOT written (${r.reason}). Set CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN.`); process.exitCode = 1; }
+    } catch (e) { console.error('sync-mirror: overrides:mirror FAILED:', e?.message ?? e); process.exitCode = 1; }
+
+    // 2) synd:config — SOW-058: the drain reads this for the enable flag, channels, approval, and hold.
+    try {
+      const s = await syncSyndicationConfigMirror({ root: ROOT, dryRun });
+      if (s.dryRun) console.log(`sync-mirror: DRY RUN would write synd:config (enabled=${s.enabled}, require_approval=${s.require_approval}).`);
+      else if (s.written) console.log(`sync-mirror: wrote synd:config (${s.bytes} bytes).`);
+      else { console.error(`sync-mirror: synd:config NOT written (${s.reason}).`); process.exitCode = 1; }
+    } catch (e) { console.error('sync-mirror: synd:config FAILED:', e?.message ?? e); process.exitCode = 1; }
+  })();
 }

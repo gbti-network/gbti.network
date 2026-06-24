@@ -7,6 +7,10 @@ name: Sync overrides mirror
 # failure aborts before the mirror write). This job does ONLY the mirror write (read 3 house/ files -> one KV
 # PUT, ~1s), so the gate can never be starved by an unrelated reconcile failure.
 #
+# SOW-058: the same run ALSO mirrors house/syndication-config.yml -> KV `synd:config` (the drain's enable flag,
+# channels, approval, and hold). That sync is likewise Stripe-free (CF token only), so it rides this job + its
+# 6-hour cron — flipping `enabled: true` then running this Action is the fast way to (de)activate syndication.
+#
 # Run locally: node scripts/sync-overrides-mirror.mjs --dry-run
 
 on:
