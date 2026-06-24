@@ -175,10 +175,12 @@ function checkContent(file, owner, type) {
     const fmc = frontmatter(txt) || {};
     checkMemberGating(fmc, rel, bodyOf(txt));
     // SOW-032: a share comment is identified by the composite "<author>/<shareId>" targetSlug (a Share id is a
-    // member-scoped timestamp-slug, not globally unique), so it stays unambiguous across members. The
-    // from-the-author intro requirement (SOW-014) only targets products/prompts, so a share never demands one.
-    if (type === 'comment' && fmc.targetType === 'share' && !/^[a-z0-9][a-z0-9-]*\/[0-9]{14}-[a-z0-9-]+$/.test(String(fmc.targetSlug || ''))) {
-      errors.push(`${rel}: a share comment targetSlug must be "<author>/<shareId>" (e.g. alice/20260615120000-x). See SOW-032.`);
+    // member-scoped timestamp-slug, not globally unique), so it stays unambiguous across members. The shareId stamp
+    // is VARIABLE length: shareId() slices the createdAt digits to 14, so a date-only createdAt yields an 8-digit
+    // stamp (e.g. 20260610-...) while a full timestamp yields 14 (20260615120000-...). Accept 1-14 leading digits.
+    // The from-the-author intro requirement (SOW-014) only targets products/prompts, so a share never demands one.
+    if (type === 'comment' && fmc.targetType === 'share' && !/^[a-z0-9][a-z0-9-]*\/[0-9]{1,14}-[a-z0-9-]+$/.test(String(fmc.targetSlug || ''))) {
+      errors.push(`${rel}: a share comment targetSlug must be "<author>/<shareId>" (e.g. alice/20260615120000-x or alice/20260610-x). See SOW-032.`);
     }
     // SOW-046 D: a news comment targets a deterministic slug-safe id derived from the (URL-shaped) news guid:
     // "news-<hash>" (newsTargetSlug in client-ui/src/news.mjs). A raw guid (a URL) is never used as a targetSlug.
