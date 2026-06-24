@@ -31,7 +31,7 @@ import yaml from 'js-yaml';
 import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication } from './member-admin-client.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
 
@@ -567,11 +567,18 @@ export async function getSyndicationQueue(ctx) {
   return workerGetSyndicationQueue({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 
-/** SOW-058: cancel a pending syndication item (SUPERADMIN only; the Worker enforces). */
+/** SOW-058: cancel/reject a pending or approved syndication item (SUPERADMIN only; the Worker enforces). */
 export async function cancelSyndication(ctx, { id } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
   return workerCancelSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+
+/** SOW-058: approve a pending syndication item (SUPERADMIN only; the Worker enforces) so the drain posts it. */
+export async function approveSyndication(ctx, { id } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  return workerApproveSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 
 /**

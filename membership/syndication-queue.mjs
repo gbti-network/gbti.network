@@ -13,7 +13,11 @@
 //     trigger, enqueuedAt, availableAt, status, claimedAt, perChannel, sentAt, failedAt, cancelledAt, cancelledBy }
 
 export const QUEUE_TYPES = new Set(['share', 'post', 'product', 'prompt']);
-export const QUEUE_STATUS = new Set(['pending', 'sent', 'failed', 'cancelled']);
+// SOW-058 (approval model): 'pending' = enqueued, AWAITING superadmin approval (never posts on its own);
+// 'approved' = a superadmin approved it, so the drain will post it on the next tick; then 'sent' / 'failed';
+// 'cancelled' = rejected (from pending) or cancelled before send (from approved). When require_approval is off
+// (legacy auto-hold), the drain posts 'pending' items past the hold instead.
+export const QUEUE_STATUS = new Set(['pending', 'approved', 'sent', 'failed', 'cancelled']);
 export const DEFAULT_HOLD_MS = 60 * 60_000; // one hour
 
 /** Thrown for caller-input problems; the handler maps it to a 400 (never a 500). */
@@ -69,6 +73,8 @@ export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HO
     failedAt: null,
     cancelledAt: null,
     cancelledBy: null,
+    approvedAt: null, // SOW-058: stamped when a superadmin approves (pending -> approved)
+    approvedBy: null,
   };
 }
 
@@ -111,28 +117,47 @@ export function normalizeItem(raw) {
     failedAt: num(raw.failedAt),
     cancelledAt: num(raw.cancelledAt),
     cancelledBy: trimOrNull(raw.cancelledBy),
+    approvedAt: num(raw.approvedAt),
+    approvedBy: trimOrNull(raw.approvedBy),
   };
 }
 
-/** Is this item due to be posted now (the one-hour hold has elapsed and it is still pending)? */
-export function isDue(item, now = Date.now()) {
-  return Boolean(item) && item.status === 'pending' && Number(now) >= Number(item.availableAt);
+/**
+ * Is this item due to be posted now? With require_approval (the default model), the SUPERADMIN APPROVAL is the gate:
+ * only an 'approved' item posts (a 'pending' item NEVER posts, regardless of the clock). With require_approval off
+ * (legacy auto-hold), a 'pending' item posts once the one-hour hold has elapsed.
+ */
+export function isDue(item, now = Date.now(), { requireApproval = false } = {}) {
+  if (!item) return false;
+  if (requireApproval) return item.status === 'approved';
+  return item.status === 'pending' && Number(now) >= Number(item.availableAt);
 }
 
-/** Partition pending items into { due, holding } at time `now`. Non-pending items are excluded entirely. */
-export function planDrain(items, now = Date.now()) {
+/** Partition the not-terminal items into { due, holding } at time `now`. Terminal items are excluded entirely. */
+export function planDrain(items, now = Date.now(), { requireApproval = false } = {}) {
   const due = [];
   const holding = [];
   for (const it of Array.isArray(items) ? items : []) {
-    if (!it || it.status !== 'pending') continue;
-    (isDue(it, now) ? due : holding).push(it);
+    if (!it || (it.status !== 'pending' && it.status !== 'approved')) continue;
+    (isDue(it, now, { requireApproval }) ? due : holding).push(it);
   }
   return { due, holding };
 }
 
-/** Cancel is only meaningful while the item is pending and the drain has not yet claimed it. */
+/** Reject/cancel is meaningful while the item is pending or approved and the drain has not yet claimed it. */
 export function canCancel(item) {
+  return Boolean(item) && (item.status === 'pending' || item.status === 'approved') && item.claimedAt == null;
+}
+
+/** A superadmin may approve only a still-pending, unclaimed item. */
+export function canApprove(item) {
   return Boolean(item) && item.status === 'pending' && item.claimedAt == null;
+}
+
+/** Transition pending -> approved, stamping the actor. Returns the item unchanged if it cannot be approved. */
+export function markApproved(item, { now = Date.now, actor = null } = {}) {
+  if (!canApprove(item)) return item;
+  return { ...item, status: 'approved', approvedAt: Number(now()), approvedBy: trimOrNull(actor) };
 }
 
 /** Mark an item claimed by a drain tick (the compare-and-set guard against a cron overlap / a late cancel). */

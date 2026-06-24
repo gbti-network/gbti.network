@@ -1,7 +1,7 @@
 // SOW-058: the superadmin tracker + cancel endpoints. Fake KV + injected authorizer; no network, no secrets.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { handleSyndicationTracker, handleSyndicationCancel } from '../workers/signup/syndication-admin.mjs';
+import { handleSyndicationTracker, handleSyndicationCancel, handleSyndicationApprove } from '../workers/signup/syndication-admin.mjs';
 import { enqueue, getItem, SYND_CONFIG_KEY } from '../workers/signup/syndication-store.mjs';
 
 function fakeKV(seed = {}) {
@@ -61,4 +61,42 @@ test('cancel of an unknown id is a 404; a missing id is a 400', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   assert.equal((await handleSyndicationCancel(req({ id: 'nope' }), {}, { kv, authorize: superadmin })).status, 404);
   assert.equal((await handleSyndicationCancel(req({}), {}, { kv, authorize: superadmin })).status, 400);
+});
+
+test('approve requires SUPERADMIN (an admin is forbidden)', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
+  const id = await seedItem(kv);
+  assert.equal((await handleSyndicationApprove(req({ id }), {}, { kv, authorize: adminOnly })).status, 403);
+});
+
+test('superadmin approves a pending item (pending -> approved); a second approve is an idempotent no-op', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
+  const id = await seedItem(kv);
+  const r = await handleSyndicationApprove(req({ id }), {}, { kv, now: at(5), authorize: superadmin });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.approved, true);
+  const item = await getItem(kv, id);
+  assert.equal(item.status, 'approved');
+  assert.equal(item.approvedBy, '1');
+  // already approved -> approved:false (not pending anymore)
+  const again = await handleSyndicationApprove(req({ id }), {}, { kv, authorize: superadmin });
+  assert.equal(again.body.approved, false);
+});
+
+test('an approved item can still be cancelled before the drain posts it', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
+  const id = await seedItem(kv);
+  await handleSyndicationApprove(req({ id }), {}, { kv, authorize: superadmin });
+  const r = await handleSyndicationCancel(req({ id }), {}, { kv, authorize: superadmin });
+  assert.equal(r.body.cancelled, true);
+  assert.equal((await getItem(kv, id)).status, 'cancelled');
+});
+
+test('approving a cancelled item is a no-op (cannot resurrect a rejected item)', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
+  const id = await seedItem(kv);
+  await handleSyndicationCancel(req({ id }), {}, { kv, authorize: superadmin });
+  const r = await handleSyndicationApprove(req({ id }), {}, { kv, authorize: superadmin });
+  assert.equal(r.body.approved, false);
+  assert.equal((await getItem(kv, id)).status, 'cancelled');
 });

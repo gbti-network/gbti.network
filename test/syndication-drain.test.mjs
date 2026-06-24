@@ -17,7 +17,9 @@ function fakeKV(seed = {}) {
 }
 const at = (t) => () => t;
 const AFTER_HOLD = 4 * 60 * 60_000;
-const cfg = (channels) => JSON.stringify({ syndication: { enabled: true, hold_minutes: 60, channels } });
+// The mechanics tests below exercise the legacy auto-hold path (require_approval:false); the approval-model gate
+// (the default) is covered by the dedicated block at the end.
+const cfg = (channels) => JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels } });
 const env = (extra = {}) => ({ DISCORD_BOT_TOKEN: 't', DISCORD_CHANNEL_SHARES: 'c', ...extra });
 
 function discordOk(calls) {
@@ -98,4 +100,28 @@ test('a config-enabled channel with no secret is recorded skipped, not failed', 
   const item = await getItem(kv, r.id);
   assert.equal(item.perChannel.x.status, 'skipped');
   assert.equal(item.status, 'sent'); // discord sent, x skipped -> no failure
+});
+
+// SOW-058 approval model (the DEFAULT): nothing posts until a superadmin approves it.
+const cfgApproval = (channels) => JSON.stringify({ syndication: { enabled: true, channels } }); // require_approval defaults true
+
+test('with approval required (the default), a PENDING item is NEVER posted, even past the hold', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfgApproval({ discord: true }) });
+  await enqueue({ SIGNUP_KV: kv }, { source: 'share', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
+  const calls = [];
+  const out = await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk(calls) });
+  assert.equal(calls.length, 0, 'an unapproved item must never reach a brand channel');
+  assert.equal(out.drained, 0);
+});
+
+test('an APPROVED item IS posted on the next drain tick', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfgApproval({ discord: true }) });
+  const r = await enqueue({ SIGNUP_KV: kv }, { source: 'share', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
+  const stored = await getItem(kv, r.id);
+  await kv.put(`synd:item:${r.id}`, JSON.stringify({ ...stored, status: 'approved', approvedAt: 1 }));
+  const calls = [];
+  const out = await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk(calls) });
+  assert.equal(out.drained, 1);
+  assert.equal(calls.length, 1);
+  assert.equal((await getItem(kv, r.id)).status, 'sent');
 });

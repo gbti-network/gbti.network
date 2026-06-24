@@ -18612,6 +18612,21 @@ async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = global
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `cancel request failed (${res.status})`);
   return data;
 }
+async function approveSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase6(signupBase) + "/membership/syndication/approve", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ id })
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `approve request failed (${res.status})`);
+  return data;
+}
 
 // client/src/operations.mjs
 var OperationError = class extends Error {
@@ -18994,6 +19009,11 @@ async function cancelSyndication2(ctx, { id } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   return cancelSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+async function approveSyndication2(ctx, { id } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  return approveSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -20130,6 +20150,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getOpenPulls(ctx));
       case "/api/syndication":
         return ok(await getSyndicationQueue2(ctx));
+      case "/api/syndication/approve":
+        return ok(await approveSyndication2(ctx, body ?? {}));
       case "/api/syndication/cancel":
         return ok(await cancelSyndication2(ctx, body ?? {}));
       case "/api/admin-ops":

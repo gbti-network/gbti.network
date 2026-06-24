@@ -29,6 +29,7 @@ export const CHANNELS = Object.freeze(['discord', 'x', 'linkedin', 'mastodon', '
 
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,
+  require_approval: true, // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
   hold_minutes: 60,
   upvote_threshold: 2,
   channels: Object.freeze({ discord: false, x: false, linkedin: false, mastodon: false, bluesky: false }),
@@ -74,6 +75,7 @@ export function syndicationConfigFromParsed(parsed) {
   const d = DEFAULT_SYNDICATION_CONFIG;
   return Object.freeze({
     enabled: asBool(raw.enabled, d.enabled),
+    require_approval: asBool(raw.require_approval, d.require_approval),
     hold_minutes: asHoldMinutes(raw.hold_minutes, d.hold_minutes),
     upvote_threshold: asThreshold(raw.upvote_threshold, d.upvote_threshold),
     channels: normalizeChannels(raw.channels),
@@ -83,6 +85,12 @@ export function syndicationConfigFromParsed(parsed) {
 /** Master switch: may anything be enqueued/syndicated at all? */
 export function isSyndicationEnabled(cfg) {
   return cfg?.enabled === true;
+}
+
+/** SOW-058: when true (the default), the drain posts ONLY superadmin-approved items; a pending item never posts on
+ *  its own. Fail-safe: anything other than an explicit false means approval IS required. */
+export function requiresApproval(cfg) {
+  return cfg?.require_approval !== false;
 }
 
 /** The hold window in milliseconds (hold_minutes * 60000). */
@@ -108,7 +116,7 @@ export function enabledChannelNames(cfg) {
 /** The small, secret-free object reconcile writes to the KV mirror (synd:config) and the Worker reads back. */
 export function toSyndicationMirror(cfg) {
   const c = syndicationConfigFromParsed(cfg);
-  return { enabled: c.enabled, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, channels: { ...c.channels } };
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, channels: { ...c.channels } };
 }
 
 /** Read + normalize house/syndication-config.yml from a repo root. Missing/unparseable file = safe defaults. */

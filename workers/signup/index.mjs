@@ -55,7 +55,7 @@ import { membershipAdminOps } from './membership-admin-ops.mjs'; // SOW-038 P3: 
 import { handleActivity } from './membership-activity.mjs';
 import { handleUpvote } from './membership-upvote.mjs';
 import { handleOgPreview } from './membership-og.mjs';
-import { handleSyndicationTracker, handleSyndicationCancel } from './syndication-admin.mjs';
+import { handleSyndicationTracker, handleSyndicationCancel, handleSyndicationApprove } from './syndication-admin.mjs';
 import { drainSyndication } from './syndication-drain.mjs';
 import { handleFollows } from './membership-follows.mjs';
 import { membershipNews, membershipNewsCategories, membershipNewsSources } from './membership-news.mjs'; // SOW-043/046: members-only news proxy
@@ -587,6 +587,13 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET') {
           const r = await handleSyndicationTracker(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+      if (pathname === '/membership/syndication/approve') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'POST') {
+          const r = await handleSyndicationApprove(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

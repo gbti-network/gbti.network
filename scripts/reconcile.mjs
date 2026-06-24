@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
+import yaml from 'js-yaml';
 
 import { createStripeClient } from '../clients/stripe.mjs';
 import { createGitHubClient } from '../clients/github.mjs';
@@ -28,7 +29,7 @@ import { deriveStatusFromCustomer, STATUS } from '../membership/derive-status.mj
 import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '../membership/overrides.mjs';
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv } from './lib/kv-mirror.mjs';
 import { syncFavoriteCounts, readCountsFromDisk } from './lib/favorite-counts.mjs';
 import { syncUpvoteCounts, readCountsFromDisk as readUpvoteCountsFromDisk } from './lib/upvote-counts.mjs';
 import { mergeState, alreadyLabeled, conflictComment, CONFLICT_LABEL } from './lib/pr-conflict.mjs';
@@ -517,6 +518,24 @@ async function main() {
       console.log(r.written ? `reconcile: mirrored overrides to KV (${r.bytes} bytes).` : `reconcile: overrides KV mirror SKIPPED (${r.reason}).`);
     } catch (e) {
       console.error('reconcile: overrides KV mirror FAILED:', e?.message ?? e);
+      process.exitCode = 1;
+    }
+  }
+
+  // SOW-058: mirror house/syndication-config.yml -> KV key synd:config so the Worker drain reads the live channel
+  // switches, require_approval, the hold, and the upvote threshold WITHOUT a redeploy (the overrides-mirror pattern).
+  // Without this sync the drain falls back to the safe default (disabled), so syndication can never be enabled.
+  let rawSyndication = {};
+  try { rawSyndication = yaml.load(fs.readFileSync(path.join(ROOT, 'house', 'syndication-config.yml'), 'utf8')) || {}; }
+  catch { rawSyndication = {}; }
+  if (dryRun) {
+    console.log('reconcile: DRY RUN would mirror syndication config to KV (key synd:config).');
+  } else {
+    try {
+      const r = await mirrorSyndicationConfigToKv({ raw: rawSyndication, env });
+      console.log(r.written ? `reconcile: mirrored syndication config to KV (${r.bytes} bytes).` : `reconcile: syndication config KV mirror SKIPPED (${r.reason}).`);
+    } catch (e) {
+      console.error('reconcile: syndication config KV mirror FAILED:', e?.message ?? e);
       process.exitCode = 1;
     }
   }

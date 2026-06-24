@@ -2132,17 +2132,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .ch.skipped { opacity:.7; }
   .cancel { flex:none; font:inherit; font-size:12.5px; font-weight:600; color:var(--danger); background:none; border:1px solid var(--line); border-radius:6px; padding:5px 10px; cursor:pointer; }
   .cancel:hover { border-color:var(--danger); }
+  .approve { flex:none; font:inherit; font-size:12.5px; font-weight:700; color:#fff; background:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:5px 12px; cursor:pointer; }
+  .approve:hover { filter:brightness(1.05); }
   .busy { opacity:.55; pointer-events:none; }
 `;
   var SRC_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
-  function countdown(sec) {
-    const s = Math.max(0, Number(sec) || 0);
-    if (s <= 0) return "sending now";
-    const m = Math.floor(s / 60);
-    if (m >= 60) return `in ${Math.floor(m / 60)}h ${m % 60}m`;
-    if (m >= 1) return `in ${m}m`;
-    return `in ${s}s`;
-  }
   var GbtiSyndicationTracker = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback();
@@ -2183,22 +2177,31 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const d = this._data;
       this.set(this.css(CSS8) + `<div class="${this._busy ? "busy" : ""}">
-      <div class="head"><h3>Syndication queue</h3><span class="hint">Every item holds one hour; a superadmin can cancel before it sends.</span></div>
+      <div class="head"><h3>Syndication queue</h3><span class="hint">Nothing posts until a superadmin approves it. Approved items post to every enabled channel on the next tick.</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
-      ${this._bucket("Pending", d.pending, true)}
-      ${this._bucket("Sent", d.sent, false)}
-      ${this._bucket("Failed", d.failed, false)}
-      ${this._bucket("Cancelled", d.cancelled, false)}
+      ${this._bucket("Pending approval", d.pending, "pending")}
+      ${this._bucket("Approved", d.approved, "approved")}
+      ${this._bucket("Sent", d.sent, "done")}
+      ${this._bucket("Failed", d.failed, "done")}
+      ${this._bucket("Cancelled", d.cancelled, "done")}
     </div>`);
+      this.$$("[data-approve]").forEach((b) => b.addEventListener("click", () => this._approve(b.dataset.approve)));
       this.$$("[data-cancel]").forEach((b) => b.addEventListener("click", () => this._cancel(b.dataset.cancel)));
     }
-    _bucket(label, items, pending) {
+    _bucket(label, items, mode) {
       const list = Array.isArray(items) ? items : [];
       if (!list.length) return `<div class="bucket"><h4>${esc(label)} (0)</h4><p class="muted">None.</p></div>`;
       const rows = list.map((it) => {
         const src = SRC_LABEL[it.source] || it.source || "";
         const title = it.title || it.targetSlug || it.id || "(untitled)";
-        const right = pending ? `<span class="when">${esc(countdown(it.secondsUntilAvailable))}</span><button class="cancel" data-cancel="${esc(it.id)}" type="button">Cancel</button>` : `<span class="chs">${this._channels(it.perChannel)}</span>`;
+        let right;
+        if (mode === "pending") {
+          right = `<button class="approve" data-approve="${esc(it.id)}" type="button">Approve</button><button class="cancel" data-cancel="${esc(it.id)}" type="button">Reject</button>`;
+        } else if (mode === "approved") {
+          right = `<span class="when">posting soon</span><button class="cancel" data-cancel="${esc(it.id)}" type="button">Cancel</button>`;
+        } else {
+          right = `<span class="chs">${this._channels(it.perChannel)}</span>`;
+        }
         return `<li class="row"><span class="src">${esc(src)}</span><span class="it"><b>${esc(title)}</b>${it.url ? `<span class="d">${esc(it.url)}</span>` : ""}</span>${right}</li>`;
       }).join("");
       return `<div class="bucket"><h4>${esc(label)} (${list.length})</h4><ul class="rows">${rows}</ul></div>`;
@@ -2211,14 +2214,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return link;
       }).join("");
     }
+    async _approve(id) {
+      if (!id) return;
+      this._busy = true;
+      this.render();
+      try {
+        const r = await this.client.approveSyndication({ id });
+        this._msg = r?.approved ? "Approved. It posts to every enabled channel on the next tick." : `Could not approve (status: ${r?.status || "unknown"}).`;
+        await this.load();
+      } catch (e) {
+        this._msg = e?.message || "Approve failed.";
+      } finally {
+        this._busy = false;
+        this.render();
+      }
+    }
     async _cancel(id) {
       if (!id) return;
-      if (typeof confirm === "function" && !confirm("Cancel this syndication item? It will not be posted.")) return;
+      if (typeof confirm === "function" && !confirm("Reject this syndication item? It will not be posted.")) return;
       this._busy = true;
       this.render();
       try {
         const r = await this.client.cancelSyndication({ id });
-        this._msg = r?.cancelled ? "Cancelled." : `Could not cancel (status: ${r?.status || "unknown"}).`;
+        this._msg = r?.cancelled ? "Removed from the queue." : `Could not cancel (status: ${r?.status || "unknown"}).`;
         await this.load();
       } catch (e) {
         this._msg = e?.message || "Cancel failed.";
@@ -9061,7 +9079,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       syndicationQueue: () => request("GET", "/api/syndication"),
       // SOW-058: superadmin tracker { pending, sent, cancelled, failed }
       cancelSyndication: ({ id }) => request("POST", "/api/syndication/cancel", { id }),
-      // SOW-058: superadmin cancel within the hold
+      // SOW-058: superadmin reject/cancel
+      approveSyndication: ({ id }) => request("POST", "/api/syndication/approve", { id }),
+      // SOW-058: superadmin approve -> posts next drain tick
       adminOp: (action, params) => request("POST", "/api/admin-ops", params ? { action, params } : { action })
       // SOW-038 P3 (reconcile/e2e); SOW-055 category-migrate carries params
     };

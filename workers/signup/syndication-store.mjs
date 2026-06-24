@@ -37,9 +37,11 @@ export async function getItem(kv, id) {
   return normalizeItem(raw);
 }
 
-/** Write an item; a terminal item gets a TTL so the store self-prunes. */
+/** Write an item; a TERMINAL item gets a TTL so the store self-prunes. 'pending' and 'approved' are NOT terminal
+ *  (an approved item is still awaiting the drain), so they must persist with no TTL or they could expire un-posted. */
 export async function putItem(kv, item) {
-  const opts = item.status !== 'pending' ? { expirationTtl: TERMINAL_TTL_SECONDS } : undefined;
+  const terminal = item.status !== 'pending' && item.status !== 'approved';
+  const opts = terminal ? { expirationTtl: TERMINAL_TTL_SECONDS } : undefined;
   await kv.put(SYND_ITEM_KEY(item.id), JSON.stringify(item), opts);
   return item;
 }
@@ -66,21 +68,22 @@ export async function removeFromPending(kv, id) {
 }
 
 /**
- * Idempotently enqueue an item. A pending OR sent item with the same dedupeKey is a no-op (republish, double
- * cron, retried Action never double-posts). A previously cancelled/failed dedupeKey may be re-enqueued. The hold
- * window comes from the config mirror (default one hour). Returns { enqueued, id, item, reason }.
+ * Idempotently enqueue an item. A pending, APPROVED, or sent item with the same dedupeKey is a no-op (republish,
+ * double cron, retried Action never double-posts). A previously cancelled/failed dedupeKey may be re-enqueued. The
+ * hold window comes from the config mirror (default one hour). Returns { enqueued, id, item, reason }.
  */
 export async function enqueue(env, input, { kv = env?.SIGNUP_KV, now = Date.now, cfg = null } = {}) {
   if (!kv) return { enqueued: false, reason: 'the syndication store is not configured' };
   const config = cfg ?? (await readSyndicationConfig(kv));
   const key = dedupeKey({ source: input?.source, targetSlug: input?.targetSlug });
 
-  // Idempotency: a still-active item with this dedupeKey blocks a duplicate.
+  // Idempotency: a still-active item with this dedupeKey blocks a duplicate. 'approved' counts as active (it is
+  // about to post), so a re-enqueue while it is awaiting the drain cannot create a second item that double-posts.
   let pointer = null;
   try { pointer = await kv.get(SYND_DEDUPE_KEY(key), 'text'); } catch { pointer = null; }
   if (pointer) {
     const existing = await getItem(kv, pointer);
-    if (existing && (existing.status === 'pending' || existing.status === 'sent')) {
+    if (existing && (existing.status === 'pending' || existing.status === 'approved' || existing.status === 'sent')) {
       return { enqueued: false, reason: 'duplicate', id: existing.id };
     }
   }
@@ -92,21 +95,21 @@ export async function enqueue(env, input, { kv = env?.SIGNUP_KV, now = Date.now,
   return { enqueued: true, id: item.id, item };
 }
 
-/** All not-yet-terminal items (from the pending index), normalized; stale index entries are skipped. */
+/** All not-yet-terminal items (pending AWAITING approval + approved-not-yet-sent) from the pending index. */
 export async function listPending(kv) {
   const ids = await readPendingIndex(kv);
   const out = [];
   for (const id of ids) {
     const item = await getItem(kv, id);
-    if (item && item.status === 'pending') out.push(item);
+    if (item && (item.status === 'pending' || item.status === 'approved')) out.push(item);
   }
   return out;
 }
 
-/** Items due to post now (pending and past the hold), capped to `limit` oldest-first. */
-export async function listDue(kv, { now = Date.now, limit = 10 } = {}) {
+/** Items due to post now, capped to `limit` oldest-first. With requireApproval, "due" = approved (SOW-058). */
+export async function listDue(kv, { now = Date.now, limit = 10, requireApproval = false } = {}) {
   const t = now();
-  const due = (await listPending(kv)).filter((it) => isDue(it, t));
+  const due = (await listPending(kv)).filter((it) => isDue(it, t, { requireApproval }));
   due.sort((a, b) => a.availableAt - b.availableAt);
   return due.slice(0, Math.max(0, limit));
 }

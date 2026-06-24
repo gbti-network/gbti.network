@@ -43,6 +43,9 @@ import {
   getOverridesRoster,
   getOpenPulls,
   triggerAdminOp,
+  getSyndicationQueue,
+  cancelSyndication,
+  approveSyndication,
 } from './operations.mjs';
 import { getSettings, updateSettings, getBilling, getReferral } from './settings-ops.mjs';
 import { fieldsFor } from './form-fields.mjs';
@@ -149,7 +152,8 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/taxonomy') return run(() => getTaxonomy(ctx)); // SOW-055: the canonical category tree for the manager UI
   if (method === 'GET' && pathname === '/api/open-pulls') return run(() => getOpenPulls(ctx)); // SOW-038 P2: open content-PR queue (admin-gated)
   if (method === 'GET' && pathname === '/api/syndication') return run(() => getSyndicationQueue(ctx)); // SOW-058: superadmin syndication tracker
-  if (method === 'POST' && pathname === '/api/syndication/cancel') return run(() => cancelSyndication(ctx, body ?? {})); // SOW-058: superadmin cancel
+  if (method === 'POST' && pathname === '/api/syndication/approve') return run(() => approveSyndication(ctx, body ?? {})); // SOW-058: superadmin approve
+  if (method === 'POST' && pathname === '/api/syndication/cancel') return run(() => cancelSyndication(ctx, body ?? {})); // SOW-058: superadmin cancel/reject
   if (method === 'POST' && pathname === '/api/admin-ops') return run(() => triggerAdminOp(ctx, body ?? {})); // SOW-038 P3: reconcile/E2E trigger
 
   // Role-gated admin/superadmin actions (the operations enforce the capability; the gate is authoritative).

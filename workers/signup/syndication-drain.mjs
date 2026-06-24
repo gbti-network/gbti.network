@@ -6,7 +6,7 @@
 
 import { markClaimed, markSent, markFailed, recordChannel, channelDone } from '../../membership/syndication-queue.mjs';
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
-import { isSyndicationEnabled } from '../../membership/syndication-config.mjs';
+import { isSyndicationEnabled, requiresApproval } from '../../membership/syndication-config.mjs';
 import { readSyndicationConfig, getItem, putItem, listDue, removeFromPending } from './syndication-store.mjs';
 
 export async function drainSyndication(env, {
@@ -22,7 +22,10 @@ export async function drainSyndication(env, {
   if (!isSyndicationEnabled(cfg)) return { drained: 0, reason: 'disabled' };
 
   const cap = Number(limit ?? env?.MAX_DRAIN_PER_TICK ?? 10);
-  const due = await listDue(kv, { now, limit: cap });
+  // SOW-058: with require_approval (the default), ONLY superadmin-approved items are due; a pending item never posts.
+  const requireApproval = requiresApproval(cfg);
+  const eligibleStatus = requireApproval ? 'approved' : 'pending';
+  const due = await listDue(kv, { now, limit: cap, requireApproval });
   const { ready, skipped } = resolveAdapterRun({ cfg, env, adapters, fetchImpl });
 
   let sent = 0;
@@ -30,7 +33,7 @@ export async function drainSyndication(env, {
   for (const stale of due) {
     // Fresh read to honor a cancel that landed since the list snapshot, and to claim against a cron overlap.
     let item = await getItem(kv, stale.id);
-    if (!item || item.status !== 'pending') continue;
+    if (!item || item.status !== eligibleStatus) continue; // re-read guard: never post an unapproved/cancelled item
     item = markClaimed(item, { now });
     item = { ...item, attempts: (item.attempts || 0) + 1 };
     await putItem(kv, item);
