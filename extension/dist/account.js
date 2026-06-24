@@ -791,17 +791,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return `<div class="preview"><p class="pmeta">${esc(shortPath(p.filename))}</p>${html || '<p class="muted">Preview unavailable.</p>'}</div>`;
       }).join("");
     }
-    // SOW-028 P4: surface the reward at the decision point. The contributor is credited on this content (the
-    // stacked-avatar footnote) and earns a contribution point for a point-bearing change; the revenue cut is THIS
-    // content's `delegation.contributions` (0..7% of the owner's 30% referral commission). A 0% split is called
-    // out with a nudge, because the contributor then earns reputation but no revenue. Delegation is set on the
-    // content itself (the Revenue delegation field when you edit the post/product/prompt in your workspace).
+    // SOW-028 P4 / SOW-059: surface the reward at the decision point. The contributor is credited on this content
+    // (the stacked-avatar footnote) and earns a contribution point. Under the touch-based model the revenue cut is
+    // AUTOMATIC: a contribution to a first-touch or last-touch item shares the fixed 5% collaboration mix (1
+    // collaboration point per qualifying contribution, split evenly). Owners no longer set a per-content delegation.
     _awardHtml() {
       const who = this._data.author?.login ? "@" + esc(this._data.author.login) : "The contributor";
-      const d = this._data.delegation;
-      const pct = d ? Math.round((d.contributions || 0) * 100) : 0;
-      const reward = pct > 0 ? `<p>${who} is credited as a contributor on this content and earns a <b>${pct}% share</b> of the referral revenue it brings in, plus a contribution point.</p>` : `<p class="zero">${who} is credited as a contributor and earns a contribution point. You currently share <b>0%</b> of this content's revenue, so they receive reputation but no revenue. Set a revenue delegation when you edit this content to give contributors a cut.</p>`;
-      return `<div class="award"><b>If you approve</b>${reward}</div>`;
+      return `<div class="award"><b>If you approve</b><p>${who} is credited as a contributor on this content and earns a contribution point. If this item is the first-touch or last-touch item when a member converts, that point also shares the automatic 5% collaboration mix. Rewards are automatic, so you do not set a revenue split.</p></div>`;
     }
     _decideHtml() {
       if (this._data && this._data.canActInClient === false) {
@@ -857,7 +853,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.client.getBilling().catch(() => ({})),
         this.client.getReferral().catch(() => ({}))
       ]);
-      const del = referral?.delegation ?? {};
       this.set(
         this.css() + `<div class="panel">
            <h2>Settings</h2>
@@ -876,7 +871,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
            <h2>Referrals + revenue</h2>
            ${referral.link ? `<p>Your link: <code>${esc(referral.link)}</code></p>` : ""}
            <p class="muted">${esc(referral.note || "")}</p>
-           <p class="muted">Set <code>delegation</code> on a post/product/prompt to share up to ${Math.round((del.contributionCap ?? 0.07) * 100)}% with contributors and ${Math.round((del.commentCap ?? 0.03) * 100)}% with commenters. Default: you keep 100%.</p>
+           <p class="muted">When a member converts after touching your content, you earn the first-touch (30%) or last-touch (10%) share. Contributors and commenters on those items are rewarded automatically from the 5% collaboration mix. You do not set a split.</p>
            ${referral.connectOnboarding ? `<a href="${esc(referral.connectOnboarding)}" target="_blank" rel="noopener"><button class="ghost">Set up payouts (Stripe Connect)</button></a>` : ""}
            ${referral.terms ? `<a href="${esc(referral.terms)}" target="_blank" rel="noopener" class="muted" style="margin-left:8px">Terms</a>` : ""}
          </div>`

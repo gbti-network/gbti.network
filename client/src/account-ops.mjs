@@ -30,13 +30,7 @@ export function getReferral(ctx) {
     connectOnboarding: `${SIGNUP_BASE}/referral/connect/start`,
     terms: `${SITE_BASE}/referral-terms/`,
     note: 'Share your link, or earn from your published work. Earnings appear once Connect payouts are enabled (SOW-007).',
-    // SOW-008: each piece of content can delegate part of its 30% commission to its contributors (up to 7%)
-    // and commenters (up to 3%). Set it per content via the `delegation` field in the Author form; the
-    // remainder is always yours. See referral-terms for how the split is computed and paid out.
-    delegation: {
-      contributionCap: 0.07,
-      commentCap: 0.03,
-      hint: 'Set `delegation` on a post/product/prompt to share up to 7% with contributors and 3% with commenters. Default: you keep 100%.',
-    },
+    // SOW-059: contributor + commenter rewards are AUTOMATIC under the touch-based model (a 5% collaboration mix on
+    // the first-touch / last-touch items). Owners no longer set a per-content `delegation`, so no caps/hint here.
   };
 }

@@ -11,7 +11,6 @@ class GbtiSettings extends GbtiElement {
       this.client.getBilling().catch(() => ({})),
       this.client.getReferral().catch(() => ({})),
     ]);
-    const del = referral?.delegation ?? {};
     this.set(
       this.css() +
         `<div class="panel">
@@ -31,7 +30,7 @@ class GbtiSettings extends GbtiElement {
            <h2>Referrals + revenue</h2>
            ${referral.link ? `<p>Your link: <code>${esc(referral.link)}</code></p>` : ''}
            <p class="muted">${esc(referral.note || '')}</p>
-           <p class="muted">Set <code>delegation</code> on a post/product/prompt to share up to ${Math.round((del.contributionCap ?? 0.07) * 100)}% with contributors and ${Math.round((del.commentCap ?? 0.03) * 100)}% with commenters. Default: you keep 100%.</p>
+           <p class="muted">When a member converts after touching your content, you earn the first-touch (30%) or last-touch (10%) share. Contributors and commenters on those items are rewarded automatically from the 5% collaboration mix. You do not set a split.</p>
            ${referral.connectOnboarding ? `<a href="${esc(referral.connectOnboarding)}" target="_blank" rel="noopener"><button class="ghost">Set up payouts (Stripe Connect)</button></a>` : ''}
            ${referral.terms ? `<a href="${esc(referral.terms)}" target="_blank" rel="noopener" class="muted" style="margin-left:8px">Terms</a>` : ''}
          </div>`,
