@@ -7670,6 +7670,73 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   }
 
+  // client-ui/src/workbench-cache.mjs
+  var WB_CACHE_PREFIX = "gbti:wb";
+  var WB_DEFAULT_TTL_MS = 10 * 60 * 1e3;
+  var mem = /* @__PURE__ */ new Map();
+  function store() {
+    try {
+      const s = globalThis.chrome?.storage?.local;
+      return s && typeof s.get === "function" && typeof s.set === "function" ? s : null;
+    } catch {
+      return null;
+    }
+  }
+  function wbKey(memberKey, type) {
+    return `${WB_CACHE_PREFIX}:${memberKey}:${type}`;
+  }
+  async function rawGet(key) {
+    const s = store();
+    if (s) {
+      try {
+        const r = await s.get(key);
+        return r?.[key] ?? null;
+      } catch {
+        return null;
+      }
+    }
+    return mem.has(key) ? mem.get(key) : null;
+  }
+  async function rawSet(key, value) {
+    const s = store();
+    if (s) {
+      try {
+        await s.set({ [key]: value });
+      } catch {
+      }
+      return;
+    }
+    mem.set(key, value);
+  }
+  async function rawDel(keys) {
+    const list = Array.isArray(keys) ? keys : [keys];
+    const s = store();
+    if (s) {
+      try {
+        await s.remove(list);
+      } catch {
+      }
+      return;
+    }
+    for (const k of list) mem.delete(k);
+  }
+  async function wbCacheGet(memberKey, type, { ttl = WB_DEFAULT_TTL_MS, now = Date.now } = {}) {
+    if (!memberKey || !type) return null;
+    const v = await rawGet(wbKey(memberKey, type));
+    if (!v || !Array.isArray(v.items)) return null;
+    const at = Number(v.at) || 0;
+    return { items: v.items, at, fresh: now() - at < ttl };
+  }
+  async function wbCacheSet(memberKey, type, items, { now = Date.now, allowEmpty = false } = {}) {
+    if (!memberKey || !type || !Array.isArray(items)) return;
+    if (!items.length && !allowEmpty) return;
+    await rawSet(wbKey(memberKey, type), { at: now(), items });
+  }
+  async function wbCacheInvalidateMany(memberKey, types2 = []) {
+    if (!memberKey || !Array.isArray(types2) || !types2.length) return;
+    await rawDel(types2.map((t) => wbKey(memberKey, t)));
+  }
+
   // client-ui/src/elements/gbti-saved.mjs
   var SITE8 = "https://gbti.network";
   var CSS24 = `
@@ -8019,6 +8086,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-subscriptions", GbtiSubscriptions);
 
   // client-ui/src/elements/gbti-workspace.mjs
+  var WB_CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "product"]);
   var TABS = [
     { id: "overview", label: "Overview" },
     // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
@@ -8112,15 +8180,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       };
       if (typeof window !== "undefined") window.addEventListener("hashchange", this._onHash);
+      this._wireStorageSync();
     }
     disconnectedCallback() {
       if (typeof window !== "undefined" && this._onHash) window.removeEventListener("hashchange", this._onHash);
+      try {
+        if (this._onStorage) globalThis.chrome?.storage?.onChanged?.removeListener?.(this._onStorage);
+      } catch {
+      }
       super.disconnectedCallback?.();
     }
     // SOW-052: load the overview hub data — content counts (+ drafts), PR + saved + follow counts, membership, and
     // the "needs attention" PR list. Fail-soft: every read defaults to 0/empty, never throws. Reuses _cache/_prs.
     async _ensureOverview() {
       if (this._overview && this._overview._trusted) return;
+      if (!this._overview) {
+        const ck = await this._memberKey();
+        const cached = ck ? await wbCacheGet(ck, "overview") : null;
+        if (cached?.items?.[0]) {
+          this._overview = cached.items[0];
+          if (this._tab === "overview" && !this._editing) this.render();
+        }
+      }
       const num = (p) => Promise.resolve(p).then((v) => v).catch(() => null);
       const [post, prompt2, product, prs, activity, follows, status] = await Promise.all([
         num(this.client?.listContent?.({ type: "post" })),
@@ -8148,6 +8229,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         attention,
         _trusted: trusted
       };
+      if (trusted) {
+        const ck = await this._memberKey();
+        if (ck) {
+          wbCacheSet(ck, "overview", [this._overview], { allowEmpty: true });
+          wbCacheSet(ck, "post", this._cache.post, { allowEmpty: true });
+          wbCacheSet(ck, "prompt", this._cache.prompt, { allowEmpty: true });
+          wbCacheSet(ck, "product", this._cache.product, { allowEmpty: true });
+          if (Array.isArray(this._prs)) wbCacheSet(ck, "prs", this._prs, { allowEmpty: true });
+        }
+      }
       if (this._tab === "overview" && !this._editing) this.render();
       if (!trusted && !this._overviewRetried) {
         this._overviewRetried = true;
@@ -8186,21 +8277,122 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (id === "earnings") return;
       if (id === "inbox" || id === "saved" || id === "subs") return;
-      if (tab.type && !this._cache[tab.type]) {
-        try {
-          this._cache[tab.type] = (await this.client?.listContent?.({ type: tab.type }))?.items ?? [];
-        } catch {
-          this._cache[tab.type] = [];
-        }
-      } else if (id === "prs" && !this._prs) {
-        try {
-          this._prs = (await this.client?.listPRs?.())?.prs ?? [];
-        } catch {
-          this._prs = [];
+      if (tab.type) {
+        await this._swrContent(id, tab.type);
+        return;
+      }
+      if (id === "prs") {
+        await this._swrPrs(id);
+      }
+    }
+    /** SOW-073: the per-member cache key (immutable github_id, falling back to login). Cached after the first read. */
+    async _memberKey() {
+      if (this._mk !== void 0) return this._mk;
+      try {
+        const id = await getIdentity();
+        this._mk = id?.githubId || id?.login ? String(id.githubId || id.login) : null;
+      } catch {
+        this._mk = null;
+      }
+      return this._mk;
+    }
+    // SOW-073: stale-while-revalidate a content tab. Paint the cached items INSTANTLY (no "Loading"/"none" flash),
+    // then revalidate in the background and re-render only if the fresh result differs. Within a session the in-memory
+    // this._cache[type] is the fast path (a tab revisit does not refetch); the persistent cache hydrates the FIRST
+    // access of a session (so a reload is instant too). A genuinely-empty list (the success path) is cached as [].
+    async _swrContent(id, type) {
+      if (this._cache[type]) return;
+      const key = await this._memberKey();
+      let fresh = false;
+      if (key) {
+        const cached = await wbCacheGet(key, type);
+        if (cached) {
+          this._cache[type] = cached.items;
+          if (this._tab === id && !this._editing) this.render();
+          fresh = cached.fresh;
         }
       }
-      if (this._tab === id && !this._editing) this.render();
-      if (id === "prs") this._loadPrStatuses();
+      if (fresh) return;
+      try {
+        const items = (await this.client?.listContent?.({ type }))?.items ?? [];
+        const changed = !this._cache[type] || JSON.stringify(this._cache[type]) !== JSON.stringify(items);
+        this._cache[type] = items;
+        if (key) await wbCacheSet(key, type, items, { allowEmpty: true });
+        if (changed && this._tab === id && !this._editing) this.render();
+      } catch {
+        if (!this._cache[type]) this._cache[type] = [];
+        if (this._tab === id && !this._editing) this.render();
+      }
+    }
+    // SOW-073: SWR for the PR tab (cached as the 'prs' pseudo-type). The per-PR gate labels still resolve live via
+    // _loadPrStatuses after the list paints (their server-side inlining is SOW-073 P4).
+    async _swrPrs(id) {
+      if (this._prs) {
+        if (id === "prs") this._loadPrStatuses();
+        return;
+      }
+      const key = await this._memberKey();
+      let fresh = false, painted = false;
+      if (key) {
+        const cached = await wbCacheGet(key, "prs");
+        if (cached) {
+          this._prs = cached.items;
+          painted = true;
+          if (this._tab === id && !this._editing) this.render();
+          if (id === "prs") this._loadPrStatuses();
+          fresh = cached.fresh;
+        }
+      }
+      if (fresh) return;
+      try {
+        const prs = (await this.client?.listPRs?.())?.prs ?? [];
+        const changed = !painted || JSON.stringify(this._prs) !== JSON.stringify(prs);
+        this._prs = prs;
+        if (key) await wbCacheSet(key, "prs", prs, { allowEmpty: true });
+        if (changed) {
+          if (this._tab === id && !this._editing) this.render();
+          if (id === "prs") this._loadPrStatuses();
+        }
+      } catch {
+        if (!this._prs) {
+          this._prs = [];
+          if (this._tab === id && !this._editing) this.render();
+        }
+      }
+    }
+    // SOW-073: a just-published/edited content type invalidates that type + the Overview snapshot + the PR list (a
+    // publish opens a PR), in BOTH the in-memory and the persistent cache, then refetches what the member will see.
+    async _onPublished(type) {
+      const t = type && WB_CONTENT_TYPES.has(type) ? type : null;
+      if (t) delete this._cache[t];
+      this._overview = null;
+      this._prs = null;
+      const key = await this._memberKey();
+      if (key) await wbCacheInvalidateMany(key, [t, "overview", "prs"].filter(Boolean));
+      if (!this._editing) this._ensureTab(this._tab);
+    }
+    // SOW-073: if ANOTHER extension page invalidates this member's cache (e.g. a publish in a second workbench tab),
+    // chrome.storage.onChanged fires here. React ONLY to REMOVALS (an invalidation), never to our own cache writes (a
+    // revalidate SET), so this can never loop. Drops the in-memory caches + refetches the open tab.
+    _wireStorageSync() {
+      try {
+        const oc = globalThis.chrome?.storage?.onChanged;
+        if (!oc?.addListener) return;
+        this._onStorage = async (changes, area) => {
+          if (area !== "local") return;
+          const key = await this._memberKey();
+          if (!key) return;
+          const prefix = `gbti:wb:${key}:`;
+          const removed = Object.entries(changes || {}).some(([k, c]) => k.startsWith(prefix) && c && c.newValue === void 0);
+          if (!removed) return;
+          this._cache = {};
+          this._prs = null;
+          this._overview = null;
+          if (!this._editing && this._reviewing == null) this._ensureTab(this._tab);
+        };
+        oc.addListener(this._onStorage);
+      } catch {
+      }
     }
     _loadPrStatuses() {
       for (const pr of this._prs || []) {
@@ -8236,6 +8428,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
         if (ed?.load) ed.load(e.type, e.frontmatter, e.body);
+        ed?.addEventListener("gbti-published", () => this._onPublished(e.type));
         return;
       }
       if (this._reviewing != null) {

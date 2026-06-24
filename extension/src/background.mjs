@@ -166,6 +166,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse(res);
       } else if (msg?.type === 'signout') {
         store.set({ githubToken: null, githubRefreshToken: null, githubTokenExpiresAt: null, identity: null });
+        // SOW-073: clear the local content caches (the workbench SWR cache gbti:wb:* and the SOW-064 create-recent
+        // cache) so a signed-out member's owned-content metadata never survives on the device into another session.
+        try {
+          const all = await chrome.storage.local.get(null);
+          const keys = Object.keys(all || {}).filter((k) => k.startsWith('gbti:wb:') || k === 'gbti:create-recent');
+          if (keys.length) await chrome.storage.local.remove(keys);
+        } catch { /* storage unavailable: best-effort */ }
         broadcastAuthChanged();
         sendResponse({ ok: true });
       } else if (msg?.type === 'open-page') {

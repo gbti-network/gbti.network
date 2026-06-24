@@ -17325,6 +17325,25 @@ function byShareNewest(a, b) {
   if (t !== 0) return t;
   return String(b?.id ?? b?.path ?? "").localeCompare(String(a?.id ?? a?.path ?? ""));
 }
+function commentId(createdAt, suffix) {
+  const ts = String(createdAt ?? "").replace(/[^0-9]/g, "").slice(0, 14) || "00000000000000";
+  const s = String(suffix ?? "").replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 8) || "c";
+  return `${ts}-${s}`;
+}
+function buildCommentFile({ username, input, body = "" }) {
+  if (!username) throw new Error("buildCommentFile: username is required");
+  const cleaned = stripUndefined({ ...input ?? {}, type: "comment", author: username });
+  const result = commentSchema.safeParse(cleaned);
+  if (!result.success) throw new ContentValidationError("comment", result.error.issues);
+  const id = cleaned.id;
+  const bodyStr = String(body ?? "").trim();
+  if (bodyStr.length > MAX_BODY_BYTES) {
+    throw new ContentValidationError("comment", [{ path: ["body"], message: `body exceeds ${MAX_BODY_BYTES} bytes` }]);
+  }
+  const path4 = `members/${username}/comments/${id}.md`;
+  const markdown = serializeContentFile(cleaned, body);
+  return { path: path4, frontmatter: cleaned, markdown, type: "comment", username, slug: id, id };
+}
 function serializeContentFile(frontmatter, body) {
   const front = index_vite_proxy_tmp_default.dump(stripUndefined(frontmatter), { lineWidth: 100, noRefs: true }).trimEnd();
   return `---
@@ -18224,6 +18243,15 @@ function listContent(ctx2, { type } = {}) {
   const id = requireIdentity(ctx2);
   return { items: ctx2.reader.list(id.username, type || void 0) };
 }
+var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
+async function listComments(ctx2, { targetType, targetSlug, limit } = {}) {
+  requireIdentity(ctx2);
+  if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError("bad-request", "a valid targetType is required");
+  if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
+  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
+  if (typeof ctx2.reader?.listComments !== "function") return { items: [] };
+  return { items: await ctx2.reader.listComments(targetType, targetSlug, n) ?? [] };
+}
 function getContentItem(ctx2, { path: path4 } = {}) {
   const id = requireIdentity(ctx2);
   if (!path4) throw new OperationError("bad-request", "path is required");
@@ -18302,6 +18330,91 @@ async function planMemberFiles({ built, body, encrypt }) {
     encPath,
     assetId
   };
+}
+var commentSuffix = () => Math.random().toString(36).slice(2, 8);
+async function planAndPublishComment(ctx2, repo, built, body, { message, title, prBody }) {
+  const token = ctx2.store?.get?.("githubToken");
+  const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
+  let plan;
+  try {
+    plan = await planMemberFiles({ built, body, encrypt });
+  } catch (err) {
+    if (err instanceof MemberContentLockedError) {
+      throw new OperationError("membership-required", "Posting a members-only comment requires a paid membership. Upgrade at https://gbti.network.");
+    }
+    throw err;
+  }
+  const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody });
+  return { id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? "public", encrypted: Boolean(plan?.encPath) };
+}
+async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody } = {}) {
+  const id = requireIdentity(ctx2);
+  const repo = requireRepo(ctx2);
+  const membership = await ctx2.membership?.() ?? "unknown";
+  if (isBlockedFromPublishing(membership)) {
+    throw new OperationError("membership-required", "Commenting on gbti.network requires a paid membership. Upgrade at https://gbti.network.", { membership });
+  }
+  const createdAt = ctx2.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
+  const cid = commentId(createdAt, commentSuffix());
+  const input = { id: cid, targetType, targetSlug, createdAt, status: "published" };
+  const isPublicIntro = authorNote === true && ["post", "product", "prompt"].includes(targetType);
+  input.visibility = visibility === "public" && isPublicIntro ? "public" : "members";
+  if (authorNote) input.authorNote = true;
+  if (parentId) input.parentId = parentId;
+  let built;
+  try {
+    built = buildCommentFile({ username: id.username, input, body });
+  } catch (err) {
+    throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
+  }
+  const r = await planAndPublishComment(ctx2, repo, built, body, {
+    message: message ?? `Comment on ${targetType} ${targetSlug}`,
+    title: title ?? `Comment on ${targetType}: ${targetSlug}`,
+    prBody
+  });
+  return { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
+}
+async function editComment(ctx2, { id, body, authorNote } = {}) {
+  const idn = requireIdentity(ctx2);
+  const repo = requireRepo(ctx2);
+  if (!id || typeof id !== "string") throw new OperationError("bad-request", "a comment id is required");
+  const membership = await ctx2.membership?.() ?? "unknown";
+  if (isBlockedFromPublishing(membership)) {
+    throw new OperationError("membership-required", "Editing a comment on gbti.network requires a paid membership. Upgrade at https://gbti.network.", { membership });
+  }
+  const existing = await ctx2.reader.get(idn.username, `members/${idn.username}/comments/${id}.md`);
+  if (!existing) throw new OperationError("not-found", "no such comment in your folder");
+  if (existing.frontmatter?.author && existing.frontmatter.author !== idn.username) {
+    throw new OperationError("not-authorized", "you can only edit your own comments");
+  }
+  const fm = existing.frontmatter ?? {};
+  const updatedAt = ctx2.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
+  const effAuthorNote = authorNote !== void 0 ? Boolean(authorNote) : Boolean(fm.authorNote);
+  const isPublicIntro = effAuthorNote && ["post", "product", "prompt"].includes(fm.targetType);
+  const input = {
+    id,
+    targetType: fm.targetType,
+    targetSlug: fm.targetSlug,
+    status: fm.status ?? "published",
+    visibility: fm.visibility === "public" && isPublicIntro ? "public" : "members",
+    authorNote: effAuthorNote,
+    parentId: fm.parentId,
+    createdAt: fm.createdAt,
+    updatedAt
+  };
+  let built;
+  try {
+    built = buildCommentFile({ username: idn.username, input, body });
+  } catch (err) {
+    throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
+  }
+  const r = await planAndPublishComment(ctx2, repo, built, body, {
+    message: `Edit comment ${id}`,
+    title: `Edit comment on ${fm.targetType}: ${fm.targetSlug}`,
+    prBody: void 0
+  });
+  return { ...r, edited: true, targetType: fm.targetType, targetSlug: fm.targetSlug };
 }
 async function listPRs(ctx2) {
   const id = requireIdentity(ctx2);
@@ -18553,6 +18666,7 @@ function logout(ctx2) {
 var PROTOCOL_VERSION = "2024-11-05";
 var obj = (properties, required2 = []) => ({ type: "object", properties, required: required2, additionalProperties: true });
 var TYPE_ENUM = { type: "string", enum: ["post", "product", "prompt", "profile"] };
+var COMMENT_TARGET = { type: "string", enum: ["post", "product", "prompt", "share", "news"] };
 var TOOLS = [
   {
     name: "login",
@@ -18658,6 +18772,31 @@ var TOOLS = [
       ["number", "decision"]
     ),
     handler: (ctx2, args) => reviewContribution(ctx2, { number: args?.number, decision: args?.decision, message: args?.message })
+  },
+  // SOW-072: commenting via MCP — author the SAME members-only (encrypted) comment + author-intro flow the CMS UI
+  // uses, through the gated PR pipeline. targetSlug: the content slug for a post/product/prompt; "<author>/<shareId>"
+  // for a Share (SOW-032); the news targetSlug for news. The server forces visibility (only an authorNote intro on
+  // your own post/product/prompt is public; every reply, and ALL Share comments, are members-only + encrypted).
+  {
+    name: "post_comment",
+    description: 'Post a comment as a pull request (members-only + encrypted unless it is a public from-the-author intro). input: targetType ("post"|"product"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), body (markdown). optional: authorNote (true = a public "from the author" intro, valid only on your own post/product/prompt), parentId (reply), message/title/prBody. author is forced to you; paid-only; goes through the gate. Returns the PR number + url.',
+    inputSchema: obj(
+      { targetType: COMMENT_TARGET, targetSlug: { type: "string" }, body: { type: "string" }, authorNote: { type: "boolean" }, parentId: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } },
+      ["targetType", "targetSlug", "body"]
+    ),
+    handler: (ctx2, args) => publishComment(ctx2, args ?? {})
+  },
+  {
+    name: "edit_comment",
+    description: "Edit one of your own comments by `id` (re-publishes through the gate; visibility is re-derived and a members body is re-encrypted). Args: id, body (markdown), optional authorNote.",
+    inputSchema: obj({ id: { type: "string" }, body: { type: "string" }, authorNote: { type: "boolean" } }, ["id", "body"]),
+    handler: (ctx2, args) => editComment(ctx2, { id: args?.id, body: args?.body, authorNote: args?.authorNote })
+  },
+  {
+    name: "list_comments",
+    description: 'Read the published comment thread for a target. Args: targetType ("post"|"product"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), optional limit. Reads merged/published comments (a just-posted comment appears after its PR merges + the site deploys).',
+    inputSchema: obj({ targetType: COMMENT_TARGET, targetSlug: { type: "string" }, limit: { type: "integer" } }, ["targetType", "targetSlug"]),
+    handler: (ctx2, args) => listComments(ctx2, { targetType: args?.targetType, targetSlug: args?.targetSlug, limit: args?.limit })
   }
 ];
 var TOOLS_BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));

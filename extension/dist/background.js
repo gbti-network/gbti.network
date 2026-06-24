@@ -20408,6 +20408,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse(res);
       } else if (msg?.type === "signout") {
         store.set({ githubToken: null, githubRefreshToken: null, githubTokenExpiresAt: null, identity: null });
+        try {
+          const all = await chrome.storage.local.get(null);
+          const keys = Object.keys(all || {}).filter((k) => k.startsWith("gbti:wb:") || k === "gbti:create-recent");
+          if (keys.length) await chrome.storage.local.remove(keys);
+        } catch {
+        }
         broadcastAuthChanged();
         sendResponse({ ok: true });
       } else if (msg?.type === "open-page") {
