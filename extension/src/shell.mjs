@@ -8,6 +8,7 @@
 import '../../client-ui/src/elements/gbti-share-composer.mjs'; // SOW-041 P5: the top-bar "+" mounts this composer
 import '../../client-ui/src/elements/gbti-activity-bell.mjs'; // SOW-042 P3: the top-bar activity bell
 import '../../client-ui/src/elements/gbti-welcome.mjs'; // SOW-048: dual-purposed as the forced-sign-in login splash
+import { wbCacheSet } from '../../client-ui/src/workbench-cache.mjs'; // SOW-073 P5: warm the workbench cache from the create-recent prefetch
 
 const SITE = 'https://gbti.network';
 const DAILYDEV_ID = 'jlmpjdjjbgclbocgajdjefcidcncaied';
@@ -379,9 +380,15 @@ function createCacheSet(key, val) {
 async function fetchCreateContent() {
   const types = ['post', 'prompt', 'product'];
   const results = await Promise.all(types.map((t) => api('/api/content', { type: t })));
+  // SOW-073 P5: the workbench SWR cache reads the SAME per-type content. Warm it here from the FULL items this
+  // prefetch already fetched (free, no extra request), so the first workbench open is an instant cache hit.
+  // Success-only: api() returns null on failure, so a missing items array never poisons the cache.
+  const mk = _lastStatus?.identity?.githubId || _lastStatus?.identity?.login || null;
   const items = [];
   results.forEach((r, i) => {
-    for (const it of Array.isArray(r?.items) ? r.items : []) {
+    const full = Array.isArray(r?.items) ? r.items : null;
+    if (mk && full) { try { wbCacheSet(String(mk), types[i], full, { allowEmpty: true }); } catch { /* best-effort */ } }
+    for (const it of full || []) {
       items.push({ type: types[i], title: it.title || it.slug || 'Untitled', status: it.status || '' });
     }
   });

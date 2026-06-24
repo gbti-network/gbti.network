@@ -9624,9 +9624,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   async function fetchCreateContent() {
     const types2 = ["post", "prompt", "product"];
     const results = await Promise.all(types2.map((t) => api("/api/content", { type: t })));
+    const mk = _lastStatus?.identity?.githubId || _lastStatus?.identity?.login || null;
     const items = [];
     results.forEach((r, i) => {
-      for (const it of Array.isArray(r?.items) ? r.items : []) {
+      const full = Array.isArray(r?.items) ? r.items : null;
+      if (mk && full) {
+        try {
+          wbCacheSet(String(mk), types2[i], full, { allowEmpty: true });
+        } catch {
+        }
+      }
+      for (const it of full || []) {
         items.push({ type: types2[i], title: it.title || it.slug || "Untitled", status: it.status || "" });
       }
     });
