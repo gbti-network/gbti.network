@@ -9410,6 +9410,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-055
       renameCategory: ({ path, label }) => request("POST", "/api/admin", { action: "category-rename", path, label }),
       // SOW-055
+      newsSourcePool: () => request("GET", "/api/news-source-pool"),
+      // SOW-056 P2: the news-source pool { sources } for the manager
+      addNewsSource: ({ id, name, url, description }) => request("POST", "/api/admin", { action: "news-source-add", id, name, url, description }),
+      // SOW-056 P2
+      removeNewsSource: ({ id }) => request("POST", "/api/admin", { action: "news-source-remove", id }),
+      // SOW-056 P2
+      setNewsSourceEnabled: ({ id, enabled }) => request("POST", "/api/admin", { action: "news-source-toggle", id, enabled }),
+      // SOW-056 P2
       openPulls: () => request("GET", "/api/open-pulls"),
       // SOW-038 P2: admin-gated open content-PR queue { pulls }
       syndicationQueue: () => request("GET", "/api/syndication"),

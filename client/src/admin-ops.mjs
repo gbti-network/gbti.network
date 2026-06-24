@@ -15,6 +15,7 @@ import { OperationError } from './operations.mjs';
 import { canModerate, canBanGrandfather, canManageRoles } from './roles.mjs';
 import { ban, unban, grandfather, revokeGrandfather, grantRole, SuperadminActionError } from '../../membership/superadmin-actions.mjs';
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs';
+import { addSource as addSourceEdit, removeSource as removeSourceEdit, setSourceEnabled as setSourceEnabledEdit, NewsSourceEditError } from '../../membership/news-source-edits.mjs'; // SOW-056 P2
 import { parseContentFile } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 
@@ -234,4 +235,51 @@ export async function renameContentCategoryLabel(ctx, { path, label } = {}) {
   if (!result.changed) return noop(`label unchanged: ${p.join(' > ')}`, result.audit);
   const pr = await publishFiles({ repo, branch: `gbti/category-rename-${slugOf(p.join('-'))}`, files: [{ path: TAXONOMY_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message: `Rename category ${p.join('/')} -> ${label}`, title: `Rename category: ${label}`, body: prBody(null, result.audit) });
   return { ...pr, changed: true, audit: result.audit };
+}
+
+// SOW-056 Phase 2: the superadmin news-source-pool manager. Each edit applies the pure news-source-edits core to the
+// parsed house/news-sources.yml and opens an auto-merged house PR (admin-owned via CODEOWNERS; the gate is the real
+// boundary), exactly like the category manager. Edits go live at the Pages-deploy cadence (the worker reads the
+// rebuilt /news-sources.json next cron).
+const NEWS_SOURCES_PATH = 'house/news-sources.yml';
+
+/** Read the current news-source pool for the manager UI. Public data; read-only. */
+export async function getNewsSourcePool(ctx) {
+  const raw = (await ctx.reader?.readFile?.(NEWS_SOURCES_PATH)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  return { sources: Array.isArray(parsed.sources) ? parsed.sources : [] };
+}
+
+async function editNewsSources(ctx, edit, { branch, message, title, noopMsg }) {
+  requireRole(ctx, canBanGrandfather, 'admin');
+  const { repo } = requireRepo(ctx);
+  const raw = (await ctx.reader?.readFile?.(NEWS_SOURCES_PATH)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  let result;
+  try { result = edit(parsed); }
+  catch (err) { if (err instanceof NewsSourceEditError) throw new OperationError('bad-request', err.message); throw err; }
+  if (!result.changed) return noop(noopMsg, result.audit);
+  const pr = await publishFiles({ repo, branch, files: [{ path: NEWS_SOURCES_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
+}
+
+export async function addNewsSource(ctx, { id, name, url, description } = {}) {
+  const sid = slugOf(String(id || name || ''));
+  return editNewsSources(ctx, (parsed) => addSourceEdit(parsed, { id, name, url, description }, actionCtx(ctx)),
+    { branch: `gbti/news-source-add-${sid}`, message: `Add news source ${id || name}`, title: `Add news source: ${name || id}`, noopMsg: `news source already present: ${id || name}` });
+}
+
+export async function removeNewsSource(ctx, { id } = {}) {
+  const sid = slugOf(String(id || ''));
+  return editNewsSources(ctx, (parsed) => removeSourceEdit(parsed, { id }, actionCtx(ctx)),
+    { branch: `gbti/news-source-remove-${sid}`, message: `Remove news source ${id}`, title: `Remove news source: ${id}`, noopMsg: `no such news source: ${id}` });
+}
+
+export async function setNewsSourceEnabled(ctx, { id, enabled } = {}) {
+  const sid = slugOf(String(id || ''));
+  const on = !!enabled;
+  return editNewsSources(ctx, (parsed) => setSourceEnabledEdit(parsed, { id, enabled: on }, actionCtx(ctx)),
+    { branch: `gbti/news-source-${on ? 'enable' : 'disable'}-${sid}`, message: `${on ? 'Enable' : 'Disable'} news source ${id}`, title: `${on ? 'Enable' : 'Disable'} news source: ${id}`, noopMsg: `news source already ${on ? 'enabled' : 'disabled'}: ${id}` });
 }

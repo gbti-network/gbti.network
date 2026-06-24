@@ -17337,8 +17337,8 @@ var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
 function decodeBase64Utf8(b64) {
-  const clean = String(b64 || "").replace(/\s/g, "");
-  const bytes = Uint8Array.from(atob(clean), (c) => c.charCodeAt(0));
+  const clean2 = String(b64 || "").replace(/\s/g, "");
+  const bytes = Uint8Array.from(atob(clean2), (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
 function safeRel(relPath) {
@@ -17530,9 +17530,9 @@ function toBase64(text) {
   return btoa(bin);
 }
 function fromBase64(b64) {
-  const clean = String(b64 || "").replace(/\s+/g, "");
-  if (typeof Buffer !== "undefined") return Buffer.from(clean, "base64").toString("utf8");
-  const bin = atob(clean);
+  const clean2 = String(b64 || "").replace(/\s+/g, "");
+  if (typeof Buffer !== "undefined") return Buffer.from(clean2, "base64").toString("utf8");
+  const bin = atob(clean2);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
   return new TextDecoder().decode(bytes);
@@ -19650,6 +19650,83 @@ function renameLabel(taxonomy, { path, label } = {}, ctx = {}) {
   return { next: tx, changed: true, audit: auditEntry(ctx, "taxonomy.rename", path, { label: lab }) };
 }
 
+// membership/news-source-edits.mjs
+var NewsSourceEditError = class extends Error {
+};
+var ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+var MAX_NAME = 80;
+var MAX_DESC = 120;
+function isoOf3(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new NewsSourceEditError("invalid timestamp");
+  return d.toISOString();
+}
+function auditEntry2(ctx, action, id, detail) {
+  const a = ctx?.actor || null;
+  return {
+    at: isoOf3(ctx?.now),
+    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+    action,
+    target: { id },
+    detail: detail ?? null
+  };
+}
+function hostOf(url2) {
+  try {
+    return new URL(url2).hostname;
+  } catch {
+    return String(url2 || "").replace(/^https?:\/\//i, "").split("/")[0] || "";
+  }
+}
+function slugify2(name, url2 = "") {
+  let s = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!s) s = hostOf(url2).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return s.slice(0, 60).replace(/-+$/g, "");
+}
+function clean(doc) {
+  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
+  if (!Array.isArray(d.sources)) d.sources = [];
+  return d;
+}
+var normUrl = (u) => String(u || "").trim();
+function addSource(doc, { id, name, url: url2, description, enabled } = {}, ctx = {}) {
+  const d = clean(doc);
+  const nm = String(name || "").trim().slice(0, MAX_NAME);
+  const u = normUrl(url2);
+  if (!nm) throw new NewsSourceEditError("a source name is required");
+  if (!/^https?:\/\//i.test(u)) throw new NewsSourceEditError("a source needs an http(s) feed url");
+  const sid = typeof id === "string" && id.trim() ? id.trim() : slugify2(nm, u);
+  if (!ID_RE.test(sid)) throw new NewsSourceEditError("the source id must be kebab-case (lowercase letters, digits, single hyphens)");
+  const byId = d.sources.find((s) => s.id === sid);
+  const byUrl = d.sources.find((s) => normUrl(s.url) === u);
+  if (byId) {
+    if (normUrl(byId.url) === u) return { next: d, changed: false, audit: auditEntry2(ctx, "news-source.add", sid, { url: u, noop: true }) };
+    throw new NewsSourceEditError(`a source "${sid}" already exists with a different url; pick another id`);
+  }
+  if (byUrl) throw new NewsSourceEditError(`that feed url is already in the pool as "${byUrl.id}"`);
+  const desc = String(description ?? "").trim().slice(0, MAX_DESC) || hostOf(u);
+  d.sources.push({ id: sid, name: nm, url: u, description: desc, enabled: enabled !== false });
+  return { next: d, changed: true, audit: auditEntry2(ctx, "news-source.add", sid, { name: nm, url: u }) };
+}
+function setSourceEnabled(doc, { id, enabled } = {}, ctx = {}) {
+  const d = clean(doc);
+  const sid = String(id || "").trim();
+  const want = enabled !== false;
+  const s = d.sources.find((x) => x.id === sid);
+  if (!s) throw new NewsSourceEditError(`source not found: ${sid}`);
+  if (s.enabled !== false === want) return { next: d, changed: false, audit: auditEntry2(ctx, "news-source.enable", sid, { enabled: want, noop: true }) };
+  s.enabled = want;
+  return { next: d, changed: true, audit: auditEntry2(ctx, "news-source.enable", sid, { enabled: want }) };
+}
+function removeSource(doc, { id } = {}, ctx = {}) {
+  const d = clean(doc);
+  const sid = String(id || "").trim();
+  const i = d.sources.findIndex((x) => x.id === sid);
+  if (i < 0) throw new NewsSourceEditError(`source not found: ${sid}`);
+  d.sources.splice(i, 1);
+  return { next: d, changed: true, audit: auditEntry2(ctx, "news-source.remove", sid, null) };
+}
+
 // client/src/admin-ops.mjs
 function requireRole(ctx, check2, need) {
   const role = ctx.role?.() ?? "member";
@@ -19678,13 +19755,13 @@ function actionCtx(ctx) {
     now: ctx.now ? ctx.now() : void 0
   };
 }
-function prBody(reason, auditEntry2) {
+function prBody(reason, auditEntry3) {
   const head = reason ? `Reason: ${reason}
 
 ` : "";
-  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry2)} -->`;
+  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry3)} -->`;
 }
-var noop = (message, auditEntry2) => ({ changed: false, noop: true, message, audit: auditEntry2 });
+var noop = (message, auditEntry3) => ({ changed: false, noop: true, message, audit: auditEntry3 });
 function requireId(githubId) {
   if (githubId === void 0 || githubId === null || String(githubId).trim() === "") {
     throw new OperationError("bad-request", "githubId is required");
@@ -19853,9 +19930,66 @@ async function renameContentCategoryLabel(ctx, { path, label } = {}) {
   const pr = await publishFiles({ repo, branch: `gbti/category-rename-${slugOf(p.join("-"))}`, files: [{ path: TAXONOMY_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message: `Rename category ${p.join("/")} -> ${label}`, title: `Rename category: ${label}`, body: prBody(null, result.audit) });
   return { ...pr, changed: true, audit: result.audit };
 }
+var NEWS_SOURCES_PATH = "house/news-sources.yml";
+async function getNewsSourcePool(ctx) {
+  const raw = await ctx.reader?.readFile?.(NEWS_SOURCES_PATH) || "";
+  let parsed;
+  try {
+    parsed = index_vite_proxy_tmp_default.load(raw) || {};
+  } catch {
+    parsed = {};
+  }
+  return { sources: Array.isArray(parsed.sources) ? parsed.sources : [] };
+}
+async function editNewsSources(ctx, edit, { branch, message, title, noopMsg }) {
+  requireRole(ctx, canBanGrandfather, "admin");
+  const { repo } = requireRepo2(ctx);
+  const raw = await ctx.reader?.readFile?.(NEWS_SOURCES_PATH) || "";
+  let parsed;
+  try {
+    parsed = index_vite_proxy_tmp_default.load(raw) || {};
+  } catch {
+    parsed = {};
+  }
+  let result;
+  try {
+    result = edit(parsed);
+  } catch (err) {
+    if (err instanceof NewsSourceEditError) throw new OperationError("bad-request", err.message);
+    throw err;
+  }
+  if (!result.changed) return noop(noopMsg, result.audit);
+  const pr = await publishFiles({ repo, branch, files: [{ path: NEWS_SOURCES_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
+}
+async function addNewsSource(ctx, { id, name, url: url2, description } = {}) {
+  const sid = slugOf(String(id || name || ""));
+  return editNewsSources(
+    ctx,
+    (parsed) => addSource(parsed, { id, name, url: url2, description }, actionCtx(ctx)),
+    { branch: `gbti/news-source-add-${sid}`, message: `Add news source ${id || name}`, title: `Add news source: ${name || id}`, noopMsg: `news source already present: ${id || name}` }
+  );
+}
+async function removeNewsSource(ctx, { id } = {}) {
+  const sid = slugOf(String(id || ""));
+  return editNewsSources(
+    ctx,
+    (parsed) => removeSource(parsed, { id }, actionCtx(ctx)),
+    { branch: `gbti/news-source-remove-${sid}`, message: `Remove news source ${id}`, title: `Remove news source: ${id}`, noopMsg: `no such news source: ${id}` }
+  );
+}
+async function setNewsSourceEnabled(ctx, { id, enabled } = {}) {
+  const sid = slugOf(String(id || ""));
+  const on = !!enabled;
+  return editNewsSources(
+    ctx,
+    (parsed) => setSourceEnabled(parsed, { id, enabled: on }, actionCtx(ctx)),
+    { branch: `gbti/news-source-${on ? "enable" : "disable"}-${sid}`, message: `${on ? "Enable" : "Disable"} news source ${id}`, title: `${on ? "Enable" : "Disable"} news source: ${id}`, noopMsg: `news source already ${on ? "enabled" : "disabled"}: ${id}` }
+  );
+}
 
 // extension/src/ext-dispatch.mjs
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -19990,6 +20124,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getOverridesRoster(ctx));
       case "/api/taxonomy":
         return ok(await getTaxonomy(ctx));
+      case "/api/news-source-pool":
+        return ok(await getNewsSourcePool(ctx));
       case "/api/open-pulls":
         return ok(await getOpenPulls(ctx));
       case "/api/syndication":
