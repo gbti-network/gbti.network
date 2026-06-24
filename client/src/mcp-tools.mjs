@@ -19,6 +19,9 @@ import {
   listIncomingContributions,
   getContributionReview,
   reviewContribution,
+  publishComment,
+  editComment,
+  listComments,
 } from './operations.mjs';
 import { startDeviceLogin, confirmDeviceLogin, logout } from './mcp-auth.mjs';
 
@@ -26,6 +29,7 @@ const PROTOCOL_VERSION = '2024-11-05';
 
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: true });
 const TYPE_ENUM = { type: 'string', enum: ['post', 'product', 'prompt', 'profile'] };
+const COMMENT_TARGET = { type: 'string', enum: ['post', 'product', 'prompt', 'share', 'news'] }; // SOW-072
 
 // The managed-abstraction tools. Each handler returns a plain JSON-serializable result (or throws an
 // OperationError); dispatch() wraps it into MCP tool-call content.
@@ -134,6 +138,31 @@ export const TOOLS = [
       ['number', 'decision'],
     ),
     handler: (ctx, args) => reviewContribution(ctx, { number: args?.number, decision: args?.decision, message: args?.message }),
+  },
+  // SOW-072: commenting via MCP — author the SAME members-only (encrypted) comment + author-intro flow the CMS UI
+  // uses, through the gated PR pipeline. targetSlug: the content slug for a post/product/prompt; "<author>/<shareId>"
+  // for a Share (SOW-032); the news targetSlug for news. The server forces visibility (only an authorNote intro on
+  // your own post/product/prompt is public; every reply, and ALL Share comments, are members-only + encrypted).
+  {
+    name: 'post_comment',
+    description: 'Post a comment as a pull request (members-only + encrypted unless it is a public from-the-author intro). input: targetType ("post"|"product"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), body (markdown). optional: authorNote (true = a public "from the author" intro, valid only on your own post/product/prompt), parentId (reply), message/title/prBody. author is forced to you; paid-only; goes through the gate. Returns the PR number + url.',
+    inputSchema: obj(
+      { targetType: COMMENT_TARGET, targetSlug: { type: 'string' }, body: { type: 'string' }, authorNote: { type: 'boolean' }, parentId: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } },
+      ['targetType', 'targetSlug', 'body'],
+    ),
+    handler: (ctx, args) => publishComment(ctx, args ?? {}),
+  },
+  {
+    name: 'edit_comment',
+    description: 'Edit one of your own comments by `id` (re-publishes through the gate; visibility is re-derived and a members body is re-encrypted). Args: id, body (markdown), optional authorNote.',
+    inputSchema: obj({ id: { type: 'string' }, body: { type: 'string' }, authorNote: { type: 'boolean' } }, ['id', 'body']),
+    handler: (ctx, args) => editComment(ctx, { id: args?.id, body: args?.body, authorNote: args?.authorNote }),
+  },
+  {
+    name: 'list_comments',
+    description: 'Read the published comment thread for a target. Args: targetType ("post"|"product"|"prompt"|"share"|"news"), targetSlug (content slug, or "<author>/<shareId>" for a share), optional limit. Reads merged/published comments (a just-posted comment appears after its PR merges + the site deploys).',
+    inputSchema: obj({ targetType: COMMENT_TARGET, targetSlug: { type: 'string' }, limit: { type: 'integer' } }, ['targetType', 'targetSlug']),
+    handler: (ctx, args) => listComments(ctx, { targetType: args?.targetType, targetSlug: args?.targetSlug, limit: args?.limit }),
   },
 ];
 

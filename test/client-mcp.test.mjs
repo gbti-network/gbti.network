@@ -53,7 +53,7 @@ test('initialize: advertises protocol + server info', async () => {
 test('tools/list: returns every managed-abstraction tool with an input schema', async () => {
   const res = await dispatch({ jsonrpc: '2.0', id: 2, method: 'tools/list' }, ctxFor());
   const names = res.result.tools.map((t) => t.name);
-  for (const expected of ['login', 'login_confirm', 'logout', 'whoami', 'list_my_content', 'get_content', 'validate_content', 'publish_content', 'add_prompt', 'add_product', 'add_post', 'list_prs', 'pr_status']) {
+  for (const expected of ['login', 'login_confirm', 'logout', 'whoami', 'list_my_content', 'get_content', 'validate_content', 'publish_content', 'add_prompt', 'add_product', 'add_post', 'list_prs', 'pr_status', 'post_comment', 'edit_comment', 'list_comments']) {
     assert.ok(names.includes(expected), `missing tool ${expected}`);
   }
   assert.equal(res.result.tools.length, TOOLS.length);
