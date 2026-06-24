@@ -204,6 +204,27 @@ async function main() {
       await p.close();
     }
 
+    // 7) The superadmin news-source manager (SOW-056 P2) — inject sample sources (the read is admin/auth-gated).
+    {
+      const p = await context.newPage();
+      await p.goto(`chrome-extension://${extId}/admin.html`, { waitUntil: 'domcontentloaded' });
+      await dismissGate(p);
+      await p.waitForSelector('gbti-news-source-manager', { timeout: 12000 }).catch(() => {});
+      await p.waitForTimeout(700);
+      await p.evaluate(() => {
+        const el = document.querySelector('gbti-news-source-manager'); if (!el) return;
+        el._sources = [
+          { id: 'the-verge', name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml', enabled: true },
+          { id: 'hacker-news', name: 'Hacker News', url: 'https://hnrss.org/frontpage', enabled: true },
+          { id: 'old-blog', name: 'An Old Blog', url: 'https://example.com/feed', enabled: false },
+        ];
+        el.render();
+      }).catch(() => {});
+      await p.waitForTimeout(300);
+      await p.locator('gbti-news-source-manager').screenshot({ path: path.join(SHOTS, 'admin-news-sources.png') }).catch((e) => log('  news-source shot failed: ' + e.message));
+      await p.close();
+    }
+
     log(`\nDONE -> ${SHOTS}`);
   } catch (e) {
     log(`ERROR ${e?.message ?? e}`);
