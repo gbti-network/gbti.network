@@ -18,6 +18,9 @@ on:
     paths:
       - 'house/**'
       - 'members/**'
+  # Manual re-validate of the current HEAD (e.g. after a validator fix that did not touch content paths, so the
+  # push/PR triggers above did not fire). Safe: no secrets, read-only.
+  workflow_dispatch: {}
 
 jobs:
   content-check:
