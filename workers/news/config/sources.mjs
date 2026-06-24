@@ -164,12 +164,6 @@ export const SOURCES = [
     "url": "https://www.xda-developers.com/feed/"
   },
   {
-    "id": "elixir-forum",
-    "name": "Elixir Forum",
-    "description": "elixirforum.com",
-    "url": "https://elixirforum.com/posts.rss"
-  },
-  {
     "id": "devops-com",
     "name": "DevOps.com",
     "description": "devops.com",

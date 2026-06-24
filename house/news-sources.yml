@@ -135,11 +135,6 @@ sources:
     url: https://www.xda-developers.com/feed/
     description: www.xda-developers.com
     enabled: true
-  - id: elixir-forum
-    name: Elixir Forum
-    url: https://elixirforum.com/posts.rss
-    description: elixirforum.com
-    enabled: true
   - id: devops-com
     name: DevOps.com
     url: https://devops.com/feed/
