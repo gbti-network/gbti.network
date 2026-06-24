@@ -344,6 +344,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .be-members { font-weight:600; color:var(--accent); font-size:13px; }
   .be-add button { width:100%; border:1px dashed var(--line); background:transparent; border-radius:8px; padding:9px 14px; cursor:pointer; color:var(--muted); font:inherit; font-weight:600; }
   .be-add button:hover { border-color:var(--accent); color:var(--accent); }
+  .be-imgup { display:flex; align-items:center; gap:10px; margin-top:8px; }
+  .be-imgpick { border:1px solid var(--line); background:var(--paper, transparent); border-radius:7px; padding:6px 12px; cursor:pointer; font:inherit; font-size:13px; color:var(--fg); }
+  .be-imgpick:hover { border-color:var(--accent); color:var(--accent); }
+  .be-imgst { font-size:12px; color:var(--muted); }
 `;
   var GbtiBlockEditor = class extends GbtiElement {
     set value(md) {
@@ -380,7 +384,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         case "list":
           return `<label class="be-ck"><input type="checkbox" data-f="ordered" data-i="${i}" ${b.ordered ? "checked" : ""} /> numbered list</label><textarea data-f="items" data-i="${i}" placeholder="one item per line">${esc((b.items || []).join("\n"))}</textarea>`;
         case "image":
-          return `<div class="be-row"><input data-f="url" data-i="${i}" value="${esc(b.url || "")}" placeholder="image URL or repo path" /><input data-f="alt" data-i="${i}" value="${esc(b.alt || "")}" placeholder="alt text" /></div>`;
+          return `<div class="be-row"><input data-f="url" data-i="${i}" value="${esc(b.url || "")}" placeholder="image URL or repo path" /><input data-f="alt" data-i="${i}" value="${esc(b.alt || "")}" placeholder="alt text" /></div><div class="be-imgup"><input type="file" accept="image/*" hidden data-imgfile data-i="${i}" /><button type="button" class="be-imgpick" data-imgpick data-i="${i}">Upload an image</button><span class="be-imgst" data-imgst data-i="${i}"></span></div>`;
         case "embed":
           return `<input data-f="url" data-i="${i}" value="${esc(b.url || "")}" placeholder="YouTube / Vimeo URL" />`;
         case "quote":
@@ -426,6 +430,33 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._render();
         this.emit("block-change");
       });
+      this.$$("[data-imgpick]").forEach((el) => {
+        const i = Number(el.dataset.i);
+        const fileEl = this.$(`[data-imgfile][data-i="${i}"]`);
+        el.addEventListener("click", () => fileEl?.click());
+        fileEl?.addEventListener("change", (e) => this._uploadImage(e.target.files?.[0], i));
+      });
+    }
+    async _uploadImage(file, i) {
+      const b = this._blocks[i];
+      if (!file || !b || !this.client?.stageImage) return;
+      const st = this.$(`[data-imgst][data-i="${i}"]`);
+      if (st) st.textContent = "Uploading...";
+      try {
+        const dataBase64 = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(String(r.result).split(",")[1] || "");
+          r.onerror = () => rej(new Error("read failed"));
+          r.readAsDataURL(file);
+        });
+        const out = await this.client.stageImage({ filename: file.name, dataBase64 });
+        b.url = out.path;
+        if (!b.alt) b.alt = file.name.replace(/\.[^.]+$/, "");
+        this._render();
+        this.emit("block-change");
+      } catch {
+        if (st) st.textContent = "Upload failed";
+      }
     }
     _move(i, dir) {
       const j = i + dir;
