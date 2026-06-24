@@ -61,5 +61,9 @@ jobs:
           # GITHUB_CONTENT_REPO is a non-secret constant (and could not be a GITHUB_-prefixed secret anyway):
           GITHUB_CONTENT_REPO: gbti-network/gbti.network
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
-          # BOT_GITHUB_ID is intentionally unset: gbtilabs is exempt by its superadmin role, and isBot
-          # must never be pointed at a superadmin id. Set this only for a future dedicated admin-only bot.
+          # BOT_GITHUB_ID = the GBTI App bot (gbti-network-publisher[bot]) that opens member authoring PRs on the
+          # member's behalf (SOW-026). The gate uses it to detect an App-opened PR and resolve the REAL author from
+          # the head-fork owner (a member can only open a PR from their own fork). It is NOT a superadmin id, so the
+          # isBot admin-floor never triggers for it. Without this, every extension-authored PR (comments + content)
+          # is rejected as "not a member" and auto-closed.
+          BOT_GITHUB_ID: ${{ vars.BOT_GITHUB_ID }}
