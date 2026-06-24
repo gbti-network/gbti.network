@@ -7,6 +7,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { gatherInput } from '../form.mjs';
 import { resolveAsset } from '../assets.mjs'; // SOW-062 P3: resolve an existing coverImage path to a preview URL
+import './gbti-block-editor.mjs'; // SOW-062 P4: the block body editor (serializes to/from Markdown via #body.value)
 
 const TYPES = ['post', 'product', 'prompt', 'profile'];
 
@@ -81,7 +82,7 @@ class GbtiContentEditor extends GbtiElement {
         @media (max-width:860px) { .editor { grid-template-columns:1fr; } }
         .doc { min-width:0; }
         .doc .body-l { margin-top:0; }
-        #body { width:100%; min-height:58vh; resize:vertical; }
+        #body { display:block; min-height:30vh; }
         .grid { display:grid; gap:2px; }
         .actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
         #out { margin-top:12px; }
@@ -109,8 +110,8 @@ class GbtiContentEditor extends GbtiElement {
         `<div class="editor">
            <div class="doc">
              ${blocked ? `<div class="notice">Publishing requires a paid membership. You can write and stage your work now; it stays on your fork until you upgrade. <a href="https://gbti.network" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ''}
-             <label class="body-l">Body (Markdown)</label>
-             <textarea id="body">${esc(this.preset?.body ?? '')}</textarea>
+             <label class="body-l">Body</label>
+             <gbti-block-editor id="body"></gbti-block-editor>
              <div class="actions">
                <button id="preview" class="ghost">Preview</button>
                <button id="validate" class="ghost">Validate</button>
@@ -148,6 +149,10 @@ class GbtiContentEditor extends GbtiElement {
       file?.addEventListener('change', (e) => this.doCoverImage(e.target.files?.[0], c));
       c.querySelector('[data-cover-clear]')?.addEventListener('click', () => this.clearCover(c));
     });
+
+    // SOW-062 P4: seed the block body editor from the preset body (its value setter parses Markdown -> blocks).
+    const be = this.$('#body');
+    if (be) be.value = this.preset?.body ?? '';
 
     // Live-toggle conditional fields (e.g. the image-gen-only result image) as their dependency changes.
     const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));
