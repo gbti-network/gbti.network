@@ -1,10 +1,11 @@
-name: Syndicate content to Discord
+name: Enqueue content for syndication
 
-# SOW-034. When a member's content merges to main, announce it in the matching Discord channel
-# (articles / products / prompts / shares), each with a "New {type} published by {member} 🎉" message and the
-# canonical link (Discord unfurls our OG tags into a rich card). Driven off the MERGE DIFF (files ADDED in the
-# push), so the backlog is never re-posted and no dedup state is needed. Metadata only: a members-only / Mode A
-# item posts its title only; the encrypted body is never read. Best-effort; re-run a batch via workflow_dispatch.
+# SOW-034 + SOW-058. When a member's post/product/prompt merges to main, ENQUEUE it into the syndication queue
+# (Cloudflare KV) instead of posting immediately. Each item is `pending` and waits for a superadmin to APPROVE it in
+# the tracker; the signup Worker's cron drain then posts the approved item to every enabled channel (Discord + the
+# social adapters). Driven off the MERGE DIFF (files ADDED in the push) + idempotent on the queue dedupeKey, so the
+# backlog is never re-enqueued. Metadata only (url + title + blurb + image); a members-only / Mode A body is never
+# read. Shares are NOT enqueued here (they enqueue via the SOW-057 upvote threshold). Re-run via workflow_dispatch.
 
 on:
   push:
@@ -67,19 +68,22 @@ jobs:
           echo "added=$ADDED" >> "$GITHUB_OUTPUT"
           echo "Added content paths: ${ADDED:-<none>}"
 
-      - name: Syndicate (apply)
+      - name: Enqueue for approval (apply)
         if: steps.diff.outputs.added != ''
-        # Paths flow through SYNDICATE_ADDED (env), never interpolated into the shell command -> no injection.
-        run: node scripts/syndicate-content.mjs --apply
+        # SOW-058: ENQUEUE each published post/product/prompt into the syndication queue (KV) instead of posting to
+        # Discord directly. Each item is `pending` and waits for a superadmin to APPROVE it in the tracker; the Worker
+        # cron drain then posts it to every enabled channel. Shares are NOT enqueued here (they enqueue via the
+        # SOW-057 upvote threshold). Paths flow through SYNDICATE_ADDED (env), never interpolated -> no injection.
+        run: node scripts/enqueue-syndication.mjs --apply
         env:
           SYNDICATE_ADDED: ${{ steps.diff.outputs.added }}
-          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
-          # Per-type Discord channel ids (non-secret production constants; acting on them needs the bot token).
-          DISCORD_CHANNEL_POSTS: "1074035424625954877"
-          DISCORD_CHANNEL_PRODUCTS: "1516431096789733456"
-          DISCORD_CHANNEL_PROMPTS: "1516430200940789842"
-          DISCORD_CHANNEL_SHARES: "1084632127657746452"
-          # Enables real @mentions: resolve author -> github_id (members-index) -> Stripe customer.discord_user_id.
+          # The KV REST creds let Actions write the same SIGNUP_KV namespace the Worker drains. The drain (in the
+          # Worker) holds the Discord/social tokens now, so this job no longer needs DISCORD_BOT_TOKEN or channel ids.
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          # Enables real @mentions: resolve author -> github_id (members-index) -> Stripe customer.discord_user_id,
+          # stamped on the queue item at enqueue so the drain stays network-free for identity.
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           SITE_ORIGIN: "https://gbti.network"
           # Optional JSON { "github_login": "discord_user_id" } for staff/grandfathered members not in Stripe.

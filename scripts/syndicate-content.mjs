@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+// SUPERSEDED (SOW-058): the auto-publish path now ENQUEUES via scripts/enqueue-syndication.mjs (items wait for
+// superadmin approval, then the Worker drain posts them). syndicate-content.yml no longer calls this script. It is
+// kept as a manual/legacy DIRECT poster only (run by hand for a one-off backfill); do NOT re-wire it into the
+// workflow or content would post immediately AND via the queue (a double-post).
+//
 // SOW-034 content-publish syndication runner. Given the content files ADDED in a push to main (the workflow
 // computes them from the merge diff), announce each newly-published item in its type's Discord channel:
 // post/product/prompt + share. Metadata only: a public item posts a link Discord unfurls; a members-only / Mode A
