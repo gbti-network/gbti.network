@@ -67,6 +67,7 @@ class GbtiNewsSourceManager extends GbtiElement {
         <input data-add-url type="text" placeholder="https://... RSS/Atom feed URL" />
         <button class="btn" type="button" data-add>Add source</button>
       </div>
+      <p class="hint" style="margin:-6px 0 14px">The next news ingest confirms the feed fetches; a source that never returns items can be removed here.</p>
       <ul class="list">${rows || '<li class="muted">No sources yet.</li>'}</ul>
     </div>`);
     this._wire();
@@ -77,7 +78,14 @@ class GbtiNewsSourceManager extends GbtiElement {
       const id = (this.$('[data-add-id]')?.value || '').trim();
       const name = (this.$('[data-add-name]')?.value || '').trim();
       const url = (this.$('[data-add-url]')?.value || '').trim();
+      // Client-side URL validation for immediate feedback (the pure edit re-checks server-side). A full
+      // fetch+parseFeed check is not done here: the extension cannot fetch arbitrary URLs (narrow host_permissions
+      // by design), and the news ingest is fail-soft (a non-fetching source returns 0 items, no outage) — remove it
+      // here if it never returns items. See the SOW for the optional server-side validate-feed follow-up.
       if (!url) { this._msg = 'A feed URL is required.'; this.render(); return; }
+      let ok = false;
+      try { ok = /^https?:$/.test(new URL(url).protocol); } catch { ok = false; }
+      if (!ok) { this._msg = 'Enter a valid http(s) RSS/Atom feed URL.'; this.render(); return; }
       this._run(() => this.client.addNewsSource({ id, name, url }));
     });
     this.$$('[data-toggle]').forEach((b) => b.addEventListener('click', () =>

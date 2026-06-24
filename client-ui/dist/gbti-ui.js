@@ -2056,6 +2056,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <input data-add-url type="text" placeholder="https://... RSS/Atom feed URL" />
         <button class="btn" type="button" data-add>Add source</button>
       </div>
+      <p class="hint" style="margin:-6px 0 14px">The next news ingest confirms the feed fetches; a source that never returns items can be removed here.</p>
       <ul class="list">${rows || '<li class="muted">No sources yet.</li>'}</ul>
     </div>`);
       this._wire();
@@ -2067,6 +2068,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const url = (this.$("[data-add-url]")?.value || "").trim();
         if (!url) {
           this._msg = "A feed URL is required.";
+          this.render();
+          return;
+        }
+        let ok = false;
+        try {
+          ok = /^https?:$/.test(new URL(url).protocol);
+        } catch {
+          ok = false;
+        }
+        if (!ok) {
+          this._msg = "Enter a valid http(s) RSS/Atom feed URL.";
           this.render();
           return;
         }
