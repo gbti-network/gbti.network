@@ -9930,6 +9930,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function splashShowsCards(raw) {
     return String(raw) !== "0";
   }
+  function splashShowsQuote(raw) {
+    return String(raw) !== "0";
+  }
+  function normalizePatternGap(raw, fallback = 16) {
+    if (raw === null || raw === void 0 || raw === "") return fallback;
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(60, Math.max(4, n));
+  }
   function fitDimensions(w, h, max) {
     w = Number(w);
     h = Number(h);
@@ -9978,7 +9987,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var BG_MODE_KEY = "gbti-splash-bg-mode";
   var BG_OPACITY_KEY = "gbti-splash-bg-opacity";
   var BG_PATTERN_KEY = "gbti-splash-bg-pattern";
-  var BG_CARDS_KEY = "gbti-splash-bg-cards";
+  var BG_PATTERN_OP_KEY = "gbti-splash-bg-pattern-op";
+  var BG_PATTERN_GAP_KEY = "gbti-splash-bg-pattern-gap";
+  var SHOW_CARDS_KEY = "gbti-splash-show-cards";
+  var SHOW_QUOTE_KEY = "gbti-splash-show-quote";
   var BG_IMAGE_KEY = "gbti:splash-bg-image";
   var BG_MAX_SIDE = 1600;
   var lsGet = (k) => {
@@ -9994,6 +10006,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     } catch {
     }
   };
+  for (const [sel, key, fn] of [["[data-show-cards]", SHOW_CARDS_KEY, splashShowsCards], ["[data-show-quote]", SHOW_QUOTE_KEY, splashShowsQuote]]) {
+    const el = document.querySelector(sel);
+    if (!el) continue;
+    el.checked = fn(lsGet(key));
+    el.addEventListener("change", () => lsSet(key, el.checked ? "1" : "0"));
+  }
   function downscaleImage(file, maxSide) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -10028,16 +10046,39 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const opacity = document.querySelector("[data-bg-opacity]");
     const opacityOut = document.querySelector("[data-bg-opacity-out]");
     const pattern = document.querySelector("[data-bg-pattern]");
-    const cards = document.querySelector("[data-bg-cards]");
+    const patternCtrls = document.querySelector("[data-bg-pattern-ctrls]");
+    const gapRow = document.querySelector("[data-bg-gap-row]");
+    const patternOp = document.querySelector("[data-bg-pattern-op]");
+    const patternOpOut = document.querySelector("[data-bg-pattern-op-out]");
+    const patternGap = document.querySelector("[data-bg-pattern-gap]");
+    const patternGapOut = document.querySelector("[data-bg-pattern-gap-out]");
+    const setOut = (out, val, suffix) => {
+      if (out) out.textContent = `${val}${suffix}`;
+    };
     bgMode.value = normalizeBgMode(lsGet(BG_MODE_KEY));
-    if (opacity) opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY)));
-    if (opacityOut && opacity) opacityOut.textContent = `${opacity.value}%`;
+    if (opacity) {
+      opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY)));
+      setOut(opacityOut, opacity.value, "%");
+    }
     if (pattern) pattern.value = normalizeBgPattern(lsGet(BG_PATTERN_KEY));
-    if (cards) cards.checked = splashShowsCards(lsGet(BG_CARDS_KEY));
+    if (patternOp) {
+      patternOp.value = String(normalizeBgOpacity(lsGet(BG_PATTERN_OP_KEY), 45));
+      setOut(patternOpOut, patternOp.value, "%");
+    }
+    if (patternGap) {
+      patternGap.value = String(normalizePatternGap(lsGet(BG_PATTERN_GAP_KEY)));
+      setOut(patternGapOut, patternGap.value, "px");
+    }
     const syncFullCtrls = () => {
       if (fullCtrls) fullCtrls.hidden = bgMode.value !== "full";
     };
+    const syncPatternCtrls = () => {
+      const p = pattern ? pattern.value : "none";
+      if (patternCtrls) patternCtrls.hidden = p === "none";
+      if (gapRow) gapRow.hidden = !(p === "dots" || p === "scanlines");
+    };
     syncFullCtrls();
+    syncPatternCtrls();
     const showImage = (dataUrl) => {
       if (preview) {
         if (dataUrl) {
@@ -10060,11 +10101,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     });
     opacity?.addEventListener("input", () => {
       const v = String(normalizeBgOpacity(opacity.value));
-      if (opacityOut) opacityOut.textContent = `${v}%`;
+      setOut(opacityOut, v, "%");
       lsSet(BG_OPACITY_KEY, v);
     });
-    pattern?.addEventListener("change", () => lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value)));
-    cards?.addEventListener("change", () => lsSet(BG_CARDS_KEY, cards.checked ? "1" : "0"));
+    pattern?.addEventListener("change", () => {
+      lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value));
+      syncPatternCtrls();
+    });
+    patternOp?.addEventListener("input", () => {
+      const v = String(normalizeBgOpacity(patternOp.value, 45));
+      setOut(patternOpOut, v, "%");
+      lsSet(BG_PATTERN_OP_KEY, v);
+    });
+    patternGap?.addEventListener("input", () => {
+      const v = String(normalizePatternGap(patternGap.value));
+      setOut(patternGapOut, v, "px");
+      lsSet(BG_PATTERN_GAP_KEY, v);
+    });
     removeBtn?.addEventListener("click", () => {
       try {
         chrome.storage?.local?.remove?.(BG_IMAGE_KEY);

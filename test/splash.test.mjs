@@ -2,7 +2,7 @@
 // decision, and the dest->hash mapping. No DOM, no chrome, like the feed-route tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BUNDLED_QUOTES, enabledQuotes, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, fitDimensions, GBTI_ASCII } from '../client-ui/src/splash.mjs';
+import { BUNDLED_QUOTES, enabledQuotes, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, fitDimensions, GBTI_ASCII } from '../client-ui/src/splash.mjs';
 
 const TWELVE_H = 12 * 60 * 60 * 1000;
 
@@ -79,10 +79,23 @@ test('normalizeBgOpacity clamps to 0..100 and falls back on non-numeric input', 
   assert.equal(normalizeBgOpacity(null, 40), 40); // custom fallback
 });
 
-test('splashShowsCards defaults to true and is only false for the stored 0', () => {
-  for (const v of [null, undefined, '1', '', 'yes']) assert.equal(splashShowsCards(v), true, String(v));
-  assert.equal(splashShowsCards('0'), false);
-  assert.equal(splashShowsCards(0), false);
+test('splashShowsCards / splashShowsQuote default to true and are only false for the stored 0', () => {
+  for (const fn of [splashShowsCards, splashShowsQuote]) {
+    for (const v of [null, undefined, '1', '', 'yes']) assert.equal(fn(v), true, String(v));
+    assert.equal(fn('0'), false);
+    assert.equal(fn(0), false);
+  }
+});
+
+test('normalizePatternGap clamps to 4..60 and falls back on an absent/non-numeric value', () => {
+  assert.equal(normalizePatternGap(16), 16);
+  assert.equal(normalizePatternGap('24'), 24);
+  assert.equal(normalizePatternGap(2), 4);   // below min
+  assert.equal(normalizePatternGap(99), 60); // above max
+  assert.equal(normalizePatternGap(null), 16);
+  assert.equal(normalizePatternGap(''), 16);
+  assert.equal(normalizePatternGap('abc'), 16);
+  assert.equal(normalizePatternGap('x', 20), 20); // custom fallback
 });
 
 test('normalizeBgPattern accepts the set and defaults unknown to none', () => {

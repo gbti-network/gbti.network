@@ -101,9 +101,11 @@
     html[data-splash][data-splash-bg="full"] .nt-splash > .splash-cards,
     html[data-splash][data-splash-bg="full"] .nt-splash > .splash-quote { position: relative; z-index: 1; }
     html[data-splash][data-splash-bg="full"] .splash-pattern { display: block; position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
-    /* full + no cards: a pure click-through curtain (the image fills the tab; clicking anywhere enters the app). */
-    html[data-splash][data-splash-bg="full"][data-splash-nocards] .splash-cards { display: none; }
-    html[data-splash][data-splash-bg="full"][data-splash-nocards] .nt-splash { cursor: pointer; }
+    /* SOW-074 standalone content toggles (any mode): no cards -> hide them + the whole splash is a click-anywhere
+       screen (a click enters the app); no quote -> hide the quote. */
+    html[data-splash][data-splash-nocards] .splash-cards { display: none; }
+    html[data-splash][data-splash-nocards] .nt-splash { cursor: pointer; }
+    html[data-splash][data-splash-noquote] .splash-quote { display: none; }
     /* Glassy, see-through cards + light quote whenever ANY background is active (the image shows through the cards). */
     html[data-splash][data-splash-bg] .splash-card { background: rgba(20,18,24,.5); border-color: rgba(255,255,255,.18); color: #fff; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
     html[data-splash][data-splash-bg] .splash-card .sc-ico { background: rgba(31,158,95,.30); color: #fff; }
@@ -112,9 +114,9 @@
     html[data-splash][data-splash-bg] .splash-quote blockquote { color: #fff; }
     html[data-splash][data-splash-bg] .splash-quote figcaption { color: rgba(255,255,255,.82); }
     .splash-pattern.p-ascii { display: flex; align-items: center; justify-content: center; }
-    .splash-pattern.p-ascii pre { margin: 0; font-family: var(--f-mono, monospace); font-weight: 700; font-size: clamp(11px, 2.6vw, 30px); line-height: 1.04; letter-spacing: 2px; color: #fff; white-space: pre; mix-blend-mode: overlay; opacity: .9; }
-    .splash-pattern.p-dots { background-image: radial-gradient(rgba(255,255,255,.20) 1.5px, transparent 1.7px); background-size: 22px 22px; }
-    .splash-pattern.p-scanlines { background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.11) 0 1px, transparent 1px 4px); }
+    .splash-pattern.p-ascii pre { margin: 0; font-family: var(--f-mono, monospace); font-weight: 700; font-size: clamp(11px, 2.6vw, 30px); line-height: 1.04; letter-spacing: 2px; color: #fff; white-space: pre; mix-blend-mode: overlay; opacity: var(--pat-op, .9); }
+    .splash-pattern.p-dots { background-image: radial-gradient(rgba(255,255,255, var(--pat-op, .2)) 1.5px, transparent 1.7px); background-size: var(--pat-gap, 16px) var(--pat-gap, 16px); }
+    .splash-pattern.p-scanlines { background-image: repeating-linear-gradient(0deg, rgba(255,255,255, var(--pat-op, .11)) 0 1px, transparent 1px var(--pat-gap, 16px)); }
     /* The feed rows/cards render inside <gbti-card-list> (SOW-042), whose styles are shadow-encapsulated; the
        per-mode + atom CSS that used to live here moved into client-ui/src/elements/gbti-card-list.mjs. */
 

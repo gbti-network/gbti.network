@@ -28,9 +28,10 @@
     .bg-full-ctrls { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; border-top: 1.5px solid var(--line); margin-top: 2px; }
     .bg-full-ctrls input[type=range] { flex: 1; max-width: 240px; accent-color: var(--green); }
     .bg-full-ctrls output { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); min-width: 40px; }
+    .bg-pattern-ctrls { display: flex; flex-direction: column; gap: 12px; padding-left: 14px; border-left: 2px solid var(--line); }
     /* the `hidden` attribute must win over the explicit display rules above (else the empty preview + the
-       full-screen-only controls show before anything is set) */
-    [data-bg-preview][hidden], .bg-full-ctrls[hidden] { display: none; }
+       conditional control groups show before anything is set) */
+    [data-bg-preview][hidden], .bg-full-ctrls[hidden], .bg-pattern-ctrls[hidden], [data-bg-gap-row][hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -60,6 +61,14 @@
             <option value="60">1 hour</option>
             <option value="120">2 hours</option>
           </select>
+        </label>
+        <label class="splash-set" style="margin-top:14px">
+          <input type="checkbox" data-show-cards />
+          <span>Show the destination cards (uncheck to make the splash a click-anywhere screen)</span>
+        </label>
+        <label class="splash-set" style="margin-top:10px">
+          <input type="checkbox" data-show-quote />
+          <span>Show the quote</span>
         </label>
       </section>
       <!-- SOW-074: the new-tab splash background image + modes. Wired in account.mjs (CSP forbids inline scripts).
@@ -103,10 +112,18 @@
                 <option value="scanlines">Scanlines</option>
               </select>
             </label>
-            <label class="splash-set">
-              <input type="checkbox" data-bg-cards />
-              <span>Show the destination cards (uncheck for a click-anywhere image curtain)</span>
-            </label>
+            <div class="bg-pattern-ctrls" data-bg-pattern-ctrls hidden>
+              <label class="splash-set">
+                <span>Pattern opacity</span>
+                <input type="range" min="0" max="100" step="5" data-bg-pattern-op aria-label="Pattern opacity" />
+                <output data-bg-pattern-op-out></output>
+              </label>
+              <label class="splash-set" data-bg-gap-row>
+                <span>Pattern spacing</span>
+                <input type="range" min="4" max="60" step="2" data-bg-pattern-gap aria-label="Pattern spacing" />
+                <output data-bg-pattern-gap-out></output>
+              </label>
+            </div>
           </div>
         </div>
       </section>

@@ -2428,6 +2428,15 @@
   function splashShowsCards(raw) {
     return String(raw) !== "0";
   }
+  function splashShowsQuote(raw) {
+    return String(raw) !== "0";
+  }
+  function normalizePatternGap(raw, fallback = 16) {
+    if (raw === null || raw === void 0 || raw === "") return fallback;
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(60, Math.max(4, n));
+  }
   var GBTI_ASCII = [
     "  ____ ____ _____ ___ ",
     " / ___| __ )_   _|_ _|",
@@ -10136,7 +10145,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (fv) fv.hidden = true;
     if (rv) rv.hidden = true;
     sv.hidden = false;
-    document.documentElement.setAttribute("data-splash", "1");
+    const root = document.documentElement;
+    root.setAttribute("data-splash", "1");
+    root.toggleAttribute("data-splash-nocards", !splashShowsCards(lsItem("gbti-splash-show-cards")));
+    root.toggleAttribute("data-splash-noquote", !splashShowsQuote(lsItem("gbti-splash-show-quote")));
     renderSplashQuote();
     applySplashBg();
     window.scrollTo(0, 0);
@@ -10146,7 +10158,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const fv = $("[data-feedview]");
     if (sv) sv.hidden = true;
     if (fv) fv.hidden = false;
-    document.documentElement.removeAttribute("data-splash");
+    const root = document.documentElement;
+    root.removeAttribute("data-splash");
+    root.removeAttribute("data-splash-nocards");
+    root.removeAttribute("data-splash-noquote");
     clearSplashBg();
   }
   function snoozeSplash(dest) {
@@ -10205,12 +10220,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function clearSplashBg() {
     const root = document.documentElement;
     root.removeAttribute("data-splash-bg");
-    root.removeAttribute("data-splash-nocards");
     root.style.removeProperty("--splash-bg");
     root.style.removeProperty("--splash-bg-dim");
     const pat = $("[data-splash-pattern]");
     if (pat) {
       pat.className = "splash-pattern";
+      pat.removeAttribute("style");
       pat.replaceChildren();
     }
   }
@@ -10224,11 +10239,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (mode === "full") {
       const dim = (100 - normalizeBgOpacity(lsItem("gbti-splash-bg-opacity"))) / 100;
       root.style.setProperty("--splash-bg-dim", `rgba(0,0,0,${dim.toFixed(2)})`);
-      if (!splashShowsCards(lsItem("gbti-splash-bg-cards"))) root.setAttribute("data-splash-nocards", "1");
       const pattern = normalizeBgPattern(lsItem("gbti-splash-bg-pattern"));
       const pat = $("[data-splash-pattern]");
       if (pat && pattern !== "none") {
         pat.classList.add(`p-${pattern}`);
+        pat.style.setProperty("--pat-op", (normalizeBgOpacity(lsItem("gbti-splash-bg-pattern-op"), 45) / 100).toFixed(2));
+        pat.style.setProperty("--pat-gap", `${normalizePatternGap(lsItem("gbti-splash-bg-pattern-gap"))}px`);
         if (pattern === "ascii") {
           const pre = document.createElement("pre");
           pre.textContent = GBTI_ASCII;

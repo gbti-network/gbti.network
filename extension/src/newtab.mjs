@@ -5,7 +5,7 @@
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
 import { isLockedMembership, canSeeNews } from '../../client/src/membership.mjs'; // SOW-060: news is a free-tier (signed-in) perk
-import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
+import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
 import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
@@ -187,7 +187,11 @@ function showSplash() {
   if (fv) fv.hidden = true;
   if (rv) rv.hidden = true;
   sv.hidden = false;
-  document.documentElement.setAttribute('data-splash', '1');
+  const root = document.documentElement;
+  root.setAttribute('data-splash', '1');
+  // SOW-074: the standalone splash-content toggles (any mode). No cards -> the splash is a click-anywhere screen.
+  root.toggleAttribute('data-splash-nocards', !splashShowsCards(lsItem('gbti-splash-show-cards')));
+  root.toggleAttribute('data-splash-noquote', !splashShowsQuote(lsItem('gbti-splash-show-quote')));
   renderSplashQuote();
   applySplashBg(); // SOW-074: apply the uploaded background (no-op until the image is read; off -> plain splash)
   window.scrollTo(0, 0);
@@ -196,7 +200,10 @@ function hideSplash() {
   const sv = $('[data-splashview]'); const fv = $('[data-feedview]');
   if (sv) sv.hidden = true;
   if (fv) fv.hidden = false;
-  document.documentElement.removeAttribute('data-splash');
+  const root = document.documentElement;
+  root.removeAttribute('data-splash');
+  root.removeAttribute('data-splash-nocards');
+  root.removeAttribute('data-splash-noquote');
   clearSplashBg(); // SOW-074: drop the background so it never bleeds onto the feed
 }
 function snoozeSplash(dest) {
@@ -237,13 +244,13 @@ let SPLASH_BG_IMG = null; // the image data URL once read (null = none / not yet
 const lsItem = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 
 function clearSplashBg() {
+  // Only the BACKGROUND state; the content toggles (data-splash-nocards/noquote) are owned by showSplash/hideSplash.
   const root = document.documentElement;
   root.removeAttribute('data-splash-bg');
-  root.removeAttribute('data-splash-nocards');
   root.style.removeProperty('--splash-bg');
   root.style.removeProperty('--splash-bg-dim');
   const pat = $('[data-splash-pattern]');
-  if (pat) { pat.className = 'splash-pattern'; pat.replaceChildren(); }
+  if (pat) { pat.className = 'splash-pattern'; pat.removeAttribute('style'); pat.replaceChildren(); }
 }
 
 function applySplashBg() {
@@ -258,11 +265,13 @@ function applySplashBg() {
   if (mode === 'full') {
     const dim = (100 - normalizeBgOpacity(lsItem('gbti-splash-bg-opacity'))) / 100; // higher opacity = brighter image
     root.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);
-    if (!splashShowsCards(lsItem('gbti-splash-bg-cards'))) root.setAttribute('data-splash-nocards', '1'); // a pure click-through curtain
     const pattern = normalizeBgPattern(lsItem('gbti-splash-bg-pattern'));
     const pat = $('[data-splash-pattern]');
     if (pat && pattern !== 'none') {
       pat.classList.add(`p-${pattern}`);
+      // SOW-074: the pattern opacity (--pat-op, 0..1) + the dots/scanlines spacing (--pat-gap, px) are tunable.
+      pat.style.setProperty('--pat-op', (normalizeBgOpacity(lsItem('gbti-splash-bg-pattern-op'), 45) / 100).toFixed(2));
+      pat.style.setProperty('--pat-gap', `${normalizePatternGap(lsItem('gbti-splash-bg-pattern-gap'))}px`);
       if (pattern === 'ascii') { const pre = document.createElement('pre'); pre.textContent = GBTI_ASCII; pat.appendChild(pre); }
     }
   }

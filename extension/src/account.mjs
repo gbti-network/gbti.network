@@ -4,7 +4,7 @@
 // the actual chrome signout + reload lives here, not in the element.
 import { mountPageClient } from './page-client.mjs'; // sets the client + defines the client-ui elements (incl. <gbti-account>)
 import { initShell } from './shell.mjs';
-import { normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, fitDimensions } from '../../client-ui/src/splash.mjs'; // SOW-074
+import { normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, fitDimensions } from '../../client-ui/src/splash.mjs'; // SOW-074
 
 mountPageClient();
 initShell({ active: 'settings', nav: 'workbench' }); // SOW-052: Account = the WorkBench "Settings" section
@@ -25,18 +25,30 @@ if (splashSel) {
   splashSel.addEventListener('change', () => { try { localStorage.setItem(SPLASH_WINDOW_KEY, splashSel.value); } catch (e) { /* storage unavailable */ } });
 }
 
-// SOW-074: the new-tab splash background. Mode / opacity / pattern are small localStorage prefs (read synchronously by
+// SOW-074: the new-tab splash background + content toggles. The small prefs are localStorage (read synchronously by
 // newtab.mjs); the uploaded image is downscaled (the pure fitDimensions math + a canvas) and kept as a JPEG data URL
-// in chrome.storage.local. Per-device + personal (not synced, not git). The full-screen-only controls reveal on mode.
+// in chrome.storage.local. Per-device + personal (not synced, not git). The full-screen + pattern controls reveal on
+// the selected mode/pattern; show-cards + show-quote are standalone splash-content toggles.
 const BG_MODE_KEY = 'gbti-splash-bg-mode';
 const BG_OPACITY_KEY = 'gbti-splash-bg-opacity';
 const BG_PATTERN_KEY = 'gbti-splash-bg-pattern';
-const BG_CARDS_KEY = 'gbti-splash-bg-cards';
+const BG_PATTERN_OP_KEY = 'gbti-splash-bg-pattern-op';
+const BG_PATTERN_GAP_KEY = 'gbti-splash-bg-pattern-gap';
+const SHOW_CARDS_KEY = 'gbti-splash-show-cards';
+const SHOW_QUOTE_KEY = 'gbti-splash-show-quote';
 const BG_IMAGE_KEY = 'gbti:splash-bg-image';
 const BG_MAX_SIDE = 1600;
 
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } };
+
+// Standalone splash-content toggles (show the destination cards / the quote), independent of the background mode.
+for (const [sel, key, fn] of [['[data-show-cards]', SHOW_CARDS_KEY, splashShowsCards], ['[data-show-quote]', SHOW_QUOTE_KEY, splashShowsQuote]]) {
+  const el = document.querySelector(sel);
+  if (!el) continue;
+  el.checked = fn(lsGet(key));
+  el.addEventListener('change', () => lsSet(key, el.checked ? '1' : '0'));
+}
 
 // Downscale an uploaded image via a canvas (longest side capped) and return a JPEG data URL. DOM-only; the dimension
 // math is the pure fitDimensions(). Rejects on a read/decode failure so the caller can show a notice.
@@ -71,16 +83,28 @@ if (bgMode) {
   const opacity = document.querySelector('[data-bg-opacity]');
   const opacityOut = document.querySelector('[data-bg-opacity-out]');
   const pattern = document.querySelector('[data-bg-pattern]');
-  const cards = document.querySelector('[data-bg-cards]');
+  const patternCtrls = document.querySelector('[data-bg-pattern-ctrls]');
+  const gapRow = document.querySelector('[data-bg-gap-row]');
+  const patternOp = document.querySelector('[data-bg-pattern-op]');
+  const patternOpOut = document.querySelector('[data-bg-pattern-op-out]');
+  const patternGap = document.querySelector('[data-bg-pattern-gap]');
+  const patternGapOut = document.querySelector('[data-bg-pattern-gap-out]');
+  const setOut = (out, val, suffix) => { if (out) out.textContent = `${val}${suffix}`; };
 
   // Hydrate the prefs (normalized).
   bgMode.value = normalizeBgMode(lsGet(BG_MODE_KEY));
-  if (opacity) opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY)));
-  if (opacityOut && opacity) opacityOut.textContent = `${opacity.value}%`;
+  if (opacity) { opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY))); setOut(opacityOut, opacity.value, '%'); }
   if (pattern) pattern.value = normalizeBgPattern(lsGet(BG_PATTERN_KEY));
-  if (cards) cards.checked = splashShowsCards(lsGet(BG_CARDS_KEY));
+  if (patternOp) { patternOp.value = String(normalizeBgOpacity(lsGet(BG_PATTERN_OP_KEY), 45)); setOut(patternOpOut, patternOp.value, '%'); }
+  if (patternGap) { patternGap.value = String(normalizePatternGap(lsGet(BG_PATTERN_GAP_KEY))); setOut(patternGapOut, patternGap.value, 'px'); }
   const syncFullCtrls = () => { if (fullCtrls) fullCtrls.hidden = bgMode.value !== 'full'; };
+  const syncPatternCtrls = () => {
+    const p = pattern ? pattern.value : 'none';
+    if (patternCtrls) patternCtrls.hidden = p === 'none';
+    if (gapRow) gapRow.hidden = !(p === 'dots' || p === 'scanlines'); // spacing only affects dots/scanlines
+  };
   syncFullCtrls();
+  syncPatternCtrls();
 
   // Hydrate the stored image preview.
   const showImage = (dataUrl) => {
@@ -90,9 +114,10 @@ if (bgMode) {
   try { chrome.storage?.local?.get?.(BG_IMAGE_KEY, (o) => showImage(o?.[BG_IMAGE_KEY] || null)); } catch { /* storage unavailable */ }
 
   bgMode.addEventListener('change', () => { lsSet(BG_MODE_KEY, normalizeBgMode(bgMode.value)); syncFullCtrls(); });
-  opacity?.addEventListener('input', () => { const v = String(normalizeBgOpacity(opacity.value)); if (opacityOut) opacityOut.textContent = `${v}%`; lsSet(BG_OPACITY_KEY, v); });
-  pattern?.addEventListener('change', () => lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value)));
-  cards?.addEventListener('change', () => lsSet(BG_CARDS_KEY, cards.checked ? '1' : '0'));
+  opacity?.addEventListener('input', () => { const v = String(normalizeBgOpacity(opacity.value)); setOut(opacityOut, v, '%'); lsSet(BG_OPACITY_KEY, v); });
+  pattern?.addEventListener('change', () => { lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value)); syncPatternCtrls(); });
+  patternOp?.addEventListener('input', () => { const v = String(normalizeBgOpacity(patternOp.value, 45)); setOut(patternOpOut, v, '%'); lsSet(BG_PATTERN_OP_KEY, v); });
+  patternGap?.addEventListener('input', () => { const v = String(normalizePatternGap(patternGap.value)); setOut(patternGapOut, v, 'px'); lsSet(BG_PATTERN_GAP_KEY, v); });
   removeBtn?.addEventListener('click', () => { try { chrome.storage?.local?.remove?.(BG_IMAGE_KEY); } catch { /* storage unavailable */ } showImage(null); if (note) note.textContent = 'Image removed.'; });
 
   fileInput?.addEventListener('change', async () => {

@@ -80,10 +80,24 @@ export function normalizeBgPattern(raw) {
   return BG_PATTERNS.has(p) ? p : 'none';
 }
 
-/** Whether the FULL-screen splash shows the destination cards (default true). When false it is a pure click-through
- *  curtain (just the image; a click anywhere enters the app). Stored as '1' (show) / '0' (hide). */
+/** Whether the splash shows the destination cards (default true). When false (in any mode) the cards are hidden and a
+ *  click anywhere on the splash enters the app. Stored as '1' (show) / '0' (hide). */
 export function splashShowsCards(raw) {
   return String(raw) !== '0';
+}
+
+/** Whether the splash shows the quote (default true). Stored as '1' (show) / '0' (hide). */
+export function splashShowsQuote(raw) {
+  return String(raw) !== '0';
+}
+
+/** Normalize the dots/scanlines pattern spacing to an integer px in [4,60] (default 16 on an absent/non-numeric
+ *  value; an absent stored pref null/undefined/'' falls back, a real number is clamped). */
+export function normalizePatternGap(raw, fallback = 16) {
+  if (raw === null || raw === undefined || raw === '') return fallback;
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(60, Math.max(4, n));
 }
 
 /** Fit (w,h) so the LONGEST side is at most `max`, preserving aspect ratio; never UP-scales. Returns rounded
