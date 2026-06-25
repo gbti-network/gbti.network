@@ -28,6 +28,9 @@
     .bg-full-ctrls { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; border-top: 1.5px solid var(--line); margin-top: 2px; }
     .bg-full-ctrls input[type=range] { flex: 1; max-width: 240px; accent-color: var(--green); }
     .bg-full-ctrls output { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); min-width: 40px; }
+    /* the `hidden` attribute must win over the explicit display rules above (else the empty preview + the
+       full-screen-only controls show before anything is set) */
+    [data-bg-preview][hidden], .bg-full-ctrls[hidden] { display: none; }
   </style>
 </head>
 <body>
