@@ -87,6 +87,13 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
     // "could not reach GitHub" with no sign-in prompt instead of step 1.)
     if (pathname === '/api/onboarding-status') return ok(await getOnboardingStatus(ctx));
 
+    // SOW-079: the admin MANAGER reads are public git-native data (house/taxonomy.yml, house/news-sources.yml,
+    // house/quotes.yml); they must load WITHOUT a signed-in identity (and tokenless once the repo is public), so they
+    // sit BEFORE the identity gate. Every WRITE (/api/admin) + the Worker-backed /api/syndication stay gated below.
+    if (pathname === '/api/taxonomy') return ok(await getTaxonomy(ctx));
+    if (pathname === '/api/news-source-pool') return ok(await getNewsSourcePool(ctx));
+    if (pathname === '/api/quote-pool') return ok(await getQuotePool(ctx));
+
     const username = id?.username;
     if (!username) throw new OperationError('no-identity', 'no signed-in identity; sign in first');
 
@@ -158,12 +165,7 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await reviewContribution(ctx, body));
       case '/api/overrides': // SOW-038 P2: superadmin dashboard roster (admin-gated; reads the public house/*.yml)
         return ok(await getOverridesRoster(ctx));
-      case '/api/taxonomy': // SOW-055: the canonical category tree for the manager UI (reads the public house/taxonomy.yml)
-        return ok(await getTaxonomy(ctx));
-      case '/api/news-source-pool': // SOW-056 P2: the news-source pool for the manager UI (reads public house/news-sources.yml)
-        return ok(await getNewsSourcePool(ctx));
-      case '/api/quote-pool': // SOW-063 P3: the splash quote pool for the manager UI (reads public house/quotes.yml)
-        return ok(await getQuotePool(ctx));
+      // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).
       case '/api/open-pulls': // SOW-038 P2: the open content-PR queue (admin-gated)
         return ok(await getOpenPulls(ctx));
       case '/api/syndication': // SOW-058: the superadmin syndication tracker (admin-gated, via the Worker)

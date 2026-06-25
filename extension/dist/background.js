@@ -20174,6 +20174,9 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       });
     }
     if (pathname === "/api/onboarding-status") return ok(await getOnboardingStatus(ctx));
+    if (pathname === "/api/taxonomy") return ok(await getTaxonomy(ctx));
+    if (pathname === "/api/news-source-pool") return ok(await getNewsSourcePool(ctx));
+    if (pathname === "/api/quote-pool") return ok(await getQuotePool(ctx));
     const username = id?.username;
     if (!username) throw new OperationError("no-identity", "no signed-in identity; sign in first");
     switch (pathname) {
@@ -20253,12 +20256,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await reviewContribution(ctx, body));
       case "/api/overrides":
         return ok(await getOverridesRoster(ctx));
-      case "/api/taxonomy":
-        return ok(await getTaxonomy(ctx));
-      case "/api/news-source-pool":
-        return ok(await getNewsSourcePool(ctx));
-      case "/api/quote-pool":
-        return ok(await getQuotePool(ctx));
+      // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).
       case "/api/open-pulls":
         return ok(await getOpenPulls(ctx));
       case "/api/syndication":

@@ -132,6 +132,29 @@ test('onboarding-status: a PRE-AUTH route (works signed-out so it can drive the 
   assert.equal(st.json.authenticated, false);
 });
 
+test('SOW-079: the public admin reads (taxonomy / news-source-pool / quote-pool) load WITHOUT a signed-in identity', async () => {
+  const files = {
+    'house/taxonomy.yml': 'tree:\n  devops:\n    label: DevOps\n',
+    'house/news-sources.yml': 'sources:\n  - id: tnw\n    name: The Next Web\n    url: https://thenextweb.com/feed/\n    enabled: true\n',
+    'house/quotes.yml': 'quotes:\n  - text: Focus.\n    author: Jobs\n    enabled: true\n',
+  };
+  const noId = () => ctxFor({ identity: null, token: null, files });
+  assert.equal((await dispatch(noId(), { pathname: '/api/taxonomy' })).status, 200);
+  const ns = await dispatch(noId(), { pathname: '/api/news-source-pool' });
+  assert.equal(ns.status, 200);
+  assert.equal(ns.json.sources.length, 1);
+  const q = await dispatch(noId(), { pathname: '/api/quote-pool' });
+  assert.equal(q.status, 200);
+  assert.equal(q.json.quotes.length, 1);
+});
+
+test('SOW-079: syndication + admin writes STILL require identity (only the public reads were ungated)', async () => {
+  const synd = await dispatch(ctxFor({ identity: null, token: null }), { pathname: '/api/syndication' });
+  assert.equal(synd.status, 409);
+  const write = await dispatch(ctxFor({ identity: null, token: null }), { pathname: '/api/admin', method: 'POST', body: { action: 'quote-add', text: 'x', author: 'y' } });
+  assert.equal(write.status, 409);
+});
+
 test('onboarding esc: escapes HTML metacharacters before innerHTML (matches gbti-auth)', () => {
   assert.equal(esc('alice'), 'alice');
   assert.equal(esc('"><img src=x onerror=alert(1)>'), '&quot;&gt;&lt;img src=x onerror=alert(1)&gt;');
