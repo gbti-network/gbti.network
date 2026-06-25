@@ -56,9 +56,9 @@ class GbtiBlockEditor extends GbtiElement {
   _blockHtml(b, i) {
     const types = BLOCK_TYPES.map((t) => `<option value="${t}" ${t === b.type ? 'selected' : ''}>${TYPE_LABEL[t]}</option>`).join('');
     const head = `<div class="be-blk-h"><select data-type data-i="${i}" title="Block type">${types}</select>`
-      + `<button type="button" class="be-mv" data-up data-i="${i}" title="Move up">&#8593;</button>`
-      + `<button type="button" class="be-mv" data-down data-i="${i}" title="Move down">&#8595;</button>`
-      + `<button type="button" class="be-mv" data-del data-i="${i}" title="Delete">&#215;</button></div>`;
+      + `<button type="button" class="be-mv" data-up data-i="${i}" title="Move up" aria-label="Move up">&#8593;</button>`
+      + `<button type="button" class="be-mv" data-down data-i="${i}" title="Move down" aria-label="Move down">&#8595;</button>`
+      + `<button type="button" class="be-mv" data-del data-i="${i}" title="Delete" aria-label="Delete block">&#215;</button></div>`;
     return `<div class="be-blk be-${esc(b.type)}" data-i="${i}">${head}<div class="be-body">${this._bodyHtml(b, i)}</div></div>`;
   }
 

@@ -19,6 +19,7 @@ import './gbti-upvote.mjs'; // SOW-057: the share upvote control
 import './gbti-favorite.mjs'; // SOW-013/064: favorite + add-to-collection on the reader meta line
 import './gbti-collection.mjs';
 import { hostOf } from '../all-merge.mjs'; // SOW-057: the link domain for the "Read article on <domain>" CTA
+import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
 
 const SITE = 'https://gbti.network';
 const lc = (s) => String(s || '').toLowerCase();
@@ -138,9 +139,14 @@ const CSS = `
   .author .follow.on { background:transparent; color:var(--fg); border-color:var(--line); }
   .author .follow.muted { background:transparent; color:var(--muted); border-color:var(--line); cursor:default; }
   .author .socials { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; }
-  .author .soc { font-size:12px; font-weight:600; color:var(--muted); background:var(--hover); border:1px solid var(--line); border-radius:8px; padding:4px 9px; text-decoration:none; display:inline-flex; align-items:center; gap:5px; }
-  .author .soc:hover { color:var(--fg); border-color:var(--accent); }
-  .author .soc.discord b { color:var(--fg); font-weight:600; }
+  .author .soc { position:relative; width:30px; height:30px; flex:none; display:inline-flex; align-items:center; justify-content:center; color:var(--muted); background:var(--hover); border:1px solid var(--line); border-radius:8px; text-decoration:none; }
+  .author .soc:hover, .author .soc:focus-visible { color:var(--accent); border-color:var(--accent); outline:none; }
+  .author .soc svg { width:15px; height:15px; }
+  /* Shared hover-tooltip recipe (SOW-067): a position:relative trigger reveals a hidden, absolutely-positioned
+     child on :hover / :focus-within / :focus-visible. The same mechanics back the news channel hovercard
+     (gbti-news.mjs). V3 tokens (inverted --fg/--bg) keep it legible in both themes. */
+  .author .soc .tip { position:absolute; bottom:calc(100% + 7px); left:50%; transform:translateX(-50%); background:var(--fg); color:var(--bg); font-size:11px; font-weight:600; line-height:1; white-space:nowrap; padding:5px 8px; border-radius:6px; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease; z-index:30; }
+  .author .soc:hover .tip, .author .soc:focus-visible .tip, .author .soc:focus-within .tip { opacity:1; visibility:visible; }
 
   .discussion h3 { font-family:var(--font-display); font-size:17px; margin:0 0 12px; }
   @media (max-width:960px) { .discussion { border-top:1px solid var(--line); padding-top:18px; } }
@@ -251,15 +257,19 @@ class GbtiReader extends GbtiElement {
     else if (a.canFollow) follow = `<button class="follow${a.following ? ' on' : ''}" data-follow type="button">${a.following ? 'Following' : 'Follow'}</button>`;
     else follow = `<a class="follow muted" href="${SITE}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
     // Social links (Discord shown as an inspectable handle chip).
+    // SOW-067: per-platform brand ICONS (not spelled-out text). Each chip keeps an aria-label for screen readers
+    // and reveals the platform name via the shared hover tooltip (.tip). Discord is not reliably linkable, so it
+    // stays a focusable, non-link chip whose tooltip carries the handle.
     const links = e.links || {};
     const chips = [];
     for (const [key, label, base] of SOCIALS) {
       const url = linkUrl(links[key], base);
-      if (url) chips.push(`<a class="soc" href="${esc(url)}" target="_blank" rel="noopener nofollow">${esc(label)}</a>`);
+      const ico = socialIcon(key);
+      if (url && ico) chips.push(`<a class="soc" href="${esc(url)}" target="_blank" rel="noopener nofollow" aria-label="${esc(label)}">${ico}<span class="tip" role="tooltip">${esc(label)}</span></a>`);
     }
     if (links.discord) {
       const handle = String(links.discord).trim();
-      chips.push(`<span class="soc discord" title="Discord: ${esc(handle)}">Discord <b>${esc(handle)}</b></span>`);
+      chips.push(`<span class="soc discord" tabindex="0" role="img" aria-label="Discord: ${esc(handle)}">${socialIcon('discord')}<span class="tip" role="tooltip">Discord: ${esc(handle)}</span></span>`);
     }
     const socials = chips.length ? `<div class="socials">${chips.join('')}</div>` : '';
     return `<div class="author"><div class="a-top">`

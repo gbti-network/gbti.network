@@ -17,6 +17,18 @@ const SITE = 'https://gbti.network';
 const nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE}/membership/">Become a member</a> to unlock the news feed.</div>`;
 const lc = (s) => String(s ?? '').toLowerCase();
 
+/** SOW-067: the display domain for a news source (its feed/site URL), www-stripped. A bare host or odd value
+ *  falls through to a best-effort first segment. Empty -> ''. Pure + exported for unit tests. */
+export function domainOf(url) {
+  const s = String(url ?? '').trim();
+  if (!s) return '';
+  try { return new URL(s).hostname.replace(/^www\./, ''); }
+  catch {
+    const m = s.replace(/^[a-z]+:\/\//i, '').match(/^([^/?#]+)/);
+    return m ? m[1].replace(/^www\./, '') : '';
+  }
+}
+
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
@@ -32,10 +44,21 @@ const CSS = `
   ul.chans { list-style:none; margin:0; padding:0; }
   .chan { display:flex; align-items:center; gap:12px; padding:12px 2px; border-top:1px solid var(--line); }
   .chan:first-child { border-top:0; }
-  .chan .ci { min-width:0; flex:1; }
+  .chan .ci { position:relative; min-width:0; flex:1; }
+  .chan .ci:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:4px; }
   .chan .ci b { display:block; font-size:14.5px; }
   .chan .ci .d { display:block; color:var(--muted); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .chan .ci .n { color:var(--muted); font-size:11.5px; }
+  /* Shared hover-tooltip recipe (SOW-067; mirrors gbti-reader.mjs .soc .tip): a position:relative trigger
+     reveals a hidden, absolutely-positioned floating panel on :hover / :focus-within. The .ci is keyboard
+     focusable (tabindex=0) so the card is reachable without a pointer. Anchored bottom-LEFT so it never covers
+     the Follow button at the row's top-right. V3 tokens => legible in both themes. */
+  .chan .hovercard { position:absolute; left:0; top:calc(100% + 6px); z-index:30; width:min(280px, 78vw); background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:11px 13px; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease; }
+  .chan .ci:hover .hovercard, .chan .ci:focus-within .hovercard { opacity:1; visibility:visible; }
+  .chan .hovercard .hc-name { display:block; font-size:13.5px; color:var(--fg); }
+  .chan .hovercard .hc-dom { display:block; font-size:11.5px; color:var(--accent); margin-top:1px; word-break:break-all; }
+  .chan .hovercard .hc-desc { margin:8px 0 0; font-size:12.5px; line-height:1.45; color:var(--muted); white-space:normal; }
+  .chan .hovercard .hc-n { display:block; margin-top:8px; font-size:11px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); }
   .fbtn { flex:none; font:inherit; font-weight:600; font-size:12.5px; padding:6px 13px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--fg); cursor:pointer; }
   .fbtn:hover { border-color:var(--accent); color:var(--accent); }
   .fbtn.on { background:var(--brand); border-color:var(--brand); color:#fff; }
@@ -233,8 +256,23 @@ class GbtiNews extends GbtiElement {
     const followed = this._followed || new Set();
     const rows = sources.map((s) => {
       const on = followed.has(lc(s.id));
-      const meta = [s.description, s.count != null ? `${s.count} items` : null].filter(Boolean).join(' · ');
-      return `<li class="chan"><div class="ci"><b>${esc(s.name || s.id)}</b>${meta ? `<span class="d">${esc(meta)}</span>` : ''}</div><button class="fbtn ${on ? 'on' : ''}" data-follow="${esc(s.id)}" type="button">${on ? 'Following' : 'Follow'}</button></li>`;
+      const name = s.name || s.id;
+      const domain = domainOf(s.url) || s.description || '';
+      const count = s.count != null ? `${s.count} items` : '';
+      // The compact resting line: domain + count (short, no truncation needed). The hover/focus card carries the
+      // full, non-truncated detail. Show the description only when it adds something beyond the domain (the
+      // current pool seeds description == domain, so this avoids a redundant line until real descriptions land).
+      const inline = [domain, count].filter(Boolean).join(' · ');
+      const showDesc = s.description && lc(s.description) !== lc(domain);
+      const card = `<div class="hovercard" role="tooltip">`
+        + `<b class="hc-name">${esc(name)}</b>`
+        + (domain ? `<span class="hc-dom">${esc(domain)}</span>` : '')
+        + (showDesc ? `<p class="hc-desc">${esc(s.description)}</p>` : '')
+        + (count ? `<span class="hc-n">${esc(count)}</span>` : '')
+        + `</div>`;
+      return `<li class="chan"><div class="ci" tabindex="0">`
+        + `<b>${esc(name)}</b>${inline ? `<span class="d">${esc(inline)}</span>` : ''}${card}`
+        + `</div><button class="fbtn ${on ? 'on' : ''}" data-follow="${esc(s.id)}" type="button">${on ? 'Following' : 'Follow'}</button></li>`;
     }).join('');
     host.innerHTML = `<p class="muted" style="margin:0 0 10px">Follow channels to drill into them from your <b>Following</b> feed.</p><ul class="chans">${rows}</ul>`;
     this.$$('[data-follow]').forEach((b) => b.addEventListener('click', () => this._toggleFollow(b.dataset.follow, b)));
