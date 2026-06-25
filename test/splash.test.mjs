@@ -2,7 +2,7 @@
 // decision, and the dest->hash mapping. No DOM, no chrome, like the feed-route tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BUNDLED_QUOTES, enabledQuotes, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, splashBgClass, normalizeBgOpacity, normalizeBgPattern, fitDimensions, GBTI_ASCII } from '../client-ui/src/splash.mjs';
+import { BUNDLED_QUOTES, enabledQuotes, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, fitDimensions, GBTI_ASCII } from '../client-ui/src/splash.mjs';
 
 const TWELVE_H = 12 * 60 * 60 * 1000;
 
@@ -62,17 +62,11 @@ test('splashDestHash maps the card destinations to the feed hash vocabulary', ()
 });
 
 // SOW-074: the user-uploaded splash-background normalizers + the ASCII art constant.
-test('normalizeBgMode accepts off/content/full and defaults unknown to off', () => {
-  for (const m of ['off', 'content', 'full']) assert.equal(normalizeBgMode(m), m);
+test('normalizeBgMode accepts off/content/fill/full and defaults unknown to off', () => {
+  for (const m of ['off', 'content', 'fill', 'full']) assert.equal(normalizeBgMode(m), m);
   assert.equal(normalizeBgMode('FULL'), 'full');
+  assert.equal(normalizeBgMode('Fill'), 'fill');
   for (const bad of ['', 'wallpaper', null, undefined, 5]) assert.equal(normalizeBgMode(bad), 'off');
-});
-
-test('splashBgClass maps the mode to the splash CSS class', () => {
-  assert.equal(splashBgClass('content'), 'bg-content');
-  assert.equal(splashBgClass('full'), 'bg-full');
-  assert.equal(splashBgClass('off'), '');
-  assert.equal(splashBgClass('nope'), '');
 });
 
 test('normalizeBgOpacity clamps to 0..100 and falls back on non-numeric input', () => {
@@ -83,6 +77,12 @@ test('normalizeBgOpacity clamps to 0..100 and falls back on non-numeric input', 
   assert.equal(normalizeBgOpacity(33.6), 34); // rounds
   assert.equal(normalizeBgOpacity('abc'), 55); // default
   assert.equal(normalizeBgOpacity(null, 40), 40); // custom fallback
+});
+
+test('splashShowsCards defaults to true and is only false for the stored 0', () => {
+  for (const v of [null, undefined, '1', '', 'yes']) assert.equal(splashShowsCards(v), true, String(v));
+  assert.equal(splashShowsCards('0'), false);
+  assert.equal(splashShowsCards(0), false);
 });
 
 test('normalizeBgPattern accepts the set and defaults unknown to none', () => {

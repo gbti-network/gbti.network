@@ -2409,14 +2409,11 @@
   function splashDestHash(dest) {
     return dest === "news" ? "#type=news" : "#type=all";
   }
-  var BG_MODES = /* @__PURE__ */ new Set(["off", "content", "full"]);
+  var BG_MODES = /* @__PURE__ */ new Set(["off", "content", "fill", "full"]);
   var BG_PATTERNS = /* @__PURE__ */ new Set(["none", "ascii", "dots", "scanlines"]);
   function normalizeBgMode(raw) {
     const m = String(raw || "").toLowerCase();
     return BG_MODES.has(m) ? m : "off";
-  }
-  function splashBgClass(mode) {
-    return mode === "content" ? "bg-content" : mode === "full" ? "bg-full" : "";
   }
   function normalizeBgOpacity(raw, fallback = 55) {
     if (raw === null || raw === void 0 || raw === "") return fallback;
@@ -2427,6 +2424,9 @@
   function normalizeBgPattern(raw) {
     const p = String(raw || "").toLowerCase();
     return BG_PATTERNS.has(p) ? p : "none";
+  }
+  function splashShowsCards(raw) {
+    return String(raw) !== "0";
   }
   var GBTI_ASCII = [
     "  ____ ____ _____ ___ ",
@@ -10147,6 +10147,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (sv) sv.hidden = true;
     if (fv) fv.hidden = false;
     document.documentElement.removeAttribute("data-splash");
+    clearSplashBg();
   }
   function snoozeSplash(dest) {
     try {
@@ -10201,26 +10202,31 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return null;
     }
   };
-  function applySplashBg() {
-    const el = $("[data-splashview]");
-    if (!el) return;
-    el.classList.remove("bg-content", "bg-full");
-    el.style.removeProperty("--splash-bg");
-    el.style.removeProperty("--splash-bg-dim");
+  function clearSplashBg() {
+    const root = document.documentElement;
+    root.removeAttribute("data-splash-bg");
+    root.removeAttribute("data-splash-nocards");
+    root.style.removeProperty("--splash-bg");
+    root.style.removeProperty("--splash-bg-dim");
     const pat = $("[data-splash-pattern]");
     if (pat) {
       pat.className = "splash-pattern";
       pat.replaceChildren();
     }
+  }
+  function applySplashBg() {
+    clearSplashBg();
     const mode = normalizeBgMode(lsItem("gbti-splash-bg-mode"));
     if (mode === "off" || !SPLASH_BG_IMG) return;
-    el.style.setProperty("--splash-bg", `url("${SPLASH_BG_IMG}")`);
-    const cls = splashBgClass(mode);
-    if (cls) el.classList.add(cls);
+    const root = document.documentElement;
+    root.style.setProperty("--splash-bg", `url("${SPLASH_BG_IMG}")`);
+    root.setAttribute("data-splash-bg", mode);
     if (mode === "full") {
       const dim = (100 - normalizeBgOpacity(lsItem("gbti-splash-bg-opacity"))) / 100;
-      el.style.setProperty("--splash-bg-dim", `rgba(0,0,0,${dim.toFixed(2)})`);
+      root.style.setProperty("--splash-bg-dim", `rgba(0,0,0,${dim.toFixed(2)})`);
+      if (!splashShowsCards(lsItem("gbti-splash-bg-cards"))) root.setAttribute("data-splash-nocards", "1");
       const pattern = normalizeBgPattern(lsItem("gbti-splash-bg-pattern"));
+      const pat = $("[data-splash-pattern]");
       if (pat && pattern !== "none") {
         pat.classList.add(`p-${pattern}`);
         if (pattern === "ascii") {
@@ -10461,6 +10467,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       hideSplash();
       location.hash = splashDestHash(dest);
     }));
+    $("[data-splashview]")?.addEventListener("click", () => {
+      if (!document.documentElement.hasAttribute("data-splash-nocards")) return;
+      snoozeSplash("activity");
+      hideSplash();
+      location.hash = splashDestHash("activity");
+    });
     loadQuotes();
     loadSplashBg();
     if (wantSplash) showSplash();

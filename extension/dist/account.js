@@ -9911,7 +9911,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/splash.mjs
   var TWELVE_HOURS_MS = 12 * 60 * 60 * 1e3;
   var DEFAULT_WINDOW_MS = 30 * 60 * 1e3;
-  var BG_MODES = /* @__PURE__ */ new Set(["off", "content", "full"]);
+  var BG_MODES = /* @__PURE__ */ new Set(["off", "content", "fill", "full"]);
   var BG_PATTERNS = /* @__PURE__ */ new Set(["none", "ascii", "dots", "scanlines"]);
   function normalizeBgMode(raw) {
     const m = String(raw || "").toLowerCase();
@@ -9926,6 +9926,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function normalizeBgPattern(raw) {
     const p = String(raw || "").toLowerCase();
     return BG_PATTERNS.has(p) ? p : "none";
+  }
+  function splashShowsCards(raw) {
+    return String(raw) !== "0";
   }
   function fitDimensions(w, h, max) {
     w = Number(w);
@@ -9975,6 +9978,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var BG_MODE_KEY = "gbti-splash-bg-mode";
   var BG_OPACITY_KEY = "gbti-splash-bg-opacity";
   var BG_PATTERN_KEY = "gbti-splash-bg-pattern";
+  var BG_CARDS_KEY = "gbti-splash-bg-cards";
   var BG_IMAGE_KEY = "gbti:splash-bg-image";
   var BG_MAX_SIDE = 1600;
   var lsGet = (k) => {
@@ -10024,10 +10028,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const opacity = document.querySelector("[data-bg-opacity]");
     const opacityOut = document.querySelector("[data-bg-opacity-out]");
     const pattern = document.querySelector("[data-bg-pattern]");
+    const cards = document.querySelector("[data-bg-cards]");
     bgMode.value = normalizeBgMode(lsGet(BG_MODE_KEY));
     if (opacity) opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY)));
     if (opacityOut && opacity) opacityOut.textContent = `${opacity.value}%`;
     if (pattern) pattern.value = normalizeBgPattern(lsGet(BG_PATTERN_KEY));
+    if (cards) cards.checked = splashShowsCards(lsGet(BG_CARDS_KEY));
     const syncFullCtrls = () => {
       if (fullCtrls) fullCtrls.hidden = bgMode.value !== "full";
     };
@@ -10058,6 +10064,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       lsSet(BG_OPACITY_KEY, v);
     });
     pattern?.addEventListener("change", () => lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value)));
+    cards?.addEventListener("change", () => lsSet(BG_CARDS_KEY, cards.checked ? "1" : "0"));
     removeBtn?.addEventListener("click", () => {
       try {
         chrome.storage?.local?.remove?.(BG_IMAGE_KEY);

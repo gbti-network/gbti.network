@@ -54,18 +54,15 @@ export function splashDestHash(dest) {
 // an opacity control + a pattern overlay (the GBTI ASCII artwork is the hero, with the image bleeding through). These
 // are PURE normalizers + the ASCII art constant; the DOM wiring lives in the extension (newtab.mjs / account.mjs).
 
-const BG_MODES = new Set(['off', 'content', 'full']);
+// Placement modes: off (none), content (behind the splash card block, in-column), fill (the whole content area right
+// of the rail), full (a full-viewport overlay over the app). newtab.mjs sets the chosen mode as html[data-splash-bg].
+const BG_MODES = new Set(['off', 'content', 'fill', 'full']);
 const BG_PATTERNS = new Set(['none', 'ascii', 'dots', 'scanlines']);
 
-/** Normalize a stored bg mode to one of off|content|full (default off on anything unknown). */
+/** Normalize a stored bg mode to one of off|content|fill|full (default off on anything unknown). */
 export function normalizeBgMode(raw) {
   const m = String(raw || '').toLowerCase();
   return BG_MODES.has(m) ? m : 'off';
-}
-
-/** The CSS class the splash element gets for a bg mode (empty for off / unknown -> the plain SOW-063 splash). */
-export function splashBgClass(mode) {
-  return mode === 'content' ? 'bg-content' : mode === 'full' ? 'bg-full' : '';
 }
 
 /** Normalize the full-mode overlay opacity to an integer 0..100 (default 55 on an absent/non-numeric value). An
@@ -81,6 +78,12 @@ export function normalizeBgOpacity(raw, fallback = 55) {
 export function normalizeBgPattern(raw) {
   const p = String(raw || '').toLowerCase();
   return BG_PATTERNS.has(p) ? p : 'none';
+}
+
+/** Whether the FULL-screen splash shows the destination cards (default true). When false it is a pure click-through
+ *  curtain (just the image; a click anywhere enters the app). Stored as '1' (show) / '0' (hide). */
+export function splashShowsCards(raw) {
+  return String(raw) !== '0';
 }
 
 /** Fit (w,h) so the LONGEST side is at most `max`, preserving aspect ratio; never UP-scales. Returns rounded

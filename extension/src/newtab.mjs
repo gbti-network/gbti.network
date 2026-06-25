@@ -5,7 +5,7 @@
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
 import { isLockedMembership, canSeeNews } from '../../client/src/membership.mjs'; // SOW-060: news is a free-tier (signed-in) perk
-import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashBgClass, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
+import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
 import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
@@ -197,6 +197,7 @@ function hideSplash() {
   if (sv) sv.hidden = true;
   if (fv) fv.hidden = false;
   document.documentElement.removeAttribute('data-splash');
+  clearSplashBg(); // SOW-074: drop the background so it never bleeds onto the feed
 }
 function snoozeSplash(dest) {
   try { localStorage.setItem(SPLASH_DECISION_KEY, JSON.stringify({ dest, at: Date.now() })); } catch { /* storage unavailable */ }
@@ -235,24 +236,31 @@ const SPLASH_BG_IMAGE_KEY = 'gbti:splash-bg-image';
 let SPLASH_BG_IMG = null; // the image data URL once read (null = none / not yet read)
 const lsItem = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 
-function applySplashBg() {
-  const el = $('[data-splashview]');
-  if (!el) return;
-  el.classList.remove('bg-content', 'bg-full');
-  el.style.removeProperty('--splash-bg');
-  el.style.removeProperty('--splash-bg-dim');
+function clearSplashBg() {
+  const root = document.documentElement;
+  root.removeAttribute('data-splash-bg');
+  root.removeAttribute('data-splash-nocards');
+  root.style.removeProperty('--splash-bg');
+  root.style.removeProperty('--splash-bg-dim');
   const pat = $('[data-splash-pattern]');
   if (pat) { pat.className = 'splash-pattern'; pat.replaceChildren(); }
+}
 
+function applySplashBg() {
+  clearSplashBg();
   const mode = normalizeBgMode(lsItem('gbti-splash-bg-mode'));
   if (mode === 'off' || !SPLASH_BG_IMG) return; // off, or no image yet -> the plain splash
-  el.style.setProperty('--splash-bg', `url("${SPLASH_BG_IMG}")`);
-  const cls = splashBgClass(mode);
-  if (cls) el.classList.add(cls);
+  // Drive the placement off html[data-splash-bg] (+ --splash-bg on :root) so the CSS can target the splash block
+  // (content), the whole content column (fill), or a fixed full-viewport overlay (full) from one switch.
+  const root = document.documentElement;
+  root.style.setProperty('--splash-bg', `url("${SPLASH_BG_IMG}")`);
+  root.setAttribute('data-splash-bg', mode);
   if (mode === 'full') {
     const dim = (100 - normalizeBgOpacity(lsItem('gbti-splash-bg-opacity'))) / 100; // higher opacity = brighter image
-    el.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);
+    root.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);
+    if (!splashShowsCards(lsItem('gbti-splash-bg-cards'))) root.setAttribute('data-splash-nocards', '1'); // a pure click-through curtain
     const pattern = normalizeBgPattern(lsItem('gbti-splash-bg-pattern'));
+    const pat = $('[data-splash-pattern]');
     if (pat && pattern !== 'none') {
       pat.classList.add(`p-${pattern}`);
       if (pattern === 'ascii') { const pre = document.createElement('pre'); pre.textContent = GBTI_ASCII; pat.appendChild(pre); }
@@ -510,6 +518,14 @@ function init() {
     hideSplash();
     location.hash = splashDestHash(dest);
   }));
+  // SOW-074: in the full-screen NO-CARDS curtain, a click ANYWHERE on the splash enters the app (the activity feed).
+  // When cards are shown they are display:none-free and handle their own clicks, and this guard is a no-op.
+  $('[data-splashview]')?.addEventListener('click', () => {
+    if (!document.documentElement.hasAttribute('data-splash-nocards')) return;
+    snoozeSplash('activity');
+    hideSplash();
+    location.hash = splashDestHash('activity');
+  });
   loadQuotes(); // SOW-063 P2: hydrate + refresh the git-native quote pool (the splash shows a bundled quote until it lands)
   loadSplashBg(); // SOW-074: read the uploaded splash background (applied when the splash is shown)
   if (wantSplash) showSplash();

@@ -4,7 +4,7 @@
 // the actual chrome signout + reload lives here, not in the element.
 import { mountPageClient } from './page-client.mjs'; // sets the client + defines the client-ui elements (incl. <gbti-account>)
 import { initShell } from './shell.mjs';
-import { normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, fitDimensions } from '../../client-ui/src/splash.mjs'; // SOW-074
+import { normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, fitDimensions } from '../../client-ui/src/splash.mjs'; // SOW-074
 
 mountPageClient();
 initShell({ active: 'settings', nav: 'workbench' }); // SOW-052: Account = the WorkBench "Settings" section
@@ -31,6 +31,7 @@ if (splashSel) {
 const BG_MODE_KEY = 'gbti-splash-bg-mode';
 const BG_OPACITY_KEY = 'gbti-splash-bg-opacity';
 const BG_PATTERN_KEY = 'gbti-splash-bg-pattern';
+const BG_CARDS_KEY = 'gbti-splash-bg-cards';
 const BG_IMAGE_KEY = 'gbti:splash-bg-image';
 const BG_MAX_SIDE = 1600;
 
@@ -70,12 +71,14 @@ if (bgMode) {
   const opacity = document.querySelector('[data-bg-opacity]');
   const opacityOut = document.querySelector('[data-bg-opacity-out]');
   const pattern = document.querySelector('[data-bg-pattern]');
+  const cards = document.querySelector('[data-bg-cards]');
 
   // Hydrate the prefs (normalized).
   bgMode.value = normalizeBgMode(lsGet(BG_MODE_KEY));
   if (opacity) opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY)));
   if (opacityOut && opacity) opacityOut.textContent = `${opacity.value}%`;
   if (pattern) pattern.value = normalizeBgPattern(lsGet(BG_PATTERN_KEY));
+  if (cards) cards.checked = splashShowsCards(lsGet(BG_CARDS_KEY));
   const syncFullCtrls = () => { if (fullCtrls) fullCtrls.hidden = bgMode.value !== 'full'; };
   syncFullCtrls();
 
@@ -89,6 +92,7 @@ if (bgMode) {
   bgMode.addEventListener('change', () => { lsSet(BG_MODE_KEY, normalizeBgMode(bgMode.value)); syncFullCtrls(); });
   opacity?.addEventListener('input', () => { const v = String(normalizeBgOpacity(opacity.value)); if (opacityOut) opacityOut.textContent = `${v}%`; lsSet(BG_OPACITY_KEY, v); });
   pattern?.addEventListener('change', () => lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value)));
+  cards?.addEventListener('change', () => lsSet(BG_CARDS_KEY, cards.checked ? '1' : '0'));
   removeBtn?.addEventListener('click', () => { try { chrome.storage?.local?.remove?.(BG_IMAGE_KEY); } catch { /* storage unavailable */ } showImage(null); if (note) note.textContent = 'Image removed.'; });
 
   fileInput?.addEventListener('change', async () => {
