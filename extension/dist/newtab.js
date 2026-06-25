@@ -10222,6 +10222,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     root.removeAttribute("data-splash-bg");
     root.style.removeProperty("--splash-bg");
     root.style.removeProperty("--splash-bg-dim");
+    root.style.removeProperty("--card-op");
     const pat = $("[data-splash-pattern]");
     if (pat) {
       pat.className = "splash-pattern";
@@ -10236,20 +10237,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const root = document.documentElement;
     root.style.setProperty("--splash-bg", `url("${SPLASH_BG_IMG}")`);
     root.setAttribute("data-splash-bg", mode);
-    if (mode === "full") {
-      const dim = (100 - normalizeBgOpacity(lsItem("gbti-splash-bg-opacity"))) / 100;
-      root.style.setProperty("--splash-bg-dim", `rgba(0,0,0,${dim.toFixed(2)})`);
-      const pattern = normalizeBgPattern(lsItem("gbti-splash-bg-pattern"));
-      const pat = $("[data-splash-pattern]");
-      if (pat && pattern !== "none") {
-        pat.classList.add(`p-${pattern}`);
-        pat.style.setProperty("--pat-op", (normalizeBgOpacity(lsItem("gbti-splash-bg-pattern-op"), 45) / 100).toFixed(2));
-        pat.style.setProperty("--pat-gap", `${normalizePatternGap(lsItem("gbti-splash-bg-pattern-gap"))}px`);
-        if (pattern === "ascii") {
-          const pre = document.createElement("pre");
-          pre.textContent = GBTI_ASCII;
-          pat.appendChild(pre);
-        }
+    const dim = (100 - normalizeBgOpacity(lsItem("gbti-splash-bg-opacity"))) / 100;
+    root.style.setProperty("--splash-bg-dim", `rgba(0,0,0,${dim.toFixed(2)})`);
+    root.style.setProperty("--card-op", (normalizeBgOpacity(lsItem("gbti-splash-bg-card-op"), 70) / 100).toFixed(2));
+    const pattern = normalizeBgPattern(lsItem("gbti-splash-bg-pattern"));
+    const pat = $("[data-splash-pattern]");
+    if (pat && pattern !== "none") {
+      pat.classList.add(`p-${pattern}`);
+      pat.style.setProperty("--pat-op", (normalizeBgOpacity(lsItem("gbti-splash-bg-pattern-op"), 3) / 100).toFixed(2));
+      pat.style.setProperty("--pat-gap", `${normalizePatternGap(lsItem("gbti-splash-bg-pattern-gap"))}px`);
+      if (pattern === "ascii") {
+        const pre = document.createElement("pre");
+        pre.textContent = GBTI_ASCII;
+        pat.appendChild(pre);
       }
     }
   }

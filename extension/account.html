@@ -25,13 +25,13 @@
     .bg-upload-btn:hover, .bg-remove:hover { border-color: var(--green); color: var(--green-700); }
     [data-bg-preview] { max-width: 260px; max-height: 146px; border-radius: var(--r); border: 1.5px solid var(--line); object-fit: cover; display: block; margin-bottom: 10px; }
     .bg-note { font-size: 12.5px; color: var(--fg-mute); margin: 8px 0 0; min-height: 16px; }
-    .bg-full-ctrls { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; border-top: 1.5px solid var(--line); margin-top: 2px; }
-    .bg-full-ctrls input[type=range] { flex: 1; max-width: 240px; accent-color: var(--green); }
-    .bg-full-ctrls output { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); min-width: 40px; }
+    .bg-on-ctrls { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; border-top: 1.5px solid var(--line); margin-top: 2px; }
+    .bg-on-ctrls input[type=range] { flex: 1; max-width: 240px; accent-color: var(--green); }
+    .bg-on-ctrls output { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); min-width: 40px; }
     .bg-pattern-ctrls { display: flex; flex-direction: column; gap: 12px; padding-left: 14px; border-left: 2px solid var(--line); }
     /* the `hidden` attribute must win over the explicit display rules above (else the empty preview + the
        conditional control groups show before anything is set) */
-    [data-bg-preview][hidden], .bg-full-ctrls[hidden], .bg-pattern-ctrls[hidden], [data-bg-gap-row][hidden] { display: none; }
+    [data-bg-preview][hidden], .bg-on-ctrls[hidden], .bg-pattern-ctrls[hidden], [data-bg-gap-row][hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -63,11 +63,11 @@
           </select>
         </label>
         <label class="splash-set" style="margin-top:14px">
-          <input type="checkbox" data-show-cards />
-          <span>Show the destination cards (uncheck to make the splash a click-anywhere screen)</span>
+          <input type="checkbox" data-show-cards checked />
+          <span>Show the quickstart cards (uncheck to make the splash a click-anywhere screen)</span>
         </label>
         <label class="splash-set" style="margin-top:10px">
-          <input type="checkbox" data-show-quote />
+          <input type="checkbox" data-show-quote checked />
           <span>Show the quote</span>
         </label>
       </section>
@@ -97,7 +97,12 @@
             </div>
             <p class="bg-note" data-bg-note></p>
           </div>
-          <div class="bg-full-ctrls" data-bg-full-ctrls hidden>
+          <div class="bg-on-ctrls" data-bg-on-ctrls hidden>
+            <label class="splash-set">
+              <span>Card opacity</span>
+              <input type="range" min="0" max="100" step="5" data-bg-card-op aria-label="Quickstart card opacity" />
+              <output data-bg-card-op-out></output>
+            </label>
             <label class="splash-set">
               <span>Image opacity</span>
               <input type="range" min="0" max="100" step="5" data-bg-opacity aria-label="Splash background opacity" />
@@ -115,7 +120,7 @@
             <div class="bg-pattern-ctrls" data-bg-pattern-ctrls hidden>
               <label class="splash-set">
                 <span>Pattern opacity</span>
-                <input type="range" min="0" max="100" step="5" data-bg-pattern-op aria-label="Pattern opacity" />
+                <input type="range" min="0" max="100" step="1" data-bg-pattern-op aria-label="Pattern opacity" />
                 <output data-bg-pattern-op-out></output>
               </label>
               <label class="splash-set" data-bg-gap-row>

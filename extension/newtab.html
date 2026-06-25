@@ -81,14 +81,16 @@
        newtab.mjs; html[data-splash-bg] picks the placement (content / fill / full). Gated on [data-splash] too, so the
        bg only shows with the splash and never bleeds onto the feed. */
     .splash-pattern { display: none; }
+    /* contain the absolute pattern in content/fill (full overrides to position:fixed below). */
+    html[data-splash][data-splash-bg] .nt-splash { position: relative; }
     /* content: the image fills the centered splash card BLOCK (rounded, inset within the column). */
     html[data-splash][data-splash-bg="content"] .nt-splash {
-      background-image: linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)), var(--splash-bg);
+      background-image: linear-gradient(var(--splash-bg-dim, rgba(0,0,0,.5)), var(--splash-bg-dim, rgba(0,0,0,.5))), var(--splash-bg);
       background-size: cover; background-position: center; border-radius: var(--r-lg); padding: 44px 28px;
     }
     /* fill: the image fills the WHOLE content area (the main column, right of the rail, behind the top controls). */
     html[data-splash][data-splash-bg="fill"] .nt-main {
-      background-image: linear-gradient(rgba(0,0,0,.5), rgba(0,0,0,.5)), var(--splash-bg);
+      background-image: linear-gradient(var(--splash-bg-dim, rgba(0,0,0,.5)), var(--splash-bg-dim, rgba(0,0,0,.5))), var(--splash-bg);
       background-size: cover; background-position: center; min-height: 100vh;
     }
     /* full: a fixed full-viewport overlay over the app, BELOW the SOW-018 lock (z-200) + SOW-048 auth (z-250) so
@@ -98,16 +100,17 @@
       background-image: linear-gradient(var(--splash-bg-dim, rgba(0,0,0,.5)), var(--splash-bg-dim, rgba(0,0,0,.5))), var(--splash-bg);
       background-size: cover; background-position: center;
     }
-    html[data-splash][data-splash-bg="full"] .nt-splash > .splash-cards,
-    html[data-splash][data-splash-bg="full"] .nt-splash > .splash-quote { position: relative; z-index: 1; }
-    html[data-splash][data-splash-bg="full"] .splash-pattern { display: block; position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+    /* the cards/quote sit above the pattern; the pattern overlays the image (any enabled background). */
+    html[data-splash][data-splash-bg] .nt-splash > .splash-cards,
+    html[data-splash][data-splash-bg] .nt-splash > .splash-quote { position: relative; z-index: 1; }
+    html[data-splash][data-splash-bg] .splash-pattern { display: block; position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
     /* SOW-074 standalone content toggles (any mode): no cards -> hide them + the whole splash is a click-anywhere
        screen (a click enters the app); no quote -> hide the quote. */
     html[data-splash][data-splash-nocards] .splash-cards { display: none; }
     html[data-splash][data-splash-nocards] .nt-splash { cursor: pointer; }
     html[data-splash][data-splash-noquote] .splash-quote { display: none; }
-    /* Glassy, see-through cards + light quote whenever ANY background is active (the image shows through the cards). */
-    html[data-splash][data-splash-bg] .splash-card { background: rgba(20,18,24,.5); border-color: rgba(255,255,255,.18); color: #fff; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+    /* Glassy, see-through cards (tunable --card-op, default 70%) + light quote whenever ANY background is active. */
+    html[data-splash][data-splash-bg] .splash-card { background: rgba(20,18,24, var(--card-op, .7)); border-color: rgba(255,255,255,.18); color: #fff; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
     html[data-splash][data-splash-bg] .splash-card .sc-ico { background: rgba(31,158,95,.30); color: #fff; }
     html[data-splash][data-splash-bg] .splash-card .sc-s { color: rgba(255,255,255,.74); }
     html[data-splash][data-splash-bg] .splash-card:hover { border-color: var(--green); }

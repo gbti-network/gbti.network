@@ -9989,6 +9989,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var BG_PATTERN_KEY = "gbti-splash-bg-pattern";
   var BG_PATTERN_OP_KEY = "gbti-splash-bg-pattern-op";
   var BG_PATTERN_GAP_KEY = "gbti-splash-bg-pattern-gap";
+  var BG_CARD_OP_KEY = "gbti-splash-bg-card-op";
   var SHOW_CARDS_KEY = "gbti-splash-show-cards";
   var SHOW_QUOTE_KEY = "gbti-splash-show-quote";
   var BG_IMAGE_KEY = "gbti:splash-bg-image";
@@ -10038,11 +10039,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   var bgMode = document.querySelector("[data-bg-mode]");
   if (bgMode) {
-    const fullCtrls = document.querySelector("[data-bg-full-ctrls]");
+    const onCtrls = document.querySelector("[data-bg-on-ctrls]");
     const fileInput = document.querySelector("[data-bg-file]");
     const preview = document.querySelector("[data-bg-preview]");
     const removeBtn = document.querySelector("[data-bg-remove]");
     const note = document.querySelector("[data-bg-note]");
+    const cardOp = document.querySelector("[data-bg-card-op]");
+    const cardOpOut = document.querySelector("[data-bg-card-op-out]");
     const opacity = document.querySelector("[data-bg-opacity]");
     const opacityOut = document.querySelector("[data-bg-opacity-out]");
     const pattern = document.querySelector("[data-bg-pattern]");
@@ -10056,28 +10059,32 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (out) out.textContent = `${val}${suffix}`;
     };
     bgMode.value = normalizeBgMode(lsGet(BG_MODE_KEY));
+    if (cardOp) {
+      cardOp.value = String(normalizeBgOpacity(lsGet(BG_CARD_OP_KEY), 70));
+      setOut(cardOpOut, cardOp.value, "%");
+    }
     if (opacity) {
       opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY)));
       setOut(opacityOut, opacity.value, "%");
     }
     if (pattern) pattern.value = normalizeBgPattern(lsGet(BG_PATTERN_KEY));
     if (patternOp) {
-      patternOp.value = String(normalizeBgOpacity(lsGet(BG_PATTERN_OP_KEY), 45));
+      patternOp.value = String(normalizeBgOpacity(lsGet(BG_PATTERN_OP_KEY), 3));
       setOut(patternOpOut, patternOp.value, "%");
     }
     if (patternGap) {
       patternGap.value = String(normalizePatternGap(lsGet(BG_PATTERN_GAP_KEY)));
       setOut(patternGapOut, patternGap.value, "px");
     }
-    const syncFullCtrls = () => {
-      if (fullCtrls) fullCtrls.hidden = bgMode.value !== "full";
+    const syncBgOnCtrls = () => {
+      if (onCtrls) onCtrls.hidden = bgMode.value === "off";
     };
     const syncPatternCtrls = () => {
       const p = pattern ? pattern.value : "none";
       if (patternCtrls) patternCtrls.hidden = p === "none";
       if (gapRow) gapRow.hidden = !(p === "dots" || p === "scanlines");
     };
-    syncFullCtrls();
+    syncBgOnCtrls();
     syncPatternCtrls();
     const showImage = (dataUrl) => {
       if (preview) {
@@ -10097,7 +10104,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     bgMode.addEventListener("change", () => {
       lsSet(BG_MODE_KEY, normalizeBgMode(bgMode.value));
-      syncFullCtrls();
+      syncBgOnCtrls();
+    });
+    cardOp?.addEventListener("input", () => {
+      const v = String(normalizeBgOpacity(cardOp.value, 70));
+      setOut(cardOpOut, v, "%");
+      lsSet(BG_CARD_OP_KEY, v);
     });
     opacity?.addEventListener("input", () => {
       const v = String(normalizeBgOpacity(opacity.value));
@@ -10109,7 +10121,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       syncPatternCtrls();
     });
     patternOp?.addEventListener("input", () => {
-      const v = String(normalizeBgOpacity(patternOp.value, 45));
+      const v = String(normalizeBgOpacity(patternOp.value, 3));
       setOut(patternOpOut, v, "%");
       lsSet(BG_PATTERN_OP_KEY, v);
     });

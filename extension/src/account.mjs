@@ -34,6 +34,7 @@ const BG_OPACITY_KEY = 'gbti-splash-bg-opacity';
 const BG_PATTERN_KEY = 'gbti-splash-bg-pattern';
 const BG_PATTERN_OP_KEY = 'gbti-splash-bg-pattern-op';
 const BG_PATTERN_GAP_KEY = 'gbti-splash-bg-pattern-gap';
+const BG_CARD_OP_KEY = 'gbti-splash-bg-card-op';
 const SHOW_CARDS_KEY = 'gbti-splash-show-cards';
 const SHOW_QUOTE_KEY = 'gbti-splash-show-quote';
 const BG_IMAGE_KEY = 'gbti:splash-bg-image';
@@ -75,11 +76,13 @@ function downscaleImage(file, maxSide) {
 
 const bgMode = document.querySelector('[data-bg-mode]');
 if (bgMode) {
-  const fullCtrls = document.querySelector('[data-bg-full-ctrls]');
+  const onCtrls = document.querySelector('[data-bg-on-ctrls]');
   const fileInput = document.querySelector('[data-bg-file]');
   const preview = document.querySelector('[data-bg-preview]');
   const removeBtn = document.querySelector('[data-bg-remove]');
   const note = document.querySelector('[data-bg-note]');
+  const cardOp = document.querySelector('[data-bg-card-op]');
+  const cardOpOut = document.querySelector('[data-bg-card-op-out]');
   const opacity = document.querySelector('[data-bg-opacity]');
   const opacityOut = document.querySelector('[data-bg-opacity-out]');
   const pattern = document.querySelector('[data-bg-pattern]');
@@ -93,17 +96,19 @@ if (bgMode) {
 
   // Hydrate the prefs (normalized).
   bgMode.value = normalizeBgMode(lsGet(BG_MODE_KEY));
+  if (cardOp) { cardOp.value = String(normalizeBgOpacity(lsGet(BG_CARD_OP_KEY), 70)); setOut(cardOpOut, cardOp.value, '%'); }
   if (opacity) { opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY))); setOut(opacityOut, opacity.value, '%'); }
   if (pattern) pattern.value = normalizeBgPattern(lsGet(BG_PATTERN_KEY));
-  if (patternOp) { patternOp.value = String(normalizeBgOpacity(lsGet(BG_PATTERN_OP_KEY), 45)); setOut(patternOpOut, patternOp.value, '%'); }
+  if (patternOp) { patternOp.value = String(normalizeBgOpacity(lsGet(BG_PATTERN_OP_KEY), 3)); setOut(patternOpOut, patternOp.value, '%'); }
   if (patternGap) { patternGap.value = String(normalizePatternGap(lsGet(BG_PATTERN_GAP_KEY))); setOut(patternGapOut, patternGap.value, 'px'); }
-  const syncFullCtrls = () => { if (fullCtrls) fullCtrls.hidden = bgMode.value !== 'full'; };
+  // The appearance controls (card/image opacity, pattern) are available on ANY enabled background (content/fill/full).
+  const syncBgOnCtrls = () => { if (onCtrls) onCtrls.hidden = bgMode.value === 'off'; };
   const syncPatternCtrls = () => {
     const p = pattern ? pattern.value : 'none';
     if (patternCtrls) patternCtrls.hidden = p === 'none';
     if (gapRow) gapRow.hidden = !(p === 'dots' || p === 'scanlines'); // spacing only affects dots/scanlines
   };
-  syncFullCtrls();
+  syncBgOnCtrls();
   syncPatternCtrls();
 
   // Hydrate the stored image preview.
@@ -113,10 +118,11 @@ if (bgMode) {
   };
   try { chrome.storage?.local?.get?.(BG_IMAGE_KEY, (o) => showImage(o?.[BG_IMAGE_KEY] || null)); } catch { /* storage unavailable */ }
 
-  bgMode.addEventListener('change', () => { lsSet(BG_MODE_KEY, normalizeBgMode(bgMode.value)); syncFullCtrls(); });
+  bgMode.addEventListener('change', () => { lsSet(BG_MODE_KEY, normalizeBgMode(bgMode.value)); syncBgOnCtrls(); });
+  cardOp?.addEventListener('input', () => { const v = String(normalizeBgOpacity(cardOp.value, 70)); setOut(cardOpOut, v, '%'); lsSet(BG_CARD_OP_KEY, v); });
   opacity?.addEventListener('input', () => { const v = String(normalizeBgOpacity(opacity.value)); setOut(opacityOut, v, '%'); lsSet(BG_OPACITY_KEY, v); });
   pattern?.addEventListener('change', () => { lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value)); syncPatternCtrls(); });
-  patternOp?.addEventListener('input', () => { const v = String(normalizeBgOpacity(patternOp.value, 45)); setOut(patternOpOut, v, '%'); lsSet(BG_PATTERN_OP_KEY, v); });
+  patternOp?.addEventListener('input', () => { const v = String(normalizeBgOpacity(patternOp.value, 3)); setOut(patternOpOut, v, '%'); lsSet(BG_PATTERN_OP_KEY, v); });
   patternGap?.addEventListener('input', () => { const v = String(normalizePatternGap(patternGap.value)); setOut(patternGapOut, v, 'px'); lsSet(BG_PATTERN_GAP_KEY, v); });
   removeBtn?.addEventListener('click', () => { try { chrome.storage?.local?.remove?.(BG_IMAGE_KEY); } catch { /* storage unavailable */ } showImage(null); if (note) note.textContent = 'Image removed.'; });
 

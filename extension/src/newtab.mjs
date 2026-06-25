@@ -249,6 +249,7 @@ function clearSplashBg() {
   root.removeAttribute('data-splash-bg');
   root.style.removeProperty('--splash-bg');
   root.style.removeProperty('--splash-bg-dim');
+  root.style.removeProperty('--card-op');
   const pat = $('[data-splash-pattern]');
   if (pat) { pat.className = 'splash-pattern'; pat.removeAttribute('style'); pat.replaceChildren(); }
 }
@@ -262,18 +263,18 @@ function applySplashBg() {
   const root = document.documentElement;
   root.style.setProperty('--splash-bg', `url("${SPLASH_BG_IMG}")`);
   root.setAttribute('data-splash-bg', mode);
-  if (mode === 'full') {
-    const dim = (100 - normalizeBgOpacity(lsItem('gbti-splash-bg-opacity'))) / 100; // higher opacity = brighter image
-    root.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);
-    const pattern = normalizeBgPattern(lsItem('gbti-splash-bg-pattern'));
-    const pat = $('[data-splash-pattern]');
-    if (pat && pattern !== 'none') {
-      pat.classList.add(`p-${pattern}`);
-      // SOW-074: the pattern opacity (--pat-op, 0..1) + the dots/scanlines spacing (--pat-gap, px) are tunable.
-      pat.style.setProperty('--pat-op', (normalizeBgOpacity(lsItem('gbti-splash-bg-pattern-op'), 45) / 100).toFixed(2));
-      pat.style.setProperty('--pat-gap', `${normalizePatternGap(lsItem('gbti-splash-bg-pattern-gap'))}px`);
-      if (pattern === 'ascii') { const pre = document.createElement('pre'); pre.textContent = GBTI_ASCII; pat.appendChild(pre); }
-    }
+  // SOW-074: the appearance vars apply on ANY enabled background (content / fill / full).
+  const dim = (100 - normalizeBgOpacity(lsItem('gbti-splash-bg-opacity'))) / 100; // higher opacity = brighter image
+  root.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);
+  root.style.setProperty('--card-op', (normalizeBgOpacity(lsItem('gbti-splash-bg-card-op'), 70) / 100).toFixed(2));
+  const pattern = normalizeBgPattern(lsItem('gbti-splash-bg-pattern'));
+  const pat = $('[data-splash-pattern]');
+  if (pat && pattern !== 'none') {
+    pat.classList.add(`p-${pattern}`);
+    // The pattern opacity (--pat-op, 0..1; default 3%) + the dots/scanlines spacing (--pat-gap, px) are tunable.
+    pat.style.setProperty('--pat-op', (normalizeBgOpacity(lsItem('gbti-splash-bg-pattern-op'), 3) / 100).toFixed(2));
+    pat.style.setProperty('--pat-gap', `${normalizePatternGap(lsItem('gbti-splash-bg-pattern-gap'))}px`);
+    if (pattern === 'ascii') { const pre = document.createElement('pre'); pre.textContent = GBTI_ASCII; pat.appendChild(pre); }
   }
 }
 
