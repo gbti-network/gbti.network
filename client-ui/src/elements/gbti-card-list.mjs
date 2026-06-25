@@ -39,6 +39,18 @@ export function avatarFor(item = {}) {
   return { src: login ? `https://github.com/${encodeURIComponent(login)}.png?size=48` : '', title: authorName(item.author) };
 }
 
+// SOW-050/067: the RAW thumbnail field for a mode — the card box uses the larger thumbCard derivative; dense rows use
+// the small thumb (falling back to thumbCard). null when the item has no featured image. Pure; exported for testing.
+export function thumbRaw(item = {}, isCard = false) {
+  return ((isCard && item.thumbCard) ? item.thumbCard : (item.thumb || item.thumbCard)) || null;
+}
+
+// SOW-067: the leaf taxonomy label (the human breadcrumb's last entry), or '' when absent. Pure; exported for testing.
+export function categoryLeaf(labels) {
+  const a = Array.isArray(labels) ? labels : [];
+  return a.length ? String(a[a.length - 1] || '').trim() : '';
+}
+
 // Relative "time ago". Elapsed-since is inherently in the viewer's OS clock/timezone (Date.now() is local epoch),
 // so no timezone handling is needed. An item from TODAY now reads "N hours/minutes ago" instead of flattening to
 // "today" (owner request). Exported for testing.
@@ -115,9 +127,16 @@ const CSS = `
   .card-i .media { width:100%; aspect-ratio:4 / 3; height:auto; border-radius:0; flex:none; }
   .card-i .cbody { display:flex; flex-direction:column; padding:14px; }
   .card-i .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  /* SOW-067: card titles wrap FULLY (no 2-line clamp); the auto-rows grid reflows the variable-height cards. */
+  .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; }
   .card-i:hover .title { color:var(--accent); }
   .card-i .meta { margin:0; white-space:normal; }
+  /* SOW-067: the category leaf label beside the type pill (card mode only), grouped left; the lock stays right. */
+  .card-i .top { gap:6px; }
+  .tcluster { display:inline-flex; align-items:center; gap:6px; min-width:0; }
+  .catchip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); background:var(--hover); border-radius:2px; padding:3px 7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:130px; }
+  /* SOW-067: the SOW-052 squared aesthetic in CARD MODE ONLY (scoped to .card-i so compact/detailed keep their radii). */
+  .card-i, .card-i .media, .card-i .chip, .card-i .lock, .card-i .av, .card-i .catchip { border-radius:2px; }
 
   /* SEPARATION — member contributions stand out from the (non-member, high-volume) News stream: each member
      type gets a 3px type-color accent bar + a faint tint + a colored chip; NEWS stays plain so it recedes.
@@ -152,21 +171,32 @@ class GbtiCardList extends GbtiElement {
   set mode(v) { this._mode = MODES.has(v) ? v : 'detailed'; this.render(); }
   get mode() { return this._mode || 'detailed'; }
 
+  // SOW-050: the resolved thumbnail URL (the card box uses the larger thumbCard derivative; dense rows use the small
+  // thumb), or null when the item has no featured image. News falls back to its single og:image URL.
+  _thumbUrl(item) {
+    const raw = thumbRaw(item, this.mode === 'card');
+    return raw ? resolveAsset(raw) : null;
+  }
   _media(item) {
     const isCard = this.mode === 'card';
     // SOW-049/050: in the dense list rows (compact/detailed) news shows NO left media (its publisher favicon sits in
-    // the meta); only the image-led card surfaces the article og:image. Member types always show a media block.
+    // the meta); only the image-led card surfaces the article og:image.
     if (lc(item.type) === 'news' && !isCard) return '';
+    const thumb = this._thumbUrl(item);
+    // SOW-067: a DETAILED row is image-or-nothing — the featured image shows as the small left thumb, or there is NO
+    // media at all (no type-glyph fallback; the title spans full width via no-media). Compact + card keep the glyph.
+    if (this.mode === 'detailed' && !thumb) return '';
     const g = glyphFor(item.category, item.type);
-    // SOW-050: the card box is ~220-360px wide, so it uses the larger thumbCard derivative; the small thumb (96px)
-    // upscaled blurry there. Dense list rows keep the small thumb. News carries one URL (its og:image), so it falls
-    // back to thumb when no card derivative exists.
-    const raw = (isCard && item.thumbCard) ? item.thumbCard : (item.thumb || item.thumbCard);
-    const thumb = raw ? resolveAsset(raw) : null;
+    const glyph = this.mode === 'detailed' ? '' : `<span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
     const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : '';
-    return `<span class="media" style="--ka:${esc(g.accent)}"><span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>${img}</span>`;
+    return `<span class="media" style="--ka:${esc(g.accent)}">${glyph}${img}</span>`;
   }
   _chip(item) { return `<span class="chip">${esc(TYPE_LABEL[item.type] || item.type)}</span>`; }
+  // SOW-067: the leaf taxonomy label (the human breadcrumb's last entry) shown beside the type pill in card mode.
+  _categoryChip(item) {
+    const leaf = categoryLeaf(item.categoryLabels);
+    return leaf ? `<span class="catchip">${esc(leaf)}</span>` : '';
+  }
   // News is open to the limited trial, not members-only, so it never carries the Members lock badge (SOW-050).
   _lock(item) { return item.visibility === 'members' && lc(item.type) !== 'news' ? `<span class="lock">${lockIco}Members</span>` : ''; }
   // SOW-049: the meta leads with a small avatar (member -> github avatar; news -> publisher favicon); the name/source
@@ -185,7 +215,8 @@ class GbtiCardList extends GbtiElement {
     const accent = t && t !== 'news' ? ` style="--cbar:${esc(typeAccent(t))}"` : '';
     // SOW-049/050: news drops its left media in the dense list rows (title leads full-width); the image-led CARD keeps
     // a media block so the article og:image can show.
-    const nomedia = (t === 'news' && cls !== 'card-i') ? ' no-media' : '';
+    // SOW-067: a detailed row with no featured image is also no-media (title spans full width, no glyph fallback).
+    const nomedia = ((t === 'news' && cls !== 'card-i') || (cls === 'row-d' && !this._thumbUrl(item))) ? ' no-media' : '';
     const attrs = `class="${cls}${nomedia}" data-card="${i}" data-type="${esc(t)}"${accent}`;
     return item.openHref ? `<a ${attrs} href="${esc(item.openHref)}">` : `<div ${attrs} role="button" tabindex="0">`;
   }
@@ -201,7 +232,7 @@ class GbtiCardList extends GbtiElement {
     // Image-led card (matches the /prompts grid card): the media leads at the TOP, full-bleed + 4:3, then a
     // padded body. Because the media meets the body below it, its bottom edge stays square (the card only rounds
     // the top corners) — no rounded bottom on the image.
-    return `<div class="card">` + items.map((it, i) => `${this._open(it, i, 'card-i')}${this._media(it)}<div class="cbody"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`).join('') + `</div>`;
+    return `<div class="card">` + items.map((it, i) => `${this._open(it, i, 'card-i')}${this._media(it)}<div class="cbody"><div class="top"><span class="tcluster">${this._chip(it)}${this._categoryChip(it)}</span>${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`).join('') + `</div>`;
   }
 
   render() {

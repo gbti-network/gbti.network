@@ -6952,6 +6952,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const login = a === "gbti" || a === "house" ? "gbti-network" : item.author;
     return { src: login ? `https://github.com/${encodeURIComponent(login)}.png?size=48` : "", title: authorName(item.author) };
   }
+  function thumbRaw(item = {}, isCard = false) {
+    return (isCard && item.thumbCard ? item.thumbCard : item.thumb || item.thumbCard) || null;
+  }
+  function categoryLeaf(labels) {
+    const a = Array.isArray(labels) ? labels : [];
+    return a.length ? String(a[a.length - 1] || "").trim() : "";
+  }
   function relTime(v, now = Date.now()) {
     if (!v) return "";
     const ms = typeof v === "number" ? v : Date.parse(v);
@@ -7023,9 +7030,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .card-i .media { width:100%; aspect-ratio:4 / 3; height:auto; border-radius:0; flex:none; }
   .card-i .cbody { display:flex; flex-direction:column; padding:14px; }
   .card-i .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  /* SOW-067: card titles wrap FULLY (no 2-line clamp); the auto-rows grid reflows the variable-height cards. */
+  .card-i .title { font-size:15px; line-height:1.3; margin:10px 0 6px; }
   .card-i:hover .title { color:var(--accent); }
   .card-i .meta { margin:0; white-space:normal; }
+  /* SOW-067: the category leaf label beside the type pill (card mode only), grouped left; the lock stays right. */
+  .card-i .top { gap:6px; }
+  .tcluster { display:inline-flex; align-items:center; gap:6px; min-width:0; }
+  .catchip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); background:var(--hover); border-radius:2px; padding:3px 7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:130px; }
+  /* SOW-067: the SOW-052 squared aesthetic in CARD MODE ONLY (scoped to .card-i so compact/detailed keep their radii). */
+  .card-i, .card-i .media, .card-i .chip, .card-i .lock, .card-i .av, .card-i .catchip { border-radius:2px; }
 
   /* SEPARATION — member contributions stand out from the (non-member, high-volume) News stream: each member
      type gets a 3px type-color accent bar + a faint tint + a colored chip; NEWS stays plain so it recedes.
@@ -7068,17 +7082,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     get mode() {
       return this._mode || "detailed";
     }
+    // SOW-050: the resolved thumbnail URL (the card box uses the larger thumbCard derivative; dense rows use the small
+    // thumb), or null when the item has no featured image. News falls back to its single og:image URL.
+    _thumbUrl(item) {
+      const raw = thumbRaw(item, this.mode === "card");
+      return raw ? resolveAsset(raw) : null;
+    }
     _media(item) {
       const isCard = this.mode === "card";
       if (lc2(item.type) === "news" && !isCard) return "";
+      const thumb = this._thumbUrl(item);
+      if (this.mode === "detailed" && !thumb) return "";
       const g = glyphFor(item.category, item.type);
-      const raw = isCard && item.thumbCard ? item.thumbCard : item.thumb || item.thumbCard;
-      const thumb = raw ? resolveAsset(raw) : null;
+      const glyph = this.mode === "detailed" ? "" : `<span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`;
       const img = thumb ? `<img class="cimg" src="${esc(thumb)}" alt="" loading="lazy">` : "";
-      return `<span class="media" style="--ka:${esc(g.accent)}"><span class="gl"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>${img}</span>`;
+      return `<span class="media" style="--ka:${esc(g.accent)}">${glyph}${img}</span>`;
     }
     _chip(item) {
       return `<span class="chip">${esc(TYPE_LABEL3[item.type] || item.type)}</span>`;
+    }
+    // SOW-067: the leaf taxonomy label (the human breadcrumb's last entry) shown beside the type pill in card mode.
+    _categoryChip(item) {
+      const leaf = categoryLeaf(item.categoryLabels);
+      return leaf ? `<span class="catchip">${esc(leaf)}</span>` : "";
     }
     // News is open to the limited trial, not members-only, so it never carries the Members lock badge (SOW-050).
     _lock(item) {
@@ -7096,7 +7122,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _open(item, i, cls) {
       const t = lc2(item.type);
       const accent = t && t !== "news" ? ` style="--cbar:${esc(typeAccent(t))}"` : "";
-      const nomedia = t === "news" && cls !== "card-i" ? " no-media" : "";
+      const nomedia = t === "news" && cls !== "card-i" || cls === "row-d" && !this._thumbUrl(item) ? " no-media" : "";
       const attrs = `class="${cls}${nomedia}" data-card="${i}" data-type="${esc(t)}"${accent}`;
       return item.openHref ? `<a ${attrs} href="${esc(item.openHref)}">` : `<div ${attrs} role="button" tabindex="0">`;
     }
@@ -7110,7 +7136,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<div class="detailed">` + items.map((it, i) => `${this._open(it, i, "row-d")}${this._media(it)}<div class="body"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${it.excerpt ? `<span class="ex">${esc(it.excerpt)}</span>` : ""}${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
     }
     _card(items) {
-      return `<div class="card">` + items.map((it, i) => `${this._open(it, i, "card-i")}${this._media(it)}<div class="cbody"><div class="top">${this._chip(it)}${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
+      return `<div class="card">` + items.map((it, i) => `${this._open(it, i, "card-i")}${this._media(it)}<div class="cbody"><div class="top"><span class="tcluster">${this._chip(it)}${this._categoryChip(it)}</span>${this._lock(it)}</div><div class="title">${esc(it.title)}</div>${this._meta(it)}</div>${this._close(it)}`).join("") + `</div>`;
     }
     render() {
       if (!this._items) return;

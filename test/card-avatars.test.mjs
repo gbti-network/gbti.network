@@ -2,7 +2,26 @@
 // a hover tooltip); a news card shows the publisher favicon (source on the tooltip) and NO left icon. Pure helpers.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { faviconFor, avatarFor, relTime } from '../client-ui/src/elements/gbti-card-list.mjs';
+import { faviconFor, avatarFor, relTime, thumbRaw, categoryLeaf } from '../client-ui/src/elements/gbti-card-list.mjs';
+
+// SOW-067: the card thumbnail-field selection + the category leaf label (pure).
+test('thumbRaw: card prefers thumbCard; rows use thumb (falling back to thumbCard); null when neither', () => {
+  assert.equal(thumbRaw({ thumb: 't.webp', thumbCard: 'c.webp' }, true), 'c.webp'); // card -> thumbCard
+  assert.equal(thumbRaw({ thumb: 't.webp', thumbCard: 'c.webp' }, false), 't.webp'); // row -> thumb
+  assert.equal(thumbRaw({ thumbCard: 'c.webp' }, false), 'c.webp'); // row, no small thumb -> thumbCard fallback
+  assert.equal(thumbRaw({ thumb: 't.webp' }, true), 't.webp'); // card, no card derivative -> thumb (news og:image)
+  assert.equal(thumbRaw({}, true), null);
+  assert.equal(thumbRaw({}, false), null);
+  assert.equal(thumbRaw(undefined, false), null);
+});
+
+test('categoryLeaf: the last breadcrumb label, trimmed; empty for none', () => {
+  assert.equal(categoryLeaf(['DevOps', 'CI/CD']), 'CI/CD');
+  assert.equal(categoryLeaf(['  AI  ']), 'AI');
+  assert.equal(categoryLeaf([]), '');
+  assert.equal(categoryLeaf(null), '');
+  assert.equal(categoryLeaf(undefined), '');
+});
 
 const NOW = Date.parse('2026-06-18T12:00:00Z');
 test('relTime: a TODAY item reads N hours/minutes ago, not "today" (OS-local elapsed)', () => {
