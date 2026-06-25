@@ -10,9 +10,13 @@ import './gbti-comment-box.mjs';
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
-  .comment { border-left:2px solid var(--line); padding-left:10px; }
+  /* SOW-067: each comment leads with the commenter's GitHub avatar, then a content column. */
+  .comment { display:flex; gap:9px; border-left:2px solid var(--line); padding-left:10px; }
   .comment.reply { margin-left:16px; }
-  .cmeta { display:flex; align-items:baseline; gap:8px; font-size:12px; }
+  .comment .cav { flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:grid; place-items:center; color:var(--muted); font-size:10px; font-weight:700; margin-top:1px; }
+  .comment .cav img { width:100%; height:100%; object-fit:cover; }
+  .comment .cmain { min-width:0; flex:1; }
+  .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; }
   .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
   .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
   .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
@@ -35,7 +39,16 @@ function relTime(iso) {
   if (mo < 12) return `${mo} month${mo === 1 ? '' : 's'} ago`;
   return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? '' : 's'} ago`;
 }
+const lc = (s) => String(s || '').toLowerCase();
 const authorName = (a) => (a === 'gbti' ? 'GBTI Network' : a || 'A member');
+// SOW-067: the commenter's GitHub avatar (gbti/house -> the org logo). A missing author falls back to initials.
+const ghLogin = (a) => (lc(a) === 'gbti' || lc(a) === 'house' ? 'gbti-network' : a);
+const ghAvatar = (a) => (a ? `https://github.com/${encodeURIComponent(ghLogin(a))}.png?size=48` : '');
+function avatarHtml(author) {
+  const url = ghAvatar(author);
+  const ini = esc((authorName(author) || '?').trim().charAt(0).toUpperCase() || '?');
+  return `<span class="cav">${url ? `<img src="${esc(url)}" alt="" loading="lazy">` : ini}</span>`;
+}
 
 class GbtiDiscussion extends GbtiElement {
   static get observedAttributes() { return ['data-gbti-target-type', 'data-gbti-target-slug']; }
@@ -84,10 +97,10 @@ class GbtiDiscussion extends GbtiElement {
       const bodyHtml = (html && html.locked)
         ? `<div class="clocked">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>`
         : (typeof html === 'string' && html) ? `<div class="cbody">${html}</div>` : '';
-      return `<div class="comment${reply}">
+      return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
         <div class="cmeta"><span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}</div>
         ${bodyHtml}
-      </div>`;
+      </div></div>`;
     }).join('');
     const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
     this.set(this.css(CSS) + threadHtml + this._composeHtml(targetType, targetSlug));

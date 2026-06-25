@@ -251,9 +251,12 @@ class GbtiReader extends GbtiElement {
     const avUrl = e.avatar || githubAvatar(it.author);
     const ini = esc((name || '?').trim().charAt(0).toUpperCase() || '?');
     const note = e.headline ? `<p class="a-note">${esc(e.headline)}</p>` : '';
-    // Follow control: paid viewer -> toggle; self -> none; otherwise a membership prompt.
+    // Follow control: paid viewer -> toggle; self -> an Edit deep-link into the WorkBench; otherwise a prompt.
     let follow = '';
-    if (a.isSelf) follow = '';
+    // SOW-067 (decision 11): the author viewing their OWN post/product/prompt gets an Edit control that opens the
+    // WorkBench on that type tab (workspace.html is a sibling extension page; npm-CMS hosts ignore the dead link).
+    if (a.isSelf) follow = ['post', 'product', 'prompt'].includes(it.type)
+      ? `<a class="follow edit" href="workspace.html#tab=${esc(it.type)}">Edit in workspace</a>` : '';
     else if (a.canFollow) follow = `<button class="follow${a.following ? ' on' : ''}" data-follow type="button">${a.following ? 'Following' : 'Follow'}</button>`;
     else follow = `<a class="follow muted" href="${SITE}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
     // Social links (Discord shown as an inspectable handle chip).

@@ -3530,9 +3530,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var CSS16 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
-  .comment { border-left:2px solid var(--line); padding-left:10px; }
+  /* SOW-067: each comment leads with the commenter's GitHub avatar, then a content column. */
+  .comment { display:flex; gap:9px; border-left:2px solid var(--line); padding-left:10px; }
   .comment.reply { margin-left:16px; }
-  .cmeta { display:flex; align-items:baseline; gap:8px; font-size:12px; }
+  .comment .cav { flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:grid; place-items:center; color:var(--muted); font-size:10px; font-weight:700; margin-top:1px; }
+  .comment .cav img { width:100%; height:100%; object-fit:cover; }
+  .comment .cmain { min-width:0; flex:1; }
+  .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; }
   .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
   .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
   .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
@@ -3554,7 +3558,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
     return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
   }
+  var lc2 = (s) => String(s || "").toLowerCase();
   var authorName2 = (a) => a === "gbti" ? "GBTI Network" : a || "A member";
+  var ghLogin = (a) => lc2(a) === "gbti" || lc2(a) === "house" ? "gbti-network" : a;
+  var ghAvatar = (a) => a ? `https://github.com/${encodeURIComponent(ghLogin(a))}.png?size=48` : "";
+  function avatarHtml(author) {
+    const url = ghAvatar(author);
+    const ini = esc((authorName2(author) || "?").trim().charAt(0).toUpperCase() || "?");
+    return `<span class="cav">${url ? `<img src="${esc(url)}" alt="" loading="lazy">` : ini}</span>`;
+  }
   var GbtiDiscussion = class extends GbtiElement {
     static get observedAttributes() {
       return ["data-gbti-target-type", "data-gbti-target-slug"];
@@ -3615,10 +3627,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const reply = c.parentId ? " reply" : "";
         const badge = c.visibility === "members" ? `<span class="cbadge">Members</span>` : "";
         const bodyHtml = html && html.locked ? `<div class="clocked">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>` : typeof html === "string" && html ? `<div class="cbody">${html}</div>` : "";
-        return `<div class="comment${reply}">
+        return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
         <div class="cmeta"><span class="cname">${esc(authorName2(c.author))}</span><span class="cwhen">${esc(relTime2(c.createdAt))}</span>${badge}</div>
         ${bodyHtml}
-      </div>`;
+      </div></div>`;
       }).join("");
       const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
       this.set(this.css(CSS16) + threadHtml + this._composeHtml(targetType, targetSlug));
@@ -4747,8 +4759,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc7 = c | 32;
-      if (lc7 >= 97 && lc7 <= 102) return lc7 - 97 + 10;
+      const lc8 = c | 32;
+      if (lc8 >= 97 && lc8 <= 102) return lc8 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -6646,7 +6658,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var PAGE_SIZE = 10;
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
   var STEPS = ["discord", "follow", "topics"];
-  var lc2 = (s) => String(s || "").toLowerCase();
+  var lc3 = (s) => String(s || "").toLowerCase();
   var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
@@ -6716,7 +6728,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         s = await this.client?.status?.();
         this._membership = s?.membership ?? "unknown";
-        this._own = lc2(s?.identity?.username || s?.identity?.login);
+        this._own = lc3(s?.identity?.username || s?.identity?.login);
       } catch {
         this._membership = "unknown";
         this._own = "";
@@ -6738,7 +6750,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const r = await this.client?.getFollows?.();
         const list = Array.isArray(r) ? r : r?.following ?? [];
-        this._follows = new Set(list.map((e) => lc2(e?.username)).filter(Boolean));
+        this._follows = new Set(list.map((e) => lc3(e?.username)).filter(Boolean));
       } catch {
         this._follows = null;
       }
@@ -6899,7 +6911,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<div class="card"><h3>${megaIco} Follow members</h3>${note}<ul class="members">${rows}</ul>${pager}</div>`;
     }
     _row(m) {
-      const u = lc2(m.username);
+      const u = lc3(m.username);
       const followed = this._follows.has(u);
       const initial = esc((m.displayName || m.username || "?").trim().charAt(0).toUpperCase());
       const av = m.avatar ? `<span class="ini">${initial}</span><img src="${esc(m.avatar)}" alt="" />` : `<span class="ini">${initial}</span>`;
@@ -6911,7 +6923,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     </li>`;
     }
     async _toggleFollow(username) {
-      const u = lc2(username);
+      const u = lc3(username);
       if (!u || !this._follows) return;
       const was = this._follows.has(u);
       was ? this._follows.delete(u) : this._follows.add(u);
@@ -6919,7 +6931,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const r = await this.client.setFollow({ username: u, on: !was });
         const list = Array.isArray(r) ? r : r?.following ?? null;
-        if (list) this._follows = new Set(list.map((e) => lc2(e?.username)).filter(Boolean));
+        if (list) this._follows = new Set(list.map((e) => lc3(e?.username)).filter(Boolean));
       } catch {
         was ? this._follows.add(u) : this._follows.delete(u);
       }
@@ -7178,7 +7190,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-subscriptions.mjs
   var SITE7 = "https://gbti.network";
   var MEMBERSHIP = { paid: "Paid member", trial: "Trial", trialing: "Trial" };
-  var lc3 = (s) => String(s || "").toLowerCase();
+  var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
   var CSS25 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -7251,8 +7263,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         const [src, prefs] = await Promise.all([this.client.getNewsSources(), this.client.getPrefs()]);
         const sources = src?.sources || [];
-        const followed = new Set((prefs?.followedChannels || []).map(lc3));
-        this._channels = sources.filter((s) => followed.has(lc3(s.id))).map((s) => ({
+        const followed = new Set((prefs?.followedChannels || []).map(lc4));
+        this._channels = sources.filter((s) => followed.has(lc4(s.id))).map((s) => ({
           id: s.id,
           name: s.name || s.id,
           meta: s.category || s.description || ""
@@ -7360,8 +7372,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.render();
       try {
         const prefs = await this.client.setPrefs({ followChannel: { id, on: false } });
-        const followed = new Set((prefs?.followedChannels || []).map(lc3));
-        this._channels = (this._channels || []).filter((c) => followed.has(lc3(c.id)));
+        const followed = new Set((prefs?.followedChannels || []).map(lc4));
+        this._channels = (this._channels || []).filter((c) => followed.has(lc4(c.id)));
       } catch {
         await this._reloadChannels(false);
       }
@@ -8045,14 +8057,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
     // (post/product/prompt) need a per-item comment walk and defer to P4's server aggregator. Hard-bounded fan-out.
     async _replies(login) {
-      const lc7 = String(login).toLowerCase();
+      const lc8 = String(login).toLowerCase();
       const { items = [] } = await this.client.listShares() || {};
-      const mine = items.filter((s) => String(s.author).toLowerCase() === lc7).slice(0, MAX_OWN_SHARES);
+      const mine = items.filter((s) => String(s.author).toLowerCase() === lc8).slice(0, MAX_OWN_SHARES);
       const lists = await Promise.all(mine.map((s) => this._safe(async () => {
         const slug = s.author && s.id ? `${s.author}/${s.id}` : "";
         if (!slug) return [];
         const r = await this.client.listShareComments({ targetSlug: slug }) || {};
-        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc7).map((c) => ({
+        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc8).map((c) => ({
           id: `cmt:${c.path || `${slug}:${c.id || c.createdAt}`}`,
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
@@ -8222,7 +8234,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-news.mjs
   var SITE9 = "https://gbti.network";
   var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE9}/membership/">Become a member</a> to unlock the news feed.</div>`;
-  var lc4 = (s) => String(s ?? "").toLowerCase();
+  var lc5 = (s) => String(s ?? "").toLowerCase();
   function domainOf(url) {
     const s = String(url ?? "").trim();
     if (!s) return "";
@@ -8345,7 +8357,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const [{ sources }, prefs] = await Promise.all([this.client.getNewsSources(), this.client.getPrefs()]);
         this._sources = Array.isArray(sources) ? sources : [];
-        this._followed = new Set((prefs?.followedChannels || []).map(lc4));
+        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
         this._chanState = "ready";
       } catch (err) {
         this._chanState = err?.code === "membership-required" ? "locked" : err?.code === "not-authenticated" ? "signin" : "error";
@@ -8363,14 +8375,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.render();
     }
     async _toggleFollow(id, btn) {
-      const on = !this._followed.has(lc4(id));
+      const on = !this._followed.has(lc5(id));
       if (btn) {
         btn.disabled = true;
         btn.textContent = on ? "Following…" : "Unfollowing…";
       }
       try {
         const prefs = await this.client.setPrefs({ followChannel: { id, on } });
-        this._followed = new Set((prefs?.followedChannels || []).map(lc4));
+        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
       } catch {
       }
       this.render();
@@ -8492,12 +8504,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const followed = this._followed || /* @__PURE__ */ new Set();
       const rows = sources.map((s) => {
-        const on = followed.has(lc4(s.id));
+        const on = followed.has(lc5(s.id));
         const name = s.name || s.id;
         const domain = domainOf(s.url) || s.description || "";
         const count = s.count != null ? `${s.count} items` : "";
         const inline = [domain, count].filter(Boolean).join(" · ");
-        const showDesc = s.description && lc4(s.description) !== lc4(domain);
+        const showDesc = s.description && lc5(s.description) !== lc5(domain);
         const card = `<div class="hovercard" role="tooltip"><b class="hc-name">${esc(name)}</b>` + (domain ? `<span class="hc-dom">${esc(domain)}</span>` : "") + (showDesc ? `<p class="hc-desc">${esc(s.description)}</p>` : "") + (count ? `<span class="hc-n">${esc(count)}</span>` : "") + `</div>`;
         return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline ? `<span class="d">${esc(inline)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
       }).join("");
@@ -8508,7 +8520,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-news", GbtiNews);
 
   // client-ui/src/elements/gbti-news-reader.mjs
-  var lc5 = (s) => String(s ?? "").toLowerCase();
+  var lc6 = (s) => String(s ?? "").toLowerCase();
   var CSS29 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); max-width:760px; }
   .pub { display:flex; align-items:center; gap:12px; padding:0 0 16px; margin:0 0 16px; border-bottom:1px solid var(--line); }
@@ -8566,9 +8578,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this.client.getPrefs?.().catch(() => null)
         ]);
         this._canCurate = Boolean(status2?.canCurate);
-        const sid = lc5(item.source);
-        this._publisher = (srcs?.sources || []).find((s) => lc5(s.id) === sid || lc5(s.name) === sid) || null;
-        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
+        const sid = lc6(item.source);
+        this._publisher = (srcs?.sources || []).find((s) => lc6(s.id) === sid || lc6(s.name) === sid) || null;
+        this._followed = new Set((prefs?.followedChannels || []).map(lc6));
       } catch {
       }
       this.render();
@@ -8576,14 +8588,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _toggleFollow(btn) {
       const id = this._item?.source;
       if (!id || !this._followed) return;
-      const on = !this._followed.has(lc5(id));
+      const on = !this._followed.has(lc6(id));
       if (btn) {
         btn.disabled = true;
         btn.textContent = on ? "Following…" : "Unfollowing…";
       }
       try {
         const prefs = await this.client.setPrefs({ followChannel: { id, on } });
-        this._followed = new Set((prefs?.followedChannels || []).map(lc5));
+        this._followed = new Set((prefs?.followedChannels || []).map(lc6));
       } catch {
       }
       this.render();
@@ -8617,7 +8629,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const fav = faviconFor(it.link || it.openHref);
       const pub = this._publisher;
       const followable = Boolean(this.client?.setPrefs && it.source && this._followed);
-      const followed = followable && this._followed.has(lc5(it.source));
+      const followed = followable && this._followed.has(lc6(it.source));
       const meta = [pub?.description, pub?.count != null ? `${pub.count} items` : null].filter(Boolean).join(" · ");
       const open = it.openHref || (it.link ? utmLink(it.link) : "");
       const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
@@ -8663,13 +8675,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-reader.mjs
   var SITE10 = "https://gbti.network";
-  var lc6 = (s) => String(s || "").toLowerCase();
+  var lc7 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
-    const x = lc6(a);
+    const x = lc7(a);
     return !x || x === "gbti" || x === "house";
   };
   var authorName4 = (a) => isHouse(a) ? "GBTI Network" : a;
-  var githubLogin = (a) => lc6(a) === "gbti" || lc6(a) === "house" ? "gbti-network" : a;
+  var githubLogin = (a) => lc7(a) === "gbti" || lc7(a) === "house" ? "gbti-network" : a;
   var githubAvatar = (a) => a ? `https://github.com/${encodeURIComponent(githubLogin(a))}.png?size=96` : "";
   function targetSlugFor(it) {
     if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
@@ -8689,7 +8701,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var _directory = null;
   function loadDirectory() {
     if (_directory) return _directory;
-    _directory = fetch(`${SITE10}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => new Map((j.members || []).map((m) => [lc6(m.username), m]))).catch(() => /* @__PURE__ */ new Map());
+    _directory = fetch(`${SITE10}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => new Map((j.members || []).map((m) => [lc7(m.username), m]))).catch(() => /* @__PURE__ */ new Map());
     return _directory;
   }
   var SOCIALS = [
@@ -8817,21 +8829,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // Resolve the author drawer model: directory entry (avatar/name/headline/links), whether the viewer follows
     // them, and whether the viewer CAN follow (SOW-060: any signed-in member). House content yields a branded, non-followable card.
     async _resolveAuthor(it) {
-      const username = lc6(it.author);
+      const username = lc7(it.author);
       if (isHouse(username)) return { house: true };
       const [dir, status2] = await Promise.all([
         loadDirectory(),
         this.client.status ? this.client.status().catch(() => null) : Promise.resolve(null)
       ]);
       const entry = dir.get(username) || null;
-      const me = lc6(status2?.identity?.username || status2?.identity?.login);
+      const me = lc7(status2?.identity?.username || status2?.identity?.login);
       const canFollow = !!status2?.canFollow;
       let following = false;
       if (canFollow && this.client.getFollows) {
         try {
           const f = await this.client.getFollows();
           const list = Array.isArray(f) ? f : f?.following ?? [];
-          following = list.some((x) => lc6(x.username) === username);
+          following = list.some((x) => lc7(x.username) === username);
         } catch {
         }
       }
@@ -8876,7 +8888,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
       const note = e.headline ? `<p class="a-note">${esc(e.headline)}</p>` : "";
       let follow = "";
-      if (a.isSelf) follow = "";
+      if (a.isSelf) follow = ["post", "product", "prompt"].includes(it.type) ? `<a class="follow edit" href="workspace.html#tab=${esc(it.type)}">Edit in workspace</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
       else follow = `<a class="follow muted" href="${SITE10}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
