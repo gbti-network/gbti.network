@@ -34,6 +34,20 @@ test('mergeAll omits Shares for a non-member, includes them for a member', () =>
   assert.ok(member.some((x) => x.type === 'share'));
 });
 
+test('SOW-076: a PUBLIC share is visible to free/banned; a MEMBER share stays paid|trialing only', () => {
+  const items = [post('a', 100)];
+  const pub = share('p1', '2026-06-15T00:00:00Z', { visibility: 'public' });
+  const mem = share('m1', '2026-06-15T00:00:00Z', { visibility: 'members' });
+  const shareIds = (m) => mergeAll({ items, shares: [pub, mem], membership: m }).filter((x) => x.type === 'share').map((x) => x.id);
+  for (const m of ['none', 'expired', 'cancelled', 'banned']) {
+    assert.deepEqual(shareIds(m), ['p1'], `${m} sees only the public share`);
+  }
+  assert.deepEqual(shareIds('paid').sort(), ['m1', 'p1']); // paid sees both
+  assert.deepEqual(shareIds('trialing').sort(), ['m1', 'p1']); // trial sees both
+  // Fail-closed: a share with no explicit visibility (defaults to members in shareSummary) is NOT public.
+  assert.deepEqual(mergeAll({ items, shares: [share('x', '2026-06-15T00:00:00Z')], membership: 'none' }).filter((x) => x.type === 'share'), []);
+});
+
 test('mergeAll sorts newest-first across publishedAt (ms) and createdAt (ISO)', () => {
   const items = [post('old', Date.parse('2026-01-01T00:00:00Z')), post('new', Date.parse('2026-06-16T00:00:00Z'))];
   const shares = [share('mid', '2026-03-01T00:00:00Z')];

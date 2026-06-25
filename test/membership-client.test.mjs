@@ -146,18 +146,24 @@ test('getStatus surfaces membership + canPublish for the UI notice', () => {
   assert.equal(paid.canPublish, true);
 });
 
-// SOW-060: the FREE-tier perks (browse / news / save / follow) need only a signed-in identity, not paid. Every
-// known signed-in status qualifies; only 'banned' and the unresolved 'unknown' are excluded. canPublish stays paid.
-test('free-tier predicates: every known signed-in status may browse/news/save/follow; banned + unknown may not', () => {
+// SOW-060 + SOW-076: every known signed-in status (not banned) gets all the free perks. A BANNED account keeps the
+// READ perk that needs no KV (browse: a static feed) but loses the KV "basket" (save/collect/follow) AND, for now,
+// the gated news endpoint (canSeeNews opens to banned in Phase 2 with the Worker read-gate). canPublish stays paid.
+test('free-tier predicates: known signed-in statuses get all perks; banned keeps browse but not the KV basket', () => {
   for (const m of ['paid', 'trialing', 'expired', 'cancelled', 'none']) {
     assert.equal(canSeeNews(m), true, `${m} sees news`);
     assert.equal(canFollow(m), true, `${m} follows`);
     assert.equal(canSave(m), true, `${m} saves`);
     assert.equal(canBrowse(m), true, `${m} browses`);
   }
-  for (const m of ['banned', 'unknown', undefined, null, '']) {
-    assert.equal(canSeeNews(m), false, `${m} sees no news`);
-    assert.equal(canFollow(m), false, `${m} does not follow`);
+  // SOW-076: a banned (community-banned) account stays a read-only user.
+  assert.equal(canBrowse('banned'), true, 'banned may browse (static feed, no KV)');
+  assert.equal(canSave('banned'), false, 'banned has no KV basket (save)');
+  assert.equal(canFollow('banned'), false, 'banned has no KV basket (follow)');
+  assert.equal(canSeeNews('banned'), false, 'banned: news gated until the Phase 2 read-gate');
+  for (const m of ['unknown', undefined, null, '']) {
+    assert.equal(canBrowse(m), false, `${m} browses nothing`);
+    assert.equal(canSave(m), false, `${m} no KV`);
   }
 });
 

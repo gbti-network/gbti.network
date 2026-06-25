@@ -7,10 +7,11 @@
 // open-in-place vs a deep-link href — but NOT in this policy, this share projection, or this sort. Pure +
 // node-testable (no DOM, no client). The body/discussion engine stays in gbti-reader / gbti-shares-feed.
 
-// A member who is paid or trialing can read Shares — the exact effectiveMembership vocabulary from membership.mjs
-// (ban > staff > grandfather > Stripe; a grandfather grant resolves to 'paid'). Every other value —
-// expired/cancelled/none/banned or an unknown/unset status — is fail-closed to no Shares, matching the SOW's
-// "omit Shares unless paid or trialing" and a Locked/unknown account showing none.
+// MEMBER-only shares (the default; visibility:'members') are readable only by paid or trialing — the exact
+// effectiveMembership vocabulary from membership.mjs (ban > staff > grandfather > Stripe; a grandfather grant
+// resolves to 'paid'). Every other value (expired/cancelled/none/banned/unknown) is fail-closed to no MEMBER shares.
+// SOW-076: PUBLIC shares (visibility:'public') are a separate, public content type (see mergeAll) visible to any
+// reader; only the members-only stream stays gated here.
 const SHARE_OK = new Set(['paid', 'trialing']);
 
 export function canSeeShares(membership) {
@@ -51,8 +52,14 @@ export function shareToItem(it) {
  *  Returns a fresh array (does not mutate `items`). */
 export function mergeAll({ items = [], shares = null, membership = 'unknown' } = {}) {
   const out = Array.isArray(items) ? items.slice() : [];
-  if (canSeeShares(membership) && Array.isArray(shares)) {
-    for (const s of shares) out.push(shareToItem(s));
+  if (Array.isArray(shares)) {
+    // SOW-076: a PUBLIC share (visibility:'public') is visible to any reader (incl. a community-banned account);
+    // a MEMBER share (the default) stays paid|trialing. Fail-closed: anything not explicitly 'public' is gated.
+    const memberOk = canSeeShares(membership);
+    for (const s of shares) {
+      const isPublic = String(s.visibility || 'members').toLowerCase() === 'public';
+      if (isPublic || memberOk) out.push(shareToItem(s));
+    }
   }
   return out.sort((a, b) => toMs(b.createdAt ?? b.publishedAt) - toMs(a.createdAt ?? a.publishedAt));
 }

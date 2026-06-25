@@ -2984,8 +2984,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function mergeAll({ items = [], shares = null, membership = "unknown" } = {}) {
     const out = Array.isArray(items) ? items.slice() : [];
-    if (canSeeShares(membership) && Array.isArray(shares)) {
-      for (const s of shares) out.push(shareToItem(s));
+    if (Array.isArray(shares)) {
+      const memberOk = canSeeShares(membership);
+      for (const s of shares) {
+        const isPublic = String(s.visibility || "members").toLowerCase() === "public";
+        if (isPublic || memberOk) out.push(shareToItem(s));
+      }
     }
     return out.sort((a, b) => toMs(b.createdAt ?? b.publishedAt) - toMs(a.createdAt ?? a.publishedAt));
   }

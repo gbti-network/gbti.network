@@ -18091,7 +18091,11 @@ function effectiveMembership({ githubId, stripeStatus = "unknown", roles = /* @_
 function canPublish(membership) {
   return membership === "paid";
 }
+var READ_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none", "banned"]);
 var FREE_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none"]);
+function canBrowse(membership) {
+  return READ_TIER.has(membership);
+}
 function canSeeNews(membership) {
   return FREE_TIER.has(membership);
 }
@@ -18099,9 +18103,6 @@ function canFollow(membership) {
   return FREE_TIER.has(membership);
 }
 function canSave(membership) {
-  return FREE_TIER.has(membership);
-}
-function canBrowse(membership) {
   return FREE_TIER.has(membership);
 }
 function isBlockedFromPublishing(membership) {
