@@ -48,3 +48,60 @@ export function shouldShowSplash(decision, now = Date.now(), windowMs = DEFAULT_
 export function splashDestHash(dest) {
   return dest === 'news' ? '#type=news' : '#type=all';
 }
+
+// SOW-074: the user-uploaded splash background. The member uploads an image and picks how it decorates the splash:
+// 'off' (none), 'content' (behind the splash cards, in-column), or 'full' (a full-viewport overlay). Full mode adds
+// an opacity control + a pattern overlay (the GBTI ASCII artwork is the hero, with the image bleeding through). These
+// are PURE normalizers + the ASCII art constant; the DOM wiring lives in the extension (newtab.mjs / account.mjs).
+
+const BG_MODES = new Set(['off', 'content', 'full']);
+const BG_PATTERNS = new Set(['none', 'ascii', 'dots', 'scanlines']);
+
+/** Normalize a stored bg mode to one of off|content|full (default off on anything unknown). */
+export function normalizeBgMode(raw) {
+  const m = String(raw || '').toLowerCase();
+  return BG_MODES.has(m) ? m : 'off';
+}
+
+/** The CSS class the splash element gets for a bg mode (empty for off / unknown -> the plain SOW-063 splash). */
+export function splashBgClass(mode) {
+  return mode === 'content' ? 'bg-content' : mode === 'full' ? 'bg-full' : '';
+}
+
+/** Normalize the full-mode overlay opacity to an integer 0..100 (default 55 on an absent/non-numeric value). An
+ *  absent stored pref (null / undefined / '') falls back; a real '0' is honored. */
+export function normalizeBgOpacity(raw, fallback = 55) {
+  if (raw === null || raw === undefined || raw === '') return fallback;
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(0, n));
+}
+
+/** Normalize a stored full-mode pattern to one of none|ascii|dots|scanlines (default none). */
+export function normalizeBgPattern(raw) {
+  const p = String(raw || '').toLowerCase();
+  return BG_PATTERNS.has(p) ? p : 'none';
+}
+
+/** Fit (w,h) so the LONGEST side is at most `max`, preserving aspect ratio; never UP-scales. Returns rounded
+ *  integers, or {w:0,h:0} on a non-positive input. Used to downscale an uploaded image before storing it. */
+export function fitDimensions(w, h, max) {
+  w = Number(w); h = Number(h); max = Number(max);
+  if (!(w > 0) || !(h > 0) || !(max > 0)) return { w: 0, h: 0 };
+  const longest = Math.max(w, h);
+  if (longest <= max) return { w: Math.round(w), h: Math.round(h) };
+  const scale = max / longest;
+  return { w: Math.round(w * scale), h: Math.round(h * scale) };
+}
+
+/** The "GBTI NETWORK" ASCII artwork (the hero full-mode pattern). Rendered in a <pre> over the image with a CSS
+ *  blend mode so the image bleeds through the characters. Decorative; kept compact so it ships in the bundle. */
+export const GBTI_ASCII = [
+  '  ____ ____ _____ ___ ',
+  ' / ___| __ )_   _|_ _|',
+  '| |  _|  _ \\ | |  | | ',
+  '| |_| | |_) || |  | | ',
+  ' \\____|____/ |_| |___|',
+  '                      ',
+  '  N  E  T  W  O  R  K  ',
+].join('\n');

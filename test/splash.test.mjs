@@ -2,7 +2,7 @@
 // decision, and the dest->hash mapping. No DOM, no chrome, like the feed-route tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BUNDLED_QUOTES, enabledQuotes, pickQuote, shouldShowSplash, splashDestHash } from '../client-ui/src/splash.mjs';
+import { BUNDLED_QUOTES, enabledQuotes, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, splashBgClass, normalizeBgOpacity, normalizeBgPattern, fitDimensions, GBTI_ASCII } from '../client-ui/src/splash.mjs';
 
 const TWELVE_H = 12 * 60 * 60 * 1000;
 
@@ -59,4 +59,47 @@ test('splashDestHash maps the card destinations to the feed hash vocabulary', ()
   assert.equal(splashDestHash('activity'), '#type=all');
   assert.equal(splashDestHash('news'), '#type=news');
   assert.equal(splashDestHash('anything-else'), '#type=all');
+});
+
+// SOW-074: the user-uploaded splash-background normalizers + the ASCII art constant.
+test('normalizeBgMode accepts off/content/full and defaults unknown to off', () => {
+  for (const m of ['off', 'content', 'full']) assert.equal(normalizeBgMode(m), m);
+  assert.equal(normalizeBgMode('FULL'), 'full');
+  for (const bad of ['', 'wallpaper', null, undefined, 5]) assert.equal(normalizeBgMode(bad), 'off');
+});
+
+test('splashBgClass maps the mode to the splash CSS class', () => {
+  assert.equal(splashBgClass('content'), 'bg-content');
+  assert.equal(splashBgClass('full'), 'bg-full');
+  assert.equal(splashBgClass('off'), '');
+  assert.equal(splashBgClass('nope'), '');
+});
+
+test('normalizeBgOpacity clamps to 0..100 and falls back on non-numeric input', () => {
+  assert.equal(normalizeBgOpacity(55), 55);
+  assert.equal(normalizeBgOpacity('70'), 70);
+  assert.equal(normalizeBgOpacity(-10), 0);
+  assert.equal(normalizeBgOpacity(140), 100);
+  assert.equal(normalizeBgOpacity(33.6), 34); // rounds
+  assert.equal(normalizeBgOpacity('abc'), 55); // default
+  assert.equal(normalizeBgOpacity(null, 40), 40); // custom fallback
+});
+
+test('normalizeBgPattern accepts the set and defaults unknown to none', () => {
+  for (const p of ['none', 'ascii', 'dots', 'scanlines']) assert.equal(normalizeBgPattern(p), p);
+  assert.equal(normalizeBgPattern('ASCII'), 'ascii');
+  for (const bad of ['', 'plaid', null, undefined]) assert.equal(normalizeBgPattern(bad), 'none');
+});
+
+test('fitDimensions caps the longest side, preserves aspect, never up-scales, guards bad input', () => {
+  assert.deepEqual(fitDimensions(3200, 1600, 1600), { w: 1600, h: 800 }); // landscape capped on width
+  assert.deepEqual(fitDimensions(1000, 4000, 1600), { w: 400, h: 1600 }); // portrait capped on height
+  assert.deepEqual(fitDimensions(800, 600, 1600), { w: 800, h: 600 }); // already small -> unchanged (no up-scale)
+  assert.deepEqual(fitDimensions(0, 600, 1600), { w: 0, h: 0 }); // bad input
+  assert.deepEqual(fitDimensions(100, 100, 0), { w: 0, h: 0 }); // bad max
+});
+
+test('GBTI_ASCII is a non-trivial multi-line art constant', () => {
+  assert.equal(typeof GBTI_ASCII, 'string');
+  assert.ok(GBTI_ASCII.split('\n').length >= 5);
 });

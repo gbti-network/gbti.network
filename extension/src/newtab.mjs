@@ -5,7 +5,7 @@
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
 import { isLockedMembership, canSeeNews } from '../../client/src/membership.mjs'; // SOW-060: news is a free-tier (signed-in) perk
-import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash } from '../../client-ui/src/splash.mjs'; // SOW-063: the landing splash core
+import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashBgClass, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
 import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
@@ -189,6 +189,7 @@ function showSplash() {
   sv.hidden = false;
   document.documentElement.setAttribute('data-splash', '1');
   renderSplashQuote();
+  applySplashBg(); // SOW-074: apply the uploaded background (no-op until the image is read; off -> plain splash)
   window.scrollTo(0, 0);
 }
 function hideSplash() {
@@ -224,6 +225,45 @@ async function loadQuotes() {
     const quotes = Array.isArray(data?.quotes) ? data.quotes : null;
     if (quotes && quotes.length) { QUOTES = quotes; writeQuotesCache(quotes); reRenderQuoteIfVisible(); }
   } catch { /* keep the cache / the bundled fallback */ }
+}
+
+// SOW-074: the user-uploaded splash background. Mode / opacity / pattern are SYNC localStorage prefs; the (downscaled)
+// image is ASYNC in chrome.storage.local. The bg is applied to the splash element when it is shown; the image fills
+// in once read (a brief fade). Off / no image -> the plain SOW-063 splash. Content + full are the placement modes;
+// opacity + the pattern overlay (incl. the GBTI ASCII art, image bleeding through) are full-mode only.
+const SPLASH_BG_IMAGE_KEY = 'gbti:splash-bg-image';
+let SPLASH_BG_IMG = null; // the image data URL once read (null = none / not yet read)
+const lsItem = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+
+function applySplashBg() {
+  const el = $('[data-splashview]');
+  if (!el) return;
+  el.classList.remove('bg-content', 'bg-full');
+  el.style.removeProperty('--splash-bg');
+  el.style.removeProperty('--splash-bg-dim');
+  const pat = $('[data-splash-pattern]');
+  if (pat) { pat.className = 'splash-pattern'; pat.replaceChildren(); }
+
+  const mode = normalizeBgMode(lsItem('gbti-splash-bg-mode'));
+  if (mode === 'off' || !SPLASH_BG_IMG) return; // off, or no image yet -> the plain splash
+  el.style.setProperty('--splash-bg', `url("${SPLASH_BG_IMG}")`);
+  const cls = splashBgClass(mode);
+  if (cls) el.classList.add(cls);
+  if (mode === 'full') {
+    const dim = (100 - normalizeBgOpacity(lsItem('gbti-splash-bg-opacity'))) / 100; // higher opacity = brighter image
+    el.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);
+    const pattern = normalizeBgPattern(lsItem('gbti-splash-bg-pattern'));
+    if (pat && pattern !== 'none') {
+      pat.classList.add(`p-${pattern}`);
+      if (pattern === 'ascii') { const pre = document.createElement('pre'); pre.textContent = GBTI_ASCII; pat.appendChild(pre); }
+    }
+  }
+}
+
+async function loadSplashBg() {
+  try { const r = await chrome.storage?.local?.get?.(SPLASH_BG_IMAGE_KEY); SPLASH_BG_IMG = r?.[SPLASH_BG_IMAGE_KEY] || null; }
+  catch { SPLASH_BG_IMG = null; }
+  if (!$('[data-splashview]')?.hidden) applySplashBg(); // re-apply if the splash is already up (the image just landed)
 }
 
 /** Reflect the active view mode onto the switcher buttons. */
@@ -471,6 +511,7 @@ function init() {
     location.hash = splashDestHash(dest);
   }));
   loadQuotes(); // SOW-063 P2: hydrate + refresh the git-native quote pool (the splash shows a bundled quote until it lands)
+  loadSplashBg(); // SOW-074: read the uploaded splash background (applied when the splash is shown)
   if (wantSplash) showSplash();
 
   // The rail's Browse shortcuts (newtab.html#type=<X>) switch the filter when clicked while already on the feed; a

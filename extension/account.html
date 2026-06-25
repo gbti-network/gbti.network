@@ -18,6 +18,16 @@
     /* SOW-063: the new-tab splash recurrence control */
     .splash-set { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--fg); }
     .splash-set select { font-family: var(--f-sans); font-size: 14px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); cursor: pointer; }
+    /* SOW-074: the splash background image + modes */
+    .splash-bg { display: flex; flex-direction: column; gap: 16px; }
+    .bg-image-ctrls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .bg-upload-btn, .bg-remove { font-family: var(--f-sans); font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: var(--r); cursor: pointer; border: 1.5px solid var(--line); background: var(--paper); color: var(--fg); }
+    .bg-upload-btn:hover, .bg-remove:hover { border-color: var(--green); color: var(--green-700); }
+    [data-bg-preview] { max-width: 260px; max-height: 146px; border-radius: var(--r); border: 1.5px solid var(--line); object-fit: cover; display: block; margin-bottom: 10px; }
+    .bg-note { font-size: 12.5px; color: var(--fg-mute); margin: 8px 0 0; min-height: 16px; }
+    .bg-full-ctrls { display: flex; flex-direction: column; gap: 12px; padding-top: 4px; border-top: 1.5px solid var(--line); margin-top: 2px; }
+    .bg-full-ctrls input[type=range] { flex: 1; max-width: 240px; accent-color: var(--green); }
+    .bg-full-ctrls output { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); min-width: 40px; }
   </style>
 </head>
 <body>
@@ -48,6 +58,49 @@
             <option value="120">2 hours</option>
           </select>
         </label>
+      </section>
+      <!-- SOW-074: the new-tab splash background image + modes. Wired in account.mjs (CSP forbids inline scripts).
+           A per-device preference: the small settings live in localStorage, the downscaled image in chrome.storage. -->
+      <section style="max-width:720px;margin:30px auto 0">
+        <h2 class="hub-h" style="font-size:18px">New-tab splash background</h2>
+        <p class="hub-sub" style="margin:4px 0 14px">Upload an image to decorate the new-tab splash. It can sit behind the splash cards, fill the whole tab, or stay off. Stored on this device only.</p>
+        <div class="splash-bg">
+          <label class="splash-set">
+            <span>Background</span>
+            <select data-bg-mode aria-label="Splash background mode">
+              <option value="off">Off</option>
+              <option value="content">Behind the splash cards</option>
+              <option value="full">Full screen</option>
+            </select>
+          </label>
+          <div class="bg-image">
+            <img data-bg-preview alt="Splash background preview" hidden />
+            <div class="bg-image-ctrls">
+              <label class="bg-upload">
+                <input type="file" data-bg-file accept="image/*" hidden />
+                <span class="bg-upload-btn">Choose image</span>
+              </label>
+              <button type="button" class="bg-remove" data-bg-remove hidden>Remove image</button>
+            </div>
+            <p class="bg-note" data-bg-note></p>
+          </div>
+          <div class="bg-full-ctrls" data-bg-full-ctrls hidden>
+            <label class="splash-set">
+              <span>Image opacity</span>
+              <input type="range" min="0" max="100" step="5" data-bg-opacity aria-label="Splash background opacity" />
+              <output data-bg-opacity-out></output>
+            </label>
+            <label class="splash-set">
+              <span>Pattern overlay</span>
+              <select data-bg-pattern aria-label="Splash background pattern">
+                <option value="none">None</option>
+                <option value="ascii">GBTI ASCII</option>
+                <option value="dots">Dots</option>
+                <option value="scanlines">Scanlines</option>
+              </select>
+            </label>
+          </div>
+        </div>
       </section>
     </main>
   </div>

@@ -76,6 +76,33 @@
     .splash-quote blockquote { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: 20px; line-height: 1.5; color: var(--fg); }
     .splash-quote figcaption { margin-top: 12px; font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); }
     .splash-quote figcaption::before { content: "— "; }
+
+    /* SOW-074: the user-uploaded splash background. The image (--splash-bg) + a dim layer (--splash-bg-dim, fixed in
+       content mode, opacity-slider-driven in full mode) sit behind the cards + quote; full mode adds a pattern layer
+       the image bleeds through. CSS vars are set by newtab.mjs from the member's settings. */
+    .splash-pattern { display: none; }
+    .nt-splash.bg-content, .nt-splash.bg-full {
+      background-image: linear-gradient(var(--splash-bg-dim, rgba(0,0,0,.5)), var(--splash-bg-dim, rgba(0,0,0,.5))), var(--splash-bg);
+      background-size: cover; background-position: center;
+    }
+    .nt-splash.bg-content { border-radius: var(--r-lg); padding: 44px 28px; }
+    .nt-splash.bg-content .splash-quote blockquote { color: #fff; }
+    .nt-splash.bg-content .splash-quote figcaption { color: rgba(255,255,255,.82); }
+    /* Full screen: a fixed full-viewport overlay over the app, BELOW the SOW-018 lock (z-200) + SOW-048 auth (z-250)
+       so those still win; data-unauth still hides it (the .nt-main ancestor is display:none). */
+    .nt-splash.bg-full { position: fixed; inset: 0; z-index: 150; margin: 0; min-height: 100vh; }
+    .nt-splash.bg-full > .splash-cards, .nt-splash.bg-full > .splash-quote { position: relative; z-index: 1; }
+    .nt-splash.bg-full .splash-card { background: rgba(22,20,27,.72); border-color: rgba(255,255,255,.16); color: #fff; }
+    .nt-splash.bg-full .splash-card .sc-s { color: rgba(255,255,255,.72); }
+    .nt-splash.bg-full .splash-card:hover { border-color: var(--green); }
+    .nt-splash.bg-full .splash-quote blockquote { color: #fff; }
+    .nt-splash.bg-full .splash-quote figcaption { color: rgba(255,255,255,.82); }
+    /* the pattern overlay (full mode only) — a layer over the image, under the content; the image bleeds through. */
+    .nt-splash.bg-full .splash-pattern { display: block; position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+    .splash-pattern.p-ascii { display: flex; align-items: center; justify-content: center; }
+    .splash-pattern.p-ascii pre { margin: 0; font-family: var(--f-mono, monospace); font-weight: 700; font-size: clamp(11px, 2.6vw, 30px); line-height: 1.04; letter-spacing: 2px; color: #fff; white-space: pre; mix-blend-mode: overlay; opacity: .9; }
+    .splash-pattern.p-dots { background-image: radial-gradient(rgba(255,255,255,.20) 1.5px, transparent 1.7px); background-size: 22px 22px; }
+    .splash-pattern.p-scanlines { background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.11) 0 1px, transparent 1px 4px); }
     /* The feed rows/cards render inside <gbti-card-list> (SOW-042), whose styles are shadow-encapsulated; the
        per-mode + atom CSS that used to live here moved into client-ui/src/elements/gbti-card-list.mjs. */
 
@@ -143,6 +170,8 @@
            rotating quote; a sibling of the feed/reader views, toggled by the same hidden-attribute switch. The
            [data-ico] glyphs are filled by initShell. -->
       <div class="nt-splash" data-splashview hidden>
+        <!-- SOW-074: the full-mode pattern overlay (configured by newtab.mjs; the image bleeds through it). -->
+        <div class="splash-pattern" data-splash-pattern aria-hidden="true"></div>
         <div class="splash-cards">
           <button class="splash-card" type="button" data-splash-go="activity">
             <span class="sc-ico" data-ico="activity"></span>

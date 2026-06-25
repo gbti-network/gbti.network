@@ -2409,6 +2409,34 @@
   function splashDestHash(dest) {
     return dest === "news" ? "#type=news" : "#type=all";
   }
+  var BG_MODES = /* @__PURE__ */ new Set(["off", "content", "full"]);
+  var BG_PATTERNS = /* @__PURE__ */ new Set(["none", "ascii", "dots", "scanlines"]);
+  function normalizeBgMode(raw) {
+    const m = String(raw || "").toLowerCase();
+    return BG_MODES.has(m) ? m : "off";
+  }
+  function splashBgClass(mode) {
+    return mode === "content" ? "bg-content" : mode === "full" ? "bg-full" : "";
+  }
+  function normalizeBgOpacity(raw, fallback = 55) {
+    if (raw === null || raw === void 0 || raw === "") return fallback;
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(100, Math.max(0, n));
+  }
+  function normalizeBgPattern(raw) {
+    const p = String(raw || "").toLowerCase();
+    return BG_PATTERNS.has(p) ? p : "none";
+  }
+  var GBTI_ASCII = [
+    "  ____ ____ _____ ___ ",
+    " / ___| __ )_   _|_ _|",
+    "| |  _|  _ \\ | |  | | ",
+    "| |_| | |_) || |  | | ",
+    " \\____|____/ |_| |___|",
+    "                      ",
+    "  N  E  T  W  O  R  K  "
+  ].join("\n");
 
   // client-ui/src/all-merge.mjs
   var SHARE_OK = /* @__PURE__ */ new Set(["paid", "trialing"]);
@@ -10110,6 +10138,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     sv.hidden = false;
     document.documentElement.setAttribute("data-splash", "1");
     renderSplashQuote();
+    applySplashBg();
     window.scrollTo(0, 0);
   }
   function hideSplash() {
@@ -10162,6 +10191,54 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     } catch {
     }
+  }
+  var SPLASH_BG_IMAGE_KEY = "gbti:splash-bg-image";
+  var SPLASH_BG_IMG = null;
+  var lsItem = (k) => {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  };
+  function applySplashBg() {
+    const el = $("[data-splashview]");
+    if (!el) return;
+    el.classList.remove("bg-content", "bg-full");
+    el.style.removeProperty("--splash-bg");
+    el.style.removeProperty("--splash-bg-dim");
+    const pat = $("[data-splash-pattern]");
+    if (pat) {
+      pat.className = "splash-pattern";
+      pat.replaceChildren();
+    }
+    const mode = normalizeBgMode(lsItem("gbti-splash-bg-mode"));
+    if (mode === "off" || !SPLASH_BG_IMG) return;
+    el.style.setProperty("--splash-bg", `url("${SPLASH_BG_IMG}")`);
+    const cls = splashBgClass(mode);
+    if (cls) el.classList.add(cls);
+    if (mode === "full") {
+      const dim = (100 - normalizeBgOpacity(lsItem("gbti-splash-bg-opacity"))) / 100;
+      el.style.setProperty("--splash-bg-dim", `rgba(0,0,0,${dim.toFixed(2)})`);
+      const pattern = normalizeBgPattern(lsItem("gbti-splash-bg-pattern"));
+      if (pat && pattern !== "none") {
+        pat.classList.add(`p-${pattern}`);
+        if (pattern === "ascii") {
+          const pre = document.createElement("pre");
+          pre.textContent = GBTI_ASCII;
+          pat.appendChild(pre);
+        }
+      }
+    }
+  }
+  async function loadSplashBg() {
+    try {
+      const r = await chrome.storage?.local?.get?.(SPLASH_BG_IMAGE_KEY);
+      SPLASH_BG_IMG = r?.[SPLASH_BG_IMAGE_KEY] || null;
+    } catch {
+      SPLASH_BG_IMG = null;
+    }
+    if (!$("[data-splashview]")?.hidden) applySplashBg();
   }
   function syncModeButtons() {
     document.querySelectorAll(".nt-mode").forEach((b) => b.classList.toggle("on", b.dataset.mode === MODE));
@@ -10385,6 +10462,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       location.hash = splashDestHash(dest);
     }));
     loadQuotes();
+    loadSplashBg();
     if (wantSplash) showSplash();
     window.addEventListener("hashchange", () => {
       const h = hashStr();

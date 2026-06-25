@@ -9908,6 +9908,45 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return { ico, loadShellAccount: () => loadShellAccount(root) };
   }
 
+  // client-ui/src/splash.mjs
+  var TWELVE_HOURS_MS = 12 * 60 * 60 * 1e3;
+  var DEFAULT_WINDOW_MS = 30 * 60 * 1e3;
+  var BG_MODES = /* @__PURE__ */ new Set(["off", "content", "full"]);
+  var BG_PATTERNS = /* @__PURE__ */ new Set(["none", "ascii", "dots", "scanlines"]);
+  function normalizeBgMode(raw) {
+    const m = String(raw || "").toLowerCase();
+    return BG_MODES.has(m) ? m : "off";
+  }
+  function normalizeBgOpacity(raw, fallback = 55) {
+    if (raw === null || raw === void 0 || raw === "") return fallback;
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(100, Math.max(0, n));
+  }
+  function normalizeBgPattern(raw) {
+    const p = String(raw || "").toLowerCase();
+    return BG_PATTERNS.has(p) ? p : "none";
+  }
+  function fitDimensions(w, h, max) {
+    w = Number(w);
+    h = Number(h);
+    max = Number(max);
+    if (!(w > 0) || !(h > 0) || !(max > 0)) return { w: 0, h: 0 };
+    const longest = Math.max(w, h);
+    if (longest <= max) return { w: Math.round(w), h: Math.round(h) };
+    const scale = max / longest;
+    return { w: Math.round(w * scale), h: Math.round(h * scale) };
+  }
+  var GBTI_ASCII = [
+    "  ____ ____ _____ ___ ",
+    " / ___| __ )_   _|_ _|",
+    "| |  _|  _ \\ | |  | | ",
+    "| |_| | |_) || |  | | ",
+    " \\____|____/ |_| |___|",
+    "                      ",
+    "  N  E  T  W  O  R  K  "
+  ].join("\n");
+
   // extension/src/account.mjs
   mountPageClient();
   initShell({ active: "settings", nav: "workbench" });
@@ -9931,6 +9970,116 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         localStorage.setItem(SPLASH_WINDOW_KEY, splashSel.value);
       } catch (e) {
       }
+    });
+  }
+  var BG_MODE_KEY = "gbti-splash-bg-mode";
+  var BG_OPACITY_KEY = "gbti-splash-bg-opacity";
+  var BG_PATTERN_KEY = "gbti-splash-bg-pattern";
+  var BG_IMAGE_KEY = "gbti:splash-bg-image";
+  var BG_MAX_SIDE = 1600;
+  var lsGet = (k) => {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  };
+  var lsSet = (k, v) => {
+    try {
+      localStorage.setItem(k, v);
+    } catch {
+    }
+  };
+  function downscaleImage(file, maxSide) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("read failed"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("decode failed"));
+        img.onload = () => {
+          const { w, h } = fitDimensions(img.naturalWidth, img.naturalHeight, maxSide);
+          if (!w || !h) {
+            reject(new Error("bad image"));
+            return;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  var bgMode = document.querySelector("[data-bg-mode]");
+  if (bgMode) {
+    const fullCtrls = document.querySelector("[data-bg-full-ctrls]");
+    const fileInput = document.querySelector("[data-bg-file]");
+    const preview = document.querySelector("[data-bg-preview]");
+    const removeBtn = document.querySelector("[data-bg-remove]");
+    const note = document.querySelector("[data-bg-note]");
+    const opacity = document.querySelector("[data-bg-opacity]");
+    const opacityOut = document.querySelector("[data-bg-opacity-out]");
+    const pattern = document.querySelector("[data-bg-pattern]");
+    bgMode.value = normalizeBgMode(lsGet(BG_MODE_KEY));
+    if (opacity) opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY)));
+    if (opacityOut && opacity) opacityOut.textContent = `${opacity.value}%`;
+    if (pattern) pattern.value = normalizeBgPattern(lsGet(BG_PATTERN_KEY));
+    const syncFullCtrls = () => {
+      if (fullCtrls) fullCtrls.hidden = bgMode.value !== "full";
+    };
+    syncFullCtrls();
+    const showImage = (dataUrl) => {
+      if (preview) {
+        if (dataUrl) {
+          preview.src = dataUrl;
+          preview.hidden = false;
+        } else {
+          preview.removeAttribute("src");
+          preview.hidden = true;
+        }
+      }
+      if (removeBtn) removeBtn.hidden = !dataUrl;
+    };
+    try {
+      chrome.storage?.local?.get?.(BG_IMAGE_KEY, (o) => showImage(o?.[BG_IMAGE_KEY] || null));
+    } catch {
+    }
+    bgMode.addEventListener("change", () => {
+      lsSet(BG_MODE_KEY, normalizeBgMode(bgMode.value));
+      syncFullCtrls();
+    });
+    opacity?.addEventListener("input", () => {
+      const v = String(normalizeBgOpacity(opacity.value));
+      if (opacityOut) opacityOut.textContent = `${v}%`;
+      lsSet(BG_OPACITY_KEY, v);
+    });
+    pattern?.addEventListener("change", () => lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value)));
+    removeBtn?.addEventListener("click", () => {
+      try {
+        chrome.storage?.local?.remove?.(BG_IMAGE_KEY);
+      } catch {
+      }
+      showImage(null);
+      if (note) note.textContent = "Image removed.";
+    });
+    fileInput?.addEventListener("change", async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      if (note) note.textContent = "Processing the image...";
+      try {
+        const dataUrl = await downscaleImage(file, BG_MAX_SIDE);
+        chrome.storage?.local?.set?.({ [BG_IMAGE_KEY]: dataUrl }, () => {
+        });
+        showImage(dataUrl);
+        if (note) note.textContent = `Saved (${Math.round(dataUrl.length / 1024)} KB). Open a new tab to see it.`;
+      } catch (e) {
+        if (note) note.textContent = "Could not read that image. Try a JPG or PNG.";
+      }
+      fileInput.value = "";
     });
   }
 })();
