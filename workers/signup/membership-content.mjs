@@ -80,7 +80,7 @@ export async function authorizePaid(request, env, deps = {}) {
   if (r.status !== 'paid') {
     return deny(r.status === 'banned' ? 'this account is not permitted' : 'an active paid membership is required');
   }
-  return { ok: true, githubId: r.githubId, login: r.login, source: r.source };
+  return { ok: true, githubId: r.githubId, login: r.login, source: r.source, status: r.status }; // SOW-061: tier for usage analytics
 }
 
 /**
@@ -94,7 +94,7 @@ export async function authorizeMember(request, env, deps = {}) {
   const r = await resolveEffective(request, env, deps);
   if (!r.ok) return r;
   if (r.status === 'banned') return deny('this account is not permitted');
-  return { ok: true, githubId: r.githubId, login: r.login, source: r.source };
+  return { ok: true, githubId: r.githubId, login: r.login, source: r.source, status: r.status }; // SOW-061: tier for usage analytics
 }
 
 // SOW-018: a Share's encrypted body carries the AAD `share:<id>:body` (encAssetFor('share', ...)). The AAD is

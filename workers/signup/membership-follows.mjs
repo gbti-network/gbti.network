@@ -10,6 +10,7 @@
 // the KV read-modify-write, so it is unit-tested with a fake KV + a stubbed authorizer (no network, no secrets).
 
 import { authorizeMember } from './membership-content.mjs';
+import { recordAuthedUsage } from './analytics.mjs'; // SOW-061 P3: follow usage by tier
 import { FollowError, normalizeFollows, applyFollow } from '../../membership/member-follows.mjs';
 
 export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`;
@@ -44,6 +45,7 @@ export async function handleFollows(request, env, { kv = env?.SIGNUP_KV, now = D
     throw err;
   }
   await kv.put(key, JSON.stringify(next));
+  recordAuthedUsage(env, auth, 'follow', request); // SOW-061 P3: a follow/unfollow write, recorded by effective tier
   return { status: 200, body: { ok: true, following: next.following } };
 }
 

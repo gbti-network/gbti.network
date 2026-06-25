@@ -9,6 +9,7 @@
 // (authorizeMember), NOT effective-paid. The server-held NEWS_API_KEY still never reaches the client. Member-only
 // content (decrypt/encrypt/Shares/publishing) stays on authorizePaid.
 import { authorizeMember } from './membership-content.mjs';
+import { recordAuthedUsage } from './analytics.mjs'; // SOW-061 P3: news_view usage by tier
 
 // A category label is config-defined (gbti-news-api/config/categories.mjs); bound the proxied query to a safe
 // token set so the proxy can never be pointed at an arbitrary upstream path/query.
@@ -73,6 +74,7 @@ export async function membershipNews(request, env, { authorize = authorizeMember
   if (since && /^[0-9]{1,12}$/.test(since)) q.set('since', since);
   q.set('limit', String(clampLimit(url.searchParams.get('limit'))));
 
+  recordAuthedUsage(env, auth, 'news_view', request); // SOW-061 P3: a news feed view, recorded by effective tier
   const r = await callNews(cfg, `/feed?${q.toString()}`, fetch);
   if (!r.ok) return r;
   const items = Array.isArray(r.data?.items) ? r.data.items : [];

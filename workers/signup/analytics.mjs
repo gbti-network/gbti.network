@@ -46,3 +46,14 @@ export function recordUsage(env, { tier, event, request } = {}) {
     });
   } catch { /* analytics must never affect the request */ }
 }
+
+/**
+ * SOW-061 P3: record a feature event for a SUCCESSFULLY authorized caller, using their effective status (the
+ * authorize result's `status`, ban > staff > grandfather > Stripe) as the tier. A no-op when the auth failed or
+ * carries no status, so a denied call is never counted as a real-tier feature use. Used by the news / follows /
+ * activity choke points.
+ */
+export function recordAuthedUsage(env, auth, event, request) {
+  if (!auth?.ok || !auth.status) return;
+  recordUsage(env, { tier: auth.status, event, request });
+}

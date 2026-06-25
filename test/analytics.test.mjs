@@ -2,7 +2,7 @@
 // version cardinality, and a structural NO-LEAK guard (no PII ever reaches a data point). Never throws.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { recordUsage } from '../workers/signup/analytics.mjs';
+import { recordUsage, recordAuthedUsage } from '../workers/signup/analytics.mjs';
 
 function fakeDataset() {
   const points = [];
@@ -57,6 +57,16 @@ test('NO-LEAK GUARD: a recorded point holds only tier/event/version/environment,
   assert.ok(!/https?:\/\//.test(flat), 'no url');
   assert.ok(!/[0-9]{6,}/.test(flat), 'no github_id-like number');
   for (const b of ds.points[0].blobs) assert.equal(typeof b, 'string');
+});
+
+test('recordAuthedUsage records the effective tier of an authorized caller; no-op otherwise', () => {
+  const ds = fakeDataset();
+  recordAuthedUsage(ENV(ds), { ok: true, status: 'none' }, 'news_view', req('1.0.0'));
+  recordAuthedUsage(ENV(ds), { ok: false, status: 403 }, 'news_view'); // denied -> no-op (never count a blocked call)
+  recordAuthedUsage(ENV(ds), { ok: true }, 'follow');                  // no status -> no-op
+  recordAuthedUsage(ENV(ds), null, 'follow');                          // no auth -> no-op
+  assert.equal(ds.points.length, 1);
+  assert.deepEqual(ds.points[0].blobs.slice(0, 2), ['none', 'news_view']);
 });
 
 test('a throwing dataset never breaks the request', () => {
