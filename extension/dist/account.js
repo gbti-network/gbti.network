@@ -9990,6 +9990,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var BG_PATTERN_OP_KEY = "gbti-splash-bg-pattern-op";
   var BG_PATTERN_GAP_KEY = "gbti-splash-bg-pattern-gap";
   var BG_CARD_OP_KEY = "gbti-splash-bg-card-op";
+  var BG_ASCII_POS_KEY = "gbti-splash-bg-ascii-pos";
+  var BG_ASCII_TEXT_KEY = "gbti-splash-bg-ascii-text";
   var SHOW_CARDS_KEY = "gbti-splash-show-cards";
   var SHOW_QUOTE_KEY = "gbti-splash-show-quote";
   var BG_IMAGE_KEY = "gbti:splash-bg-image";
@@ -10055,6 +10057,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const patternOpOut = document.querySelector("[data-bg-pattern-op-out]");
     const patternGap = document.querySelector("[data-bg-pattern-gap]");
     const patternGapOut = document.querySelector("[data-bg-pattern-gap-out]");
+    const asciiCtrls = document.querySelector("[data-bg-ascii-ctrls]");
+    const asciiPos = document.querySelector("[data-bg-ascii-pos]");
+    const asciiText = document.querySelector("[data-bg-ascii-text]");
     const setOut = (out, val, suffix) => {
       if (out) out.textContent = `${val}${suffix}`;
     };
@@ -10076,6 +10081,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       patternGap.value = String(normalizePatternGap(lsGet(BG_PATTERN_GAP_KEY)));
       setOut(patternGapOut, patternGap.value, "px");
     }
+    if (asciiPos) {
+      asciiPos.value = lsGet(BG_ASCII_POS_KEY) || "bottom-right";
+      if (!asciiPos.value) asciiPos.value = "bottom-right";
+    }
+    if (asciiText) asciiText.value = lsGet(BG_ASCII_TEXT_KEY) || "";
     const syncBgOnCtrls = () => {
       if (onCtrls) onCtrls.hidden = bgMode.value === "off";
     };
@@ -10083,6 +10093,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const p = pattern ? pattern.value : "none";
       if (patternCtrls) patternCtrls.hidden = p === "none";
       if (gapRow) gapRow.hidden = !(p === "dots" || p === "scanlines");
+      if (asciiCtrls) asciiCtrls.hidden = p !== "ascii";
     };
     syncBgOnCtrls();
     syncPatternCtrls();
@@ -10130,6 +10141,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       setOut(patternGapOut, v, "px");
       lsSet(BG_PATTERN_GAP_KEY, v);
     });
+    asciiPos?.addEventListener("change", () => lsSet(BG_ASCII_POS_KEY, asciiPos.value));
+    asciiText?.addEventListener("input", () => lsSet(BG_ASCII_TEXT_KEY, asciiText.value));
     removeBtn?.addEventListener("click", () => {
       try {
         chrome.storage?.local?.remove?.(BG_IMAGE_KEY);

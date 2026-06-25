@@ -29,9 +29,12 @@
     .bg-on-ctrls input[type=range] { flex: 1; max-width: 240px; accent-color: var(--green); }
     .bg-on-ctrls output { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); min-width: 40px; }
     .bg-pattern-ctrls { display: flex; flex-direction: column; gap: 12px; padding-left: 14px; border-left: 2px solid var(--line); }
+    .bg-ascii-ctrls { display: flex; flex-direction: column; gap: 12px; }
+    .ascii-text-field { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--fg); }
+    .ascii-text-field textarea { font-family: var(--f-mono, monospace); font-size: 12px; line-height: 1.2; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); white-space: pre; overflow: auto; resize: vertical; }
     /* the `hidden` attribute must win over the explicit display rules above (else the empty preview + the
        conditional control groups show before anything is set) */
-    [data-bg-preview][hidden], .bg-on-ctrls[hidden], .bg-pattern-ctrls[hidden], [data-bg-gap-row][hidden] { display: none; }
+    [data-bg-preview][hidden], .bg-on-ctrls[hidden], .bg-pattern-ctrls[hidden], [data-bg-gap-row][hidden], .bg-ascii-ctrls[hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -128,6 +131,26 @@
                 <input type="range" min="4" max="60" step="2" data-bg-pattern-gap aria-label="Pattern spacing" />
                 <output data-bg-pattern-gap-out></output>
               </label>
+              <div class="bg-ascii-ctrls" data-bg-ascii-ctrls hidden>
+                <label class="splash-set">
+                  <span>ASCII position</span>
+                  <select data-bg-ascii-pos aria-label="ASCII position">
+                    <option value="top-left">Top left</option>
+                    <option value="top-center">Top</option>
+                    <option value="top-right">Top right</option>
+                    <option value="center-left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="center-right">Right</option>
+                    <option value="bottom-left">Bottom left</option>
+                    <option value="bottom-center">Bottom</option>
+                    <option value="bottom-right" selected>Bottom right</option>
+                  </select>
+                </label>
+                <label class="ascii-text-field">
+                  <span>ASCII text</span>
+                  <textarea data-bg-ascii-text rows="4" placeholder="Leave blank to use the GBTI Network logo" aria-label="ASCII text"></textarea>
+                </label>
+              </div>
             </div>
           </div>
         </div>

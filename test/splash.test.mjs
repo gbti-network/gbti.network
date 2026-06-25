@@ -2,7 +2,7 @@
 // decision, and the dest->hash mapping. No DOM, no chrome, like the feed-route tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BUNDLED_QUOTES, enabledQuotes, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, fitDimensions, GBTI_ASCII } from '../client-ui/src/splash.mjs';
+import { BUNDLED_QUOTES, enabledQuotes, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, asciiAnchor, fitDimensions, GBTI_ASCII } from '../client-ui/src/splash.mjs';
 
 const TWELVE_H = 12 * 60 * 60 * 1000;
 
@@ -110,6 +110,16 @@ test('fitDimensions caps the longest side, preserves aspect, never up-scales, gu
   assert.deepEqual(fitDimensions(800, 600, 1600), { w: 800, h: 600 }); // already small -> unchanged (no up-scale)
   assert.deepEqual(fitDimensions(0, 600, 1600), { w: 0, h: 0 }); // bad input
   assert.deepEqual(fitDimensions(100, 100, 0), { w: 0, h: 0 }); // bad max
+});
+
+test('asciiAnchor maps positions to flex align/justify, defaulting to bottom-right', () => {
+  assert.deepEqual(asciiAnchor('top-left'), { alignItems: 'flex-start', justifyContent: 'flex-start' });
+  assert.deepEqual(asciiAnchor('top-center'), { alignItems: 'flex-start', justifyContent: 'center' });
+  assert.deepEqual(asciiAnchor('center'), { alignItems: 'center', justifyContent: 'center' });
+  assert.deepEqual(asciiAnchor('center-left'), { alignItems: 'center', justifyContent: 'flex-start' });
+  assert.deepEqual(asciiAnchor('bottom-right'), { alignItems: 'flex-end', justifyContent: 'flex-end' });
+  // absent / unknown -> bottom-right
+  for (const v of [null, undefined, '', 'garbage']) assert.deepEqual(asciiAnchor(v), { alignItems: 'flex-end', justifyContent: 'flex-end' }, String(v));
 });
 
 test('GBTI_ASCII is a non-trivial multi-line art constant', () => {

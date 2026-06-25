@@ -116,7 +116,9 @@
     html[data-splash][data-splash-bg] .splash-card:hover { border-color: var(--green); }
     html[data-splash][data-splash-bg] .splash-quote blockquote { color: #fff; }
     html[data-splash][data-splash-bg] .splash-quote figcaption { color: rgba(255,255,255,.82); }
-    .splash-pattern.p-ascii { display: flex; align-items: center; justify-content: center; }
+    /* the ascii art is anchored by inline align-items/justify-content (set by newtab.mjs from the chosen position,
+       default bottom-right); the padding keeps it off the very edge. */
+    .splash-pattern.p-ascii { display: flex; align-items: center; justify-content: center; padding: 5vh 5vw; box-sizing: border-box; }
     .splash-pattern.p-ascii pre { margin: 0; font-family: var(--f-mono, monospace); font-weight: 700; font-size: clamp(11px, 2.6vw, 30px); line-height: 1.04; letter-spacing: 2px; color: #fff; white-space: pre; mix-blend-mode: overlay; opacity: var(--pat-op, .9); }
     .splash-pattern.p-dots { background-image: radial-gradient(rgba(255,255,255, var(--pat-op, .2)) 1.5px, transparent 1.7px); background-size: var(--pat-gap, 16px) var(--pat-gap, 16px); }
     .splash-pattern.p-scanlines { background-image: repeating-linear-gradient(0deg, rgba(255,255,255, var(--pat-op, .11)) 0 1px, transparent 1px var(--pat-gap, 16px)); }

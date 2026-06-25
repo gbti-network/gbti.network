@@ -100,6 +100,20 @@ export function normalizePatternGap(raw, fallback = 16) {
   return Math.min(60, Math.max(4, n));
 }
 
+const ASCII_V = { top: 'flex-start', center: 'center', bottom: 'flex-end' };
+const ASCII_H = { left: 'flex-start', center: 'center', right: 'flex-end' };
+
+/** Map an ASCII-pattern anchor ('top-left' .. 'center' .. 'bottom-right') to the flexbox align/justify that places
+ *  it there inside the full-bleed pattern layer. Defaults to bottom-right for an absent/unknown value. 'center'
+ *  alone means dead center. */
+export function asciiAnchor(pos) {
+  let [v, h] = String(pos || '').toLowerCase().split('-');
+  if (v === 'center' && h === undefined) h = 'center'; // a bare 'center' is dead center
+  if (!(v in ASCII_V)) v = 'bottom';
+  if (!(h in ASCII_H)) h = 'right';
+  return { alignItems: ASCII_V[v], justifyContent: ASCII_H[h] };
+}
+
 /** Fit (w,h) so the LONGEST side is at most `max`, preserving aspect ratio; never UP-scales. Returns rounded
  *  integers, or {w:0,h:0} on a non-positive input. Used to downscale an uploaded image before storing it. */
 export function fitDimensions(w, h, max) {

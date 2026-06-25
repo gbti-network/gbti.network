@@ -5,7 +5,7 @@
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
 import { isLockedMembership, canSeeNews } from '../../client/src/membership.mjs'; // SOW-060: news is a free-tier (signed-in) perk
-import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
+import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, asciiAnchor, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
 import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
@@ -274,7 +274,14 @@ function applySplashBg() {
     // The pattern opacity (--pat-op, 0..1; default 3%) + the dots/scanlines spacing (--pat-gap, px) are tunable.
     pat.style.setProperty('--pat-op', (normalizeBgOpacity(lsItem('gbti-splash-bg-pattern-op'), 3) / 100).toFixed(2));
     pat.style.setProperty('--pat-gap', `${normalizePatternGap(lsItem('gbti-splash-bg-pattern-gap'))}px`);
-    if (pattern === 'ascii') { const pre = document.createElement('pre'); pre.textContent = GBTI_ASCII; pat.appendChild(pre); }
+    if (pattern === 'ascii') {
+      const pre = document.createElement('pre');
+      pre.textContent = (lsItem('gbti-splash-bg-ascii-text') || '').trim() || GBTI_ASCII; // custom text, else the GBTI logo
+      pat.appendChild(pre);
+      const anchor = asciiAnchor(lsItem('gbti-splash-bg-ascii-pos')); // cardinal position (default bottom-right)
+      pat.style.alignItems = anchor.alignItems;
+      pat.style.justifyContent = anchor.justifyContent;
+    }
   }
 }
 

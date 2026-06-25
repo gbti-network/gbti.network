@@ -2437,6 +2437,15 @@
     if (!Number.isFinite(n)) return fallback;
     return Math.min(60, Math.max(4, n));
   }
+  var ASCII_V = { top: "flex-start", center: "center", bottom: "flex-end" };
+  var ASCII_H = { left: "flex-start", center: "center", right: "flex-end" };
+  function asciiAnchor(pos) {
+    let [v, h] = String(pos || "").toLowerCase().split("-");
+    if (v === "center" && h === void 0) h = "center";
+    if (!(v in ASCII_V)) v = "bottom";
+    if (!(h in ASCII_H)) h = "right";
+    return { alignItems: ASCII_V[v], justifyContent: ASCII_H[h] };
+  }
   var GBTI_ASCII = [
     "  ____ ____ _____ ___ ",
     " / ___| __ )_   _|_ _|",
@@ -10248,8 +10257,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       pat.style.setProperty("--pat-gap", `${normalizePatternGap(lsItem("gbti-splash-bg-pattern-gap"))}px`);
       if (pattern === "ascii") {
         const pre = document.createElement("pre");
-        pre.textContent = GBTI_ASCII;
+        pre.textContent = (lsItem("gbti-splash-bg-ascii-text") || "").trim() || GBTI_ASCII;
         pat.appendChild(pre);
+        const anchor = asciiAnchor(lsItem("gbti-splash-bg-ascii-pos"));
+        pat.style.alignItems = anchor.alignItems;
+        pat.style.justifyContent = anchor.justifyContent;
       }
     }
   }

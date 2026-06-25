@@ -35,6 +35,8 @@ const BG_PATTERN_KEY = 'gbti-splash-bg-pattern';
 const BG_PATTERN_OP_KEY = 'gbti-splash-bg-pattern-op';
 const BG_PATTERN_GAP_KEY = 'gbti-splash-bg-pattern-gap';
 const BG_CARD_OP_KEY = 'gbti-splash-bg-card-op';
+const BG_ASCII_POS_KEY = 'gbti-splash-bg-ascii-pos';
+const BG_ASCII_TEXT_KEY = 'gbti-splash-bg-ascii-text';
 const SHOW_CARDS_KEY = 'gbti-splash-show-cards';
 const SHOW_QUOTE_KEY = 'gbti-splash-show-quote';
 const BG_IMAGE_KEY = 'gbti:splash-bg-image';
@@ -92,6 +94,9 @@ if (bgMode) {
   const patternOpOut = document.querySelector('[data-bg-pattern-op-out]');
   const patternGap = document.querySelector('[data-bg-pattern-gap]');
   const patternGapOut = document.querySelector('[data-bg-pattern-gap-out]');
+  const asciiCtrls = document.querySelector('[data-bg-ascii-ctrls]');
+  const asciiPos = document.querySelector('[data-bg-ascii-pos]');
+  const asciiText = document.querySelector('[data-bg-ascii-text]');
   const setOut = (out, val, suffix) => { if (out) out.textContent = `${val}${suffix}`; };
 
   // Hydrate the prefs (normalized).
@@ -101,12 +106,15 @@ if (bgMode) {
   if (pattern) pattern.value = normalizeBgPattern(lsGet(BG_PATTERN_KEY));
   if (patternOp) { patternOp.value = String(normalizeBgOpacity(lsGet(BG_PATTERN_OP_KEY), 3)); setOut(patternOpOut, patternOp.value, '%'); }
   if (patternGap) { patternGap.value = String(normalizePatternGap(lsGet(BG_PATTERN_GAP_KEY))); setOut(patternGapOut, patternGap.value, 'px'); }
+  if (asciiPos) { asciiPos.value = lsGet(BG_ASCII_POS_KEY) || 'bottom-right'; if (!asciiPos.value) asciiPos.value = 'bottom-right'; }
+  if (asciiText) asciiText.value = lsGet(BG_ASCII_TEXT_KEY) || '';
   // The appearance controls (card/image opacity, pattern) are available on ANY enabled background (content/fill/full).
   const syncBgOnCtrls = () => { if (onCtrls) onCtrls.hidden = bgMode.value === 'off'; };
   const syncPatternCtrls = () => {
     const p = pattern ? pattern.value : 'none';
     if (patternCtrls) patternCtrls.hidden = p === 'none';
     if (gapRow) gapRow.hidden = !(p === 'dots' || p === 'scanlines'); // spacing only affects dots/scanlines
+    if (asciiCtrls) asciiCtrls.hidden = p !== 'ascii'; // position + custom text only for the ascii pattern
   };
   syncBgOnCtrls();
   syncPatternCtrls();
@@ -124,6 +132,8 @@ if (bgMode) {
   pattern?.addEventListener('change', () => { lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value)); syncPatternCtrls(); });
   patternOp?.addEventListener('input', () => { const v = String(normalizeBgOpacity(patternOp.value, 3)); setOut(patternOpOut, v, '%'); lsSet(BG_PATTERN_OP_KEY, v); });
   patternGap?.addEventListener('input', () => { const v = String(normalizePatternGap(patternGap.value)); setOut(patternGapOut, v, 'px'); lsSet(BG_PATTERN_GAP_KEY, v); });
+  asciiPos?.addEventListener('change', () => lsSet(BG_ASCII_POS_KEY, asciiPos.value));
+  asciiText?.addEventListener('input', () => lsSet(BG_ASCII_TEXT_KEY, asciiText.value));
   removeBtn?.addEventListener('click', () => { try { chrome.storage?.local?.remove?.(BG_IMAGE_KEY); } catch { /* storage unavailable */ } showImage(null); if (note) note.textContent = 'Image removed.'; });
 
   fileInput?.addEventListener('change', async () => {
