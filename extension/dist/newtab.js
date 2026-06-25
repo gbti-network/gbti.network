@@ -3685,6 +3685,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
         <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
+        <a class="mi" role="menuitem" href="account.html">Settings</a>
+        <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <div class="me-sep" role="separator"></div>
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
@@ -3753,8 +3755,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const head = root.querySelector("[data-me-head]");
       if (head) head.innerHTML = `Signed in as <b>@${esc2(login)}</b>`;
-      const adminItem = root.querySelector("[data-admin-only]");
-      if (adminItem) adminItem.hidden = (RANK2[status.role] ?? 0) < RANK2.moderator;
+      const showAdmin = (RANK2[status.role] ?? 0) >= RANK2.moderator;
+      root.querySelectorAll("[data-admin-only]").forEach((el) => {
+        el.hidden = !showAdmin;
+      });
       if (greetName) greetName.textContent = `, @${login}`;
       if (meBtn) meBtn.hidden = false;
       if (signinBtn) signinBtn.hidden = true;

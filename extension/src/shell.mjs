@@ -125,6 +125,8 @@ function controlsHtml() {
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
         <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
+        <a class="mi" role="menuitem" href="account.html">Settings</a>
+        <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <div class="me-sep" role="separator"></div>
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
@@ -199,9 +201,11 @@ function applyAccount(root, status) {
     if (av) { av.src = `https://github.com/${encodeURIComponent(login)}.png?size=64`; av.alt = `@${login}`; }
     const head = root.querySelector('[data-me-head]');
     if (head) head.innerHTML = `Signed in as <b>@${esc(login)}</b>`;
-    // SOW-052: the Admin entry now lives in the WorkBench rail (role-gated there), not the dropdown.
-    const adminItem = root.querySelector('[data-admin-only]');
-    if (adminItem) adminItem.hidden = (RANK[status.role] ?? 0) < RANK.moderator;
+    // The Admin entry lives in BOTH the WorkBench rail and (re-added) the avatar dropdown, so role-gate EVERY
+    // [data-admin-only] node (querySelectorAll, not querySelector). Shown for staff (moderator and up); admin.html
+    // self-gates each tool and the SOW-005 gate + CODEOWNERS stay the real boundary.
+    const showAdmin = (RANK[status.role] ?? 0) >= RANK.moderator;
+    root.querySelectorAll('[data-admin-only]').forEach((el) => { el.hidden = !showAdmin; });
     if (greetName) greetName.textContent = `, @${login}`;
     if (meBtn) meBtn.hidden = false;
     if (signinBtn) signinBtn.hidden = true;
