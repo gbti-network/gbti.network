@@ -54,7 +54,9 @@ export const ico = (k) => (SVG[k] ? `<svg viewBox="0 0 24 24" aria-hidden="true"
 // in the avatar dropdown. `initShell({ nav })` picks the variant.
 const RAIL_FEED = [
   { group: 'Feeds' },
-  { key: 'activity', href: 'newtab.html', ico: 'activity', nm: 'Activity', sub: 'The latest across the co-op' },
+  // SOW-063: an explicit #type=all so a rail click goes straight to the Activity feed; the BARE newtab.html (a fresh
+  // Chrome new tab + the brand logo) is what lands on the landing splash.
+  { key: 'activity', href: 'newtab.html#type=all', ico: 'activity', nm: 'Activity', sub: 'The latest across the co-op' },
   // News is a curated feed open to the limited trial (not members-only), so it sits with Activity, not Browse.
   { key: 'news', href: 'newtab.html#type=news', ico: 'news', nm: 'News', sub: 'Curated, limited trial' },
   { group: 'Member Activity' },

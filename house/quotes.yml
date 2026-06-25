@@ -1,0 +1,35 @@
+# SOW-063: the new-tab landing-splash quote pool (git-native, portable). This file IS the curation: a fork that
+# clones this repo carries its quotes, and its build publishes its own /quotes.json. Admin-CODEOWNED (house/**),
+# editable from the extension superadmin quote manager (which opens an auto-merged PR). The Astro build emits
+# src/pages/quotes.json.ts from this; the extension new tab fetches that artifact, caches it, and shows one quote
+# on a deterministic 12-hour rotation (the same quote for every tab in a 12h window). Each entry: { text, author,
+# enabled }. Disable a quote with enabled: false (kept for history) instead of deleting it. The extension also
+# ships a bundled copy of this seed set as a fail-soft fallback (client-ui/src/splash.mjs).
+quotes:
+  - text: Focus can be knowing when to say no.
+    author: Steve Jobs
+    enabled: true
+  - text: The successful warrior is the average man, with laser-like focus.
+    author: Bruce Lee
+    enabled: true
+  - text: Where focus goes, energy flows.
+    author: Tony Robbins
+    enabled: true
+  - text: What you seek is seeking you.
+    author: Rumi
+    enabled: true
+  - text: You will never be able to escape from your heart. So it is better to listen to what it has to say.
+    author: Paulo Coelho
+    enabled: true
+  - text: In matters of style, swim with the current; in matters of principle, stand like a rock.
+    author: Thomas Jefferson
+    enabled: true
+  - text: The enemy of art is the absence of constraints.
+    author: Orson Welles
+    enabled: true
+  - text: The only real test of intelligence is if you get what you want out of life.
+    author: Naval Ravikant
+    enabled: true
+  - text: Nature does not hurry, yet everything is accomplished.
+    author: Lao Tzu
+    enabled: true

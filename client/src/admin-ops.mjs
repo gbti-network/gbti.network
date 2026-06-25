@@ -16,6 +16,7 @@ import { canModerate, canBanGrandfather, canManageRoles } from './roles.mjs';
 import { ban, unban, grandfather, revokeGrandfather, grantRole, SuperadminActionError } from '../../membership/superadmin-actions.mjs';
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs';
 import { addSource as addSourceEdit, removeSource as removeSourceEdit, setSourceEnabled as setSourceEnabledEdit, NewsSourceEditError } from '../../membership/news-source-edits.mjs'; // SOW-056 P2
+import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabled as setQuoteEnabledEdit, QuoteEditError } from '../../membership/quote-edits.mjs'; // SOW-063 P3
 import { parseContentFile } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 
@@ -282,4 +283,49 @@ export async function setNewsSourceEnabled(ctx, { id, enabled } = {}) {
   const on = !!enabled;
   return editNewsSources(ctx, (parsed) => setSourceEnabledEdit(parsed, { id, enabled: on }, actionCtx(ctx)),
     { branch: `gbti/news-source-${on ? 'enable' : 'disable'}-${sid}`, message: `${on ? 'Enable' : 'Disable'} news source ${id}`, title: `${on ? 'Enable' : 'Disable'} news source: ${id}`, noopMsg: `news source already ${on ? 'enabled' : 'disabled'}: ${id}` });
+}
+
+// SOW-063 Phase 3: the superadmin quote-pool manager. Each edit applies the pure quote-edits core to the parsed
+// house/quotes.yml and opens an auto-merged house PR (admin-owned via CODEOWNERS; the gate is the real boundary),
+// exactly like the news-source manager. Edits go live at the Pages-deploy cadence (the extension reads the rebuilt
+// /quotes.json). Quotes are keyed by their text (no id).
+const QUOTES_PATH = 'house/quotes.yml';
+const quoteSlug = (text) => slugOf(String(text || '').slice(0, 40)) || 'quote';
+
+/** Read the current quote pool for the manager UI. Public data; read-only. */
+export async function getQuotePool(ctx) {
+  const raw = (await ctx.reader?.readFile?.(QUOTES_PATH)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  return { quotes: Array.isArray(parsed.quotes) ? parsed.quotes : [] };
+}
+
+async function editQuotes(ctx, edit, { branch, message, title, noopMsg }) {
+  requireRole(ctx, canBanGrandfather, 'admin');
+  const { repo } = requireRepo(ctx);
+  const raw = (await ctx.reader?.readFile?.(QUOTES_PATH)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  let result;
+  try { result = edit(parsed); }
+  catch (err) { if (err instanceof QuoteEditError) throw new OperationError('bad-request', err.message); throw err; }
+  if (!result.changed) return noop(noopMsg, result.audit);
+  const pr = await publishFiles({ repo, branch, files: [{ path: QUOTES_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
+}
+
+export async function addQuote(ctx, { text, author } = {}) {
+  return editQuotes(ctx, (parsed) => addQuoteEdit(parsed, { text, author }, actionCtx(ctx)),
+    { branch: `gbti/quote-add-${quoteSlug(text)}`, message: `Add quote (${author || 'unknown'})`, title: `Add quote: ${author || 'unknown'}`, noopMsg: 'quote already present' });
+}
+
+export async function removeQuote(ctx, { text } = {}) {
+  return editQuotes(ctx, (parsed) => removeQuoteEdit(parsed, { text }, actionCtx(ctx)),
+    { branch: `gbti/quote-remove-${quoteSlug(text)}`, message: 'Remove quote', title: 'Remove quote', noopMsg: 'no such quote' });
+}
+
+export async function setQuoteEnabled(ctx, { text, enabled } = {}) {
+  const on = !!enabled;
+  return editQuotes(ctx, (parsed) => setQuoteEnabledEdit(parsed, { text, enabled: on }, actionCtx(ctx)),
+    { branch: `gbti/quote-${on ? 'enable' : 'disable'}-${quoteSlug(text)}`, message: `${on ? 'Enable' : 'Disable'} quote`, title: `${on ? 'Enable' : 'Disable'} quote`, noopMsg: `quote already ${on ? 'enabled' : 'disabled'}` });
 }

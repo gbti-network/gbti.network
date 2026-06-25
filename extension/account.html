@@ -15,6 +15,9 @@
     .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; margin: 0; }
     .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 4px 0 0; }
     gbti-account { display: block; max-width: 720px; }
+    /* SOW-063: the new-tab splash recurrence control */
+    .splash-set { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--fg); }
+    .splash-set select { font-family: var(--f-sans); font-size: 14px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); cursor: pointer; }
   </style>
 </head>
 <body>
@@ -29,6 +32,22 @@
         <h2 class="hub-h" style="font-size:18px">Followed topics</h2>
         <p class="hub-sub" style="margin:4px 0 14px">Pick the topics you care about. Your activity feed and news default to them. Leave it empty to see everything.</p>
         <gbti-topic-picker></gbti-topic-picker>
+      </section>
+      <!-- SOW-063: the new-tab landing splash recurrence window (a client preference; 0 = always show). Wired in
+           account.mjs (CSP forbids inline scripts). -->
+      <section style="max-width:720px;margin:30px auto 0">
+        <h2 class="hub-h" style="font-size:18px">New-tab splash</h2>
+        <p class="hub-sub" style="margin:4px 0 14px">When you open a new tab and pick a destination from the splash, GBTI Network opens that view directly for a while before showing the splash again. Choose how long, or always show the splash.</p>
+        <label class="splash-set">
+          <span>Show the splash again after</span>
+          <select data-splash-window aria-label="New-tab splash window">
+            <option value="0">Always show it</option>
+            <option value="15">15 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="120">2 hours</option>
+          </select>
+        </label>
       </section>
     </main>
   </div>

@@ -5,6 +5,7 @@
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
 import { isLockedMembership, canSeeNews } from '../../client/src/membership.mjs'; // SOW-060: news is a free-tier (signed-in) perk
+import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash } from '../../client-ui/src/splash.mjs'; // SOW-063: the landing splash core
 import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
@@ -154,6 +155,75 @@ function closeReader() {
   if (rv) rv.hidden = true;
   if (host) host.replaceChildren();
   if (fv) fv.hidden = false;
+}
+
+// SOW-063: the new-tab landing splash. A BARE tab (no hash) lands on the splash unless snoozed within the window;
+// clicking a card snoozes that destination and switches the main column IN PLACE (WorkBench navigates away). The
+// pure decision/rotation helpers live in client-ui/src/splash.mjs; this owns the DOM + the localStorage state. The
+// lapsed lock (SOW-018, data-locked) and the forced-sign-in gate (SOW-048, data-unauth) are fixed overlays that
+// cover this, so it is safe to show the splash before those async checks resolve.
+const SPLASH_DECISION_KEY = 'gbti-splash-decision';
+const SPLASH_WINDOW_KEY = 'gbti-splash-window-min'; // a client preference set in account.html; minutes, 0 = always show
+let QUOTES = null; // P2: the git-native /quotes.json once loaded; null -> the bundled set
+function readSplashDecision() { try { return JSON.parse(localStorage.getItem(SPLASH_DECISION_KEY) || 'null'); } catch { return null; } }
+function splashWindowMs() {
+  try { const m = parseInt(localStorage.getItem(SPLASH_WINDOW_KEY) ?? '30', 10); return Number.isFinite(m) && m >= 0 ? m * 60000 : 30 * 60000; }
+  catch { return 30 * 60000; }
+}
+function renderSplashQuote() {
+  const fig = $('[data-splash-quote]');
+  const q = pickQuote(QUOTES || BUNDLED_QUOTES, Date.now());
+  if (!fig || !q) return;
+  const t = fig.querySelector('[data-splash-quote-text]');
+  const a = fig.querySelector('[data-splash-quote-author]');
+  if (t) t.textContent = q.text;
+  if (a) a.textContent = q.author;
+  fig.hidden = false;
+}
+function showSplash() {
+  const sv = $('[data-splashview]');
+  if (!sv) return;
+  const fv = $('[data-feedview]'); const rv = $('[data-readerview]');
+  if (fv) fv.hidden = true;
+  if (rv) rv.hidden = true;
+  sv.hidden = false;
+  document.documentElement.setAttribute('data-splash', '1');
+  renderSplashQuote();
+  window.scrollTo(0, 0);
+}
+function hideSplash() {
+  const sv = $('[data-splashview]'); const fv = $('[data-feedview]');
+  if (sv) sv.hidden = true;
+  if (fv) fv.hidden = false;
+  document.documentElement.removeAttribute('data-splash');
+}
+function snoozeSplash(dest) {
+  try { localStorage.setItem(SPLASH_DECISION_KEY, JSON.stringify({ dest, at: Date.now() })); } catch { /* storage unavailable */ }
+}
+
+// SOW-063 P2: the git-native quote pool (gbti.network/quotes.json, built from house/quotes.yml). Like the news
+// cache, it is the SAME curated set for everyone, so persist the last good fetch + re-hydrate it for an instant
+// quote; the live fetch then refreshes it. Fail-soft: cache -> the bundled BUNDLED_QUOTES, so the splash always has
+// a quote even offline or before the first fetch.
+const QUOTES_CACHE_KEY = 'gbti-quotes-cache';
+async function readQuotesCache() {
+  try { const r = await chrome.storage?.local?.get?.(QUOTES_CACHE_KEY); const c = r?.[QUOTES_CACHE_KEY]; return Array.isArray(c?.quotes) ? c.quotes : null; }
+  catch { return null; }
+}
+function writeQuotesCache(quotes) {
+  try { chrome.storage?.local?.set?.({ [QUOTES_CACHE_KEY]: { quotes, at: Date.now() } }); } catch { /* storage unavailable */ }
+}
+const reRenderQuoteIfVisible = () => { if (!$('[data-splashview]')?.hidden) renderSplashQuote(); };
+async function loadQuotes() {
+  const cached = await readQuotesCache();
+  if (Array.isArray(cached) && cached.length) { QUOTES = cached; reRenderQuoteIfVisible(); }
+  try {
+    const res = await fetch(`${SITE}/quotes.json`, { cache: 'no-cache' });
+    if (!res.ok) return;
+    const data = await res.json();
+    const quotes = Array.isArray(data?.quotes) ? data.quotes : null;
+    if (quotes && quotes.length) { QUOTES = quotes; writeQuotesCache(quotes); reRenderQuoteIfVisible(); }
+  } catch { /* keep the cache / the bundled fallback */ }
 }
 
 /** Reflect the active view mode onto the switcher buttons. */
@@ -334,6 +404,15 @@ function init() {
   // Register the messaging-backed GbtiClient so the shell's "+" composer (and any client-ui element) works on the
   // new tab too; the feed itself still talks to the background worker directly.
   mountPageClient();
+  // SOW-063: resolve the landing BEFORE initShell (so the rail highlight matches). A bare tab (no hash) shows the
+  // splash unless snoozed within the window; if snoozed, land directly on the remembered feed type. A hashed open
+  // (rail click / bell deep-link) always goes straight to the feed.
+  const splashBare = !hashStr();
+  const splashDecision = readSplashDecision();
+  const wantSplash = splashBare && shouldShowSplash(splashDecision, Date.now(), splashWindowMs());
+  if (splashBare && !wantSplash && splashDecision?.dest) {
+    TYPE = typeForHash(splashDestHash(splashDecision.dest)); // snoozed -> land on the remembered feed type
+  }
   // The shared shell injects the left rail (feed variant: search + Latest/Following on top) + the control cluster
   // (theme, apps, account, "+") into the greeting's top-right, and fills the page's [data-ico] glyphs. The rail
   // item highlighted is derived from the active TYPE (railKeyForType); selectType keeps it in sync thereafter.
@@ -381,12 +460,28 @@ function init() {
   // re-render; selecting All/Shares lazily loads Shares, All/News lazily loads News, the first time.
   document.querySelectorAll('.nt-type').forEach((b) => b.addEventListener('click', () => selectType(b.dataset.type)));
 
+  // SOW-063: the landing splash cards. Activity/News switch the main column IN PLACE (snoozing that destination so
+  // the next bare tab skips straight to it); WorkBench navigates to its own page (it leaves the new tab, so it does
+  // not become a new-tab default). Setting the hash drives the existing hashchange handler (selectType + rail).
+  document.querySelectorAll('[data-splash-go]').forEach((b) => b.addEventListener('click', () => {
+    const dest = b.dataset.splashGo;
+    if (dest === 'workbench') { window.location.href = chrome.runtime.getURL('workspace.html'); return; }
+    snoozeSplash(dest);
+    hideSplash();
+    location.hash = splashDestHash(dest);
+  }));
+  loadQuotes(); // SOW-063 P2: hydrate + refresh the git-native quote pool (the splash shows a bundled quote until it lands)
+  if (wantSplash) showSplash();
+
   // The rail's Browse shortcuts (newtab.html#type=<X>) switch the filter when clicked while already on the feed; a
   // bell deep-link (#tab=<type>&read=<path>) also auto-opens that item in the in-place reader. A hash that drops
   // the type (back to a bare or typeless fragment) resets to 'all' (typeForHash), so the river is reachable
   // without a full reload too.
   window.addEventListener('hashchange', () => {
-    const t = typeForHash(hashStr());
+    const h = hashStr();
+    if (!h) { showSplash(); return; } // SOW-063: Back to the bare tab returns to the splash
+    hideSplash();
+    const t = typeForHash(h);
     selectType(t);
     const rd = readFromHash();
     if (rd) openReader({ type: t, path: rd });

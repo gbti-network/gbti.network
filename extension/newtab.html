@@ -56,9 +56,26 @@
 
     /* In-place reader: a content/Share item opens here (gbti-reader) instead of navigating away; Back restores
        the feed. The feed IS the browser now, so there is no separate Browse page to bounce through. */
-    [data-feedview][hidden], [data-readerview][hidden] { display: none; }
+    [data-feedview][hidden], [data-readerview][hidden], [data-splashview][hidden] { display: none; }
     .reader-back { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 18px; padding: 8px 14px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); font-family: var(--f-sans); font-weight: 600; font-size: 13px; cursor: pointer; }
     .reader-back:hover { border-color: var(--green); color: var(--green-700); }
+
+    /* SOW-063: the new-tab landing splash. A calm centered landing (3 destination cards + a rotating quote) that
+       replaces the feed on a bare new tab. While it is up, hide the greeting + the view-mode switch (no feed = no
+       mode toggle); the shell control cluster (account / theme / bell / compose) stays. */
+    html[data-splash] .nt-greet-tx, html[data-splash] .nt-modes-slot { display: none; }
+    .nt-splash { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 38px; min-height: 62vh; padding: 36px 0; }
+    .splash-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; width: 100%; max-width: 760px; }
+    .splash-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 26px 24px; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); color: var(--fg); cursor: pointer; text-align: left; transition: border-color .14s, transform .14s, box-shadow .14s; }
+    .splash-card:hover { border-color: var(--green); transform: translateY(-2px); box-shadow: var(--sh-sm); }
+    .splash-card .sc-ico { display: inline-flex; width: 42px; height: 42px; align-items: center; justify-content: center; border-radius: var(--r); background: var(--green-tint); color: var(--green-700); }
+    .splash-card .sc-ico svg { width: 23px; height: 23px; }
+    .splash-card .sc-t { font-family: var(--f-display); font-weight: 800; font-size: 17px; }
+    .splash-card .sc-s { font-size: 13px; color: var(--fg-mute); line-height: 1.4; }
+    .splash-quote { margin: 0; max-width: 600px; text-align: center; }
+    .splash-quote blockquote { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: 20px; line-height: 1.5; color: var(--fg); }
+    .splash-quote figcaption { margin-top: 12px; font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); }
+    .splash-quote figcaption::before { content: "— "; }
     /* The feed rows/cards render inside <gbti-card-list> (SOW-042), whose styles are shadow-encapsulated; the
        per-mode + atom CSS that used to live here moved into client-ui/src/elements/gbti-card-list.mjs. */
 
@@ -121,6 +138,33 @@
         <button class="ft-x" type="button" data-footertip-dismiss>Got it</button>
       </div>
       </div><!-- /[data-feedview] -->
+
+      <!-- SOW-063: the landing splash (shown on a bare new tab unless snoozed). Three destination cards over a
+           rotating quote; a sibling of the feed/reader views, toggled by the same hidden-attribute switch. The
+           [data-ico] glyphs are filled by initShell. -->
+      <div class="nt-splash" data-splashview hidden>
+        <div class="splash-cards">
+          <button class="splash-card" type="button" data-splash-go="activity">
+            <span class="sc-ico" data-ico="activity"></span>
+            <span class="sc-t">View Network Activity</span>
+            <span class="sc-s">The latest across the co-op</span>
+          </button>
+          <button class="splash-card" type="button" data-splash-go="news">
+            <span class="sc-ico" data-ico="news"></span>
+            <span class="sc-t">View News</span>
+            <span class="sc-s">Curated headlines for builders</span>
+          </button>
+          <button class="splash-card" type="button" data-splash-go="workbench">
+            <span class="sc-ico" data-ico="grid"></span>
+            <span class="sc-t">Open WorkBench</span>
+            <span class="sc-s">Your content and tools</span>
+          </button>
+        </div>
+        <figure class="splash-quote" data-splash-quote hidden>
+          <blockquote data-splash-quote-text></blockquote>
+          <figcaption data-splash-quote-author></figcaption>
+        </figure>
+      </div>
 
       <!-- The in-place reader: a content/Share item opens here; Back restores the feed (no Browse page). -->
       <section data-readerview hidden>

@@ -128,6 +128,10 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     addNewsSource: ({ id, name, url, description }) => request('POST', '/api/admin', { action: 'news-source-add', id, name, url, description }), // SOW-056 P2
     removeNewsSource: ({ id }) => request('POST', '/api/admin', { action: 'news-source-remove', id }), // SOW-056 P2
     setNewsSourceEnabled: ({ id, enabled }) => request('POST', '/api/admin', { action: 'news-source-toggle', id, enabled }), // SOW-056 P2
+    quotePool: () => request('GET', '/api/quote-pool'), // SOW-063 P3: the splash quote pool { quotes } for the manager
+    addQuote: ({ text, author }) => request('POST', '/api/admin', { action: 'quote-add', text, author }), // SOW-063 P3
+    removeQuote: ({ text }) => request('POST', '/api/admin', { action: 'quote-remove', text }), // SOW-063 P3
+    setQuoteEnabled: ({ text, enabled }) => request('POST', '/api/admin', { action: 'quote-toggle', text, enabled }), // SOW-063 P3
     openPulls: () => request('GET', '/api/open-pulls'), // SOW-038 P2: admin-gated open content-PR queue { pulls }
     syndicationQueue: () => request('GET', '/api/syndication'), // SOW-058: superadmin tracker { pending, sent, cancelled, failed }
     cancelSyndication: ({ id }) => request('POST', '/api/syndication/cancel', { id }), // SOW-058: superadmin reject/cancel

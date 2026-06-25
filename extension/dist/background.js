@@ -17337,8 +17337,8 @@ var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
 function decodeBase64Utf8(b64) {
-  const clean2 = String(b64 || "").replace(/\s/g, "");
-  const bytes = Uint8Array.from(atob(clean2), (c) => c.charCodeAt(0));
+  const clean3 = String(b64 || "").replace(/\s/g, "");
+  const bytes = Uint8Array.from(atob(clean3), (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
 function safeRel(relPath) {
@@ -17530,9 +17530,9 @@ function toBase64(text) {
   return btoa(bin);
 }
 function fromBase64(b64) {
-  const clean2 = String(b64 || "").replace(/\s+/g, "");
-  if (typeof Buffer !== "undefined") return Buffer.from(clean2, "base64").toString("utf8");
-  const bin = atob(clean2);
+  const clean3 = String(b64 || "").replace(/\s+/g, "");
+  if (typeof Buffer !== "undefined") return Buffer.from(clean3, "base64").toString("utf8");
+  const bin = atob(clean3);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
   return new TextDecoder().decode(bytes);
@@ -19748,6 +19748,61 @@ function removeSource(doc, { id } = {}, ctx = {}) {
   return { next: d, changed: true, audit: auditEntry2(ctx, "news-source.remove", sid, null) };
 }
 
+// membership/quote-edits.mjs
+var QuoteEditError = class extends Error {
+};
+var MAX_TEXT = 280;
+var MAX_AUTHOR = 80;
+var normText = (t) => String(t || "").trim();
+var keyOf = (t) => normText(t).toLowerCase();
+function isoOf4(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new QuoteEditError("invalid timestamp");
+  return d.toISOString();
+}
+function auditEntry3(ctx, action, text, detail) {
+  const a = ctx?.actor || null;
+  return {
+    at: isoOf4(ctx?.now),
+    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+    action,
+    target: { text },
+    detail: detail ?? null
+  };
+}
+function clean2(doc) {
+  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
+  if (!Array.isArray(d.quotes)) d.quotes = [];
+  return d;
+}
+function addQuote(doc, { text, author, enabled } = {}, ctx = {}) {
+  const d = clean2(doc);
+  const t = normText(text).slice(0, MAX_TEXT);
+  const a = normText(author).slice(0, MAX_AUTHOR);
+  if (!t) throw new QuoteEditError("a quote needs text");
+  if (!a) throw new QuoteEditError("a quote needs an author");
+  const exists = d.quotes.find((q) => keyOf(q.text) === keyOf(t));
+  if (exists) return { next: d, changed: false, audit: auditEntry3(ctx, "quote.add", t, { noop: true }) };
+  d.quotes.push({ text: t, author: a, enabled: enabled !== false });
+  return { next: d, changed: true, audit: auditEntry3(ctx, "quote.add", t, { author: a }) };
+}
+function setQuoteEnabled(doc, { text, enabled } = {}, ctx = {}) {
+  const d = clean2(doc);
+  const want = enabled !== false;
+  const q = d.quotes.find((x) => keyOf(x.text) === keyOf(text));
+  if (!q) throw new QuoteEditError(`quote not found: ${normText(text)}`);
+  if (q.enabled !== false === want) return { next: d, changed: false, audit: auditEntry3(ctx, "quote.enable", q.text, { enabled: want, noop: true }) };
+  q.enabled = want;
+  return { next: d, changed: true, audit: auditEntry3(ctx, "quote.enable", q.text, { enabled: want }) };
+}
+function removeQuote(doc, { text } = {}, ctx = {}) {
+  const d = clean2(doc);
+  const i = d.quotes.findIndex((x) => keyOf(x.text) === keyOf(text));
+  if (i < 0) throw new QuoteEditError(`quote not found: ${normText(text)}`);
+  const [gone] = d.quotes.splice(i, 1);
+  return { next: d, changed: true, audit: auditEntry3(ctx, "quote.remove", gone?.text ?? normText(text), null) };
+}
+
 // client/src/admin-ops.mjs
 function requireRole(ctx, check2, need) {
   const role = ctx.role?.() ?? "member";
@@ -19776,13 +19831,13 @@ function actionCtx(ctx) {
     now: ctx.now ? ctx.now() : void 0
   };
 }
-function prBody(reason, auditEntry3) {
+function prBody(reason, auditEntry4) {
   const head = reason ? `Reason: ${reason}
 
 ` : "";
-  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry3)} -->`;
+  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry4)} -->`;
 }
-var noop = (message, auditEntry3) => ({ changed: false, noop: true, message, audit: auditEntry3 });
+var noop = (message, auditEntry4) => ({ changed: false, noop: true, message, audit: auditEntry4 });
 function requireId(githubId) {
   if (githubId === void 0 || githubId === null || String(githubId).trim() === "") {
     throw new OperationError("bad-request", "githubId is required");
@@ -20008,9 +20063,64 @@ async function setNewsSourceEnabled(ctx, { id, enabled } = {}) {
     { branch: `gbti/news-source-${on ? "enable" : "disable"}-${sid}`, message: `${on ? "Enable" : "Disable"} news source ${id}`, title: `${on ? "Enable" : "Disable"} news source: ${id}`, noopMsg: `news source already ${on ? "enabled" : "disabled"}: ${id}` }
   );
 }
+var QUOTES_PATH = "house/quotes.yml";
+var quoteSlug = (text) => slugOf(String(text || "").slice(0, 40)) || "quote";
+async function getQuotePool(ctx) {
+  const raw = await ctx.reader?.readFile?.(QUOTES_PATH) || "";
+  let parsed;
+  try {
+    parsed = index_vite_proxy_tmp_default.load(raw) || {};
+  } catch {
+    parsed = {};
+  }
+  return { quotes: Array.isArray(parsed.quotes) ? parsed.quotes : [] };
+}
+async function editQuotes(ctx, edit, { branch, message, title, noopMsg }) {
+  requireRole(ctx, canBanGrandfather, "admin");
+  const { repo } = requireRepo2(ctx);
+  const raw = await ctx.reader?.readFile?.(QUOTES_PATH) || "";
+  let parsed;
+  try {
+    parsed = index_vite_proxy_tmp_default.load(raw) || {};
+  } catch {
+    parsed = {};
+  }
+  let result;
+  try {
+    result = edit(parsed);
+  } catch (err) {
+    if (err instanceof QuoteEditError) throw new OperationError("bad-request", err.message);
+    throw err;
+  }
+  if (!result.changed) return noop(noopMsg, result.audit);
+  const pr = await publishFiles({ repo, branch, files: [{ path: QUOTES_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
+}
+async function addQuote2(ctx, { text, author } = {}) {
+  return editQuotes(
+    ctx,
+    (parsed) => addQuote(parsed, { text, author }, actionCtx(ctx)),
+    { branch: `gbti/quote-add-${quoteSlug(text)}`, message: `Add quote (${author || "unknown"})`, title: `Add quote: ${author || "unknown"}`, noopMsg: "quote already present" }
+  );
+}
+async function removeQuote2(ctx, { text } = {}) {
+  return editQuotes(
+    ctx,
+    (parsed) => removeQuote(parsed, { text }, actionCtx(ctx)),
+    { branch: `gbti/quote-remove-${quoteSlug(text)}`, message: "Remove quote", title: "Remove quote", noopMsg: "no such quote" }
+  );
+}
+async function setQuoteEnabled2(ctx, { text, enabled } = {}) {
+  const on = !!enabled;
+  return editQuotes(
+    ctx,
+    (parsed) => setQuoteEnabled(parsed, { text, enabled: on }, actionCtx(ctx)),
+    { branch: `gbti/quote-${on ? "enable" : "disable"}-${quoteSlug(text)}`, message: `${on ? "Enable" : "Disable"} quote`, title: `${on ? "Enable" : "Disable"} quote`, noopMsg: `quote already ${on ? "enabled" : "disabled"}` }
+  );
+}
 
 // extension/src/ext-dispatch.mjs
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -20147,6 +20257,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getTaxonomy(ctx));
       case "/api/news-source-pool":
         return ok(await getNewsSourcePool(ctx));
+      case "/api/quote-pool":
+        return ok(await getQuotePool(ctx));
       case "/api/open-pulls":
         return ok(await getOpenPulls(ctx));
       case "/api/syndication":

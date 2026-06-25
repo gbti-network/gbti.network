@@ -2107,8 +2107,119 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-news-source-manager", GbtiNewsSourceManager);
 
-  // client-ui/src/elements/gbti-syndication-tracker.mjs
+  // client-ui/src/elements/gbti-quote-manager.mjs
   var CSS8 = `
+  :host { display:block; }
+  .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
+  .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
+  .hint { font-size:12.5px; color:var(--muted); }
+  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
+  .busy { opacity:.55; pointer-events:none; }
+  .add { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+  .add textarea { flex:2 1 280px; min-width:0; font:inherit; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:7px 9px; resize:vertical; min-height:38px; }
+  .add input { flex:1 1 140px; min-width:0; font:inherit; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:7px 9px; }
+  .btn { flex:none; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:7px; font:inherit; font-weight:700; font-size:13px; padding:7px 14px; cursor:pointer; }
+  .list { list-style:none; margin:0; padding:0; }
+  .q { border-top:1px solid var(--line); }
+  .q:first-child { border-top:0; }
+  .q.off { opacity:.55; }
+  .row { display:flex; align-items:flex-start; gap:10px; padding:10px 2px; }
+  .tx { flex:1; min-width:0; }
+  .quote { display:block; color:var(--fg); font-size:14px; line-height:1.45; }
+  .by { display:block; font-size:12.5px; color:var(--muted); margin-top:2px; }
+  .lk { flex:none; border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); border-radius:7px; font:inherit; font-size:12.5px; font-weight:600; padding:5px 11px; cursor:pointer; }
+  .lk:hover { border-color:var(--accent); color:var(--accent); }
+  .lk.danger:hover { border-color:var(--danger, #e06c6c); color:var(--danger, #e06c6c); }
+  .muted { color:var(--muted); }
+`;
+  var GbtiQuoteManager = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback?.();
+      this.load();
+    }
+    async load() {
+      if (!this.client) {
+        this.render();
+        return;
+      }
+      try {
+        this._quotes = (await this.client.quotePool())?.quotes || [];
+      } catch {
+        this._quotes = [];
+        this._msg = "Could not load the quotes.";
+      }
+      this.render();
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS8) + `<p class="muted">Open in the GBTI client (admin) to manage quotes.</p>`);
+        return;
+      }
+      if (!this._quotes) {
+        this.set(this.css(CSS8) + `<p class="muted">Loading quotes...</p>`);
+        return;
+      }
+      const enabled = this._quotes.filter((q) => q && q.enabled !== false).length;
+      const rows = this._quotes.map((q) => {
+        const on = q && q.enabled !== false;
+        return `<li class="q ${on ? "" : "off"}"><div class="row"><span class="tx"><span class="quote">${esc(q.text || "")}</span><span class="by">${esc(q.author || "")}</span></span><button class="lk" type="button" data-toggle="${esc(q.text || "")}" data-on="${on ? "1" : "0"}">${on ? "Disable" : "Enable"}</button><button class="lk danger" type="button" data-remove="${esc(q.text || "")}">Remove</button></div></li>`;
+      }).join("");
+      this.set(this.css(CSS8) + `<div class="${this._busy ? "busy" : ""}">
+      <div class="head"><h3>Splash quotes</h3><span class="hint">${this._quotes.length} quotes, ${enabled} enabled &middot; edits open an auto-merged house PR</span></div>
+      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      <div class="add">
+        <textarea data-add-text placeholder="The quote text"></textarea>
+        <input data-add-author type="text" placeholder="Author" />
+        <button class="btn" type="button" data-add>Add quote</button>
+      </div>
+      <p class="hint" style="margin:-6px 0 14px">The new-tab splash shows one enabled quote, rotating every 12 hours. Disable a quote to retire it without losing the history.</p>
+      <ul class="list">${rows || '<li class="muted">No quotes yet.</li>'}</ul>
+    </div>`);
+      this._wire();
+    }
+    _wire() {
+      this.on("[data-add]", "click", () => {
+        const text = (this.$("[data-add-text]")?.value || "").trim();
+        const author = (this.$("[data-add-author]")?.value || "").trim();
+        if (!text) {
+          this._msg = "A quote text is required.";
+          this.render();
+          return;
+        }
+        if (!author) {
+          this._msg = "An author is required.";
+          this.render();
+          return;
+        }
+        this._run(() => this.client.addQuote({ text, author }));
+      });
+      this.$$("[data-toggle]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.setQuoteEnabled({ text: b.dataset.toggle, enabled: b.dataset.on !== "1" }))));
+      this.$$("[data-remove]").forEach((b) => b.addEventListener("click", () => {
+        const text = b.dataset.remove;
+        if (typeof confirm === "function" && !confirm(`Remove this quote?
+
+"${text}"`)) return;
+        this._run(() => this.client.removeQuote({ text }));
+      }));
+    }
+    async _run(fn) {
+      this._busy = true;
+      this._msg = "";
+      this.render();
+      try {
+        const r = await fn();
+        this._msg = r?.noop ? "No change (already in that state)." : r?.number ? `Opened PR #${r.number} (auto-merges; the list updates after it lands + the site redeploys).` : "Done.";
+      } catch (e) {
+        this._msg = e?.message || "That edit failed.";
+      }
+      this._busy = false;
+      await this.load();
+    }
+  };
+  define("gbti-quote-manager", GbtiQuoteManager);
+
+  // client-ui/src/elements/gbti-syndication-tracker.mjs
+  var CSS9 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; gap:10px; margin:0 0 8px; }
   .head h3 { margin:0; font-size:15px; }
@@ -2163,20 +2274,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS8) + `<p class="muted">Open in the GBTI client (admin) to view syndication.</p>`);
+        this.set(this.css(CSS9) + `<p class="muted">Open in the GBTI client (admin) to view syndication.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS8) + `<div class="head"><h3>Syndication</h3></div><p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS9) + `<div class="head"><h3>Syndication</h3></div><p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
       if (!this._data) {
-        this.set(this.css(CSS8) + `<p class="muted">Loading syndication queue...</p>`);
+        this.set(this.css(CSS9) + `<p class="muted">Loading syndication queue...</p>`);
         return;
       }
       const d = this._data;
-      this.set(this.css(CSS8) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS9) + `<div class="${this._busy ? "busy" : ""}">
       <div class="head"><h3>Syndication queue</h3><span class="hint">Nothing posts until a superadmin approves it. Approved items post to every enabled channel on the next tick.</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       ${this._bucket("Pending approval", d.pending, "pending")}
@@ -2476,7 +2587,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS9 = `
+  var CSS10 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -2497,7 +2608,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const c = Math.max(0, this._count);
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       this.set(
-        this.css(CSS9) + `<button class="pill ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS10) + `<button class="pill ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -2532,7 +2643,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS10 = `
+  var CSS11 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -2558,7 +2669,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const open = this._open ? this._renderPop() : "";
       const label = !this.client ? "Sign in to save to a collection" : "Save to a collection";
-      this.set(this.css(CSS10) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}">${folder}<span>Save</span></button>${open}`);
+      this.set(this.css(CSS11) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}">${folder}<span>Save</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -2678,7 +2789,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-subscribe.mjs
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
-  var CSS11 = `
+  var CSS12 = `
   .btn { display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font-body);
     font-size:14px; font-weight:600; border-radius:10px; padding:9px 16px;
     border:1.5px solid var(--brand); background:var(--brand); color:#08231a;
@@ -2710,7 +2821,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const label = !known ? "Subscribe to activity" : following ? "Following" : "Subscribe to activity";
       const onCls = following ? "on" : "";
       this.set(
-        this.css(CSS11) + `<button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>`
+        this.css(CSS12) + `<button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>`
       );
       this.on(".btn", "click", () => this._onClick());
       if (this.client && username && !this._loaded) this._loadState(username);
@@ -2758,7 +2869,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-share-composer.mjs
   var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS12 = `
+  var CSS13 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
   h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -2813,8 +2924,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       const m = this._membership;
-      if (!this.client) return this.set(this.css(CSS12) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
-      if (m === void 0) return this.set(this.css(CSS12) + `<div class="card"><p class="sub">Loading…</p></div>`);
+      if (!this.client) return this.set(this.css(CSS13) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
+      if (m === void 0) return this.set(this.css(CSS13) + `<div class="card"><p class="sub">Loading…</p></div>`);
       if (LOCKED2.has(m)) return this._renderLocked();
       if (m === "trialing") return this._renderTrial();
       return this._renderComposer();
@@ -2823,21 +2934,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<div class="notice"><span class="lock">${glyph}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
     }
     _renderLocked() {
-      this.set(this.css(CSS12) + this._noticeHtml(
+      this.set(this.css(CSS13) + this._noticeHtml(
         "Your access is locked",
         'Your membership has lapsed, so Shares are locked. <a href="https://gbti.network/membership/">Renew your membership</a> to read and post in the community stream again.',
         "🔒"
       ));
     }
     _renderTrial() {
-      this.set(this.css(CSS12) + this._noticeHtml(
+      this.set(this.css(CSS13) + this._noticeHtml(
         "Reading only on the free trial",
         'On the trial you can READ the community Shares stream. Posting Shares is a paid feature. <a href="https://gbti.network/membership/">Upgrade your membership</a> to post.',
         "👀"
       ));
     }
     _renderComposer() {
-      this.set(this.css(CSS12) + `
+      this.set(this.css(CSS13) + `
       <div class="card">
         <h3>Share an update</h3>
         <p class="sub">A short note or an off-network link for the co-op. Members-only by default.</p>
@@ -3093,7 +3204,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS13 = `
+  var CSS14 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -3239,11 +3350,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS13) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS14) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS13) + body);
+      this.set(this.css(CSS14) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -3268,7 +3379,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-comment-box.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS14 = `
+  var CSS15 = `
   :host { display: block; font-family: var(--font-body); color: var(--fg); }
   .nudge { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--panel); font-size: 13.5px; color: var(--muted); }
   .nudge a { color: var(--brand); font-weight: 600; }
@@ -3316,19 +3427,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // ---- EDIT mode: only the comment's author sees an Edit link ----
     _renderEditAffordance() {
       if (!this._identity || this._identity.username !== this._editAuthor) {
-        this.set(this.css(CSS14) + "");
+        this.set(this.css(CSS15) + "");
         return;
       }
-      this.set(this.css(CSS14) + `<button class="edit" type="button">Edit</button>`);
+      this.set(this.css(CSS15) + `<button class="edit" type="button">Edit</button>`);
       this.on(".edit", "click", () => this._openEdit());
     }
     async _openEdit() {
-      this.set(this.css(CSS14) + `<p class="msg">Loading…</p>`);
+      this.set(this.css(CSS15) + `<p class="msg">Loading…</p>`);
       let body = "";
       try {
         body = (await this.client.getComment({ id: this._editId }))?.body ?? "";
       } catch {
-        this.set(this.css(CSS14) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
+        this.set(this.css(CSS15) + `<p class="msg err">Could not load the comment.</p><button class="edit" type="button">Retry</button>`);
         this.on(".edit", "click", () => this._openEdit());
         return;
       }
@@ -3337,24 +3448,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // ---- COMPOSE mode ----
     _renderCompose() {
       if (LOCKED3.has(this._membership)) {
-        this.set(this.css(CSS14) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
+        this.set(this.css(CSS15) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
         return;
       }
       if (this._membership === "trialing") {
-        this.set(this.css(CSS14) + `<div class="nudge">Commenting is a paid feature. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
+        this.set(this.css(CSS15) + `<div class="nudge">Commenting is a paid feature. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`);
         return;
       }
       if (!this._identity) {
-        this.set(this.css(CSS14) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS15) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`);
         return;
       }
-      this.set(this.css(CSS14) + `<button class="open" type="button">Write a comment</button>`);
+      this.set(this.css(CSS15) + `<button class="open" type="button">Write a comment</button>`);
       this.on(".open", "click", () => this._form({ body: "", edit: false }));
     }
     _form({ body, edit }) {
       const isIntroTarget = ["post", "product", "prompt"].includes(this._target().type);
       const noteRow = !edit && isIntroTarget ? `<label class="chk"><input type="checkbox" data-authornote /> Post as my public "from the author" note</label>` : "";
-      this.set(this.css(CSS14) + `
+      this.set(this.css(CSS15) + `
       <div class="form">
         <textarea placeholder="Write your comment (markdown supported)…" maxlength="8000">${esc(body)}</textarea>
         <div class="row">
@@ -3425,7 +3536,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-comment-box", GbtiCommentBox);
 
   // client-ui/src/elements/gbti-discussion.mjs
-  var CSS15 = `
+  var CSS16 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .thread { display:flex; flex-direction:column; gap:10px; margin-bottom:8px; }
   .comment { border-left:2px solid var(--line); padding-left:10px; }
@@ -3489,19 +3600,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const targetType = this._type();
       const targetSlug = this._slug();
       if (!targetType || !targetSlug) {
-        this.set(this.css(CSS15));
+        this.set(this.css(CSS16));
         return;
       }
       if (!this.client) {
-        this.set(this.css(CSS15) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
+        this.set(this.css(CSS16) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
         return;
       }
-      if (!this._loaded) this.set(this.css(CSS15) + `<p class="empty">Loading the discussion…</p>`);
+      if (!this._loaded) this.set(this.css(CSS16) + `<p class="empty">Loading the discussion…</p>`);
       let items = [];
       try {
         items = (await this.client.listComments({ targetType, targetSlug }))?.items ?? [];
       } catch {
-        this.set(this.css(CSS15) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
+        this.set(this.css(CSS16) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
         return;
       }
       const resolved = await Promise.all(items.map((c) => this._resolveBody(c).then((html) => ({ c, html }))));
@@ -3519,7 +3630,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>`;
       }).join("");
       const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
-      this.set(this.css(CSS15) + threadHtml + this._composeHtml(targetType, targetSlug));
+      this.set(this.css(CSS16) + threadHtml + this._composeHtml(targetType, targetSlug));
     }
     // A fresh <gbti-comment-box> for this target (it handles its own paid/trial/visitor gating UX). The injected
     // client is process-global, so it upgrades + talks to the same host with nothing to wire here.
@@ -3544,7 +3655,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-upvote.mjs
   var arrow = (filled) => `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4l8 9h-5v7h-6v-7H4z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>`;
-  var CSS16 = `
+  var CSS17 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -3565,7 +3676,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const c = Math.max(0, this._count);
       const label = !this.client ? "Sign in to upvote" : this._voted ? "Remove upvote" : "Upvote";
       this.set(
-        this.css(CSS16) + `<button class="pill ${this._voted ? "on" : ""}" type="button" aria-pressed="${this._voted}" aria-label="${label}" title="${label}">${arrow(this._voted)}<span class="c">${c}</span></button>`
+        this.css(CSS17) + `<button class="pill ${this._voted ? "on" : ""}" type="button" aria-pressed="${this._voted}" aria-label="${label}" title="${label}">${arrow(this._voted)}<span class="c">${c}</span></button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -3601,7 +3712,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED4 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var CSS17 = `
+  var CSS18 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -3672,10 +3783,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     async reload() {
       if (!this.client) {
-        this.set(this.css(CSS17) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        this.set(this.css(CSS18) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      this.set(this.css(CSS17) + `<p class="muted">Loading the co-op stream…</p>`);
+      this.set(this.css(CSS18) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st = await this.client.status();
@@ -3692,7 +3803,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         this._items = (await this.client.listShares())?.items ?? [];
       } catch {
-        this.set(this.css(CSS17) + `<p class="muted">Could not load Shares right now.</p>`);
+        this.set(this.css(CSS18) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       this.render();
@@ -3711,11 +3822,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const head = `<div class="head"><h3>Co-op stream</h3><button class="refresh" type="button">Refresh</button></div>`;
       const items = this._items || [];
       if (!items.length) {
-        this.set(this.css(CSS17) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS18) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
-      this.set(this.css(CSS17) + head + `<div data-list></div>`);
+      this.set(this.css(CSS18) + head + `<div data-list></div>`);
       this.on(".refresh", "click", () => this.reload());
       const list = document.createElement("gbti-card-list");
       list.mode = "detailed";
@@ -3749,7 +3860,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const canHide = (RANK2[this._role] ?? 0) >= RANK2.moderator && share.author && share.id;
       const mod = canHide ? `<button class="hide" type="button" data-hide>Hide Share</button>` : "";
-      this.set(this.css(CSS17) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS18) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime3(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -3805,21 +3916,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     }
     _splash() {
-      this.set(this.css(CSS17) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS18) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS18 = `
+  var CSS19 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS18) + `<div class="stack">
+      this.set(this.css(CSS19) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -6202,7 +6313,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS19 = `
+  var CSS20 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -6218,7 +6329,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS19) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS20) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -6226,7 +6337,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         membership = "unknown";
       }
       if (isLockedMembership(membership)) {
-        this.set(this.css(CSS19) + `<div class="splash">
+        this.set(this.css(CSS20) + `<div class="splash">
         <div class="lock">🔒</div>
         <h2>Your access is locked</h2>
         <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
@@ -6235,7 +6346,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>`);
         return;
       }
-      this.set(this.css(CSS19) + `<slot></slot>`);
+      this.set(this.css(CSS20) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -6248,7 +6359,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
     install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
   };
-  var CSS20 = `
+  var CSS21 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
@@ -6345,11 +6456,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const s = this._status;
       if (!s) {
-        this.set(this.css(CSS20) + `<p class="note">Checking your setup...</p>`);
+        this.set(this.css(CSS21) + `<p class="note">Checking your setup...</p>`);
         return;
       }
       if (s.ready) {
-        this.set(this.css(CSS20) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
+        this.set(this.css(CSS21) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
         <p class="note">Your drafts save to your copy, and we open the review request for you.</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
@@ -6365,7 +6476,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return `<li class="row"><span class="ic">${check(false)}</span>${this._card(id, meta, s)}</li>`;
       }).filter(Boolean).join("");
       const reached = s.reachedGithub !== false;
-      this.set(this.css(CSS20) + `
+      this.set(this.css(CSS21) + `
       <div class="head"><h2>Set up publishing</h2><span class="count">${nDone} of 3</span></div>
       <div class="bar"><i style="width:${Math.round(nDone / 3 * 100)}%"></i></div>
       <ul>${rows}</ul>
@@ -6468,7 +6579,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-topic-picker.mjs
   var SITE4 = "https://gbti.network";
-  var CSS21 = `
+  var CSS22 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { font:inherit; font-size:13px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:7px 14px; cursor:pointer; }
@@ -6508,16 +6619,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS21) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS22) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS21) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS22) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
       const sel = new Set(this._selected);
       const chips = this._topics.map((t) => `<button class="chip ${sel.has(t.key) ? "on" : ""}" data-topic="${esc(t.key)}" type="button" aria-pressed="${sel.has(t.key)}">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS21) + `<div class="chips ${this._busy ? "busy" : ""}">${chips}</div>`);
+      this.set(this.css(CSS22) + `<div class="chips ${this._busy ? "busy" : ""}">${chips}</div>`);
       this.$$("[data-topic]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.topic)));
     }
     async _toggle(key) {
@@ -6549,7 +6660,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
   var megaIco = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4z" fill="currentColor"/></svg>`;
-  var CSS22 = `
+  var CSS23 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); padding:32px 28px; max-width:680px; margin:0 auto; }
   .head { text-align:center; margin-bottom:22px; }
   .head .ic { display:inline-grid; place-items:center; }
@@ -6673,7 +6784,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
            <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(CSS22) + `
+      this.set(this.css(CSS23) + `
       <div class="head">
         <span class="ic">${check2}</span>
         <h2>Sign in to GBTI Network</h2>
@@ -6693,7 +6804,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this._loaded) {
-        this.set(this.css(CSS22) + `<p class="loading">Setting up your welcome...</p>`);
+        this.set(this.css(CSS23) + `<p class="loading">Setting up your welcome...</p>`);
         return;
       }
       if (this._authGate && !this._authenticated) {
@@ -6711,7 +6822,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
       ${isLast ? `<button class="btn done" data-done type="button">I am all set</button>` : `<button class="btn" data-step-next type="button">Continue &rarr;</button>`}
     </div>`;
-      this.set(this.css(CSS22) + `
+      this.set(this.css(CSS23) + `
       <div class="head">
         <span class="ic">${check2}</span>
         <div class="phase">${esc(ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "Welcome")}</div>
@@ -6923,7 +7034,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE6 = "https://gbti.network";
-  var CSS23 = `
+  var CSS24 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -6995,15 +7106,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS23) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS23) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS23) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -7019,7 +7130,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS23) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS24) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
@@ -7078,7 +7189,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var MEMBERSHIP = { paid: "Paid member", trial: "Trial", trialing: "Trial" };
   var lc3 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS24 = `
+  var CSS25 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -7173,11 +7284,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS24) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS25) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (this._membership === null) {
-        this.set(this.css(CSS24) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS25) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const m = this._membership;
@@ -7192,7 +7303,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <button class="subtab ${this._view === "channels" ? "on" : ""}" data-view="channels" type="button">News channels</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._membersHtml();
-      this.set(this.css(CSS24) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS25) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Membership</h3>${card}</section>
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
@@ -7287,7 +7398,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-052: placeholder for referrals + rewards (SOW-007/008)
   ];
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS25 = `
+  var CSS26 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:2px; padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* SOW-052 squared aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:2px; cursor:pointer; }
@@ -7604,7 +7715,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // ----- rendering -----
     render() {
       if (this._editing) {
-        this.set(this.css(CSS25) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS26) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this.render();
@@ -7616,7 +7727,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       if (this._reviewing != null) {
-        this.set(this.css(CSS25) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+        this.set(this.css(CSS26) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
         this.on("[data-back]", "click", () => {
           this._reviewing = null;
           this.render();
@@ -7632,7 +7743,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const badge = t.id === "inbox" && this._inboxCount ? `<span class="tbadge">${esc(this._inboxCount)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS25) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+      this.set(this.css(CSS26) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();
@@ -7809,7 +7920,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     } catch {
     }
   }
-  var CSS26 = `
+  var CSS27 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   .btn { width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:border-color .15s, color .15s; }
   .btn:hover { color:var(--fg); }
@@ -7992,7 +8103,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const total = this._bell?.total || 0;
       const dot = total > 0 ? `<span class="dot">${total > 99 ? "99+" : total}</span>` : "";
       const panel = this._open ? this._panelHtml() : "";
-      this.set(this.css(CSS26) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
+      this.set(this.css(CSS27) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -8121,7 +8232,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var SITE9 = "https://gbti.network";
   var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE9}/membership/">Become a member</a> to unlock the news feed.</div>`;
   var lc4 = (s) => String(s ?? "").toLowerCase();
-  var CSS27 = `
+  var CSS28 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -8270,12 +8381,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS27) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS28) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS27) + head + `<div data-body></div>`);
+      this.set(this.css(CSS28) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -8381,7 +8492,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc5 = (s) => String(s ?? "").toLowerCase();
-  var CSS28 = `
+  var CSS29 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); max-width:760px; }
   .pub { display:flex; align-items:center; gap:12px; padding:0 0 16px; margin:0 0 16px; border-bottom:1px solid var(--line); }
   .pav { position:relative; width:40px; height:40px; border-radius:10px; overflow:hidden; flex:none; background:var(--hover); }
@@ -8478,12 +8589,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS28) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS29) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS28) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS29) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -8498,7 +8609,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const discussion = slug ? `<div class="disc-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const heroSrc = it.thumb || it.image || "";
       const hero = heroSrc ? `<img class="hero" src="${esc(heroSrc)}" alt="" loading="lazy">` : "";
-      this.set(this.css(CSS28) + `<div class="pub"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="pi"><b>${esc(pub?.name || it.source || "Publisher")}</b>${meta ? `<span class="d">${esc(meta)}</span>` : ""}</div>` + (followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "") + `</div>` + hero + `<h2>${esc(it.title || "News")}</h2><p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + discussion);
+      this.set(this.css(CSS29) + `<div class="pub"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="pi"><b>${esc(pub?.name || it.source || "Publisher")}</b>${meta ? `<span class="d">${esc(meta)}</span>` : ""}</div>` + (followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "") + `</div>` + hero + `<h2>${esc(it.title || "News")}</h2><p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + discussion);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -8561,7 +8672,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS29 = `
+  var CSS30 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -8741,7 +8852,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS29));
+        this.set(this.css(CSS30));
         return;
       }
       const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE10 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
@@ -8758,7 +8869,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></section>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
-      this.set(this.css(CSS29) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${shareUpvote}</article>${side}</div></div>`);
+      this.set(this.css(CSS30) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${shareUpvote}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -8866,7 +8977,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-043: a self-loading members-only feed (not a per-type index)
   ];
   var CONTENT_TYPES = ["post", "product", "prompt"];
-  var CSS30 = `
+  var CSS31 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -8995,7 +9106,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS30) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS31) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -9008,7 +9119,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS30) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS31) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -9271,6 +9382,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-056 P2
       setNewsSourceEnabled: ({ id, enabled }) => request("POST", "/api/admin", { action: "news-source-toggle", id, enabled }),
       // SOW-056 P2
+      quotePool: () => request("GET", "/api/quote-pool"),
+      // SOW-063 P3: the splash quote pool { quotes } for the manager
+      addQuote: ({ text, author }) => request("POST", "/api/admin", { action: "quote-add", text, author }),
+      // SOW-063 P3
+      removeQuote: ({ text }) => request("POST", "/api/admin", { action: "quote-remove", text }),
+      // SOW-063 P3
+      setQuoteEnabled: ({ text, enabled }) => request("POST", "/api/admin", { action: "quote-toggle", text, enabled }),
+      // SOW-063 P3
       openPulls: () => request("GET", "/api/open-pulls"),
       // SOW-038 P2: admin-gated open content-PR queue { pulls }
       syndicationQueue: () => request("GET", "/api/syndication"),
