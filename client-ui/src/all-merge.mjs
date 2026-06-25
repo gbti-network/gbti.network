@@ -10,7 +10,7 @@
 // MEMBER-only shares (the default; visibility:'members') are readable only by paid or trialing — the exact
 // effectiveMembership vocabulary from membership.mjs (ban > staff > grandfather > Stripe; a grandfather grant
 // resolves to 'paid'). Every other value (expired/cancelled/none/banned/unknown) is fail-closed to no MEMBER shares.
-// SOW-076: PUBLIC shares (visibility:'public') are a separate, public content type (see mergeAll) visible to any
+// SOW-077: PUBLIC shares (visibility:'public') are a separate, public content type (see mergeAll) visible to any
 // reader; only the members-only stream stays gated here.
 const SHARE_OK = new Set(['paid', 'trialing']);
 
@@ -53,7 +53,7 @@ export function shareToItem(it) {
 export function mergeAll({ items = [], shares = null, membership = 'unknown' } = {}) {
   const out = Array.isArray(items) ? items.slice() : [];
   if (Array.isArray(shares)) {
-    // SOW-076: a PUBLIC share (visibility:'public') is visible to any reader (incl. a community-banned account);
+    // SOW-077: a PUBLIC share (visibility:'public') is visible to any reader (incl. a community-banned account);
     // a MEMBER share (the default) stays paid|trialing. Fail-closed: anything not explicitly 'public' is gated.
     const memberOk = canSeeShares(membership);
     for (const s of shares) {

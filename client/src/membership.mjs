@@ -74,18 +74,18 @@ export function canPublish(membership) {
   return membership === 'paid';
 }
 
-// SOW-076: a ban is a COMMUNITY ban, not total. A banned account stays a READ-only signed-in user (browse member
+// SOW-077: a ban is a COMMUNITY ban, not total. A banned account stays a READ-only signed-in user (browse member
 // activity, read the news feed, see public shares) but gets ZERO KV: no save/collect/follow/prefs (its own mutable
 // member record). So there are TWO free-tier sets:
 //   READ_TIER  = any signed-in status INCLUDING banned (the non-KV reads).
 //   FREE_TIER  = signed-in AND NOT banned (the KV "basket": save/collect/follow + news prefs).
 // Only the unresolved 'unknown' is excluded from both. Member-only content/comments stay on canSeeShares; publishing
-// stays on canPublish. (SOW-060 opened these to the free tier; SOW-076 carves banned out of the KV ones only.)
+// stays on canPublish. (SOW-060 opened these to the free tier; SOW-077 carves banned out of the KV ones only.)
 const READ_TIER = new Set(['paid', 'trialing', 'expired', 'cancelled', 'none', 'banned']);
 const FREE_TIER = new Set(['paid', 'trialing', 'expired', 'cancelled', 'none']);
 /** READ perks (no KV) — a banned account keeps these. Browse is a STATIC feed (no gated endpoint), so it is safe to
  *  open to banned now. NEWS is a gated Worker endpoint; canSeeNews opens to banned only once the Worker read-gate
- *  allows banned (SOW-076 Phase 2), so it stays on FREE_TIER until then to avoid showing banned a 403'ing tab. */
+ *  allows banned (SOW-077 Phase 2), so it stays on FREE_TIER until then to avoid showing banned a 403'ing tab. */
 export function canBrowse(membership) { return READ_TIER.has(membership); }
 export function canSeeNews(membership) { return FREE_TIER.has(membership); }
 /** CURATE / KV perks (write the member's own record) — a banned account loses these (it always has, via FREE_TIER). */

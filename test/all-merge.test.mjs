@@ -34,7 +34,7 @@ test('mergeAll omits Shares for a non-member, includes them for a member', () =>
   assert.ok(member.some((x) => x.type === 'share'));
 });
 
-test('SOW-076: a PUBLIC share is visible to free/banned; a MEMBER share stays paid|trialing only', () => {
+test('SOW-077: a PUBLIC share is visible to free/banned; a MEMBER share stays paid|trialing only', () => {
   const items = [post('a', 100)];
   const pub = share('p1', '2026-06-15T00:00:00Z', { visibility: 'public' });
   const mem = share('m1', '2026-06-15T00:00:00Z', { visibility: 'members' });
