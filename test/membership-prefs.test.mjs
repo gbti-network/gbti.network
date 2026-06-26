@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { handlePrefs, eraseMemberPrefs, PREFS_KEY } from '../workers/signup/membership-prefs.mjs';
+import { OVERRIDES_KV_KEY } from '../workers/signup/membership-content.mjs';
 
 const fakeKV = (init = {}) => {
   const store = new Map(Object.entries(init));
@@ -45,6 +46,23 @@ test('prefs: POST followChannel persists to the per-member KV key', async () => 
 test('prefs: POST an invalid patch -> 400', async () => {
   const r = await handlePrefs(REQ('POST', { categories: 'nope' }), {}, { kv: fakeKV(), authorize: paid });
   assert.equal(r.status, 400);
+});
+
+// SOW-078: prefs records NO analytics, so its DEFAULT gate is the Stripe-free authorizeMemberCheap — a free member
+// is served and a banned member denied, both with NO Stripe call (proven by a makeStripe that throws if invoked).
+const freshMirror = (over = {}) => ({ generatedAt: new Date().toISOString(), roles: over.roles ?? {}, bans: over.bans ?? { bans: [] }, grandfathered: over.grandfathered ?? { grandfathered: [] } });
+const userIs = (id) => async () => ({ githubId: id, githubLogin: 'u' });
+const explodeStripe = () => () => ({ findCustomerByGithubId: async () => { throw new Error('Stripe must not be called for prefs'); } });
+const REQ_AUTH = (method, body) => new Request('https://x/membership/prefs', { method, headers: { Authorization: 'Bearer tok' }, ...(body ? { body: JSON.stringify(body) } : {}) });
+
+test('prefs (SOW-078): the DEFAULT gate is Stripe-free — a free member is served, a banned member denied, no Stripe call', async () => {
+  const free = await handlePrefs(REQ_AUTH('GET'), {}, { kv: fakeKV({ [OVERRIDES_KV_KEY]: JSON.stringify(freshMirror()) }), fetchUser: userIs('9'), makeStripe: explodeStripe() });
+  assert.equal(free.status, 200);
+  const banned = await handlePrefs(REQ_AUTH('GET'), {}, { kv: fakeKV({ [OVERRIDES_KV_KEY]: JSON.stringify(freshMirror({ bans: { bans: [{ github_id: '9' }] } })) }), fetchUser: userIs('9'), makeStripe: explodeStripe() });
+  assert.equal(banned.status, 403);
+  // a missing mirror still fails closed (a stale/unavailable mirror does not open prefs to a since-banned member)
+  const noMirror = await handlePrefs(REQ_AUTH('GET'), {}, { kv: fakeKV(), fetchUser: userIs('9'), makeStripe: explodeStripe() });
+  assert.equal(noMirror.status, 403);
 });
 
 test('eraseMemberPrefs hard-deletes the key (SOW-024 right-to-erasure)', async () => {

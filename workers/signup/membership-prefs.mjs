@@ -4,22 +4,24 @@
 //   POST /membership/prefs { categories }           -> replace category interests
 //   POST /membership/prefs { followChannel:{id,on} } -> follow/unfollow a news source id
 //
-// SOW-060: prefs (category interests + followed news channels) personalize the FREE-tier news feed, so they follow
-// the same gate as news + follows: SIGNED-IN, non-banned (authorizeMember: ban > staff > grandfather > Stripe,
-// fail-closed from the KV overrides mirror), NOT effective-paid. Keyed `prefs:<github_id>` in SIGNUP_KV: per-member,
-// private, ERASABLE (eraseMemberPrefs = a hard KV delete; wired into the SOW-024 right-to-erasure runbook). The
-// transforms are the pure membership/member-prefs.mjs core; this handler only does auth + the KV read-modify-write,
-// so it unit-tests with a fake KV + a stubbed authorizer.
+// SOW-060: prefs (category interests + followed news channels) personalize the FREE-tier news feed; the gate is
+// SIGNED-IN, non-banned (NOT effective-paid). SOW-078: prefs records NO usage analytics (unlike news/follows, which
+// keep the Stripe-derived tier for per-tier insights), and its decision is identity + the ban mirror only, so it uses
+// the Stripe-FREE authorizeMemberCheap: same fail-closed contract (401 no/bad token, 403 missing/stale/incomplete
+// mirror, 403 banned) with no live Stripe round-trip on a hot, every-new-tab path. Keyed `prefs:<github_id>` in
+// SIGNUP_KV: per-member, private, ERASABLE (eraseMemberPrefs = a hard KV delete; SOW-024 right-to-erasure runbook).
+// The transforms are the pure membership/member-prefs.mjs core; this handler only does auth + the KV RMW.
 
-import { authorizeMember } from './membership-content.mjs';
+import { authorizeMemberCheap } from './membership-content.mjs';
 import { PrefsError, normalizePrefs, applyPrefs } from '../../membership/member-prefs.mjs';
 
 export const PREFS_KEY = (githubId) => `prefs:${githubId}`;
 
-export async function handlePrefs(request, env, { kv = env?.SIGNUP_KV, authorize = authorizeMember, ...authDeps } = {}) {
+export async function handlePrefs(request, env, { kv = env?.SIGNUP_KV, authorize = authorizeMemberCheap, ...authDeps } = {}) {
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the prefs store is not configured' } };
 
-  const auth = await authorize(request, env, authDeps);
+  // Pass kv so the (default) Stripe-free authorizer reads the overrides mirror from the SAME namespace as the prefs store.
+  const auth = await authorize(request, env, { ...authDeps, kv });
   if (!auth.ok) return { status: auth.status, body: auth.body };
   const key = PREFS_KEY(auth.githubId);
 
