@@ -8,7 +8,7 @@
 
 import { buildContentFile, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, parseContentFile, contentPath, ContentValidationError } from './content-ops.mjs';
 import { publishContent, publishFiles, commitToBranchOnFork, branchName } from './publish.mjs';
-import { canPublish, canStageDrafts, isBlockedFromPublishing, canSeeNews, canFollow, canSave, canBrowse } from './membership.mjs';
+import { canPublish, canStageDrafts, isBlockedFromPublishing, canSeeNews, canFollow, canSave, canBrowse, canSeeShares } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, decryptViaWorker, MemberContentLockedError } from './member-content.mjs';
 import {
   getActivity as workerGetActivity, setFavorite as workerSetFavorite, createCollection as workerCreateCollection,
@@ -102,7 +102,22 @@ export async function listShares(ctx, { limit } = {}) {
   requireIdentity(ctx);
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 40;
   if (typeof ctx.reader?.listShares !== 'function') return { items: [] };
-  return { items: (await ctx.reader.listShares(n)) ?? [] };
+  const items = (await ctx.reader.listShares(n)) ?? [];
+  // SOW-078: the public-vs-member visibility split is enforced HERE (host-side), not only in the client's mergeAll.
+  // A caller who cannot see the members-only stream (not paid/trialing) receives ONLY public shares, so the raw op
+  // can no longer be called directly to harvest member-share stubs (title/url/description). Paid/trial see all.
+  // (Per-tier completeness past the read cap is a SOW-077 concern; this is the no-leak guarantee.)
+  const membership = (await ctx.membership?.()) ?? 'unknown';
+  if (canSeeShares(membership)) return { items };
+  return { items: items.filter((s) => String(s?.visibility || 'members').toLowerCase() === 'public') };
+}
+
+// SOW-078: drop MEMBER-visibility comment stubs (author / timestamp / thread placement) for a caller who cannot read
+// member content (not paid/trialing). The body is already gated to '' in the summary, but the metadata of the
+// members-only conversation should not be served below the seeing tier. Public comments are kept for everyone.
+function gateMemberComments(items, membership) {
+  if (canSeeShares(membership ?? 'unknown')) return items ?? [];
+  return (items ?? []).filter((c) => String(c?.visibility || 'public').toLowerCase() !== 'members');
 }
 
 /**
@@ -116,7 +131,8 @@ export async function listShareComments(ctx, { targetSlug, limit } = {}) {
   if (!targetSlug || typeof targetSlug !== 'string') throw new OperationError('bad-request', 'targetSlug is required');
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listShareComments !== 'function') return { items: [] };
-  return { items: (await ctx.reader.listShareComments(targetSlug, n)) ?? [] };
+  const items = (await ctx.reader.listShareComments(targetSlug, n)) ?? [];
+  return { items: gateMemberComments(items, await ctx.membership?.()) }; // SOW-078: member comment stubs are tier-gated
 }
 
 // SOW-041: the generic comment thread for ANY content type (post/product/prompt/share). Powers the shared
@@ -129,7 +145,8 @@ export async function listComments(ctx, { targetType, targetSlug, limit } = {}) 
   if (!targetSlug || typeof targetSlug !== 'string') throw new OperationError('bad-request', 'targetSlug is required');
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listComments !== 'function') return { items: [] };
-  return { items: (await ctx.reader.listComments(targetType, targetSlug, n)) ?? [] };
+  const items = (await ctx.reader.listComments(targetType, targetSlug, n)) ?? [];
+  return { items: gateMemberComments(items, await ctx.membership?.()) }; // SOW-078: member comment stubs are tier-gated
 }
 
 /**

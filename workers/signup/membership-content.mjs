@@ -29,7 +29,7 @@ const deny = (message) => ({ ok: false, status: 403, body: { error: 'forbidden',
  * from the verified token; ban > staff > grandfather > Stripe is applied here. The caller decides which
  * statuses it accepts (decrypt allows an active trial to read a Share; encrypt + everything else is paid-only).
  */
-export async function resolveEffective(request, env, { fetchImpl = globalThis.fetch, makeStripe = createStripeClient, fetchUser = githubFetchUser, now = new Date() } = {}) {
+export async function resolveEffective(request, env, { fetchImpl = globalThis.fetch, makeStripe = createStripeClient, fetchUser = githubFetchUser, now = new Date(), needStripe = true, kv = env?.SIGNUP_KV } = {}) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   if (!token) return { ok: false, status: 401, body: { error: 'unauthorized', message: 'a GitHub bearer token is required' } };
@@ -43,13 +43,21 @@ export async function resolveEffective(request, env, { fetchImpl = globalThis.fe
   if (!user?.githubId) return { ok: false, status: 401, body: { error: 'unauthorized', message: 'the GitHub token has no user id' } };
   const githubId = String(user.githubId);
 
-  if (!env?.STRIPE_SECRET_KEY) return { ok: false, status: 500, body: { error: 'misconfigured', message: 'Stripe is not configured' } };
-  const stripe = makeStripe({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
-  const derived = await deriveStatus(githubId, stripe, now); // fails closed to 'none'; share the injected clock
+  // SOW-078: a free / ban-only caller (authorizeMemberCheap) does NOT need the Stripe-derived paid/trial status —
+  // its decision rests on identity + the cheap KV ban/override mirror, and ban > staff > grandfather wins regardless
+  // of the Stripe value. Skip the live Stripe round-trip for it (a hot path such as the new-tab feed). The mirror
+  // guards + the ban check below are UNCHANGED, so the cheap path still fails closed on a missing/stale/incomplete
+  // mirror; only the unneeded `derived` paid/trial signal is dropped (it floors to 'none').
+  let derived = 'none';
+  if (needStripe) {
+    if (!env?.STRIPE_SECRET_KEY) return { ok: false, status: 500, body: { error: 'misconfigured', message: 'Stripe is not configured' } };
+    const stripe = makeStripe({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
+    derived = await deriveStatus(githubId, stripe, now); // fails closed to 'none'; share the injected clock
+  }
 
   let mirror = null;
   try {
-    mirror = await env.SIGNUP_KV.get(OVERRIDES_KV_KEY, 'json');
+    mirror = await kv?.get(OVERRIDES_KV_KEY, 'json');
   } catch {
     mirror = null;
   }
@@ -95,6 +103,22 @@ export async function authorizeMember(request, env, deps = {}) {
   if (!r.ok) return r;
   if (r.status === 'banned') return deny('this account is not permitted');
   return { ok: true, githubId: r.githubId, login: r.login, source: r.source, status: r.status }; // SOW-061: tier for usage analytics
+}
+
+/**
+ * SOW-078: authorize any SIGNED-IN, non-banned caller WITHOUT a Stripe call. Same fail-closed contract as
+ * authorizeMember (401 no/bad token, 403 missing/stale/incomplete mirror, 403 banned), but it skips the live Stripe
+ * derive because the decision is identity + the ban mirror only. For the cheap free-tier gates whose outcome never
+ * reads paid-vs-trial: the member ACTIVITY save/collect (SOW-077: banned gets ZERO KV) and other identity+ban gates.
+ * CAVEAT: the returned `status` is NOT Stripe-derived (a paid member surfaces as 'none' unless staff/grandfather), so
+ * it must NOT be used as an analytics tier — that is why news/follows (which record per-tier usage) stay on the
+ * Stripe-backed authorizeMember until that analytics tradeoff is accepted (see the SOW-078 punch-list).
+ */
+export async function authorizeMemberCheap(request, env, deps = {}) {
+  const r = await resolveEffective(request, env, { ...deps, needStripe: false });
+  if (!r.ok) return r;
+  if (r.status === 'banned') return deny('this account is not permitted');
+  return { ok: true, githubId: r.githubId, login: r.login, source: r.source, status: r.status };
 }
 
 // SOW-018: a Share's encrypted body carries the AAD `share:<id>:body` (encAssetFor('share', ...)). The AAD is

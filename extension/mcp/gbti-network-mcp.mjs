@@ -18135,6 +18135,10 @@ function canBrowse(membership) {
 function canSeeNews(membership) {
   return FREE_TIER.has(membership);
 }
+var SEE_SHARES_TIER = /* @__PURE__ */ new Set(["paid", "trialing"]);
+function canSeeShares(membership) {
+  return SEE_SHARES_TIER.has(membership);
+}
 function canFollow(membership) {
   return FREE_TIER.has(membership);
 }
@@ -18282,6 +18286,10 @@ function listContent(ctx2, { type } = {}) {
   const id = requireIdentity(ctx2);
   return { items: ctx2.reader.list(id.username, type || void 0) };
 }
+function gateMemberComments(items, membership) {
+  if (canSeeShares(membership ?? "unknown")) return items ?? [];
+  return (items ?? []).filter((c) => String(c?.visibility || "public").toLowerCase() !== "members");
+}
 var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
 async function listComments(ctx2, { targetType, targetSlug, limit } = {}) {
   requireIdentity(ctx2);
@@ -18289,7 +18297,8 @@ async function listComments(ctx2, { targetType, targetSlug, limit } = {}) {
   if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx2.reader?.listComments !== "function") return { items: [] };
-  return { items: await ctx2.reader.listComments(targetType, targetSlug, n) ?? [] };
+  const items = await ctx2.reader.listComments(targetType, targetSlug, n) ?? [];
+  return { items: gateMemberComments(items, await ctx2.membership?.()) };
 }
 function getContentItem(ctx2, { path: path4 } = {}) {
   const id = requireIdentity(ctx2);

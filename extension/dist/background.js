@@ -18030,6 +18030,10 @@ function canBrowse(membership) {
 function canSeeNews(membership) {
   return FREE_TIER.has(membership);
 }
+var SEE_SHARES_TIER = /* @__PURE__ */ new Set(["paid", "trialing"]);
+function canSeeShares(membership) {
+  return SEE_SHARES_TIER.has(membership);
+}
 function canFollow(membership) {
   return FREE_TIER.has(membership);
 }
@@ -18688,14 +18692,22 @@ async function listShares(ctx, { limit } = {}) {
   requireIdentity(ctx);
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 40;
   if (typeof ctx.reader?.listShares !== "function") return { items: [] };
-  return { items: await ctx.reader.listShares(n) ?? [] };
+  const items = await ctx.reader.listShares(n) ?? [];
+  const membership = await ctx.membership?.() ?? "unknown";
+  if (canSeeShares(membership)) return { items };
+  return { items: items.filter((s) => String(s?.visibility || "members").toLowerCase() === "public") };
+}
+function gateMemberComments(items, membership) {
+  if (canSeeShares(membership ?? "unknown")) return items ?? [];
+  return (items ?? []).filter((c) => String(c?.visibility || "public").toLowerCase() !== "members");
 }
 async function listShareComments(ctx, { targetSlug, limit } = {}) {
   requireIdentity(ctx);
   if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listShareComments !== "function") return { items: [] };
-  return { items: await ctx.reader.listShareComments(targetSlug, n) ?? [] };
+  const items = await ctx.reader.listShareComments(targetSlug, n) ?? [];
+  return { items: gateMemberComments(items, await ctx.membership?.()) };
 }
 var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
 async function listComments(ctx, { targetType, targetSlug, limit } = {}) {
@@ -18704,7 +18716,8 @@ async function listComments(ctx, { targetType, targetSlug, limit } = {}) {
   if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listComments !== "function") return { items: [] };
-  return { items: await ctx.reader.listComments(targetType, targetSlug, n) ?? [] };
+  const items = await ctx.reader.listComments(targetType, targetSlug, n) ?? [];
+  return { items: gateMemberComments(items, await ctx.membership?.()) };
 }
 async function readContent(ctx, { path } = {}) {
   requireIdentity(ctx);

@@ -130,8 +130,14 @@ test('normalizeActivity drops malformed entries and caps the name length', () =>
 
 // ---- Worker handler ----
 
-function fakeKV() {
+// SOW-078: handleActivity now denies a banned account (authorizeMemberCheap), reading the overrides mirror from the
+// SAME SIGNUP_KV namespace as the activity store. So the fake KV seeds a fresh `overrides:mirror` (pass null to
+// simulate an unavailable mirror, or a custom mirror to ban a member).
+const OVERRIDES_KV_KEY = 'overrides:mirror';
+const freshMirror = (over = {}) => ({ generatedAt: new Date().toISOString(), roles: over.roles ?? {}, bans: over.bans ?? { bans: [] }, grandfathered: over.grandfathered ?? { grandfathered: [] } });
+function fakeKV(mirror = freshMirror()) {
   const store = new Map();
+  if (mirror) store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror));
   return {
     store,
     async get(key, type) { const v = store.get(key); return v === undefined ? null : (type === 'json' ? JSON.parse(v) : v); },
@@ -188,6 +194,22 @@ test('handler: unauthorized without a token, and 400 on a bad action / invalid i
   assert.equal(unknown.status, 400);
   const invalid = await handleActivity(req('POST', { action: 'favorite', type: 'prompt', slug: 'Bad!', on: true }), {}, deps(kv));
   assert.equal(invalid.status, 400);
+});
+
+// SOW-078: a ban is ZERO KV. handleActivity must deny a banned member (read AND write) and never touch their record.
+test('handler: a BANNED member is denied KV access (ZERO KV), and a write never reaches the store', async () => {
+  const kv = fakeKV(freshMirror({ bans: { bans: [{ github_id: '42' }] } })); // fetchUser resolves the token to '42'
+  const get = await handleActivity(req('GET'), {}, deps(kv));
+  assert.equal(get.status, 403);
+  const post = await handleActivity(req('POST', { action: 'favorite', type: 'prompt', slug: 'p', on: true }), {}, deps(kv));
+  assert.equal(post.status, 403);
+  assert.equal(kv.store.has(ACTIVITY_KEY('42')), false, 'a banned write must not persist to KV');
+});
+
+test('handler: a missing/stale overrides mirror fails closed (403), never opening the activity store', async () => {
+  assert.equal((await handleActivity(req('GET'), {}, deps(fakeKV(null)))).status, 403);
+  const stale = freshMirror(); stale.generatedAt = new Date('2020-01-01').toISOString();
+  assert.equal((await handleActivity(req('GET'), {}, deps(fakeKV(stale)))).status, 403);
 });
 
 test('eraseMemberActivity hard-deletes the member key (right to erasure)', async () => {

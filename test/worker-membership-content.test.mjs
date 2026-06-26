@@ -4,7 +4,7 @@
 // the decrypt/encrypt round-trip. Injected fetchUser + Stripe + KV: no network, no secrets.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { membershipDecrypt, membershipEncrypt, authorizePaid, authorizeMember, OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from '../workers/signup/membership-content.mjs';
+import { membershipDecrypt, membershipEncrypt, authorizePaid, authorizeMember, authorizeMemberCheap, OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from '../workers/signup/membership-content.mjs';
 import { encryptAsset, generateEpochKey } from '../client/src/crypto-assets.mjs';
 
 const KEY = generateEpochKey();
@@ -173,4 +173,41 @@ test('authorizeMember: a missing/stale overrides mirror fails closed (403), neve
   const r = await authorizeMember(POST('news', 'Bearer g'), ENV({}, null), deps('9', () => null));
   assert.equal(r.ok, false);
   assert.equal(r.status, 403);
+});
+
+// SOW-078: authorizeMemberCheap is the FREE-tier gate WITHOUT a Stripe call (the activity ban check + future
+// news/follows/prefs trim). It must keep authorizeMember's fail-closed contract while NEVER invoking Stripe.
+const explodeStripe = () => () => ({ findCustomerByGithubId: async () => { throw new Error('Stripe must not be called on the cheap path'); } });
+
+test('authorizeMemberCheap: a signed-in member is authorized WITHOUT any Stripe call', async () => {
+  const r = await authorizeMemberCheap(POST('activity', 'Bearer g'), ENV(), { fetchUser: userIs('9'), makeStripe: explodeStripe() });
+  assert.equal(r.ok, true);
+  assert.equal(r.githubId, '9');
+});
+
+test('authorizeMemberCheap: a banned member is denied (fail closed), still with no Stripe call', async () => {
+  const mirror = freshMirror({ bans: { bans: [{ github_id: '1' }] } });
+  const r = await authorizeMemberCheap(POST('activity', 'Bearer g'), ENV({}, mirror), { fetchUser: userIs('1'), makeStripe: explodeStripe() });
+  assert.equal(r.ok, false);
+  assert.equal(r.status, 403);
+  assert.match(r.body.message, /not permitted/);
+});
+
+test('authorizeMemberCheap: no token -> 401; a missing/stale mirror -> 403 (fails closed like authorizeMember)', async () => {
+  assert.equal((await authorizeMemberCheap(POST('activity', null), ENV(), { fetchUser: userIs('9') })).status, 401);
+  assert.equal((await authorizeMemberCheap(POST('activity', 'Bearer g'), ENV({}, null), { fetchUser: userIs('9') })).status, 403);
+  const stale = freshMirror(); stale.generatedAt = new Date(Date.now() - MAX_OVERRIDES_AGE_MS - 1000).toISOString();
+  assert.equal((await authorizeMemberCheap(POST('activity', 'Bearer g'), ENV({}, stale), { fetchUser: userIs('9') })).status, 403);
+});
+
+test('authorizeMemberCheap: works even with no STRIPE_SECRET_KEY configured (it never needs Stripe)', async () => {
+  const r = await authorizeMemberCheap(POST('activity', 'Bearer g'), ENV({ STRIPE_SECRET_KEY: undefined }), { fetchUser: userIs('9') });
+  assert.equal(r.ok, true);
+});
+
+test('authorizeMemberCheap: a grandfathered member with no Stripe sub still resolves to paid (override wins)', async () => {
+  const mirror = freshMirror({ grandfathered: { grandfathered: [{ github_id: '3' }] } });
+  const r = await authorizeMemberCheap(POST('activity', 'Bearer g'), ENV({}, mirror), { fetchUser: userIs('3'), makeStripe: explodeStripe() });
+  assert.equal(r.ok, true);
+  assert.equal(r.status, 'paid');
 });

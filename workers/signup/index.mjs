@@ -463,8 +463,9 @@ export default {
         }
       }
 
-      // SOW-023: the member follow graph (subscriptions) in the deletable edge store. Effective-paid only
-      // (read + write), per-member, private, ERASABLE. Per-token body, so never cached and varied on the bearer.
+      // SOW-023: the member follow graph (subscriptions) in the deletable edge store. Signed-in, non-banned
+      // (the FREE tier, SOW-060; authorizeMember denies banned), per-member, private, ERASABLE. Per-token body, so
+      // never cached and varied on the bearer.
       if (pathname === '/membership/follows') {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET' || method === 'POST') {

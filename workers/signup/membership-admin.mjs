@@ -10,7 +10,7 @@
 // reaches a non-admin and is never cached. Pure over injected deps so it unit-tests with no network/secrets.
 
 import { githubFetchUser } from './oauth.mjs';
-import { rolesFromParsed, roleOf, isAdminRole, curatorsFromParsed, isCurator, canCurateNews } from '../../membership/overrides-core.mjs';
+import { rolesFromParsed, roleOf, isAdminRole, curatorsFromParsed, isCurator, canCurateNews, bansFromParsed, isBanned } from '../../membership/overrides-core.mjs';
 import { deriveStatusFromCustomer } from '../../membership/derive-status.mjs';
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from './membership-content.mjs';
@@ -42,6 +42,12 @@ async function resolveCaller(request, env, { fetchImpl = globalThis.fetch, fetch
   if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_OVERRIDES_AGE_MS) return fail(403, 'forbidden', 'member overrides are stale right now');
   const isSection = (x) => x != null && typeof x === 'object' && !Array.isArray(x);
   if (!isSection(mirror.roles)) return fail(403, 'forbidden', 'member overrides are incomplete right now');
+
+  // SOW-078: ban > staff. This admin/curator path read ONLY roles, so a banned admin/superadmin/curator kept full
+  // powers (statuses enumeration, ops dispatch, news publish, syndication). Read the bans section too (fail closed
+  // if it is missing/malformed, exactly like roles) and deny a banned caller before any role grant.
+  if (!isSection(mirror.bans)) return fail(403, 'forbidden', 'member overrides are incomplete right now');
+  if (isBanned(githubId, bansFromParsed(mirror.bans))) return fail(403, 'forbidden', 'this account is not permitted');
 
   const role = roleOf(githubId, rolesFromParsed(mirror.roles));
   return { ok: true, githubId, role, isCurator: isCurator(githubId, curatorsFromParsed(mirror.roles)), mirror };

@@ -97,6 +97,12 @@ const FREE_TIER = new Set(['paid', 'trialing', 'expired', 'cancelled', 'none']);
  *  allows banned (SOW-077 Phase 2), so it stays on FREE_TIER until then to avoid showing banned a 403'ing tab. */
 export function canBrowse(membership) { return READ_TIER.has(membership); }
 export function canSeeNews(membership) { return FREE_TIER.has(membership); }
+// SOW-018/078: who may see the MEMBER-only Shares stream (and member-visibility comment stubs) — an active trial
+// may READ, a paid member fully. Mirrors client-ui/all-merge.mjs canSeeShares (the browser copy) and the Worker
+// decrypt's READ_TRIAL_OK; kept in lockstep. Used HOST-side to filter member Share/comment stubs out of the list
+// responses for any caller below this tier, so the raw list ops cannot be hit to harvest the members-only stream.
+const SEE_SHARES_TIER = new Set(['paid', 'trialing']);
+export function canSeeShares(membership) { return SEE_SHARES_TIER.has(membership); }
 /** CURATE / KV perks (write the member's own record) — a banned account loses these (it always has, via FREE_TIER). */
 export function canFollow(membership) { return FREE_TIER.has(membership); }
 export function canSave(membership) { return FREE_TIER.has(membership); }

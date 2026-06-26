@@ -8,13 +8,16 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { shareSummary, byShareNewest, commentSummary, byCommentOldest } from '../client/src/content-ops.mjs';
-import { listShares, listShareComments, OperationError } from '../client/src/operations.mjs';
+import { listShares, listShareComments, listComments, OperationError } from '../client/src/operations.mjs';
 import { createReader } from '../client/src/repo-fs.mjs';
 import { createGithubReader } from '../extension/src/github-reader.mjs';
 
-const ctxWith = (reader, identity = { username: 'alice', login: 'alice', githubId: '1' }) => ({
+// SOW-078: the list ops now tier-filter member-visibility stubs, so the ctx carries the caller's membership
+// (defaults to 'paid' = sees everything, matching the prior behavior the existing tests assert).
+const ctxWith = (reader, identity = { username: 'alice', login: 'alice', githubId: '1' }, membership = 'paid') => ({
   identity: () => identity,
   reader,
+  membership: () => membership,
 });
 
 test('shareSummary: public includes the body, members excludes it, createdAt normalized', () => {
@@ -50,6 +53,37 @@ test('listShares: delegates to the reader, awaits async, caps the limit', async 
   assert.equal((await listShares(ctxWith(syncReader))).items.length, 5);
   // a reader without listShares -> empty, no throw
   assert.deepEqual((await listShares(ctxWith({}))).items, []);
+});
+
+// SOW-078: the host op enforces the public-vs-member visibility split, so the raw op cannot be hit directly to
+// harvest member-share stubs when a tier below paid/trial relaxes its client fetch-gate (SOW-077 Phase 2).
+test('SOW-078: listShares returns member shares ONLY to paid/trialing; lower tiers get public shares only', async () => {
+  const items = [
+    { id: 'p1', visibility: 'public' },
+    { id: 'm1', visibility: 'members' },
+    { id: 'p2', visibility: 'public' },
+  ];
+  const reader = { listShares: async () => items };
+  assert.equal((await listShares(ctxWith(reader, undefined, 'paid'))).items.length, 3, 'paid sees all');
+  assert.equal((await listShares(ctxWith(reader, undefined, 'trialing'))).items.length, 3, 'trial sees all');
+  for (const m of ['none', 'expired', 'cancelled', 'banned', 'unknown']) {
+    const r = await listShares(ctxWith(reader, undefined, m));
+    assert.deepEqual(r.items.map((s) => s.id), ['p1', 'p2'], `${m} gets public shares only, no member stubs`);
+  }
+  // a share with NO explicit visibility is treated as members (fail closed) for a lower tier
+  const r = await listShares(ctxWith({ listShares: async () => [{ id: 'x' }] }, undefined, 'none'));
+  assert.deepEqual(r.items, [], 'an unmarked share is withheld from a lower tier (fail closed)');
+});
+
+test('SOW-078: listShareComments + listComments hide member-visibility comment stubs below the seeing tier', async () => {
+  const items = [{ id: 'cpub', visibility: 'public' }, { id: 'cmem', visibility: 'members' }];
+  const reader = { listShareComments: async () => items, listComments: async () => items };
+  assert.equal((await listShareComments(ctxWith(reader, undefined, 'paid'), { targetSlug: 'a/x' })).items.length, 2);
+  assert.equal((await listShareComments(ctxWith(reader, undefined, 'trialing'), { targetSlug: 'a/x' })).items.length, 2);
+  const freeShare = await listShareComments(ctxWith(reader, undefined, 'none'), { targetSlug: 'a/x' });
+  assert.deepEqual(freeShare.items.map((c) => c.id), ['cpub'], 'a free caller gets only the public comment stub');
+  const bannedGeneric = await listComments(ctxWith(reader, undefined, 'banned'), { targetType: 'post', targetSlug: 'hello' });
+  assert.deepEqual(bannedGeneric.items.map((c) => c.id), ['cpub'], 'a banned caller gets only the public comment stub');
 });
 
 test('repo-fs listShares: walks members/*/shares, published-only, newest-first, public body only', () => {

@@ -12,26 +12,13 @@
 // KV read-modify-write, so it is unit-tested with a fake KV + fake token verifier (no network, no secrets).
 
 import { githubFetchUser } from './oauth.mjs';
+import { authorizeMemberCheap } from './membership-content.mjs';
 import {
   ActivityError, normalizeActivity,
   applyFavorite, createCollection, renameCollection, deleteCollection, setCollectionItem,
 } from '../../membership/member-activity.mjs';
 
 export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
-
-async function authMember(request, { fetchImpl, fetchUser }) {
-  const auth = request.headers.get('Authorization') || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  if (!token) return { ok: false, status: 401, body: { error: 'unauthorized', message: 'a GitHub bearer token is required' } };
-  let user;
-  try {
-    user = await fetchUser(token, fetchImpl);
-  } catch {
-    return { ok: false, status: 401, body: { error: 'unauthorized', message: 'could not verify the GitHub token' } };
-  }
-  if (!user?.githubId) return { ok: false, status: 401, body: { error: 'unauthorized', message: 'the GitHub token has no user id' } };
-  return { ok: true, githubId: String(user.githubId) };
-}
 
 export async function handleActivity(request, env, {
   fetchImpl = globalThis.fetch,
@@ -42,8 +29,12 @@ export async function handleActivity(request, env, {
 } = {}) {
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the activity store is not configured' } };
 
-  const a = await authMember(request, { fetchImpl, fetchUser });
-  if (!a.ok) return a;
+  // SOW-077/078: a ban is ZERO KV. authorizeMemberCheap denies a banned account (and fails closed on a
+  // missing/stale/incomplete overrides mirror) WITHOUT a Stripe call, matching the follows/prefs gate — closing
+  // the gap where the old identity-only auth let a banned member keep writing favorites/collections. The activity
+  // store and the overrides mirror share the SAME SIGNUP_KV namespace, so the mirror is read through `kv`.
+  const a = await authorizeMemberCheap(request, env, { fetchImpl, fetchUser, kv });
+  if (!a.ok) return { status: a.status, body: a.body };
   const key = ACTIVITY_KEY(a.githubId);
   const method = request.method;
 

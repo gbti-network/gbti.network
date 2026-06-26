@@ -49,6 +49,23 @@ test('authorizeAdmin: a stale or missing mirror fails closed (403)', async () =>
   assert.equal((await authorizeAdmin(req('sa'), envWith(bad), { fetchUser, now })).status, 403);
 });
 
+// SOW-078: ban > staff. A banned admin/superadmin/curator must be denied, and a malformed bans section must fail
+// closed (never silently drop the ban tier and grant admin).
+test('authorizeAdmin: a BANNED superadmin is denied (ban overrides staff)', async () => {
+  const banned = freshMirror({ bans: { bans: [{ github_id: '1' }] } }); // '1' is a superadmin in the roster
+  const r = await authorizeAdmin(req('sa'), envWith(banned), { fetchUser, now });
+  assert.equal(r.ok, false);
+  assert.equal(r.status, 403);
+  assert.match(r.body.message, /not permitted/);
+});
+
+test('authorizeAdmin: a malformed/missing bans section fails closed (403), not an open admin grant', async () => {
+  const badBans = freshMirror({ bans: [] }); // a bare array, not { bans: [...] }
+  assert.equal((await authorizeAdmin(req('sa'), envWith(badBans), { fetchUser, now })).status, 403);
+  const noBans = freshMirror({ bans: undefined });
+  assert.equal((await authorizeAdmin(req('sa'), envWith(noBans), { fetchUser, now })).status, 403);
+});
+
 test('membershipAdminStatuses: admin gets a github_id -> status map from Stripe', async () => {
   const customers = [
     { metadata: { github_id: '2' }, subscriptions: { data: [{ status: 'active' }] } },
