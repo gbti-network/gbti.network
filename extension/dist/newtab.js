@@ -4587,8 +4587,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.fields = [];
       }
       let membership = "unknown";
+      let canStage = true;
       try {
-        membership = (await this.client.status())?.membership ?? "unknown";
+        const st = await this.client.status();
+        membership = st?.membership ?? "unknown";
+        canStage = membership === "unknown" || st?.canStageDrafts === true;
       } catch {
         membership = "unknown";
       }
@@ -4643,12 +4646,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .cover-actions { display:flex; gap:8px; }
       `) + `<div class="editor">
            <div class="doc">
-             ${blocked ? `<div class="notice">Publishing requires a paid membership. You can write and stage your work now; it stays on your fork until you upgrade. <a href="https://gbti.network" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
+             ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
              <label class="body-l">Body</label>
              <gbti-block-editor id="body"></gbti-block-editor>
              <div class="actions">
                <button id="preview" class="ghost">Preview</button>
                <button id="validate" class="ghost">Validate</button>
+               ${canStage ? `<button id="draft" title="Save a draft to your own fork (does not publish)">Save draft</button>` : ""}
                <button id="publish"${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required to publish" : "Publish (open PR)"}</button>
                <input type="file" id="img" accept="image/*" style="display:none" />
                <button id="imgbtn" class="ghost">Add image</button>
@@ -4671,6 +4675,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       });
       this.on("#preview", "click", () => this.doPreview());
       this.on("#validate", "click", () => this.doValidate());
+      this.on("#draft", "click", () => this.doDraft());
       this.on("#publish", "click", () => this.doPublish());
       this.on("#imgbtn", "click", () => this.$("#img").click());
       this.on("#img", "change", (e) => this.doImage(e.target.files?.[0]));
@@ -4793,6 +4798,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const res = await this.client.publish({ type, input, body });
         this.out(`<span class="tag ok">${res.updated ? "updated" : "opened"}</span> PR <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a>`);
         this.emit("gbti-published", res);
+      } catch (err) {
+        this.out(esc(err.message), "danger");
+      }
+    }
+    // SOW-082: Save the current content as a draft on the member's own fork (no PR). Allowed for trial + paid; a
+    // trial member's members-only content is refused server-side with a clean upgrade nudge (membership-required).
+    async doDraft() {
+      this.out("Saving draft…");
+      try {
+        const { type, input, body } = this.gather();
+        const res = await this.client.saveDraft({ type, input, body });
+        this.out('<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
+        this.emit("gbti-draft-saved", res);
       } catch (err) {
         this.out(esc(err.message), "danger");
       }
