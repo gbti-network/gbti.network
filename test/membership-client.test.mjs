@@ -156,20 +156,20 @@ test('getStatus surfaces membership + canPublish for the UI notice', () => {
 });
 
 // SOW-060 + SOW-077: every known signed-in status (not banned) gets all the free perks. A BANNED account keeps the
-// READ perk that needs no KV (browse: a static feed) but loses the KV "basket" (save/collect/follow) AND, for now,
-// the gated news endpoint (canSeeNews opens to banned in Phase 2 with the Worker read-gate). canPublish stays paid.
-test('free-tier predicates: known signed-in statuses get all perks; banned keeps browse but not the KV basket', () => {
+// READ perks that need no KV (browse: a static feed; AND news, opened to banned by the SOW-077 Phase 2 Worker
+// read-gate) but loses the KV "basket" (save/collect/follow). canPublish stays paid.
+test('free-tier predicates: known signed-in statuses get all perks; banned keeps READ (browse + news) but not the KV basket', () => {
   for (const m of ['paid', 'trialing', 'expired', 'cancelled', 'none']) {
     assert.equal(canSeeNews(m), true, `${m} sees news`);
     assert.equal(canFollow(m), true, `${m} follows`);
     assert.equal(canSave(m), true, `${m} saves`);
     assert.equal(canBrowse(m), true, `${m} browses`);
   }
-  // SOW-077: a banned (community-banned) account stays a read-only user.
+  // SOW-077: a banned (community-banned) account stays a read-only user — browse AND news, but ZERO KV.
   assert.equal(canBrowse('banned'), true, 'banned may browse (static feed, no KV)');
+  assert.equal(canSeeNews('banned'), true, 'banned may read news (SOW-077 P2 read-gate, no KV)');
   assert.equal(canSave('banned'), false, 'banned has no KV basket (save)');
   assert.equal(canFollow('banned'), false, 'banned has no KV basket (follow)');
-  assert.equal(canSeeNews('banned'), false, 'banned: news gated until the Phase 2 read-gate');
   for (const m of ['unknown', undefined, null, '']) {
     assert.equal(canBrowse(m), false, `${m} browses nothing`);
     assert.equal(canSave(m), false, `${m} no KV`);

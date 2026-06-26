@@ -2368,9 +2368,9 @@
 
   // client/src/membership.mjs
   var STAFF = /* @__PURE__ */ new Set([ROLE.moderator, ROLE.admin, ROLE.superadmin]);
-  var FREE_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none"]);
+  var READ_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none", "banned"]);
   function canSeeNews(membership) {
-    return FREE_TIER.has(membership);
+    return READ_TIER.has(membership);
   }
   var LOCKED_MEMBERSHIP = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   function isLockedMembership(membership) {

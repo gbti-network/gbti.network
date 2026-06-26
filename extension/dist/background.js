@@ -18028,7 +18028,7 @@ function canBrowse(membership) {
   return READ_TIER.has(membership);
 }
 function canSeeNews(membership) {
-  return FREE_TIER.has(membership);
+  return READ_TIER.has(membership);
 }
 var SEE_SHARES_TIER = /* @__PURE__ */ new Set(["paid", "trialing"]);
 function canSeeShares(membership) {

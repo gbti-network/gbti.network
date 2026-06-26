@@ -16,6 +16,19 @@ test('news: a non-paid caller is denied (the proxy never calls the news worker /
   assert.equal(called, false, 'the upstream news worker must not be called for a denied member');
 });
 
+// SOW-077: news READ is open to any signed-in account INCLUDING banned (the default gate is now authorizeSignedIn).
+// The handler must serve a banned reader (it is a non-KV read); the analytics tier carries through as 'banned'.
+test('news: a BANNED reader is served (read-only, non-KV); the news_view is recorded as the banned tier', async () => {
+  const bannedOk = () => ({ ok: true, githubId: '1', status: 'banned' });
+  let recordedTier = null;
+  const env = { ...ENV, EXT_ANALYTICS: { writeDataPoint: (p) => { recordedTier = p?.blobs?.[0]; } } };
+  const fetch = async () => new Response(JSON.stringify({ updatedAt: 1, items: [{ guid: 'g1', title: 'A' }] }), { status: 200 });
+  const r = await membershipNews(req(), env, { authorize: bannedOk, fetch });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.items.length, 1);
+  assert.equal(recordedTier, 'banned', 'the news_view analytics event is bucketed as banned, not dropped');
+});
+
 test('news: a paid caller gets the proxied items + the bearer key is sent upstream (never to the client)', async () => {
   let sentAuth = null; let sentUrl = null;
   const fetch = async (url, init) => { sentUrl = url; sentAuth = init?.headers?.Authorization; return new Response(JSON.stringify({ updatedAt: 123, items: [{ guid: 'g1', title: 'A' }] }), { status: 200 }); };

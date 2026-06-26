@@ -92,11 +92,12 @@ export function canStageDrafts(membership) {
 // stays on canPublish. (SOW-060 opened these to the free tier; SOW-077 carves banned out of the KV ones only.)
 const READ_TIER = new Set(['paid', 'trialing', 'expired', 'cancelled', 'none', 'banned']);
 const FREE_TIER = new Set(['paid', 'trialing', 'expired', 'cancelled', 'none']);
-/** READ perks (no KV) — a banned account keeps these. Browse is a STATIC feed (no gated endpoint), so it is safe to
- *  open to banned now. NEWS is a gated Worker endpoint; canSeeNews opens to banned only once the Worker read-gate
- *  allows banned (SOW-077 Phase 2), so it stays on FREE_TIER until then to avoid showing banned a 403'ing tab. */
+/** READ perks (no KV) — a banned account keeps these. Browse is a STATIC feed (no gated endpoint). NEWS is a gated
+ *  Worker endpoint, now opened to ANY signed-in account INCLUDING banned by the SOW-077 Phase 2 read-gate
+ *  (the Worker's authorizeSignedIn), so canSeeNews matches canBrowse (the READ tier). Following channels / news-prefs
+ *  (the KV write) stay on the CURATE tier below (canFollow/canSave), which excludes banned. */
 export function canBrowse(membership) { return READ_TIER.has(membership); }
-export function canSeeNews(membership) { return FREE_TIER.has(membership); }
+export function canSeeNews(membership) { return READ_TIER.has(membership); }
 // SOW-018/078: who may see the MEMBER-only Shares stream (and member-visibility comment stubs) — an active trial
 // may READ, a paid member fully. Mirrors client-ui/all-merge.mjs canSeeShares (the browser copy) and the Worker
 // decrypt's READ_TRIAL_OK; kept in lockstep. Used HOST-side to filter member Share/comment stubs out of the list

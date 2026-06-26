@@ -106,6 +106,19 @@ export async function authorizeMember(request, env, deps = {}) {
 }
 
 /**
+ * SOW-077: authorize ANY signed-in caller, INCLUDING a banned account, for a READ-only, non-KV perk (the news feed).
+ * Identical to authorizeMember EXCEPT it does NOT deny banned: a ban is a COMMUNITY ban, so a banned account keeps the
+ * non-KV reads (it still gets ZERO KV via the activity/follows/prefs gates, which stay on authorizeMember). Keeps the
+ * fail-closed token + mirror checks AND the Stripe-derived `status` (so news analytics stay per-tier; the 'banned'
+ * bucket is already in USAGE_BUCKETS). The optional Stripe-trim — flip to needStripe:false — is a separate decision.
+ */
+export async function authorizeSignedIn(request, env, deps = {}) {
+  const r = await resolveEffective(request, env, deps);
+  if (!r.ok) return r;
+  return { ok: true, githubId: r.githubId, login: r.login, source: r.source, status: r.status }; // banned is allowed to read
+}
+
+/**
  * SOW-078: authorize any SIGNED-IN, non-banned caller WITHOUT a Stripe call. Same fail-closed contract as
  * authorizeMember (401 no/bad token, 403 missing/stale/incomplete mirror, 403 banned), but it skips the live Stripe
  * derive because the decision is identity + the ban mirror only. For the cheap free-tier gates whose outcome never

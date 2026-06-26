@@ -4,7 +4,7 @@
 // the decrypt/encrypt round-trip. Injected fetchUser + Stripe + KV: no network, no secrets.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { membershipDecrypt, membershipEncrypt, authorizePaid, authorizeMember, authorizeMemberCheap, OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from '../workers/signup/membership-content.mjs';
+import { membershipDecrypt, membershipEncrypt, authorizePaid, authorizeMember, authorizeMemberCheap, authorizeSignedIn, OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from '../workers/signup/membership-content.mjs';
 import { encryptAsset, generateEpochKey } from '../client/src/crypto-assets.mjs';
 
 const KEY = generateEpochKey();
@@ -210,4 +210,20 @@ test('authorizeMemberCheap: a grandfathered member with no Stripe sub still reso
   const r = await authorizeMemberCheap(POST('activity', 'Bearer g'), ENV({}, mirror), { fetchUser: userIs('3'), makeStripe: explodeStripe() });
   assert.equal(r.ok, true);
   assert.equal(r.status, 'paid');
+});
+
+// SOW-077: authorizeSignedIn is the READ gate for the news feed — like authorizeMember but it ADMITS a banned
+// account (a ban is a community ban, not total; news is non-KV). It keeps the token + fail-closed mirror checks and
+// the Stripe-derived status (so news analytics stay per-tier, including the 'banned' bucket).
+test('authorizeSignedIn: a BANNED member is ADMITTED (read access), with the banned status for analytics', async () => {
+  const mirror = freshMirror({ bans: { bans: [{ github_id: '1' }] } });
+  const r = await authorizeSignedIn(POST('news', 'Bearer g'), ENV({}, mirror), deps('1', () => paid));
+  assert.equal(r.ok, true);
+  assert.equal(r.status, 'banned');
+});
+
+test('authorizeSignedIn: a free (none) member is admitted; no token -> 401; a stale mirror still fails closed', async () => {
+  assert.equal((await authorizeSignedIn(POST('news', 'Bearer g'), ENV(), deps('9', () => null))).ok, true);
+  assert.equal((await authorizeSignedIn(POST('news', null), ENV(), deps('9', () => null))).status, 401);
+  assert.equal((await authorizeSignedIn(POST('news', 'Bearer g'), ENV({}, null), deps('9', () => null))).status, 403);
 });
