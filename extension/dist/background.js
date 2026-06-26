@@ -18695,7 +18695,7 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError(
       "membership-required",
-      "Publishing on gbti.network requires a paid membership. Your draft is saved; upgrade at https://gbti.network and publish your work.",
+      "Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.",
       { membership }
     );
   }
@@ -18783,7 +18783,7 @@ async function publishShare(ctx, { input = {}, body = "", message, title, prBody
   const repo = requireRepo(ctx);
   const membership = await ctx.membership?.() ?? "unknown";
   if (isBlockedFromPublishing(membership)) {
-    throw new OperationError("membership-required", "Publishing Shares on gbti.network requires a paid membership. Upgrade at https://gbti.network and post your Share.", { membership });
+    throw new OperationError("membership-required", "Posting Shares on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to post your Share.", { membership });
   }
   const createdAt = input.createdAt ?? (ctx.now?.() ?? (/* @__PURE__ */ new Date()).toISOString());
   const id_ = input.id ?? shareId(createdAt, input.title);
@@ -18838,7 +18838,7 @@ async function publishComment(ctx, { targetType, targetSlug, body, authorNote, p
   const repo = requireRepo(ctx);
   const membership = await ctx.membership?.() ?? "unknown";
   if (isBlockedFromPublishing(membership)) {
-    throw new OperationError("membership-required", "Commenting on gbti.network requires a paid membership. Upgrade at https://gbti.network.", { membership });
+    throw new OperationError("membership-required", "Commenting on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to join the conversation.", { membership });
   }
   const createdAt = ctx.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
   const cid = commentId(createdAt, commentSuffix());

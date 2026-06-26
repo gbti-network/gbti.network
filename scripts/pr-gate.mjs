@@ -41,9 +41,11 @@ export const CLOSE_LABELS = Object.freeze(['rejected-not-a-member', 'rejected-no
  * to upgrade and reassured their work is safe on their own fork (nothing is lost by the close). */
 export const CLOSE_NUDGE = Object.freeze({
   'rejected-not-a-member':
-    'Thanks for your interest. The GBTI Network content repo only merges pull requests from members. ' +
-    'Please sign up (a free 90-day trial, no card required) at https://gbti.network and reopen your ' +
-    'pull request. See CONTRIBUTING.md for how content authoring works.',
+    'Thanks for your interest. Publishing on gbti.network is a paid-member feature, so this pull request ' +
+    'cannot merge. A free 90-day trial (no card required) lets you join the community and author drafts, ' +
+    'but those drafts stay on your own fork until you upgrade. Sign up at https://gbti.network, and once ' +
+    'you are a paid member your client publishes your staged drafts as a new pull request. See ' +
+    'CONTRIBUTING.md for how content authoring works.',
   'rejected-not-paid':
     'Thanks for your work. Publishing on gbti.network is a paid-member feature, so this pull request ' +
     'cannot merge during your trial. Nothing is lost: your draft stays on your own fork. Upgrade to a ' +

@@ -180,7 +180,7 @@ export async function publish(ctx, { type, input, body, message, title, prBody }
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError(
       'membership-required',
-      'Publishing on gbti.network requires a paid membership. Your draft is saved; upgrade at https://gbti.network and publish your work.',
+      'Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.',
       { membership },
     );
   }
@@ -297,7 +297,7 @@ export async function publishShare(ctx, { input = {}, body = '', message, title,
   const repo = requireRepo(ctx);
   const membership = (await ctx.membership?.()) ?? 'unknown';
   if (isBlockedFromPublishing(membership)) {
-    throw new OperationError('membership-required', 'Publishing Shares on gbti.network requires a paid membership. Upgrade at https://gbti.network and post your Share.', { membership });
+    throw new OperationError('membership-required', 'Posting Shares on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to post your Share.', { membership });
   }
   // INVARIANT (SOW-018): a Share's id ENCODES its createdAt (makeShareId derives the timestamp-slug from it),
   // and Shares are append-only — never re-timestamped after publish. So the id-filename order always tracks the
@@ -364,7 +364,7 @@ export async function publishComment(ctx, { targetType, targetSlug, body, author
   const repo = requireRepo(ctx);
   const membership = (await ctx.membership?.()) ?? 'unknown';
   if (isBlockedFromPublishing(membership)) {
-    throw new OperationError('membership-required', 'Commenting on gbti.network requires a paid membership. Upgrade at https://gbti.network.', { membership });
+    throw new OperationError('membership-required', 'Commenting on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to join the conversation.', { membership });
   }
   const createdAt = ctx.now?.() ?? new Date().toISOString();
   const cid = makeCommentId(createdAt, commentSuffix());

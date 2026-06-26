@@ -71,7 +71,7 @@ class GbtiCommentBox extends GbtiElement {
   // ---- COMPOSE mode ----
   _renderCompose() {
     if (LOCKED.has(this._membership)) { this.set(this.css(CSS) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`); return; }
-    if (this._membership === 'trialing') { this.set(this.css(CSS) + `<div class="nudge">Commenting is a paid feature. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`); return; }
+    if (this._membership === 'trialing') { this.set(this.css(CSS) + `<div class="nudge">Commenting requires a paid membership. <a href="https://gbti.network/membership/">Upgrade</a> to join the conversation.</div>`); return; }
     if (!this._identity) { this.set(this.css(CSS) + `<div class="nudge">Sign in with the GBTI client to comment. <a href="https://gbti.network/membership/">Become a member</a>.</div>`); return; }
     this.set(this.css(CSS) + `<button class="open" type="button">Write a comment</button>`);
     this.on('.open', 'click', () => this._form({ body: '', edit: false }));

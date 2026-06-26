@@ -1,11 +1,11 @@
 # Contributing to gbti.network
 
-You author content as pull requests to this public repo. **Only members may open a pull request that
-the gate will accept.** A pull request from a non-member (a visitor, or a lapsed account whose trial
-expired or whose subscription was cancelled) is auto-rejected and closed with a sign-up nudge. Among
-members, your membership controls whether your content merges and stays published: a trial member may
-open a pull request, but their content is held until they pay; a paid member's own-folder content
-merges and publishes.
+You author content as pull requests to this public repo. **Publishing is paid-only:** a pull request that
+merges into the canonical repo requires a paid membership. A pull request from anyone who is not a paid
+member (a visitor, a lapsed account, or a trial member) is auto-rejected and closed. Nothing is lost: a
+trial member authors and stages drafts on their own GitHub fork, and after upgrading to a paid membership
+their client publishes those staged drafts as a new pull request. Among paid members, your membership
+controls whether your own-folder content stays published.
 
 ## Add or edit content
 
@@ -18,10 +18,12 @@ merges and publishes.
 ## Contributing to another member's content
 
 You may also suggest an edit to another member's content. Open a pull request that touches only that
-one member's folder. The gate holds it as a contribution until that folder's owner accepts it by
-submitting an approving review on your pull request. Once the owner approves (and the owner is paid),
-it merges, your commit is recorded in git history, and you are credited in the content's contributors
-footnote and the stacked avatars. Classify your change so the owner knows what it is:
+one member's folder. If you are a paid member, the gate holds it as a contribution until that folder's
+owner accepts it by submitting an approving review on your pull request (a trial contributor's pull request
+is auto-rejected and closed instead, with the draft kept on your fork until you upgrade). Once the owner
+approves (and the owner is paid), it merges, your commit is recorded in git history, and you are credited
+in the content's contributors footnote and the stacked avatars. Classify your change so the owner knows
+what it is:
 
 - `grammar`: spelling, punctuation, formatting only. A courtesy. It earns no points.
 - `correction`: a factual or code fix that changes meaning or behavior. It earns 1 point.
@@ -43,8 +45,9 @@ how points and the author's right to reject an award work.
 
 ## What membership changes
 
-- Non-members (visitors and lapsed accounts) cannot merge: their pull requests are auto-rejected and closed.
-- Trial members can open PRs, but their content is held until they pay.
+- Non-members (visitors and lapsed accounts) cannot publish: their pull requests are auto-rejected and closed.
+- Trial members author and stage drafts on their own fork; a trial content pull request (own folder or a
+  contribution) is auto-rejected and closed until they pay, so nothing reaches the canonical repo during the trial.
 - Paid members' own-folder content auto-merges and publishes.
 - If a paid membership lapses, that member's content flips to draft until they resubscribe.
 - Details: `.data/specs/membership-and-access.md` and `.data/specs/roles-and-capabilities.md`.

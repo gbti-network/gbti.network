@@ -87,7 +87,7 @@ class GbtiShareComposer extends GbtiElement {
   _renderTrial() {
     this.set(this.css(CSS) + this._noticeHtml(
       'Reading only on the free trial',
-      'On the trial you can READ the community Shares stream. Posting Shares is a paid feature. <a href="https://gbti.network/membership/">Upgrade your membership</a> to post.',
+      'On the trial you can READ the community Shares stream. Posting Shares requires a paid membership. <a href="https://gbti.network/membership/">Upgrade to a paid membership</a> to post.',
       '👀',
     ));
   }

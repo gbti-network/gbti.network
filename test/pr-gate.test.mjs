@@ -263,6 +263,13 @@ test('CLOSE_NUDGE distinguishes the non-member sign-up nudge from the trial upgr
   for (const label of CLOSE_LABELS) assert.ok(CLOSE_NUDGE[label], `a nudge exists for ${label}`);
   assert.match(CLOSE_NUDGE['rejected-not-a-member'], /sign up/i);
   assert.match(CLOSE_NUDGE['rejected-not-paid'], /your own fork/i); // reassures the trial member nothing is lost
+  // SOW-075: both nudges name the fork (publishing is paid-only; the draft is safe), and NEITHER may tell the
+  // author to "reopen" the closed PR (post-upgrade the client opens a FRESH PR from the fork-staged drafts).
+  assert.match(CLOSE_NUDGE['rejected-not-a-member'], /your own fork/i);
+  for (const label of ['rejected-not-a-member', 'rejected-not-paid']) {
+    assert.doesNotMatch(CLOSE_NUDGE[label], /reopen/i, `${label} must not say "reopen"`);
+    assert.match(CLOSE_NUDGE[label], /paid member/i, `${label} states publishing is paid-only`);
+  }
 });
 
 test('bot author (botId) is treated as admin and is membership-exempt', async () => {

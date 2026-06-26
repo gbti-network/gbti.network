@@ -18277,7 +18277,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody } = {})
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError(
       "membership-required",
-      "Publishing on gbti.network requires a paid membership. Your draft is saved; upgrade at https://gbti.network and publish your work.",
+      "Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.",
       { membership }
     );
   }
@@ -18354,7 +18354,7 @@ async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, 
   const repo = requireRepo(ctx2);
   const membership = await ctx2.membership?.() ?? "unknown";
   if (isBlockedFromPublishing(membership)) {
-    throw new OperationError("membership-required", "Commenting on gbti.network requires a paid membership. Upgrade at https://gbti.network.", { membership });
+    throw new OperationError("membership-required", "Commenting on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to join the conversation.", { membership });
   }
   const createdAt = ctx2.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
   const cid = commentId(createdAt, commentSuffix());
