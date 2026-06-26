@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull, parseWorkspaceTab, parseWorkspaceNew } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, classifyDraft, parseWorkspaceTab, parseWorkspaceNew } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -11,6 +11,20 @@ test('merged PR -> Accepted (regardless of gate status)', () => {
 test('closed-unmerged PR -> Declined', () => {
   assert.deepEqual(classifyPull({ state: 'closed' }, null), { label: 'Declined', tone: 'muted' });
   assert.deepEqual(classifyPull({ state: 'closed', merged: false }, { state: 'success' }), { label: 'Declined', tone: 'muted' });
+});
+
+// SOW-082: classifyDraft layers the fork-staged lifecycle on top of classifyPull.
+test('classifyDraft: no PR -> Staged (the draft lives on the fork only)', () => {
+  assert.deepEqual(classifyDraft({ pull: null }), { state: 'staged', label: 'Staged', tone: '' });
+  assert.deepEqual(classifyDraft({}), { state: 'staged', label: 'Staged', tone: '' });
+});
+
+test('classifyDraft: a PR maps to Submitted / Needs changes / Published / Declined', () => {
+  assert.deepEqual(classifyDraft({ pull: { state: 'open' }, status: { state: 'success' } }), { state: 'review', label: 'Submitted', tone: 'ok' });
+  assert.deepEqual(classifyDraft({ pull: { state: 'open' }, status: { state: 'failure' } }), { state: 'review', label: 'Needs changes', tone: 'bad' });
+  assert.deepEqual(classifyDraft({ pull: { state: 'open' }, status: null }), { state: 'review', label: 'Submitted', tone: '' });
+  assert.deepEqual(classifyDraft({ pull: { merged: true } }), { state: 'published', label: 'Published', tone: 'ok' });
+  assert.deepEqual(classifyDraft({ pull: { state: 'closed' } }), { state: 'declined', label: 'Declined', tone: 'muted' });
 });
 
 test('open PR maps the gate status to Proposed / Needs changes / Error', () => {

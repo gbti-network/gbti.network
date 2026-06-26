@@ -6,13 +6,13 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, listComments } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, saveDraft, listDrafts, readDraft, discardDraft, publishDraft, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, listComments } from '../../client/src/operations.mjs';
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from '../../client/src/roles.mjs';
 import { banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, addNewsSource, removeNewsSource, setNewsSourceEnabled, getQuotePool, addQuote, removeQuote, setQuoteEnabled } from '../../client/src/admin-ops.mjs';
-import { canSeeNews, canFollow, canSave, canBrowse } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates
+import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates; SOW-082: draft staging
 
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
 // host-portable / async-safe) and commits via the repo client; capability is UX-gated here while the SOW-005
@@ -71,6 +71,7 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         authenticated: live,
         membership,
         canPublish: membership === 'paid',
+        canStageDrafts: canStageDrafts(membership), // SOW-082: Save-draft is trial+paid (broader than canPublish)
         // SOW-060: free-tier perks (browse / news / save / follow) need only a signed-in identity, not paid.
         canSeeNews: canSeeNews(membership),
         canFollow: canFollow(membership),
@@ -117,6 +118,15 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(validateContent(ctx, body)); // reader-free
       case '/api/publish':
         return ok(await publish(ctx, body)); // reader-free (uses content-ops + the repo client)
+      // SOW-082: universal draft staging (Save to the fork without a PR; review; Publish from the staged branch).
+      case '/api/drafts':
+        return ok(await listDrafts(ctx, { type: query.type }));
+      case '/api/draft':
+        return ok(method === 'POST' ? await saveDraft(ctx, body) : await readDraft(ctx, { type: query.type, slug: query.slug }));
+      case '/api/draft/discard':
+        return ok(await discardDraft(ctx, body));
+      case '/api/draft/publish':
+        return ok(await publishDraft(ctx, body));
       case '/api/share':
         return ok(await publishShare(ctx, body)); // SOW-018: reader-free; members Share encrypts via the Worker
       case '/api/shares':

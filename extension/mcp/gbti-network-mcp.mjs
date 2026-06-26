@@ -17932,6 +17932,37 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
         throw err;
       }
     },
+    // ----- SOW-082: fork-staged draft I/O. A draft is a per-item branch gbti/<type>-<slug> on the member's FORK
+    // with NO open PR. All three operate DIRECTLY on the fork in both classic and app mode (the fork is the
+    // member's own repo; the app-mode fork-scoped token can read+write+delete it), so none need a Worker proxy. -----
+    /** List branch refs on a repo matching `heads/<prefix>` (GET git/matching-refs). Used to enumerate a member's
+     *  fork-staged draft branches (prefix 'gbti/'). Returns [{ branch, sha }]; an empty/absent set -> []. */
+    async listMatchingRefs(repoFullName, prefix) {
+      try {
+        const r = await req("GET", `/repos/${repoFullName}/git/matching-refs/heads/${prefix}`);
+        return (Array.isArray(r) ? r : []).map((x) => ({ branch: String(x.ref || "").replace(/^refs\/heads\//, ""), sha: x.object?.sha ?? null }));
+      } catch (err) {
+        if (err instanceof GitHubError && err.status === 404) return [];
+        throw err;
+      }
+    },
+    /** Delete a branch ref on a repo (DELETE git/refs/heads). Used to discard a fork-staged draft. The branch is
+     *  NOT URL-encoded: the slashes in `heads/gbti/<slug>` are real path separators in the git-refs API. */
+    async deleteBranch(repoFullName, branch) {
+      return req("DELETE", `/repos/${repoFullName}/git/refs/heads/${branch}`);
+    },
+    /** The decoded text of a file at a ref on a SPECIFIC repo (the member's fork), or null if absent. Unlike
+     *  getFileContent (which targets the upstream / Worker), this reads the fork directly with the member token. */
+    async getForkFileContent(repoFullName, path4, ref) {
+      try {
+        const r = await req("GET", `/repos/${repoFullName}/contents/${path4}?ref=${encodeURIComponent(ref)}`);
+        if (Array.isArray(r) || !r?.content) return null;
+        return fromBase64(r.content);
+      } catch (err) {
+        if (err instanceof GitHubError && err.status === 404) return null;
+        throw err;
+      }
+    },
     /** Submit a PR review as the signed-in owner (CLASSIC mode only). The gate honors an APPROVE only when
      *  commit_id is the current head SHA (a later push invalidates a stale approval), so the caller passes the
      *  freshly-read headSha. There is deliberately no app-mode proxy: a fork-scoped token cannot post to the
@@ -17998,31 +18029,9 @@ function defaultMessage(change) {
 function defaultTitle(change) {
   return change.type === "profile" ? `Update ${change.username}'s profile` : `${change.type}: ${change.slug}`;
 }
-async function publishContent({ repo, change, message, title, body }) {
-  if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
-  const fork = await repo.ensureFork();
-  const base2 = await repo.getDefaultBranch(repo.upstream);
-  const baseSha = await repo.getBranchSha(fork.full_name, base2);
-  const branch = branchName(change.type, change.slug);
-  await repo.ensureBranch(fork.full_name, branch, baseSha);
-  const existingSha = await repo.getFileSha(fork.full_name, change.path, branch);
-  await repo.putFile(fork.full_name, change.path, {
-    message: message ?? defaultMessage(change),
-    contentBase64: toBase64(change.markdown),
-    branch,
-    sha: existingSha ?? void 0
-  });
-  const head = `${fork.owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) {
-    return { prNumber: existing.number, prUrl: existing.html_url, branch, fork: fork.full_name, updated: true };
-  }
-  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base2, body: body ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork: fork.full_name, updated: false };
-}
-async function publishFiles({ repo, branch, files, message, title, body }) {
-  if (!branch) throw new Error("publishFiles: a branch name is required");
-  if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
+async function commitToBranchOnFork({ repo, branch, files, message }) {
+  if (!branch) throw new Error("commitToBranchOnFork: a branch name is required");
+  if (!Array.isArray(files) || files.length === 0) throw new Error("commitToBranchOnFork: at least one file change is required");
   const fork = await repo.ensureFork();
   const base2 = await repo.getDefaultBranch(repo.upstream);
   const baseSha = await repo.getBranchSha(fork.full_name, base2);
@@ -18040,11 +18049,34 @@ async function publishFiles({ repo, branch, files, message, title, body }) {
       });
     }
   }
-  const head = `${fork.owner}:${branch}`;
+  return { fork: fork.full_name, owner: fork.owner, branch, base: base2 };
+}
+async function publishContent({ repo, change, message, title, body }) {
+  if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
+  const branch = branchName(change.type, change.slug);
+  const { fork, owner, base: base2 } = await commitToBranchOnFork({
+    repo,
+    branch,
+    files: [{ path: change.path, content: change.markdown }],
+    message: message ?? defaultMessage(change)
+  });
+  const head = `${owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });
-  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork: fork.full_name, updated: true };
+  if (existing) {
+    return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
+  }
+  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base2, body: body ?? "" });
+  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
+}
+async function publishFiles({ repo, branch, files, message, title, body }) {
+  if (!branch) throw new Error("publishFiles: a branch name is required");
+  if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
+  const { fork, owner, base: base2 } = await commitToBranchOnFork({ repo, branch, files, message });
+  const head = `${owner}:${branch}`;
+  const existing = await repo.findOpenPull({ head });
+  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
   const pull = await repo.openPull({ title: title ?? message ?? "Update", head, base: base2, body: body ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork: fork.full_name, updated: false };
+  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
 }
 
 // client/src/membership.mjs
@@ -18090,6 +18122,10 @@ function effectiveMembership({ githubId, stripeStatus = "unknown", roles = /* @_
 }
 function canPublish(membership) {
   return membership === "paid";
+}
+var STAGE_TIER = /* @__PURE__ */ new Set(["paid", "trialing"]);
+function canStageDrafts(membership) {
+  return STAGE_TIER.has(membership);
 }
 var READ_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none", "banned"]);
 var FREE_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none"]);
@@ -18231,6 +18267,8 @@ function getStatus(ctx2) {
     mcpEnabled: ctx2.store?.get("mcpEnabled") ?? null,
     membership,
     canPublish: canPublish(membership),
+    canStageDrafts: canStageDrafts(membership),
+    // SOW-082: Save-draft is trial+paid (broader than canPublish)
     // SOW-060: the free-tier perks (browse / news / save / follow) need only a signed-in identity, not paid.
     canSeeNews: canSeeNews(membership),
     canFollow: canFollow(membership),

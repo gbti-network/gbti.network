@@ -326,6 +326,41 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
       }
     },
 
+    // ----- SOW-082: fork-staged draft I/O. A draft is a per-item branch gbti/<type>-<slug> on the member's FORK
+    // with NO open PR. All three operate DIRECTLY on the fork in both classic and app mode (the fork is the
+    // member's own repo; the app-mode fork-scoped token can read+write+delete it), so none need a Worker proxy. -----
+
+    /** List branch refs on a repo matching `heads/<prefix>` (GET git/matching-refs). Used to enumerate a member's
+     *  fork-staged draft branches (prefix 'gbti/'). Returns [{ branch, sha }]; an empty/absent set -> []. */
+    async listMatchingRefs(repoFullName, prefix) {
+      try {
+        const r = await req('GET', `/repos/${repoFullName}/git/matching-refs/heads/${prefix}`);
+        return (Array.isArray(r) ? r : []).map((x) => ({ branch: String(x.ref || '').replace(/^refs\/heads\//, ''), sha: x.object?.sha ?? null }));
+      } catch (err) {
+        if (err instanceof GitHubError && err.status === 404) return [];
+        throw err;
+      }
+    },
+
+    /** Delete a branch ref on a repo (DELETE git/refs/heads). Used to discard a fork-staged draft. The branch is
+     *  NOT URL-encoded: the slashes in `heads/gbti/<slug>` are real path separators in the git-refs API. */
+    async deleteBranch(repoFullName, branch) {
+      return req('DELETE', `/repos/${repoFullName}/git/refs/heads/${branch}`);
+    },
+
+    /** The decoded text of a file at a ref on a SPECIFIC repo (the member's fork), or null if absent. Unlike
+     *  getFileContent (which targets the upstream / Worker), this reads the fork directly with the member token. */
+    async getForkFileContent(repoFullName, path, ref) {
+      try {
+        const r = await req('GET', `/repos/${repoFullName}/contents/${path}?ref=${encodeURIComponent(ref)}`);
+        if (Array.isArray(r) || !r?.content) return null;
+        return fromBase64(r.content);
+      } catch (err) {
+        if (err instanceof GitHubError && err.status === 404) return null;
+        throw err;
+      }
+    },
+
     /** Submit a PR review as the signed-in owner (CLASSIC mode only). The gate honors an APPROVE only when
      *  commit_id is the current head SHA (a later push invalidates a stale approval), so the caller passes the
      *  freshly-read headSha. There is deliberately no app-mode proxy: a fork-scoped token cannot post to the

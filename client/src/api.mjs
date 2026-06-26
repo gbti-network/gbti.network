@@ -11,6 +11,11 @@ import {
   getContentItem,
   validateContent,
   publish,
+  saveDraft,
+  listDrafts,
+  readDraft,
+  discardDraft,
+  publishDraft,
   publishShare,
   listShares,
   listShareComments,
@@ -107,6 +112,12 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/read') return run(() => readContent(ctx, { path: query.path })); // SOW-031: cross-member published-content read for the reader
   if (method === 'POST' && pathname === '/api/validate') return run(() => validateContent(ctx, body ?? {}));
   if (method === 'POST' && pathname === '/api/publish') return run(() => publish(ctx, body ?? {}));
+  // SOW-082: universal draft staging (save to the fork without a PR; review; publish from the staged branch).
+  if (method === 'GET' && pathname === '/api/drafts') return run(() => listDrafts(ctx, { type: query.type }));
+  if (method === 'GET' && pathname === '/api/draft') return run(() => readDraft(ctx, { type: query.type, slug: query.slug }));
+  if (method === 'POST' && pathname === '/api/draft') return run(() => saveDraft(ctx, body ?? {}));
+  if (method === 'POST' && pathname === '/api/draft/discard') return run(() => discardDraft(ctx, body ?? {}));
+  if (method === 'POST' && pathname === '/api/draft/publish') return run(() => publishDraft(ctx, body ?? {}));
   if (method === 'POST' && pathname === '/api/share') return run(() => publishShare(ctx, body ?? {})); // SOW-018
   if (method === 'GET' && pathname === '/api/shares') return run(() => listShares(ctx, { limit: Number(query.limit) || undefined })); // SOW-018 feed
   if (method === 'GET' && pathname === '/api/share-comments') return run(() => listShareComments(ctx, { targetSlug: query.targetSlug, limit: Number(query.limit) || undefined })); // SOW-032 discussion

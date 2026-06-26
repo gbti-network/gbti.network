@@ -6,9 +6,9 @@
 // Errors are typed OperationError(code, ...) so each transport can map a code to its own shape (HTTP status
 // or MCP isError). Codes: no-identity | not-authenticated | not-found | bad-request | invalid-content.
 
-import { buildContentFile, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, parseContentFile, ContentValidationError } from './content-ops.mjs';
-import { publishContent, publishFiles, branchName } from './publish.mjs';
-import { canPublish, isBlockedFromPublishing, canSeeNews, canFollow, canSave, canBrowse } from './membership.mjs';
+import { buildContentFile, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, parseContentFile, contentPath, ContentValidationError } from './content-ops.mjs';
+import { publishContent, publishFiles, commitToBranchOnFork, branchName } from './publish.mjs';
+import { canPublish, canStageDrafts, isBlockedFromPublishing, canSeeNews, canFollow, canSave, canBrowse } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, decryptViaWorker, MemberContentLockedError } from './member-content.mjs';
 import {
   getActivity as workerGetActivity, setFavorite as workerSetFavorite, createCollection as workerCreateCollection,
@@ -70,6 +70,7 @@ export function getStatus(ctx) {
     mcpEnabled: ctx.store?.get('mcpEnabled') ?? null,
     membership,
     canPublish: canPublish(membership),
+    canStageDrafts: canStageDrafts(membership), // SOW-082: Save-draft is trial+paid (broader than canPublish)
     // SOW-060: the free-tier perks (browse / news / save / follow) need only a signed-in identity, not paid.
     canSeeNews: canSeeNews(membership),
     canFollow: canFollow(membership),
@@ -250,6 +251,145 @@ export async function planMemberFiles({ built, body, encrypt }) {
     encPath,
     assetId,
   };
+}
+
+// ----- SOW-082: universal draft staging. A draft is the item committed to its per-item branch gbti/<type>-<slug>
+// on the member's FORK with NO open PR. Save commits there (no PR); Publish opens the PR from that same branch.
+// Save is trial+paid (canStageDrafts); Publish stays paid-only (the SOW-005 gate is the backstop). -----
+
+/** Parse a draft branch (gbti/<type>-<slug>, or gbti/profile) back to { type, slug }. Returns null for a branch
+ *  that is not a draftable content item (e.g. gbti/share-*, gbti/comment-*), so those are skipped by listDrafts. */
+function draftMetaFromBranch(branch) {
+  if (branch === 'gbti/profile') return { type: 'profile', slug: null };
+  const m = String(branch || '').match(/^gbti\/(post|product|prompt)-(.+)$/);
+  return m ? { type: m[1], slug: m[2] } : null;
+}
+
+/** Save (stage) a content draft to the member's OWN fork on its deterministic branch, WITHOUT opening a PR.
+ *  Trial + paid may stage (canStageDrafts); 'unknown' fails open (the fork write is the member's own repo).
+ *  Members-only content needs the Worker to encrypt (paid only), so a trial member's members-only draft is
+ *  refused with a clean upgrade nudge and NO branch is created. */
+export async function saveDraft(ctx, { type, input, body, message } = {}) {
+  const id = requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  const membership = (await ctx.membership?.()) ?? 'unknown';
+  if (membership !== 'unknown' && !canStageDrafts(membership)) {
+    throw new OperationError('forbidden', 'Saving drafts requires an active trial or paid membership.', { membership });
+  }
+  let built;
+  try {
+    built = buildContentFile({ type, username: id.username, input, body });
+  } catch (err) {
+    throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
+  }
+  const branch = branchName(built.type, built.slug);
+  const token = ctx.store?.get?.('githubToken');
+  const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  let plan;
+  try {
+    plan = await planMemberFiles({ built, body, encrypt });
+  } catch (err) {
+    if (err instanceof MemberContentLockedError) {
+      throw new OperationError('membership-required', 'Staging members-only content requires a paid membership. Save it as public, or upgrade to a paid membership.', { membership });
+    }
+    throw err;
+  }
+  const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
+  return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: built.path, state: 'staged' };
+}
+
+/** List the member's fork-staged drafts (the gbti/* branches on their fork). Each draft carries enough to render
+ *  a row + open the editor; `pull` is the matched OPEN PR (or null) so the UI computes the lifecycle state via
+ *  classifyDraft. Fail-soft per draft (an unreadable branch is skipped). */
+export async function listDrafts(ctx, { type } = {}) {
+  const id = requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  const fork = await repo.ensureFork();
+  const refs = await repo.listMatchingRefs(fork.full_name, 'gbti/');
+  const drafts = [];
+  for (const { branch } of refs) {
+    const meta = draftMetaFromBranch(branch);
+    if (!meta) continue;
+    if (type && meta.type !== type) continue;
+    let path;
+    try { path = contentPath(meta.type, id.username, meta.slug); } catch { continue; }
+    let text = null;
+    try { text = await repo.getForkFileContent(fork.full_name, path, branch); } catch { text = null; }
+    if (!text) continue;
+    let fm = {};
+    try { fm = parseContentFile(text).frontmatter ?? {}; } catch { fm = {}; }
+    let pull = null;
+    try { pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }); } catch { pull = null; }
+    drafts.push({
+      type: meta.type,
+      slug: meta.slug,
+      branch,
+      path,
+      title: fm.title || fm.displayName || meta.slug || meta.type,
+      visibility: fm.visibility || 'public',
+      status: fm.status || 'draft',
+      pull: pull ? { number: pull.number, html_url: pull.html_url } : null,
+    });
+  }
+  return { drafts };
+}
+
+/** Read one fork-staged draft (frontmatter + body) for the editor prefill. A members-only draft stores its body
+ *  in the sibling .enc; decrypt it (the author is paid) so a re-save never replaces the gated text with a stub. */
+export async function readDraft(ctx, { type, slug } = {}) {
+  const id = requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  if (!type) throw new OperationError('bad-request', 'type is required');
+  const branch = branchName(type, slug);
+  const fork = await repo.ensureFork();
+  let path;
+  try { path = contentPath(type, id.username, slug); } catch (err) { throw new OperationError('bad-request', err.message); }
+  const text = await repo.getForkFileContent(fork.full_name, path, branch);
+  if (!text) throw new OperationError('not-found', 'no such draft on your fork');
+  const { frontmatter, body } = parseContentFile(text);
+  if (frontmatter?.encryptedBody) {
+    try {
+      const { text: plain } = await decryptMemberAsset(ctx, { encPath: frontmatter.encryptedBody });
+      return { path, branch, frontmatter, body: plain };
+    } catch { /* the decrypt is unavailable (not paid): fall through to the public part */ }
+  }
+  return { path, branch, frontmatter, body };
+}
+
+/** Discard a fork-staged draft (delete its branch). Refuses when an open PR exists (deleting the branch would
+ *  abruptly close the PR + lose the review thread); the member withdraws the PR first. */
+export async function discardDraft(ctx, { type, slug } = {}) {
+  requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  if (!type) throw new OperationError('bad-request', 'type is required');
+  const branch = branchName(type, slug);
+  const fork = await repo.ensureFork();
+  let pull = null;
+  try { pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }); } catch { pull = null; }
+  if (pull) throw new OperationError('bad-request', 'This draft has an open pull request; withdraw it from review before discarding.', { prNumber: pull.number });
+  await repo.deleteBranch(fork.full_name, branch);
+  return { ok: true, branch };
+}
+
+/** Publish a staged draft to the network: open the canonical PR from the branch Save already created (no rebuild,
+ *  so a members-only draft's encrypted files round-trip untouched). Paid-only — the gate stays the backstop. */
+export async function publishDraft(ctx, { type, slug, title, prBody } = {}) {
+  const id = requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  const membership = (await ctx.membership?.()) ?? 'unknown';
+  if (isBlockedFromPublishing(membership)) {
+    throw new OperationError('membership-required', 'Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.', { membership });
+  }
+  const branch = branchName(type, slug);
+  const fork = await repo.ensureFork();
+  const head = `${fork.owner}:${branch}`;
+  const existing = await repo.findOpenPull({ head });
+  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, updated: true };
+  const base = await repo.getDefaultBranch(repo.upstream);
+  const titleText = title ?? (type === 'profile' ? `Update ${id.username}'s profile` : `${type}: ${slug}`);
+  const pull = await repo.openPull({ title: titleText, head, base, body: prBody ?? '' });
+  return { prNumber: pull.number, prUrl: pull.html_url, branch, updated: false };
 }
 
 /**

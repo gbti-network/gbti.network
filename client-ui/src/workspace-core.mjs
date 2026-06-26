@@ -34,3 +34,16 @@ export function classifyPull(pr = {}, status = null) {
     default: return { label: 'Proposed', tone: '' };                 // open + pending/unknown (still checking)
   }
 }
+
+// SOW-082: a fork-staged draft's lifecycle state. A draft is identified by its deterministic branch
+// gbti/<type>-<slug> on the member's fork; its state joins "branch exists" with the PR (if any) for that branch.
+// `pull` is the matched PR ({ state, merged }) or null (no PR yet = still staged on the fork). Reuses classifyPull
+// for the PR half. Pure; node-testable.
+export function classifyDraft({ pull = null, status = null } = {}) {
+  if (!pull) return { state: 'staged', label: 'Staged', tone: '' }; // branch on the fork, no PR opened yet
+  const c = classifyPull(pull, status);
+  if (c.label === 'Accepted') return { state: 'published', label: 'Published', tone: 'ok' };
+  if (c.label === 'Declined') return { state: 'declined', label: 'Declined', tone: 'muted' };
+  // an open PR: it has been submitted to the network and is moving through the gate
+  return { state: 'review', label: c.label === 'Proposed' ? 'Submitted' : c.label, tone: c.tone };
+}

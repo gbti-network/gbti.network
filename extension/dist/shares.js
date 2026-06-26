@@ -9347,6 +9347,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-031: read ANY published index.md for the in-extension reader -> { path, frontmatter, body }
       validateContent: (b) => request("POST", "/api/validate", b),
       publish: (b) => request("POST", "/api/publish", b),
+      // SOW-082: universal draft staging (Save to the fork without a PR; review; Publish from the staged branch).
+      saveDraft: (b) => request("POST", "/api/draft", b),
+      // { type, input, body } -> { branch, state: 'staged' }
+      listDrafts: ({ type } = {}) => request("GET", `/api/drafts${qs({ type })}`),
+      // -> { drafts: [{ type, slug, title, branch, pull }] }
+      readDraft: ({ type, slug } = {}) => request("GET", `/api/draft${qs({ type, slug })}`),
+      // -> { frontmatter, body } for the editor prefill
+      discardDraft: (b) => request("POST", "/api/draft/discard", b),
+      // { type, slug } -> { ok, branch }
+      publishDraft: (b) => request("POST", "/api/draft/publish", b),
+      // { type, slug } -> { prNumber, prUrl } (paid-only)
       postShare: (b) => request("POST", "/api/share", b),
       // SOW-018: returns { id, path, visibility, encrypted }
       listShares: ({ limit } = {}) => request("GET", `/api/shares${qs({ limit })}`),

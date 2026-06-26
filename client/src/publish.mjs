@@ -30,62 +30,25 @@ function defaultTitle(change) {
 // fresh-read-for-edit + GitHub's 3-way merge is exactly what preserves those concurrent edits. See SOW-053.
 
 /**
- * Publish a content change as (or into) a PR.
+ * SOW-082: commit files to a branch on the member's FORK, WITHOUT opening a PR. This is the fork+branch+commit
+ * primitive shared by `saveDraft` (commit only) and `publishContent`/`publishFiles` (commit then openPull). Each
+ * file is { path, content }; content === null deletes. Idempotent by branch: re-running updates the same branch
+ * file in place. The SOW-053 stale-base behavior is preserved (base on the FORK's main + a fresh per-file blob-sha
+ * read), so GitHub's 3-way merge keeps concurrent edits (contributor credits, reconcile status flips).
  *
- * @param {object} a
- * @param {object} a.repo     a github-repo client (createRepoClient).
- * @param {object} a.change   a buildContentFile result: { path, markdown, type, slug, username }.
- * @param {string} [a.message] commit message; defaults from the change.
- * @param {string} [a.title]   PR title; defaults from the change.
- * @param {string} [a.body]    PR body.
- * @returns {Promise<{prNumber, prUrl, branch, fork, updated}>}
+ * @returns {Promise<{ fork: string, owner: string, branch: string, base: string }>}
  */
-export async function publishContent({ repo, change, message, title, body }) {
-  if (!change?.path || !change?.markdown) throw new Error('publishContent: a built content change is required');
+export async function commitToBranchOnFork({ repo, branch, files, message }) {
+  if (!branch) throw new Error('commitToBranchOnFork: a branch name is required');
+  if (!Array.isArray(files) || files.length === 0) throw new Error('commitToBranchOnFork: at least one file change is required');
 
   const fork = await repo.ensureFork();                 // { full_name, owner }
-  const base = await repo.getDefaultBranch(repo.upstream);
-  const baseSha = await repo.getBranchSha(fork.full_name, base);
-  const branch = branchName(change.type, change.slug);
-
-  await repo.ensureBranch(fork.full_name, branch, baseSha);
-
-  // CREATE vs UPDATE: the Contents API needs the existing blob sha to overwrite a file on the branch.
-  const existingSha = await repo.getFileSha(fork.full_name, change.path, branch);
-  await repo.putFile(fork.full_name, change.path, {
-    message: message ?? defaultMessage(change),
-    contentBase64: toBase64(change.markdown),
-    branch,
-    sha: existingSha ?? undefined,
-  });
-
-  const head = `${fork.owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) {
-    return { prNumber: existing.number, prUrl: existing.html_url, branch, fork: fork.full_name, updated: true };
-  }
-
-  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base, body: body ?? '' });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork: fork.full_name, updated: false };
-}
-
-/**
- * General multi-file PR primitive (used by the admin/superadmin tools, which edit house/*.yml or another
- * member's content rather than the author's own folder). Each file is { path, content }; content === null
- * deletes the file. Idempotent by branch: re-running updates the same branch + PR.
- *
- * @returns {Promise<{prNumber, prUrl, branch, fork, updated}>}
- */
-export async function publishFiles({ repo, branch, files, message, title, body }) {
-  if (!branch) throw new Error('publishFiles: a branch name is required');
-  if (!Array.isArray(files) || files.length === 0) throw new Error('publishFiles: at least one file change is required');
-
-  const fork = await repo.ensureFork();
   const base = await repo.getDefaultBranch(repo.upstream);
   const baseSha = await repo.getBranchSha(fork.full_name, base);
   await repo.ensureBranch(fork.full_name, branch, baseSha);
 
   for (const f of files) {
+    // CREATE vs UPDATE: the Contents API needs the existing blob sha to overwrite a file on the branch.
     const existingSha = await repo.getFileSha(fork.full_name, f.path, branch);
     if (f.content === null) {
       if (existingSha) await repo.deleteFile(fork.full_name, f.path, { message: message ?? `Remove ${f.path}`, branch, sha: existingSha });
@@ -99,9 +62,57 @@ export async function publishFiles({ repo, branch, files, message, title, body }
     }
   }
 
-  const head = `${fork.owner}:${branch}`;
+  return { fork: fork.full_name, owner: fork.owner, branch, base };
+}
+
+/**
+ * Publish a content change as (or into) a PR.
+ *
+ * @param {object} a
+ * @param {object} a.repo     a github-repo client (createRepoClient).
+ * @param {object} a.change   a buildContentFile result: { path, markdown, type, slug, username }.
+ * @param {string} [a.message] commit message; defaults from the change.
+ * @param {string} [a.title]   PR title; defaults from the change.
+ * @param {string} [a.body]    PR body.
+ * @returns {Promise<{prNumber, prUrl, branch, fork, updated}>}
+ */
+export async function publishContent({ repo, change, message, title, body }) {
+  if (!change?.path || !change?.markdown) throw new Error('publishContent: a built content change is required');
+
+  const branch = branchName(change.type, change.slug);
+  const { fork, owner, base } = await commitToBranchOnFork({
+    repo,
+    branch,
+    files: [{ path: change.path, content: change.markdown }],
+    message: message ?? defaultMessage(change),
+  });
+
+  const head = `${owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });
-  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork: fork.full_name, updated: true };
+  if (existing) {
+    return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
+  }
+
+  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base, body: body ?? '' });
+  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
+}
+
+/**
+ * General multi-file PR primitive (used by the admin/superadmin tools, which edit house/*.yml or another
+ * member's content rather than the author's own folder). Each file is { path, content }; content === null
+ * deletes the file. Idempotent by branch: re-running updates the same branch + PR.
+ *
+ * @returns {Promise<{prNumber, prUrl, branch, fork, updated}>}
+ */
+export async function publishFiles({ repo, branch, files, message, title, body }) {
+  if (!branch) throw new Error('publishFiles: a branch name is required');
+  if (!Array.isArray(files) || files.length === 0) throw new Error('publishFiles: at least one file change is required');
+
+  const { fork, owner, base } = await commitToBranchOnFork({ repo, branch, files, message });
+
+  const head = `${owner}:${branch}`;
+  const existing = await repo.findOpenPull({ head });
+  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
   const pull = await repo.openPull({ title: title ?? message ?? 'Update', head, base, body: body ?? '' });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork: fork.full_name, updated: false };
+  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
 }

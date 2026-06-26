@@ -74,6 +74,15 @@ export function canPublish(membership) {
   return membership === 'paid';
 }
 
+// SOW-082: who may STAGE a draft on their OWN fork (Save, no PR). The tier table "Author + stage drafts": Trial yes /
+// Paid yes / Free no / banned no. This is DISTINCT from canSave (the KV favorites/follow perk) and from canPublish
+// (paid-only). 'unknown' is deliberately absent so the op fails OPEN (the fork write is the member's own repo; the
+// members-only encryption path re-checks effective-paid server-side anyway).
+const STAGE_TIER = new Set(['paid', 'trialing']);
+export function canStageDrafts(membership) {
+  return STAGE_TIER.has(membership);
+}
+
 // SOW-077: a ban is a COMMUNITY ban, not total. A banned account stays a READ-only signed-in user (browse member
 // activity, read the news feed, see public shares) but gets ZERO KV: no save/collect/follow/prefs (its own mutable
 // member record). So there are TWO free-tier sets:

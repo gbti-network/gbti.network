@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
   effectiveMembership,
   canPublish,
+  canStageDrafts,
   canSeeNews,
   canFollow,
   canSave,
@@ -48,6 +49,14 @@ test('canPublish + isBlockedFromPublishing: only paid publishes; unknown is not 
   for (const s of ['trialing', 'expired', 'cancelled', 'none', 'banned']) assert.equal(isBlockedFromPublishing(s), true);
   assert.equal(isBlockedFromPublishing('paid'), false);
   assert.equal(isBlockedFromPublishing('unknown'), false); // unknown fails OPEN to the gate
+});
+
+test('canStageDrafts (SOW-082): trial + paid may stage drafts on their fork; free/lapsed/banned may not', () => {
+  for (const s of ['paid', 'trialing']) assert.equal(canStageDrafts(s), true);
+  for (const s of ['expired', 'cancelled', 'none', 'banned', 'unknown']) assert.equal(canStageDrafts(s), false);
+  // staging is BROADER than publishing (trial can stage but not publish) and NARROWER than canSave (no lapsed/free)
+  assert.equal(canStageDrafts('trialing') && !canPublish('trialing'), true);
+  assert.equal(canSave('none') && !canStageDrafts('none'), true);
 });
 
 test('override parsers tolerate missing/garbage text and read the github_id lists', () => {

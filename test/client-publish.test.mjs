@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildContentFile } from '../client/src/content-ops.mjs';
-import { publishContent, branchName } from '../client/src/publish.mjs';
+import { publishContent, publishFiles, commitToBranchOnFork, branchName } from '../client/src/publish.mjs';
 import { createRepoClient, toBase64, interpretGateState } from '../client/src/github-repo.mjs';
 
 function fakeRepo({ existingFileSha = null, existingPull = null } = {}) {
@@ -20,6 +20,7 @@ function fakeRepo({ existingFileSha = null, existingPull = null } = {}) {
     async ensureBranch(r, b, sha) { calls.push(['ensureBranch', r, b, sha]); },
     async getFileSha(r, p, ref) { calls.push(['getFileSha', r, p, ref]); return existingFileSha; },
     async putFile(r, p, opts) { calls.push(['putFile', r, p, opts]); },
+    async deleteFile(r, p, opts) { calls.push(['deleteFile', r, p, opts]); },
     async findOpenPull({ head }) { calls.push(['findOpenPull', head]); return existingPull; },
     async openPull(opts) { calls.push(['openPull', opts]); return { number: 42, html_url: 'https://github.com/gbti-network/gbti.network/pull/42' }; },
   };
@@ -71,6 +72,49 @@ test('publishContent: an existing open PR is reused, not duplicated', async () =
 
 test('publishContent: rejects a change that is not a built content file', async () => {
   await assert.rejects(publishContent({ repo: fakeRepo(), change: { type: 'post' } }), /built content change/);
+});
+
+// ---- SOW-082: commitToBranchOnFork (the shared fork-commit primitive; Save uses it WITHOUT opening a PR) ----
+
+test('commitToBranchOnFork: commits to the fork branch and NEVER opens (or looks for) a PR', async () => {
+  const repo = fakeRepo();
+  const out = await commitToBranchOnFork({
+    repo, branch: 'gbti/post-hello',
+    files: [{ path: 'members/alice/posts/hello/index.md', content: 'Body' }],
+    message: 'Draft: hello',
+  });
+  assert.deepEqual(out, { fork: 'alice/gbti.network', owner: 'alice', branch: 'gbti/post-hello', base: 'main' });
+  const put = repo.calls.find((c) => c[0] === 'putFile');
+  assert.equal(put[2], 'members/alice/posts/hello/index.md');
+  assert.equal(put[3].branch, 'gbti/post-hello');
+  assert.equal(put[3].message, 'Draft: hello');
+  // the whole point: a Save must not touch the canonical PR surface
+  assert.equal(repo.calls.some((c) => c[0] === 'findOpenPull'), false, 'must not look for a PR');
+  assert.equal(repo.calls.some((c) => c[0] === 'openPull'), false, 'must not open a PR');
+});
+
+test('commitToBranchOnFork: content:null deletes the file (passing the blob sha), no putFile', async () => {
+  const repo = fakeRepo({ existingFileSha: 'blob-7' });
+  await commitToBranchOnFork({ repo, branch: 'gbti/post-x', files: [{ path: 'members/alice/posts/x/index.md', content: null }] });
+  const del = repo.calls.find((c) => c[0] === 'deleteFile');
+  assert.ok(del, 'a content:null file is deleted');
+  assert.equal(del[3].sha, 'blob-7');
+  assert.equal(repo.calls.some((c) => c[0] === 'putFile'), false);
+});
+
+test('commitToBranchOnFork: requires a branch and at least one file', async () => {
+  await assert.rejects(commitToBranchOnFork({ repo: fakeRepo(), branch: '', files: [{ path: 'a', content: 'x' }] }), /branch name is required/);
+  await assert.rejects(commitToBranchOnFork({ repo: fakeRepo(), branch: 'gbti/post-x', files: [] }), /at least one file/);
+});
+
+test('publishFiles: still commits then opens a PR (refactor regression)', async () => {
+  const repo = fakeRepo();
+  const out = await publishFiles({ repo, branch: 'gbti/post-x', files: [{ path: 'members/alice/posts/x/index.md', content: 'Body' }], message: 'Update' });
+  assert.equal(out.prNumber, 42);
+  assert.equal(out.fork, 'alice/gbti.network');
+  const open = repo.calls.find((c) => c[0] === 'openPull');
+  assert.equal(open[1].head, 'alice:gbti/post-x');
+  assert.equal(open[1].base, 'main');
 });
 
 // ---- createRepoClient against a fake fetch ----
@@ -134,6 +178,40 @@ test('repo.getFileSha: 404 -> null, 200 -> sha', async () => {
 test('repo.ensureBranch: a 422 (already exists) is swallowed', async () => {
   const repo = createRepoClient({ token: 't', upstream: 'u/r', fetch: fetchRouter([{ method: 'POST', match: '/git/refs', status: 422, body: 'exists' }]) });
   await repo.ensureBranch('u/r', 'gbti/post-x', 'sha'); // must not throw
+});
+
+// ---- SOW-082: fork-staged draft I/O on the repo client ----
+
+test('repo.listMatchingRefs: maps refs/heads/<prefix>* to branch names; 404 -> []', async () => {
+  const repo = createRepoClient({ token: 't', upstream: 'u/r', fetch: fetchRouter([
+    { method: 'GET', match: '/git/matching-refs/heads/gbti/', json: [
+      { ref: 'refs/heads/gbti/post-a', object: { sha: 's1' } },
+      { ref: 'refs/heads/gbti/profile', object: { sha: 's2' } },
+    ] },
+  ]) });
+  const refs = await repo.listMatchingRefs('alice/r', 'gbti/');
+  assert.deepEqual(refs.map((r) => r.branch).sort(), ['gbti/post-a', 'gbti/profile']);
+  assert.equal(refs[0].sha, 's1');
+
+  const empty = createRepoClient({ token: 't', upstream: 'u/r', fetch: fetchRouter([{ method: 'GET', match: '/matching-refs/', status: 404 }]) });
+  assert.deepEqual(await empty.listMatchingRefs('alice/r', 'gbti/'), []);
+});
+
+test('repo.getForkFileContent: decodes the fork file at a ref; 404 -> null', async () => {
+  const present = createRepoClient({ token: 't', upstream: 'u/r', fetch: fetchRouter([{ method: 'GET', match: '/contents/', json: { content: toBase64('staged body') } }]) });
+  assert.equal(await present.getForkFileContent('alice/r', 'members/alice/posts/a/index.md', 'gbti/post-a'), 'staged body');
+
+  const missing = createRepoClient({ token: 't', upstream: 'u/r', fetch: fetchRouter([{ method: 'GET', match: '/contents/', status: 404 }]) });
+  assert.equal(await missing.getForkFileContent('alice/r', 'x.md', 'b'), null);
+});
+
+test('repo.deleteBranch: DELETEs git/refs/heads with the RAW (unencoded) branch path', async () => {
+  let seen = null;
+  const fetch = async (url, opts = {}) => { seen = { url, method: (opts.method || 'GET').toUpperCase() }; return { status: 204, ok: true, text: async () => '' }; };
+  const repo = createRepoClient({ token: 't', upstream: 'u/r', fetch });
+  await repo.deleteBranch('alice/r', 'gbti/post-a');
+  assert.equal(seen.method, 'DELETE');
+  assert.match(seen.url, /\/repos\/alice\/r\/git\/refs\/heads\/gbti\/post-a$/); // real slashes, not %2F
 });
 
 test('repo.gateStatus: reads the membership-gate context and maps it', async () => {
