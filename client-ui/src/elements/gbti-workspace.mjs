@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, parseWorkspaceTab, parseWorkspaceNew } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, parseWorkspaceTab, parseWorkspaceNew } from '../workspace-core.mjs';
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
 const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'product']); // SOW-073: types whose publish invalidates a tab
@@ -22,6 +22,7 @@ const TABS = [
   { id: 'post', label: 'Articles', type: 'post' },
   { id: 'prompt', label: 'Prompts', type: 'prompt' },
   { id: 'product', label: 'Products', type: 'product' },
+  { id: 'drafts', label: 'Drafts' }, // SOW-082: fork-staged drafts (Save -> review -> Publish)
   { id: 'prs', label: 'Pull requests' },
   { id: 'inbox', label: 'Inbox' },
   { id: 'saved', label: 'Saved' }, // SOW-037: favorites + collections
@@ -214,6 +215,7 @@ class GbtiWorkspace extends GbtiElement {
     // The Inbox / Saved / Subscriptions tabs are self-loading elements (they fetch their own data on connect),
     // so there is nothing to preload here; render() already mounted them. Returning avoids a redundant render.
     if (id === 'inbox' || id === 'saved' || id === 'subs') return;
+    if (id === 'drafts') { await this._loadDrafts(id); return; } // SOW-082
     if (tab.type) { await this._swrContent(id, tab.type); return; }
     if (id === 'prs') { await this._swrPrs(id); }
   }
@@ -285,6 +287,28 @@ class GbtiWorkspace extends GbtiElement {
     }
   }
 
+  // SOW-082: load the member's fork-staged drafts (in-memory per session; the staged set changes on save/publish/
+  // discard, so it is invalidated there rather than persistently cached). `this._drafts` null = loading.
+  async _loadDrafts(id) {
+    if (this._drafts) return; // already loaded this session
+    try {
+      this._drafts = (await this.client?.listDrafts?.())?.drafts ?? [];
+    } catch {
+      this._drafts = [];
+    }
+    if (this._tab === id && !this._editing) this.render();
+  }
+
+  // SOW-082: a Save-draft from the embedded editor changed the staged set (+ the overview count). Drop the in-memory
+  // drafts + overview so the next visit reloads. The editor stays open after a save, so the refresh lands on return.
+  async _onDraftSaved() {
+    this._drafts = null;
+    this._overview = null;
+    const key = await this._memberKey();
+    if (key) await wbCacheInvalidateMany(key, ['overview']);
+    if (!this._editing) this._ensureTab(this._tab);
+  }
+
   // SOW-073: a just-published/edited content type invalidates that type + the Overview snapshot + the PR list (a
   // publish opens a PR), in BOTH the in-memory and the persistent cache, then refetches what the member will see.
   async _onPublished(type) {
@@ -292,6 +316,7 @@ class GbtiWorkspace extends GbtiElement {
     if (t) delete this._cache[t];
     this._overview = null;
     this._prs = null;
+    this._drafts = null; // SOW-082: a publish moves a draft Staged -> Submitted
     const key = await this._memberKey();
     if (key) await wbCacheInvalidateMany(key, [t, 'overview', 'prs'].filter(Boolean));
     if (!this._editing) this._ensureTab(this._tab); // refresh the visible tab (skip while still in the editor)
@@ -353,6 +378,7 @@ class GbtiWorkspace extends GbtiElement {
       // SOW-073: publishing/editing from the embedded editor invalidates the affected type (+ Overview + PRs) so the
       // workbench reflects the change immediately on return, never a stale list.
       ed?.addEventListener('gbti-published', () => this._onPublished(e.type));
+      ed?.addEventListener('gbti-draft-saved', () => this._onDraftSaved()); // SOW-082
       return;
     }
     if (this._reviewing != null) {
@@ -397,6 +423,7 @@ class GbtiWorkspace extends GbtiElement {
         <span class="t"><b>${esc(pr.title || ('PR #' + pr.number))}</b><span class="meta"><a href="${esc(pr.html_url || '#')}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span></span>
         <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join('')}</ul>`;
     }
+    if (this._tab === 'drafts') return this._draftsHtml(); // SOW-082
     const items = this._cache?.[tab?.type]; // optional chain: never throw if render runs before init
     if (!items) return `<p class="empty">Loading...</p>`;
     if (items.length === 0) return `<p class="empty">No ${esc(tab.label.toLowerCase())} yet.</p>`;
@@ -434,6 +461,7 @@ class GbtiWorkspace extends GbtiElement {
       { nm: 'Articles', href: 'workspace.html#tab=post', n: c.post },
       { nm: 'Prompts', href: 'workspace.html#tab=prompt', n: c.prompt },
       { nm: 'Products', href: 'workspace.html#tab=product', n: c.product },
+      { nm: 'Drafts', href: 'workspace.html#tab=drafts', n: this._drafts ? this._drafts.length : null }, // SOW-082: fork-staged
       { nm: 'Pull requests', href: 'workspace.html#tab=prs', n: c.prs },
       { nm: 'Saved', href: 'workspace.html#tab=saved', n: c.saved },
       { nm: 'Following', href: 'workspace.html#tab=subs', n: c.subs },
@@ -460,8 +488,41 @@ class GbtiWorkspace extends GbtiElement {
     </div>`;
   }
 
+  // SOW-082: the fork-staged drafts review view. Each draft shows its lifecycle state (Staged -> Submitted / Needs
+  // changes -> Published / Declined via classifyDraft) and opens in the editor; a paid member publishes it here.
+  _draftsHtml() {
+    const drafts = this._drafts;
+    if (drafts == null) return `<p class="empty">Loading your drafts...</p>`;
+    const msg = this._draftMsg ? `<div class="notice">${esc(this._draftMsg)}</div>` : '';
+    const intro = `<p class="muted draft-intro">Drafts live on your own fork. Save work here, review it, then publish it to the network when you are ready.</p>`;
+    if (!drafts.length) return msg + intro + `<p class="empty">No drafts yet. Use <b>Save draft</b> in the editor to stage an article, product, or prompt on your fork.</p>`;
+    const paid = this._overview ? this._overview.membership === 'paid' : true; // unknown -> show Publish; the server gates
+    return msg + intro + `<ul class="rows">${drafts.map((d, i) => this._draftRow(d, i, paid)).join('')}</ul>`;
+  }
+
+  _draftRow(d, i, paid) {
+    const g = glyphFor(null, d.type);
+    const { label, tone } = classifyDraft({ pull: d.pull });
+    const vis = d.visibility === 'members' ? `<span class="tag">members</span>` : '';
+    const pub = label === 'Published' ? ''
+      : paid
+        ? `<button class="btn" data-draft-publish="${i}" type="button">Publish</button>`
+        : `<a class="btn" href="https://gbti.network/membership/" target="_blank" rel="noopener" title="Publishing requires a paid membership">Upgrade to publish</a>`;
+    return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
+      + `<span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)}</span></span>`
+      + `<span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${vis}`
+      + `<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}`
+      + `<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
+  }
+
   _wireBody() {
     this.on('[data-profile]', 'click', () => this._openItem(this._profile?.path, 'profile'));
+    if (this._tab === 'drafts') {
+      const drafts = this._drafts || [];
+      this.$$('[data-draft-edit]').forEach((b) => b.addEventListener('click', () => this._openDraft(drafts[Number(b.dataset.draftEdit)])));
+      this.$$('[data-draft-publish]').forEach((b) => b.addEventListener('click', () => this._publishDraft(drafts[Number(b.dataset.draftPublish)], b)));
+      this.$$('[data-draft-discard]').forEach((b) => b.addEventListener('click', () => this._discardDraft(drafts[Number(b.dataset.draftDiscard)], b)));
+    }
     // SOW-028: the Inbox tab's <gbti-contrib-inbox> emits `contrib-open` (composed) when a Review button is
     // clicked; open the review drill-in. The listener sits on the element node the bubbling event passes through.
     if (this._tab === 'inbox') {
@@ -488,6 +549,52 @@ class GbtiWorkspace extends GbtiElement {
       this._editing = { type, frontmatter: full.frontmatter, body: full.body };
       this.render();
     } catch { /* could not load: stay on the list */ }
+  }
+
+  // SOW-082: open a fork-staged draft in the editor. readDraft (NOT getContentItem) reads from the staged branch on
+  // the fork, decrypting a members-only body for the prefill so a re-save never replaces the gated text with a stub.
+  async _openDraft(d) {
+    if (!d) return;
+    this._draftMsg = null;
+    try {
+      const full = await this.client.readDraft({ type: d.type, slug: d.slug });
+      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body };
+      this.render();
+    } catch { this._draftMsg = 'Could not open that draft.'; this.render(); }
+  }
+
+  // SOW-082: publish a staged draft to the network (opens the canonical PR from its branch). Paid-only; a gate
+  // rejection surfaces inline. On success the draft becomes Submitted and the list + caches refresh.
+  async _publishDraft(d, btn) {
+    if (!d) return;
+    this._draftMsg = null;
+    if (btn) { btn.disabled = true; btn.textContent = 'Publishing...'; }
+    try {
+      await this.client.publishDraft({ type: d.type, slug: d.slug });
+      await this._onPublished(d.type); // clears _drafts + overview + prs and refreshes the visible tab
+    } catch (err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Publish'; }
+      this._draftMsg = err?.message || 'Could not publish this draft.';
+      this.render();
+    }
+  }
+
+  // SOW-082: discard a staged draft (deletes its fork branch). Refused server-side if it has an open PR.
+  async _discardDraft(d, btn) {
+    if (!d) return;
+    if (typeof confirm === 'function' && !confirm(`Discard the draft "${d.title}"? This deletes it from your fork.`)) return;
+    this._draftMsg = null;
+    if (btn) { btn.disabled = true; btn.textContent = 'Discarding...'; }
+    try {
+      await this.client.discardDraft({ type: d.type, slug: d.slug });
+      this._drafts = null;
+      this._overview = null;
+      this._ensureTab('drafts');
+    } catch (err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Discard'; }
+      this._draftMsg = err?.message || 'Could not discard this draft.';
+      this.render();
+    }
   }
 }
 

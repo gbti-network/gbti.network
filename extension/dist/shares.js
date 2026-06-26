@@ -6959,7 +6959,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-welcome", GbtiWelcome);
 
   // client-ui/src/workspace-core.mjs
-  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "product", "prs", "inbox", "saved", "subs", "earnings"]);
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "product", "drafts", "prs", "inbox", "saved", "subs", "earnings"]);
   function parseWorkspaceTab(hash) {
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
@@ -6984,6 +6984,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       default:
         return { label: "Proposed", tone: "" };
     }
+  }
+  function classifyDraft({ pull = null, status = null } = {}) {
+    if (!pull) return { state: "staged", label: "Staged", tone: "" };
+    const c = classifyPull(pull, status);
+    if (c.label === "Accepted") return { state: "published", label: "Published", tone: "ok" };
+    if (c.label === "Declined") return { state: "declined", label: "Declined", tone: "muted" };
+    return { state: "review", label: c.label === "Proposed" ? "Submitted" : c.label, tone: c.tone };
   }
 
   // client-ui/src/workbench-cache.mjs
@@ -7409,6 +7416,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "post", label: "Articles", type: "post" },
     { id: "prompt", label: "Prompts", type: "prompt" },
     { id: "product", label: "Products", type: "product" },
+    { id: "drafts", label: "Drafts" },
+    // SOW-082: fork-staged drafts (Save -> review -> Publish)
     { id: "prs", label: "Pull requests" },
     { id: "inbox", label: "Inbox" },
     { id: "saved", label: "Saved" },
@@ -7598,6 +7607,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (id === "earnings") return;
       if (id === "inbox" || id === "saved" || id === "subs") return;
+      if (id === "drafts") {
+        await this._loadDrafts(id);
+        return;
+      }
       if (tab.type) {
         await this._swrContent(id, tab.type);
         return;
@@ -7681,6 +7694,26 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       }
     }
+    // SOW-082: load the member's fork-staged drafts (in-memory per session; the staged set changes on save/publish/
+    // discard, so it is invalidated there rather than persistently cached). `this._drafts` null = loading.
+    async _loadDrafts(id) {
+      if (this._drafts) return;
+      try {
+        this._drafts = (await this.client?.listDrafts?.())?.drafts ?? [];
+      } catch {
+        this._drafts = [];
+      }
+      if (this._tab === id && !this._editing) this.render();
+    }
+    // SOW-082: a Save-draft from the embedded editor changed the staged set (+ the overview count). Drop the in-memory
+    // drafts + overview so the next visit reloads. The editor stays open after a save, so the refresh lands on return.
+    async _onDraftSaved() {
+      this._drafts = null;
+      this._overview = null;
+      const key = await this._memberKey();
+      if (key) await wbCacheInvalidateMany(key, ["overview"]);
+      if (!this._editing) this._ensureTab(this._tab);
+    }
     // SOW-073: a just-published/edited content type invalidates that type + the Overview snapshot + the PR list (a
     // publish opens a PR), in BOTH the in-memory and the persistent cache, then refetches what the member will see.
     async _onPublished(type) {
@@ -7688,6 +7721,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (t) delete this._cache[t];
       this._overview = null;
       this._prs = null;
+      this._drafts = null;
       const key = await this._memberKey();
       if (key) await wbCacheInvalidateMany(key, [t, "overview", "prs"].filter(Boolean));
       if (!this._editing) this._ensureTab(this._tab);
@@ -7750,6 +7784,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const e = this._editing;
         if (ed?.load) ed.load(e.type, e.frontmatter, e.body);
         ed?.addEventListener("gbti-published", () => this._onPublished(e.type));
+        ed?.addEventListener("gbti-draft-saved", () => this._onDraftSaved());
         return;
       }
       if (this._reviewing != null) {
@@ -7798,6 +7833,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <span class="t"><b>${esc(pr.title || "PR #" + pr.number)}</b><span class="meta"><a href="${esc(pr.html_url || "#")}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span></span>
         <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join("")}</ul>`;
       }
+      if (this._tab === "drafts") return this._draftsHtml();
       const items = this._cache?.[tab?.type];
       if (!items) return `<p class="empty">Loading...</p>`;
       if (items.length === 0) return `<p class="empty">No ${esc(tab.label.toLowerCase())} yet.</p>`;
@@ -7827,6 +7863,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         { nm: "Articles", href: "workspace.html#tab=post", n: c.post },
         { nm: "Prompts", href: "workspace.html#tab=prompt", n: c.prompt },
         { nm: "Products", href: "workspace.html#tab=product", n: c.product },
+        { nm: "Drafts", href: "workspace.html#tab=drafts", n: this._drafts ? this._drafts.length : null },
+        // SOW-082: fork-staged
         { nm: "Pull requests", href: "workspace.html#tab=prs", n: c.prs },
         { nm: "Saved", href: "workspace.html#tab=saved", n: c.saved },
         { nm: "Following", href: "workspace.html#tab=subs", n: c.subs },
@@ -7846,8 +7884,32 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ${att}
     </div>`;
     }
+    // SOW-082: the fork-staged drafts review view. Each draft shows its lifecycle state (Staged -> Submitted / Needs
+    // changes -> Published / Declined via classifyDraft) and opens in the editor; a paid member publishes it here.
+    _draftsHtml() {
+      const drafts = this._drafts;
+      if (drafts == null) return `<p class="empty">Loading your drafts...</p>`;
+      const msg = this._draftMsg ? `<div class="notice">${esc(this._draftMsg)}</div>` : "";
+      const intro = `<p class="muted draft-intro">Drafts live on your own fork. Save work here, review it, then publish it to the network when you are ready.</p>`;
+      if (!drafts.length) return msg + intro + `<p class="empty">No drafts yet. Use <b>Save draft</b> in the editor to stage an article, product, or prompt on your fork.</p>`;
+      const paid = this._overview ? this._overview.membership === "paid" : true;
+      return msg + intro + `<ul class="rows">${drafts.map((d, i) => this._draftRow(d, i, paid)).join("")}</ul>`;
+    }
+    _draftRow(d, i, paid) {
+      const g = glyphFor(null, d.type);
+      const { label, tone } = classifyDraft({ pull: d.pull });
+      const vis = d.visibility === "members" ? `<span class="tag">members</span>` : "";
+      const pub = label === "Published" ? "" : paid ? `<button class="btn" data-draft-publish="${i}" type="button">Publish</button>` : `<a class="btn" href="https://gbti.network/membership/" target="_blank" rel="noopener" title="Publishing requires a paid membership">Upgrade to publish</a>`;
+      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)}</span></span><span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${vis}<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
+    }
     _wireBody() {
       this.on("[data-profile]", "click", () => this._openItem(this._profile?.path, "profile"));
+      if (this._tab === "drafts") {
+        const drafts = this._drafts || [];
+        this.$$("[data-draft-edit]").forEach((b) => b.addEventListener("click", () => this._openDraft(drafts[Number(b.dataset.draftEdit)])));
+        this.$$("[data-draft-publish]").forEach((b) => b.addEventListener("click", () => this._publishDraft(drafts[Number(b.dataset.draftPublish)], b)));
+        this.$$("[data-draft-discard]").forEach((b) => b.addEventListener("click", () => this._discardDraft(drafts[Number(b.dataset.draftDiscard)], b)));
+      }
       if (this._tab === "inbox") {
         this.$("gbti-contrib-inbox")?.addEventListener("contrib-open", (e) => {
           this._reviewing = e.detail?.number ?? null;
@@ -7874,6 +7936,64 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._editing = { type, frontmatter: full.frontmatter, body: full.body };
         this.render();
       } catch {
+      }
+    }
+    // SOW-082: open a fork-staged draft in the editor. readDraft (NOT getContentItem) reads from the staged branch on
+    // the fork, decrypting a members-only body for the prefill so a re-save never replaces the gated text with a stub.
+    async _openDraft(d) {
+      if (!d) return;
+      this._draftMsg = null;
+      try {
+        const full = await this.client.readDraft({ type: d.type, slug: d.slug });
+        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body };
+        this.render();
+      } catch {
+        this._draftMsg = "Could not open that draft.";
+        this.render();
+      }
+    }
+    // SOW-082: publish a staged draft to the network (opens the canonical PR from its branch). Paid-only; a gate
+    // rejection surfaces inline. On success the draft becomes Submitted and the list + caches refresh.
+    async _publishDraft(d, btn) {
+      if (!d) return;
+      this._draftMsg = null;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Publishing...";
+      }
+      try {
+        await this.client.publishDraft({ type: d.type, slug: d.slug });
+        await this._onPublished(d.type);
+      } catch (err) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Publish";
+        }
+        this._draftMsg = err?.message || "Could not publish this draft.";
+        this.render();
+      }
+    }
+    // SOW-082: discard a staged draft (deletes its fork branch). Refused server-side if it has an open PR.
+    async _discardDraft(d, btn) {
+      if (!d) return;
+      if (typeof confirm === "function" && !confirm(`Discard the draft "${d.title}"? This deletes it from your fork.`)) return;
+      this._draftMsg = null;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Discarding...";
+      }
+      try {
+        await this.client.discardDraft({ type: d.type, slug: d.slug });
+        this._drafts = null;
+        this._overview = null;
+        this._ensureTab("drafts");
+      } catch (err) {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Discard";
+        }
+        this._draftMsg = err?.message || "Could not discard this draft.";
+        this.render();
       }
     }
   };

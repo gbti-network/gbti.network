@@ -51,6 +51,7 @@ test('parseWorkspaceTab reads a valid tab from the hash (leading # optional, ext
   // SOW-037: the Saved + Subscriptions tabs are deep-linkable too.
   assert.equal(parseWorkspaceTab('#tab=saved'), 'saved');
   assert.equal(parseWorkspaceTab('#tab=subs'), 'subs');
+  assert.equal(parseWorkspaceTab('#tab=drafts'), 'drafts'); // SOW-082: the fork-staged Drafts tab
 });
 
 test('SOW-064: parseWorkspaceNew reads a valid #new=<type>; null otherwise', () => {
