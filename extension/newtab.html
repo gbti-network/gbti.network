@@ -133,11 +133,16 @@
     .footertip .ft-x:hover { background: var(--green); color: #fff; }
 
     /* SOW-018 lapsed-lock splash (full overlay; the rest of the shell is covered) */
-    .nt-lock { display: none; }
-    html[data-locked] .nt-lock { display: flex; position: fixed; inset: 0; z-index: 200; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: var(--paper-2); }
-    .nt-lock .ico { font-size: 38px; }
-    .nt-lock h1 { font-family: var(--f-display); font-size: clamp(24px, 4vw, 34px); margin: 12px 0 6px; }
-    .nt-lock a.cta { display: inline-block; margin-top: 18px; background: var(--green); color: #fff; font-weight: 800; padding: 11px 22px; border-radius: 12px; }
+    /* SOW-077: the read-only upgrade banner (replaces the old full-screen lock wall). In-flow at the top of the feed,
+       dismissible, shown only for the free/lapsed tier by newtab.mjs. */
+    .nt-upgrade { display: none; align-items: center; gap: 12px; margin: 0 0 16px; padding: 11px 16px; border: 1.5px solid var(--green); border-radius: var(--r); background: var(--green-tint); }
+    .nt-upgrade.show { display: flex; }
+    .nt-upgrade .up-ico { flex: none; color: var(--green-700); font-size: 15px; }
+    .nt-upgrade .up-txt { flex: 1; font-size: 13px; color: var(--fg); line-height: 1.5; }
+    .nt-upgrade .up-cta { flex: none; font-family: var(--f-sans); font-weight: 800; font-size: 13px; color: #fff; background: var(--green); border-radius: var(--r-pill); padding: 7px 16px; }
+    .nt-upgrade .up-cta:hover { background: var(--green-700); }
+    .nt-upgrade .up-x { flex: none; background: transparent; border: 0; color: var(--fg-mute); cursor: pointer; font-size: 13px; line-height: 1; padding: 4px 6px; }
+    .nt-upgrade .up-x:hover { color: var(--fg); }
   </style>
 </head>
 <body>
@@ -160,6 +165,14 @@
       </div>
 
       <div data-feedview>
+      <!-- SOW-077: a non-blocking upgrade prompt for a free/lapsed member browsing read-only (replaces the old
+           full-screen renew wall). newtab.mjs shows it only for the 'join'/'renew' tiers; banned + active never see it. -->
+      <div class="nt-upgrade" data-upgrade>
+        <span class="up-ico" aria-hidden="true">✦</span>
+        <span class="up-txt" data-upgrade-txt></span>
+        <a class="up-cta" data-upgrade-cta href="https://gbti.network/membership/" target="_blank" rel="noopener">Join GBTI</a>
+        <button class="up-x" type="button" data-upgrade-dismiss aria-label="Dismiss">✕</button>
+      </div>
       <a class="setup" data-setup href="#">
         <span class="s-txt" data-setup-txt></span>
         <span class="s-go" data-setup-go>Get started</span>
@@ -221,13 +234,6 @@
       </section>
     </main>
 
-    <!-- SOW-018: lapsed-member lock splash (shown only when html[data-locked]) -->
-    <div class="nt-lock">
-      <div class="ico">🔒</div>
-      <h1>Your access is locked</h1>
-      <p class="muted">Your GBTI membership has lapsed. Renew to rejoin the co-op, read the community stream, and publish again.</p>
-      <a class="cta" href="https://gbti.network/membership/">Renew membership</a>
-    </div>
   </div>
   <script src="dist/newtab.js"></script>
 </body>

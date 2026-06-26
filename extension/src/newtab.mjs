@@ -4,9 +4,9 @@
 // banner (SOW-026/029), and the lapsed-member lock (SOW-018). Fetches the public activity index over the
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
-import { isLockedMembership, canSeeNews } from '../../client/src/membership.mjs'; // SOW-060: news is a free-tier (signed-in) perk
+import { canSeeNews, canBrowse, upgradePromptKind } from '../../client/src/membership.mjs'; // SOW-060/077: free-tier read perks + the read-only upgrade prompt
 import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, asciiAnchor, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
-import { mergeAll, canSeeShares, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy
+import { mergeAll, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
 import { initShell, setRailActive } from './shell.mjs';
@@ -160,8 +160,8 @@ function closeReader() {
 // SOW-063: the new-tab landing splash. A BARE tab (no hash) lands on the splash unless snoozed within the window;
 // clicking a card snoozes that destination and switches the main column IN PLACE (WorkBench navigates away). The
 // pure decision/rotation helpers live in client-ui/src/splash.mjs; this owns the DOM + the localStorage state. The
-// lapsed lock (SOW-018, data-locked) and the forced-sign-in gate (SOW-048, data-unauth) are fixed overlays that
-// cover this, so it is safe to show the splash before those async checks resolve.
+// forced-sign-in gate (SOW-048, data-unauth) is a fixed overlay that covers this, so it is safe to show the splash
+// before that async check resolves. (SOW-077 removed the lapsed lock wall; a signed-in member browses read-only.)
 const SPLASH_DECISION_KEY = 'gbti-splash-decision';
 const SPLASH_WINDOW_KEY = 'gbti-splash-window-min'; // a client preference set in account.html; minutes, 0 = always show
 let QUOTES = null; // P2: the git-native /quotes.json once loaded; null -> the bundled set
@@ -316,10 +316,11 @@ function selectType(next) {
   ensureNewsForFilter();
 }
 
-/** Load the member's Shares once (member-gated, fail-closed to []). Shares ride /api/shares via the background. */
+/** Load Shares once for any signed-in member (SOW-077). The op + mergeAll filter by tier: paid/trial see member +
+ *  public shares, a free/banned reader sees PUBLIC shares only. Fail-closed to [] for a signed-out/unknown caller. */
 async function loadShares() {
   SHARES_LOADED = true;
-  if (!canSeeShares(MEMBERSHIP)) { SHARES = []; return; }
+  if (!canBrowse(MEMBERSHIP)) { SHARES = []; return; }
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/shares', query: {} } });
     SHARES = Array.isArray(r?.json?.items) ? r.json.items : [];
@@ -436,18 +437,44 @@ async function loadSetupBanner() {
   setup.classList.add('show');
 }
 
-// SOW-018: a lapsed (Locked) member's extension is locked behind a renew splash. Only a genuinely Locked status
-// (expired/cancelled/banned/none) locks the page; a signed-out visitor or an active member sees the normal tab.
-async function checkMembershipLock() {
+// SOW-077: resolve the member's effective tier, then drive the read-only upgrade prompt. A ban is a COMMUNITY ban,
+// not total, so EVERY signed-in account (free / lapsed / banned) now BROWSES the read-only feed; the old full-screen
+// renew wall is gone. The server is the boundary (KV writes + member content are still denied below the right tier);
+// the per-action controls hide off their predicates, and a free/lapsed tier additionally sees a soft upgrade banner.
+async function applyMembershipState() {
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/status', query: {} } });
-    MEMBERSHIP = r?.json?.membership ?? 'unknown'; // SOW-042: drives the All filter's Shares visibility
-    if (isLockedMembership(r?.json?.membership)) {
-      document.documentElement.setAttribute('data-locked', '1');
-      return true;
-    }
-  } catch (e) { /* worker unreachable -> fail open */ }
-  return false;
+    MEMBERSHIP = r?.json?.membership ?? 'unknown'; // SOW-042: drives the feed's Shares (public-vs-member) + News visibility
+  } catch (e) { MEMBERSHIP = 'unknown'; /* worker unreachable -> fail open to a read-only feed */ }
+  showUpgradeBanner();
+}
+
+// SOW-077: the read-only upgrade banner. Shown only for the free ('join') / lapsed ('renew') tier; banned + active
+// members see nothing. Dismiss snoozes it for a week so it stays a prompt, not a nag.
+const UPGRADE_SNOOZE_KEY = 'gbti-upgrade-snooze';
+const UPGRADE_SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
+function showUpgradeBanner() {
+  const el = $('[data-upgrade]');
+  if (!el) return;
+  const kind = upgradePromptKind(MEMBERSHIP);
+  if (!kind) { el.classList.remove('show'); return; }
+  let snoozedUntil = 0;
+  try { snoozedUntil = Number(localStorage.getItem(UPGRADE_SNOOZE_KEY)) || 0; } catch (e) {}
+  if (Date.now() < snoozedUntil) return;
+  const txt = $('[data-upgrade-txt]');
+  const cta = $('[data-upgrade-cta]');
+  if (kind === 'renew') {
+    if (txt) txt.textContent = 'Your membership has lapsed, so you are browsing in read-only mode. Renew to save, follow, unlock member-only content, and publish again.';
+    if (cta) cta.textContent = 'Renew membership';
+  } else {
+    if (txt) txt.textContent = 'You are browsing in read-only mode. Join GBTI to save, follow, unlock member-only content, and publish.';
+    if (cta) cta.textContent = 'Join GBTI';
+  }
+  el.classList.add('show');
+  el.querySelector('[data-upgrade-dismiss]')?.addEventListener('click', () => {
+    el.classList.remove('show');
+    try { localStorage.setItem(UPGRADE_SNOOZE_KEY, String(Date.now() + UPGRADE_SNOOZE_MS)); } catch (e) {}
+  }, { once: true });
 }
 
 // One-time tip about Chrome's own new-tab footer (Chrome 138+). CSP-safe (no inline handler).
@@ -496,12 +523,12 @@ function init() {
   syncModeButtons();
   syncTypeButtons();
   initFooterTip();
-  // Status drives the lapsed lock + the All filter's Shares (paid/trial) + News (paid) visibility; once it
-  // resolves, pull whatever the default/persisted filter needs and re-render.
-  checkMembershipLock().then(() => { ensureSharesForFilter(); ensureNewsForFilter(); });
+  // SOW-077: status drives the read-only upgrade banner + the feed's Shares (public-vs-member) + News visibility;
+  // once it resolves, pull whatever the default/persisted filter needs and re-render. No hard lock anymore.
+  applyMembershipState().then(() => { ensureSharesForFilter(); ensureNewsForFilter(); });
   // Hydrate the news cache for an INSTANT first paint (a #type=news tab shows the last-known news while the live
-  // fetch runs); skip if a fresh fetch already landed. Render gating stays paid-only, so this never leaks to a
-  // non-paid viewer. The live loadNews then re-sorts the list in place.
+  // fetch runs); skip if a fresh fetch already landed. Render gating is canSeeNews (SOW-077: any signed-in member,
+  // including banned), and a signed-out visitor is held by the forced-sign-in gate. The live loadNews re-sorts in place.
   readNewsCache().then((cached) => { if (cached && !NEWS_LOADED) { NEWS = cached; renderFeed($('[data-filter]')?.value || ''); } });
   loadSetupBanner();
 

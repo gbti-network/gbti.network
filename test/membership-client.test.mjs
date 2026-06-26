@@ -15,6 +15,7 @@ import {
   canBrowse,
   isBlockedFromPublishing,
   isLockedMembership,
+  upgradePromptKind,
   bannedIdsFromText,
   grandfathersFromText,
   grandfatherActive,
@@ -185,6 +186,17 @@ test('SOW-060 regression: a free (none) member follows + sees news + saves + bro
   assert.equal(canSave('none'), true);
   assert.equal(canBrowse('none'), true);
   assert.equal(canPublish('none'), false);
+});
+
+// SOW-077: the new-tab read-only upgrade prompt. Free 'none' -> join; lapsed expired/cancelled -> renew; an active
+// member, a banned account (paying does not lift a ban), and 'unknown' (oracle down, fail open) see NO prompt.
+test('upgradePromptKind: join for free, renew for lapsed, nothing for active/banned/unknown', () => {
+  assert.equal(upgradePromptKind('none'), 'join');
+  assert.equal(upgradePromptKind('expired'), 'renew');
+  assert.equal(upgradePromptKind('cancelled'), 'renew');
+  for (const m of ['paid', 'trialing', 'banned', 'unknown', undefined, null, '']) {
+    assert.equal(upgradePromptKind(m), null, `${m} gets no upgrade prompt`);
+  }
 });
 
 // SOW-018: the extension lock-splash predicate. Lapsed accounts lock; trial reads; paid is full; unknown fails OPEN.

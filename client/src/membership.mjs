@@ -119,6 +119,18 @@ export function isLockedMembership(membership) {
   return LOCKED_MEMBERSHIP.has(membership);
 }
 
+// SOW-077: the new-tab READ tier (free / lapsed) now BROWSES read-only instead of hitting the old full-screen renew
+// wall, and sees a non-blocking upgrade prompt. Returns the prompt KIND, or null for everyone who should see NO prompt:
+//   'join'  -> a never-subscribed free account ('none').
+//   'renew' -> a lapsed account ('expired' | 'cancelled').
+//   null    -> paid / trialing (active), 'banned' (a ban is NOT lifted by paying; ban > Stripe), and 'unknown'
+//              (the status oracle is unreachable -> fail open, do not nag a possibly-paid member).
+export function upgradePromptKind(membership) {
+  if (membership === 'none') return 'join';
+  if (membership === 'expired' || membership === 'cancelled') return 'renew';
+  return null;
+}
+
 /** Whether a membership value is a KNOWN non-paid status (so the publish is blocked, not merely unverified). */
 export function isBlockedFromPublishing(membership) {
   return NON_PUBLISHABLE.has(membership);

@@ -2369,12 +2369,20 @@
   // client/src/membership.mjs
   var STAFF = /* @__PURE__ */ new Set([ROLE.moderator, ROLE.admin, ROLE.superadmin]);
   var READ_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none", "banned"]);
+  function canBrowse(membership) {
+    return READ_TIER.has(membership);
+  }
   function canSeeNews(membership) {
     return READ_TIER.has(membership);
   }
   var LOCKED_MEMBERSHIP = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   function isLockedMembership(membership) {
     return LOCKED_MEMBERSHIP.has(membership);
+  }
+  function upgradePromptKind(membership) {
+    if (membership === "none") return "join";
+    if (membership === "expired" || membership === "cancelled") return "renew";
+    return null;
   }
 
   // client-ui/src/splash.mjs
@@ -10539,7 +10547,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   async function loadShares() {
     SHARES_LOADED = true;
-    if (!canSeeShares(MEMBERSHIP2)) {
+    if (!canBrowse(MEMBERSHIP2)) {
       SHARES = [];
       return;
     }
@@ -10657,17 +10665,48 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     setup.classList.add("show");
   }
-  async function checkMembershipLock() {
+  async function applyMembershipState() {
     try {
       const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/status", query: {} } });
       MEMBERSHIP2 = r?.json?.membership ?? "unknown";
-      if (isLockedMembership(r?.json?.membership)) {
-        document.documentElement.setAttribute("data-locked", "1");
-        return true;
-      }
+    } catch (e) {
+      MEMBERSHIP2 = "unknown";
+    }
+    showUpgradeBanner();
+  }
+  var UPGRADE_SNOOZE_KEY = "gbti-upgrade-snooze";
+  var UPGRADE_SNOOZE_MS = 7 * 24 * 60 * 60 * 1e3;
+  function showUpgradeBanner() {
+    const el = $("[data-upgrade]");
+    if (!el) return;
+    const kind = upgradePromptKind(MEMBERSHIP2);
+    if (!kind) {
+      el.classList.remove("show");
+      return;
+    }
+    let snoozedUntil = 0;
+    try {
+      snoozedUntil = Number(localStorage.getItem(UPGRADE_SNOOZE_KEY)) || 0;
     } catch (e) {
     }
-    return false;
+    if (Date.now() < snoozedUntil) return;
+    const txt = $("[data-upgrade-txt]");
+    const cta = $("[data-upgrade-cta]");
+    if (kind === "renew") {
+      if (txt) txt.textContent = "Your membership has lapsed, so you are browsing in read-only mode. Renew to save, follow, unlock member-only content, and publish again.";
+      if (cta) cta.textContent = "Renew membership";
+    } else {
+      if (txt) txt.textContent = "You are browsing in read-only mode. Join GBTI to save, follow, unlock member-only content, and publish.";
+      if (cta) cta.textContent = "Join GBTI";
+    }
+    el.classList.add("show");
+    el.querySelector("[data-upgrade-dismiss]")?.addEventListener("click", () => {
+      el.classList.remove("show");
+      try {
+        localStorage.setItem(UPGRADE_SNOOZE_KEY, String(Date.now() + UPGRADE_SNOOZE_MS));
+      } catch (e) {
+      }
+    }, { once: true });
   }
   var FOOTERTIP_KEY = "gbti-footertip-dismissed";
   function initFooterTip() {
@@ -10707,7 +10746,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     syncModeButtons();
     syncTypeButtons();
     initFooterTip();
-    checkMembershipLock().then(() => {
+    applyMembershipState().then(() => {
       ensureSharesForFilter();
       ensureNewsForFilter();
     });
