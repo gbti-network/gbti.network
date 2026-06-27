@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull, classifyDraft, prLifecycle, parseWorkspaceTab, parseWorkspaceNew } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, submitAck, parseWorkspaceTab, parseWorkspaceNew } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -83,6 +83,17 @@ test('prLifecycle: an open, passing/checking PR is pending — no attention, no 
     assert.equal(r.needsAttention, false);
     assert.equal(r.reason, '');
   }
+});
+
+// SOW-072 P2: submitAck is the one consistent submission confirmation.
+test('submitAck: states the real auto-merge flow + the WorkBench, with the PR number when known', () => {
+  const auto = submitAck({ prNumber: 42 });
+  assert.match(auto, /PR #42/);
+  assert.match(auto, /merges automatically/);
+  assert.match(auto, /WorkBench/);
+  assert.match(submitAck({ prNumber: 7, autoMerge: false }), /awaiting review/);
+  // no PR number yet -> no dangling "#"
+  assert.doesNotMatch(submitAck({}), /#/);
 });
 
 // SOW-036 P4: the workspace deep-link tab hint.

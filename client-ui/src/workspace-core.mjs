@@ -69,6 +69,17 @@ export function prLifecycle(pull = {}, status = null) {
   };
 }
 
+// SOW-072 P2: the ONE submit-acknowledgement copy, so every composer confirms a submission the SAME accurate way.
+// The old acks guessed ("it appears after the next build") or named only the PR; this states what actually happens
+// (auto-merge makes it fast) and points at the WorkBench, where the PR is tracked and a rejection surfaces with its
+// reason. `autoMerge` true = an own-folder paid publish (merges + goes live automatically); false = review-gated.
+export function submitAck({ prNumber = null, autoMerge = true } = {}) {
+  const pr = prNumber ? ` (PR #${prNumber})` : '';
+  return autoMerge
+    ? `Submitted${pr}. It merges automatically and appears shortly. Track it in your WorkBench.`
+    : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
+}
+
 // SOW-082: a fork-staged draft's lifecycle state. A draft is identified by its deterministic branch
 // gbti/<type>-<slug> on the member's fork; its state joins "branch exists" with the PR (if any) for that branch.
 // `pull` is the matched PR ({ state, merged }) or null (no PR yet = still staged on the fork). Reuses classifyPull

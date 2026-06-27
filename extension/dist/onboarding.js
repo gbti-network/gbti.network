@@ -3386,6 +3386,65 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-card-list", GbtiCardList);
 
+  // client-ui/src/workspace-core.mjs
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "product", "drafts", "prs", "inbox", "saved", "subs", "earnings"]);
+  function parseWorkspaceTab(hash) {
+    const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+    return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
+  }
+  var WORKSPACE_NEW_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "product"]);
+  function parseWorkspaceNew(hash) {
+    const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)new=([a-z]+)(?:&|$)/);
+    return m && WORKSPACE_NEW_TYPES.has(m[1]) ? m[1] : null;
+  }
+  function classifyPull(pr = {}, status2 = null) {
+    if (pr.merged === true || pr.state === "merged") return { label: "Accepted", tone: "ok" };
+    if (pr.state === "closed") return { label: "Declined", tone: "muted" };
+    switch (status2?.state) {
+      case "success":
+        return { label: "Proposed", tone: "ok" };
+      // mergeable / auto-merging
+      case "failure":
+        return { label: "Needs changes", tone: "bad" };
+      // held / rejected-not-paid / changes requested
+      case "error":
+        return { label: "Error", tone: "bad" };
+      default:
+        return { label: "Proposed", tone: "" };
+    }
+  }
+  function prLifecycle(pull = {}, status2 = null) {
+    const c = classifyPull(pull, status2);
+    const merged = pull.merged === true || pull.state === "merged";
+    const closed = !merged && pull.state === "closed";
+    let phase;
+    if (merged) phase = "accepted";
+    else if (closed) phase = "rejected";
+    else if (c.label === "Needs changes" || c.label === "Error") phase = "blocked";
+    else phase = "pending";
+    const needsAttention = phase === "rejected" || phase === "blocked";
+    const desc = status2 && typeof status2.description === "string" ? status2.description.trim() : "";
+    const fallback = phase === "rejected" ? "This request was closed without merging." : c.label === "Error" ? "The membership gate check errored; it will retry." : c.label === "Needs changes" ? "The membership gate is holding this until it passes." : "";
+    return {
+      label: c.label,
+      tone: needsAttention ? "bad" : c.tone,
+      phase,
+      needsAttention,
+      reason: needsAttention ? desc || fallback : desc
+    };
+  }
+  function submitAck({ prNumber = null, autoMerge = true } = {}) {
+    const pr = prNumber ? ` (PR #${prNumber})` : "";
+    return autoMerge ? `Submitted${pr}. It merges automatically and appears shortly. Track it in your WorkBench.` : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
+  }
+  function classifyDraft({ pull = null, status: status2 = null } = {}) {
+    if (!pull) return { state: "staged", label: "Staged", tone: "" };
+    const c = classifyPull(pull, status2);
+    if (c.label === "Accepted") return { state: "published", label: "Published", tone: "ok" };
+    if (c.label === "Declined") return { state: "declined", label: "Declined", tone: "muted" };
+    return { state: "review", label: c.label === "Proposed" ? "Submitted" : c.label, tone: c.tone };
+  }
+
   // client-ui/src/elements/gbti-comment-box.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var CSS15 = `
@@ -3503,7 +3562,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       wrap?.classList.add("busy");
       try {
         const res = await this.client.postComment({ targetType: t.type, targetSlug: t.slug, body, visibility, authorNote });
-        this._done(msg, "Posted. It appears after the next build.", "gbti-comment-posted", res);
+        this._done(msg, submitAck({ prNumber: res?.prNumber }), "gbti-comment-posted", res);
       } catch (err) {
         this._fail(msg, err);
         wrap?.classList.remove("busy");
@@ -3520,7 +3579,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       wrap?.classList.add("busy");
       try {
         const res = await this.client.editComment({ id: this._editId, body });
-        this._done(msg, "Saved. The edit appears after the next build.", "gbti-comment-edited", res);
+        this._done(msg, submitAck({ prNumber: res?.prNumber }), "gbti-comment-edited", res);
       } catch (err) {
         this._fail(msg, err);
         wrap?.classList.remove("busy");
@@ -6957,61 +7016,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   define("gbti-welcome", GbtiWelcome);
-
-  // client-ui/src/workspace-core.mjs
-  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "product", "drafts", "prs", "inbox", "saved", "subs", "earnings"]);
-  function parseWorkspaceTab(hash) {
-    const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
-    return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
-  }
-  var WORKSPACE_NEW_TYPES = /* @__PURE__ */ new Set(["post", "prompt", "product"]);
-  function parseWorkspaceNew(hash) {
-    const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)new=([a-z]+)(?:&|$)/);
-    return m && WORKSPACE_NEW_TYPES.has(m[1]) ? m[1] : null;
-  }
-  function classifyPull(pr = {}, status2 = null) {
-    if (pr.merged === true || pr.state === "merged") return { label: "Accepted", tone: "ok" };
-    if (pr.state === "closed") return { label: "Declined", tone: "muted" };
-    switch (status2?.state) {
-      case "success":
-        return { label: "Proposed", tone: "ok" };
-      // mergeable / auto-merging
-      case "failure":
-        return { label: "Needs changes", tone: "bad" };
-      // held / rejected-not-paid / changes requested
-      case "error":
-        return { label: "Error", tone: "bad" };
-      default:
-        return { label: "Proposed", tone: "" };
-    }
-  }
-  function prLifecycle(pull = {}, status2 = null) {
-    const c = classifyPull(pull, status2);
-    const merged = pull.merged === true || pull.state === "merged";
-    const closed = !merged && pull.state === "closed";
-    let phase;
-    if (merged) phase = "accepted";
-    else if (closed) phase = "rejected";
-    else if (c.label === "Needs changes" || c.label === "Error") phase = "blocked";
-    else phase = "pending";
-    const needsAttention = phase === "rejected" || phase === "blocked";
-    const desc = status2 && typeof status2.description === "string" ? status2.description.trim() : "";
-    const fallback = phase === "rejected" ? "This request was closed without merging." : c.label === "Error" ? "The membership gate check errored; it will retry." : c.label === "Needs changes" ? "The membership gate is holding this until it passes." : "";
-    return {
-      label: c.label,
-      tone: needsAttention ? "bad" : c.tone,
-      phase,
-      needsAttention,
-      reason: needsAttention ? desc || fallback : desc
-    };
-  }
-  function classifyDraft({ pull = null, status: status2 = null } = {}) {
-    if (!pull) return { state: "staged", label: "Staged", tone: "" };
-    const c = classifyPull(pull, status2);
-    if (c.label === "Accepted") return { state: "published", label: "Published", tone: "ok" };
-    if (c.label === "Declined") return { state: "declined", label: "Declined", tone: "muted" };
-    return { state: "review", label: c.label === "Proposed" ? "Submitted" : c.label, tone: c.tone };
-  }
 
   // client-ui/src/workbench-cache.mjs
   var WB_CACHE_PREFIX = "gbti:wb";

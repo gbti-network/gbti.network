@@ -9,6 +9,7 @@
 // The host holds the token; this element only calls the injected client. Comment bodies are never baked into
 // the page (the edit form fetches the current body on demand).
 import { GbtiElement, define, esc } from '../base.mjs';
+import { submitAck } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 
@@ -114,7 +115,7 @@ class GbtiCommentBox extends GbtiElement {
     wrap?.classList.add('busy');
     try {
       const res = await this.client.postComment({ targetType: t.type, targetSlug: t.slug, body, visibility, authorNote });
-      this._done(msg, 'Posted. It appears after the next build.', 'gbti-comment-posted', res);
+      this._done(msg, submitAck({ prNumber: res?.prNumber }), 'gbti-comment-posted', res); // SOW-072 P2: consistent, accurate ack
     } catch (err) { this._fail(msg, err); wrap?.classList.remove('busy'); }
   }
 
@@ -127,7 +128,7 @@ class GbtiCommentBox extends GbtiElement {
       // SOW-044: editing only changes the body; the comment's audience (public intro vs members) is preserved by
       // editComment (it defaults a missing authorNote/visibility to the existing values), so it never re-leaks.
       const res = await this.client.editComment({ id: this._editId, body });
-      this._done(msg, 'Saved. The edit appears after the next build.', 'gbti-comment-edited', res);
+      this._done(msg, submitAck({ prNumber: res?.prNumber }), 'gbti-comment-edited', res); // SOW-072 P2: consistent, accurate ack
     } catch (err) { this._fail(msg, err); wrap?.classList.remove('busy'); }
   }
 

@@ -2971,6 +2971,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       reason: needsAttention ? desc || fallback : desc
     };
   }
+  function submitAck({ prNumber = null, autoMerge = true } = {}) {
+    const pr = prNumber ? ` (PR #${prNumber})` : "";
+    return autoMerge ? `Submitted${pr}. It merges automatically and appears shortly. Track it in your WorkBench.` : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
+  }
   function classifyDraft({ pull = null, status = null } = {}) {
     if (!pull) return { state: "staged", label: "Staged", tone: "" };
     const c = classifyPull(pull, status);
@@ -7369,7 +7373,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       wrap?.classList.add("busy");
       try {
         const res = await this.client.postComment({ targetType: t.type, targetSlug: t.slug, body, visibility, authorNote });
-        this._done(msg, "Posted. It appears after the next build.", "gbti-comment-posted", res);
+        this._done(msg, submitAck({ prNumber: res?.prNumber }), "gbti-comment-posted", res);
       } catch (err) {
         this._fail(msg, err);
         wrap?.classList.remove("busy");
@@ -7386,7 +7390,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       wrap?.classList.add("busy");
       try {
         const res = await this.client.editComment({ id: this._editId, body });
-        this._done(msg, "Saved. The edit appears after the next build.", "gbti-comment-edited", res);
+        this._done(msg, submitAck({ prNumber: res?.prNumber }), "gbti-comment-edited", res);
       } catch (err) {
         this._fail(msg, err);
         wrap?.classList.remove("busy");
