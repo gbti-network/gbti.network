@@ -40,16 +40,17 @@ We practice data minimization. We do not store your email address or payment det
 
 - To provide the service you signed up for: authentication, publishing, membership, billing, role assignment, and community access. Our lawful basis is performance of our contract with you.
 - To keep the service secure: anti-abuse checks, access controls, and logging. Our lawful basis is our legitimate interest in protecting the network.
-- To run the referral program: when you arrive through a member's referral link, we set a first-party cookie that records only the referrer's id, so that member is credited if you join later. Our lawful basis is our legitimate interest in operating the referral program. The cookie is first-party, holds no profile, and you can clear it anytime in your browser.
+- To run the referral and attribution program: when you arrive through a member's invite link, we set a first-party cookie that records only the referrer or invite id, so that member is credited if you join later. Separately, so that we can fairly credit the members whose content brought you here, we record which member-owned content you view before you sign up. We keep that record in a deletable store at the network edge, keyed to a rotating session id, for up to a 90-day window, and we link it to your account only if you convert to a member. Until you convert, this record is not tied to your identity. Our lawful basis is our legitimate interest in operating the referral and content-attribution program. You can clear the cookie at any time in your browser, and you can ask us to erase the attribution record at any time.
 - To understand and improve the site: privacy-respecting, cookieless analytics (Cloudflare Web Analytics). It sets no cookies and stores no cross-site identifier, so it needs no consent banner. Our lawful basis is our legitimate interest in understanding aggregate traffic to improve the co-op.
 
 We do not use advertising cookies, we do not sell your data, and we do not profile you to make decisions that produce legal effects.
 
 ## 5. Cookies
 
-One referral cookie, plus a sign-in session cookie that is strictly necessary to keep you logged in. Our analytics is cookieless and sets no cookie at all:
+One referral and attribution cookie, plus a sign-in session cookie that is strictly necessary to keep you logged in. Our analytics is cookieless and sets no cookie at all:
 
-- **Referral (always set, for referral credit):** a first-party cookie set only when you arrive through a member's referral link, so a referral can be credited if you join. It holds only the referrer's id. It is set for all visitors, including those in the EU, the EEA, and the UK. You can clear it at any time in your browser settings.
+- **Referral and attribution (always set, for crediting members):** a first-party, essential cookie that holds a rotating session id, plus a referrer or invite id when you arrive through a member's invite link. It is what lets us credit the member whose link or content brought you in if you later join. This cookie is essential to the referral and attribution program, so it is set for all visitors, including those in the EU, the EEA, and the UK, and is not placed behind the analytics consent gate. It carries no profile of you. You can clear it at any time in your browser settings.
+- **Pre-signup content attribution (deletable edge record):** so that we can fairly credit the members whose content brought you to the network, we record which member-owned content you view before you sign up. We keep that record at the network edge, keyed to the rotating session id above, for up to a 90-day window. It is not linked to your identity unless and until you convert to a member, and you can ask us to erase it at any time. This is broader than a single referral cookie, so we disclose it here plainly. Our lawful basis is our legitimate interest in fairly crediting contributing members.
 - **Analytics (cookieless):** we use Cloudflare Web Analytics, which is privacy-respecting and sets NO cookie and no cross-site identifier, so there is nothing here to consent to. We do not use advertising or cross-site tracking cookies. (The EU/EEA/UK consent banner remains in place should we ever add a cookie-based analytics product.)
 
 ## 6. Who we share data with
@@ -71,7 +72,7 @@ Some of these providers are based in the United States. Where personal data is t
 Depending on where you live, you may have the right to access your data, correct it, delete it, receive a portable copy, restrict or object to certain processing, and withdraw consent. To exercise any of these, please [contact us](/contact/).
 
 - **Access and portability.** Much of your data is already portable: your published content is plain Markdown in your own folder in the repository.
-- **Erasure.** We will remove your content from our canonical repository, hard-delete your activity data (favorites and collections) from the edge store, rotate the key that protects your encrypted member-only content, and remove your membership records from Stripe and your community roles from Discord. As explained in section 2, we cannot guarantee removal from third-party forks, caches, or archives of the public repository.
+- **Erasure.** We will remove your content from our canonical repository, hard-delete your activity data (favorites and collections) and any pre-signup content-attribution record from the edge store, rotate the key that protects your encrypted member-only content, and remove your membership records from Stripe and your community roles from Discord. As explained in section 2, we cannot guarantee removal from third-party forks, caches, or archives of the public repository.
 - **Complaints.** If you are in the EU, the UK, or another region with a supervisory authority, you have the right to lodge a complaint with it.
 
 ## 8. Data retention

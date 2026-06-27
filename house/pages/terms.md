@@ -4,8 +4,8 @@ title: "Terms of Service"
 slug: terms
 status: published
 visibility: public
-description: "The terms for using the GBTI Network: membership ($150 per year with a 90-day limited-access trial), publishing through the public repository, the referral and contribution revenue share, payments through Stripe, refunds, and the community Code of Conduct."
-updatedAt: 2026-06-09
+description: "The terms for using the GBTI Network: membership ($150 per year with a 90-day limited-access trial), publishing through the public repository, the referral and contribution revenue share, the personal invite commission, payments through Stripe, refunds, and the community Code of Conduct."
+updatedAt: 2026-06-27
 redirectFrom: ["/terms/"]
 ---
 
@@ -43,10 +43,11 @@ You may cancel your membership at any time, which prevents the next renewal. Exc
 
 ## Revenue share
 
-GBTI shares revenue with the members whose content brings new paying members in, and the members who improve or discuss that content. The distribution is fixed and automatic; content owners do not choose it.
+GBTI shares revenue with the members whose content brings new paying members in, the members who improve or discuss that content, and the members who personally invite someone who joins. The distribution is fixed and automatic; content owners do not choose it. This is a forward-looking program, and these terms are subject to final review before the program is activated.
 
-- **Discovery and closing.** When a visitor becomes a paid member, the first eligible member-owned item they viewed earns its author 30 percent of that member's paid membership revenue, and the last eligible item they viewed before joining earns its author 10 percent (40 percent if the same item did both). This is subject to a settlement hold and active-member requirements. See the referral terms for details.
-- **Collaboration.** A fixed 5 percent pool is shared, automatically and equally, by the members who commented on or contributed to those first-touch and last-touch items before the signup. Every accepted contribution and every valid comment counts; content owners do not decide what is revenue-bearing.
+- **Discovery and closing.** When a visitor becomes a paid member, the first eligible member-owned item they viewed earns its author 30 percent of that member's paid membership revenue, and the last eligible item they viewed before joining earns its author 10 percent (40 percent if the same item did both), for the lifetime of that membership. This is subject to a settlement hold and active-member requirements. See the referral terms for details.
+- **Collaboration.** A fixed 5 percent pool is shared, automatically and equally, by the members who commented on or contributed to those first-touch and last-touch items before the signup. The qualifying contributors and commenters are counted once at conversion; there is no persistent points ledger and content owners do not decide what is revenue-bearing.
+- **Invite commission.** A member who personally brings someone in through their own invite link earns a flat 10 percent of the new member's paid membership revenue, for the lifetime of that membership. This commission is paid from the platform's retained share and never reduces the shares earned by content owners and collaborators. It does not pay when the inviting member already earns a content share on the same conversion.
 
 Payouts are made in USD. Recipients of more than 600 USD in a year may be required to complete tax forms that satisfy legal requirements before payout.
 
