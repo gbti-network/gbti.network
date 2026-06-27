@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, parseWorkspaceTab, parseWorkspaceNew } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, parseWorkspaceTab, parseWorkspaceNew } from '../workspace-core.mjs';
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
 const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'product']); // SOW-073: types whose publish invalidates a tab
@@ -51,6 +51,8 @@ const CSS = `
   .row .gl svg { width:19px; height:19px; }
   .row .t b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row .t .meta { color:var(--muted); font-size:12.5px; }
+  .row .t .why { display:block; margin-top:3px; color:var(--danger); font-size:12px; line-height:1.35; white-space:normal; } /* SOW-072 P2: the rejection reason, never silent */
+  .row .t .why[hidden] { display:none; }
   .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--hover); font-size:11.5px; color:var(--muted); white-space:nowrap; }
   .tag.ok { background:rgba(31,158,95,.14); color:var(--accent); }
   .tag.bad { background:rgba(224,108,108,.16); color:var(--danger); }
@@ -345,10 +347,10 @@ class GbtiWorkspace extends GbtiElement {
 
   _loadPrStatuses() {
     for (const pr of this._prs || []) {
-      // SOW-033 P4: a merged/closed PR is already terminal (classifyPull decides Accepted/Declined from
-      // pr.state/merged, ignoring the gate), so label it immediately and skip the per-PR gate fetch — one fewer
-      // API call per terminal PR, and the label shows instantly instead of waiting on the network.
-      if (pr.merged === true || pr.state === 'closed' || pr.state === 'merged') this._renderPrLabel(pr, null);
+      // SOW-033 P4 / SOW-072 P2: a MERGED PR is terminal-accepted (no gate reason to show), so label it instantly
+      // and skip the fetch. An OPEN or a CLOSED-declined PR fetches its gate status, so a rejection shows its REASON
+      // (the silent-rejection fix) instead of a bare "Declined".
+      if (pr.merged === true || pr.state === 'merged') this._renderPrLabel(pr, null);
       else this._loadPrStatus(pr.number);
     }
   }
@@ -359,12 +361,20 @@ class GbtiWorkspace extends GbtiElement {
     if (pr) this._renderPrLabel(pr, status);
   }
   _renderPrLabel(pr, status) {
+    // SOW-072 P2: the shared lifecycle model drives the label/tone AND the inline rejection reason.
+    const { label, tone, reason, needsAttention } = prLifecycle(pr, status);
     const tag = this.$(`.gate[data-n="${pr.number}"]`);
-    if (!tag) return;
-    const { label, tone } = classifyPull(pr, status);
-    tag.className = `gate tag ${tone}`;
-    tag.textContent = label;
-    if (status?.description) tag.title = status.description;
+    if (tag) {
+      tag.className = `gate tag ${tone}`;
+      tag.textContent = label;
+      if (reason) tag.title = reason;
+    }
+    // A rejection is never silent: surface the gate reason as visible text, not just a hover tooltip.
+    const why = this.$(`.why[data-n="${pr.number}"]`);
+    if (why) {
+      if (needsAttention && reason) { why.textContent = reason; why.hidden = false; }
+      else { why.textContent = ''; why.hidden = true; }
+    }
   }
 
   // ----- rendering -----
@@ -420,7 +430,7 @@ class GbtiWorkspace extends GbtiElement {
       if (prs === null) return `<p class="empty">Loading your pull requests...</p>`;
       if (prs.length === 0) return `<p class="empty">No pull requests yet. Publish from the site or the CMS and they show here.</p>`;
       return `<ul class="rows">${prs.map((pr) => `<li class="row">
-        <span class="t"><b>${esc(pr.title || ('PR #' + pr.number))}</b><span class="meta"><a href="${esc(pr.html_url || '#')}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span></span>
+        <span class="t"><b>${esc(pr.title || ('PR #' + pr.number))}</b><span class="meta"><a href="${esc(pr.html_url || '#')}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span><span class="why" data-n="${esc(pr.number)}" hidden></span></span>
         <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join('')}</ul>`;
     }
     if (this._tab === 'drafts') return this._draftsHtml(); // SOW-082

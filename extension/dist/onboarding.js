@@ -6985,6 +6985,26 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return { label: "Proposed", tone: "" };
     }
   }
+  function prLifecycle(pull = {}, status2 = null) {
+    const c = classifyPull(pull, status2);
+    const merged = pull.merged === true || pull.state === "merged";
+    const closed = !merged && pull.state === "closed";
+    let phase;
+    if (merged) phase = "accepted";
+    else if (closed) phase = "rejected";
+    else if (c.label === "Needs changes" || c.label === "Error") phase = "blocked";
+    else phase = "pending";
+    const needsAttention = phase === "rejected" || phase === "blocked";
+    const desc = status2 && typeof status2.description === "string" ? status2.description.trim() : "";
+    const fallback = phase === "rejected" ? "This request was closed without merging." : c.label === "Error" ? "The membership gate check errored; it will retry." : c.label === "Needs changes" ? "The membership gate is holding this until it passes." : "";
+    return {
+      label: c.label,
+      tone: needsAttention ? "bad" : c.tone,
+      phase,
+      needsAttention,
+      reason: needsAttention ? desc || fallback : desc
+    };
+  }
   function classifyDraft({ pull = null, status: status2 = null } = {}) {
     if (!pull) return { state: "staged", label: "Staged", tone: "" };
     const c = classifyPull(pull, status2);
@@ -7445,6 +7465,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .row .gl svg { width:19px; height:19px; }
   .row .t b { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row .t .meta { color:var(--muted); font-size:12.5px; }
+  .row .t .why { display:block; margin-top:3px; color:var(--danger); font-size:12px; line-height:1.35; white-space:normal; } /* SOW-072 P2: the rejection reason, never silent */
+  .row .t .why[hidden] { display:none; }
   .tag { display:inline-block; padding:2px 8px; border-radius:999px; background:var(--hover); font-size:11.5px; color:var(--muted); white-space:nowrap; }
   .tag.ok { background:rgba(31,158,95,.14); color:var(--accent); }
   .tag.bad { background:rgba(224,108,108,.16); color:var(--danger); }
@@ -7751,7 +7773,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _loadPrStatuses() {
       for (const pr of this._prs || []) {
-        if (pr.merged === true || pr.state === "closed" || pr.state === "merged") this._renderPrLabel(pr, null);
+        if (pr.merged === true || pr.state === "merged") this._renderPrLabel(pr, null);
         else this._loadPrStatus(pr.number);
       }
     }
@@ -7765,12 +7787,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (pr) this._renderPrLabel(pr, status2);
     }
     _renderPrLabel(pr, status2) {
+      const { label, tone, reason, needsAttention } = prLifecycle(pr, status2);
       const tag = this.$(`.gate[data-n="${pr.number}"]`);
-      if (!tag) return;
-      const { label, tone } = classifyPull(pr, status2);
-      tag.className = `gate tag ${tone}`;
-      tag.textContent = label;
-      if (status2?.description) tag.title = status2.description;
+      if (tag) {
+        tag.className = `gate tag ${tone}`;
+        tag.textContent = label;
+        if (reason) tag.title = reason;
+      }
+      const why = this.$(`.why[data-n="${pr.number}"]`);
+      if (why) {
+        if (needsAttention && reason) {
+          why.textContent = reason;
+          why.hidden = false;
+        } else {
+          why.textContent = "";
+          why.hidden = true;
+        }
+      }
     }
     // ----- rendering -----
     render() {
@@ -7830,7 +7863,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (prs === null) return `<p class="empty">Loading your pull requests...</p>`;
         if (prs.length === 0) return `<p class="empty">No pull requests yet. Publish from the site or the CMS and they show here.</p>`;
         return `<ul class="rows">${prs.map((pr) => `<li class="row">
-        <span class="t"><b>${esc(pr.title || "PR #" + pr.number)}</b><span class="meta"><a href="${esc(pr.html_url || "#")}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span></span>
+        <span class="t"><b>${esc(pr.title || "PR #" + pr.number)}</b><span class="meta"><a href="${esc(pr.html_url || "#")}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span><span class="why" data-n="${esc(pr.number)}" hidden></span></span>
         <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join("")}</ul>`;
       }
       if (this._tab === "drafts") return this._draftsHtml();
@@ -8175,14 +8208,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     async _prs() {
       const { prs = [] } = await this.client.listPRs() || {};
-      return prs.filter((p) => p.merged === true || p.state === "merged" || p.state === "closed").map((p) => ({
-        id: p.number,
-        ts: p.number,
-        // no reliable timestamp in both host modes; the number is a recency proxy for display sort
-        title: p.title || `PR #${p.number}`,
-        sub: p.merged === true || p.state === "merged" ? "Accepted" : "Declined",
-        href: p.html_url || SITE8
-      }));
+      return prs.filter((p) => p.merged === true || p.state === "merged" || p.state === "closed").map((p) => {
+        const lc8 = prLifecycle(p, null);
+        return {
+          id: p.number,
+          ts: p.number,
+          // no reliable timestamp in both host modes; the number is a recency proxy for display sort
+          title: p.title || `PR #${p.number}`,
+          sub: lc8.needsAttention ? "Declined — open to see why" : "Accepted",
+          href: lc8.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE8
+        };
+      });
     }
     async _following(login) {
       const f = await this.client.getFollows() || {};

@@ -35,6 +35,40 @@ export function classifyPull(pr = {}, status = null) {
   }
 }
 
+// SOW-072 P2: the ONE authoring-lifecycle model, layered on classifyPull so every surface (the composer ack, the
+// workspace PR tab, the activity bell) speaks the same states AND surfaces a rejection with its reason — never
+// silence. Maps a PR + its gate status to:
+//   phase: 'pending' (open, checking / awaiting) | 'accepted' (merged, going live) | 'rejected' (closed, not merged)
+//          | 'blocked' (open but the gate fails: needs changes / error).
+//   label, tone: from classifyPull (the shared five-state vocabulary), with the tone raised to 'bad' whenever the
+//          author must act, so a rejection is visibly flagged instead of muted.
+//   needsAttention: true when the author should look (rejected/closed, needs-changes, error) -> drives the bell badge.
+//   reason: the gate status description (why), or a plain-language fallback for the attention states so the author
+//          is never left guessing. Empty for a clean pending/accepted PR. Pure; node-testable.
+export function prLifecycle(pull = {}, status = null) {
+  const c = classifyPull(pull, status);
+  const merged = pull.merged === true || pull.state === 'merged';
+  const closed = !merged && pull.state === 'closed';
+  let phase;
+  if (merged) phase = 'accepted';
+  else if (closed) phase = 'rejected';
+  else if (c.label === 'Needs changes' || c.label === 'Error') phase = 'blocked';
+  else phase = 'pending';
+  const needsAttention = phase === 'rejected' || phase === 'blocked';
+  const desc = status && typeof status.description === 'string' ? status.description.trim() : '';
+  const fallback = phase === 'rejected' ? 'This request was closed without merging.'
+    : c.label === 'Error' ? 'The membership gate check errored; it will retry.'
+    : c.label === 'Needs changes' ? 'The membership gate is holding this until it passes.'
+    : '';
+  return {
+    label: c.label,
+    tone: needsAttention ? 'bad' : c.tone,
+    phase,
+    needsAttention,
+    reason: needsAttention ? (desc || fallback) : desc,
+  };
+}
+
 // SOW-082: a fork-staged draft's lifecycle state. A draft is identified by its deterministic branch
 // gbti/<type>-<slug> on the member's fork; its state joins "branch exists" with the PR (if any) for that branch.
 // `pull` is the matched PR ({ state, merged }) or null (no PR yet = still staged on the fork). Reuses classifyPull

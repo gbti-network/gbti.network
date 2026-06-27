@@ -12,6 +12,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { buildBell, markSeen } from '../activity-bell.mjs';
 import { canSeeShares, toMs } from '../all-merge.mjs';
 import { buildReadHash } from '../browse-hash.mjs';
+import { prLifecycle } from '../workspace-core.mjs'; // SOW-072 P2: the shared PR-lifecycle model (rejection never silent)
 
 const SITE = 'https://gbti.network';
 const POLL_MS = 120000; // a light poll (the panel-open refresh is the responsive path)
@@ -121,13 +122,19 @@ class GbtiActivityBell extends GbtiElement {
     const { prs = [] } = (await this.client.listPRs()) || {};
     return prs
       .filter((p) => p.merged === true || p.state === 'merged' || p.state === 'closed')
-      .map((p) => ({
-        id: p.number,
-        ts: p.number, // no reliable timestamp in both host modes; the number is a recency proxy for display sort
-        title: p.title || `PR #${p.number}`,
-        sub: (p.merged === true || p.state === 'merged') ? 'Accepted' : 'Declined',
-        href: p.html_url || SITE,
-      }));
+      .map((p) => {
+        // SOW-072 P2: a Declined PR is a "needs attention" signal, never silence. The bell has no gate status, so a
+        // declined item routes to the workspace PR tab where the gate REASON is fetched + shown; an accepted one
+        // links to GitHub as before.
+        const lc = prLifecycle(p, null);
+        return {
+          id: p.number,
+          ts: p.number, // no reliable timestamp in both host modes; the number is a recency proxy for display sort
+          title: p.title || `PR #${p.number}`,
+          sub: lc.needsAttention ? 'Declined — open to see why' : 'Accepted',
+          href: lc.needsAttention ? 'workspace.html#tab=prs' : (p.html_url || SITE),
+        };
+      });
   }
 
   async _following(login) {

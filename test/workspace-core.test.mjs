@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull, classifyDraft, parseWorkspaceTab, parseWorkspaceNew } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, parseWorkspaceTab, parseWorkspaceNew } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -39,6 +39,50 @@ test('open PR maps the gate status to Proposed / Needs changes / Error', () => {
 
 test('merged takes precedence over a closed flag', () => {
   assert.deepEqual(classifyPull({ state: 'closed', merged: true }, null), { label: 'Accepted', tone: 'ok' });
+});
+
+// SOW-072 P2: prLifecycle layers phase + needsAttention + the gate REASON on classifyPull, so a rejection is never
+// silent. The label/tone come from classifyPull; the tone is raised to 'bad' for any state the author must act on.
+test('prLifecycle: a merged PR is accepted, no attention, no reason', () => {
+  const r = prLifecycle({ merged: true }, null);
+  assert.equal(r.phase, 'accepted');
+  assert.equal(r.label, 'Accepted');
+  assert.equal(r.needsAttention, false);
+  assert.equal(r.reason, '');
+});
+
+test('prLifecycle: a CLOSED PR is rejected + needs attention + carries the gate reason (or a fallback)', () => {
+  const withReason = prLifecycle({ state: 'closed' }, { state: 'failure', description: 'rejected-not-paid: publishing is paid-only' });
+  assert.equal(withReason.phase, 'rejected');
+  assert.equal(withReason.label, 'Declined');
+  assert.equal(withReason.tone, 'bad'); // surfaced, not muted
+  assert.equal(withReason.needsAttention, true);
+  assert.match(withReason.reason, /paid-only/);
+  // closed with no status still gives a plain-language reason, never silence
+  const noStatus = prLifecycle({ state: 'closed' }, null);
+  assert.equal(noStatus.needsAttention, true);
+  assert.match(noStatus.reason, /closed without merging/);
+});
+
+test('prLifecycle: an open PR whose gate fails is blocked + needs attention with the reason', () => {
+  const failed = prLifecycle({ state: 'open' }, { state: 'failure', description: 'changes requested' });
+  assert.equal(failed.phase, 'blocked');
+  assert.equal(failed.label, 'Needs changes');
+  assert.equal(failed.tone, 'bad');
+  assert.equal(failed.needsAttention, true);
+  assert.equal(failed.reason, 'changes requested');
+  // a fallback reason when the gate gives no description
+  assert.match(prLifecycle({ state: 'open' }, { state: 'failure' }).reason, /holding this until it passes/);
+  assert.match(prLifecycle({ state: 'open' }, { state: 'error' }).reason, /errored/);
+});
+
+test('prLifecycle: an open, passing/checking PR is pending — no attention, no nag', () => {
+  for (const status of [{ state: 'success' }, { state: 'pending' }, null]) {
+    const r = prLifecycle({ state: 'open' }, status);
+    assert.equal(r.phase, 'pending');
+    assert.equal(r.needsAttention, false);
+    assert.equal(r.reason, '');
+  }
 });
 
 // SOW-036 P4: the workspace deep-link tab hint.
