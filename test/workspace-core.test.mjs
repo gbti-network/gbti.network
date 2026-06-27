@@ -62,6 +62,11 @@ test('prLifecycle: a CLOSED PR is rejected + needs attention + carries the gate 
   const noStatus = prLifecycle({ state: 'closed' }, null);
   assert.equal(noStatus.needsAttention, true);
   assert.match(noStatus.reason, /closed without merging/);
+  // review fix: a manually-closed PASSING PR must NOT show the success gate message as the "why declined"
+  const closedPassing = prLifecycle({ state: 'closed' }, { state: 'success', description: 'paid member own-folder content' });
+  assert.equal(closedPassing.phase, 'rejected');
+  assert.match(closedPassing.reason, /closed without merging/);
+  assert.doesNotMatch(closedPassing.reason, /own-folder/);
 });
 
 test('prLifecycle: an open PR whose gate fails is blocked + needs attention with the reason', () => {

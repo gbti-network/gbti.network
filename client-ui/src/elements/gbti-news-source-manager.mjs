@@ -103,7 +103,7 @@ class GbtiNewsSourceManager extends GbtiElement {
     try {
       const r = await fn();
       this._msg = r?.noop ? 'No change (already in that state).'
-        : (r?.number ? submitAck({ prNumber: r.number, autoMerge: true }) : 'Done.'); // SOW-072 P2: consistent ack
+        : (r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : 'Done.'); // SOW-072 P2: consistent ack (house edit -> code-owner review)
     } catch (e) {
       this._msg = e?.message || 'That edit failed.';
     }

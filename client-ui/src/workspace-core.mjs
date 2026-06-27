@@ -56,6 +56,9 @@ export function prLifecycle(pull = {}, status = null) {
   else phase = 'pending';
   const needsAttention = phase === 'rejected' || phase === 'blocked';
   const desc = status && typeof status.description === 'string' ? status.description.trim() : '';
+  // A CLOSED PR's head-SHA gate status can be a SUCCESS message (the author closed an otherwise-passing PR); that is
+  // NOT a close reason, so for 'rejected' surface the gate description only when it is an actual failure/error.
+  const descIsReason = phase !== 'rejected' || status?.state === 'failure' || status?.state === 'error';
   const fallback = phase === 'rejected' ? 'This request was closed without merging.'
     : c.label === 'Error' ? 'The membership gate check errored; it will retry.'
     : c.label === 'Needs changes' ? 'The membership gate is holding this until it passes.'
@@ -65,7 +68,7 @@ export function prLifecycle(pull = {}, status = null) {
     tone: needsAttention ? 'bad' : c.tone,
     phase,
     needsAttention,
-    reason: needsAttention ? (desc || fallback) : desc,
+    reason: needsAttention ? ((descIsReason && desc) || fallback) : desc,
   };
 }
 

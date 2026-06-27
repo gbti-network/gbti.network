@@ -2740,13 +2740,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     else phase = "pending";
     const needsAttention = phase === "rejected" || phase === "blocked";
     const desc = status && typeof status.description === "string" ? status.description.trim() : "";
+    const descIsReason = phase !== "rejected" || status?.state === "failure" || status?.state === "error";
     const fallback = phase === "rejected" ? "This request was closed without merging." : c.label === "Error" ? "The membership gate check errored; it will retry." : c.label === "Needs changes" ? "The membership gate is holding this until it passes." : "";
     return {
       label: c.label,
       tone: needsAttention ? "bad" : c.tone,
       phase,
       needsAttention,
-      reason: needsAttention ? desc || fallback : desc
+      reason: needsAttention ? descIsReason && desc || fallback : desc
     };
   }
   function submitAck({ prNumber = null, autoMerge = true } = {}) {
@@ -6076,7 +6077,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.render();
       try {
         const r = await fn();
-        this._msg = r?.noop ? "No change (already in that state)." : r?.number ? submitAck({ prNumber: r.number, autoMerge: true }) : "Done.";
+        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
       } catch (err) {
         this._msg = err?.message || "The edit failed.";
       }
@@ -6202,7 +6203,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.render();
       try {
         const r = await fn();
-        this._msg = r?.noop ? "No change (already in that state)." : r?.number ? submitAck({ prNumber: r.number, autoMerge: true }) : "Done.";
+        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
       } catch (e) {
         this._msg = e?.message || "That edit failed.";
       }
@@ -6313,7 +6314,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.render();
       try {
         const r = await fn();
-        this._msg = r?.noop ? "No change (already in that state)." : r?.number ? `Opened PR #${r.number} (auto-merges; the list updates after it lands + the site redeploys).` : "Done.";
+        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
       } catch (e) {
         this._msg = e?.message || "That edit failed.";
       }
@@ -8482,8 +8483,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._tab = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "overview";
       this._cache = {};
       this._prs = null;
-      this._pollTimers = /* @__PURE__ */ new Map();
-      this._pollCount = /* @__PURE__ */ new Map();
+      this._pollTimer = null;
+      this._pollTries = 0;
       this._overview = null;
       const newType = typeof location !== "undefined" && parseWorkspaceNew(location.hash) || null;
       this._editing = newType ? { type: newType, frontmatter: {}, body: "" } : null;
@@ -8751,7 +8752,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     }
     _loadPrStatuses() {
-      this._clearPolls();
+      this._pollTries = 0;
+      this._renderAllPrLabels();
+      this._schedulePrPoll();
+    }
+    // Render every row's gate label from the CURRENT this._prs: a MERGED PR is terminal-accepted (no gate reason to
+    // show); an OPEN or CLOSED-declined PR fetches its gate status so a rejection shows its REASON (the silent-rejection
+    // fix). Patches the .gate / .why nodes in place by data-n; safe to re-run on a poll tick (no full re-render).
+    _renderAllPrLabels() {
       for (const pr of this._prs || []) {
         if (pr.merged === true || pr.state === "merged") this._renderPrLabel(pr, null);
         else this._loadPrStatus(pr.number);
@@ -8764,45 +8772,42 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
       }
       const pr = (this._prs || []).find((p) => p.number === number);
-      if (!pr) return;
-      this._renderPrLabel(pr, status);
-      this._maybePollPr(pr, status);
+      if (pr) this._renderPrLabel(pr, status);
     }
-    // SOW-072 P3: schedule the next poll ONLY for an open, still-checking PR (shouldPollPr); stop on a terminal/blocked
-    // state, when the row leaves the DOM (tab switch / re-render), or after a bounded number of tries (a review-gated PR
-    // can sit "pending" forever). Linear backoff to a 30s ceiling. One timer per PR number; teardown clears them all.
-    _maybePollPr(pr, status) {
+    // SOW-072 P3: while ANY PR is still open (in flight), re-fetch the PR LIST on a backoff and re-render the labels, so a
+    // row flips Submitted -> Accepted (merged) / Declined (closed) without a manual refresh. The gate STATUS alone never
+    // carries merged/closed, so we must refresh the PR list itself. ONE workspace-level timer. Self-stops off the PR tab
+    // / in an editor; bounded by MAX_TRIES per viewing session (the poll only runs while the tab is open). Cleared on
+    // re-render + disconnect. _pollTries is NOT reset by _clearPolls (only a fresh _loadPrStatuses resets it), so the cap
+    // is not silently defeated by a re-render mid-poll.
+    _schedulePrPoll() {
+      if (this._pollTimer) {
+        clearTimeout(this._pollTimer);
+        this._pollTimer = null;
+      }
       const BASE_MS = 1e4, CAP_MS = 3e4, MAX_TRIES = 20;
-      const number = pr.number;
-      const prev = this._pollTimers.get(number);
-      if (prev) {
-        clearTimeout(prev);
-        this._pollTimers.delete(number);
-      }
-      if (!shouldPollPr(prLifecycle(pr, status))) {
-        this._pollCount.delete(number);
-        return;
-      }
-      const tries = (this._pollCount.get(number) || 0) + 1;
-      if (tries > MAX_TRIES) {
-        this._pollCount.delete(number);
-        return;
-      }
-      this._pollCount.set(number, tries);
-      const id = setTimeout(() => {
-        this._pollTimers.delete(number);
-        if (this._tab !== "prs" || this._editing || !this.$(`.gate[data-n="${number}"]`)) {
-          this._pollCount.delete(number);
-          return;
+      const anyOpen = (this._prs || []).some((pr) => shouldPollPr(prLifecycle(pr, null)));
+      if (!anyOpen || (this._pollTries || 0) >= MAX_TRIES) return;
+      this._pollTimer = setTimeout(async () => {
+        this._pollTimer = null;
+        if (this._tab !== "prs" || this._editing) return;
+        this._pollTries = (this._pollTries || 0) + 1;
+        let prs = null;
+        try {
+          prs = (await this.client?.listPRs?.())?.prs;
+        } catch {
         }
-        this._loadPrStatus(number);
-      }, Math.min(BASE_MS * tries, CAP_MS));
-      this._pollTimers.set(number, id);
+        if (this._tab !== "prs" || this._editing) return;
+        if (Array.isArray(prs)) this._prs = prs;
+        this._renderAllPrLabels();
+        this._schedulePrPoll();
+      }, Math.min(BASE_MS * ((this._pollTries || 0) + 1), CAP_MS));
     }
     _clearPolls() {
-      for (const id of this._pollTimers.values()) clearTimeout(id);
-      this._pollTimers.clear();
-      this._pollCount.clear();
+      if (this._pollTimer) {
+        clearTimeout(this._pollTimer);
+        this._pollTimer = null;
+      }
     }
     _renderPrLabel(pr, status) {
       const { label, tone, reason, needsAttention } = prLifecycle(pr, status);
@@ -8825,6 +8830,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     // ----- rendering -----
     render() {
+      this._clearPolls();
       if (this._editing) {
         this.set(this.css(CSS27) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {

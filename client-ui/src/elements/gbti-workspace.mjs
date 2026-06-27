@@ -98,8 +98,8 @@ class GbtiWorkspace extends GbtiElement {
     this._tab = (typeof location !== 'undefined' && parseWorkspaceTab(location.hash)) || 'overview'; // SOW-052 default
     this._cache = {};   // type -> items[]
     this._prs = null;   // { prs }
-    this._pollTimers = new Map(); // SOW-072 P3: number -> setTimeout id for the live PR-status poll
-    this._pollCount = new Map();  // SOW-072 P3: number -> attempts (bounds a never-merging PR)
+    this._pollTimer = null; // SOW-072 P3: the single live PR-list poll timer id
+    this._pollTries = 0;    // SOW-072 P3: poll attempts this viewing session (bounds a never-merging PR)
     this._overview = null; // SOW-052: { membership, role, counts, attention[] }
     // SOW-064: a #new=<type> deep-link (from the "+" quick-create menu) opens a BLANK editor for that content type,
     // so the member lands straight in a new article/prompt/product. Empty frontmatter + body = a blank form.
@@ -349,11 +349,15 @@ class GbtiWorkspace extends GbtiElement {
   }
 
   _loadPrStatuses() {
-    this._clearPolls(); // re-entry (a refresh / tab re-open): drop any in-flight polls before re-scheduling
+    this._pollTries = 0; // a fresh load (tab open / refresh) resets the live-poll budget
+    this._renderAllPrLabels();
+    this._schedulePrPoll(); // SOW-072 P3: keep the list fresh while any PR is still in flight, so a row flips live
+  }
+  // Render every row's gate label from the CURRENT this._prs: a MERGED PR is terminal-accepted (no gate reason to
+  // show); an OPEN or CLOSED-declined PR fetches its gate status so a rejection shows its REASON (the silent-rejection
+  // fix). Patches the .gate / .why nodes in place by data-n; safe to re-run on a poll tick (no full re-render).
+  _renderAllPrLabels() {
     for (const pr of this._prs || []) {
-      // SOW-033 P4 / SOW-072 P2: a MERGED PR is terminal-accepted (no gate reason to show), so label it instantly
-      // and skip the fetch. An OPEN or a CLOSED-declined PR fetches its gate status, so a rejection shows its REASON
-      // (the silent-rejection fix) instead of a bare "Declined".
       if (pr.merged === true || pr.state === 'merged') this._renderPrLabel(pr, null);
       else this._loadPrStatus(pr.number);
     }
@@ -362,34 +366,35 @@ class GbtiWorkspace extends GbtiElement {
     let status = null;
     try { status = await this.client?.prStatus?.({ number }); } catch { /* leave null */ }
     const pr = (this._prs || []).find((p) => p.number === number);
-    if (!pr) return;
-    this._renderPrLabel(pr, status);
-    this._maybePollPr(pr, status); // SOW-072 P3: keep polling while it is still checking, so the row flips live
+    if (pr) this._renderPrLabel(pr, status);
   }
-  // SOW-072 P3: schedule the next poll ONLY for an open, still-checking PR (shouldPollPr); stop on a terminal/blocked
-  // state, when the row leaves the DOM (tab switch / re-render), or after a bounded number of tries (a review-gated PR
-  // can sit "pending" forever). Linear backoff to a 30s ceiling. One timer per PR number; teardown clears them all.
-  _maybePollPr(pr, status) {
+  // SOW-072 P3: while ANY PR is still open (in flight), re-fetch the PR LIST on a backoff and re-render the labels, so a
+  // row flips Submitted -> Accepted (merged) / Declined (closed) without a manual refresh. The gate STATUS alone never
+  // carries merged/closed, so we must refresh the PR list itself. ONE workspace-level timer. Self-stops off the PR tab
+  // / in an editor; bounded by MAX_TRIES per viewing session (the poll only runs while the tab is open). Cleared on
+  // re-render + disconnect. _pollTries is NOT reset by _clearPolls (only a fresh _loadPrStatuses resets it), so the cap
+  // is not silently defeated by a re-render mid-poll.
+  _schedulePrPoll() {
+    if (this._pollTimer) { clearTimeout(this._pollTimer); this._pollTimer = null; }
     const BASE_MS = 10000, CAP_MS = 30000, MAX_TRIES = 20;
-    const number = pr.number;
-    const prev = this._pollTimers.get(number);
-    if (prev) { clearTimeout(prev); this._pollTimers.delete(number); }
-    if (!shouldPollPr(prLifecycle(pr, status))) { this._pollCount.delete(number); return; }
-    const tries = (this._pollCount.get(number) || 0) + 1;
-    if (tries > MAX_TRIES) { this._pollCount.delete(number); return; }
-    this._pollCount.set(number, tries);
-    const id = setTimeout(() => {
-      this._pollTimers.delete(number);
-      // Self-stop if the member navigated away from the PR tab, opened an editor, or the row is gone.
-      if (this._tab !== 'prs' || this._editing || !this.$(`.gate[data-n="${number}"]`)) { this._pollCount.delete(number); return; }
-      this._loadPrStatus(number);
-    }, Math.min(BASE_MS * tries, CAP_MS));
-    this._pollTimers.set(number, id);
+    // "still in flight" = an open PR: prLifecycle with no gate status classifies any non-merged/closed PR as the
+    // pollable 'pending' phase (shouldPollPr), so the poll runs until every PR is merged or closed.
+    const anyOpen = (this._prs || []).some((pr) => shouldPollPr(prLifecycle(pr, null)));
+    if (!anyOpen || (this._pollTries || 0) >= MAX_TRIES) return;
+    this._pollTimer = setTimeout(async () => {
+      this._pollTimer = null;
+      if (this._tab !== 'prs' || this._editing) return; // self-stop off the PR tab / in an editor
+      this._pollTries = (this._pollTries || 0) + 1;
+      let prs = null;
+      try { prs = (await this.client?.listPRs?.())?.prs; } catch { /* keep the current list */ }
+      if (this._tab !== 'prs' || this._editing) return; // re-check after the await
+      if (Array.isArray(prs)) this._prs = prs;
+      this._renderAllPrLabels();
+      this._schedulePrPoll();
+    }, Math.min(BASE_MS * ((this._pollTries || 0) + 1), CAP_MS));
   }
   _clearPolls() {
-    for (const id of this._pollTimers.values()) clearTimeout(id);
-    this._pollTimers.clear();
-    this._pollCount.clear();
+    if (this._pollTimer) { clearTimeout(this._pollTimer); this._pollTimer = null; }
   }
   _renderPrLabel(pr, status) {
     // SOW-072 P2: the shared lifecycle model drives the label/tone AND the inline rejection reason.
@@ -410,6 +415,8 @@ class GbtiWorkspace extends GbtiElement {
 
   // ----- rendering -----
   render() {
+    this._clearPolls(); // SOW-072 P3: a re-render replaces the rows (and fires on a client/sign-out change) -> stop the
+    // poll; the PR tab re-arms it via _ensureTab -> _loadPrStatuses, and a sign-out leaves it stopped.
     if (this._editing) {
       this.set(this.css(CSS) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
       this.on('[data-back]', 'click', () => { this._editing = null; this.render(); });

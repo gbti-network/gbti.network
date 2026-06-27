@@ -135,7 +135,7 @@ class GbtiCategoryManager extends GbtiElement {
     this._busy = true; this._msg = ''; this.render();
     try {
       const r = await fn();
-      this._msg = r?.noop ? 'No change (already in that state).' : (r?.number ? submitAck({ prNumber: r.number, autoMerge: true }) : 'Done.'); // SOW-072 P2: consistent ack
+      this._msg = r?.noop ? 'No change (already in that state).' : (r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : 'Done.'); // SOW-072 P2: consistent ack (house edit -> code-owner review)
     } catch (err) {
       this._msg = err?.message || 'The edit failed.';
     }
