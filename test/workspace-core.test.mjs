@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull, classifyDraft, prLifecycle, submitAck, parseWorkspaceTab, parseWorkspaceNew } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -94,6 +94,31 @@ test('submitAck: states the real auto-merge flow + the WorkBench, with the PR nu
   assert.match(submitAck({ prNumber: 7, autoMerge: false }), /awaiting review/);
   // no PR number yet -> no dangling "#"
   assert.doesNotMatch(submitAck({}), /#/);
+});
+
+// SOW-072 P3: failHint maps an error to consistent guidance (message + upgrade pointer + retryable).
+test('failHint: membership-required upgrades (not retryable); auth fails to sign-in; others retry', () => {
+  const paid = failHint({ code: 'membership-required', message: 'Commenting requires a paid membership.' });
+  assert.equal(paid.upgrade, true);
+  assert.equal(paid.retryable, false);
+  assert.match(paid.text, /paid membership/);
+  assert.deepEqual(failHint({ code: 'no-identity' }), { text: 'Sign in with the GBTI client first.', upgrade: false, retryable: false });
+  assert.equal(failHint({ code: 'invalid-content', message: 'Title is required.' }).retryable, true);
+  const net = failHint({ message: 'network down' });
+  assert.equal(net.retryable, true);
+  assert.equal(net.upgrade, false);
+  assert.match(failHint(null).text, /try again/); // no error object -> a safe default
+});
+
+// SOW-072 P3: shouldPollPr keeps polling only an open, still-checking PR.
+test('shouldPollPr: poll a pending PR, stop on accepted/rejected/blocked', () => {
+  assert.equal(shouldPollPr({ phase: 'pending' }), true);
+  for (const phase of ['accepted', 'rejected', 'blocked']) assert.equal(shouldPollPr({ phase }), false, `${phase} stops polling`);
+  assert.equal(shouldPollPr(null), false);
+  // it composes with prLifecycle: an open+checking PR polls; a merged one does not
+  assert.equal(shouldPollPr(prLifecycle({ state: 'open' }, { state: 'pending' })), true);
+  assert.equal(shouldPollPr(prLifecycle({ merged: true }, null)), false);
+  assert.equal(shouldPollPr(prLifecycle({ state: 'closed' }, null)), false);
 });
 
 // SOW-036 P4: the workspace deep-link tab hint.

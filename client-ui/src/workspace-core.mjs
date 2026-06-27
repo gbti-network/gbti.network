@@ -80,6 +80,29 @@ export function submitAck({ prNumber = null, autoMerge = true } = {}) {
     : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
 }
 
+// SOW-072 P3: map a publish/comment FAILURE to consistent author-facing guidance, so every composer reports a
+// failure the same accurate way (and points a non-paid member at the upgrade) instead of each surface inventing its
+// own copy. Returns { text, upgrade, retryable }. Pure; node-testable.
+//   membership-required           -> the publish is paid-only (upgrade, not retryable as-is)
+//   not-authenticated/no-identity -> sign in first (not retryable until signed in)
+//   invalid-content               -> fix the fields, then retry
+//   anything else                 -> a transient error; retryable
+export function failHint(err) {
+  const code = err?.code || '';
+  const msg = err?.message || '';
+  if (code === 'membership-required') return { text: msg || 'Publishing to the network requires a paid membership.', upgrade: true, retryable: false };
+  if (code === 'not-authenticated' || code === 'no-identity') return { text: 'Sign in with the GBTI client first.', upgrade: false, retryable: false };
+  if (code === 'invalid-content') return { text: msg || 'Some fields need fixing before this can publish.', upgrade: false, retryable: true };
+  return { text: msg || 'Could not save right now. Please try again.', upgrade: false, retryable: true };
+}
+
+// SOW-072 P3: whether the workspace PR tab should KEEP polling a PR's gate status. Only an OPEN, still-checking PR
+// (phase 'pending') is worth polling; 'accepted'/'rejected' are terminal, and 'blocked' (needs-changes/error) sits
+// until the author acts, so we stop there too (it re-fetches on the next manual load). Pure.
+export function shouldPollPr(lifecycle) {
+  return lifecycle?.phase === 'pending';
+}
+
 // SOW-082: a fork-staged draft's lifecycle state. A draft is identified by its deterministic branch
 // gbti/<type>-<slug> on the member's fork; its state joins "branch exists" with the PR (if any) for that branch.
 // `pull` is the matched PR ({ state, merged }) or null (no PR yet = still staged on the fork). Reuses classifyPull

@@ -5,7 +5,7 @@
 // pure form.mjs helpers, so the only DOM concern here is reading raw values + rendering.
 
 import { GbtiElement, define, esc } from '../base.mjs';
-import { submitAck } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
+import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { gatherInput } from '../form.mjs';
 import { resolveAsset } from '../assets.mjs'; // SOW-062 P3: resolve an existing coverImage path to a preview URL
 import './gbti-block-editor.mjs'; // SOW-062 P4: the block body editor (serializes to/from Markdown via #body.value)
@@ -264,7 +264,8 @@ class GbtiContentEditor extends GbtiElement {
       const res = await this.client.preview({ body: this.$('#body').value });
       this.out(`<div class="preview">${res.html || ''}</div>`);
     } catch (err) {
-      this.out(esc(err.message), 'danger');
+      const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
+      this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
     }
   }
 
@@ -274,7 +275,8 @@ class GbtiContentEditor extends GbtiElement {
       const res = await this.client.validateContent({ type, input, body });
       this.out(res.valid ? `<span class="tag ok">valid</span> ${esc(res.path || '')}` : `<span class="danger">${esc(res.error)}</span>`);
     } catch (err) {
-      this.out(esc(err.message), 'danger');
+      const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
+      this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
     }
   }
 
@@ -286,7 +288,8 @@ class GbtiContentEditor extends GbtiElement {
       this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`); // SOW-072 P2: consistent ack (esc: out() writes innerHTML)
       this.emit('gbti-published', res);
     } catch (err) {
-      this.out(esc(err.message), 'danger');
+      const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
+      this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
     }
   }
 
@@ -300,7 +303,8 @@ class GbtiContentEditor extends GbtiElement {
       this.out('<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
       this.emit('gbti-draft-saved', res);
     } catch (err) {
-      this.out(esc(err.message), 'danger');
+      const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
+      this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
     }
   }
 
@@ -321,7 +325,8 @@ class GbtiContentEditor extends GbtiElement {
         this.out(`Image staged: <code>${esc(res.path)}</code> (reference it in your body)`);
       }
     } catch (err) {
-      this.out(esc(err.message), 'danger');
+      const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
+      this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
     }
   }
 
@@ -341,7 +346,8 @@ class GbtiContentEditor extends GbtiElement {
       if (el) el.value = res.path;
       this.out(`Cover image staged: <code>${esc(res.path)}</code>`);
     } catch (err) {
-      this.out(esc(err.message), 'danger');
+      const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
+      this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
     }
   }
 

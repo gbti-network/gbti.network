@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, parseWorkspaceTab, parseWorkspaceNew } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew } from '../workspace-core.mjs';
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
 const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'product']); // SOW-073: types whose publish invalidates a tab
@@ -98,6 +98,8 @@ class GbtiWorkspace extends GbtiElement {
     this._tab = (typeof location !== 'undefined' && parseWorkspaceTab(location.hash)) || 'overview'; // SOW-052 default
     this._cache = {};   // type -> items[]
     this._prs = null;   // { prs }
+    this._pollTimers = new Map(); // SOW-072 P3: number -> setTimeout id for the live PR-status poll
+    this._pollCount = new Map();  // SOW-072 P3: number -> attempts (bounds a never-merging PR)
     this._overview = null; // SOW-052: { membership, role, counts, attention[] }
     // SOW-064: a #new=<type> deep-link (from the "+" quick-create menu) opens a BLANK editor for that content type,
     // so the member lands straight in a new article/prompt/product. Empty frontmatter + body = a blank form.
@@ -125,6 +127,7 @@ class GbtiWorkspace extends GbtiElement {
   disconnectedCallback() {
     if (typeof window !== 'undefined' && this._onHash) window.removeEventListener('hashchange', this._onHash);
     try { if (this._onStorage) globalThis.chrome?.storage?.onChanged?.removeListener?.(this._onStorage); } catch { /* ignore */ }
+    this._clearPolls(); // SOW-072 P3: never leak a PR-status poll timer past teardown
     super.disconnectedCallback?.();
   }
 
@@ -346,6 +349,7 @@ class GbtiWorkspace extends GbtiElement {
   }
 
   _loadPrStatuses() {
+    this._clearPolls(); // re-entry (a refresh / tab re-open): drop any in-flight polls before re-scheduling
     for (const pr of this._prs || []) {
       // SOW-033 P4 / SOW-072 P2: a MERGED PR is terminal-accepted (no gate reason to show), so label it instantly
       // and skip the fetch. An OPEN or a CLOSED-declined PR fetches its gate status, so a rejection shows its REASON
@@ -358,7 +362,34 @@ class GbtiWorkspace extends GbtiElement {
     let status = null;
     try { status = await this.client?.prStatus?.({ number }); } catch { /* leave null */ }
     const pr = (this._prs || []).find((p) => p.number === number);
-    if (pr) this._renderPrLabel(pr, status);
+    if (!pr) return;
+    this._renderPrLabel(pr, status);
+    this._maybePollPr(pr, status); // SOW-072 P3: keep polling while it is still checking, so the row flips live
+  }
+  // SOW-072 P3: schedule the next poll ONLY for an open, still-checking PR (shouldPollPr); stop on a terminal/blocked
+  // state, when the row leaves the DOM (tab switch / re-render), or after a bounded number of tries (a review-gated PR
+  // can sit "pending" forever). Linear backoff to a 30s ceiling. One timer per PR number; teardown clears them all.
+  _maybePollPr(pr, status) {
+    const BASE_MS = 10000, CAP_MS = 30000, MAX_TRIES = 20;
+    const number = pr.number;
+    const prev = this._pollTimers.get(number);
+    if (prev) { clearTimeout(prev); this._pollTimers.delete(number); }
+    if (!shouldPollPr(prLifecycle(pr, status))) { this._pollCount.delete(number); return; }
+    const tries = (this._pollCount.get(number) || 0) + 1;
+    if (tries > MAX_TRIES) { this._pollCount.delete(number); return; }
+    this._pollCount.set(number, tries);
+    const id = setTimeout(() => {
+      this._pollTimers.delete(number);
+      // Self-stop if the member navigated away from the PR tab, opened an editor, or the row is gone.
+      if (this._tab !== 'prs' || this._editing || !this.$(`.gate[data-n="${number}"]`)) { this._pollCount.delete(number); return; }
+      this._loadPrStatus(number);
+    }, Math.min(BASE_MS * tries, CAP_MS));
+    this._pollTimers.set(number, id);
+  }
+  _clearPolls() {
+    for (const id of this._pollTimers.values()) clearTimeout(id);
+    this._pollTimers.clear();
+    this._pollCount.clear();
   }
   _renderPrLabel(pr, status) {
     // SOW-072 P2: the shared lifecycle model drives the label/tone AND the inline rejection reason.

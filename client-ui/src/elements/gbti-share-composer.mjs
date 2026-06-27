@@ -8,7 +8,7 @@
 //                       real authority and will reject a genuinely non-paid post)
 // The host holds the GitHub token; this element only calls the injected client.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { submitAck } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
+import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 
@@ -165,11 +165,8 @@ class GbtiShareComposer extends GbtiElement {
       const ogBox = this.$('[data-og]'); if (ogBox) { ogBox.hidden = true; ogBox.innerHTML = ''; }
       this.emit('gbti-share-posted', res);
     } catch (err) {
-      if (err?.code === 'membership-required') {
-        this._say(msg, 'Posting Shares requires a paid membership.', 'err');
-      } else {
-        this._say(msg, err?.message || 'Could not post the Share.', 'err');
-      }
+      const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
+      this._say(msg, h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text, 'err');
     } finally {
       card?.classList.remove('busy');
     }

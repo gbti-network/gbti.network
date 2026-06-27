@@ -9,7 +9,7 @@
 // The host holds the token; this element only calls the injected client. Comment bodies are never baked into
 // the page (the edit form fetches the current body on demand).
 import { GbtiElement, define, esc } from '../base.mjs';
-import { submitAck } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
+import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 
@@ -137,9 +137,8 @@ class GbtiCommentBox extends GbtiElement {
     this.emit(event, detail);
   }
   _fail(msg, err) {
-    if (err?.code === 'membership-required') this._say(msg, 'Commenting requires a paid membership.', 'err');
-    else if (err?.code === 'not-authenticated' || err?.code === 'no-identity') this._say(msg, 'Sign in with the GBTI client first.', 'err');
-    else this._say(msg, err?.message || 'Could not save the comment.', 'err');
+    const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
+    this._say(msg, h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text, 'err');
   }
   _say(el, text, kind) { if (el) { el.textContent = text; el.className = `msg ${kind || ''}`; } }
 }

@@ -520,6 +520,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const pr = prNumber ? ` (PR #${prNumber})` : "";
     return autoMerge ? `Submitted${pr}. It merges automatically and appears shortly. Track it in your WorkBench.` : `Submitted${pr}. It is awaiting review. Track it in your WorkBench.`;
   }
+  function failHint(err) {
+    const code = err?.code || "";
+    const msg = err?.message || "";
+    if (code === "membership-required") return { text: msg || "Publishing to the network requires a paid membership.", upgrade: true, retryable: false };
+    if (code === "not-authenticated" || code === "no-identity") return { text: "Sign in with the GBTI client first.", upgrade: false, retryable: false };
+    if (code === "invalid-content") return { text: msg || "Some fields need fixing before this can publish.", upgrade: false, retryable: true };
+    return { text: msg || "Could not save right now. Please try again.", upgrade: false, retryable: true };
+  }
+  function shouldPollPr(lifecycle) {
+    return lifecycle?.phase === "pending";
+  }
   function classifyDraft({ pull = null, status: status2 = null } = {}) {
     if (!pull) return { state: "staged", label: "Staged", tone: "" };
     const c = classifyPull(pull, status2);
@@ -800,7 +811,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const res = await this.client.preview({ body: this.$("#body").value });
         this.out(`<div class="preview">${res.html || ""}</div>`);
       } catch (err) {
-        this.out(esc(err.message), "danger");
+        const h = failHint(err);
+        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
     }
     async doValidate() {
@@ -809,7 +821,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const res = await this.client.validateContent({ type, input, body });
         this.out(res.valid ? `<span class="tag ok">valid</span> ${esc(res.path || "")}` : `<span class="danger">${esc(res.error)}</span>`);
       } catch (err) {
-        this.out(esc(err.message), "danger");
+        const h = failHint(err);
+        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
     }
     async doPublish() {
@@ -820,7 +833,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`);
         this.emit("gbti-published", res);
       } catch (err) {
-        this.out(esc(err.message), "danger");
+        const h = failHint(err);
+        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
     }
     // SOW-082: Save the current content as a draft on the member's own fork (no PR). Allowed for trial + paid; a
@@ -833,7 +847,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.out('<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
         this.emit("gbti-draft-saved", res);
       } catch (err) {
-        this.out(esc(err.message), "danger");
+        const h = failHint(err);
+        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
     }
     async doImage(file) {
@@ -851,7 +866,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this.out(`Image staged: <code>${esc(res.path)}</code> (reference it in your body)`);
         }
       } catch (err) {
-        this.out(esc(err.message), "danger");
+        const h = failHint(err);
+        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
     }
     // SOW-062 P3: stage a picked cover image — update both framing previews from the file immediately, then stage it
@@ -872,7 +888,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (el) el.value = res.path;
         this.out(`Cover image staged: <code>${esc(res.path)}</code>`);
       } catch (err) {
-        this.out(esc(err.message), "danger");
+        const h = failHint(err);
+        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
     }
     clearCover(control) {
@@ -3086,11 +3103,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         this.emit("gbti-share-posted", res);
       } catch (err) {
-        if (err?.code === "membership-required") {
-          this._say(msg, "Posting Shares requires a paid membership.", "err");
-        } else {
-          this._say(msg, err?.message || "Could not post the Share.", "err");
-        }
+        const h = failHint(err);
+        this._say(msg, h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text, "err");
       } finally {
         card?.classList.remove("busy");
       }
@@ -3590,9 +3604,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.emit(event, detail);
     }
     _fail(msg, err) {
-      if (err?.code === "membership-required") this._say(msg, "Commenting requires a paid membership.", "err");
-      else if (err?.code === "not-authenticated" || err?.code === "no-identity") this._say(msg, "Sign in with the GBTI client first.", "err");
-      else this._say(msg, err?.message || "Could not save the comment.", "err");
+      const h = failHint(err);
+      this._say(msg, h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text, "err");
     }
     _say(el, text, kind) {
       if (el) {
@@ -7510,6 +7523,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._tab = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "overview";
       this._cache = {};
       this._prs = null;
+      this._pollTimers = /* @__PURE__ */ new Map();
+      this._pollCount = /* @__PURE__ */ new Map();
       this._overview = null;
       const newType = typeof location !== "undefined" && parseWorkspaceNew(location.hash) || null;
       this._editing = newType ? { type: newType, frontmatter: {}, body: "" } : null;
@@ -7544,6 +7559,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (this._onStorage) globalThis.chrome?.storage?.onChanged?.removeListener?.(this._onStorage);
       } catch {
       }
+      this._clearPolls();
       super.disconnectedCallback?.();
     }
     // SOW-052: load the overview hub data — content counts (+ drafts), PR + saved + follow counts, membership, and
@@ -7776,6 +7792,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     }
     _loadPrStatuses() {
+      this._clearPolls();
       for (const pr of this._prs || []) {
         if (pr.merged === true || pr.state === "merged") this._renderPrLabel(pr, null);
         else this._loadPrStatus(pr.number);
@@ -7788,7 +7805,45 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
       }
       const pr = (this._prs || []).find((p) => p.number === number);
-      if (pr) this._renderPrLabel(pr, status2);
+      if (!pr) return;
+      this._renderPrLabel(pr, status2);
+      this._maybePollPr(pr, status2);
+    }
+    // SOW-072 P3: schedule the next poll ONLY for an open, still-checking PR (shouldPollPr); stop on a terminal/blocked
+    // state, when the row leaves the DOM (tab switch / re-render), or after a bounded number of tries (a review-gated PR
+    // can sit "pending" forever). Linear backoff to a 30s ceiling. One timer per PR number; teardown clears them all.
+    _maybePollPr(pr, status2) {
+      const BASE_MS = 1e4, CAP_MS = 3e4, MAX_TRIES = 20;
+      const number = pr.number;
+      const prev = this._pollTimers.get(number);
+      if (prev) {
+        clearTimeout(prev);
+        this._pollTimers.delete(number);
+      }
+      if (!shouldPollPr(prLifecycle(pr, status2))) {
+        this._pollCount.delete(number);
+        return;
+      }
+      const tries = (this._pollCount.get(number) || 0) + 1;
+      if (tries > MAX_TRIES) {
+        this._pollCount.delete(number);
+        return;
+      }
+      this._pollCount.set(number, tries);
+      const id = setTimeout(() => {
+        this._pollTimers.delete(number);
+        if (this._tab !== "prs" || this._editing || !this.$(`.gate[data-n="${number}"]`)) {
+          this._pollCount.delete(number);
+          return;
+        }
+        this._loadPrStatus(number);
+      }, Math.min(BASE_MS * tries, CAP_MS));
+      this._pollTimers.set(number, id);
+    }
+    _clearPolls() {
+      for (const id of this._pollTimers.values()) clearTimeout(id);
+      this._pollTimers.clear();
+      this._pollCount.clear();
     }
     _renderPrLabel(pr, status2) {
       const { label, tone, reason, needsAttention } = prLifecycle(pr, status2);
