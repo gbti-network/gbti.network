@@ -74,6 +74,9 @@ test('publishComment: SOW-044 a plain comment is members-only + ENCRYPTED by def
   assert.equal(r.targetType, 'post');
   assert.equal(r.visibility, 'members'); // no longer public by default
   assert.equal(r.encrypted, true);
+  // SOW-072 P2: the comment op now returns the PR handle (was discarded) so the ack + the MCP post_comment report it.
+  assert.equal(r.prNumber, 7);
+  assert.equal(r.prUrl, 'u');
   assert.match(r.path, /^members\/alice\/comments\/20260610120000-[a-z0-9]+\.md$/);
   // the body is committed ONLY as an encrypted envelope; the stub .md carries no plaintext
   assert.ok(puts.some((p) => /^members\/alice\/_enc\/comment-.*-body\.enc$/.test(p.path)), JSON.stringify(puts.map((p) => p.path)));

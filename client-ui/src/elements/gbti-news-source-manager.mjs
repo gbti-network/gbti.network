@@ -4,6 +4,7 @@
 // token + the gate is the real boundary). Edits go live at the Pages-deploy cadence (the worker reads the rebuilt
 // /news-sources.json next cron). Inert in public (no injected client). Host-agnostic.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { submitAck } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 
 const hostOf = (url) => { try { return new URL(url).host; } catch { return url || ''; } };
 
@@ -102,7 +103,7 @@ class GbtiNewsSourceManager extends GbtiElement {
     try {
       const r = await fn();
       this._msg = r?.noop ? 'No change (already in that state).'
-        : (r?.number ? `Opened PR #${r.number} (auto-merges; the list updates after it lands + the site redeploys).` : 'Done.');
+        : (r?.number ? submitAck({ prNumber: r.number, autoMerge: true }) : 'Done.'); // SOW-072 P2: consistent ack
     } catch (e) {
       this._msg = e?.message || 'That edit failed.';
     }

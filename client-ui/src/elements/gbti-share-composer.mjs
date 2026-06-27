@@ -8,6 +8,7 @@
 //                       real authority and will reject a genuinely non-paid post)
 // The host holds the GitHub token; this element only calls the injected client.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { submitAck } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 
@@ -158,7 +159,7 @@ class GbtiShareComposer extends GbtiElement {
       if (url) input.url = url;
       if (this._image) input.image = this._image; // SOW-057: the featured image (OG-fetched, author-clearable)
       const res = await this.client.postShare({ input, body });
-      this._say(msg, res?.encrypted ? 'Posted (members-only).' : 'Posted.', 'ok');
+      this._say(msg, submitAck({ prNumber: res?.prNumber, autoMerge: true }), 'ok'); // SOW-072 P2: consistent ack
       for (const sel of ['input.title', 'input.desc', 'textarea', 'input[type=url]']) { const el = this.$(sel); if (el) el.value = ''; }
       this._image = null;
       const ogBox = this.$('[data-og]'); if (ogBox) { ogBox.hidden = true; ogBox.innerHTML = ''; }

@@ -18393,8 +18393,8 @@ async function planAndPublishComment(ctx2, repo, built, body, { message, title, 
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
-  await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody });
-  return { id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? "public", encrypted: Boolean(plan?.encPath) };
+  const pr = await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody });
+  return { ...pr, id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? "public", encrypted: Boolean(plan?.encPath) };
 }
 async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody } = {}) {
   const id = requireIdentity(ctx2);

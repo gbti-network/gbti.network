@@ -512,8 +512,10 @@ async function planAndPublishComment(ctx, repo, built, body, { message, title, p
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
   // Idempotent by branch: re-editing the same comment id updates the same PR.
-  await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody });
-  return { id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? 'public', encrypted: Boolean(plan?.encPath) };
+  const pr = await publishFiles({ repo, branch: `gbti/comment-${built.id}`, files, message, title, body: prBody });
+  // SOW-072 P2: spread the PR handle (prNumber/prUrl/updated) so the comment ack + the MCP post_comment can report
+  // it (publishFiles returns it; this op used to discard it). The explicit fields win on any key collision.
+  return { ...pr, id: built.id, path: built.path, visibility: built.frontmatter.visibility ?? 'public', encrypted: Boolean(plan?.encPath) };
 }
 
 export async function publishComment(ctx, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody } = {}) {

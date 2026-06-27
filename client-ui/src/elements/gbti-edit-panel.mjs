@@ -8,6 +8,7 @@
 // chrome. The merge into the full frontmatter uses the pure inline.mjs helpers.
 
 import { GbtiElement, define, getIdentity, esc } from '../base.mjs';
+import { submitAck } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { readHooks, canEditInPlace, toPublishPayload } from '../inline.mjs';
 
 class GbtiEditPanel extends GbtiElement {
@@ -117,7 +118,7 @@ class GbtiEditPanel extends GbtiElement {
       this.teardown();
       this.editing = false;
       this.render();
-      this.flash(`Published: PR #${res.prNumber}`);
+      this.flash(submitAck({ prNumber: res.prNumber, autoMerge: true })); // SOW-072 P2: consistent ack
       this.emit('gbti-published', res);
     } catch (err) {
       this.flash(err.message, true);

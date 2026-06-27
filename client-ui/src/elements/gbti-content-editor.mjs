@@ -5,6 +5,7 @@
 // pure form.mjs helpers, so the only DOM concern here is reading raw values + rendering.
 
 import { GbtiElement, define, esc } from '../base.mjs';
+import { submitAck } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { gatherInput } from '../form.mjs';
 import { resolveAsset } from '../assets.mjs'; // SOW-062 P3: resolve an existing coverImage path to a preview URL
 import './gbti-block-editor.mjs'; // SOW-062 P4: the block body editor (serializes to/from Markdown via #body.value)
@@ -282,7 +283,7 @@ class GbtiContentEditor extends GbtiElement {
     try {
       const { type, input, body } = this.gather();
       const res = await this.client.publish({ type, input, body });
-      this.out(`<span class="tag ok">${res.updated ? 'updated' : 'opened'}</span> PR <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a>`);
+      this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`); // SOW-072 P2: consistent ack (esc: out() writes innerHTML)
       this.emit('gbti-published', res);
     } catch (err) {
       this.out(esc(err.message), 'danger');

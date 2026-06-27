@@ -5,6 +5,7 @@
 // path-changing ops (move/remove/key-rename) are SOW-055 Phase 2 (they need the content migration) and are not
 // offered here. Admin-only by where it is mounted + the server-side gate; inert without a client.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { submitAck } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -134,7 +135,7 @@ class GbtiCategoryManager extends GbtiElement {
     this._busy = true; this._msg = ''; this.render();
     try {
       const r = await fn();
-      this._msg = r?.noop ? 'No change (already in that state).' : (r?.number ? `Opened PR #${r.number} (auto-merges; the tree updates after it lands).` : 'Done.');
+      this._msg = r?.noop ? 'No change (already in that state).' : (r?.number ? submitAck({ prNumber: r.number, autoMerge: true }) : 'Done.'); // SOW-072 P2: consistent ack
     } catch (err) {
       this._msg = err?.message || 'The edit failed.';
     }
