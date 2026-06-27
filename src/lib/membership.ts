@@ -43,3 +43,10 @@ export const COMMENT_PCT = pct(COMMENT_CAP); // "3%"
 export const FIRST_TOUCH_PCT = '30%';
 export const LAST_TOUCH_PCT = '10%';
 export const COLLAB_POOL_PCT = '5%';
+// SOW-059 (owner decision 2026-06-27): a SEPARATE manual-invite lane. A member who shares their personal invite link
+// earns a flat 10% LIFETIME commission on anyone who joins through it, paid from the platform's retained share (so
+// content first/last-touch are never diluted), with a no-double-dip rule (it does not pay when the inviter already
+// earns a content share on that conversion). Platform retains 55% normally, 45% when the invite lane pays.
+export const INVITE_PCT = '10%';
+export const PLATFORM_RETAINED_PCT = '55%';
+export const PLATFORM_RETAINED_INVITE_PCT = '45%';

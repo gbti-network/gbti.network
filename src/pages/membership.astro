@@ -4,7 +4,7 @@ import TierTable from '../components/TierTable.astro';
 import { getCollection } from 'astro:content';
 import { isPublic } from '../lib/content';
 import { REF_COOKIE, REF_VIA_COOKIE, REF_COOKIE_DAYS } from '../lib/referral';
-import { MEMBERSHIP_PRICE_LABEL, BILLING_PERIOD, TRIAL_DAYS_SITE, FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT, HOLD_DAYS, TURNSTILE_SITE_KEY, SIGNUP_BASE } from '../lib/membership';
+import { MEMBERSHIP_PRICE_LABEL, BILLING_PERIOD, TRIAL_DAYS_SITE, FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT, INVITE_PCT, HOLD_DAYS, TURNSTILE_SITE_KEY, SIGNUP_BASE } from '../lib/membership';
 
 // SOW-002 signup CTA: the pricing card renders a Cloudflare Turnstile widget; on solve the button navigates
 // to the signup Worker's /signup/start with the token + first-touch ref/via cookies. The Worker verifies the
@@ -26,7 +26,7 @@ const postCount = (await getCollection('post')).filter(isPublic).length;
 const included = [
   'Publish your profile, articles, products, and prompts',
   'Full Discord access plus weekly build sessions and coaching',
-  `Revenue share when your content brings a member in (${FIRST_TOUCH_PCT} discovery, ${LAST_TOUCH_PCT} closing)`,
+  `Revenue share when your content brings a member in (${FIRST_TOUCH_PCT} discovery, ${LAST_TOUCH_PCT} closing), plus a ${INVITE_PCT} lifetime invite commission`,
   'Author with humans or your own AI agents through the local client',
   'A vote in a creator network',
 ];
@@ -54,7 +54,7 @@ const faqs = [
   },
   {
     q: 'How does revenue share work?',
-    a: `When someone joins, the network looks at the content that brought them in and the content that closed the signup. The first earns its author ${FIRST_TOUCH_PCT}, the last earns ${LAST_TOUCH_PCT}, and a fixed ${COLLAB_POOL_PCT} pool is shared by the members who improved or discussed those items, all paid out after a ${HOLD_DAYS}-day hold.`,
+    a: `When someone joins, the network looks at the content that brought them in and the content that closed the signup. The first earns its author ${FIRST_TOUCH_PCT}, the last earns ${LAST_TOUCH_PCT}, and a fixed ${COLLAB_POOL_PCT} pool is shared by the members who improved or discussed those items. Separately, if you bring someone in with your personal invite link, you earn a flat ${INVITE_PCT} lifetime commission paid from the platform share, so it never reduces what content owners earn. All distributions pay out after a ${HOLD_DAYS}-day hold.`,
   },
   {
     q: 'Who runs GBTI?',

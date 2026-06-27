@@ -2,13 +2,23 @@
 // SOW: Revenue Model lander (imported from the owner's "GBTI Revenue Model" Claude Design handoff).
 // Built on the shared V3 design system (BaseLayout supplies the V3 header/footer, fonts, and gbti-v3.css
 // tokens). The page-scoped styles + a namespaced local icon sprite (rm-ico-*) keep it self-contained so it
-// never collides with the global IconSprite. The split percentages (30/10/5/55) and the $150 worked example
-// are the model as designed; they are page copy, not yet single-sourced from lib/membership.
+// never collides with the global IconSprite. The split figures (content first/last-touch, the collaboration
+// pool, the manual invite lane, and the platform retained share) are single-sourced from lib/membership so
+// this explainer never drifts from the model. The donut/stack-bar geometry stays literal in the markup.
 import BaseLayout from '../layouts/BaseLayout.astro';
+import {
+  FIRST_TOUCH_PCT,
+  LAST_TOUCH_PCT,
+  COLLAB_POOL_PCT,
+  INVITE_PCT,
+  PLATFORM_RETAINED_PCT,
+  PLATFORM_RETAINED_INVITE_PCT,
+  HOLD_DAYS,
+} from '../lib/membership';
 ---
 <BaseLayout
   title="Revenue Model"
-  description="How the GBTI Network shares membership revenue with the members whose work brings people in: 30% to the first touch, 10% to the last touch, a 5% collaboration pool, on a 90-day window."
+  description={`How the GBTI Network shares membership revenue with the members whose work brings people in: ${FIRST_TOUCH_PCT} to the first touch, ${LAST_TOUCH_PCT} to the last touch, a ${COLLAB_POOL_PCT} collaboration pool, plus a flat ${INVITE_PCT} lifetime invite commission, on a ${HOLD_DAYS}-day window.`}
 >
   {/* page-local icon sprite, namespaced rm-ico-* so it never collides with the global IconSprite */}
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -48,7 +58,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <div class="wrap">
         <div class="chip"><span class="chip-dot"></span> The publishing network</div>
         <h1 class="h1">A professional publishing network with shared upside</h1>
-        <p class="lead">GBTI gives members a place to publish useful work, discuss what they are building, create gated resources, and grow alongside other professionals. A portion of member dues is shared back when that work helps grow the network.</p>
+        <p class="lead">GBTI gives members a place to publish useful work, discuss what they are building, create gated resources, and grow alongside other professionals. A portion of member dues is shared back when that work helps grow the network, and members can also share a personal invite link to earn a flat {INVITE_PCT} lifetime commission on anyone who joins through it.</p>
         <div class="hero-btns">
           <a href="#flow" class="btn btn-primary btn-lg">Explore the model <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#rm-ico-arrow"/></svg></a>
           <a href="/membership/" class="btn btn-ghost btn-lg">Become a member</a>
@@ -149,7 +159,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           <div class="hero-copy">
             <p class="eyebrow">How value flows</p>
             <h2 class="h2 mt12">Member work creates value at every touch</h2>
-            <p class="lead">A reader might discover the network through an article, come back through a product, read the comments, and notice what members improved before they join. <strong>In this network, those touches matter,</strong> and each one can earn.</p>
+            <p class="lead">A reader might discover the network through an article, come back through a product, read the comments, and notice what members improved before they join. <strong>In this network, those touches matter,</strong> and each one can earn. A member can also bring someone in directly with a personal invite link, which earns a separate lifetime commission.</p>
             <a href="#split" class="link mt24">See the full split <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#rm-ico-arrow"/></svg></a>
           </div>
 
@@ -193,13 +203,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <div class="wrap">
         <div class="sec-head center">
           <p class="eyebrow">The split</p>
-          <h2 class="h2 mt12">Revenue growth divided four ways</h2>
-          <p class="lead">Every conversion is distributed the same way. Content owners do not decide what counts. If a contribution is accepted or a comment is published, the model pays it automatically.</p>
+          <h2 class="h2 mt12">How a conversion is divided</h2>
+          <p class="lead">Every conversion is distributed the same way. Content owners do not decide what counts. If a contribution is accepted or a comment is published, the model pays it automatically. The donut shows the content split. A separate manual invite lane is described below it.</p>
         </div>
 
         <div class="split-grid">
           <div class="donut-wrap">
-            <svg viewBox="0 0 200 200" role="img" aria-label="Revenue split: 30% first touch, 10% last touch, 5% collaboration, 55% platform">
+            <svg viewBox="0 0 200 200" role="img" aria-label="Content split of a conversion: 30% first touch, 10% last touch, 5% collaboration pool, 55% platform retained. A separate manual invite lane pays a flat 10% lifetime commission out of the platform share when someone joins through a member invite link, leaving 45% retained.">
               <circle class="donut-seg" cx="100" cy="100" r="80" stroke="var(--c-first)"  stroke-dasharray="147.8 354.85" stroke-dashoffset="0"/>
               <circle class="donut-seg" cx="100" cy="100" r="80" stroke="var(--c-last)"   stroke-dasharray="47.27 455.38" stroke-dashoffset="-150.8"/>
               <circle class="donut-seg" cx="100" cy="100" r="80" stroke="var(--c-collab)" stroke-dasharray="22.13 480.52" stroke-dashoffset="-201.06"/>
@@ -213,26 +223,31 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
           <div class="split-cards">
             <div class="scard first">
-              <div class="pct">30%</div>
+              <div class="pct">{FIRST_TOUCH_PCT}</div>
               <div class="nm">First touch</div>
               <p class="ds">The owner of the first eligible article, product, or prompt the member touched inside the attribution window.</p>
             </div>
             <div class="scard last">
-              <div class="pct">10%</div>
+              <div class="pct">{LAST_TOUCH_PCT}</div>
               <div class="nm">Last touch</div>
               <p class="ds">The owner of the final eligible item they touched before they converted to a paying member.</p>
             </div>
             <div class="scard collab">
-              <div class="pct">5%</div>
+              <div class="pct">{COLLAB_POOL_PCT}</div>
               <div class="nm">Collaboration pool</div>
               <p class="ds">Split evenly among members who commented on or contributed to the first-touch and last-touch items.</p>
             </div>
             <div class="scard retain">
-              <div class="pct">55%</div>
+              <div class="pct">{PLATFORM_RETAINED_PCT}</div>
               <div class="nm">Platform &amp; community</div>
-              <p class="ds">Funds hosting, tooling, weekly sessions, and the shared work of running the network.</p>
+              <p class="ds">Funds hosting, tooling, weekly sessions, and the shared work of running the network. This becomes {PLATFORM_RETAINED_INVITE_PCT} when the manual invite lane pays.</p>
             </div>
           </div>
+        </div>
+
+        <div class="jnote" style="margin:34px auto 0">
+          <svg viewBox="0 0 24 24"><use href="#rm-ico-mega"/></svg>
+          <p><strong>The manual invite lane.</strong> Separate from the content split, a member who shares their personal invite link earns a flat {INVITE_PCT} lifetime commission when someone joins through it. It is paid out of the platform share, so the first-touch and last-touch content owners are never diluted: the platform simply keeps {PLATFORM_RETAINED_INVITE_PCT} instead of {PLATFORM_RETAINED_PCT} on that conversion. No double dipping: when the inviter already earns a content share on the same conversion, for example when they invited the reader to their own article, they earn the larger content share instead, not the {INVITE_PCT} invite commission.</p>
         </div>
       </div>
     </section>
@@ -305,15 +320,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div class="pool-grid">
           <div>
             <p class="eyebrow">Participation</p>
-            <h2 class="h2 mt12">The 5% collaboration pool</h2>
-            <p class="lead mt16">Every accepted contribution and every published comment on the first-touch or last-touch item counts as one point. The pool splits evenly across all points.</p>
+            <h2 class="h2 mt12">The {COLLAB_POOL_PCT} collaboration pool</h2>
+            <p class="lead mt16">At each conversion, every accepted contribution and every published comment on the first-touch or last-touch item counts as one qualifying share. The pool splits evenly across the qualifying shares for that conversion. There is no running points balance or reputation score, just a fresh count taken at the moment a member joins.</p>
             <p class="body-sm muted mt20">A spelling fix counts the same as a new section. A published comment counts the same as a merged pull request. Owners do not decide which participation is revenue-bearing. If it is accepted or published, it counts.</p>
           </div>
 
           <div class="pool-vis">
             <div class="pool-top">
-              <span class="pool-chip"><b>5%</b><span>pool</span></span>
-              <span class="pool-div">÷ 4 points = 1.25% each</span>
+              <span class="pool-chip"><b>{COLLAB_POOL_PCT}</b><span>pool</span></span>
+              <span class="pool-div">÷ 4 shares = 1.25% each</span>
             </div>
             <div class="pool-points">
               <div class="ppt">
@@ -337,7 +352,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
                 <div class="sh">1.25%</div>
               </div>
             </div>
-            <p class="pool-eq">One member with two accepted points earns two shares of the pool.</p>
+            <p class="pool-eq">One member with two qualifying contributions earns two shares of the pool.</p>
           </div>
         </div>
       </div>
@@ -349,7 +364,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div class="sec-head center">
           <p class="eyebrow">A worked example</p>
           <h2 class="h2 mt12">The same split in dollars</h2>
-          <p class="lead">Take one conversion where four members commented on or improved the first-touch and last-touch items. Using today's $150 membership, the split lands like this.</p>
+          <p class="lead">Take one conversion where four members commented on or improved the first-touch and last-touch items, and no invite link was used. Using today's $150 membership, the content split lands like this.</p>
         </div>
 
         <div class="stackbar" aria-hidden="true">
@@ -360,13 +375,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         </div>
 
         <div class="we-legend">
-          <div class="we-lrow"><i style="background:var(--c-first)"></i><span class="nm">First-touch owner</span><span class="pc" style="color:var(--c-first)">30%</span><span class="dl">$45.00</span></div>
-          <div class="we-lrow"><i style="background:var(--c-last)"></i><span class="nm">Last-touch owner</span><span class="pc" style="color:var(--c-last)">10%</span><span class="dl">$15.00</span></div>
-          <div class="we-lrow"><i style="background:var(--c-collab)"></i><span class="nm">Collaboration pool <span>&middot; 4 points, split evenly</span></span><span class="pc" style="color:var(--c-collab)">5%</span><span class="dl">$7.50</span></div>
-          <div class="we-lrow"><i style="background:var(--c-retain)"></i><span class="nm">Platform &amp; community</span><span class="pc" style="color:var(--c-retain-ink)">55%</span><span class="dl">$82.50</span></div>
+          <div class="we-lrow"><i style="background:var(--c-first)"></i><span class="nm">First-touch owner</span><span class="pc" style="color:var(--c-first)">{FIRST_TOUCH_PCT}</span><span class="dl">$45.00</span></div>
+          <div class="we-lrow"><i style="background:var(--c-last)"></i><span class="nm">Last-touch owner</span><span class="pc" style="color:var(--c-last)">{LAST_TOUCH_PCT}</span><span class="dl">$15.00</span></div>
+          <div class="we-lrow"><i style="background:var(--c-collab)"></i><span class="nm">Collaboration pool <span>&middot; 4 shares, split evenly</span></span><span class="pc" style="color:var(--c-collab)">{COLLAB_POOL_PCT}</span><span class="dl">$7.50</span></div>
+          <div class="we-lrow"><i style="background:var(--c-retain)"></i><span class="nm">Platform &amp; community</span><span class="pc" style="color:var(--c-retain-ink)">{PLATFORM_RETAINED_PCT}</span><span class="dl">$82.50</span></div>
           <div class="we-lrow" style="border-bottom:0"><i style="background:transparent"></i><span class="nm" style="font-weight:700">Membership</span><span class="pc">100%</span><span class="dl">$150.00</span></div>
         </div>
-        <p class="mono muted mt24" style="font-size:12px">Dollar figures use today's $150 annual membership. Percentages are fixed; the dollar amount follows the membership price.</p>
+        <p class="mono muted mt24" style="font-size:12px">Dollar figures use today's $150 annual membership. Percentages are fixed; the dollar amount follows the membership price. When a member joins through an invite link instead, that inviter earns the flat {INVITE_PCT} lifetime commission, $15.00 of this membership, out of the platform share, so the platform keeps {PLATFORM_RETAINED_INVITE_PCT} rather than {PLATFORM_RETAINED_PCT} and the content owners are unchanged.</p>
       </div>
     </section>
 
@@ -397,13 +412,23 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           </div>
           <div class="rule">
             <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-plus-pt"/></svg></span>
-            <h4 class="h4">One point each</h4>
-            <p>Every accepted contribution and every published comment is worth exactly one collaboration point.</p>
+            <h4 class="h4">One share each</h4>
+            <p>At a conversion, every accepted contribution and every published comment counts as one equal share of the collaboration pool. There is no running points balance.</p>
           </div>
           <div class="rule">
             <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-noself"/></svg></span>
             <h4 class="h4">No self-dealing</h4>
             <p>Your own comments and edits on your own content do not earn from the collaboration pool.</p>
+          </div>
+          <div class="rule">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-mega"/></svg></span>
+            <h4 class="h4">Lifetime invite commission</h4>
+            <p>An invite link pays a flat {INVITE_PCT} of the invited member's membership for as long as they keep paying, out of the platform share, so content owners are never diluted.</p>
+          </div>
+          <div class="rule">
+            <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-noself"/></svg></span>
+            <h4 class="h4">No double dipping</h4>
+            <p>If the inviter already earns a content share on the same conversion, for example by inviting a reader to their own article, they take the larger content share, not the {INVITE_PCT} invite commission.</p>
           </div>
           <div class="rule">
             <span class="ic"><svg viewBox="0 0 24 24"><use href="#rm-ico-refund"/></svg></span>
@@ -459,7 +484,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           </details>
           <details>
             <summary>How does revenue sharing work? <span class="pm"></span></summary>
-            <div class="ans"><p>When a new member joins after interacting with member-owned content, part of that member's dues may be distributed to the members who helped create the value path.</p><p>The first eligible member-owned item in the path can receive 30%. The last eligible item before signup can receive 10%. A 5% collaboration pool can be shared by members who commented on or contributed to those first-touch and last-touch items.</p></div>
+            <div class="ans"><p>When a new member joins after interacting with member-owned content, part of that member's dues may be distributed to the members who helped create the value path.</p><p>The first eligible member-owned item in the path can receive {FIRST_TOUCH_PCT}. The last eligible item before signup can receive {LAST_TOUCH_PCT}. A {COLLAB_POOL_PCT} collaboration pool can be shared by members who commented on or contributed to those first-touch and last-touch items. The platform retains {PLATFORM_RETAINED_PCT}.</p><p>Separately, a member who shares a personal invite link can earn a flat {INVITE_PCT} lifetime commission when someone joins through it. That commission comes out of the platform share, so it never reduces the content owners, and the platform keeps {PLATFORM_RETAINED_INVITE_PCT} on that conversion. It does not stack with a content share on the same conversion.</p></div>
           </details>
           <details>
             <summary>Do comments and small contributions count? <span class="pm"></span></summary>
@@ -475,7 +500,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           </details>
           <details>
             <summary>Do members earn for inviting people? <span class="pm"></span></summary>
-            <div class="ans"><p>Yes. Members get a personal invite link and earn a commission when someone they invite becomes a paying member. It is a flat one-time commission on that signup, paid to the inviting member only. There is no downline, and nothing is earned on anyone the new member later invites.</p></div>
+            <div class="ans"><p>Yes. Members get a personal invite link and earn a flat {INVITE_PCT} commission when someone they invite becomes a paying member. The commission is a lifetime share of that member's membership revenue, paid for as long as they keep paying, to the inviting member only. There is no downline, and nothing is earned on anyone the new member later invites.</p><p>The invite commission is paid out of the platform's retained share, so it never reduces the first-touch or last-touch content owners. It also does not double up with content earnings: if the inviter already earns a content share on the same conversion, for example by inviting a reader to their own article, they keep the larger content share instead of the invite commission.</p></div>
           </details>
           <details>
             <summary>Why are member dues shared back? <span class="pm"></span></summary>

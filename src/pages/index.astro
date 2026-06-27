@@ -6,7 +6,7 @@ import Avatar from '../components/Avatar.astro';
 import { isPublic, byNewest } from '../lib/content';
 import { authorDisplay, authorHref, formatDate } from '../lib/authors';
 import { buildAvatarIndex, authorItem } from '../lib/avatars';
-import { TRIAL_DAYS_SITE, REFERRAL_PCT } from '../lib/membership';
+import { TRIAL_DAYS_SITE, FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT, INVITE_PCT } from '../lib/membership';
 import TierTable from '../components/TierTable.astro';
 import { extensionInstallUrl } from '../lib/extension';
 import ampPublishOnce from '../assets/amp-publish-once.webp';
@@ -73,14 +73,14 @@ if (stamps.length) {
 }
 
 ---
-<BaseLayout title="Publish your work. Build with peers. Share the revenue." description={`A creator network powered by Git. Publish articles, products, and prompts, build with peers, and earn ${REFERRAL_PCT} of every member your work brings in. Start a ${TRIAL_DAYS_SITE}-day limited-access trial, no card required.`}>
+<BaseLayout title="Publish your work. Build with peers. Share the revenue." description={`A creator network powered by Git. Publish articles, products, and prompts, build with peers, and earn from the members your work brings in: ${FIRST_TOUCH_PCT} for the first touch, ${LAST_TOUCH_PCT} for the last touch, plus a ${INVITE_PCT} invite lane. Start a ${TRIAL_DAYS_SITE}-day limited-access trial, no card required.`}>
 
 <!-- ============ HERO (centered) ============ -->
 <section class="hero hero-centered">
   <div class="wrap hero-c">
     <div class="chip"><span class="chip-dot"></span> A creator network, powered by Git</div>
     <h1 class="h-hero mt20">Publish your work. Build with peers. <span class="grn">Share the revenue.</span></h1>
-    <p class="lead">The work you publish can earn you {REFERRAL_PCT} of every member it brings in, for the life of their membership.</p>
+    <p class="lead">The work you publish can earn up to {FIRST_TOUCH_PCT} of every member it helps bring in, for the life of their membership.</p>
     <div class="hero-c-cta">
       <a href="/membership/" class="btn btn-primary btn-lg">Start your {TRIAL_DAYS_SITE}-day limited-access trial</a>
       <a href="/revenue-model/" class="btn btn-ghost btn-lg">See how revenue sharing works <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>
@@ -419,16 +419,17 @@ if (stamps.length) {
       <div class="led-sec">
         <div class="led-sech">How it is triggered</div>
         <div class="led-row"><span class="n">01</span><span class="v">A member candidate lands on your work</span><span class="s">anywhere amplified</span></div>
-        <div class="led-row"><span class="n">02</span><span class="v">They join GBTI Network</span><span class="s">you are the first touch</span></div>
+        <div class="led-row"><span class="n">02</span><span class="v">They join GBTI Network</span><span class="s">first or last touch</span></div>
         <div class="led-row"><span class="n">03</span><span class="v">You earn, every month they stay</span><span class="s">recurring</span></div>
       </div>
       <div class="led-sec" style="padding-bottom:18px">
         <div class="led-sech">Your split</div>
-        <div class="led-row"><span class="v">Your share of their membership</span><span class="amt">{REFERRAL_PCT}</span></div>
-        <div class="led-row"><span class="v">You keep, by default</span><span class="amt" style="color:var(--green-mint)">100%</span></div>
-        <div class="led-row"><span class="v">Shared with other members who contribute or comment</span><span class="amt" style="color:var(--on-dark-soft)">optional</span></div>
+        <div class="led-row"><span class="v">First touch, the work that started their discovery</span><span class="amt">{FIRST_TOUCH_PCT}</span></div>
+        <div class="led-row"><span class="v">Last touch, the work they converted from</span><span class="amt">{LAST_TOUCH_PCT}</span></div>
+        <div class="led-row"><span class="v">Collaboration pool, shared by members who comment or contribute</span><span class="amt" style="color:var(--on-dark-soft)">{COLLAB_POOL_PCT}</span></div>
+        <div class="led-row"><span class="v">Invite lane, when someone joins through your invite link</span><span class="amt" style="color:var(--green-mint)">{INVITE_PCT}</span></div>
       </div>
-      <div class="led-total"><span class="l">To you, by default</span><span class="r">100% of {REFERRAL_PCT}, for life</span></div>
+      <div class="led-total"><span class="l">As the first touch</span><span class="r">{FIRST_TOUCH_PCT} of their membership, for life</span></div>
     </div>
 
     <div class="tcenter mt40"><a href="/membership/" class="btn btn-primary btn-lg">Learn how the model works <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a></div>
