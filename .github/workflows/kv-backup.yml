@@ -49,5 +49,8 @@ jobs:
         with:
           name: kv-backup-${{ github.run_id }}
           path: kv-backup.enc
-          retention-days: 90
+          # 14 days of off-namespace DR copies is ample (the in-KV backup keeps 30d; this artifact only guards a
+          # whole-namespace loss, which you would notice fast). Kept low because Actions ARTIFACT storage is metered
+          # (0.5 GB free account-wide). For a storage-free off-namespace target, move this to R2 later (SOW-084 note).
+          retention-days: 14
           if-no-files-found: error
