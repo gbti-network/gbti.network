@@ -3,7 +3,7 @@
 // no-double-dip, cross-run dedupe, and fail-closed on a missing snapshot.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { invoiceState, splitInvoice, planSnapshotPayouts } from '../scripts/lib/snapshot-payout-plan.mjs';
+import { invoiceState, splitInvoice, planSnapshotPayouts, buildEarningsLedger } from '../scripts/lib/snapshot-payout-plan.mjs';
 import { COMMISSION_STATE } from '../membership/commissions.mjs';
 
 const DAY = 86_400_000;
@@ -111,6 +111,42 @@ test('planSnapshotPayouts: Connect not ready / no account -> withheld with a rea
   assert.equal(notReady.actions.length, 0); assert.equal(notReady.withheld[0].reason, 'connect-not-ready');
   const noAcct = planSnapshotPayouts({ members, nowMs: 91 * DAY, recipientConnect: () => ({ ready: false, destination: null }) });
   assert.equal(noAcct.withheld[0].reason, 'no-connect-account');
+});
+
+// ---- SOW-083 P2: the per-recipient earnings view (held + payable + paid) ----
+
+test('buildEarningsLedger: a payable invoice gives each recipient a payable earnings entry + totals', () => {
+  const members = [{ member: 'm1', snapshot: snap(), invoices: [inv({ id: 'in_1', paidAtSec: 0 })] }];
+  const led = buildEarningsLedger({ members, nowMs: 91 * DAY });
+  const alice = led.get('alice');
+  assert.equal(alice.entries.length, 1);
+  assert.deepEqual(alice.entries[0], { from: 'm1', role: 'first', amount: 4500, currency: 'usd', invoice: 'in_1', state: 'payable' });
+  assert.equal(alice.totals.payable, 4500); assert.equal(alice.totals.lifetime, 4500);
+  assert.equal(led.get('carol').entries[0].role, 'invite');
+});
+
+test('buildEarningsLedger: a HELD invoice accrues (state held), a PAID pair shows paid', () => {
+  const members = [{ member: 'm1', snapshot: snap({ lastOwner: null, inviter: null, points: [] }), invoices: [
+    inv({ id: 'in_held', paidAtSec: 90 * DAY / 1000 }), // still within hold at 91d
+    inv({ id: 'in_paid', paidAtSec: 0 }),               // matured + already transferred
+  ] }];
+  const led = buildEarningsLedger({ members, nowMs: 91 * DAY, paidPairs: new Set(['alice:in_paid']) });
+  const states = led.get('alice').entries.reduce((m, e) => (m[e.state] = e.invoice, m), {});
+  assert.equal(states.held, 'in_held');
+  assert.equal(states.paid, 'in_paid');
+  assert.equal(led.get('alice').totals.held, 4500);
+  assert.equal(led.get('alice').totals.paid, 4500);
+});
+
+test('buildEarningsLedger: an ineligible recipient earns nothing (not in the ledger)', () => {
+  const members = [{ member: 'm1', snapshot: snap({ lastOwner: null, inviter: null, points: [] }), invoices: [inv()] }];
+  const led = buildEarningsLedger({ members, nowMs: 91 * DAY, eligible: (id) => id !== 'alice' });
+  assert.equal(led.has('alice'), false);
+});
+
+test('buildEarningsLedger: a voided (refunded) invoice contributes nothing', () => {
+  const members = [{ member: 'm1', snapshot: snap(), invoices: [inv({ refunded: 15000 })] }];
+  assert.equal(buildEarningsLedger({ members, nowMs: 91 * DAY }).size, 0);
 });
 
 test('conservation holds under fuzzed bases (recipients never exceed base)', () => {

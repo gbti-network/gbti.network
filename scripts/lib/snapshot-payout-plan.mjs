@@ -97,3 +97,36 @@ export function planSnapshotPayouts({ members = [], nowMs, holdDays = 90, eligib
   }
   return { actions, withheld };
 }
+
+/**
+ * SOW-083 P2: build a per-RECIPIENT earnings view across all converted members, for the member dashboard. Unlike
+ * planSnapshotPayouts (which only TRANSFERS payable invoices), this includes HELD (accruing) and PAID amounts so a
+ * member sees their whole picture. Pure; the payout job persists the result per recipient (earnings:<github_id>) and
+ * the Worker serves it. Eligibility is applied exactly as at payout (an ineligible recipient earns nothing -> the
+ * share is retained), so the dashboard never over-promises. Returns Map<recipient, { entries, totals }> where each
+ * entry is { from, role, amount, currency, invoice, state } and state is 'paid' | 'payable' | 'held'.
+ */
+export function buildEarningsLedger({ members = [], nowMs, holdDays = 90, eligible = () => true, paidPairs = new Set() }) {
+  const byRecipient = new Map();
+  const ensure = (id) => {
+    let e = byRecipient.get(id);
+    if (!e) { e = { entries: [], totals: { held: 0, payable: 0, paid: 0, lifetime: 0 } }; byRecipient.set(id, e); }
+    return e;
+  };
+  for (const entry of members) {
+    const { member, snapshot, invoices = [] } = entry || {};
+    if (!member || !snapshot) continue;
+    for (const invoice of invoices) {
+      const { state, base } = invoiceState(invoice, { holdDays, nowMs });
+      if (state === COMMISSION_STATE.voided || !(base > 0)) continue; // refunded/disputed pays nobody
+      for (const r of splitInvoice({ snapshot, base, eligible })) {
+        const rec = ensure(r.id);
+        const st = paidPairs.has(`${r.id}:${invoice.id}`) ? 'paid' : (state === COMMISSION_STATE.held ? 'held' : 'payable');
+        rec.entries.push({ from: member, role: r.role, amount: r.amount, currency: invoice.currency, invoice: invoice.id, state: st });
+        rec.totals[st] += r.amount;
+        rec.totals.lifetime += r.amount;
+      }
+    }
+  }
+  return byRecipient;
+}
