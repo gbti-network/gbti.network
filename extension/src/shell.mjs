@@ -38,6 +38,7 @@ export const SVG = {
   plus: '<path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   mega: '<path d="M4 10v4a1 1 0 0 0 1 1h2l5 3.5V5.5L7 9H5a1 1 0 0 0-1 1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M16 9.2a4 4 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>', // megaphone (Share)
+  share: '<path d="m3 11 18-5v12L3 14v-3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>', // SOW-069: paper-plane (Shares rail + card cat-glyph; matches the "New Share" composer card), replacing a coin
   // SOW-052: the WorkBench rail glyphs.
   bookmark: '<path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
   users: '<circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a3 3 0 0 1 0 5.6M16.5 13.5a5.5 5.5 0 0 1 4 5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
@@ -64,9 +65,14 @@ const RAIL_FEED = [
   { key: 'articles', href: 'newtab.html#type=post', ico: 'article', nm: 'Articles', sub: 'Posts and tutorials' },
   { key: 'products', href: 'newtab.html#type=product', ico: 'product', nm: 'Products', sub: 'Plugins and tools' },
   { key: 'prompts', href: 'newtab.html#type=prompt', ico: 'prompt', nm: 'Prompts', sub: 'Reusable prompts' },
-  { key: 'shares', href: 'newtab.html#type=share', ico: 'coin', nm: 'Shares', sub: 'The co-op stream' },
+  { key: 'shares', href: 'newtab.html#type=share', ico: 'share', nm: 'Shares', sub: 'The co-op stream' }, // SOW-069: a share glyph, not a coin (Shares are not monetary)
   { div: true },
-  { key: 'workspace', href: 'workspace.html', ico: 'grid', nm: 'WorkBench', sub: 'Your content + tools' },
+  // SOW-069: the WorkBench item carries quick deep-links into the workspace tabs (always-visible indented children).
+  { key: 'workspace', href: 'workspace.html', ico: 'grid', nm: 'WorkBench', sub: 'Your content + tools', children: [
+    { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests' },
+    { key: 'saved', href: 'workspace.html#tab=saved', ico: 'bookmark', nm: 'Saved' },
+    { key: 'subs', href: 'workspace.html#tab=subs', ico: 'users', nm: 'Following' },
+  ] },
 ];
 
 const RAIL_WORKBENCH = [
@@ -152,7 +158,10 @@ function railHtml(active, nav = 'feed') {
     const on = r.key === active ? ' on' : '';
     const admin = r.adminOnly ? ' data-admin-only hidden' : ''; // role-gated after /api/status resolves
     const sub = r.sub ? `<span class="sub">${esc(r.sub)}</span>` : '';
-    return `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
+    const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc(r.nm)}</span>${sub}</span></a>`;
+    // SOW-069: a rail item may carry indented child links (WorkBench -> quick deep-links into the workspace tabs).
+    const kids = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? ' on' : ''}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc(c.nm)}</span></span></a>`).join('');
+    return self + kids;
   }).join('');
   // The feed rail leads with the feed search + Latest/Following; the workbench rail does not. The brand sits above
   // either, at the very top of the rail.

@@ -3174,7 +3174,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     users: '<circle cx="9" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
     skill: '<path d="M13 2.5 6 13.2h5v8.3l7-10.7h-5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     puzzle: '<path d="M9 4.5a1.8 1.8 0 0 1 3.6 0c0 .5.4.9.9.9H16a1 1 0 0 1 1 1v2.5c0 .5.4.9.9.9a1.8 1.8 0 0 1 0 3.6c-.5 0-.9.4-.9.9V17a1 1 0 0 1-1 1h-2.6c-.5 0-.9.4-.9.9a1.8 1.8 0 0 1-3.6 0c0-.5-.4-.9-.9-.9H5a1 1 0 0 1-1-1v-2.4c0-.5-.4-.9-.9-.9a1.8 1.8 0 0 1 0-3.6c.5 0 .9-.4.9-.9V6.4a1 1 0 0 1 1-1h3.1c.5 0 .9-.4.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
-    news: '<path d="M4 5h13a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18 9h2a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2M7 9h7M7 12.5h7M7 16h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
+    news: '<path d="M4 5h13a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18 9h2a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2M7 9h7M7 12.5h7M7 16h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+    share: '<path d="m3 11 18-5v12L3 14v-3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>'
+    // SOW-069: paper-plane, the Share type glyph (was a coin)
   };
   var CAT_GLYPH = {
     ai: "spark",
@@ -3207,7 +3209,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     skill: "#b0316f"
   };
   var OTHER_ACCENT = "#5b6472";
-  var TYPE_GLYPH = { share: "coin", post: "pencil", product: "box", prompt: "spark", news: "news" };
+  var TYPE_GLYPH = { share: "share", post: "pencil", product: "box", prompt: "spark", news: "news" };
   var TYPE_ACCENT = { share: "#b3791f", post: "#3f74c9", product: "#c9683b", prompt: "#1f9e5f", news: "#3a6ea5" };
   function glyphFor(category, type) {
     const key = String(category || "").toLowerCase();
@@ -9777,6 +9779,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
     mega: '<path d="M4 10v4a1 1 0 0 0 1 1h2l5 3.5V5.5L7 9H5a1 1 0 0 0-1 1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M16 9.2a4 4 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     // megaphone (Share)
+    share: '<path d="m3 11 18-5v12L3 14v-3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+    // SOW-069: paper-plane (Shares rail + card cat-glyph; matches the "New Share" composer card), replacing a coin
     // SOW-052: the WorkBench rail glyphs.
     bookmark: '<path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     users: '<circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a3 3 0 0 1 0 5.6M16.5 13.5a5.5 5.5 0 0 1 4 5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
@@ -9798,9 +9802,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "articles", href: "newtab.html#type=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
     { key: "products", href: "newtab.html#type=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
     { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
-    { key: "shares", href: "newtab.html#type=share", ico: "coin", nm: "Shares", sub: "The co-op stream" },
+    { key: "shares", href: "newtab.html#type=share", ico: "share", nm: "Shares", sub: "The co-op stream" },
+    // SOW-069: a share glyph, not a coin (Shares are not monetary)
     { div: true },
-    { key: "workspace", href: "workspace.html", ico: "grid", nm: "WorkBench", sub: "Your content + tools" }
+    // SOW-069: the WorkBench item carries quick deep-links into the workspace tabs (always-visible indented children).
+    { key: "workspace", href: "workspace.html", ico: "grid", nm: "WorkBench", sub: "Your content + tools", children: [
+      { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests" },
+      { key: "saved", href: "workspace.html#tab=saved", ico: "bookmark", nm: "Saved" },
+      { key: "subs", href: "workspace.html#tab=subs", ico: "users", nm: "Following" }
+    ] }
   ];
   var RAIL_WORKBENCH = [
     // SOW-052: a "Network" item up top takes the member back to the main co-op feed (newtab). No "WorkBench" eyebrow.
@@ -9872,7 +9882,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const on = r.key === active ? " on" : "";
       const admin = r.adminOnly ? " data-admin-only hidden" : "";
       const sub = r.sub ? `<span class="sub">${esc2(r.sub)}</span>` : "";
-      return `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc2(r.nm)}</span>${sub}</span></a>`;
+      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc2(r.nm)}</span>${sub}</span></a>`;
+      const kids = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc2(c.nm)}</span></span></a>`).join("");
+      return self + kids;
     }).join("");
     const top = nav === "feed" ? feedControlsHtml() : "";
     return `<nav class="nt-rail">${brandHtml()}${top}${items}<div class="nt-rail-foot"><a class="nt-coop" href="${SITE12}/">View the co-op <span data-ico="arrow"></span></a></div></nav>`;

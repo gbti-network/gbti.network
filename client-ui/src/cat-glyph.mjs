@@ -17,6 +17,7 @@ export const GLYPH_SVG = {
   skill: '<path d="M13 2.5 6 13.2h5v8.3l7-10.7h-5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
   puzzle: '<path d="M9 4.5a1.8 1.8 0 0 1 3.6 0c0 .5.4.9.9.9H16a1 1 0 0 1 1 1v2.5c0 .5.4.9.9.9a1.8 1.8 0 0 1 0 3.6c-.5 0-.9.4-.9.9V17a1 1 0 0 1-1 1h-2.6c-.5 0-.9.4-.9.9a1.8 1.8 0 0 1-3.6 0c0-.5-.4-.9-.9-.9H5a1 1 0 0 1-1-1v-2.4c0-.5-.4-.9-.9-.9a1.8 1.8 0 0 1 0-3.6c.5 0 .9-.4.9-.9V6.4a1 1 0 0 1 1-1h3.1c.5 0 .9-.4.9-.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
   news: '<path d="M4 5h13a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18 9h2a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2M7 9h7M7 12.5h7M7 16h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  share: '<path d="m3 11 18-5v12L3 14v-3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>', // SOW-069: paper-plane, the Share type glyph (was a coin)
 };
 
 // Top-level category key -> glyph key (mirrors PromptCard.astro CAT_GLYPH, plus skill + imagegen).
@@ -44,7 +45,7 @@ export function catGlyph(category) {
 
 // SOW-041: a Share carries no category (it has tags), so its glyph falls back on its TYPE. Other content types
 // keep their category glyph; the type fallback only fires when the category is missing/unknown.
-const TYPE_GLYPH = { share: 'coin', post: 'pencil', product: 'box', prompt: 'spark', news: 'news' };
+const TYPE_GLYPH = { share: 'share', post: 'pencil', product: 'box', prompt: 'spark', news: 'news' }; // SOW-069: share -> a share glyph, not a coin
 // Per-TYPE accent (article/product/prompt/share/news). Used by glyphFor's type fallback AND by the activity
 // feed's separation treatment (typeAccent below). Article = blue, Product = orange, Prompt = green, Share = gold:
 // a distinct, vivid spread so member contributions stand out from the News stream in the blended feed.

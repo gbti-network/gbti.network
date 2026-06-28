@@ -31,16 +31,16 @@ test('category match is case-insensitive', () => {
 });
 
 // SOW-041: glyphFor(category, type) — category first, then a TYPE fallback (so a Share, which has no category,
-// gets the coin glyph), then the neutral puzzle.
+// gets the share glyph, SOW-069), then the neutral puzzle.
 test('glyphFor prefers a known category over the type', () => {
   assert.equal(glyphFor('ai', 'share').svg, GLYPH_SVG.spark);
   assert.equal(glyphFor('ai', 'share').accent, '#6b4fb0');
   assert.equal(glyphFor('blockchain', 'post').svg, GLYPH_SVG.coin);
 });
 
-test('glyphFor falls back to TYPE when the category is missing/unknown (Shares -> coin)', () => {
-  assert.equal(glyphFor(null, 'share').svg, GLYPH_SVG.coin);
-  assert.equal(glyphFor('', 'share').svg, GLYPH_SVG.coin);
+test('glyphFor falls back to TYPE when the category is missing/unknown (Shares -> share glyph, SOW-069)', () => {
+  assert.equal(glyphFor(null, 'share').svg, GLYPH_SVG.share);
+  assert.equal(glyphFor('', 'share').svg, GLYPH_SVG.share);
   assert.equal(glyphFor('not-a-category', 'product').svg, GLYPH_SVG.box);
   assert.equal(glyphFor(undefined, 'prompt').svg, GLYPH_SVG.spark);
   assert.equal(glyphFor('zzz', 'post').svg, GLYPH_SVG.pencil);
