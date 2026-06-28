@@ -4,6 +4,8 @@ import { Image } from 'astro:assets';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Prose from '../../components/blog/Prose.astro';
 import EditHooks from '../../components/EditHooks.astro';
+import TouchSignal from '../../components/TouchSignal.astro';
+import { refCodeForAuthor } from '../../lib/referral';
 import LockedBody from '../../components/LockedBody.astro';
 import Avatar from '../../components/Avatar.astro';
 import ContentMeta from '../../components/ContentMeta.astro';
@@ -173,6 +175,7 @@ const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.netw
     </div>
   </section>
   <EditHooks type="prompt" owner={d.author} slug={d.slug} />
+  <TouchSignal type="prompt" ownerId={refCodeForAuthor(d.author)} slug={d.slug} />
 
   <style>
     /* Two columns scale down (sidebar shrinks via clamp) and only collapse to one column below 600px. */

@@ -11,6 +11,8 @@ import ContentActions from '../../components/ContentActions.astro';
 import ContentFooter from '../../components/ContentFooter.astro';
 import VideoEmbed from '../../components/VideoEmbed.astro';
 import EditHooks from '../../components/EditHooks.astro';
+import TouchSignal from '../../components/TouchSignal.astro';
+import { refCodeForAuthor } from '../../lib/referral';
 import { favoriteCount } from '../../lib/favorites';
 import LockedBody from '../../components/LockedBody.astro';
 import { hasPublicPage, isStub } from '../../lib/content';
@@ -80,4 +82,5 @@ const stack = avatarStack({
     </div>
   </section>
   <EditHooks type="post" owner={d.author} slug={d.slug} />
+  <TouchSignal type="post" ownerId={refCodeForAuthor(d.author)} slug={d.slug} />
 </BaseLayout>

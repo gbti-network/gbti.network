@@ -1,0 +1,11 @@
+---
+// SOW-059 P1b: a content detail page drops this so the site-wide TouchTracker can record a pre-signup CONTENT touch
+// (consent-gated). Renders ONLY a hidden data element (no script of its own). `ownerId` MUST be the content author's
+// resolved member github_id (use refCodeForAuthor(author)); it is omitted for the house account + unindexed authors,
+// who do not earn, so no touch is recorded for them. Inert until TouchTracker capture is enabled.
+interface Props { type: 'post' | 'product' | 'prompt'; ownerId?: string | number; slug: string; }
+const { type, ownerId, slug } = Astro.props;
+---
+{ownerId && slug && (
+  <div data-gbti-touch data-owner={String(ownerId)} data-type={type} data-slug={slug} hidden></div>
+)}

@@ -53,6 +53,7 @@ import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { membershipAdminStatuses } from './membership-admin.mjs';
 import { membershipAdminOps } from './membership-admin-ops.mjs'; // SOW-038 P3: admin-gated reconcile/E2E dispatch
 import { handleActivity } from './membership-activity.mjs';
+import { handleTouch } from './membership-touches.mjs'; // SOW-059 P1b: anonymous pre-signup touch/invite capture
 import { handleUpvote } from './membership-upvote.mjs';
 import { handleOgPreview } from './membership-og.mjs';
 import { handleSyndicationTracker, handleSyndicationCancel, handleSyndicationApprove } from './syndication-admin.mjs';
@@ -618,6 +619,23 @@ export default {
           try { discord = clientsFromEnv(env).discord; } catch { discord = null; }
           const r = await handleDiscordInvite(request, env, { discord });
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-059 P1b: the pre-signup TOUCH-CAPTURE endpoint. ANONYMOUS (a rotating, client-minted session id keys the
+      // record; no GitHub token, no cookies), so a wildcard CORS origin is safe (there is no ambient credential to
+      // ride). Gated by TOUCH_CAPTURE_ENABLED (off until the SOW-059 model is activated) so the live endpoint stays
+      // inert; a coarse per-IP rate limit blunts floods (the capture is high-frequency + unauthenticated); the
+      // handler consent-gates content touches and validates the session. Never cached.
+      if (pathname === '/touch') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBER_CONTENT_CORS });
+        if (method === 'POST') {
+          if (env.TOUCH_CAPTURE_ENABLED !== 'true') return json({ ok: true, recorded: false, reason: 'disabled' }, 200, MEMBER_CONTENT_CORS);
+          const ip = request.headers.get('CF-Connecting-IP') || '';
+          const rl = await rateLimit({ kv: env.SIGNUP_KV, ip, limit: 120, windowSeconds: 600, prefix: 'rl:touch:' });
+          if (!rl.allowed) return json({ error: 'rate_limited' }, 429, MEMBER_CONTENT_CORS);
+          const r = await handleTouch(request, env);
+          return json(r.body, r.status, { ...MEMBER_CONTENT_CORS, 'Cache-Control': 'no-store' });
         }
       }
 

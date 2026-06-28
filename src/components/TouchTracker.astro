@@ -1,0 +1,56 @@
+---
+// SOW-059 P1b: site-wide pre-signup TOUCH capture. Mints a rotating session id (the touch-store key), posts the
+// invite (?ref, essential) and -- when a <TouchSignal> data element is present AND analytics consent is granted --
+// the page's CONTENT touch, to the Worker /touch endpoint. OFF by default (touch.mjs TOUCH_CAPTURE_ENABLED = false):
+// the script early-returns, so it is inert until activated. Rendered once in BaseLayout, beside ReferralCapture.
+// (ReferralCapture keeps the legacy first-touch cookie; this is the richer multi-touch store for the SOW-059 model.)
+---
+<script>
+  import { TOUCH_CAPTURE_ENABLED, TOUCH_ENDPOINT, TOUCH_SID_COOKIE, TOUCH_SID_DAYS, sessionIdFromBytes, validTouchSignal } from '../lib/touch.mjs';
+  import { CONSENT_KEY, ANALYTICS_EVENT } from '../lib/consent.mjs';
+
+  if (TOUCH_CAPTURE_ENABLED) (function () {
+    const readCookie = (name) => {
+      const c = document.cookie.split('; ').find((x) => x.indexOf(name + '=') === 0);
+      return c ? decodeURIComponent(c.slice(name.length + 1)) : null;
+    };
+    function sessionId() {
+      let sid = readCookie(TOUCH_SID_COOKIE);
+      if (sid) return sid;
+      const rb = new Uint8Array(24);
+      (window.crypto || {}).getRandomValues && window.crypto.getRandomValues(rb);
+      sid = sessionIdFromBytes(rb);
+      try { document.cookie = TOUCH_SID_COOKIE + '=' + sid + '; path=/; max-age=' + (60 * 60 * 24 * TOUCH_SID_DAYS) + '; SameSite=Lax'; } catch (e) { /* cookies disabled */ }
+      return sid;
+    }
+    function post(body) {
+      try {
+        const payload = JSON.stringify(body);
+        // sendBeacon sends text/plain (no CORS preflight) and request.json() still parses it; fire-and-forget.
+        if (navigator.sendBeacon) navigator.sendBeacon(TOUCH_ENDPOINT, payload);
+        else fetch(TOUCH_ENDPOINT, { method: 'POST', body: payload, keepalive: true, mode: 'cors' });
+      } catch (e) { /* best effort: a dropped touch only loses attribution, never breaks the page */ }
+    }
+
+    const sid = sessionId();
+    if (!sid) return;
+
+    // The invite (?ref) is an essential referral signal: always sent (the server enforces first-wins).
+    try {
+      const ref = new URLSearchParams(location.search).get('ref');
+      if (ref) post({ session: sid, invite: ref });
+    } catch (e) { /* no search params */ }
+
+    // The CONTENT touch is consent-gated. A content page drops a <TouchSignal> data element; send it only once
+    // analytics consent is granted (EU click-through or a non-EU implicit allow, both stored as 'granted').
+    const el = document.querySelector('[data-gbti-touch]');
+    if (!el) return;
+    const touch = { owner: el.getAttribute('data-owner'), type: el.getAttribute('data-type'), slug: el.getAttribute('data-slug') };
+    if (!validTouchSignal(touch)) return;
+    let sent = false;
+    const send = () => { if (sent) return; sent = true; post({ session: sid, touch, consent: true }); };
+    const granted = () => { try { return localStorage.getItem(CONSENT_KEY) === 'granted'; } catch (e) { return false; } };
+    if (granted()) send();                                   // already allowed
+    else document.addEventListener(ANALYTICS_EVENT, send);   // wait for the grant moment (handles the load race)
+  })();
+</script>
