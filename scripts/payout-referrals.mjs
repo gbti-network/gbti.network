@@ -208,8 +208,11 @@ async function main() {
   const earnings = buildEarningsLedger({ members, nowMs, holdDays: config.hold_days, eligible, paidPairs });
   let wroteEarnings = 0;
   for (const [recipient, ledger] of earnings) {
+    // SOW-083 P3: record this recipient's Connect readiness (already gathered) so the dashboard can prompt setup.
+    const c = connect.get(String(recipient)) || {};
+    const payoutSetup = { connected: !!c.destination, ready: !!c.ready };
     try {
-      await putKvValue({ key: `earnings:${recipient}`, value: JSON.stringify({ v: 1, recipient, ...ledger, updatedAt: nowMs }), env });
+      await putKvValue({ key: `earnings:${recipient}`, value: JSON.stringify({ v: 1, recipient, ...ledger, payoutSetup, updatedAt: nowMs }), env });
       wroteEarnings++;
     } catch (err) { console.warn(`payout: could not write earnings for ${recipient} (${err?.message ?? err}).`); }
   }

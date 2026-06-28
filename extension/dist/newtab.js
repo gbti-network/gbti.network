@@ -8617,6 +8617,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!e || !Array.isArray(e.entries) || e.entries.length === 0) {
         return hero + `<p class="empty">No earnings yet. When someone joins through your invite link or via content you wrote, your share shows here: 30% when your content is the first touch, 10% when it is the last, a slice of the 5% collaboration pool, and a flat 10% lifetime commission on your invites. Distributions pay out after a 90-day hold. Copy your invite link under <a href="account.html">Settings</a>.</p>`;
       }
+      const ps = e.payoutSetup || { connected: false, ready: false };
+      const setup = ps.ready ? "" : `<p class="empty" style="margin-bottom:12px">${ps.connected ? "Your Stripe payout account is not finished. Complete setup" : "Set up Stripe payouts"} under <a href="account.html">Settings</a> to receive your earnings.</p>`;
       const t = e.totals || {};
       const stat = (n, l) => `<div style="flex:1;min-width:110px"><div style="font:600 22px/1.1 var(--f-display,inherit)">${money(n)}</div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${esc(l)}</div></div>`;
       const totals = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;padding:16px;border:1px solid var(--line-2,#ddd);border-radius:var(--r,8px)">${stat(t.lifetime, "Lifetime")}${stat(t.paid, "Paid")}${stat(t.payable, "Ready")}${stat(t.held, "Accruing")}</div>`;
@@ -8624,7 +8626,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const stateLabel = { paid: "Paid", payable: "Ready", held: "Accruing" };
       const label = (m, k) => esc(m[k] || String(k).replace(/\+/g, " + "));
       const rows = e.entries.map((r) => `<tr><td style="padding:6px 8px">${label(roleLabel, r.role)}</td><td style="padding:6px 8px">${label(stateLabel, r.state)}</td><td style="padding:6px 8px;text-align:right">${money(r.amount)}</td></tr>`).join("");
-      return hero + totals + `<table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="text-align:left;color:var(--fg-mute,#888)"><th style="padding:6px 8px;font-weight:600">Source</th><th style="padding:6px 8px;font-weight:600">Status</th><th style="padding:6px 8px;font-weight:600;text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table>`;
+      return hero + setup + totals + `<table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="text-align:left;color:var(--fg-mute,#888)"><th style="padding:6px 8px;font-weight:600">Source</th><th style="padding:6px 8px;font-weight:600">Status</th><th style="padding:6px 8px;font-weight:600;text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table>`;
     }
     async _ensureTab(id) {
       const tab = TABS.find((t) => t.id === id);
