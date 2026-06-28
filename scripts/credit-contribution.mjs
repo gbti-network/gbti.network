@@ -1,20 +1,16 @@
 #!/usr/bin/env node
-// SOW-008 contribution award runner. When the folder owner accepts a contribution (the PR merges),
-// this credits the contributor: it adds them to the target content file's `contributors` frontmatter
-// (which renders the stacked avatars + the Contributions footnote) and, for a point-bearing class,
-// writes an award to house/points-ledger.yml.
+// SOW-008/SOW-059 contribution credit runner (credit-only, no points). When the folder owner accepts a
+// contribution (the PR merges), this credits the contributor by adding them to the target content file's
+// `contributors` frontmatter, which renders the stacked avatars + the Contributions footnote. The old
+// points ledger (house/points-ledger.yml) was retired in SOW-059; this script no longer writes points.
 //
-// The pure helpers (insertContributor, the membership/points.mjs builders) are unit-tested. The thin
-// main() reads a JSON payload describing the merged contribution and applies the changes; the GitHub
-// Action that derives that payload from the merged PR event and commits the result is wired by the
-// owner (see .data/sow/human-todo.md). Runs with --dry-run to print intended changes.
-//   node scripts/award-contribution.mjs --payload <file.json> [--dry-run]
+// The pure helper (insertContributor) is unit-tested. The thin main() reads a JSON payload describing the
+// merged contribution and applies the change; the GitHub Action that derives that payload from the merged
+// PR event and commits the result is wired by the owner. Runs with --dry-run to print intended changes.
+//   node scripts/credit-contribution.mjs --payload <file.json> [--dry-run]
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import yaml from 'js-yaml';
-
-import { buildAward, upsertLedger } from '../membership/points.mjs';
 
 const CONTRIB_INDENT = '  ';
 
@@ -62,10 +58,10 @@ function parseArgs(argv) {
 }
 
 function applyAward(payload, { root, dryRun }) {
-  const { targetFile, contributor, contributorGithubId, ownerGithubId, banned = false, now = null, additionBonus = 0 } = payload;
+  const { targetFile, contributor } = payload;
   const changes = [];
 
-  // 1. Credit the contributor in the target file's frontmatter (every accepted class, grammar included).
+  // Credit the contributor in the target file's frontmatter (every accepted class, grammar included).
   const abs = path.join(root, targetFile);
   const before = fs.readFileSync(abs, 'utf8');
   const after = insertContributor(before, contributor);
@@ -74,36 +70,16 @@ function applyAward(payload, { root, dryRun }) {
     if (!dryRun) fs.writeFileSync(abs, after);
   }
 
-  // 2. Write a points award for a point-bearing class (grammar is courtesy: buildAward returns null).
-  const award = buildAward({
-    contributorGithubId,
-    contributorLogin: contributor.login,
-    ownerGithubId,
-    target: payload.target,
-    commit: contributor.commit,
-    url: contributor.url,
-    klass: contributor.class,
-    now,
-    banned,
-    additionBonus,
-  });
-  if (award) {
-    const ledgerPath = path.join(root, 'house/points-ledger.yml');
-    const doc = yaml.load(fs.readFileSync(ledgerPath, 'utf8')) ?? {};
-    const awards = upsertLedger(doc.awards ?? [], award);
-    changes.push(`award ${award.points}pt (${award.class}) -> ${award.contributor_login}`);
-    if (!dryRun) fs.writeFileSync(ledgerPath, yaml.dump({ ...doc, awards }));
-  }
   return changes;
 }
 
 function main() {
   const { dryRun, payload } = parseArgs(process.argv.slice(2));
-  if (!payload) throw new Error('award-contribution: --payload <file.json> is required');
+  if (!payload) throw new Error('credit-contribution: --payload <file.json> is required');
   const root = process.cwd();
   const data = JSON.parse(fs.readFileSync(payload, 'utf8'));
   const changes = applyAward(data, { root, dryRun });
-  console.log(`award-contribution: ${dryRun ? 'DRY RUN, ' : ''}${changes.length} change(s)`);
+  console.log(`credit-contribution: ${dryRun ? 'DRY RUN, ' : ''}${changes.length} change(s)`);
   for (const c of changes) console.log('  ' + c);
 }
 
