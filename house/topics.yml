@@ -1,21 +1,60 @@
 # SOW-080: the flat, git-native TOPIC VOCABULARY a member can follow (stored in prefs.categories). DECOUPLED from the
-# content taxonomy (house/taxonomy.yml) so the follow-topic list can grow to ~50 without re-tagging any content. Read
-# by src/lib/taxonomy.ts (the site build + /topics.json), validated against house/topic-map.yml, and rendered by the
-# extension topic picker. Each entry is a kebab-case key -> { label, group? } (group is optional, for picker sections).
-# Admin-owned (house/** is CODEOWNED). Phase 1 seeds the existing taxonomy top-levels so /topics.json is unchanged;
-# SOW-080 Phase 2 expands this to the curated ~50.
+# content taxonomy (house/taxonomy.yml) so the follow-topic list grows without re-tagging any content. Read by
+# src/lib/taxonomy.ts (the site build + /topics.json), validated against house/topic-map.yml, and rendered by the
+# extension topic picker. Each entry is a kebab-case key -> { label, group? } (group is optional). Admin-owned
+# (house/** is CODEOWNED). A topic that is ALSO a content-taxonomy primary drives the browse drill-down; a topic with a
+# house/topic-map.yml entry also biases the news feed; otherwise a topic is a browse/interest follow. No em/en dashes.
 topics:
+  # Tech & Building
   ai: { label: AI }
-  blockchain: { label: Blockchain }
-  blog: { label: Blog }
-  business: { label: Business }
-  design: { label: Design }
   devops: { label: DevOps }
-  entertainment: { label: Entertainment }
-  gbti: { label: GBTI Network }
-  generators: { label: Generators }
+  design: { label: Design }
+  blockchain: { label: Blockchain }
   imagegen: { label: ImageGen }
-  member-tutorials: { label: Member Tutorials }
-  minecraft: { label: Minecraft }
-  skill: { label: Skill }
+  open-source: { label: Open Source }
+  hardware: { label: Hardware }
+  iot: { label: IoT }
+  home-network: { label: Home Network }
+  materials: { label: Materials }
+  mechanics: { label: Mechanics }
+  metaverse: { label: Metaverse }
+  pixel-art: { label: Pixel Art }
+  "3d-printing": { label: 3D Printing }
+  makers: { label: Makers }
+  space: { label: Space }
+  energy: { label: Energy }
+  production: { label: Production }
+  # Business & Work
+  business: { label: Business }
+  entrepreneurship: { label: Entrepreneurship }
+  startups: { label: Startups }
+  finance: { label: Finance }
+  marketing: { label: Marketing }
+  branding: { label: Branding }
+  sales: { label: Sales }
+  leadership: { label: Leadership }
+  realestate: { label: Real Estate }
+  law: { label: Law }
+  # Creative & Media
   writing: { label: Writing }
+  photography: { label: Photography }
+  music: { label: Music }
+  cinema: { label: Cinema }
+  memes: { label: Memes }
+  gaming: { label: Gaming }
+  # Life & Interests
+  cooking: { label: Cooking }
+  gardening: { label: Gardening }
+  homesteading: { label: Homesteading }
+  agriculture: { label: Agriculture }
+  bicycles: { label: Bicycles }
+  health: { label: Health }
+  medicine: { label: Medicine }
+  education: { label: Education }
+  charity: { label: Charity }
+  religion: { label: Religion }
+  esoteric: { label: Esoteric }
+  mindset: { label: Mindset }
+  nature: { label: Nature }
+  transportation: { label: Transportation }
+  novelty: { label: Novelty }

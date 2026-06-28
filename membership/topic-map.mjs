@@ -69,16 +69,17 @@ export function prioritizeNewsByTopics(items, followedNewsCats) {
 
 /**
  * Validate the parsed topic map against the live vocabularies. Returns an array of error strings (empty = valid):
- * every TOPIC key must be a real taxonomy PRIMARY, and every mapped news category must be a canonical news category.
+ * every TOPIC key must be a real topic in house/topics.yml (SOW-080), and every mapped news category must be a
+ * canonical news category.
  */
-export function validateTopicMap(parsed, { taxonomyPrimaries = [], newsCategories = [] } = {}) {
+export function validateTopicMap(parsed, { topicKeys = [], newsCategories = [] } = {}) {
   const errors = [];
   const map = topicMapFromParsed(parsed);
-  const primaries = new Set(taxonomyPrimaries);
+  const keys = new Set(topicKeys);
   const cats = new Set(newsCategories);
   for (const [topic, list] of Object.entries(map)) {
-    if (!primaries.has(topic)) {
-      errors.push(`house/topic-map.yml: "${topic}" is not a top-level category in house/taxonomy.yml`);
+    if (!keys.has(topic)) {
+      errors.push(`house/topic-map.yml: "${topic}" is not a topic in house/topics.yml`);
     }
     for (const c of list) {
       if (!cats.has(c)) {

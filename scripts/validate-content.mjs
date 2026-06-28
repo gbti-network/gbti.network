@@ -12,6 +12,7 @@ import { isImageGenTarget } from '../client/src/image-models.mjs';
 import { membersIndexFromParsed, overrideConsistencyErrors } from '../membership/overrides-core.mjs';
 import { validateNewsChannels } from '../membership/news-channels.mjs'; // SOW-043: the news-category -> Discord channel map
 import { validateTopicMap } from '../membership/topic-map.mjs'; // SOW-054: the followed-topic -> news-category map
+import { topicVocabKeys } from '../membership/topics-vocab.mjs'; // SOW-080: the flat house/topics.yml topic vocabulary
 import { CATEGORY_NAMES } from '../workers/news/config/categories.mjs'; // SOW-054: the canonical news category labels
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
@@ -357,17 +358,18 @@ function validateNewsChannelsConfig() {
 }
 validateNewsChannelsConfig();
 
-// SOW-054: the followed-topic -> news-category map (house/topic-map.yml). Absent is fine; when present, every
-// topic must be a real taxonomy PRIMARY and every mapped news category must be canonical, so one "followed topics"
-// selection cleanly drives both the browse drill-down and the news default. Pure validation lives in
-// membership/topic-map.mjs.
+// SOW-054 + SOW-080: the followed-topic -> news-category map (house/topic-map.yml). Absent is fine; when present,
+// every topic must be a real topic in house/topics.yml (the flat vocabulary, no longer the content taxonomy) and
+// every mapped news category must be canonical. Pure validation lives in membership/topic-map.mjs.
 function validateTopicMapConfig() {
   const rel = 'house/topic-map.yml';
   if (!has(path.join(ROOT, rel))) return; // optional config
   let parsed;
   try { parsed = yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')); }
   catch { errors.push(`${rel}: not valid YAML`); return; }
-  const opts = { taxonomyPrimaries: Object.keys(TAXONOMY), newsCategories: CATEGORY_NAMES };
+  let topicsParsed = {};
+  try { topicsParsed = yaml.load(fs.readFileSync(path.join(ROOT, 'house/topics.yml'), 'utf8')); } catch { /* absent -> no topics */ }
+  const opts = { topicKeys: topicVocabKeys(topicsParsed), newsCategories: CATEGORY_NAMES };
   for (const err of validateTopicMap(parsed, opts)) errors.push(err);
 }
 validateTopicMapConfig();

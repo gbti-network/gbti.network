@@ -8,6 +8,7 @@ import url from 'node:url';
 import yaml from 'js-yaml';
 import { topicMapFromParsed, newsCategoriesForTopics, validateTopicMap, prioritizeNewsByTopics } from '../membership/topic-map.mjs';
 import { CATEGORY_NAMES } from '../workers/news/config/categories.mjs';
+import { topicVocabKeys } from '../membership/topics-vocab.mjs'; // SOW-080: topics now come from house/topics.yml
 
 const ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
 const load = (p) => yaml.load(fs.readFileSync(path.join(ROOT, p), 'utf8'));
@@ -43,21 +44,20 @@ test('newsCategoriesForTopics: de-dupes across topics, keeps order, ignores unkn
 });
 
 test('validateTopicMap: flags an unknown topic and an unknown news category', () => {
-  const opts = { taxonomyPrimaries: ['ai', 'devops'], newsCategories: ['AI/ML', 'DevOps/Cloud'] };
+  const opts = { topicKeys: ['ai', 'devops'], newsCategories: ['AI/ML', 'DevOps/Cloud'] };
   assert.deepEqual(validateTopicMap({ topics: { ai: ['AI/ML'] } }, opts), []); // valid
   const errs = validateTopicMap({ topics: { ai: ['AI/ML'], nope: ['AI/ML'], devops: ['Bogus'] } }, opts);
   assert.equal(errs.length, 2);
-  assert.ok(errs.some((e) => /"nope" is not a top-level category/.test(e)));
+  assert.ok(errs.some((e) => /"nope" is not a topic/.test(e)));
   assert.ok(errs.some((e) => /maps to "Bogus", which is not a news category/.test(e)));
 });
 
 // Integration: the real house/topic-map.yml must stay valid against the live vocabularies (catches drift when a
 // taxonomy primary is renamed or a news category is removed).
-test('the real house/topic-map.yml is valid against the live taxonomy primaries + news categories', () => {
-  const taxonomy = load('house/taxonomy.yml');
-  const primaries = Object.keys((taxonomy && taxonomy.tree) || {});
+test('the real house/topic-map.yml is valid against the live topics (house/topics.yml) + news categories', () => {
+  const topicKeys = topicVocabKeys(load('house/topics.yml'));
   const parsed = load('house/topic-map.yml');
-  const errs = validateTopicMap(parsed, { taxonomyPrimaries: primaries, newsCategories: CATEGORY_NAMES });
+  const errs = validateTopicMap(parsed, { topicKeys, newsCategories: CATEGORY_NAMES });
   assert.deepEqual(errs, [], `house/topic-map.yml has validation errors:\n${errs.join('\n')}`);
   // and it actually resolves SOME news categories (a smoke check that the map is not empty/broken)
   assert.ok(newsCategoriesForTopics(['ai'], parsed).includes('AI/ML'));

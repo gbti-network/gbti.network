@@ -1,20 +1,61 @@
-# SOW-054: the admin-owned TOPIC MAP. Each followed TOPIC (a content-taxonomy PRIMARY key from
-# house/taxonomy.yml: ai, devops, blockchain, ...) maps to the NEWS categories
-# (workers/news/config/categories.mjs) it should surface, so one "followed topics" selection drives BOTH the
-# browse drill-down (content) and the news default. CI-validated by scripts/validate-content.mjs: every topic
-# must be a real taxonomy primary, and every news category must be canonical. Topics with no clear news
-# equivalent (writing, design subtopics, gbti, blog, ...) are simply omitted: following them adds no news bias,
-# they still drive the content browse drill-down. Admin-owned. No em or en dashes, no contractions.
+# SOW-054 + SOW-080: the admin-owned TOPIC MAP. Each followed TOPIC (a key in house/topics.yml) maps to the NEWS
+# categories (workers/news/config/categories.mjs) it should surface, so one "followed topics" selection biases the
+# news feed. CI-validated by scripts/validate-content.mjs: every topic here must be a real topic in house/topics.yml,
+# and every news category must be canonical. A topic with NO clear tech-news equivalent (cooking, gardening, music,
+# religion, ...) is simply OMITTED here: following it adds no news bias and is a browse/interest follow only. This
+# many-to-few mapping keeps the news classifier at its ~12 categories (not ~50). Admin-owned. No em or en dashes.
 topics:
+  # AI
   ai:
     newsCategories: ["AI/ML"]
   imagegen:
     newsCategories: ["AI/ML"]
-  devops:
-    newsCategories: ["DevOps/Cloud", "Frameworks/Libraries", "Programming Languages", "Open Source"]
-  blockchain:
-    newsCategories: ["Blockchain"]
-  business:
-    newsCategories: ["Business/Funding"]
+  # Web + platform + open source
   design:
     newsCategories: ["Web Dev"]
+  metaverse:
+    newsCategories: ["Web Dev"]
+  open-source:
+    newsCategories: ["Open Source"]
+  devops:
+    newsCategories: ["DevOps/Cloud", "Frameworks/Libraries", "Programming Languages", "Open Source"]
+  # Hardware + physical building
+  hardware:
+    newsCategories: ["Hardware"]
+  iot:
+    newsCategories: ["Hardware"]
+  home-network:
+    newsCategories: ["Hardware"]
+  materials:
+    newsCategories: ["Hardware"]
+  mechanics:
+    newsCategories: ["Hardware"]
+  "3d-printing":
+    newsCategories: ["Hardware"]
+  makers:
+    newsCategories: ["Hardware"]
+  space:
+    newsCategories: ["Hardware"]
+  # Energy
+  energy:
+    newsCategories: ["Energy"]
+  # Crypto
+  blockchain:
+    newsCategories: ["Blockchain"]
+  # Business + work
+  business:
+    newsCategories: ["Business/Funding"]
+  entrepreneurship:
+    newsCategories: ["Business/Funding"]
+  startups:
+    newsCategories: ["Business/Funding"]
+  finance:
+    newsCategories: ["Business/Funding"]
+  marketing:
+    newsCategories: ["Business/Funding"]
+  branding:
+    newsCategories: ["Business/Funding"]
+  sales:
+    newsCategories: ["Business/Funding"]
+  leadership:
+    newsCategories: ["Business/Funding"]
