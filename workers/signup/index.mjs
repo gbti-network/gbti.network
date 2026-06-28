@@ -61,6 +61,7 @@ import { handleSyndicationTracker, handleSyndicationCancel, handleSyndicationApp
 import { drainSyndication } from './syndication-drain.mjs';
 import { handleFollows } from './membership-follows.mjs';
 import { handleEarnings } from './membership-earnings.mjs'; // SOW-083 P2: the member's own earnings ledger
+import { handleCommentEcho } from './membership-comment-echo.mjs'; // SOW-076 P1: optimistic comment echoes (instant-feel)
 import { membershipNews, membershipNewsCategories, membershipNewsSources } from './membership-news.mjs'; // SOW-043/046: members-only news proxy
 import { handlePrefs } from './membership-prefs.mjs'; // SOW-046: member prefs (categories + followed news channels)
 import { membershipNewsPublish } from './membership-news-publish.mjs'; // SOW-046 C: curator-gated news -> Discord publish
@@ -495,6 +496,17 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET') {
           const r = await handleEarnings(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-076 P1: optimistic comment echoes (instant-feel). A member's own pending comment appears in <1s from KV
+      // while its SOW-072 PR auto-merges + deploys behind it. Signed-in + non-banned; read-your-writes (a member sees
+      // only their own echoes). Per-token body, so never cached, varied on the bearer.
+      if (pathname === '/membership/comment-echo') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET' || method === 'POST') {
+          const r = await handleCommentEcho(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

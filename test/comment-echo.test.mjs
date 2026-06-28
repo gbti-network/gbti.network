@@ -2,7 +2,7 @@
 // phantoms) + no merged-not-deployed gap.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeCommentEchoes } from '../membership/comment-echo.mjs';
+import { mergeCommentEchoes, emptyEchoRecord, normalizeEchoRecord, addEcho, reapEchoes, CommentEchoError, MAX_ECHOES_PER_TARGET } from '../membership/comment-echo.mjs';
 
 const c = (id, createdAt, extra = {}) => ({ id, createdAt, body: id, ...extra });
 const echo = (id, prNumber, postedAt) => ({ id, prNumber, postedAt, body: id });
@@ -57,4 +57,44 @@ test('default prState (unknown = still in flight) keeps an undeployed echo', () 
   const r = mergeCommentEchoes({ echoes: [echo('e1', 7)] });
   assert.equal(r.comments.length, 1);
   assert.equal(r.comments[0]._pending, true);
+});
+
+// ---- the per-target echo store ----
+
+const E = (id, author = 'alice', extra = {}) => ({ id, author, targetType: 'post', targetSlug: 'a', body: id, ...extra });
+
+test('addEcho appends, replaces by id, sets postedAt, and stamps updatedAt', () => {
+  let r = addEcho(emptyEchoRecord(), E('e1'), { now: () => 100 });
+  assert.equal(r.echoes.length, 1);
+  assert.equal(r.echoes[0].postedAt, 100);
+  assert.equal(r.updatedAt, 100);
+  r = addEcho(r, E('e1', 'alice', { body: 'edited' }), { now: () => 200 }); // same id -> replace
+  assert.equal(r.echoes.length, 1);
+  assert.equal(r.echoes[0].body, 'edited');
+});
+
+test('addEcho rejects a malformed echo; the store caps at MAX_ECHOES_PER_TARGET (newest kept)', () => {
+  assert.throws(() => addEcho(emptyEchoRecord(), { id: 'x' }), CommentEchoError);
+  let r = emptyEchoRecord();
+  for (let i = 0; i < MAX_ECHOES_PER_TARGET + 5; i++) r = addEcho(r, E('e' + i), { now: () => 1000 + i });
+  assert.equal(r.echoes.length, MAX_ECHOES_PER_TARGET);
+  assert.ok(r.echoes.some((e) => e.id === 'e' + (MAX_ECHOES_PER_TARGET + 4)), 'newest retained');
+  assert.ok(!r.echoes.some((e) => e.id === 'e0'), 'oldest evicted');
+});
+
+test('reapEchoes removes ids; with an author guard it only reaps that author\'s own', () => {
+  let r = addEcho(addEcho(emptyEchoRecord(), E('e1', 'alice')), E('e2', 'bob'));
+  // alice may not reap bob's echo
+  let after = reapEchoes(r, ['e1', 'e2'], { author: 'alice' });
+  assert.deepEqual(after.echoes.map((e) => e.id).sort(), ['e2']);
+  // the reconcile sweep (no author) reaps any
+  after = reapEchoes(r, ['e1', 'e2']);
+  assert.deepEqual(after.echoes, []);
+});
+
+test('normalizeEchoRecord drops malformed + dedupes by id; null is an empty record', () => {
+  const r = normalizeEchoRecord({ echoes: [E('e1', 'alice', { postedAt: 1 }), E('e1', 'alice', { postedAt: 5 }), { id: 'bad' }, null], updatedAt: 7 });
+  assert.equal(r.echoes.length, 1);
+  assert.equal(r.echoes[0].postedAt, 5); // newest of the dup
+  assert.deepEqual(normalizeEchoRecord(null), emptyEchoRecord());
 });
