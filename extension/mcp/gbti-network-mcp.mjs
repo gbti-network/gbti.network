@@ -18209,6 +18209,62 @@ function encAssetFor(type, username, slug) {
   return { assetId, path: path4 };
 }
 
+// client/src/member-comment-echo-client.mjs
+var trimBase = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var CommentEchoClientError = class extends Error {
+};
+async function call(method, path4, body, { token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new CommentEchoClientError("not signed in");
+  const res = await fetch(trimBase(signupBase) + "/membership/comment-echo" + path4, {
+    method,
+    headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
+    ...body ? { body: JSON.stringify(body) } : {}
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new CommentEchoClientError(data?.message || data?.error || `comment-echo request failed (${res.status})`);
+  return data;
+}
+async function getCommentEchoes({ targetType, targetSlug, ...opts }) {
+  const q = `?targetType=${encodeURIComponent(targetType)}&targetSlug=${encodeURIComponent(targetSlug)}`;
+  return call("GET", q, null, opts);
+}
+async function addCommentEcho({ echo, ...opts }) {
+  return call("POST", "", { action: "add", echo }, opts);
+}
+async function reapCommentEchoes({ targetType, targetSlug, ids, ...opts }) {
+  return call("POST", "", { action: "reap", targetType, targetSlug, ids }, opts);
+}
+
+// membership/comment-echo.mjs
+var byTime = (a, b) => String(a?.createdAt || a?.postedAt || "").localeCompare(String(b?.createdAt || b?.postedAt || ""));
+function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unknown" } = {}) {
+  const deployedIds = new Set((Array.isArray(deployed) ? deployed : []).map((c) => c && c.id).filter(Boolean));
+  const reap = [];
+  const pending = /* @__PURE__ */ new Set();
+  const kept = [];
+  const seenEcho = /* @__PURE__ */ new Set();
+  for (const e of Array.isArray(echoes) ? echoes : []) {
+    if (!e || !e.id || seenEcho.has(e.id)) continue;
+    seenEcho.add(e.id);
+    if (deployedIds.has(e.id)) {
+      reap.push(e.id);
+      continue;
+    }
+    if (prState(e.prNumber) === "closed") {
+      reap.push(e.id);
+      continue;
+    }
+    kept.push({ ...e, _pending: true });
+    pending.add(e.id);
+  }
+  const comments = [...Array.isArray(deployed) ? deployed : [], ...kept].sort(byTime);
+  return { comments, reap, pending };
+}
+
 // membership/overrides-core.mjs
 var ROLE2 = Object.freeze({
   member: "member",
@@ -18285,6 +18341,22 @@ function gateMemberComments(items, membership) {
   if (canSeeShares(membership ?? "unknown")) return items ?? [];
   return (items ?? []).filter((c) => String(c?.visibility || "public").toLowerCase() !== "members");
 }
+async function mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed }) {
+  const token = ctx2.store?.get?.("githubToken");
+  if (!token || !targetType || !targetSlug) return deployed;
+  const opts = { token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch };
+  let echoes = [];
+  try {
+    echoes = (await getCommentEchoes({ targetType, targetSlug, ...opts }))?.echoes ?? [];
+  } catch {
+    return deployed;
+  }
+  if (!echoes.length) return deployed;
+  const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
+  if (reap.length) reapCommentEchoes({ targetType, targetSlug, ids: reap, ...opts }).catch(() => {
+  });
+  return comments;
+}
 var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
 async function listComments(ctx2, { targetType, targetSlug, limit } = {}) {
   requireIdentity(ctx2);
@@ -18293,7 +18365,8 @@ async function listComments(ctx2, { targetType, targetSlug, limit } = {}) {
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx2.reader?.listComments !== "function") return { items: [] };
   const items = await ctx2.reader.listComments(targetType, targetSlug, n) ?? [];
-  return { items: gateMemberComments(items, await ctx2.membership?.()) };
+  const gated = gateMemberComments(items, await ctx2.membership?.());
+  return { items: await mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed: gated }) };
 }
 function getContentItem(ctx2, { path: path4 } = {}) {
   const id = requireIdentity(ctx2);
@@ -18416,7 +18489,18 @@ async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, 
     title: title ?? `Comment on ${targetType}: ${targetSlug}`,
     prBody
   });
-  return { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
+  const out = { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
+  const echoToken = ctx2.store?.get?.("githubToken");
+  if (echoToken && out.prNumber) {
+    addCommentEcho({
+      echo: { id: cid, targetType: out.targetType, targetSlug: out.targetSlug, body, prNumber: out.prNumber, createdAt },
+      token: echoToken,
+      signupBase: SIGNUP_BASE,
+      fetch: ctx2.fetch ?? globalThis.fetch
+    }).catch(() => {
+    });
+  }
+  return out;
 }
 async function editComment(ctx2, { id, body, authorNote } = {}) {
   const idn = requireIdentity(ctx2);

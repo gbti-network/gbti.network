@@ -18173,13 +18173,69 @@ async function getEarnings({ token, signupBase, fetch: fetch2 = globalThis.fetch
   return data;
 }
 
-// client/src/member-follows-client.mjs
+// client/src/member-comment-echo-client.mjs
 var trimBase3 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var CommentEchoClientError = class extends Error {
+};
+async function call2(method, path, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new CommentEchoClientError("not signed in");
+  const res = await fetch2(trimBase3(signupBase) + "/membership/comment-echo" + path, {
+    method,
+    headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
+    ...body ? { body: JSON.stringify(body) } : {}
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new CommentEchoClientError(data?.message || data?.error || `comment-echo request failed (${res.status})`);
+  return data;
+}
+async function getCommentEchoes({ targetType, targetSlug, ...opts }) {
+  const q = `?targetType=${encodeURIComponent(targetType)}&targetSlug=${encodeURIComponent(targetSlug)}`;
+  return call2("GET", q, null, opts);
+}
+async function addCommentEcho({ echo, ...opts }) {
+  return call2("POST", "", { action: "add", echo }, opts);
+}
+async function reapCommentEchoes({ targetType, targetSlug, ids, ...opts }) {
+  return call2("POST", "", { action: "reap", targetType, targetSlug, ids }, opts);
+}
+
+// membership/comment-echo.mjs
+var byTime = (a, b) => String(a?.createdAt || a?.postedAt || "").localeCompare(String(b?.createdAt || b?.postedAt || ""));
+function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unknown" } = {}) {
+  const deployedIds = new Set((Array.isArray(deployed) ? deployed : []).map((c) => c && c.id).filter(Boolean));
+  const reap = [];
+  const pending = /* @__PURE__ */ new Set();
+  const kept = [];
+  const seenEcho = /* @__PURE__ */ new Set();
+  for (const e of Array.isArray(echoes) ? echoes : []) {
+    if (!e || !e.id || seenEcho.has(e.id)) continue;
+    seenEcho.add(e.id);
+    if (deployedIds.has(e.id)) {
+      reap.push(e.id);
+      continue;
+    }
+    if (prState(e.prNumber) === "closed") {
+      reap.push(e.id);
+      continue;
+    }
+    kept.push({ ...e, _pending: true });
+    pending.add(e.id);
+  }
+  const comments = [...Array.isArray(deployed) ? deployed : [], ...kept].sort(byTime);
+  return { comments, reap, pending };
+}
+
+// client/src/member-follows-client.mjs
+var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var FollowsClientError = class extends Error {
 };
-async function call2(method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+async function call3(method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new FollowsClientError("not signed in");
-  const res = await fetch2(trimBase3(signupBase) + "/membership/follows", {
+  const res = await fetch2(trimBase4(signupBase) + "/membership/follows", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -18193,19 +18249,19 @@ async function call2(method, body, { token, signupBase, fetch: fetch2 = globalTh
   return data;
 }
 async function getFollows(opts) {
-  return call2("GET", null, opts);
+  return call3("GET", null, opts);
 }
 async function setFollow({ username, on = true, ...opts }) {
-  return call2("POST", { username, on }, opts);
+  return call3("POST", { username, on }, opts);
 }
 
 // client/src/member-upvote-client.mjs
-var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var UpvoteClientError = class extends Error {
 };
 async function upvote({ type = "share", slug, on = true, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new UpvoteClientError("not signed in");
-  const res = await fetch2(trimBase4(signupBase) + "/membership/upvote", {
+  const res = await fetch2(trimBase5(signupBase) + "/membership/upvote", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ type, slug, on })
@@ -18220,12 +18276,12 @@ async function upvote({ type = "share", slug, on = true, token, signupBase, fetc
 }
 
 // client/src/member-og-client.mjs
-var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var OgClientError = class extends Error {
 };
 async function ogPreview({ url: url2, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new OgClientError("not signed in");
-  const res = await fetch2(trimBase5(signupBase) + "/membership/og-preview", {
+  const res = await fetch2(trimBase6(signupBase) + "/membership/og-preview", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ url: url2 })
@@ -18240,12 +18296,12 @@ async function ogPreview({ url: url2, token, signupBase, fetch: fetch2 = globalT
 }
 
 // client/src/member-invite-client.mjs
-var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase7 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var InviteClientError = class extends Error {
 };
 async function getDiscordInvite({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new InviteClientError("not signed in");
-  const res = await fetch2(trimBase6(signupBase) + "/membership/discord-invite", {
+  const res = await fetch2(trimBase7(signupBase) + "/membership/discord-invite", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -18607,12 +18663,12 @@ function filterActivity(activity, types2) {
 }
 
 // client/src/member-admin-client.mjs
-var trimBase7 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase8 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var AdminClientError = class extends Error {
 };
 async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase7(signupBase) + "/membership/admin/statuses", {
+  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/statuses", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -18626,7 +18682,7 @@ async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis
 }
 async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, params }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase7(signupBase) + "/membership/admin/ops", {
+  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/ops", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(params ? { action, params } : { action })
@@ -18642,7 +18698,7 @@ async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase7(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
   let data = null;
   try {
     data = await res.json();
@@ -18653,7 +18709,7 @@ async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalTh
 }
 async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase7(signupBase) + "/membership/syndication/cancel", {
+  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication/cancel", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ id })
@@ -18668,7 +18724,7 @@ async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = global
 }
 async function approveSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase7(signupBase) + "/membership/syndication/approve", {
+  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication/approve", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ id })
@@ -18714,13 +18770,30 @@ function gateMemberComments(items, membership) {
   if (canSeeShares(membership ?? "unknown")) return items ?? [];
   return (items ?? []).filter((c) => String(c?.visibility || "public").toLowerCase() !== "members");
 }
+async function mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed }) {
+  const token = ctx.store?.get?.("githubToken");
+  if (!token || !targetType || !targetSlug) return deployed;
+  const opts = { token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch };
+  let echoes = [];
+  try {
+    echoes = (await getCommentEchoes({ targetType, targetSlug, ...opts }))?.echoes ?? [];
+  } catch {
+    return deployed;
+  }
+  if (!echoes.length) return deployed;
+  const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
+  if (reap.length) reapCommentEchoes({ targetType, targetSlug, ids: reap, ...opts }).catch(() => {
+  });
+  return comments;
+}
 async function listShareComments(ctx, { targetSlug, limit } = {}) {
   requireIdentity(ctx);
   if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listShareComments !== "function") return { items: [] };
   const items = await ctx.reader.listShareComments(targetSlug, n) ?? [];
-  return { items: gateMemberComments(items, await ctx.membership?.()) };
+  const gated = gateMemberComments(items, await ctx.membership?.());
+  return { items: await mergeCommentEchoesFor(ctx, { targetType: "share", targetSlug, deployed: gated }) };
 }
 var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
 async function listComments(ctx, { targetType, targetSlug, limit } = {}) {
@@ -18730,7 +18803,8 @@ async function listComments(ctx, { targetType, targetSlug, limit } = {}) {
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listComments !== "function") return { items: [] };
   const items = await ctx.reader.listComments(targetType, targetSlug, n) ?? [];
-  return { items: gateMemberComments(items, await ctx.membership?.()) };
+  const gated = gateMemberComments(items, await ctx.membership?.());
+  return { items: await mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed: gated }) };
 }
 async function readContent(ctx, { path } = {}) {
   requireIdentity(ctx);
@@ -19059,7 +19133,18 @@ async function publishComment(ctx, { targetType, targetSlug, body, authorNote, p
     title: title ?? `Comment on ${targetType}: ${targetSlug}`,
     prBody: prBody2
   });
-  return { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
+  const out = { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
+  const echoToken = ctx.store?.get?.("githubToken");
+  if (echoToken && out.prNumber) {
+    addCommentEcho({
+      echo: { id: cid, targetType: out.targetType, targetSlug: out.targetSlug, body, prNumber: out.prNumber, createdAt },
+      token: echoToken,
+      signupBase: SIGNUP_BASE,
+      fetch: ctx.fetch ?? globalThis.fetch
+    }).catch(() => {
+    });
+  }
+  return out;
 }
 async function getComment(ctx, { id } = {}) {
   const idn = requireIdentity(ctx);

@@ -16,6 +16,8 @@ import {
   setCollectionItem as workerSetCollectionItem, ActivityClientError,
 } from './member-activity-client.mjs';
 import { getEarnings as workerGetEarnings } from './member-earnings-client.mjs'; // SOW-083 P2: the member's own earnings ledger
+import { getCommentEchoes as workerGetCommentEchoes, addCommentEcho as workerAddCommentEcho, reapCommentEchoes as workerReapCommentEchoes } from './member-comment-echo-client.mjs'; // SOW-076
+import { mergeCommentEchoes } from '../../membership/comment-echo.mjs'; // SOW-076
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
 import { upvote as workerUpvote, UpvoteClientError } from './member-upvote-client.mjs'; // SOW-057
 import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.mjs'; // SOW-057
@@ -121,6 +123,22 @@ function gateMemberComments(items, membership) {
   return (items ?? []).filter((c) => String(c?.visibility || 'public').toLowerCase() !== 'members');
 }
 
+// SOW-076: merge the caller's OWN optimistic comment echoes (read-your-writes) onto the deployed comments, reaping
+// any that have landed (now deployed) or been declined. Best-effort + signed-in only: any failure (or a target the
+// echo store does not handle, e.g. news) falls back cleanly to the deployed comments.
+async function mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed }) {
+  const token = ctx.store?.get?.('githubToken');
+  if (!token || !targetType || !targetSlug) return deployed;
+  const opts = { token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch };
+  let echoes = [];
+  try { echoes = (await workerGetCommentEchoes({ targetType, targetSlug, ...opts }))?.echoes ?? []; }
+  catch { return deployed; }
+  if (!echoes.length) return deployed;
+  const { comments, reap } = mergeCommentEchoes({ deployed, echoes });
+  if (reap.length) workerReapCommentEchoes({ targetType, targetSlug, ids: reap, ...opts }).catch(() => {}); // fire-and-forget
+  return comments;
+}
+
 /**
  * SOW-032: list PUBLISHED comments for one Share's discussion thread (oldest-first). targetSlug is the composite
  * "<author>/<shareId>" the share carries. Like listShares, this returns public-repo stub metadata + the PUBLIC
@@ -133,7 +151,8 @@ export async function listShareComments(ctx, { targetSlug, limit } = {}) {
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listShareComments !== 'function') return { items: [] };
   const items = (await ctx.reader.listShareComments(targetSlug, n)) ?? [];
-  return { items: gateMemberComments(items, await ctx.membership?.()) }; // SOW-078: member comment stubs are tier-gated
+  const gated = gateMemberComments(items, await ctx.membership?.()); // SOW-078: member comment stubs are tier-gated
+  return { items: await mergeCommentEchoesFor(ctx, { targetType: 'share', targetSlug, deployed: gated }) }; // SOW-076
 }
 
 // SOW-041: the generic comment thread for ANY content type (post/product/prompt/share). Powers the shared
@@ -147,7 +166,8 @@ export async function listComments(ctx, { targetType, targetSlug, limit } = {}) 
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listComments !== 'function') return { items: [] };
   const items = (await ctx.reader.listComments(targetType, targetSlug, n)) ?? [];
-  return { items: gateMemberComments(items, await ctx.membership?.()) }; // SOW-078: member comment stubs are tier-gated
+  const gated = gateMemberComments(items, await ctx.membership?.()); // SOW-078: member comment stubs are tier-gated
+  return { items: await mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed: gated }) }; // SOW-076
 }
 
 /**
@@ -548,7 +568,17 @@ export async function publishComment(ctx, { targetType, targetSlug, body, author
     title: title ?? `Comment on ${targetType}: ${targetSlug}`,
     prBody,
   });
-  return { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
+  const out = { ...r, targetType: built.frontmatter.targetType, targetSlug: built.frontmatter.targetSlug };
+  // SOW-076: optimistic echo so the AUTHOR's own comment appears instantly (read-your-writes) while the SOW-072 PR
+  // auto-merges + the site rebuilds behind it. Best-effort + fire-and-forget; the durable PR is the source of truth.
+  const echoToken = ctx.store?.get?.('githubToken');
+  if (echoToken && out.prNumber) {
+    workerAddCommentEcho({
+      echo: { id: cid, targetType: out.targetType, targetSlug: out.targetSlug, body, prNumber: out.prNumber, createdAt },
+      token: echoToken, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch,
+    }).catch(() => {});
+  }
+  return out;
 }
 
 /** Read one of the member's OWN comments (frontmatter + body), for the edit-form prefill. A members comment
