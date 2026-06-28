@@ -44,12 +44,7 @@
         <div><h1 class="hub-h">Settings</h1><p class="hub-sub">Membership, billing, referrals, and account controls.</p></div>
       </div>
       <gbti-account></gbti-account>
-      <!-- SOW-054 Phase 5: manage followed topics later (the same picker as the onboarding Topics step). -->
-      <section style="max-width:720px;margin:30px auto 0">
-        <h2 class="hub-h" style="font-size:18px">Followed topics</h2>
-        <p class="hub-sub" style="margin:4px 0 14px">Pick the topics you care about. Your activity feed and news default to them. Leave it empty to see everything.</p>
-        <gbti-topic-picker></gbti-topic-picker>
-      </section>
+      <!-- SOW-080: followed-topic management moved to WorkBench -> Following -> Topics (gbti-subscriptions). -->
       <!-- SOW-063: the new-tab landing splash recurrence window (a client preference; 0 = always show). Wired in
            account.mjs (CSP forbids inline scripts). -->
       <section style="max-width:720px;margin:30px auto 0">
@@ -72,6 +67,10 @@
         <label class="splash-set" style="margin-top:10px">
           <input type="checkbox" data-show-quote checked />
           <span>Show the quote</span>
+        </label>
+        <label class="splash-set" style="margin-top:10px">
+          <input type="checkbox" data-dark-cards checked />
+          <span>Keep dark cards on the splash background (uncheck for light frosted cards in light mode)</span>
         </label>
       </section>
       <!-- SOW-074: the new-tab splash background image + modes. Wired in account.mjs (CSP forbids inline scripts).

@@ -47,7 +47,7 @@ const CSS = `
 class GbtiSubscriptions extends GbtiElement {
   connectedCallback() {
     this._membership = null;
-    this._view = 'members'; // 'members' | 'channels'
+    this._view = 'members'; // 'members' | 'channels' | 'topics'
     this._follows = null; // array, or null when not loaded / paid-denied
     this._channels = null; // [{ id, name, meta }] followed channels, or null
     this._channelsError = false;
@@ -114,9 +114,12 @@ class GbtiSubscriptions extends GbtiElement {
     const subtabs = `<div class="subtabs">
       <button class="subtab ${this._view === 'members' ? 'on' : ''}" data-view="members" type="button">Network members</button>
       <button class="subtab ${this._view === 'channels' ? 'on' : ''}" data-view="channels" type="button">News channels</button>
+      <button class="subtab ${this._view === 'topics' ? 'on' : ''}" data-view="topics" type="button">Topics</button>
     </div>`;
 
-    const body = this._view === 'channels' ? this._channelsHtml() : this._membersHtml();
+    const body = this._view === 'channels' ? this._channelsHtml()
+      : this._view === 'topics' ? this._topicsHtml()
+        : this._membersHtml();
 
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
       <section class="sec"><h3>Membership</h3>${card}</section>
@@ -145,6 +148,13 @@ class GbtiSubscriptions extends GbtiElement {
       </li>`;
     }).join('');
     return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+  }
+
+  // SOW-080: followed-topic management moved here from the extension Settings page. The shared <gbti-topic-picker>
+  // self-loads /topics.json + self-persists prefs.categories via the global client (base.mjs get client()), so this
+  // is a mount-only branch (no per-element wiring, no reload on subtab switch beyond the picker's own load).
+  _topicsHtml() {
+    return `<p class="muted" style="margin:0 0 12px">Follow the topics you care about. Your activity feed and news prioritize them; leave it empty to see everything.</p><gbti-topic-picker></gbti-topic-picker>`;
   }
 
   _channelsHtml() {

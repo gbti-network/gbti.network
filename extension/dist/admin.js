@@ -6657,7 +6657,33 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/topic-picker-core.mjs
   function topicsFromJson(data) {
     const list = Array.isArray(data && data.topics) ? data.topics : [];
-    return list.filter((t) => t && typeof t.key === "string" && t.key).map((t) => ({ key: t.key, label: typeof t.label === "string" && t.label ? t.label : t.key }));
+    return list.filter((t) => t && typeof t.key === "string" && t.key).map((t) => ({
+      key: t.key,
+      label: typeof t.label === "string" && t.label ? t.label : t.key,
+      ...typeof t.group === "string" && t.group ? { group: t.group } : {}
+    }));
+  }
+  function filterTopics(list, query) {
+    const q = String(query || "").trim().toLowerCase();
+    const arr = Array.isArray(list) ? list : [];
+    if (!q) return arr;
+    return arr.filter((t) => String(t && t.label || "").toLowerCase().includes(q) || String(t && t.key || "").toLowerCase().includes(q));
+  }
+  function groupTopics(list) {
+    const arr = Array.isArray(list) ? list : [];
+    const order = [];
+    const byGroup = /* @__PURE__ */ new Map();
+    for (const t of arr) {
+      const g = t && typeof t.group === "string" && t.group ? t.group : "";
+      if (!byGroup.has(g)) {
+        byGroup.set(g, []);
+        if (g) order.push(g);
+      }
+      byGroup.get(g).push(t);
+    }
+    const out = order.map((g) => ({ group: g, topics: byGroup.get(g) }));
+    if (byGroup.has("")) out.push({ group: "", topics: byGroup.get("") });
+    return out;
   }
   function toggleTopic(selection, key) {
     const cur = (Array.isArray(selection) ? selection : []).filter((k) => typeof k === "string" && k);
@@ -6675,20 +6701,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-topic-picker.mjs
   var SITE4 = "https://gbti.network";
+  var MAX_TOPICS = 40;
   var CSS22 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .bar { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
+  .srch { flex:1; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
+  .srch:focus { outline:none; border-color:var(--accent); }
+  .cnt { flex:none; font-size:12px; color:var(--muted); white-space:nowrap; }
+  .grp { margin:14px 0 8px; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
+  .grp:first-child { margin-top:0; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { font:inherit; font-size:13px; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:7px 14px; cursor:pointer; }
   .chip:hover { color:var(--fg); border-color:var(--accent); }
   .chip.on { color:#fff; background:var(--accent); border-color:var(--accent); }
   .muted { color:var(--muted); font-size:14px; }
-  .chips.busy { opacity:.6; pointer-events:none; }
+  .list.busy { opacity:.6; pointer-events:none; }
 `;
   var GbtiTopicPicker = class extends GbtiElement {
     connectedCallback() {
       this._topics = null;
       this._selected = [];
       this._busy = false;
+      this._query = "";
       super.connectedCallback?.();
       this._load();
     }
@@ -6722,25 +6756,52 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS22) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
+      this.set(this.css(CSS22) + `
+      <div class="bar">
+        <input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" />
+        <span class="cnt" data-cnt></span>
+      </div>
+      <div class="list" data-list></div>`);
+      const srch = this.$(".srch");
+      if (srch) {
+        srch.value = this._query;
+        srch.addEventListener("input", () => {
+          this._query = srch.value;
+          this._renderChips();
+        });
+      }
+      this._renderChips();
+    }
+    _renderChips() {
+      const list = this.$("[data-list]");
+      if (!list) return;
       const sel = new Set(this._selected);
-      const chips = this._topics.map((t) => `<button class="chip ${sel.has(t.key) ? "on" : ""}" data-topic="${esc(t.key)}" type="button" aria-pressed="${sel.has(t.key)}">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS22) + `<div class="chips ${this._busy ? "busy" : ""}">${chips}</div>`);
+      const groups = groupTopics(filterTopics(this._topics, this._query)).filter((g) => g.topics.length);
+      const chipsFor = (topics) => topics.map((t) => `<button class="chip ${sel.has(t.key) ? "on" : ""}" data-topic="${esc(t.key)}" type="button" aria-pressed="${sel.has(t.key)}">${esc(t.label)}</button>`).join("");
+      list.className = `list ${this._busy ? "busy" : ""}`;
+      list.innerHTML = groups.length ? groups.map((g) => `${g.group ? `<h4 class="grp">${esc(g.group)}</h4>` : ""}<div class="chips">${chipsFor(g.topics)}</div>`).join("") : `<p class="muted">No topics match "${esc(this._query)}".</p>`;
+      const cnt = this.$("[data-cnt]");
+      if (cnt) {
+        const n = this._selected.length;
+        cnt.textContent = n ? `${n} selected${n >= MAX_TOPICS ? ` (max ${MAX_TOPICS})` : ""}` : "";
+      }
       this.$$("[data-topic]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.topic)));
     }
     async _toggle(key) {
       const next = toggleTopic(this._selected, key);
       this._selected = next;
-      this.render();
+      this._renderChips();
       this.dispatchEvent(new CustomEvent("topics-change", { detail: { topics: [...next] }, bubbles: true, composed: true }));
       if (this.client?.setPrefs) {
         this._busy = true;
+        this._renderChips();
         try {
           const p = await this.client.setPrefs({ categories: next });
           this._selected = selectedTopics(p?.categories);
         } catch {
         }
         this._busy = false;
-        this.render();
+        this._renderChips();
       }
     }
   };
@@ -7369,8 +7430,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const subtabs = `<div class="subtabs">
       <button class="subtab ${this._view === "members" ? "on" : ""}" data-view="members" type="button">Network members</button>
       <button class="subtab ${this._view === "channels" ? "on" : ""}" data-view="channels" type="button">News channels</button>
+      <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
-      const body = this._view === "channels" ? this._channelsHtml() : this._membersHtml();
+      const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
       this.set(this.css(CSS25) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Membership</h3>${card}</section>
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
@@ -7398,6 +7460,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </li>`;
       }).join("");
       return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE7}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+    }
+    // SOW-080: followed-topic management moved here from the extension Settings page. The shared <gbti-topic-picker>
+    // self-loads /topics.json + self-persists prefs.categories via the global client (base.mjs get client()), so this
+    // is a mount-only branch (no per-element wiring, no reload on subtab switch beyond the picker's own load).
+    _topicsHtml() {
+      return `<p class="muted" style="margin:0 0 12px">Follow the topics you care about. Your activity feed and news prioritize them; leave it empty to see everything.</p><gbti-topic-picker></gbti-topic-picker>`;
     }
     _channelsHtml() {
       if (this._channels === null && this._channelsError) {
@@ -9856,7 +9924,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { group: "Activity" },
     { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests", sub: "Proposed + accepted" },
     { key: "saved", href: "workspace.html#tab=saved", ico: "bookmark", nm: "Saved", sub: "Favorites + collections" },
-    { key: "subs", href: "workspace.html#tab=subs", ico: "users", nm: "Following", sub: "Members + news channels" },
+    { key: "subs", href: "workspace.html#tab=subs", ico: "users", nm: "Following", sub: "Members, channels, topics" },
     { key: "earnings", href: "workspace.html#tab=earnings", ico: "coin", nm: "Earnings", sub: "Referrals + rewards" },
     { div: true },
     { key: "settings", href: "account.html", ico: "gear", nm: "Settings", sub: "Membership + account" },

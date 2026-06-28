@@ -87,7 +87,7 @@ const RAIL_WORKBENCH = [
   { group: 'Activity' },
   { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests', sub: 'Proposed + accepted' },
   { key: 'saved', href: 'workspace.html#tab=saved', ico: 'bookmark', nm: 'Saved', sub: 'Favorites + collections' },
-  { key: 'subs', href: 'workspace.html#tab=subs', ico: 'users', nm: 'Following', sub: 'Members + news channels' },
+  { key: 'subs', href: 'workspace.html#tab=subs', ico: 'users', nm: 'Following', sub: 'Members, channels, topics' },
   { key: 'earnings', href: 'workspace.html#tab=earnings', ico: 'coin', nm: 'Earnings', sub: 'Referrals + rewards' },
   { div: true },
   { key: 'settings', href: 'account.html', ico: 'gear', nm: 'Settings', sub: 'Membership + account' },
