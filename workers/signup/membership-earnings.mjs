@@ -1,0 +1,19 @@
+// SOW-083 P2: serve a member's OWN earnings ledger (earnings:<github_id>), computed + written by the offline payout
+// job (scripts/payout-referrals.mjs buildEarningsLedger). Read-only GET, per-token (the member's own), never cached.
+// Signed-in + non-banned (authorizeMemberCheap, Stripe-free); a free / non-earning member simply gets an empty
+// ledger. The KV value holds github_ids + amounts only (no PII), so it composes cleanly with right-to-erasure.
+import { authorizeMemberCheap } from './membership-content.mjs';
+import { githubFetchUser } from './oauth.mjs';
+
+export const EARNINGS_KEY = (githubId) => `earnings:${githubId}`;
+const emptyLedger = (githubId) => ({ v: 1, recipient: githubId, entries: [], totals: { held: 0, payable: 0, paid: 0, lifetime: 0 } });
+
+export async function handleEarnings(request, env, { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, kv = env?.SIGNUP_KV, authorize = authorizeMemberCheap } = {}) {
+  if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the earnings store is not configured' } };
+  // Same ban-aware, Stripe-free gate as activity/follows: a banned account gets ZERO KV; an unverifiable token is 401.
+  const a = await authorize(request, env, { fetchImpl, fetchUser, kv });
+  if (!a.ok) return { status: a.status, body: a.body };
+  let ledger = null;
+  try { ledger = await kv.get(EARNINGS_KEY(a.githubId), 'json'); } catch { ledger = null; }
+  return { status: 200, body: ledger || emptyLedger(a.githubId) };
+}

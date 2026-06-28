@@ -24,8 +24,8 @@ import { createStripeClient } from '../clients/stripe.mjs';
 import { loadOverrides } from '../membership/overrides.mjs';
 import { loadReferralConfig, isPayoutsActive } from '../membership/referral-config.mjs';
 import { activeIntervalsFromStripe, isActiveAt, COMMISSION_STATE } from '../membership/commissions.mjs';
-import { planSnapshotPayouts, invoiceState } from './lib/snapshot-payout-plan.mjs';
-import { listKvByPrefix } from './lib/erase-member.mjs';
+import { planSnapshotPayouts, invoiceState, buildEarningsLedger } from './lib/snapshot-payout-plan.mjs';
+import { listKvByPrefix, putKvValue } from './lib/erase-member.mjs';
 import { readCommentsIndex, gatherSnapshotPoints, reverseMembersIndex } from './lib/collaboration-gather.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
@@ -200,7 +200,21 @@ async function main() {
   for (const a of actions) console.log(`  transfer ${a.recipientGithubId} (${a.role}) -> ${a.destination}  ${formatAmount(a.amount, a.currency)}  invoice=${a.invoiceId}`);
   console.log(`payout: ${actions.length} transfer(s) planned, ${withheld.length} balance(s) withheld.`);
 
-  if (dryRun) { console.log('payout: DRY RUN (no transfers). Re-run with --apply to enact.'); return; }
+  if (dryRun) { console.log('payout: DRY RUN (no transfers, earnings ledger not written). Re-run with --apply to enact.'); return; }
+
+  // SOW-083 P2: persist each recipient's earnings ledger (held + payable + paid) so the member dashboard can read it.
+  // Written on a real run REGARDLESS of payoutsActive, since members ACCRUE before payouts are switched on. The KV
+  // value holds github_ids + amounts only (erasure-resilient); the Worker serves earnings:<github_id> per member.
+  const earnings = buildEarningsLedger({ members, nowMs, holdDays: config.hold_days, eligible, paidPairs });
+  let wroteEarnings = 0;
+  for (const [recipient, ledger] of earnings) {
+    try {
+      await putKvValue({ key: `earnings:${recipient}`, value: JSON.stringify({ v: 1, recipient, ...ledger, updatedAt: nowMs }), env });
+      wroteEarnings++;
+    } catch (err) { console.warn(`payout: could not write earnings for ${recipient} (${err?.message ?? err}).`); }
+  }
+  console.log(`payout: earnings ledger written for ${wroteEarnings} recipient(s).`);
+
   if (!payoutsActive) { console.log('payout: payouts are NOT active (referral-config). Nothing transferred.'); return; }
 
   // Best-effort, fault-tolerant apply: a single failed transfer must NOT abort the rest. The idempotency key makes
