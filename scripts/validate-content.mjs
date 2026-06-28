@@ -372,9 +372,16 @@ function validateTopicMapConfig() {
 }
 validateTopicMapConfig();
 
+// SOW-076 Phase 3: `--json` emits the errors as machine-readable JSON (for the post-publish remediation), while the
+// exit code is unchanged. The default human output is untouched.
+const JSON_OUT = process.argv.includes('--json');
 if (errors.length) {
-  console.error(`✗ content validation failed (${errors.length} issue${errors.length === 1 ? '' : 's'}):`);
-  for (const e of errors) console.error('  - ' + e);
+  if (JSON_OUT) console.log(JSON.stringify({ ok: false, errors }));
+  else {
+    console.error(`✗ content validation failed (${errors.length} issue${errors.length === 1 ? '' : 's'}):`);
+    for (const e of errors) console.error('  - ' + e);
+  }
   process.exit(1);
 }
-console.log('✓ content validation passed (author scoping, unique slugs, valid status/visibility, canonical categories)');
+if (JSON_OUT) console.log(JSON.stringify({ ok: true, errors: [] }));
+else console.log('✓ content validation passed (author scoping, unique slugs, valid status/visibility, canonical categories)');
