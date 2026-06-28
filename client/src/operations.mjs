@@ -15,6 +15,7 @@ import {
   renameCollection as workerRenameCollection, deleteCollection as workerDeleteCollection,
   setCollectionItem as workerSetCollectionItem, ActivityClientError,
 } from './member-activity-client.mjs';
+import { getEarnings as workerGetEarnings } from './member-earnings-client.mjs'; // SOW-083 P2: the member's own earnings ledger
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
 import { upvote as workerUpvote, UpvoteClientError } from './member-upvote-client.mjs'; // SOW-057
 import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.mjs'; // SOW-057
@@ -638,6 +639,17 @@ export async function getMemberActivity(ctx, { types } = {}) {
     return Array.isArray(types) && types.length ? filterActivity(activity, types) : activity;
   } catch (err) {
     throw mapActivityError(err);
+  }
+}
+
+/** SOW-083 P2: the signed-in member's own earnings ledger (the SOW-059 revenue dashboard data), via the Worker. */
+export async function getMemberEarnings(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try {
+    return await workerGetEarnings({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new Error(err?.message || 'could not load earnings');
   }
 }
 

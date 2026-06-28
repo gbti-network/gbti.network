@@ -18155,13 +18155,31 @@ async function setCollectionItem({ id, targetType, targetSlug, on = true, ...opt
   return call("POST", { action: "collection.item", id, type: targetType, slug: targetSlug, on }, opts);
 }
 
-// client/src/member-follows-client.mjs
+// client/src/member-earnings-client.mjs
 var trimBase2 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var EarningsClientError = class extends Error {
+};
+async function getEarnings({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new EarningsClientError("not signed in");
+  const res = await fetch2(trimBase2(signupBase) + "/membership/earnings", {
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new EarningsClientError(data?.message || data?.error || `earnings request failed (${res.status})`);
+  return data;
+}
+
+// client/src/member-follows-client.mjs
+var trimBase3 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var FollowsClientError = class extends Error {
 };
 async function call2(method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new FollowsClientError("not signed in");
-  const res = await fetch2(trimBase2(signupBase) + "/membership/follows", {
+  const res = await fetch2(trimBase3(signupBase) + "/membership/follows", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -18182,12 +18200,12 @@ async function setFollow({ username, on = true, ...opts }) {
 }
 
 // client/src/member-upvote-client.mjs
-var trimBase3 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var UpvoteClientError = class extends Error {
 };
 async function upvote({ type = "share", slug, on = true, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new UpvoteClientError("not signed in");
-  const res = await fetch2(trimBase3(signupBase) + "/membership/upvote", {
+  const res = await fetch2(trimBase4(signupBase) + "/membership/upvote", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ type, slug, on })
@@ -18202,12 +18220,12 @@ async function upvote({ type = "share", slug, on = true, token, signupBase, fetc
 }
 
 // client/src/member-og-client.mjs
-var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var OgClientError = class extends Error {
 };
 async function ogPreview({ url: url2, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new OgClientError("not signed in");
-  const res = await fetch2(trimBase4(signupBase) + "/membership/og-preview", {
+  const res = await fetch2(trimBase5(signupBase) + "/membership/og-preview", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ url: url2 })
@@ -18222,12 +18240,12 @@ async function ogPreview({ url: url2, token, signupBase, fetch: fetch2 = globalT
 }
 
 // client/src/member-invite-client.mjs
-var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var InviteClientError = class extends Error {
 };
 async function getDiscordInvite({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new InviteClientError("not signed in");
-  const res = await fetch2(trimBase5(signupBase) + "/membership/discord-invite", {
+  const res = await fetch2(trimBase6(signupBase) + "/membership/discord-invite", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -18589,12 +18607,12 @@ function filterActivity(activity, types2) {
 }
 
 // client/src/member-admin-client.mjs
-var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase7 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var AdminClientError = class extends Error {
 };
 async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase6(signupBase) + "/membership/admin/statuses", {
+  const res = await fetch2(trimBase7(signupBase) + "/membership/admin/statuses", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -18608,7 +18626,7 @@ async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis
 }
 async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, params }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase6(signupBase) + "/membership/admin/ops", {
+  const res = await fetch2(trimBase7(signupBase) + "/membership/admin/ops", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(params ? { action, params } : { action })
@@ -18624,7 +18642,7 @@ async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase6(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  const res = await fetch2(trimBase7(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
   let data = null;
   try {
     data = await res.json();
@@ -18635,7 +18653,7 @@ async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalTh
 }
 async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase6(signupBase) + "/membership/syndication/cancel", {
+  const res = await fetch2(trimBase7(signupBase) + "/membership/syndication/cancel", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ id })
@@ -18650,7 +18668,7 @@ async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = global
 }
 async function approveSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase6(signupBase) + "/membership/syndication/approve", {
+  const res = await fetch2(trimBase7(signupBase) + "/membership/syndication/approve", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ id })
@@ -19111,6 +19129,15 @@ async function getMemberActivity(ctx, { types: types2 } = {}) {
     return Array.isArray(types2) && types2.length ? filterActivity(activity, types2) : activity;
   } catch (err) {
     throw mapActivityError(err);
+  }
+}
+async function getMemberEarnings(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await getEarnings({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new Error(err?.message || "could not load earnings");
   }
 }
 async function mutateMemberActivity(ctx, payload = {}) {
@@ -20406,6 +20433,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       // SOW-016: reads the .enc via the reader, decrypts via the Worker
       case "/api/activity":
         return ok(method === "POST" ? await mutateMemberActivity(ctx, body) : await getMemberActivity(ctx));
+      case "/api/earnings":
+        return ok(await getMemberEarnings(ctx));
       case "/api/follows":
         return ok(method === "POST" ? await setFollow2(ctx, body) : await getFollows2(ctx));
       case "/api/upvote":

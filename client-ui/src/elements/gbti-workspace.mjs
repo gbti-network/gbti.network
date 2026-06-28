@@ -212,11 +212,36 @@ class GbtiWorkspace extends GbtiElement {
     if (!this._editing) this.render();
   }
 
+  // SOW-083 P2: the member's own earnings ledger (held + payable + paid), served by the Worker from earnings:<id>.
+  async _loadEarnings() {
+    try { this._earnings = (await this.client?.getEarnings?.()) ?? null; }
+    catch { this._earnings = null; }
+    this.render();
+  }
+
+  // SOW-083 P2: render the earnings dashboard (totals + the per-source breakdown), or the empty/explainer state.
+  _renderEarnings() {
+    const e = this._earnings;
+    const money = (cents) => `$${((cents || 0) / 100).toFixed(2)}`;
+    const hero = `<div class="ov-hero"><div><b>Earnings</b><br/><span class="muted">Revenue share from the members your work and your invites bring in.</span></div></div>`;
+    if (!e || !Array.isArray(e.entries) || e.entries.length === 0) {
+      return hero + `<p class="empty">No earnings yet. When someone joins through your invite link or via content you wrote, your share shows here: 30% when your content is the first touch, 10% when it is the last, a slice of the 5% collaboration pool, and a flat 10% lifetime commission on your invites. Distributions pay out after a 90-day hold. Copy your invite link under <a href="account.html">Settings</a>.</p>`;
+    }
+    const t = e.totals || {};
+    const stat = (n, l) => `<div style="flex:1;min-width:110px"><div style="font:600 22px/1.1 var(--f-display,inherit)">${money(n)}</div><div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.04em">${esc(l)}</div></div>`;
+    const totals = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin:16px 0;padding:16px;border:1px solid var(--line-2,#ddd);border-radius:var(--r,8px)">${stat(t.lifetime, 'Lifetime')}${stat(t.paid, 'Paid')}${stat(t.payable, 'Ready')}${stat(t.held, 'Accruing')}</div>`;
+    const roleLabel = { first: 'First touch', last: 'Last touch', invite: 'Invite', collab: 'Collaboration' };
+    const stateLabel = { paid: 'Paid', payable: 'Ready', held: 'Accruing' };
+    const label = (m, k) => esc(m[k] || String(k).replace(/\+/g, ' + '));
+    const rows = e.entries.map((r) => `<tr><td style="padding:6px 8px">${label(roleLabel, r.role)}</td><td style="padding:6px 8px">${label(stateLabel, r.state)}</td><td style="padding:6px 8px;text-align:right">${money(r.amount)}</td></tr>`).join('');
+    return hero + totals + `<table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="text-align:left;color:var(--fg-mute,#888)"><th style="padding:6px 8px;font-weight:600">Source</th><th style="padding:6px 8px;font-weight:600">Status</th><th style="padding:6px 8px;font-weight:600;text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
   async _ensureTab(id) {
     const tab = TABS.find((t) => t.id === id);
     if (!tab) return;
     if (id === 'overview') { this._ensureOverview(); return; } // SOW-052
-    if (id === 'earnings') return; // SOW-052: static placeholder, nothing to load
+    if (id === 'earnings') { await this._loadEarnings(); return; } // SOW-083 P2: the member's earnings ledger
     // The Inbox / Saved / Subscriptions tabs are self-loading elements (they fetch their own data on connect),
     // so there is nothing to preload here; render() already mounted them. Returning avoids a redundant render.
     if (id === 'inbox' || id === 'saved' || id === 'subs') return;
@@ -457,7 +482,7 @@ class GbtiWorkspace extends GbtiElement {
   _body() {
     const tab = TABS.find((t) => t.id === this._tab);
     if (this._tab === 'overview') return this._overviewHtml(); // SOW-052
-    if (this._tab === 'earnings') return `<div class="ov-hero"><div><b>Earnings</b><br/><span class="muted">Revenue share from the members your work and your invites bring in.</span></div></div><p class="empty">Earnings are coming soon. When live, this is where your share of each member you help bring in will show, with payout status: 30% when your content is the first touch that brought them in, 10% when it is the last, a slice of the automatic 5% collaboration pool when you commented on or improved those items, and a flat 10% lifetime commission on anyone who joins through your invite link. Today you can copy your invite link and manage membership under <a href="account.html">Settings</a>.</p>`; // SOW-083: the member revenue dashboard placeholder (SOW-059 model)
+    if (this._tab === 'earnings') return this._renderEarnings(); // SOW-083 P2: the member revenue dashboard
     // SOW-028: the incoming-contribution review inbox is its own self-loading element. It fetches + renders
     // independently (and is inert with no client), so the workspace just mounts the tag.
     if (this._tab === 'inbox') return `<gbti-contrib-inbox></gbti-contrib-inbox>`;

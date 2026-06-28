@@ -32,6 +32,7 @@ import {
   stageImage,
   decryptMemberAsset,
   getMemberActivity,
+  getMemberEarnings,
   mutateMemberActivity,
   getFollows,
   setFollow,
@@ -127,6 +128,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/comment') return run(() => getComment(ctx, { id: query.id })); // SOW-027 edit prefill
   if (method === 'GET' && pathname === '/api/activity') return run(() => getMemberActivity(ctx, { types: parseTypeList(query.types) })); // SOW-024 (favorites + collections); SOW-050 P2 optional type filter
   if (method === 'POST' && pathname === '/api/activity') return run(() => mutateMemberActivity(ctx, body ?? {})); // SOW-024
+  if (method === 'GET' && pathname === '/api/earnings') return run(() => getMemberEarnings(ctx)); // SOW-083 P2: the member's own earnings ledger
   if (method === 'GET' && pathname === '/api/follows') return run(() => getFollows(ctx)); // SOW-023
   if (method === 'POST' && pathname === '/api/follows') return run(() => setFollow(ctx, body ?? {})); // SOW-023
   if (method === 'POST' && pathname === '/api/upvote') return run(() => upvoteContent(ctx, body ?? {})); // SOW-057

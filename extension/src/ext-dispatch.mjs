@@ -6,7 +6,7 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, saveDraft, listDrafts, readDraft, discardDraft, publishDraft, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, listComments } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, saveDraft, listDrafts, readDraft, discardDraft, publishDraft, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, listComments } from '../../client/src/operations.mjs';
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
@@ -143,6 +143,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await decryptMemberAsset(ctx, body)); // SOW-016: reads the .enc via the reader, decrypts via the Worker
       case '/api/activity': // SOW-024: member activity (favorites + collections) in the deletable edge store, via the Worker
         return ok(method === 'POST' ? await mutateMemberActivity(ctx, body) : await getMemberActivity(ctx));
+      case '/api/earnings': // SOW-083 P2: the member's own earnings ledger (the SOW-059 revenue dashboard), via the Worker
+        return ok(await getMemberEarnings(ctx));
       case '/api/follows': // SOW-023: the follow graph (subscriptions) in the deletable edge store, via the Worker (paid-only)
         return ok(method === 'POST' ? await setFollow(ctx, body) : await getFollows(ctx));
       case '/api/upvote': // SOW-057: upvote a share (effective-paid, via the Worker; two votes enqueue syndication)

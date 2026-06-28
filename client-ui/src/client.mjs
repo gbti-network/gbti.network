@@ -111,6 +111,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     ogPreview: ({ url }) => request('POST', '/api/og-preview', { url }),
     // SOW-024: member activity (favorites + collections) in the deletable edge store.
     getActivity: ({ types } = {}) => request('GET', `/api/activity${qs({ types: Array.isArray(types) && types.length ? types.join(',') : undefined })}`), // returns { favorites, collections }; SOW-050 P2 optional type filter
+    getEarnings: () => request('GET', '/api/earnings'), // SOW-083 P2: the member's own earnings ledger { entries, totals }
     createCollection: ({ name }) => request('POST', '/api/activity', { action: 'collection.create', name }), // returns { id, activity }
     addToCollection: ({ id, targetType, targetSlug, on = true }) => request('POST', '/api/activity', { action: 'collection.item', id, targetType, targetSlug, on }),
     // SOW-037: manage collections from the member's "Saved" view (the ops already support these actions).
