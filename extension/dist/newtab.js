@@ -5534,7 +5534,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const copyField = (id, value, label) => `<div class="row"><span class="lbl">${esc(label)}</span><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div>`;
       return `<section class="sec">
       <h3>Referrals & invites</h3>
-      <p class="hint">Share your link to invite members; you earn referral commission on what you refer (SOW-007).</p>
+      <p class="hint">Share your invite link to earn a flat ${esc(r.invitePct || "10%")} lifetime commission on every member who joins through it (paid from the platform share, so it never reduces what content owners earn). You also earn from your published work, separately.</p>
       ${canonical ? copyField("ref-canonical", canonical, "Your invite link") : ""}
       ${invite ? copyField("discord-invite", invite, "Discord invite") : ""}
       ${!canonical && !invite ? `<p class="hint">No referral link yet. Sign in as a member to generate one.</p>` : ""}
@@ -8878,7 +8878,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _body() {
       const tab = TABS.find((t) => t.id === this._tab);
       if (this._tab === "overview") return this._overviewHtml();
-      if (this._tab === "earnings") return `<div class="ov-hero"><div><b>Earnings</b><br/><span class="muted">Referral revenue-share and contributor rewards.</span></div></div><p class="empty">Earnings are coming soon. When live, this is where your referral commissions (30% lifetime of members you bring in) and accepted-contribution rewards will show, with payout status. Today you can manage your referral link + membership under <a href="account.html">Settings</a>.</p>`;
+      if (this._tab === "earnings") return `<div class="ov-hero"><div><b>Earnings</b><br/><span class="muted">Revenue share from the members your work and your invites bring in.</span></div></div><p class="empty">Earnings are coming soon. When live, this is where your share of each member you help bring in will show, with payout status: 30% when your content is the first touch that brought them in, 10% when it is the last, a slice of the automatic 5% collaboration pool when you commented on or improved those items, and a flat 10% lifetime commission on anyone who joins through your invite link. Today you can copy your invite link and manage membership under <a href="account.html">Settings</a>.</p>`;
       if (this._tab === "inbox") return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
       if (this._tab === "saved") return `<gbti-saved></gbti-saved>`;
       if (this._tab === "subs") return `<gbti-subscriptions></gbti-subscriptions>`;

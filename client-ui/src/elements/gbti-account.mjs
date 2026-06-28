@@ -122,7 +122,7 @@ class GbtiAccount extends GbtiElement {
     const copyField = (id, value, label) => `<div class="row"><span class="lbl">${esc(label)}</span><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div>`;
     return `<section class="sec">
       <h3>Referrals & invites</h3>
-      <p class="hint">Share your link to invite members; you earn referral commission on what you refer (SOW-007).</p>
+      <p class="hint">Share your invite link to earn a flat ${esc(r.invitePct || '10%')} lifetime commission on every member who joins through it (paid from the platform share, so it never reduces what content owners earn). You also earn from your published work, separately.</p>
       ${canonical ? copyField('ref-canonical', canonical, 'Your invite link') : ''}
       ${invite ? copyField('discord-invite', invite, 'Discord invite') : ''}
       ${!canonical && !invite ? `<p class="hint">No referral link yet. Sign in as a member to generate one.</p>` : ''}

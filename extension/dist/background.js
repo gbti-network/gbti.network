@@ -19483,11 +19483,10 @@ function getReferral(ctx) {
   return {
     code,
     link: code ? `${SITE_BASE}/join?ref=${code}` : null,
+    invitePct: "10%",
     connectOnboarding: `${SIGNUP_BASE}/referral/connect/start`,
     terms: `${SITE_BASE}/referral-terms/`,
-    note: "Share your link, or earn from your published work. Earnings appear once Connect payouts are enabled (SOW-007)."
-    // SOW-059: contributor + commenter rewards are AUTOMATIC under the touch-based model (a 5% collaboration mix on
-    // the first-touch / last-touch items). Owners no longer set a per-content `delegation`, so no caps/hint here.
+    note: "Share your invite link to earn a flat 10% lifetime commission on every member who joins through it. You also earn from your published work: 30% when it is the first content that brought a member in, and 10% when it is the last. Earnings and payout status appear here once payouts are enabled."
   };
 }
 

@@ -457,7 +457,7 @@ class GbtiWorkspace extends GbtiElement {
   _body() {
     const tab = TABS.find((t) => t.id === this._tab);
     if (this._tab === 'overview') return this._overviewHtml(); // SOW-052
-    if (this._tab === 'earnings') return `<div class="ov-hero"><div><b>Earnings</b><br/><span class="muted">Referral revenue-share and contributor rewards.</span></div></div><p class="empty">Earnings are coming soon. When live, this is where your referral commissions (30% lifetime of members you bring in) and accepted-contribution rewards will show, with payout status. Today you can manage your referral link + membership under <a href="account.html">Settings</a>.</p>`; // SOW-052 placeholder (SOW-007/008)
+    if (this._tab === 'earnings') return `<div class="ov-hero"><div><b>Earnings</b><br/><span class="muted">Revenue share from the members your work and your invites bring in.</span></div></div><p class="empty">Earnings are coming soon. When live, this is where your share of each member you help bring in will show, with payout status: 30% when your content is the first touch that brought them in, 10% when it is the last, a slice of the automatic 5% collaboration pool when you commented on or improved those items, and a flat 10% lifetime commission on anyone who joins through your invite link. Today you can copy your invite link and manage membership under <a href="account.html">Settings</a>.</p>`; // SOW-083: the member revenue dashboard placeholder (SOW-059 model)
     // SOW-028: the incoming-contribution review inbox is its own self-loading element. It fetches + renders
     // independently (and is inert with no client), so the workspace just mounts the tag.
     if (this._tab === 'inbox') return `<gbti-contrib-inbox></gbti-contrib-inbox>`;
