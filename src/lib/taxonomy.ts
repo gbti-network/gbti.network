@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import yaml from 'js-yaml';
+import { topicVocabList, topicVocabLabel } from '../../membership/topics-vocab.mjs';
 
 interface TaxNode {
   label: string;
@@ -65,16 +66,24 @@ export function isValidPath(pathArr: string[] | undefined): boolean {
 
 export const TAXONOMY_TREE = TREE;
 
-/** SOW-054: the followed-topic vocabulary = every top-level taxonomy category as {key,label}, sorted by label.
- *  This is the single "followed topics" vocabulary that drives the browse drill-down and (via house/topic-map.yml)
- *  the news default. */
-export function topicList(): { key: string; label: string }[] {
-  return Object.keys(TREE)
-    .map((key) => ({ key, label: categoryLabel(key) }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+// SOW-080: the followed-topic vocabulary is now a flat, git-native file (house/topics.yml) DECOUPLED from the content
+// taxonomy, so it can grow to ~50 follow topics without re-tagging content. Loaded once; the pure parser lives in
+// membership/topics-vocab.mjs (shared with the Worker + node tests).
+const topicsFile = path.resolve(process.cwd(), 'house/topics.yml');
+let TOPICS_PARSED: unknown = {};
+try {
+  TOPICS_PARSED = yaml.load(fs.readFileSync(topicsFile, 'utf8'));
+} catch {
+  TOPICS_PARSED = {};
 }
 
-/** Display label for a followed-topic key (a top-level category key); falls back to the key. */
+/** SOW-054/SOW-080: the followed-topic vocabulary as {key,label,group?}, sorted by label. Drives the browse
+ *  drill-down and (via house/topic-map.yml) the news default. */
+export function topicList(): { key: string; label: string; group?: string }[] {
+  return topicVocabList(TOPICS_PARSED);
+}
+
+/** Display label for a followed-topic key; falls back to a Title-Cased key. */
 export function topicLabel(key: string): string {
-  return categoryLabel(key);
+  return topicVocabLabel(TOPICS_PARSED, key);
 }

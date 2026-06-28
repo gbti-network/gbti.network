@@ -1,0 +1,21 @@
+# SOW-080: the flat, git-native TOPIC VOCABULARY a member can follow (stored in prefs.categories). DECOUPLED from the
+# content taxonomy (house/taxonomy.yml) so the follow-topic list can grow to ~50 without re-tagging any content. Read
+# by src/lib/taxonomy.ts (the site build + /topics.json), validated against house/topic-map.yml, and rendered by the
+# extension topic picker. Each entry is a kebab-case key -> { label, group? } (group is optional, for picker sections).
+# Admin-owned (house/** is CODEOWNED). Phase 1 seeds the existing taxonomy top-levels so /topics.json is unchanged;
+# SOW-080 Phase 2 expands this to the curated ~50.
+topics:
+  ai: { label: AI }
+  blockchain: { label: Blockchain }
+  blog: { label: Blog }
+  business: { label: Business }
+  design: { label: Design }
+  devops: { label: DevOps }
+  entertainment: { label: Entertainment }
+  gbti: { label: GBTI Network }
+  generators: { label: Generators }
+  imagegen: { label: ImageGen }
+  member-tutorials: { label: Member Tutorials }
+  minecraft: { label: Minecraft }
+  skill: { label: Skill }
+  writing: { label: Writing }
