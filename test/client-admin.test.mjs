@@ -10,7 +10,7 @@ import path from 'node:path';
 
 import { rolesFromParsed, roleOf, canModerate, canBanGrandfather, canManageRoles } from '../client/src/roles.mjs';
 import { createReader, loadRoles } from '../client/src/repo-fs.mjs';
-import { banMember, grandfatherMember, setMemberRole, deplatformContent, removeContent } from '../client/src/admin-ops.mjs';
+import { banMember, grandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent } from '../client/src/admin-ops.mjs';
 import { OperationError } from '../client/src/operations.mjs';
 
 // ---- roles ----
@@ -70,6 +70,10 @@ function seedRepo(extra = {}) {
   if (extra.content) {
     fs.mkdirSync(path.join(dir, 'members', 'bob', 'posts'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'members', 'bob', 'posts', 'x.md'), '---\ntype: post\ntitle: X\nslug: x\nauthor: bob\nstatus: published\n---\n\nbody\n');
+  }
+  if (extra.draftContent) {
+    fs.mkdirSync(path.join(dir, 'members', 'bob', 'posts'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'members', 'bob', 'posts', 'x.md'), '---\ntype: post\ntitle: X\nslug: x\nauthor: bob\nstatus: draft\n---\n\nbody\n');
   }
   return dir;
 }
@@ -149,13 +153,30 @@ test('deplatformContent: moderator sets a member content file to draft via PR', 
   assert.match(repo.puts[0].content, /status: draft/);
 });
 
-test('removeContent: moderator deletes a member content file via PR', async () => {
+test('removeContent: admin deletes a member content file via PR; a moderator is forbidden (SOW-071)', async () => {
   const repo = fakeRepo();
-  await removeContent(adminCtx({ role: 'moderator', repoPath: seedRepo({ content: true }), repo }), { path: 'members/bob/posts/x.md' });
+  await removeContent(adminCtx({ role: 'admin', repoPath: seedRepo({ content: true }), repo }), { path: 'members/bob/posts/x.md' });
   assert.equal(repo.deletes[0].path, 'members/bob/posts/x.md');
+  // SOW-071: Remove is now admin+ (destructive); Hide/Unhide stay moderator+.
+  await assert.rejects(
+    removeContent(adminCtx({ role: 'moderator', repoPath: seedRepo({ content: true }), repo: fakeRepo() }), { path: 'members/bob/posts/x.md' }),
+    (e) => e instanceof OperationError && e.code === 'forbidden',
+  );
+});
+
+test('republishContent: moderator flips a draft member content file to published; a member is forbidden (SOW-071)', async () => {
+  const repo = fakeRepo();
+  const out = await republishContent(adminCtx({ role: 'moderator', repoPath: seedRepo({ draftContent: true }), repo }), { path: 'members/bob/posts/x.md' });
+  assert.equal(out.prNumber, 55);
+  assert.equal(repo.puts[0].path, 'members/bob/posts/x.md');
+  assert.match(repo.puts[0].content, /status: published/);
+  await assert.rejects(
+    republishContent(adminCtx({ role: 'member', repoPath: seedRepo({ draftContent: true }), repo: fakeRepo() }), { path: 'members/bob/posts/x.md' }),
+    (e) => e.code === 'forbidden',
+  );
 });
 
 test('admin ops fail closed without auth or path traversal', async () => {
   await assert.rejects(banMember(adminCtx({ role: 'admin', repoPath: seedRepo(), repo: null }), { githubId: '1' }), (e) => e.code === 'not-authenticated');
-  await assert.rejects(removeContent(adminCtx({ role: 'moderator', repoPath: seedRepo(), repo: fakeRepo() }), { path: '../../etc/passwd' }), (e) => e.code === 'bad-request');
+  await assert.rejects(removeContent(adminCtx({ role: 'admin', repoPath: seedRepo(), repo: fakeRepo() }), { path: '../../etc/passwd' }), (e) => e.code === 'bad-request');
 });

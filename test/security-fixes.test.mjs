@@ -44,9 +44,10 @@ test('buildContentFile: body over the size cap is rejected', () => {
 test('deplatform/remove: ./ prefix and non-member paths are rejected', async () => {
   const repoPath = '/nope';
   const ctx = { role: () => 'moderator', getRepoClient: () => ({}), store: { get: (k) => ({ repoPath })[k] } };
+  const adminCtx = { role: () => 'admin', getRepoClient: () => ({}), store: { get: (k) => ({ repoPath })[k] } }; // SOW-071: remove is admin+
   await assert.rejects(deplatformContent(ctx, { path: './members/bob/posts/x.md' }), (e) => e.code === 'bad-request');
-  await assert.rejects(removeContent(ctx, { path: 'members/bob/../alice/posts/x.md' }), (e) => e.code === 'bad-request');
-  await assert.rejects(removeContent(ctx, { path: 'house/bans.yml' }), (e) => e.code === 'forbidden');
+  await assert.rejects(removeContent(adminCtx, { path: 'members/bob/../alice/posts/x.md' }), (e) => e.code === 'bad-request');
+  await assert.rejects(removeContent(adminCtx, { path: 'house/bans.yml' }), (e) => e.code === 'forbidden');
   await assert.rejects(deplatformContent(ctx, { path: 'CODEOWNERS' }), (e) => e.code === 'forbidden');
 });
 

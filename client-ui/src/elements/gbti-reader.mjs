@@ -18,6 +18,7 @@ import './gbti-discussion.mjs'; // SOW-041: the always-open discussion, now moun
 import './gbti-upvote.mjs'; // SOW-057: the share upvote control
 import './gbti-favorite.mjs'; // SOW-013/064: favorite + add-to-collection on the reader meta line
 import './gbti-collection.mjs';
+import './gbti-mod-actions.mjs'; // SOW-071: per-item moderation (Hide/Unhide/Remove) for moderator+
 import { hostOf } from '../all-merge.mjs'; // SOW-057: the link domain for the "Read article on <domain>" CTA
 import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
 
@@ -232,6 +233,7 @@ class GbtiReader extends GbtiElement {
     const acts = slug ? `<span class="m-actions">`
       + `<gbti-favorite data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}" data-gbti-region="favorite"><button type="button" class="m-act" aria-label="Favorite">${HEART}</button></gbti-favorite>`
       + `<gbti-collection data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"><button type="button" class="m-act" aria-label="Add to collection">${COLL}</button></gbti-collection>`
+      + `<gbti-mod-actions data-gbti-type="${esc(it.type)}" data-gbti-author="${esc(it.author || '')}" data-gbti-slug="${esc(slug)}"></gbti-mod-actions>` // SOW-071: moderator+ only (self-gates; renders nothing otherwise)
       + `</span>` : '';
     return `<div class="meta"><span class="badge">${esc(t)}</span>`
       + `<span class="who">${av}<b>${esc(name)}</b></span>`

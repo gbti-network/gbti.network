@@ -20218,8 +20218,24 @@ ${String(body).trim()}
 `;
   return publishFiles({ repo, branch: `gbti/deplatform-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Deplatform ${rel}`, title: `Deplatform ${rel}`, body: "Moderation: set status to draft." });
 }
-async function removeContent(ctx, { path: rel } = {}) {
+async function republishContent(ctx, { path: rel } = {}) {
   requireRole(ctx, canModerate, "moderator");
+  const { repo } = requireRepo2(ctx);
+  requireMemberContentPath(rel);
+  const text = await ctx.reader?.readFile?.(rel);
+  if (text == null) throw new OperationError("not-found", `no such file: ${rel}`);
+  const { frontmatter, body } = parseContentFile(text);
+  const updated = { ...frontmatter ?? {}, status: "published" };
+  const content = `---
+${dumpYaml(updated).trimEnd()}
+---
+
+${String(body).trim()}
+`;
+  return publishFiles({ repo, branch: `gbti/republish-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Republish ${rel}`, title: `Republish ${rel}`, body: "Moderation: set status to published." });
+}
+async function removeContent(ctx, { path: rel } = {}) {
+  requireRole(ctx, canBanGrandfather, "admin");
   const { repo } = requireRepo2(ctx);
   requireMemberContentPath(rel);
   return publishFiles({ repo, branch: `gbti/remove-${slugOf(rel)}`, files: [{ path: rel, content: null }], message: `Remove ${rel}`, title: `Remove ${rel}`, body: "Moderation: remove content." });
@@ -20403,7 +20419,7 @@ async function setQuoteEnabled2(ctx, { text, enabled } = {}) {
 }
 
 // extension/src/ext-dispatch.mjs
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2 };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,

@@ -178,8 +178,25 @@ export async function deplatformContent(ctx, { path: rel } = {}) {
   return publishFiles({ repo, branch: `gbti/deplatform-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Deplatform ${rel}`, title: `Deplatform ${rel}`, body: 'Moderation: set status to draft.' });
 }
 
-export async function removeContent(ctx, { path: rel } = {}) {
+// SOW-071: the inverse of deplatform (status -> published); visibility is left untouched. Moderator+, members content
+// only. The unhideContent pure core (superadmin-actions.mjs) also flips visibility, which is NOT the inverse of what
+// deplatform does, so this inlines the status flip to mirror deplatformContent exactly.
+export async function republishContent(ctx, { path: rel } = {}) {
   requireRole(ctx, canModerate, 'moderator');
+  const { repo } = requireRepo(ctx);
+  requireMemberContentPath(rel);
+  const text = await ctx.reader?.readFile?.(rel);
+  if (text == null) throw new OperationError('not-found', `no such file: ${rel}`);
+  const { frontmatter, body } = parseContentFile(text);
+  const updated = { ...(frontmatter ?? {}), status: 'published' };
+  const content = `---\n${dumpYaml(updated).trimEnd()}\n---\n\n${String(body).trim()}\n`;
+  return publishFiles({ repo, branch: `gbti/republish-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Republish ${rel}`, title: `Republish ${rel}`, body: 'Moderation: set status to published.' });
+}
+
+// SOW-071: Remove is a destructive file delete, so it is gated heavier than Hide -> admin+ (was moderator+), so the
+// enforced boundary matches the displayed UI tier. CODEOWNERS + the SOW-005 gate remain the real merge boundary.
+export async function removeContent(ctx, { path: rel } = {}) {
+  requireRole(ctx, canBanGrandfather, 'admin');
   const { repo } = requireRepo(ctx);
   requireMemberContentPath(rel);
   return publishFiles({ repo, branch: `gbti/remove-${slugOf(rel)}`, files: [{ path: rel, content: null }], message: `Remove ${rel}`, title: `Remove ${rel}`, body: 'Moderation: remove content.' });

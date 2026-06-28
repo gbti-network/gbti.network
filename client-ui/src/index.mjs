@@ -17,6 +17,7 @@ import './elements/gbti-contrib-review.mjs';
 import './elements/gbti-members-portal.mjs';
 import './elements/gbti-settings.mjs';
 import './elements/gbti-account.mjs';
+import './elements/gbti-mod-actions.mjs'; // SOW-071: shared per-item moderation control (Hide/Unhide/Remove)
 import './elements/gbti-admin.mjs';
 import './elements/gbti-superadmin-dashboard.mjs';
 import './elements/gbti-category-manager.mjs'; // SOW-055: superadmin category manager

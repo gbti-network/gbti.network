@@ -57,7 +57,7 @@ import { getSettings, updateSettings, getBilling, getReferral } from './settings
 import { fieldsFor } from './form-fields.mjs';
 import { renderMarkdown } from './markdown.mjs';
 import {
-  banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent,
+  banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent,
   getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, getQuotePool,
 } from './admin-ops.mjs';
 
@@ -71,6 +71,7 @@ const ADMIN_ACTIONS = {
   role: setMemberRole,
   deplatform: deplatformContent,
   remove: removeContent,
+  republish: republishContent, // SOW-071: the inverse of deplatform (un-hide)
   'category-add': addContentCategory, // SOW-055: category manager (add a category/subcategory)
   'category-rename': renameContentCategoryLabel, // SOW-055: rename a category's display label
 };

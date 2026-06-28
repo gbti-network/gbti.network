@@ -13,6 +13,7 @@ import './gbti-discussion.mjs'; // SOW-041: the shared thread engine (factored o
 import './gbti-favorite.mjs'; // SOW-050 P3: Shares are first-class — favorite + collect them like every other type
 import './gbti-collection.mjs';
 import './gbti-upvote.mjs'; // SOW-057: upvote a share (two votes enqueue syndication)
+import './gbti-mod-actions.mjs'; // SOW-071: the shared per-item moderation control (replaces the bespoke Hide button)
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 const RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -147,10 +148,10 @@ class GbtiSharesFeed extends GbtiElement {
       <gbti-collection data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-collection>
     </div>` : '';
     const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : '';
-    // SOW-041 #5: a moderator+ can HIDE a Share (set it to draft via the SOW-005 PR flow; it drops from the stream
-    // on the next read). UX-only gate; CODEOWNERS + the gate are the real boundary. Only members/<u>/shares/ paths.
-    const canHide = (RANK[this._role] ?? 0) >= RANK.moderator && share.author && share.id;
-    const mod = canHide ? `<button class="hide" type="button" data-hide>Hide Share</button>` : '';
+    // SOW-071: the shared <gbti-mod-actions> replaces the bespoke Hide button (one moderation surface on every content
+    // type). It self-gates by role + builds the canonical members/<author>/shares/<id>.md path; on a hide/remove it
+    // emits 'mod-action', which returns us to the updated stream. CODEOWNERS + the SOW-005 gate stay the boundary.
+    const mod = (share.author && share.id) ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : '';
     this.set(this.css(CSS) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName(share.author))}</span><span class="when">${esc(relTime(share.createdAt))}</span>${badge}</div>
@@ -159,25 +160,9 @@ class GbtiSharesFeed extends GbtiElement {
         ${link}${hero}${tags}${discussion}
       </article>`);
     this.on('[data-back]', 'click', () => { this._reading = null; this.render(); });
-    this.on('[data-hide]', 'click', () => this._hide(share));
+    this.on('gbti-mod-actions', 'mod-action', (e) => { if (e.detail?.action !== 'unhide') { this._reading = null; this.reload(); } });
     // Resolve the Share's note body (decrypt for a members Share); the discussion loads itself.
     this._fillBody(share);
-  }
-
-  // Moderation: deplatform (status -> draft) this Share via the wired admin op; on success return to the stream,
-  // where it no longer appears. Fail-soft: a forbidden/error shows inline, the Share stays.
-  async _hide(share) {
-    if (typeof confirm === 'function' && !confirm('Hide this Share? It is set to draft and removed from the stream for everyone.')) return;
-    const path = `members/${share.author}/shares/${share.id}.md`;
-    const btn = this.$('[data-hide]');
-    if (btn) { btn.disabled = true; btn.textContent = 'Hiding…'; }
-    try {
-      await this.client.admin('deplatform', { path });
-      this._reading = null;
-      this.reload();
-    } catch (err) {
-      if (btn) { btn.disabled = false; btn.textContent = (err?.code === 'forbidden') ? 'Not permitted' : 'Hide failed — retry'; }
-    }
   }
 
   async _fillBody(share) {
