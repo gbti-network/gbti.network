@@ -167,7 +167,7 @@ async function main() {
       await p.evaluate(async () => {
         const el = document.querySelector('gbti-workspace'); if (!el) return;
         // formFields is identity-gated (the placeholder token can't satisfy it), so stub it with a representative
-        // field set to render the SOW-062 two-column rail + its sections (incl. the hidden canonicalUrl/delegation).
+        // field set to render the SOW-062 two-column rail + its sections (incl. the hidden canonicalUrl).
         const FIELDS = [
           { key: 'title', label: 'Title', kind: 'text', required: true },
           { key: 'slug', label: 'Slug', kind: 'text' },
@@ -179,10 +179,9 @@ async function main() {
           { key: 'coverImage', label: 'Cover image', kind: 'image' },
           { key: 'coverAlt', label: 'Cover image alt text', kind: 'text' },
           { key: 'canonicalUrl', label: 'Canonical URL', kind: 'text' },
-          { key: 'delegation', label: 'Delegation', kind: 'text' },
         ];
         el.client.formFields = async () => ({ fields: FIELDS });
-        el._editing = { type: 'post', frontmatter: { title: 'My draft article', slug: 'my-draft', categories: ['ai'], tags: ['demo', 'editor'], status: 'draft', visibility: 'public', canonicalUrl: 'https://example.com/x', delegation: 0.3 }, body: '# Hello\n\nThis is the article body.\n\n<!-- members-only -->\n\nA members-only section below the marker.' };
+        el._editing = { type: 'post', frontmatter: { title: 'My draft article', slug: 'my-draft', categories: ['ai'], tags: ['demo', 'editor'], status: 'draft', visibility: 'public', canonicalUrl: 'https://example.com/x' }, body: '# Hello\n\nThis is the article body.\n\n<!-- members-only -->\n\nA members-only section below the marker.' };
         el.render();
       }).catch(() => {});
       // Wait for the cover control to exist in the editor shadow, then populate both framing previews with a base64

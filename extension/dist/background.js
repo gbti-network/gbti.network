@@ -16954,10 +16954,6 @@ var contributors = external_exports.array(
     class: external_exports.enum(["grammar", "correction", "addition"]).optional()
   })
 ).default([]);
-var delegation = external_exports.object({
-  contributions: external_exports.number().min(0).max(0.07).default(0),
-  comments: external_exports.number().min(0).max(0.03).default(0)
-}).default({ contributions: 0, comments: 0 });
 var contentLinks = external_exports.array(
   external_exports.object({
     type: external_exports.enum(["homepage", "repository", "mirror", "download", "documentation", "support"]),
@@ -16987,7 +16983,6 @@ var postSchema = external_exports.object({
   slug: external_exports.string().regex(/^[a-z0-9-]+$/, "kebab-case, globally unique -> /articles/<slug>/"),
   author: external_exports.string(),
   contributors,
-  delegation,
   status: STATUS.default("draft"),
   visibility: VISIBILITY.default("public"),
   publicStub: external_exports.boolean().default(false),
@@ -17013,7 +17008,6 @@ var productSchema = external_exports.object({
   slug: external_exports.string().regex(/^[a-z0-9-]+$/),
   author: external_exports.string(),
   contributors,
-  delegation,
   status: STATUS.default("draft"),
   visibility: VISIBILITY.default("public"),
   publicStub: external_exports.boolean().default(false),
@@ -17068,7 +17062,6 @@ var promptSchema = external_exports.object({
   // Was missing from this mirror: a prompt published without it passed the client but broke the Astro build (SOW-025).
   author: external_exports.string(),
   contributors,
-  delegation,
   status: STATUS.default("draft"),
   visibility: VISIBILITY.default("public"),
   publicStub: external_exports.boolean().default(false),
@@ -19407,7 +19400,6 @@ async function loadOwnContribution(ctx, number4) {
 async function getContributionReview(ctx, { number: number4 } = {}) {
   const { repo, n, pr, files } = await loadOwnContribution(ctx, number4);
   const proposed = [];
-  let delegation2 = null;
   for (const f2 of files) {
     if (!/\.md$/i.test(f2.filename) || f2.status === "removed") continue;
     let text = null;
@@ -19417,12 +19409,8 @@ async function getContributionReview(ctx, { number: number4 } = {}) {
       text = null;
     }
     if (text == null) continue;
-    const { frontmatter, body } = parseContentFile(text);
+    const { body } = parseContentFile(text);
     proposed.push({ filename: f2.filename, body });
-    const del = frontmatter && typeof frontmatter === "object" ? frontmatter.delegation : null;
-    if (delegation2 == null && del && typeof del === "object") {
-      delegation2 = { contributions: Number(del.contributions) || 0, comments: Number(del.comments) || 0 };
-    }
   }
   return {
     number: n,
@@ -19432,8 +19420,6 @@ async function getContributionReview(ctx, { number: number4 } = {}) {
     author: pr.author,
     files: files.map((f2) => ({ filename: f2.filename, status: f2.status, additions: f2.additions, deletions: f2.deletions, patch: f2.patch ?? null })),
     proposed,
-    delegation: delegation2,
-    // { contributions, comments } as it will be after merge, or null when the content sets none
     // SOW-028: in app mode (SOW-026) the member's fork-scoped token cannot post a review the gate would honor by
     // their github_id, so the decision is taken on github.com. The UI shows decide buttons only when this is true.
     canActInClient: !isAppMode()
@@ -19495,7 +19481,6 @@ var f = (key, label, kind, extra = {}) => ({ key, label, kind, ...extra });
 var STATUS2 = f("status", "Status", "enum", { options: ["draft", "published"] });
 var VISIBILITY2 = f("visibility", "Visibility", "enum", { options: ["public", "members"] });
 var TAGS = f("tags", "Tags", "array", { placeholder: "comma,separated" });
-var DELEGATION = f("delegation", 'Revenue delegation (JSON: {"contributions":0.05,"comments":0.02})', "json");
 var FIELDS = Object.freeze({
   post: [
     f("title", "Title", "text", { required: true }),
@@ -19512,8 +19497,7 @@ var FIELDS = Object.freeze({
     f("video", "Video (YouTube/Vimeo URL)", "text"),
     f("featured", "Featured", "boolean"),
     f("publishedAt", "Published at", "date"),
-    f("canonicalUrl", "Canonical URL", "text"),
-    DELEGATION
+    f("canonicalUrl", "Canonical URL", "text")
   ],
   product: [
     f("title", "Title", "text", { required: true }),
@@ -19536,8 +19520,7 @@ var FIELDS = Object.freeze({
     f("gallery", "Gallery (screenshots)", "array", { placeholder: "image1.png, image2.png" }),
     f("video", "Video (YouTube/Vimeo URL)", "text"),
     f("links", "Links (JSON array: {type,url,visibility:public|members,primary,label})", "json"),
-    f("publishedAt", "Published at", "date"),
-    DELEGATION
+    f("publishedAt", "Published at", "date")
   ],
   prompt: [
     f("title", "Title", "text", { required: true }),
@@ -19560,8 +19543,7 @@ var FIELDS = Object.freeze({
     f("image", "Result image (image-gen models, recommended 4:3)", "image", { placeholder: "1200x900 (4:3) crops cleanest", showIf: { field: "targets", includesModel: IMAGE_GEN_MODELS } }),
     f("sourceUrl", "Source URL", "text"),
     f("links", "Links (JSON array: {type,url,visibility:public|members,primary,label})", "json"),
-    f("publishedAt", "Published at", "date"),
-    DELEGATION
+    f("publishedAt", "Published at", "date")
   ],
   profile: [
     f("displayName", "Display name", "text", { required: true }),

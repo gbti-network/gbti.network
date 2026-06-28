@@ -66,11 +66,11 @@ test('gatherInput: builds input, omits empties, keeps booleans, surfaces a bad-j
     { key: 'tags', kind: 'array' },
     { key: 'featured', kind: 'boolean' },
     { key: 'empty', kind: 'text' },
-    { key: 'delegation', kind: 'json' },
+    { key: 'links', kind: 'json' },
   ];
-  const raw = { title: 'Hello', tags: 'a,b', featured: false, empty: '', delegation: '{"contributions":0.07}' };
+  const raw = { title: 'Hello', tags: 'a,b', featured: false, empty: '', links: '{"type":"homepage"}' };
   const input = gatherInput(fields, (k) => raw[k]);
-  assert.deepEqual(input, { title: 'Hello', tags: ['a', 'b'], featured: false, delegation: { contributions: 0.07 } });
+  assert.deepEqual(input, { title: 'Hello', tags: ['a', 'b'], featured: false, links: { type: 'homepage' } });
 
   assert.throws(() => gatherInput([{ key: 'd', kind: 'json' }], () => '{bad'), /field "d"/);
 });

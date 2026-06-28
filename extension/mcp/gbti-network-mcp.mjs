@@ -17009,10 +17009,6 @@ var contributors = external_exports.array(
     class: external_exports.enum(["grammar", "correction", "addition"]).optional()
   })
 ).default([]);
-var delegation = external_exports.object({
-  contributions: external_exports.number().min(0).max(0.07).default(0),
-  comments: external_exports.number().min(0).max(0.03).default(0)
-}).default({ contributions: 0, comments: 0 });
 var contentLinks = external_exports.array(
   external_exports.object({
     type: external_exports.enum(["homepage", "repository", "mirror", "download", "documentation", "support"]),
@@ -17042,7 +17038,6 @@ var postSchema = external_exports.object({
   slug: external_exports.string().regex(/^[a-z0-9-]+$/, "kebab-case, globally unique -> /articles/<slug>/"),
   author: external_exports.string(),
   contributors,
-  delegation,
   status: STATUS.default("draft"),
   visibility: VISIBILITY.default("public"),
   publicStub: external_exports.boolean().default(false),
@@ -17068,7 +17063,6 @@ var productSchema = external_exports.object({
   slug: external_exports.string().regex(/^[a-z0-9-]+$/),
   author: external_exports.string(),
   contributors,
-  delegation,
   status: STATUS.default("draft"),
   visibility: VISIBILITY.default("public"),
   publicStub: external_exports.boolean().default(false),
@@ -17123,7 +17117,6 @@ var promptSchema = external_exports.object({
   // Was missing from this mirror: a prompt published without it passed the client but broke the Astro build (SOW-025).
   author: external_exports.string(),
   contributors,
-  delegation,
   status: STATUS.default("draft"),
   visibility: VISIBILITY.default("public"),
   publicStub: external_exports.boolean().default(false),
@@ -18533,7 +18526,6 @@ async function loadOwnContribution(ctx2, number4) {
 async function getContributionReview(ctx2, { number: number4 } = {}) {
   const { repo, n, pr, files } = await loadOwnContribution(ctx2, number4);
   const proposed = [];
-  let delegation2 = null;
   for (const f of files) {
     if (!/\.md$/i.test(f.filename) || f.status === "removed") continue;
     let text = null;
@@ -18543,12 +18535,8 @@ async function getContributionReview(ctx2, { number: number4 } = {}) {
       text = null;
     }
     if (text == null) continue;
-    const { frontmatter, body } = parseContentFile(text);
+    const { body } = parseContentFile(text);
     proposed.push({ filename: f.filename, body });
-    const del = frontmatter && typeof frontmatter === "object" ? frontmatter.delegation : null;
-    if (delegation2 == null && del && typeof del === "object") {
-      delegation2 = { contributions: Number(del.contributions) || 0, comments: Number(del.comments) || 0 };
-    }
   }
   return {
     number: n,
@@ -18558,8 +18546,6 @@ async function getContributionReview(ctx2, { number: number4 } = {}) {
     author: pr.author,
     files: files.map((f) => ({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: f.patch ?? null })),
     proposed,
-    delegation: delegation2,
-    // { contributions, comments } as it will be after merge, or null when the content sets none
     // SOW-028: in app mode (SOW-026) the member's fork-scoped token cannot post a review the gate would honor by
     // their github_id, so the decision is taken on github.com. The UI shows decide buttons only when this is true.
     canActInClient: !isAppMode()

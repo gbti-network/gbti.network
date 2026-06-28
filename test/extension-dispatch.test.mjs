@@ -91,7 +91,7 @@ test('validate + preview + form-fields: reader-free routes work', async () => {
   const prev = await dispatch(ctx, { pathname: '/api/preview', body: { body: '# Hi' } });
   assert.match(prev.json.html, /<h1/);
   const ff = await dispatch(ctx, { pathname: '/api/form-fields', query: { type: 'post' } });
-  assert.ok(ff.json.fields.some((f) => f.key === 'delegation'));
+  assert.ok(ff.json.fields.some((f) => f.key === 'categories'));
 });
 
 test('publish: builds + opens a PR via the repo client (nested path)', async () => {

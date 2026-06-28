@@ -4635,7 +4635,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-content-editor.mjs
   var TYPES = ["post", "product", "prompt", "profile"];
-  var HIDDEN_KEYS = /* @__PURE__ */ new Set(["delegation", "canonicalUrl"]);
+  var HIDDEN_KEYS = /* @__PURE__ */ new Set(["canonicalUrl"]);
   var RAIL_SECTIONS = [
     { name: "Publishing", keys: ["status", "visibility"] },
     { name: "Taxonomy", keys: ["categories", "tags"] },

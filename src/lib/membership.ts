@@ -1,7 +1,7 @@
 // Site-facing membership + revenue constants, single-sourced from the real systems so the marketing
 // surfaces (homepage, /membership/, the CTA) never drift from the actual config or from each other.
-// SOW-010 / SOW-011. The trial length, referral rate, and delegation caps are imported from the
-// membership trust core + the referral config; the price mirrors the Stripe annual price.
+// SOW-010 / SOW-011. The trial length and the settlement hold are imported from the membership trust
+// core + the referral config; the price mirrors the Stripe annual price.
 import { TRIAL_DAYS } from '../../membership/derive-status.mjs';
 import { DEFAULT_REFERRAL_CONFIG } from '../../membership/referral-config.mjs';
 

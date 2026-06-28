@@ -42,18 +42,6 @@ const contributors = z
   )
   .default([]);
 
-// OWNER-TRUSTED (SOW-007/008): the content owner's revenue-share delegation. When a reader first lands on
-// this content and joins, the owner earns the 30% lifetime referral commission and may delegate part of it:
-// up to 7% of the commission to the contributors who improved it, up to 3% to its commenters. The owner sets
-// this in their OWN folder, so it is not system-managed (over-delegating only reduces their own take, and a
-// member cannot touch another folder). The payout job clamps to the caps and reads it at payout time.
-const delegation = z
-  .object({
-    contributions: z.number().min(0).max(0.07).default(0), // 0..7% of the commission to contributors
-    comments: z.number().min(0).max(0.03).default(0), // 0..3% of the commission to commenters
-  })
-  .default({ contributions: 0, comments: 0 });
-
 // SOW-014: typed, visibility-tagged outbound links for products + prompts. `visibility: members`
 // links are rendered INERT (locked) on the public static site (open in the client to unlock); they are
 // NOT a confidentiality control (public-repo encryption is obfuscation, see SOW-014). `primary` marks
@@ -99,7 +87,6 @@ const post = defineCollection({
     slug: z.string().regex(/^[a-z0-9-]+$/, 'kebab-case, globally unique → /articles/<slug>/'),
     author: z.string(),
     contributors,
-    delegation,
     status: STATUS.default('draft'),
     visibility: VISIBILITY.default('public'),
     // SOW-016 member-only gating: publicStub (only meaningful when visibility=members) true -> a public stub
@@ -131,7 +118,6 @@ const productShape = ({ image }: { image: any }) => ({
   slug: z.string().regex(/^[a-z0-9-]+$/),
   author: z.string(),
   contributors,
-  delegation,
   status: STATUS.default('draft'),
   visibility: VISIBILITY.default('public'),
   publicStub: z.boolean().default(false), // SOW-016: members + publicStub -> a public stub page (Mode B); false -> no public page (Mode A)
@@ -227,7 +213,6 @@ const prompt = defineCollection({
     shortDescription: z.string(), // one-line blurb shown on prompt cards + the activity feed
     author: z.string(),
     contributors,
-    delegation,
     status: STATUS.default('draft'),
     visibility: VISIBILITY.default('public'),
     publicStub: z.boolean().default(false), // SOW-016: members + publicStub -> a public stub page (Mode B); false -> no public page (Mode A)

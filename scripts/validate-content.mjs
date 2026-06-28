@@ -18,11 +18,6 @@ const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const errors = [];
 const slugs = { post: new Map(), product: new Map(), prompt: new Map(), applet: new Map() };
 
-// SOW-007/008 delegation caps (mirror membership/distribution.mjs + content.config.ts). Defense-in-depth:
-// the Zod schema already bounds these at build time, but delegation is a money field so CI rejects an
-// out-of-range value explicitly (a member cannot delegate more of their commission than the caps allow).
-const DELEGATION_CAPS = { contributions: 0.07, comments: 0.03 };
-
 // Canonical taxonomy (house/taxonomy.yml). Every content `categories` path must resolve in this tree
 // (SOW-012) — the single source of truth shared with src/lib/taxonomy.ts. A path may stop at any node.
 const TAXONOMY = (() => {
@@ -124,23 +119,6 @@ function frontmatter(txt) {
   }
 }
 
-/** Validate the optional delegation object against the 7%/3% caps. Adds an error per out-of-range share. */
-function checkDelegation(fm, rel) {
-  const d = fm?.delegation;
-  if (d == null) return; // absent => owner keeps 100% (the default)
-  if (typeof d !== 'object' || Array.isArray(d)) {
-    errors.push(`${rel}: delegation must be an object { contributions, comments }`);
-    return;
-  }
-  for (const [key, cap] of Object.entries(DELEGATION_CAPS)) {
-    if (d[key] == null) continue;
-    const v = Number(d[key]);
-    if (!Number.isFinite(v) || v < 0 || v > cap) {
-      errors.push(`${rel}: delegation.${key} must be a number in [0, ${cap}] (got ${JSON.stringify(d[key])})`);
-    }
-  }
-}
-
 function checkContent(file, owner, type) {
   const txt = fs.readFileSync(file, 'utf8');
   const rel = path.relative(ROOT, file);
@@ -160,7 +138,6 @@ function checkContent(file, owner, type) {
   const bodyOf = (t) => t.replace(/^---\n[\s\S]*?\n---/, '');
   if (type === 'post' || type === 'product' || type === 'prompt' || type === 'applet') {
     const fm = frontmatter(txt);
-    checkDelegation(fm, rel);
     checkCategories(fm, rel);
     checkEncryptedLinks(fm, rel);
     checkMemberGating(fm, rel, bodyOf(txt)); // SOW-016

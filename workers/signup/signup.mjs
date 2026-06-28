@@ -31,11 +31,11 @@ export function decideCustomer(existingCustomer) {
 }
 
 /**
- * The content the new member first landed on, e.g. `post:my-slug` (SOW-007/008). Stored verbatim so the
- * payout job can find that content's per-content delegation + contributors + commenters and split the
- * owner's commission. Validated to a strict `<type>:<kebab-slug>` shape; anything else is dropped (fail
- * safe: a bad/spoofed via just yields no delegation, the owner keeps 100%). It is NOT the earner key, only
- * the content pointer: the earner is `referred_by` (the content author's github_id), set independently.
+ * The content the new member first landed on, e.g. `post:my-slug` (SOW-007/008, repurposed by SOW-059 as the
+ * touch pointer). Stored verbatim so the conversion/payout job can attribute the first/last-touch item and its
+ * contributors + commenters. Validated to a strict `<type>:<kebab-slug>` shape; anything else is dropped (fail
+ * safe: a bad/spoofed via just yields no attribution, the owner keeps their share). It is NOT the earner key,
+ * only the content pointer: the earner is `referred_by` (the content author's github_id), set independently.
  */
 const VIA_RE = /^(post|product|prompt):[a-z0-9-]+$/;
 export function normalizeVia(via) {

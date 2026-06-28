@@ -29,15 +29,6 @@ const contributors = z
   )
   .default([]);
 
-// OWNER-TRUSTED (SOW-007/008): the owner's revenue-share delegation. Mirrors content.config.ts. NOT
-// system-managed: the owner sets it in their own folder (the payout job clamps to the 7%/3% caps).
-const delegation = z
-  .object({
-    contributions: z.number().min(0).max(0.07).default(0),
-    comments: z.number().min(0).max(0.03).default(0),
-  })
-  .default({ contributions: 0, comments: 0 });
-
 // SOW-014: typed, visibility-tagged links for products + prompts. Mirrors src/content.config.ts.
 const contentLinks = z
   .array(
@@ -73,7 +64,6 @@ export const postSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]+$/, 'kebab-case, globally unique -> /articles/<slug>/'),
   author: z.string(),
   contributors,
-  delegation,
   status: STATUS.default('draft'),
   visibility: VISIBILITY.default('public'),
   publicStub: z.boolean().default(false), // SOW-016
@@ -97,7 +87,6 @@ export const productSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]+$/),
   author: z.string(),
   contributors,
-  delegation,
   status: STATUS.default('draft'),
   visibility: VISIBILITY.default('public'),
   publicStub: z.boolean().default(false), // SOW-016
@@ -148,7 +137,6 @@ export const promptSchema = z.object({
   // Was missing from this mirror: a prompt published without it passed the client but broke the Astro build (SOW-025).
   author: z.string(),
   contributors,
-  delegation,
   status: STATUS.default('draft'),
   visibility: VISIBILITY.default('public'),
   publicStub: z.boolean().default(false), // SOW-016

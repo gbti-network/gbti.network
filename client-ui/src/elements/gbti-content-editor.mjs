@@ -14,8 +14,8 @@ const TYPES = ['post', 'product', 'prompt', 'profile'];
 
 // SOW-062 Phase 2: fields HIDDEN from the editor UI but PRESERVED on save. They are still rendered into the DOM
 // (a hidden block) carrying their preset value, and gather() filters by showIf (not DOM-hidden), so it still reads
-// + re-submits them — editing an item that already has a `delegation` / `canonicalUrl` never strips it.
-const HIDDEN_KEYS = new Set(['delegation', 'canonicalUrl']);
+// + re-submits them — editing an item that already has a `canonicalUrl` never strips it.
+const HIDDEN_KEYS = new Set(['canonicalUrl']);
 // SOW-062 Phase 2: the right-hand document side rail groups the meta fields into collapsible sections. Anything not
 // matched here falls into "Details" (rendered first, open). Keys vary by type; unmatched keys degrade gracefully.
 const RAIL_SECTIONS = [

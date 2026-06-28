@@ -13,10 +13,6 @@ const f = (key, label, kind, extra = {}) => ({ key, label, kind, ...extra });
 const STATUS = f('status', 'Status', 'enum', { options: ['draft', 'published'] });
 const VISIBILITY = f('visibility', 'Visibility', 'enum', { options: ['public', 'members'] });
 const TAGS = f('tags', 'Tags', 'array', { placeholder: 'comma,separated' });
-// SOW-007/008 owner-trusted revenue delegation. Fractions of YOUR 30% referral commission to share:
-// contributions up to 0.07 (7%) to your contributors, comments up to 0.03 (3%) to your commenters. The
-// caps are enforced by the schema (an out-of-range value fails validation), default {0,0} = keep 100%.
-const DELEGATION = f('delegation', 'Revenue delegation (JSON: {"contributions":0.05,"comments":0.02})', 'json');
 
 export const FIELDS = Object.freeze({
   post: [
@@ -33,7 +29,6 @@ export const FIELDS = Object.freeze({
     f('featured', 'Featured', 'boolean'),
     f('publishedAt', 'Published at', 'date'),
     f('canonicalUrl', 'Canonical URL', 'text'),
-    DELEGATION,
   ],
   product: [
     f('title', 'Title', 'text', { required: true }),
@@ -54,7 +49,6 @@ export const FIELDS = Object.freeze({
     f('video', 'Video (YouTube/Vimeo URL)', 'text'),
     f('links', 'Links (JSON array: {type,url,visibility:public|members,primary,label})', 'json'),
     f('publishedAt', 'Published at', 'date'),
-    DELEGATION,
   ],
   prompt: [
     f('title', 'Title', 'text', { required: true }),
@@ -75,7 +69,6 @@ export const FIELDS = Object.freeze({
     f('sourceUrl', 'Source URL', 'text'),
     f('links', 'Links (JSON array: {type,url,visibility:public|members,primary,label})', 'json'),
     f('publishedAt', 'Published at', 'date'),
-    DELEGATION,
   ],
   profile: [
     f('displayName', 'Display name', 'text', { required: true }),
