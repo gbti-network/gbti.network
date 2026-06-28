@@ -15,6 +15,7 @@
 // instances; it does not construct them itself (the Worker entrypoint wires them with real secrets).
 
 import { resolveReferral } from './referral.mjs';
+import { SESSION_RE } from './membership-touches.mjs'; // SOW-059 P1c: validate the bound touch-session shape
 
 /**
  * Decide whether to reuse an existing Stripe Customer or create a new one for this github_id.
@@ -47,7 +48,7 @@ export function normalizeVia(via) {
  * Build the metadata for a brand-new Customer. trial_started_at is set HERE and only here.
  * referred_by is included only when a valid (non-self) referral resolved. via is the landed-on content.
  */
-export function buildNewCustomerMetadata({ githubId, githubLogin, discordUserId, trialStartedAt, signupSource, referredBy, via }) {
+export function buildNewCustomerMetadata({ githubId, githubLogin, discordUserId, trialStartedAt, signupSource, referredBy, via, touchSession }) {
   const metadata = {
     github_id: String(githubId),
     github_login: githubLogin ? String(githubLogin) : '',
@@ -58,6 +59,10 @@ export function buildNewCustomerMetadata({ githubId, githubLogin, discordUserId,
   if (referredBy) metadata.referred_by = String(referredBy);
   const v = normalizeVia(via);
   if (v) metadata.via = v;
+  // SOW-059 P1c: bind the visitor's pre-signup touch-session id so the conversion handler can locate touch:<sid>
+  // and freeze the attribution snapshot. New-customer-only (like referred_by + trial_started_at) and never
+  // refreshed, so a re-run cannot rewrite the binding. Validated to the session shape; a bad value is dropped.
+  if (touchSession && SESSION_RE.test(String(touchSession))) metadata.touch_session = String(touchSession);
   return metadata;
 }
 
@@ -89,7 +94,7 @@ export function buildRefreshMetadata({ githubLogin, discordUserId }) {
  * @param {Date}   [a.now]      injectable clock (trial_started_at source).
  * @returns {Promise<{ customerId:string, created:boolean, referredBy:string|null }>}
  */
-export async function runSignup({ identity, stripe, discord, kv, config, refCode, via, resolveReferral: resolver, now = new Date() }) {
+export async function runSignup({ identity, stripe, discord, kv, config, refCode, via, touchSession, resolveReferral: resolver, now = new Date() }) {
   const { githubId, githubLogin, discordUserId, email, discordAccessToken } = identity;
   if (!githubId) throw new Error('runSignup: githubId is required');
   if (!discordUserId || !discordAccessToken) throw new Error('runSignup: discord identity + access token are required');
@@ -121,6 +126,7 @@ export async function runSignup({ identity, stripe, discord, kv, config, refCode
       signupSource: config?.signupSource,
       referredBy,
       via,
+      touchSession,
     });
     // Idempotency key derived from github_id so a retried create cannot double-insert.
     const customer = await stripe.createCustomer({ email: email || undefined, metadata }, `signup:${githubId}`);

@@ -53,7 +53,7 @@ import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { membershipAdminStatuses } from './membership-admin.mjs';
 import { membershipAdminOps } from './membership-admin-ops.mjs'; // SOW-038 P3: admin-gated reconcile/E2E dispatch
 import { handleActivity } from './membership-activity.mjs';
-import { handleTouch } from './membership-touches.mjs'; // SOW-059 P1b: anonymous pre-signup touch/invite capture
+import { handleTouch, SESSION_RE } from './membership-touches.mjs'; // SOW-059 P1b/P1c: touch capture + session binding
 import { handleUpvote } from './membership-upvote.mjs';
 import { handleOgPreview } from './membership-og.mjs';
 import { handleSyndicationTracker, handleSyndicationCancel, handleSyndicationApprove } from './syndication-admin.mjs';
@@ -151,8 +151,13 @@ async function handleStart(request, env) {
   // The content the reader first landed on (SOW-007/008). Carried alongside ?ref so the payout job can
   // split the owner's commission with that content's contributors + commenters. Validated at signup.mjs.
   const via = url.searchParams.get('via') || '';
+  // SOW-059 P1c: the visitor's rotating touch-session id (gbti_sid), forwarded as ?sid because the cookie lives on
+  // gbti.network, not this Worker's origin. Validated to the session shape; anything else is dropped (fail safe ->
+  // no attribution binding). Carried in the signed state so the conversion handler can later locate touch:<sid>.
+  const sidParam = url.searchParams.get('sid') || '';
+  const sid = SESSION_RE.test(sidParam) ? sidParam : '';
   // No browser-bound nonce: the HMAC signature over the state blob is the CSRF control (FIX 4).
-  const state = await packState({ ref, via }, env);
+  const state = await packState({ ref, via, sid }, env);
   const location = githubAuthorizeUrl({
     clientId: env.GITHUB_OAUTH_CLIENT_ID,
     redirectUri: `${env.PUBLIC_BASE_URL}/signup/github/callback`,
@@ -178,8 +183,8 @@ async function handleGithubCallback(request, env) {
   );
   const { githubId, githubLogin } = await githubFetchUser(accessToken, globalThis.fetch);
 
-  // Carry the resolved identity (and the first-touch ref + via) into the Discord hop via a fresh state.
-  const nextState = await packState({ ref: state.ref, via: state.via, githubId, githubLogin }, env);
+  // Carry the resolved identity (and the first-touch ref + via + touch sid) into the Discord hop via a fresh state.
+  const nextState = await packState({ ref: state.ref, via: state.via, sid: state.sid, githubId, githubLogin }, env);
   const location = discordAuthorizeUrl({
     clientId: env.DISCORD_OAUTH_CLIENT_ID,
     redirectUri: `${env.PUBLIC_BASE_URL}/signup/discord/callback`,
@@ -220,6 +225,7 @@ async function handleDiscordCallback(request, env) {
     config: discordConfig(env),
     refCode: state.ref,
     via: state.via,
+    touchSession: state.sid, // SOW-059 P1c: bind the touch session to this new Customer (new-customer-only)
   });
 
   const session = await signSession({ githubId: state.githubId, githubLogin: state.githubLogin }, env.SESSION_SECRET);

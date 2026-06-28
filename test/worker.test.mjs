@@ -155,6 +155,30 @@ test('buildNewCustomerMetadata includes trial_started_at and optional referred_b
   assert.ok(!('trial_started_at' in refresh), 'refresh metadata must never carry trial_started_at');
   assert.ok(!('referred_by' in refresh), 'refresh metadata must never carry referred_by');
   assert.ok(!('via' in refresh), 'refresh metadata must never rewrite the first-touch via');
+  assert.ok(!('touch_session' in refresh), 'refresh metadata must never rewrite the touch-session binding (SOW-059 P1c)');
+});
+
+test('SOW-059 P1c: buildNewCustomerMetadata binds a valid touch_session new-customer-only; drops an invalid one', () => {
+  const sid = 'abcdefghijklmnopqrstuvwxyz012345'; // 32 chars, matches the session shape
+  const ok = buildNewCustomerMetadata({ githubId: '5', discordUserId: 'd9', trialStartedAt: 'x', touchSession: sid });
+  assert.equal(ok.touch_session, sid);
+  // an invalid / short / spoofed session id is dropped (never written to Stripe metadata)
+  for (const bad of ['short', 'has spaces!!', 'x'.repeat(200), '', undefined]) {
+    const m = buildNewCustomerMetadata({ githubId: '5', discordUserId: 'd9', trialStartedAt: 'x', touchSession: bad });
+    assert.ok(!('touch_session' in m), `invalid sid (${bad}) must be dropped`);
+  }
+});
+
+test('SOW-059 P1c: the OAuth state blob round-trips the touch sid through both hops', async () => {
+  const env = { SESSION_SECRET: 'test-secret-至少-32-bytes-long-padding-xx' };
+  const sid = 'abcdefghijklmnopqrstuvwxyz012345';
+  const packed = await packState({ ref: '42', via: 'post:a', sid }, env);
+  const back = await unpackState(packed, env);
+  assert.equal(back.sid, sid);
+  // re-pack at the github hop (carrying identity) preserves it
+  const next = await unpackState(await packState({ ref: back.ref, via: back.via, sid: back.sid, githubId: '5', githubLogin: 'octocat' }, env), env);
+  assert.equal(next.sid, sid);
+  assert.equal(next.githubId, '5');
 });
 
 test('normalizeVia accepts a strict <type>:<kebab-slug> and drops anything else (fail safe)', () => {

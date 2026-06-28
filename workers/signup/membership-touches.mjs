@@ -18,8 +18,9 @@ import { normalizeTouches, addTouch, setInvite, TouchError } from '../../members
 export const TOUCH_KEY = (session) => `touch:${session}`;
 export const TOUCH_TTL_SECONDS = 90 * 24 * 60 * 60; // the attribution window; the record self-expires on top of DELETE
 
-// A rotating, opaque, high-entropy session id (the client mints it; it is NOT a stable identifier).
-const SESSION_RE = /^[A-Za-z0-9_-]{16,128}$/;
+// A rotating, opaque, high-entropy session id (the client mints it; it is NOT a stable identifier). Exported so the
+// signup binding (SOW-059 P1c) validates the same session shape before persisting it as Customer metadata.
+export const SESSION_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
 export async function handleTouch(request, env, { kv = env?.SIGNUP_KV, now = Date.now } = {}) {
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the touch store is not configured' } };

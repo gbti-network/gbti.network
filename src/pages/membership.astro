@@ -4,6 +4,7 @@ import TierTable from '../components/TierTable.astro';
 import { getCollection } from 'astro:content';
 import { isPublic } from '../lib/content';
 import { REF_COOKIE, REF_VIA_COOKIE, REF_COOKIE_DAYS } from '../lib/referral';
+import { TOUCH_CAPTURE_ENABLED, TOUCH_SID_COOKIE } from '../lib/touch.mjs';
 import { MEMBERSHIP_PRICE_LABEL, BILLING_PERIOD, TRIAL_DAYS_SITE, FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT, INVITE_PCT, HOLD_DAYS, TURNSTILE_SITE_KEY, SIGNUP_BASE } from '../lib/membership';
 
 // SOW-002 signup CTA: the pricing card renders a Cloudflare Turnstile widget; on solve the button navigates
@@ -273,7 +274,7 @@ const faqs = [
 
   <!-- SOW-002 signup: Cloudflare Turnstile widget + the gated /signup/start navigation. -->
   <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-  <script define:vars={{ signupBase: SIGNUP_BASE, refCookie: REF_COOKIE, viaCookie: REF_VIA_COOKIE }}>
+  <script define:vars={{ signupBase: SIGNUP_BASE, refCookie: REF_COOKIE, viaCookie: REF_VIA_COOKIE, sidCookie: TOUCH_SID_COOKIE, touchEnabled: TOUCH_CAPTURE_ENABLED }}>
     // The Turnstile widget calls gbtiTurnstileOk(token) on solve; the button then navigates to the Worker's
     // /signup/start with the token + first-touch ref/via cookies. The Worker verifies the token server-side
     // (fail-closed) before any OAuth or registry work, so this is only the client half of the gate.
@@ -292,6 +293,9 @@ const faqs = [
         u.searchParams.set('cf-turnstile-response', token);
         var ref = cookie(refCookie); if (ref) u.searchParams.set('ref', ref);
         var via = cookie(viaCookie); if (via) u.searchParams.set('via', via);
+        // SOW-059 P1c: forward the rotating touch-session id (gbti_sid) so the conversion handler can later find
+        // this visitor's touch record and freeze the attribution snapshot. Flag-gated (inert until activated).
+        if (touchEnabled) { var sid = cookie(sidCookie); if (sid) u.searchParams.set('sid', sid); }
         window.location.href = u.toString();
       });
     })();
