@@ -5810,9 +5810,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.css(`.act{margin:14px 0;padding-top:12px;border-top:1px solid var(--line)} .act:first-of-type{border:0;padding:0}`) + `<div class="panel">
            <h2>Admin <span class="tag ok">${esc(role)}</span></h2>
            <div class="act">
-             <label>Deplatform / remove content (path)</label>
+             <label>Deplatform / republish / remove content (path)</label>
              <input id="cpath" placeholder="members/<user>/posts/<slug>/index.md" />
-             <div class="row" style="margin-top:8px"><button class="ghost" id="deplatform">Deplatform (draft)</button><button class="ghost" id="remove">Remove</button></div>
+             <div class="row" style="margin-top:8px"><button class="ghost" id="deplatform">Deplatform (draft)</button><button class="ghost" id="republish">Republish</button><button class="ghost" id="remove">Remove</button></div>
            </div>
            ${rank >= RANK4.admin ? `<div class="act">
              <label>Ban / grandfather (github_id)</label>
@@ -5839,6 +5839,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const cpath = () => ({ path: this.$("#cpath").value.trim() });
       const gid = () => ({ githubId: this.$("#gid").value.trim(), reason: this.$("#reason").value.trim() || void 0 });
       this.on("#deplatform", "click", run("deplatform", cpath));
+      this.on("#republish", "click", run("republish", cpath));
       this.on("#remove", "click", run("remove", cpath));
       if (rank >= RANK4.admin) {
         this.on("#ban", "click", run("ban", gid));
@@ -7611,6 +7612,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; }
   .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
   .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
+  .cmeta .chide { margin-left:auto; font:inherit; font-size:11px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:2px 8px; cursor:pointer; }
+  .cmeta .chide:hover { color:#c0392b; border-color:#c0392b; }
   .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
   .cbody p { margin:0 0 .5em; } .cbody :is(h1,h2,h3,h4){ font-weight:700; margin:.6em 0 .2em; }
   .cbody a { color:var(--accent, var(--brand)); }
@@ -7682,6 +7685,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS20) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`);
         return;
       }
+      if (this._role == null) {
+        try {
+          this._role = (await this.client.status?.())?.role || "member";
+        } catch {
+          this._role = "member";
+        }
+      }
       if (!this._loaded) this.set(this.css(CSS20) + `<p class="empty">Loading the discussion…</p>`);
       let items = [];
       try {
@@ -7695,17 +7705,31 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._loaded = true;
     }
     _render(targetType, targetSlug, rows) {
+      const canMod = (RANK3[this._role] ?? 0) >= RANK3.moderator;
       const thread = rows.map(({ c, html }) => {
         const reply = c.parentId ? " reply" : "";
         const badge = c.visibility === "members" ? `<span class="cbadge">Members</span>` : "";
         const bodyHtml = html && html.locked ? `<div class="clocked">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>` : typeof html === "string" && html ? `<div class="cbody">${html}</div>` : "";
+        const houseComment = c.author === "gbti" || c.author === "house";
+        const hidePath = canMod && !houseComment && c.author && c.id ? c.path || `members/${c.author}/comments/${c.id}.md` : "";
+        const hideBtn = hidePath ? `<button class="chide" type="button" data-hidec="${esc(hidePath)}">Hide</button>` : "";
         return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
-        <div class="cmeta"><span class="cname">${esc(authorName2(c.author))}</span><span class="cwhen">${esc(relTime2(c.createdAt))}</span>${badge}</div>
+        <div class="cmeta"><span class="cname">${esc(authorName2(c.author))}</span><span class="cwhen">${esc(relTime2(c.createdAt))}</span>${badge}${hideBtn}</div>
         ${bodyHtml}
       </div></div>`;
       }).join("");
       const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
       this.set(this.css(CSS20) + threadHtml + this._composeHtml(targetType, targetSlug));
+      this.$$("[data-hidec]").forEach((b) => b.addEventListener("click", () => this._hideComment(b.dataset.hidec)));
+    }
+    // SOW-071: hide a comment (moderator+): deplatform its file -> draft, then reload the thread.
+    async _hideComment(path) {
+      if (typeof confirm === "function" && !confirm("Hide this comment? It is set to draft and removed from the thread.")) return;
+      try {
+        await this.client.admin("deplatform", { path });
+        this.load();
+      } catch {
+      }
     }
     // A fresh <gbti-comment-box> for this target (it handles its own paid/trial/visitor gating UX). The injected
     // client is process-global, so it upgrades + talks to the same host with nothing to wire here.

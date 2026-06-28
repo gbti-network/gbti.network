@@ -25,9 +25,9 @@ class GbtiAdmin extends GbtiElement {
         `<div class="panel">
            <h2>Admin <span class="tag ok">${esc(role)}</span></h2>
            <div class="act">
-             <label>Deplatform / remove content (path)</label>
+             <label>Deplatform / republish / remove content (path)</label>
              <input id="cpath" placeholder="members/<user>/posts/<slug>/index.md" />
-             <div class="row" style="margin-top:8px"><button class="ghost" id="deplatform">Deplatform (draft)</button><button class="ghost" id="remove">Remove</button></div>
+             <div class="row" style="margin-top:8px"><button class="ghost" id="deplatform">Deplatform (draft)</button><button class="ghost" id="republish">Republish</button><button class="ghost" id="remove">Remove</button></div>
            </div>
            ${rank >= RANK.admin ? `<div class="act">
              <label>Ban / grandfather (github_id)</label>
@@ -57,6 +57,7 @@ class GbtiAdmin extends GbtiElement {
     const gid = () => ({ githubId: this.$('#gid').value.trim(), reason: this.$('#reason').value.trim() || undefined });
 
     this.on('#deplatform', 'click', run('deplatform', cpath));
+    this.on('#republish', 'click', run('republish', cpath)); // SOW-071: the inverse of deplatform (un-hide)
     this.on('#remove', 'click', run('remove', cpath));
     if (rank >= RANK.admin) {
       this.on('#ban', 'click', run('ban', gid));
