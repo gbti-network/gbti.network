@@ -1,23 +1,21 @@
 #!/usr/bin/env node
-// SOW-007/008 referral payout job. Computes the referral commission ledger from Stripe (the referred
-// members' paid invoices), SPLITS each commission into the content owner's keep plus any delegate slices
-// (contributors + commenters the owner chose to share), and pays them out via Stripe Connect transfers.
-// Runs locally (owner runs --dry-run first, then --apply) and can be scheduled alongside the reconcile.
+// SOW-059 referral payout job. Pays out the FROZEN conversion snapshots (scripts/lib/snapshot-payout-plan.mjs):
+// per converted member, per PAYABLE paid invoice, base = NET invoice revenue split 30/10/5/10 (first-touch /
+// last-touch / collaboration / invite lane), eligibility (not-banned + active) re-applied at payout, via Stripe
+// Connect transfers. Replaces the SOW-007 link/delegation job (clean replacement: there are zero legacy transfers).
 //
-//   node scripts/payout-referrals.mjs            # DRY RUN: prints the ledger + planned transfers, changes nothing
+//   node scripts/payout-referrals.mjs            # DRY RUN: prints the plan, changes nothing
 //   node scripts/payout-referrals.mjs --apply    # creates the Connect transfers
 //   node scripts/payout-referrals.mjs --dry-run  # explicit dry run
 //
-// Design mirrors reconcile.mjs: every decision lives in the PURE modules (scripts/lib/payout-plan.mjs
-// buildLedger + planPayouts, membership/distribution*.mjs, scripts/lib/distribution-gather.mjs); this
-// file is the thin I/O shell that reads Stripe + the git-native content/points/comments and feeds them in.
+// The pure money math lives in scripts/lib/snapshot-payout-plan.mjs; this file is the thin I/O shell that reads the
+// frozen snapshots from KV (`conv:*`), each member's paid invoices + Connect state from Stripe, and feeds the planner.
 //
-// Fail closed on MONEY: payouts only happen when house/referral-config.yml has BOTH enabled AND
-// payouts_enabled (isPayoutsActive). A missing/unparseable config, a missing Connect account, an
-// un-onboarded account, or an unreadable transfer history all WITHHOLD (accrue) the balance rather than
-// pay. Cross-run safety is PER RECIPIENT: each recipient's existing transfers are read and the (recipient,
-// invoice) pairs they cover are marked paid, so a re-run never double-pays anyone, and a delegate who had
-// no Connect account at first is still paid on a later run (their slice accrued, the owner was not blocked).
+// Fail closed on MONEY: payouts only happen when house/referral-config.yml has BOTH enabled AND payouts_enabled
+// (isPayoutsActive). A member with no frozen snapshot pays nobody (retain 100%); a missing/un-onboarded Connect
+// account withholds (accrues); cross-run dedupe reads each recipient's existing transfers so a re-run never
+// double-pays. Collaboration POINTS (the 5% pool) are taken as frozen on the snapshot; populating them from git at
+// payout is the C-gather follow-up (until then the 5% pool returns to retained -- safe, never mis-paid).
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,9 +23,9 @@ import { fileURLToPath } from 'node:url';
 import { createStripeClient } from '../clients/stripe.mjs';
 import { loadOverrides } from '../membership/overrides.mjs';
 import { loadReferralConfig, isPayoutsActive } from '../membership/referral-config.mjs';
-import { buildLedger, planPayouts, paidByRecipientFromTransfers, splitByInvoiceFromTransfers } from './lib/payout-plan.mjs';
-import { assembleDistributionInputs, readContentIndex, readComments, readAwards } from './lib/distribution-gather.mjs';
-import { COMMISSION_STATE } from '../membership/commissions.mjs';
+import { activeIntervalsFromStripe, isActiveAt, COMMISSION_STATE } from '../membership/commissions.mjs';
+import { planSnapshotPayouts, invoiceState } from './lib/snapshot-payout-plan.mjs';
+import { listKvByPrefix } from './lib/erase-member.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 
@@ -46,94 +44,105 @@ export function connectReady(account) {
   return Boolean(account && account.details_submitted === true && account.payouts_enabled === true);
 }
 
-/**
- * Gather the customers + their paid invoices from Stripe (no Connect reads yet; those come after the
- * ledger so we know which delegate accounts to read too).
- * @returns {{customers, byGithubId, invoicesByCustomerId, referrerIds:Set<string>}}
- */
-export async function gatherCustomers(stripe) {
-  const customers = [];
-  for await (const c of stripe.listCustomers()) customers.push(c);
+/** Read the frozen conversion snapshots from KV `conv:*`. `listKv` is injected ({ available, entries:[{key,value}] }).
+ *  Returns Map<member github_id, snapshot record>. A missing KV (no creds) yields an empty map (a dry-run no-op). */
+export async function gatherSnapshots(listKv) {
+  const listed = await listKv({ prefix: 'conv:' });
+  const byMember = new Map();
+  if (!listed?.available) return byMember;
+  for (const { value } of listed.entries) {
+    if (value && value.member) byMember.set(String(value.member), value);
+  }
+  return byMember;
+}
 
+/** Build byGithubId from all customers (the github_id -> customer map for invoices, Connect, eligibility). */
+export async function gatherCustomers(stripe) {
   const byGithubId = new Map();
-  for (const c of customers) {
+  for await (const c of stripe.listCustomers()) {
     const gid = c?.metadata?.github_id;
     if (gid) byGithubId.set(String(gid), c);
   }
+  return byGithubId;
+}
 
-  const referredCustomers = customers.filter((c) => c?.metadata?.referred_by);
-  const invoicesByCustomerId = new Map();
-  for (const b of referredCustomers) {
+/** For each converted member WITH a snapshot, list their paid invoices (the lifetime stream the split applies to). */
+export async function gatherMemberInvoices(stripe, members, byGithubId) {
+  const invoicesByMember = new Map();
+  for (const member of members) {
+    const customer = byGithubId.get(String(member));
+    if (!customer?.id) { invoicesByMember.set(member, []); continue; }
     const invoices = [];
     try {
-      for await (const inv of stripe.listInvoices({ customer: b.id, status: 'paid' })) invoices.push(inv);
+      for await (const inv of stripe.listInvoices({ customer: customer.id, status: 'paid' })) invoices.push(inv);
     } catch (err) {
-      console.warn(`payout: could not list invoices for ${b.id} (${err?.message ?? err}); skipping that member.`);
+      console.warn(`payout: could not list invoices for member ${member} (${err?.message ?? err}); skipping.`);
     }
-    invoicesByCustomerId.set(b.id, invoices);
+    invoicesByMember.set(member, invoices);
   }
+  return invoicesByMember;
+}
 
-  const referrerIds = new Set(referredCustomers.map((b) => String(b.metadata.referred_by)));
-  return { customers, byGithubId, invoicesByCustomerId, referrerIds };
+/** Eligibility-at-payout: NOT banned AND active (a current paid subscription OR a grandfather grant). The frozen
+ *  snapshot pins WHO; this only re-checks PAID-OR-NOT, so a later ban/lapse drops that share to retained. */
+export function buildEligible({ bannedGithubIds, byGithubId, grandfathers, nowMs }) {
+  return (member) => {
+    const id = String(member);
+    if (bannedGithubIds.has(id)) return false;
+    const grandfather = grandfathers.get(id);
+    const intervals = activeIntervalsFromStripe(byGithubId.get(id), grandfather);
+    return isActiveAt(intervals, nowMs);
+  };
+}
+
+/** Cross-run dedupe: the set of `${recipient}:${invoice}` pairs already covered by existing snapshot-payout transfers
+ *  (read from this job's own metadata; there is no legacy SOW-007 metadata to consider). */
+export function paidPairsFromTransfers(transfers) {
+  const pairs = new Set();
+  for (const t of transfers || []) {
+    const recipient = t?.metadata?.payout_recipient;
+    const invoice = t?.metadata?.snapshot_invoice;
+    if (recipient && invoice) pairs.add(`${recipient}:${invoice}`);
+  }
+  return pairs;
 }
 
 /**
- * Read each recipient's Connect account state + their existing transfers, building connectByReferrer (the
- * readiness map the planner gates on) and paidByRecipient (the per-recipient cross-run dedupe). recipientIds
- * covers BOTH referrers (content owners) and delegates (contributors/commenters). A transfer-history read
- * failure marks that recipient historyLoaded=false so the planner withholds them this run (double-pay guard).
- * @returns {{connectByReferrer:Map, paidByRecipient:Map}}
+ * Read each recipient's Connect account state + their existing transfers, building recipientConnect (ready +
+ * destination) and paidPairs (cross-run dedupe). A transfer-history read failure marks that recipient not-ready
+ * this run (withhold -> avoid double-pay). recipientIds = every github_id a snapshot pays (owners, inviter, collab).
  */
 export async function gatherConnectForRecipients(stripe, recipientIds, byGithubId) {
-  const connectByReferrer = new Map();
-  const paidByRecipient = new Map();
-  const recordedSplitByInvoice = new Map();
-
+  const connect = new Map();
+  const paidPairs = new Set();
   for (const id of recipientIds) {
     const key = String(id);
-    const customer = byGithubId.get(key);
-    const accountId = customer?.metadata?.connect_account_id || null;
-    if (!accountId) {
-      connectByReferrer.set(key, { accountId: null, payoutsReady: false });
-      continue;
-    }
-    let payoutsReady = false;
-    try {
-      payoutsReady = connectReady(await stripe.getConnectAccount(accountId));
-    } catch (err) {
-      console.warn(`payout: could not read Connect account ${accountId} for ${key} (${err?.message ?? err}); withholding.`);
-    }
-    let historyLoaded = true;
+    const accountId = byGithubId.get(key)?.metadata?.connect_account_id || null;
+    if (!accountId) { connect.set(key, { ready: false, destination: null }); continue; }
+    let ready = false;
+    try { ready = connectReady(await stripe.getConnectAccount(accountId)); }
+    catch (err) { console.warn(`payout: could not read Connect account ${accountId} for ${key} (${err?.message ?? err}); withholding.`); }
     try {
       const transfers = [];
       for await (const t of stripe.listTransfers({ destination: accountId })) transfers.push(t);
-      for (const [rid, set] of paidByRecipientFromTransfers(transfers)) {
-        let s = paidByRecipient.get(rid);
-        if (!s) { s = new Set(); paidByRecipient.set(rid, s); }
-        for (const inv of set) s.add(inv);
-      }
-      // Reconstruct the recorded split so a partially-applied invoice is completed at its original amounts.
-      for (const [inv, list] of splitByInvoiceFromTransfers(transfers)) {
-        if (!recordedSplitByInvoice.has(inv)) recordedSplitByInvoice.set(inv, list);
-      }
+      for (const p of paidPairsFromTransfers(transfers)) paidPairs.add(p);
     } catch (err) {
-      historyLoaded = false;
-      console.warn(`payout: could not list transfers for ${accountId} (${err?.message ?? err}); WITHHOLDING ${key} this run to avoid double-pay.`);
+      ready = false; // unreadable history -> withhold this run (double-pay guard)
+      console.warn(`payout: could not list transfers for ${accountId} (${err?.message ?? err}); WITHHOLDING ${key} this run.`);
     }
-    connectByReferrer.set(key, { accountId, payoutsReady, historyLoaded });
+    connect.set(key, { ready, destination: accountId });
   }
-
-  return { connectByReferrer, paidByRecipient, recordedSplitByInvoice };
+  return { connect, paidPairs };
 }
 
-function describeLedger(entries) {
-  const tally = { held: 0, payable: 0, voided: 0, paid: 0 };
-  let payableTotal = 0;
-  for (const e of entries) {
-    tally[e.state] = (tally[e.state] ?? 0) + 1;
-    if (e.state === COMMISSION_STATE.payable) payableTotal += e.amount;
+/** Every github_id a snapshot would pay: first/last-touch owners, the inviter, and collaboration recipients. */
+export function recipientsFromSnapshots(snapshots) {
+  const ids = new Set();
+  for (const s of snapshots.values()) {
+    for (const id of [s.firstOwner, s.lastOwner, s.inviter]) if (id) ids.add(String(id));
+    for (const p of s.points || []) if (p?.member) ids.add(String(p.member));
   }
-  return { tally, payableTotal };
+  return ids;
 }
 
 async function main() {
@@ -148,98 +157,63 @@ async function main() {
 
   console.log(
     `payout: referral-config enabled=${config.enabled} payouts_enabled=${config.payouts_enabled} ` +
-    `(payoutsActive=${payoutsActive}) rate=${config.rate} hold_days=${config.hold_days}`,
+    `(payoutsActive=${payoutsActive}) hold_days=${config.hold_days}`,
   );
 
   const stripe = createStripeClient({ apiKey: env.STRIPE_SECRET_KEY });
-  const { customers, byGithubId, invoicesByCustomerId, referrerIds } = await gatherCustomers(stripe);
-
-  // No paidInvoiceIds here on purpose: the per-recipient dedupe happens in planPayouts so a withheld
-  // delegate slice can still be paid on a later run after the owner's invoice was already settled.
-  const entries = buildLedger({
-    customers,
-    invoicesByCustomerId,
-    grandfatherByGithubId: overrides.grandfathers,
-    bannedGithubIds,
-    rate: config.rate,
-    holdDays: config.hold_days,
-    nowMs,
-  });
-
-  // Per-content delegation + contributors + commenters for the vias in the ledger (git-native sources).
-  const distribution = assembleDistributionInputs({
-    entries,
-    contentIndex: readContentIndex(ROOT),
-    awards: readAwards(ROOT),
-    comments: readComments(ROOT),
-    membersIndex: overrides.membersIndex,
-    bannedGithubIds,
-    nowMs,
-  });
-
-  // Connect state + per-recipient paid map + any recorded splits, for every recipient: referrers PLUS delegates.
-  const recipientIds = new Set([...referrerIds, ...distribution.delegateIds]);
-  const { connectByReferrer, paidByRecipient, recordedSplitByInvoice } = await gatherConnectForRecipients(stripe, recipientIds, byGithubId);
-
-  const { tally, payableTotal } = describeLedger(entries);
-  console.log(
-    `payout: ledger has ${entries.length} commission(s) ` +
-    `[held=${tally.held} payable=${tally.payable} voided=${tally.voided} paid=${tally.paid}], ` +
-    `payable total ${formatAmount(payableTotal, 'usd')}.`,
-  );
-  if (distribution.delegationByContent.size) {
-    console.log(`payout: ${distribution.delegationByContent.size} content item(s) delegate part of their commission to contributors/commenters.`);
+  const snapshots = await gatherSnapshots((opts) => listKvByPrefix({ ...opts, env }));
+  console.log(`payout: ${snapshots.size} frozen conversion snapshot(s).`);
+  if (snapshots.size === 0) {
+    console.log('payout: no snapshots to pay (nobody has converted under the SOW-059 model yet). Nothing to do.');
+    return;
   }
 
-  const { actions, withheld } = planPayouts({
-    entries,
-    connectByReferrer,
-    payoutsActive,
-    paidByRecipient,
-    recordedSplitByInvoice,
-    contentOwnerByVia: distribution.contentOwnerByVia,
-    delegationByContent: distribution.delegationByContent,
-    contributorsByContent: distribution.contributorsByContent,
-    commentsByContent: distribution.commentsByContent,
+  const byGithubId = await gatherCustomers(stripe);
+  const invoicesByMember = await gatherMemberInvoices(stripe, [...snapshots.keys()], byGithubId);
+  const recipientIds = recipientsFromSnapshots(snapshots);
+  const { connect, paidPairs } = await gatherConnectForRecipients(stripe, recipientIds, byGithubId);
+  const eligible = buildEligible({ bannedGithubIds, byGithubId, grandfathers: overrides.grandfathers, nowMs });
+
+  // Describe the matured balance before planning (held vs payable vs voided across all members' invoices).
+  const tally = { held: 0, payable: 0, voided: 0 };
+  for (const [member, invoices] of invoicesByMember) {
+    for (const inv of invoices) tally[invoiceState(inv, { holdDays: config.hold_days, nowMs }).state] += 1;
+  }
+  console.log(`payout: invoices [held=${tally.held} payable=${tally.payable} voided=${tally.voided}] across ${snapshots.size} member(s).`);
+
+  const members = [...snapshots.entries()].map(([member, snapshot]) => ({ member, snapshot, invoices: invoicesByMember.get(member) || [] }));
+  const { actions, withheld } = planSnapshotPayouts({
+    members, nowMs, holdDays: config.hold_days, eligible, paidPairs,
+    recipientConnect: (id) => connect.get(String(id)) || { ready: false, destination: null },
   });
 
-  for (const w of withheld) {
-    console.log(`  withhold ${w.recipientGithubId} (${w.role})  ${formatAmount(w.amount, w.currency)}  (${w.reason})`);
-  }
-  for (const a of actions) {
-    console.log(`  transfer ${a.recipientGithubId} (${a.role}) -> ${a.destination}  ${formatAmount(a.amount, a.currency)}  invoices=${a.invoiceIds.length}`);
-  }
+  for (const w of withheld) console.log(`  withhold ${w.recipientGithubId} (${w.role})  ${formatAmount(w.amount, w.currency)}  (${w.reason})`);
+  for (const a of actions) console.log(`  transfer ${a.recipientGithubId} (${a.role}) -> ${a.destination}  ${formatAmount(a.amount, a.currency)}  invoice=${a.invoiceId}`);
   console.log(`payout: ${actions.length} transfer(s) planned, ${withheld.length} balance(s) withheld.`);
 
-  if (dryRun) {
-    console.log('payout: DRY RUN (no transfers). Re-run with --apply to enact.');
-    return;
-  }
-  if (!payoutsActive) {
-    console.log('payout: payouts are NOT active (referral-config). Nothing transferred.');
-    return;
-  }
+  if (dryRun) { console.log('payout: DRY RUN (no transfers). Re-run with --apply to enact.'); return; }
+  if (!payoutsActive) { console.log('payout: payouts are NOT active (referral-config). Nothing transferred.'); return; }
 
-  // Best-effort, fault-tolerant apply: a single failed transfer must NOT abort the rest. Every transfer
-  // records the full split (referral_split), so any that fail this run are completed on a later run from the
-  // recorded amounts (planPayouts' locked path), preserving exact conservation. The idempotency key makes a
-  // re-run of a SUCCEEDED transfer a no-op within Stripe's window; the cross-run paidByRecipient covers beyond it.
-  let made = 0;
-  let failed = 0;
+  // Best-effort, fault-tolerant apply: a single failed transfer must NOT abort the rest. The idempotency key makes
+  // a re-run of a succeeded transfer a no-op within Stripe's window; the cross-run paidPairs covers beyond it.
+  let made = 0, failed = 0;
   for (const a of actions) {
     try {
       await stripe.createTransfer(
-        { amount: a.amount, currency: a.currency, destination: a.destination, metadata: a.metadata },
+        {
+          amount: a.amount, currency: a.currency, destination: a.destination,
+          metadata: { snapshot_member: a.member, snapshot_invoice: a.invoiceId, payout_recipient: a.recipientGithubId, payout_role: a.role },
+        },
         a.idempotencyKey,
       );
       made++;
     } catch (err) {
       failed++;
-      console.error(`payout: transfer to ${a.recipientGithubId} (${a.role}) for ${a.invoiceIds.join(',')} FAILED (${err?.message ?? err}); a later run completes it from the recorded split.`);
+      console.error(`payout: transfer to ${a.recipientGithubId} (${a.role}) for ${a.invoiceId} FAILED (${err?.message ?? err}); re-run to complete.`);
     }
   }
   console.log(`payout: applied. ${made} transfer(s) created${failed ? `, ${failed} FAILED (re-run to complete).` : '.'}`);
-  if (failed) process.exitCode = 1; // signal the operator to re-run; conservation is preserved meanwhile
+  if (failed) process.exitCode = 1;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
