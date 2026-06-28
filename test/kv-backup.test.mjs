@@ -47,12 +47,17 @@ test('buildSnapshot shapes a versioned, counted, timestamped blob', () => {
   assert.equal(s.takenAt, NOW.toISOString());
 });
 
-test('collectSnapshot gathers activity: + follows: and is a no-op without creds', async () => {
-  const kv = fakeKv({ 'activity:1': '{"favorites":[]}', 'follows:2': '{"following":[]}', 'gh:3': 'cus_x', 'overrides:mirror': '{}' });
+test('collectSnapshot gathers activity:/follows:/prefs:/conv: and is a no-op without creds', async () => {
+  const kv = fakeKv({
+    'activity:1': '{"favorites":[]}', 'follows:2': '{"following":[]}', 'prefs:4': '{}', 'conv:5': '{"member":"5"}',
+    'earnings:6': '{}', 'touch:7': '{}', 'gh:3': 'cus_x', 'overrides:mirror': '{}',
+  });
   const c = await collectSnapshot({ env: CF, fetchImpl: kv.fetchImpl, now: NOW });
   assert.equal(c.available, true);
   const keys = c.snapshot.records.map((r) => r.key).sort();
-  assert.deepEqual(keys, ['activity:1', 'follows:2']); // gh: + overrides are NOT backed up (regenerable)
+  // conv: (irreplaceable money attribution) + prefs: are now backed up; earnings: (recomputable), touch: (ephemeral),
+  // gh: + overrides:mirror (regenerable) are NOT.
+  assert.deepEqual(keys, ['activity:1', 'conv:5', 'follows:2', 'prefs:4']);
   const none = await collectSnapshot({ env: {}, fetchImpl: async () => { throw new Error('no fetch'); } });
   assert.equal(none.available, false);
   assert.match(none.reason, /CF_ACCOUNT_ID/);

@@ -21,9 +21,14 @@
 import { encryptAsset, decryptAssetText } from '../../client/src/crypto-assets.mjs';
 
 export const BACKUP_PREFIX = 'backup:';
-// The KV-only member data worth backing up. activity/follows cannot be rebuilt; gh: (Stripe lookup) and the
-// overrides mirror are regenerable, and erasure-audit records are write-once compliance logs handled separately.
-export const BACKED_UP_PREFIXES = ['activity:', 'follows:'];
+// The KV-only member data worth backing up: it cannot be rebuilt from git or Stripe.
+//   activity: (favorites + collections), follows: (the subscription graph), prefs: (category interests + followed
+//   channels), conv: (SOW-059 frozen attribution snapshots -- frozen ONCE at conversion; the touch: records that fed
+//   them are cleared at conversion + TTL-expire, so a lost conv: record loses the payout attribution PERMANENTLY).
+// Excluded ON PURPOSE: earnings: (recomputable by the payout job from conv: + Stripe + git), touch: (ephemeral, 90-day
+//   TTL, cleared at conversion -- backing it up would EXTEND its retention, GDPR-adverse), gh: (the Stripe-lookup
+//   cache) + overrides:mirror (both regenerable), and the erasure-audit log (write-once, handled separately).
+export const BACKED_UP_PREFIXES = ['activity:', 'follows:', 'prefs:', 'conv:'];
 export const DEFAULT_RETENTION_SECONDS = 30 * 24 * 60 * 60; // 30 days
 export const SNAPSHOT_KEY = (iso) => `${BACKUP_PREFIX}${iso}`;
 
