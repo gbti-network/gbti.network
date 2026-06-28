@@ -1,0 +1,45 @@
+name: Post-publish remediation
+
+# SOW-076 Phase 3: after content lands on main, an item that auto-merged BEFORE its PR content-check finished could be
+# invalid + still PUBLIC. This validates the just-pushed content and flips any offending PUBLISHED item back to draft
+# via an auto-merged bot PR (reversible -- the author fixes + re-publishes), so invalid content does not stay public.
+# content-check.yml already validates + alarms on push; this adds the automated remediation. The job fails (notifying
+# the owner) only for un-auto-remediable errors (global / draft / non-content). Needs GH_BOT_TOKEN (the gbtilabs PAT).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'members/**'
+      - 'house/**'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-publish-remediate
+  cancel-in-progress: false
+
+jobs:
+  remediate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # the previous commit, to diff the changed content
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Compute the changed content files
+        id: changed
+        run: echo "files=$(git diff --name-only HEAD~1 HEAD -- members house | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
+      - name: Validate published content + auto-flip the invalid items to draft
+        run: node scripts/remediate-published.mjs --apply
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+          # GitHub forbids a GITHUB_-prefixed secret, so the gbtilabs PAT is stored as GH_BOT_TOKEN and injected into
+          # GITHUB_BOT_TOKEN; the bot is an admin in roles.yml so its content-flip PR auto-merges (the repo is a constant).
+          GITHUB_BOT_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          GITHUB_CONTENT_REPO: gbti-network/gbti.network
