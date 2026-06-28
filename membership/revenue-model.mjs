@@ -1,13 +1,14 @@
 // SOW-059: the PURE core of the SIMPLIFIED revenue model (the spec is .data/ops/revenue-ops/README.md). Replaces
 // the link-based, owner-delegated model (SOW-007/008). Touch-based + fixed + automatic, frozen at conversion:
 //   first-touch owner 30% + last-touch owner 10% (40% if the same item is both) + a fixed 5% collaboration pool
-//   (split evenly across qualifying points) + the remainder retained by the platform/community.
+//   (split evenly across qualifying points) + a SEPARATE 10% manual-invite lane (paid from the retained share, no
+//   double-dip) + the remainder retained by the platform/community (55% with no invite paid, 45% when it is).
 //
 // Node-free + side-effect-free (callers inject `now`), so it runs in the Worker, the payout job, and node tests.
 // This module computes the SPLIT only; capturing touches, storing them (consent-gated + deletable, SOW-024),
 // freezing the snapshot at conversion, the hold period, and the Stripe Connect transfers are the IO layers around it.
 //
-// ELIGIBILITY-AT-PAYOUT is the CALLER's job: pass only eligible owners (null if an owner is ineligible at payout)
+// ELIGIBILITY-AT-PAYOUT is the CALLER's job: pass only eligible owners + inviter (null if ineligible at payout)
 // and only eligible collaboration points. An unpaid/ineligible share then falls into `retainedPct` automatically
 // (retained = 100 - everything actually paid out), matching the README's "unpaid ineligible shares return to
 // the platform/community retained share" + "the unused collaboration pool returns to retained".
@@ -15,6 +16,7 @@
 export const FIRST_TOUCH_PCT = 30;
 export const LAST_TOUCH_PCT = 10;
 export const COLLAB_POOL_PCT = 5;
+export const INVITE_PCT = 10; // SOW-059: the manual invite lane, paid from the retained share, no double-dip
 
 /**
  * Resolve the first + last touch from a visitor's touch log within the attribution window. `touches` is a list of
@@ -62,7 +64,7 @@ export function qualifyingCollaboration({ firstTouch, lastTouch, events = [], co
  * points. Returns { shares: { <member>: pct }, retainedPct, collaborationUsedPct }. Percentages are exact (not
  * rounded); money rounding happens at the transfer layer. The shares + retained always sum to 100.
  */
-export function computeDistribution({ firstOwner = null, lastOwner = null, points = [] } = {}) {
+export function computeDistribution({ firstOwner = null, lastOwner = null, points = [], inviter = null } = {}) {
   const shares = {};
   const add = (member, pct) => { if (member && pct > 0) shares[member] = (shares[member] || 0) + pct; };
 
@@ -81,10 +83,21 @@ export function computeDistribution({ firstOwner = null, lastOwner = null, point
   // retained. Derived (not accumulated) so it is exact and never NaN.
   const collaborationUsedPct = totalPoints > 0 ? COLLAB_POOL_PCT : 0;
 
+  // SOW-059 manual invite lane: a flat 10% paid from the RETAINED share (it is added to the inviter, so retained =
+  // 100 - paid absorbs it; content shares are never reduced). NO DOUBLE-DIP: it pays ONLY when the inviter earns no
+  // CONTENT share on this conversion (not the first-touch owner and not the last-touch owner). A member who invited
+  // a visitor to their own content therefore earns the larger 30/40 content share, never also the 10% invite. A
+  // COLLABORATION share does NOT block the invite (commenting on or improving an item is separate from owning the
+  // touch). `firstOwner`/`lastOwner` here are the ACTUAL-earning owners (null when absent / ineligible / Mode A), so
+  // an inviter whose own content earned nothing still gets the invite. The caller passes inviter=null if ineligible.
+  const inviterEarnsContent = !!inviter && (inviter === firstOwner || inviter === lastOwner);
+  const invitePaid = !!inviter && !inviterEarnsContent;
+  if (invitePaid) add(inviter, INVITE_PCT);
+
   const paid = Object.values(shares).reduce((n, v) => n + v, 0);
-  // Retained absorbs: the 55% base, the unused collaboration pool (no eligible points), and any owner share whose
-  // owner was ineligible at payout (passed as null). retained = 100 - everything actually paid out.
-  return { shares, retainedPct: 100 - paid, collaborationUsedPct };
+  // Retained absorbs: the 55% base, the unused collaboration pool (no eligible points), any owner share whose owner
+  // was ineligible at payout (passed as null), and the invite lane when it does NOT pay. retained = 100 - paid out.
+  return { shares, retainedPct: 100 - paid, collaborationUsedPct, invitePaidPct: invitePaid ? INVITE_PCT : 0 };
 }
 
 /**
@@ -92,10 +105,11 @@ export function computeDistribution({ firstOwner = null, lastOwner = null, point
  * (an ineligible owner's share falls to retained; an ineligible collaborator's point is dropped, re-splitting the
  * pool across the survivors). Returns the computeDistribution result.
  */
-export function distributeSnapshot({ firstOwner = null, lastOwner = null, points = [] } = {}, { eligible = () => true } = {}) {
+export function distributeSnapshot({ firstOwner = null, lastOwner = null, points = [], inviter = null } = {}, { eligible = () => true } = {}) {
   return computeDistribution({
     firstOwner: firstOwner && eligible(firstOwner) ? firstOwner : null,
     lastOwner: lastOwner && eligible(lastOwner) ? lastOwner : null,
     points: (Array.isArray(points) ? points : []).filter((p) => p && eligible(p.member)),
+    inviter: inviter && eligible(inviter) ? inviter : null,
   });
 }

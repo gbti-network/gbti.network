@@ -2,7 +2,7 @@
 // .data/ops/revenue-ops/README.md (the spec) + the window / sum-to-100 / eligibility edge cases. No IO.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveTouches, qualifyingCollaboration, computeDistribution, distributeSnapshot, FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT } from '../membership/revenue-model.mjs';
+import { resolveTouches, qualifyingCollaboration, computeDistribution, distributeSnapshot, FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT, INVITE_PCT } from '../membership/revenue-model.mjs';
 
 const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg || ''} expected ~${b}, got ${a}`);
 const sums100 = (d) => near(Object.values(d.shares).reduce((n, v) => n + v, 0) + d.retainedPct, 100, 'shares + retained');
@@ -109,6 +109,78 @@ test('an owner who is ALSO a collaborator on the OTHER item accumulates both sha
   const d = computeDistribution({ firstOwner: 'alice', lastOwner: 'bob', points: pts(['alice', 1], ['dana', 1]) });
   near(d.shares.alice, 30 + 2.5); near(d.shares.dana, 2.5); near(d.retainedPct, 55);
   sums100(d);
+});
+
+// ---- SOW-059 manual invite lane (10% from retained, no double-dip) ----
+
+test('invite constant is 10', () => { assert.equal(INVITE_PCT, 10); });
+
+test('Example 9a: invite to ANOTHER member content -> inviter 10 (from retained), content untouched', () => {
+  // alice first, bob last, carol invited the visitor in. No collaboration here.
+  const d = computeDistribution({ firstOwner: 'alice', lastOwner: 'bob', inviter: 'carol' });
+  assert.equal(d.shares.alice, 30);
+  assert.equal(d.shares.bob, 10);
+  assert.equal(d.shares.carol, 10);
+  assert.equal(d.invitePaidPct, 10);
+  assert.equal(d.retainedPct, 50); // 100 - 30 - 10 - 10; the invite came out of retained, not the content shares
+  sums100(d);
+});
+
+test('Example 9a with a collaboration pool -> 30 / 10 / 5 / 10 invite / 45 retained (matches the README)', () => {
+  const d = computeDistribution({ firstOwner: 'alice', lastOwner: 'bob', points: pts(['dana', 1]), inviter: 'carol' });
+  assert.equal(d.shares.alice, 30); assert.equal(d.shares.bob, 10);
+  near(d.shares.dana, 5); assert.equal(d.shares.carol, 10);
+  near(d.retainedPct, 45); sums100(d);
+});
+
+test('Example 9b / no double-dip: inviting to your OWN content earns the content share, NOT the invite', () => {
+  // alice invited the visitor to her own first-touch content. She earns 30, the invite does not also pay.
+  const d = computeDistribution({ firstOwner: 'alice', lastOwner: 'bob', inviter: 'alice' });
+  assert.equal(d.shares.alice, 30); // not 40
+  assert.equal(d.shares.bob, 10);
+  assert.equal(d.invitePaidPct, 0); // suppressed
+  assert.equal(d.retainedPct, 60);
+  sums100(d);
+});
+
+test('no double-dip also when the inviter is the LAST-touch owner', () => {
+  const d = computeDistribution({ firstOwner: 'alice', lastOwner: 'bob', inviter: 'bob' });
+  assert.equal(d.shares.bob, 10); assert.equal(d.invitePaidPct, 0); assert.equal(d.retainedPct, 60);
+  sums100(d);
+});
+
+test('a direct invite signup (no content touched) -> inviter 10, retained 90', () => {
+  const d = computeDistribution({ inviter: 'carol' });
+  assert.equal(d.shares.carol, 10); assert.equal(d.invitePaidPct, 10); assert.equal(d.retainedPct, 90);
+  sums100(d);
+});
+
+test('an inviter who is a COLLABORATOR (not an owner) earns BOTH the collab share and the invite', () => {
+  // carol invited the visitor AND commented on bob last-touch item; she is not the first/last owner -> both pay.
+  const d = computeDistribution({ firstOwner: 'alice', lastOwner: 'bob', points: pts(['carol', 1]), inviter: 'carol' });
+  assert.equal(d.shares.alice, 30); assert.equal(d.shares.bob, 10);
+  near(d.shares.carol, 5 + 10); // 5% collaboration (sole point) + 10% invite
+  assert.equal(d.invitePaidPct, 10); near(d.retainedPct, 45);
+  sums100(d);
+});
+
+test('an inviter whose OWN content earned nothing (Mode A / ineligible owner -> null) still gets the invite', () => {
+  // carol's content is the first-touch item but earns no share (passed null); carol still brought the member in.
+  const d = computeDistribution({ firstOwner: null, lastOwner: 'bob', inviter: 'carol' });
+  assert.equal(d.shares.carol, 10); assert.equal(d.shares.bob, 10);
+  assert.equal(d.retainedPct, 80); sums100(d);
+});
+
+test('distributeSnapshot: an INELIGIBLE inviter is dropped (no invite paid); content unaffected', () => {
+  const d = distributeSnapshot({ firstOwner: 'alice', lastOwner: 'bob', inviter: 'carol' }, { eligible: (m) => m !== 'carol' });
+  assert.equal(d.shares.carol, undefined); assert.equal(d.invitePaidPct, 0);
+  assert.equal(d.shares.alice, 30); assert.equal(d.shares.bob, 10); assert.equal(d.retainedPct, 60);
+  sums100(d);
+});
+
+test('distributeSnapshot: inviter == first-touch owner but ineligible -> both drop, nothing pays, retained 100', () => {
+  const d = distributeSnapshot({ firstOwner: 'alice', inviter: 'alice' }, { eligible: (m) => m !== 'alice' });
+  assert.deepEqual(d.shares, {}); assert.equal(d.retainedPct, 100); sums100(d);
 });
 
 test('resolveTouches: earliest in-window is first, latest is last; an expired touch is excluded', () => {
