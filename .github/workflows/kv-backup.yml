@@ -1,0 +1,53 @@
+name: KV backup
+
+# SOW-024 + SOW-084: a DAILY encrypted, retention-bounded backup of the KV-only member data (favorites, follows,
+# prefs, and the SOW-059 conv: attribution snapshots) -- it cannot be rebuilt from git or Stripe. The snapshot is
+# stored in KV (backup:<iso>, 30-day TTL) AND exported OFF-namespace as an encrypted artifact, so a whole-namespace
+# loss is survivable. The job then VERIFIES the latest snapshot decrypts. A failed run fails the job (GitHub emails
+# the owner on a failed scheduled workflow). Restore is manual + runbooked (the SOW + sop-member-erasure.md).
+#
+# Owner reviews locally first:  node scripts/backup-kv.mjs              # dry-run, writes nothing
+# This workflow runs:           node scripts/backup-kv.mjs --apply --export kv-backup.enc  +  --verify
+#
+# Needs the Actions secrets: CF_ACCOUNT_ID, CF_KV_NAMESPACE_ID, CF_API_TOKEN (the SIGNUP_KV account), and
+# KV_BACKUP_KEY (a stable 32-byte base64 AES key; the SAME key is required to restore, so store it safely OFF the
+# repo). See .data/ops/secrets-ops/README.md.
+
+on:
+  schedule:
+    - cron: '41 6 * * *'   # daily at 06:41 UTC (off the hour, before the 07:17 reconcile)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kv-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+      CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      KV_BACKUP_KEY: ${{ secrets.KV_BACKUP_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Take + export an encrypted snapshot (in-KV + off-namespace)
+        run: node scripts/backup-kv.mjs --apply --export kv-backup.enc
+      - name: Verify the latest snapshot decrypts (restorable)
+        run: node scripts/backup-kv.mjs --verify
+      - name: Upload the encrypted snapshot off-namespace (DR copy, survives a namespace loss)
+        if: ${{ hashFiles('kv-backup.enc') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kv-backup-${{ github.run_id }}
+          path: kv-backup.enc
+          retention-days: 90
+          if-no-files-found: error

@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildSnapshot, collectSnapshot, encryptSnapshot, decryptSnapshot, takeBackup, listSnapshots,
-  readSnapshot, restoreSnapshot, SNAPSHOT_KEY, BACKUP_PREFIX, DEFAULT_RETENTION_SECONDS,
+  readSnapshot, restoreSnapshot, verifyLatestBackup, SNAPSHOT_KEY, BACKUP_PREFIX, DEFAULT_RETENTION_SECONDS,
 } from '../scripts/lib/kv-backup.mjs';
 import { generateEpochKey, AssetAccessError } from '../client/src/crypto-assets.mjs';
 
@@ -135,4 +135,31 @@ test('readSnapshot reports a missing snapshot and a missing key', async () => {
   const kv = fakeKv({});
   assert.match((await readSnapshot({ env: CF, fetchImpl: kv.fetchImpl, snapshotKey: 'backup:nope', key: KEY })).reason, /not found/);
   assert.match((await readSnapshot({ env: CF, fetchImpl: kv.fetchImpl, snapshotKey: 'backup:x', key: undefined })).reason, /KV_BACKUP_KEY/);
+});
+
+// ---- SOW-084: off-namespace export + verify ----
+
+test('takeBackup returns the encrypted envelope; the off-namespace copy round-trips (decrypt -> restore)', async () => {
+  const kv = fakeKv({ 'activity:1': '{"favorites":[1]}', 'conv:5': '{"member":"5"}' });
+  const r = await takeBackup({ env: CF, fetchImpl: kv.fetchImpl, now: NOW, key: KEY });
+  assert.equal(r.stored, true);
+  assert.ok(r.envelope && r.envelope.ct, 'returns the encrypted envelope for an off-namespace artifact');
+  // Simulate a whole-namespace loss: wipe everything, then restore purely from the exported envelope.
+  kv.store.clear();
+  const snap = await decryptSnapshot({ envelope: r.envelope, key: KEY });
+  assert.equal(snap.count, 2);
+  const out = await restoreSnapshot({ env: CF, fetchImpl: kv.fetchImpl, snapshot: snap });
+  assert.equal(out.restored, 2);
+  assert.equal(kv.store.get('conv:5'), '{"member":"5"}');
+});
+
+test('verifyLatestBackup confirms the newest snapshot is restorable; catches none + a wrong key', async () => {
+  const kv = fakeKv({ 'activity:1': '{"favorites":[1]}', 'follows:2': '{"following":[2]}' });
+  assert.match((await verifyLatestBackup({ env: CF, fetchImpl: kv.fetchImpl, key: KEY })).reason, /no snapshots/);
+  await takeBackup({ env: CF, fetchImpl: kv.fetchImpl, now: NOW, key: KEY });
+  const ok = await verifyLatestBackup({ env: CF, fetchImpl: kv.fetchImpl, key: KEY });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.count, 2);
+  const bad = await verifyLatestBackup({ env: CF, fetchImpl: kv.fetchImpl, key: generateEpochKey() }); // wrong key -> the broken-backup alarm
+  assert.equal(bad.ok, false);
 });

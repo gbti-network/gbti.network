@@ -123,7 +123,28 @@ export async function takeBackup({
   const snapshotId = SNAPSHOT_KEY(snapshot.takenAt);
   const envelope = await encryptSnapshot({ snapshot, key, snapshotId });
   await putRaw({ env, fetchImpl, key: snapshotId, value: JSON.stringify(envelope), ttlSeconds });
-  return { stored: true, key: snapshotId, count: snapshot.count, ttlSeconds };
+  // SOW-084: return the encrypted envelope so the caller can ALSO write it OFF-namespace (a CI artifact), surviving a
+  // whole-namespace loss (the in-KV backup:<iso> only survives key-level deletion). Still encrypted; safe to export.
+  return { stored: true, key: snapshotId, count: snapshot.count, ttlSeconds, envelope };
+}
+
+/**
+ * SOW-084: verify the LATEST stored backup is RESTORABLE (it decrypts + parses), so a silently-broken backup (wrong
+ * key, tamper, corruption) is caught BEFORE it is needed. Returns { ok, snapshotKey, count, takenAt } or { ok:false,
+ * reason }. Reported no-op without creds/key.
+ */
+export async function verifyLatestBackup({ env = process.env, fetchImpl = globalThis.fetch, key = env.KV_BACKUP_KEY } = {}) {
+  const listed = await listSnapshots({ env, fetchImpl });
+  if (!listed.available) return { ok: false, reason: listed.reason };
+  if (!listed.keys.length) return { ok: false, reason: 'no snapshots stored' };
+  const latest = listed.keys[listed.keys.length - 1]; // ISO-suffix sort -> last is newest
+  let read;
+  // A wrong key / tampered envelope makes decryptSnapshot THROW; catch it so a broken backup is REPORTED (ok:false),
+  // never an unhandled rejection that hides the alarm.
+  try { read = await readSnapshot({ env, fetchImpl, snapshotKey: latest, key }); }
+  catch (err) { return { ok: false, reason: err?.message || 'snapshot did not decrypt (wrong key or tampered)', snapshotKey: latest }; }
+  if (!read.available) return { ok: false, reason: read.reason, snapshotKey: latest };
+  return { ok: true, snapshotKey: latest, count: read.snapshot.count, takenAt: read.snapshot.takenAt };
 }
 
 /** List the stored snapshot keys (`backup:*`), newest discoverable via the ISO suffix sort. */
