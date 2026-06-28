@@ -26,6 +26,7 @@ import { loadReferralConfig, isPayoutsActive } from '../membership/referral-conf
 import { activeIntervalsFromStripe, isActiveAt, COMMISSION_STATE } from '../membership/commissions.mjs';
 import { planSnapshotPayouts, invoiceState } from './lib/snapshot-payout-plan.mjs';
 import { listKvByPrefix } from './lib/erase-member.mjs';
+import { readCommentsIndex, gatherSnapshotPoints, reverseMembersIndex } from './lib/collaboration-gather.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 
@@ -166,6 +167,14 @@ async function main() {
   if (snapshots.size === 0) {
     console.log('payout: no snapshots to pay (nobody has converted under the SOW-059 model yet). Nothing to do.');
     return;
+  }
+
+  // SOW-059 C-gather: reconstruct each snapshot's collaboration points (the 5% pool) from git at payout. The frozen
+  // items + conversion window make this deterministic. Read the comment index once; contributors are read per item.
+  const reverseIndex = reverseMembersIndex(overrides.membersIndex);
+  const commentsIndex = readCommentsIndex(ROOT);
+  for (const snapshot of snapshots.values()) {
+    snapshot.points = gatherSnapshotPoints({ root: ROOT, snapshot, membersIndex: overrides.membersIndex, reverseIndex, commentsIndex });
   }
 
   const byGithubId = await gatherCustomers(stripe);

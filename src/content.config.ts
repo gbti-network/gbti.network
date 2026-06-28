@@ -38,6 +38,7 @@ const contributors = z
       commit: z.string().optional(), // merge commit SHA
       url: z.string().url().optional(), // commit URL
       class: z.enum(['grammar', 'correction', 'addition']).optional(),
+      at: z.string().optional(), // SOW-059: merge date (ISO); the payout collaboration gather windows on it
     }),
   )
   .default([]);

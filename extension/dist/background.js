@@ -16951,7 +16951,9 @@ var contributors = external_exports.array(
     login: external_exports.string(),
     commit: external_exports.string().optional(),
     url: external_exports.string().url().optional(),
-    class: external_exports.enum(["grammar", "correction", "addition"]).optional()
+    class: external_exports.enum(["grammar", "correction", "addition"]).optional(),
+    at: external_exports.string().optional()
+    // SOW-059: merge date (ISO); the payout collaboration gather windows on it
   })
 ).default([]);
 var contentLinks = external_exports.array(

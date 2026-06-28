@@ -39,3 +39,11 @@ test('contributorItemYaml omits absent optional fields', () => {
   const y = contributorItemYaml({ login: 'x' });
   assert.equal(y, '  - login: x');
 });
+
+test('contributorItemYaml renders the SOW-059 `at` merge date (quoted) when present', () => {
+  const y = contributorItemYaml({ login: 'x', commit: 'abc', at: '2026-06-28' });
+  assert.match(y, /^  - login: x$/m);
+  assert.match(y, /^ {4}at: "2026-06-28"$/m);
+  // absent `at` -> no line
+  assert.ok(!/at:/.test(contributorItemYaml({ login: 'x' })));
+});

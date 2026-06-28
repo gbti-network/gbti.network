@@ -20,6 +20,10 @@ export function contributorItemYaml(c) {
   if (c.commit) lines.push(`${CONTRIB_INDENT}  commit: "${c.commit}"`);
   if (c.url) lines.push(`${CONTRIB_INDENT}  url: "${c.url}"`);
   if (c.class) lines.push(`${CONTRIB_INDENT}  class: ${c.class}`);
+  // SOW-059: the merge date (ISO). The payout job's collaboration gather reads it so a contribution only counts
+  // toward the 5% pool when it landed BEFORE the conversion it is attributed to. An entry without `at` earns no
+  // collaboration point (the window check drops a non-finite date) -- safe + backward-tolerant for legacy entries.
+  if (c.at) lines.push(`${CONTRIB_INDENT}  at: "${c.at}"`);
   return lines.join('\n');
 }
 
