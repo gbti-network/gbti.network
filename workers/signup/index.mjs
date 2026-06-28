@@ -54,6 +54,7 @@ import { membershipAdminStatuses } from './membership-admin.mjs';
 import { membershipAdminOps } from './membership-admin-ops.mjs'; // SOW-038 P3: admin-gated reconcile/E2E dispatch
 import { handleActivity } from './membership-activity.mjs';
 import { handleTouch, SESSION_RE } from './membership-touches.mjs'; // SOW-059 P1b/P1c: touch capture + session binding
+import { freezeAndPersist } from './conversion-snapshot-store.mjs'; // SOW-059 P1c-B: freeze the attribution at conversion
 import { handleUpvote } from './membership-upvote.mjs';
 import { handleOgPreview } from './membership-og.mjs';
 import { handleSyndicationTracker, handleSyndicationCancel, handleSyndicationApprove } from './syndication-admin.mjs';
@@ -335,6 +336,11 @@ async function handleWebhook(request, env) {
           { githubId, dispatchToken: env.REGATE_DISPATCH_TOKEN, contentRepo: env.GITHUB_CONTENT_REPO },
           globalThis.fetch,
         );
+      },
+      // SOW-059 P1c-B: at the paid conversion, freeze + persist the attribution snapshot (flag-gated + idempotent;
+      // handleStripeEvent already wraps this fail-soft so it never blocks the role swap).
+      onConversion: async ({ customer, conversionAt }) => {
+        await freezeAndPersist({ env, customer, conversionAt });
       },
     });
   } catch (err) {

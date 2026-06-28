@@ -138,7 +138,8 @@ async function resolveDiscordTarget({ customerId, stripe }) {
   const discordUserId = customer?.metadata?.discord_user_id;
   const githubId = customer?.metadata?.github_id;
   if (!discordUserId) return null;
-  return { discordUserId: String(discordUserId), githubId: githubId ? String(githubId) : null };
+  // Return the full customer too (SOW-059 P1c needs its touch_session / referred_by metadata to freeze the snapshot).
+  return { discordUserId: String(discordUserId), githubId: githubId ? String(githubId) : null, customer };
 }
 
 /**
@@ -153,7 +154,7 @@ async function resolveDiscordTarget({ customerId, stripe }) {
  * @param {object} a.config    { guildId, trialRoleId, memberRoleId }.
  * @param {function} [a.signalDisable]  optional callback for subscription.deleted (SOW-005 signal).
  */
-export async function handleStripeEvent({ event, stripe, discord, config, signalDisable }) {
+export async function handleStripeEvent({ event, stripe, discord, config, signalDisable, onConversion }) {
   const type = event?.type;
   const obj = event?.data?.object ?? {};
   const customerId = typeof obj.customer === 'string' ? obj.customer : obj.customer?.id;
@@ -169,6 +170,16 @@ export async function handleStripeEvent({ event, stripe, discord, config, signal
     }
     const target = await resolveDiscordTarget({ customerId, stripe });
     if (!target) return 'payment_succeeded: no discord target, skipped';
+    // SOW-059 P1c: freeze + persist the attribution snapshot at this paid conversion. FAIL-SOFT: a freeze failure
+    // must never block the role swap or fail the webhook (which would make Stripe retry). The injected handler is
+    // flag-gated + idempotent (absent-only), so a retried delivery re-runs it harmlessly. Use the invoice paid
+    // timestamp as the conversion instant (NOT now), so the 90-day attribution window is exact.
+    if (typeof onConversion === 'function' && target.githubId) {
+      const paidAtSec = obj.status_transitions?.paid_at ?? obj.created ?? event?.created;
+      const conversionAt = Number.isFinite(paidAtSec) ? paidAtSec * 1000 : undefined;
+      try { await onConversion({ githubId: target.githubId, customer: target.customer, conversionAt }); }
+      catch { /* freeze is best-effort; the role swap + webhook success must not depend on it */ }
+    }
     // Trial -> Member: add Member, remove Trial. Idempotent.
     await discord.addRole(config.guildId, target.discordUserId, config.memberRoleId);
     await discord.removeRole(config.guildId, target.discordUserId, config.trialRoleId);

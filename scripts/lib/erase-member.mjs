@@ -17,11 +17,13 @@ import yaml from 'js-yaml';
 import { flipStatus } from '../reconcile.mjs';
 import { buildAuditRecord, storeAuditRecord } from './erase-audit.mjs';
 import { scrubVoter } from '../../membership/share-votes.mjs';
+import { scrubCounterpart } from '../../workers/signup/conversion-snapshot-store.mjs'; // SOW-059 P1c
 
 export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
 export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`; // SOW-023 subscription graph
 export const PREFS_KEY = (githubId) => `prefs:${githubId}`; // SOW-046 member prefs (categories + followed news channels)
 export const LOOKUP_KEY = (githubId) => `gh:${githubId}`; // the github_id -> Stripe customer_id lookup cache
+export const CONV_SNAPSHOT_KEY = (githubId) => `conv:${githubId}`; // SOW-059 P1c: the frozen conversion attribution snapshot
 export const MEMBERS_INDEX_PATH = 'house/members-index.yml';
 const toBase64 = (str) => Buffer.from(str, 'utf8').toString('base64');
 
@@ -136,6 +138,32 @@ export async function eraseShareVotes({ githubId, env = process.env, fetchImpl =
   return { scrubbed };
 }
 
+/** Hard-delete the member's OWN frozen conversion snapshot (SOW-059: their attribution + invite/collaboration record). */
+export async function eraseConversionSnapshot({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (!githubId) throw new Error('a github_id is required');
+  return deleteKvKey({ key: CONV_SNAPSHOT_KEY(String(githubId)), env, fetchImpl });
+}
+
+/**
+ * SOW-059 GDPR: scrub the member's github_id from every OTHER member's frozen snapshot where they appear as a
+ * COUNTERPART (first/last-touch owner, an item owner, the inviter, or a collaboration recipient). The per-member
+ * conv:<id> delete does not reach those. Nulling the id makes that share fall to retained at payout (money-safe).
+ * Reported no-op without CF creds. Mirrors eraseShareVotes (list -> scrub -> write back).
+ */
+export async function scrubConversionSnapshots({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (!githubId) throw new Error('a github_id is required');
+  const listed = await listKvByPrefix({ prefix: 'conv:', env, fetchImpl });
+  if (!listed.available) return { skipped: true, reason: listed.reason };
+  const own = CONV_SNAPSHOT_KEY(String(githubId));
+  let scrubbed = 0;
+  for (const { key, value } of listed.entries) {
+    if (key === own) continue; // their own record is deleted by eraseConversionSnapshot, not scrubbed
+    const cleaned = scrubCounterpart(value, String(githubId));
+    if (cleaned) { await putKvValue({ key, value: JSON.stringify(cleaned), env, fetchImpl }); scrubbed++; }
+  }
+  return { scrubbed };
+}
+
 /**
  * The ordered erasure runbook for a member (SOW-024). `auto: true` steps this tool performs on --apply; the
  * rest are the operator checklist (composed from reconcile + the SOW-016 rotation), printed so nothing is
@@ -148,6 +176,8 @@ export function planErasure({ githubId, username } = {}) {
     { step: 'activity', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the edge-store keys ${ACTIVITY_KEY(githubId)} (favorites + collections) and ${FOLLOWS_KEY(githubId)} (the follow graph).` },
     { step: 'lookup-cache', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the lookup-cache key ${LOOKUP_KEY(githubId)} (github_id -> Stripe customer_id).` },
     { step: 'share-votes', auto: true, tool: 'erase-member.mjs --apply', action: `Scrub github_id ${githubId} from every per-target share-vote set (upvotes:share:*); syndication queue items auto-expire via TTL.` },
+    { step: 'conv-snapshot', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the member's frozen conversion snapshot ${CONV_SNAPSHOT_KEY(githubId)} (SOW-059).` },
+    { step: 'conv-counterpart', auto: true, tool: 'erase-member.mjs --apply', action: `Scrub github_id ${githubId} from every OTHER member's frozen snapshot (conv:*) where they are a first/last-touch owner, inviter, or collaborator.` },
     { step: 'discord', auto: true, tool: 'erase-member.mjs --apply', action: 'Remove the member\'s managed Discord roles (Member/Trial/Locked).' },
     { step: 'members-index', auto: true, tool: 'erase-member.mjs --apply', action: 'Remove the members-index.yml entry (bundled into the content erasure PR).' },
     { step: 'crypto-shred', auto: false, tool: 'scripts/rotate-member-key.mjs', action: 'Rotate the SOW-016 member-content key (global) so the public-history ciphertext becomes keyless.' },
@@ -328,6 +358,8 @@ export async function runErasure({
   await runStep('prefs', () => erasePrefs({ githubId, env, fetchImpl })); // SOW-046: categories + followed news channels
   await runStep('lookup-cache', () => eraseLookupCache({ githubId, env, fetchImpl }));
   await runStep('share-votes', () => eraseShareVotes({ githubId, env, fetchImpl })); // SOW-057: per-target voter sets
+  await runStep('conv-snapshot', () => eraseConversionSnapshot({ githubId, env, fetchImpl })); // SOW-059: own frozen snapshot
+  await runStep('conv-counterpart', () => scrubConversionSnapshots({ githubId, env, fetchImpl })); // SOW-059: scrub as counterpart
   await runStep('discord', () => eraseDiscordRoles({ githubId, stripe, discord, env }));
   await runStep('content', () => eraseContent({ github, githubId, username, files, now }));
   if (deleteStripe) await runStep('stripe', () => eraseStripeCustomer({ githubId, stripe }));

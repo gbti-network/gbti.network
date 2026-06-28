@@ -700,6 +700,51 @@ test('handleStripeEvent upgrades on the FIRST invoice (billing_reason subscripti
   assert.deepEqual(discord.calls.removeRole[0], { guildId: 'guild-1', userId: 'd-1', roleId: 'role-trial' });
 });
 
+test('SOW-059 P1c-B: handleStripeEvent fires onConversion on the FIRST invoice with paid_at as conversionAt', async () => {
+  const discord = fakeRoleDiscord();
+  const stripe = fakeWebhookStripe({ discord_user_id: 'd-1', github_id: '5', touch_session: 'x' });
+  const seen = [];
+  const summary = await handleStripeEvent({
+    event: {
+      type: 'invoice.payment_succeeded', created: 1700,
+      data: { object: { customer: 'cus_x', billing_reason: 'subscription_create', status_transitions: { paid_at: 1500 } } },
+    },
+    stripe, discord, config: WEBHOOK_CONFIG,
+    onConversion: async (a) => { seen.push(a); },
+  });
+  assert.match(summary, /upgraded/);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].githubId, '5');
+  assert.equal(seen[0].conversionAt, 1500 * 1000); // paid_at (ms), not event.created, not now
+  assert.equal(seen[0].customer.metadata.touch_session, 'x');
+  // the role swap still happened
+  assert.equal(discord.calls.addRole.length, 1);
+});
+
+test('SOW-059 P1c-B: a throwing onConversion is fail-soft (role swap still happens, webhook does not fail)', async () => {
+  const discord = fakeRoleDiscord();
+  const stripe = fakeWebhookStripe({ discord_user_id: 'd-1', github_id: '5' });
+  const summary = await handleStripeEvent({
+    event: { type: 'invoice.payment_succeeded', created: 1700, data: { object: { customer: 'cus_x', billing_reason: 'subscription_create' } } },
+    stripe, discord, config: WEBHOOK_CONFIG,
+    onConversion: async () => { throw new Error('kv down'); },
+  });
+  assert.match(summary, /upgraded/); // did not throw; the conversion freeze never blocks the swap
+  assert.equal(discord.calls.addRole[0].roleId, 'role-member');
+});
+
+test('SOW-059 P1c-B: onConversion does NOT fire on a renewal (only the first invoice freezes)', async () => {
+  const discord = fakeRoleDiscord();
+  const stripe = fakeWebhookStripe({ discord_user_id: 'd-1', github_id: '5' });
+  let fired = false;
+  await handleStripeEvent({
+    event: { type: 'invoice.payment_succeeded', data: { object: { customer: 'cus_x', billing_reason: 'subscription_cycle' } } },
+    stripe, discord, config: WEBHOOK_CONFIG,
+    onConversion: async () => { fired = true; },
+  });
+  assert.equal(fired, false);
+});
+
 test('handleStripeEvent is a no-op on annual RENEWAL invoices (FIX 3)', async () => {
   const discord = fakeRoleDiscord();
   const stripe = fakeWebhookStripe({ discord_user_id: 'd-1', github_id: '5' });
