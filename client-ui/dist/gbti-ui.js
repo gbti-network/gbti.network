@@ -1488,6 +1488,31 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return 50;
     }
   }
+  var GLOW_KEY = "gbti-glass-glow";
+  function normalizeGlow(v) {
+    if (v == null || v === "") return 50;
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50;
+  }
+  function glowStrength(pct) {
+    return normalizeGlow(pct) / 50;
+  }
+  function applyGlow(pct, { doc = typeof document !== "undefined" ? document : null, storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+    const p = normalizeGlow(pct);
+    try {
+      storage?.setItem(GLOW_KEY, String(p));
+    } catch {
+    }
+    doc?.documentElement?.style?.setProperty("--glass-glow", String(glowStrength(p)));
+    return p;
+  }
+  function currentGlow({ storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+    try {
+      return normalizeGlow(storage?.getItem(GLOW_KEY));
+    } catch {
+      return 50;
+    }
+  }
 
   // client-ui/src/elements/gbti-account.mjs
   var SITE2 = "https://gbti.network";
@@ -1653,8 +1678,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const layout = currentLayout();
       const theme = currentTheme();
       const glass = currentGlass();
+      const glow = currentGlow();
       const seg = (name, options, active) => `<div class="seg">` + options.map(([v, lbl]) => `<button type="button" class="segbtn${v === active ? " on" : ""}" data-set-${name}="${v}">${esc(lbl)}</button>`).join("") + `</div>`;
-      const glassRow = layout === "glass" ? `<div class="row"><div class="rl"><div class="t">Glass intensity</div><div class="d">How opaque the frosted glass surfaces are. Lower is more see-through.</div></div><div class="rc"><input type="range" class="rng" min="0" max="100" step="5" value="${glass}" data-set-glass aria-label="Glass intensity" /><span class="rngval" data-glass-val>${glass}%</span></div></div>` : "";
+      const slider = (key, label, desc, val) => `<div class="row"><div class="rl"><div class="t">${label}</div><div class="d">${desc}</div></div><div class="rc"><input type="range" class="rng" min="0" max="100" step="5" value="${val}" data-set-${key} aria-label="${label}" /><span class="rngval" data-${key}-val>${val}%</span></div></div>`;
+      const glassRow = layout === "glass" ? slider("glass", "Surface opacity", "How opaque the frosted glass panels are. Lower is more see-through.", glass) + slider("glow", "Color highlight intensity", "How vivid the colorful backdrop glow is. Lower is calmer; 0 turns the colors off.", glow) : "";
       return `<section class="sec">
       <div class="sec-h"><h3>Appearance</h3><p>Display preferences for this device. Glass is an experimental frosted layout; Flat is the classic solid look.</p></div>
       <div class="rows">
@@ -1716,12 +1743,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         applyTheme(b.dataset.setTheme);
         this.render();
       }));
-      const glassRng = this.$("[data-set-glass]");
-      if (glassRng) glassRng.addEventListener("input", () => {
-        const p = applyGlass(glassRng.value);
-        const out = this.$("[data-glass-val]");
-        if (out) out.textContent = `${p}%`;
-      });
+      const liveRange = (sel, apply, outSel) => {
+        const el = this.$(sel);
+        if (el) el.addEventListener("input", () => {
+          const p = apply(el.value);
+          const out = this.$(outSel);
+          if (out) out.textContent = `${p}%`;
+        });
+      };
+      liveRange("[data-set-glass]", applyGlass, "[data-glass-val]");
+      liveRange("[data-set-glow]", applyGlow, "[data-glow-val]");
       const confirm2 = this.$("[data-delete-confirm]");
       const delBtn = this.$("[data-delete]");
       if (confirm2 && delBtn) confirm2.addEventListener("input", () => {

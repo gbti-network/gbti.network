@@ -1,7 +1,7 @@
 // SOW-070: the display-preference helpers (layout Flat/Glass + theme Light/Dark/System). Pure + injectable DOM.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeLayout, normalizeTheme, resolveTheme, applyLayout, applyTheme, currentLayout, currentTheme, LAYOUT_KEY, THEME_KEY, normalizeGlass, glassStrength, applyGlass, currentGlass, GLASS_KEY } from '../client-ui/src/display-prefs.mjs';
+import { normalizeLayout, normalizeTheme, resolveTheme, applyLayout, applyTheme, currentLayout, currentTheme, LAYOUT_KEY, THEME_KEY, normalizeGlass, glassStrength, applyGlass, currentGlass, GLASS_KEY, normalizeGlow, glowStrength, applyGlow, currentGlow, GLOW_KEY } from '../client-ui/src/display-prefs.mjs';
 
 function fakeDom() {
   const attrs = {};
@@ -81,4 +81,16 @@ test('applyGlass persists the percent + sets --glass-strength; currentGlass read
   assert.equal(styles['--glass-strength'], '1.6'); // 80 / 50
   assert.equal(currentGlass({ storage }), 80);
   assert.equal(currentGlass({ storage: fakeDom().storage }), 50); // unset -> default
+});
+
+test('applyGlow persists + sets --glass-glow; currentGlow reads it back (default 50)', () => {
+  const { doc, storage, store, styles } = fakeDom();
+  assert.equal(normalizeGlow(null), 50);
+  assert.equal(glowStrength(50), 1); // 50% = the built-in look
+  assert.equal(glowStrength(100), 2);
+  assert.equal(applyGlow(20, { doc, storage }), 20);
+  assert.equal(store.get(GLOW_KEY), '20');
+  assert.equal(styles['--glass-glow'], '0.4'); // 20 / 50
+  assert.equal(currentGlow({ storage }), 20);
+  assert.equal(currentGlow({ storage: fakeDom().storage }), 50); // unset -> default
 });

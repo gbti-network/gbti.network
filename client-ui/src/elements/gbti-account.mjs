@@ -8,7 +8,7 @@
 // divided rows (label/description left, control right). Shadow DOM + V3 tokens only; the shell rail/header are NOT
 // part of this element.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { currentLayout, currentTheme, applyLayout, applyTheme, currentGlass, applyGlass } from '../display-prefs.mjs'; // SOW-070: the Appearance segment
+import { currentLayout, currentTheme, applyLayout, applyTheme, currentGlass, applyGlass, currentGlow, applyGlow } from '../display-prefs.mjs'; // SOW-070: the Appearance segment
 
 const SITE = 'https://gbti.network';
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
@@ -161,13 +161,17 @@ class GbtiAccount extends GbtiElement {
     const layout = currentLayout();
     const theme = currentTheme();
     const glass = currentGlass();
+    const glow = currentGlow();
     const seg = (name, options, active) => `<div class="seg">` + options
       .map(([v, lbl]) => `<button type="button" class="segbtn${v === active ? ' on' : ''}" data-set-${name}="${v}">${esc(lbl)}</button>`)
       .join('') + `</div>`;
-    // SOW-070: Glass intensity only appears when Glass is the active layout (it is a no-op in Flat). The slider drives
-    // --glass-strength, which scales the opacity of every glass surface live.
+    // SOW-070: the two glass sliders appear only when Glass is the active layout (no-ops in Flat). "Surface opacity"
+    // drives --glass-strength (how solid the frosted panels are); "Color highlight intensity" drives --glass-glow (how
+    // vivid the four ambient backdrop spotlights are). Both apply live as you drag.
+    const slider = (key, label, desc, val) => `<div class="row"><div class="rl"><div class="t">${label}</div><div class="d">${desc}</div></div><div class="rc"><input type="range" class="rng" min="0" max="100" step="5" value="${val}" data-set-${key} aria-label="${label}" /><span class="rngval" data-${key}-val>${val}%</span></div></div>`;
     const glassRow = layout === 'glass'
-      ? `<div class="row"><div class="rl"><div class="t">Glass intensity</div><div class="d">How opaque the frosted glass surfaces are. Lower is more see-through.</div></div><div class="rc"><input type="range" class="rng" min="0" max="100" step="5" value="${glass}" data-set-glass aria-label="Glass intensity" /><span class="rngval" data-glass-val>${glass}%</span></div></div>`
+      ? slider('glass', 'Surface opacity', 'How opaque the frosted glass panels are. Lower is more see-through.', glass)
+        + slider('glow', 'Color highlight intensity', 'How vivid the colorful backdrop glow is. Lower is calmer; 0 turns the colors off.', glow)
       : '';
     return `<section class="sec">
       <div class="sec-h"><h3>Appearance</h3><p>Display preferences for this device. Glass is an experimental frosted layout; Flat is the classic solid look.</p></div>
@@ -234,9 +238,10 @@ class GbtiAccount extends GbtiElement {
     // SOW-070: Appearance — apply + re-render so the active segment updates (tokens.mjs + shell.css re-skin live).
     this.$$('[data-set-layout]').forEach((b) => b.addEventListener('click', () => { applyLayout(b.dataset.setLayout); this.render(); }));
     this.$$('[data-set-theme]').forEach((b) => b.addEventListener('click', () => { applyTheme(b.dataset.setTheme); this.render(); }));
-    // SOW-070: Glass intensity — apply live (the inline --glass-strength re-skins every surface instantly) + update the readout. No re-render.
-    const glassRng = this.$('[data-set-glass]');
-    if (glassRng) glassRng.addEventListener('input', () => { const p = applyGlass(glassRng.value); const out = this.$('[data-glass-val]'); if (out) out.textContent = `${p}%`; });
+    // SOW-070: the glass sliders apply live (the inline --glass-strength / --glass-glow re-skin instantly) + update their readout. No re-render.
+    const liveRange = (sel, apply, outSel) => { const el = this.$(sel); if (el) el.addEventListener('input', () => { const p = apply(el.value); const out = this.$(outSel); if (out) out.textContent = `${p}%`; }); };
+    liveRange('[data-set-glass]', applyGlass, '[data-glass-val]');
+    liveRange('[data-set-glow]', applyGlow, '[data-glow-val]');
     // Delete: type-to-confirm enables the button only on exactly "DELETE".
     const confirm = this.$('[data-delete-confirm]');
     const delBtn = this.$('[data-delete]');

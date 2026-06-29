@@ -69,3 +69,27 @@ export function applyGlass(pct, { doc = (typeof document !== 'undefined' ? docum
 export function currentGlass({ storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
   try { return normalizeGlass(storage?.getItem(GLASS_KEY)); } catch { return 50; }
 }
+
+// SOW-070: COLOR HIGHLIGHT INTENSITY -- only meaningful when layout is Glass. Scales the four ambient backdrop
+// "spotlight" colors (green/blue/gold/purple). Stored as an integer percent 0..100 (default 50); the CSS multiplies
+// each spotlight alpha by var(--glass-glow), where glow = percent / 50, so 50% keeps the built-in look (1.0), 0% turns
+// the colors off, and higher is more vivid. Mirrors the gbti-glass-glow key in the no-flash boot (theme-init.mjs).
+export const GLOW_KEY = 'gbti-glass-glow';
+
+/** A stored glow value -> an integer percent 0..100 (default 50). */
+export function normalizeGlow(v) { if (v == null || v === '') return 50; const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50; }
+
+/** The CSS multiplier for a glow percent: 50% -> 1.0 (the built-in look). */
+export function glowStrength(pct) { return normalizeGlow(pct) / 50; }
+
+/** Persist + apply the color-highlight intensity (an inline --glass-glow on the root). Returns the normalized percent. */
+export function applyGlow(pct, { doc = (typeof document !== 'undefined' ? document : null), storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
+  const p = normalizeGlow(pct);
+  try { storage?.setItem(GLOW_KEY, String(p)); } catch { /* private mode */ }
+  doc?.documentElement?.style?.setProperty('--glass-glow', String(glowStrength(p)));
+  return p;
+}
+
+export function currentGlow({ storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
+  try { return normalizeGlow(storage?.getItem(GLOW_KEY)); } catch { return 50; }
+}

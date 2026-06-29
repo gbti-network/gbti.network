@@ -17,5 +17,8 @@
     // fallback (1) holds, so flat + an unset glass intensity are unaffected.
     var g = localStorage.getItem('gbti-glass');
     if (g != null) { var gp = Math.round(Number(g)); if (gp === gp) document.documentElement.style.setProperty('--glass-strength', String(Math.max(0, Math.min(100, gp)) / 50)); }
+    // SOW-070: color highlight intensity (gbti-glass-glow) -> --glass-glow (glow = percent / 50; 50% = the built-in look).
+    var gw = localStorage.getItem('gbti-glass-glow');
+    if (gw != null) { var gwp = Math.round(Number(gw)); if (gwp === gwp) document.documentElement.style.setProperty('--glass-glow', String(Math.max(0, Math.min(100, gwp)) / 50)); }
   } catch (e) {}
 })();

@@ -37,21 +37,24 @@
   --paper: rgba(30,38,32,calc(.58 * var(--glass-strength,1))); --paper-2: rgba(18,26,21,calc(.4 * var(--glass-strength,1))); --paper-3: rgba(40,48,42,calc(.5 * var(--glass-strength,1)));
   --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1))); --line-2: rgba(255,255,255,calc(.16 * var(--glass-strength,1)));
 }
+/* SOW-070: the four ambient "spotlight" colors (green, blue, gold, purple). Their alpha is multiplied by
+   var(--glass-glow,1) so the "Color highlight intensity" setting scales the whole glow (0 = off, default 1, higher =
+   more vivid). The neutral base color stays solid so contrast never depends on the glow. */
 [data-layout="glass"] body {
   background:
-    radial-gradient(40% 50% at 12% 8%, rgba(54,170,110,.34), transparent 70%),
-    radial-gradient(44% 54% at 92% 6%, rgba(120,162,230,.3), transparent 70%),
-    radial-gradient(50% 60% at 88% 96%, rgba(222,182,92,.32), transparent 72%),
-    radial-gradient(46% 54% at 8% 98%, rgba(150,112,210,.24), transparent 72%),
+    radial-gradient(40% 50% at 12% 8%, rgba(54,170,110,calc(.34 * var(--glass-glow,1))), transparent 70%),
+    radial-gradient(44% 54% at 92% 6%, rgba(120,162,230,calc(.3 * var(--glass-glow,1))), transparent 70%),
+    radial-gradient(50% 60% at 88% 96%, rgba(222,182,92,calc(.32 * var(--glass-glow,1))), transparent 72%),
+    radial-gradient(46% 54% at 8% 98%, rgba(150,112,210,calc(.24 * var(--glass-glow,1))), transparent 72%),
     #eef2ec;
   background-attachment: fixed;
 }
 [data-layout="glass"][data-theme="dark"] body {
   background:
-    radial-gradient(40% 50% at 12% 8%, rgba(34,140,86,.4), transparent 70%),
-    radial-gradient(44% 54% at 92% 6%, rgba(70,110,180,.34), transparent 70%),
-    radial-gradient(50% 60% at 88% 96%, rgba(170,134,60,.3), transparent 72%),
-    radial-gradient(46% 54% at 8% 98%, rgba(110,80,160,.28), transparent 72%),
+    radial-gradient(40% 50% at 12% 8%, rgba(34,140,86,calc(.4 * var(--glass-glow,1))), transparent 70%),
+    radial-gradient(44% 54% at 92% 6%, rgba(70,110,180,calc(.34 * var(--glass-glow,1))), transparent 70%),
+    radial-gradient(50% 60% at 88% 96%, rgba(170,134,60,calc(.3 * var(--glass-glow,1))), transparent 72%),
+    radial-gradient(46% 54% at 8% 98%, rgba(110,80,160,calc(.28 * var(--glass-glow,1))), transparent 72%),
     #0b120e;
   background-attachment: fixed;
 }
