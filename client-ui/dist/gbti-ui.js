@@ -58,11 +58,11 @@ var GbtiUI = (() => {
    frosts; flat leaves --glass-blur: none (a no-op). Composes with data-theme (light + dark). Green + per-type accents
    are unchanged. Contrast: the panel alphas are kept >= .5 so --fg/--muted stay AA-legible over the ambient backdrop. */
 :host-context([data-layout="glass"]) {
-  --panel: rgba(255,255,255,calc(.55 * var(--glass-strength,1))); --line: rgba(255,255,255,calc(.66 * var(--glass-strength,1))); --hover: rgba(255,255,255,calc(.4 * var(--glass-strength,1)));
+  --panel: rgba(255,255,255,calc(.55 * var(--glass-strength,1.7))); --line: rgba(255,255,255,calc(.66 * var(--glass-strength,1.7))); --hover: rgba(255,255,255,calc(.4 * var(--glass-strength,1.7)));
   --glass-blur: blur(20px) saturate(150%);
 }
 :host-context([data-layout="glass"][data-theme="dark"]) {
-  --panel: rgba(18,26,21,calc(.55 * var(--glass-strength,1))); --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1))); --hover: rgba(255,255,255,calc(.08 * var(--glass-strength,1)));
+  --panel: rgba(18,26,21,calc(.55 * var(--glass-strength,1.7))); --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1.7))); --hover: rgba(255,255,255,calc(.08 * var(--glass-strength,1.7)));
 }
 `;
   var BASE_CSS = `
@@ -1414,10 +1414,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var LAYOUT_KEY = "gbti-layout";
   var THEME_KEY = "gbti-theme";
   function normalizeLayout(v) {
-    return v === "glass" ? "glass" : "flat";
+    return v === "flat" ? "flat" : "glass";
   }
   function normalizeTheme(v) {
-    return v === "light" || v === "dark" ? v : "system";
+    return v === "light" || v === "dark" || v === "system" ? v : "dark";
   }
   function resolveTheme(theme, prefersDark) {
     const t = normalizeTheme(theme);
@@ -1442,8 +1442,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function applyTheme(theme, { doc = typeof document !== "undefined" ? document : null, storage = typeof localStorage !== "undefined" ? localStorage : null, prefersDark = osPrefersDark() } = {}) {
     const t = normalizeTheme(theme);
     try {
-      if (t === "system") storage?.removeItem(THEME_KEY);
-      else storage?.setItem(THEME_KEY, t);
+      storage?.setItem(THEME_KEY, t);
     } catch {
     }
     doc?.documentElement?.setAttribute("data-theme", resolveTheme(t, prefersDark));
@@ -1453,21 +1452,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     try {
       return normalizeLayout(storage?.getItem(LAYOUT_KEY));
     } catch {
-      return "flat";
+      return "glass";
     }
   }
   function currentTheme({ storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
     try {
       return normalizeTheme(storage?.getItem(THEME_KEY));
     } catch {
-      return "system";
+      return "dark";
     }
   }
   var GLASS_KEY = "gbti-glass";
   function normalizeGlass(v) {
-    if (v == null || v === "") return 50;
+    if (v == null || v === "") return 85;
     const n = Math.round(Number(v));
-    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50;
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 85;
   }
   function glassStrength(pct) {
     return normalizeGlass(pct) / 50;

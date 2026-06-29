@@ -5,16 +5,18 @@
 // runs before paint, so there is no theme flash.
 (function () {
   try {
+    // SOW-070: DEFAULT theme is Dark (a missing/legacy key). 'system' is an explicit stored choice that follows the OS.
     var t = localStorage.getItem('gbti-theme');
-    if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t === 'system') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    else if (t !== 'light' && t !== 'dark') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
-    // SOW-070: the layout skin (Flat default | Glass), applied before paint so Glass never flashes Flat. Mirrors the
-    // gbti-layout key in client-ui/src/display-prefs.mjs.
+    // SOW-070: DEFAULT layout is Glass (only an explicit 'flat' opts out), applied before paint so it never flashes.
+    // Mirrors the gbti-layout key in client-ui/src/display-prefs.mjs.
     var l = localStorage.getItem('gbti-layout');
-    document.documentElement.setAttribute('data-layout', l === 'glass' ? 'glass' : 'flat');
-    // SOW-070: glass intensity (gbti-glass, percent 0..100). The CSS scales every glass surface alpha by
-    // --glass-strength (strength = percent / 50; 50% = the built-in look). Only set when stored; otherwise the CSS
-    // fallback (1) holds, so flat + an unset glass intensity are unaffected.
+    document.documentElement.setAttribute('data-layout', l === 'flat' ? 'flat' : 'glass');
+    // SOW-070: surface opacity (gbti-glass, percent 0..100). The CSS scales every glass surface alpha by
+    // --glass-strength (strength = percent / 50). Only set when stored; otherwise the CSS fallback (1.7 = the 85%
+    // default) holds. Flat is unaffected (the tokens only apply under data-layout="glass").
     var g = localStorage.getItem('gbti-glass');
     if (g != null) { var gp = Math.round(Number(g)); if (gp === gp) document.documentElement.style.setProperty('--glass-strength', String(Math.max(0, Math.min(100, gp)) / 50)); }
     // SOW-070: color highlight intensity (gbti-glass-glow) -> --glass-glow (glow = percent / 50; 50% = the built-in look).

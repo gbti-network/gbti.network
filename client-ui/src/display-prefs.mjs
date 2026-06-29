@@ -1,17 +1,18 @@
 // SOW-070: the two device-display preferences -- LAYOUT (Flat | Glass) and THEME (Light | Dark | System) -- persisted
 // in localStorage and applied as data-layout / data-theme on the document root, where tokens.mjs reads them via
-// :host-context. Flat + System are the defaults (opt-in, reversible). The pure normalizers/resolver are node-tested;
-// the apply/current wrappers take injectable doc/storage/prefersDark so they test without a real DOM. The no-flash
-// boot (extension/src/theme-init.mjs) mirrors the SAME keys + the same System->OS-pref resolution.
+// :host-context. The DEFAULTS are Glass + Dark (a new device opts in automatically; both stay reversible). The pure
+// normalizers/resolver are node-tested; the apply/current wrappers take injectable doc/storage/prefersDark so they
+// test without a real DOM. The no-flash boot (extension/src/theme-init.mjs) mirrors the SAME keys + the same defaults.
 
 export const LAYOUT_KEY = 'gbti-layout';
 export const THEME_KEY = 'gbti-theme';
 
-/** A stored layout value -> 'flat' | 'glass' (default flat). */
-export function normalizeLayout(v) { return v === 'glass' ? 'glass' : 'flat'; }
+/** A stored layout value -> 'flat' | 'glass' (DEFAULT glass; only an explicit 'flat' opts out). */
+export function normalizeLayout(v) { return v === 'flat' ? 'flat' : 'glass'; }
 
-/** A stored theme value -> 'light' | 'dark' | 'system' (default system; a missing key = System). */
-export function normalizeTheme(v) { return (v === 'light' || v === 'dark') ? v : 'system'; }
+/** A stored theme value -> 'light' | 'dark' | 'system' (DEFAULT dark; a missing/legacy key = Dark). 'system' is an
+ *  explicit stored choice that follows the OS, so it is preserved here rather than treated as the default. */
+export function normalizeTheme(v) { return (v === 'light' || v === 'dark' || v === 'system') ? v : 'dark'; }
 
 /** The CONCRETE theme to paint: 'system' resolves to the OS preference. */
 export function resolveTheme(theme, prefersDark) {
@@ -29,31 +30,33 @@ export function applyLayout(layout, { doc = (typeof document !== 'undefined' ? d
   return l;
 }
 
-/** Persist + apply the theme. 'system' REMOVES the stored key (so it follows the OS) and paints the resolved value;
- *  this is the SAME key the header quick-toggle writes, so the two never disagree. Returns the normalized value. */
+/** Persist + apply the theme. All three choices are STORED explicitly now (including 'system', which follows the OS):
+ *  the default (a missing key) is Dark, so 'system' can no longer be represented by an absent key. This is the SAME
+ *  key the header quick-toggle writes (light|dark), so the two never disagree. Returns the normalized value. */
 export function applyTheme(theme, { doc = (typeof document !== 'undefined' ? document : null), storage = (typeof localStorage !== 'undefined' ? localStorage : null), prefersDark = osPrefersDark() } = {}) {
   const t = normalizeTheme(theme);
-  try { if (t === 'system') storage?.removeItem(THEME_KEY); else storage?.setItem(THEME_KEY, t); } catch { /* private mode */ }
+  try { storage?.setItem(THEME_KEY, t); } catch { /* private mode */ }
   doc?.documentElement?.setAttribute('data-theme', resolveTheme(t, prefersDark));
   return t;
 }
 
 export function currentLayout({ storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
-  try { return normalizeLayout(storage?.getItem(LAYOUT_KEY)); } catch { return 'flat'; }
+  try { return normalizeLayout(storage?.getItem(LAYOUT_KEY)); } catch { return 'glass'; }
 }
 
 export function currentTheme({ storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
-  try { return normalizeTheme(storage?.getItem(THEME_KEY)); } catch { return 'system'; }
+  try { return normalizeTheme(storage?.getItem(THEME_KEY)); } catch { return 'dark'; }
 }
 
-// SOW-070: GLASS INTENSITY -- only meaningful when layout is Glass. Stored as an integer percent 0..100 (default 50);
-// the CSS multiplies every glass surface alpha by var(--glass-strength), where strength = percent / 50, so 50% keeps
-// the built-in look (strength 1.0), 100% nears fully opaque, and lower is more see-through. Applied as an inline
-// --glass-strength on the document root; the no-flash boot (theme-init.mjs) mirrors the same gbti-glass key.
+// SOW-070: GLASS / SURFACE OPACITY -- only meaningful when layout is Glass. Stored as an integer percent 0..100
+// (DEFAULT 85); the CSS multiplies every glass surface alpha by var(--glass-strength), where strength = percent / 50,
+// so 50% is the original token alphas (strength 1.0), the 85% default is the more-solid look, 100% nears fully opaque,
+// and lower is more see-through. The matching CSS fallback is var(--glass-strength,1.7) so an unset value renders the
+// 85% default with no flash. Applied as an inline --glass-strength on the root; mirrored in theme-init.mjs.
 export const GLASS_KEY = 'gbti-glass';
 
-/** A stored glass value -> an integer percent 0..100 (default 50). */
-export function normalizeGlass(v) { if (v == null || v === '') return 50; const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50; }
+/** A stored glass/surface-opacity value -> an integer percent 0..100 (DEFAULT 85). */
+export function normalizeGlass(v) { if (v == null || v === '') return 85; const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 85; }
 
 /** The CSS multiplier for a glass percent: 50% -> 1.0 (the built-in look). */
 export function glassStrength(pct) { return normalizeGlass(pct) / 50; }

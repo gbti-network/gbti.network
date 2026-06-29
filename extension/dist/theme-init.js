@@ -4,10 +4,11 @@
   (function() {
     try {
       var t = localStorage.getItem("gbti-theme");
-      if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      if (t === "system") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      else if (t !== "light" && t !== "dark") t = "dark";
       document.documentElement.setAttribute("data-theme", t);
       var l = localStorage.getItem("gbti-layout");
-      document.documentElement.setAttribute("data-layout", l === "glass" ? "glass" : "flat");
+      document.documentElement.setAttribute("data-layout", l === "flat" ? "flat" : "glass");
       var g = localStorage.getItem("gbti-glass");
       if (g != null) {
         var gp = Math.round(Number(g));

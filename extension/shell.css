@@ -29,13 +29,13 @@
    inert without it). An ambient brand-tinted backdrop behind the shell + translucent, backdrop-blurred surface tokens.
    Composes with data-theme (light + dark). The shell surfaces read backdrop-filter: var(--glass-blur). ---- */
 [data-layout="glass"] {
-  --paper: rgba(255,255,255,calc(.55 * var(--glass-strength,1))); --paper-2: rgba(255,255,255,calc(.34 * var(--glass-strength,1))); --paper-3: rgba(255,255,255,calc(.46 * var(--glass-strength,1)));
-  --line: rgba(255,255,255,calc(.6 * var(--glass-strength,1))); --line-2: rgba(255,255,255,calc(.7 * var(--glass-strength,1)));
+  --paper: rgba(255,255,255,calc(.55 * var(--glass-strength,1.7))); --paper-2: rgba(255,255,255,calc(.34 * var(--glass-strength,1.7))); --paper-3: rgba(255,255,255,calc(.46 * var(--glass-strength,1.7)));
+  --line: rgba(255,255,255,calc(.6 * var(--glass-strength,1.7))); --line-2: rgba(255,255,255,calc(.7 * var(--glass-strength,1.7)));
   --glass-blur: blur(20px) saturate(150%);
 }
 [data-layout="glass"][data-theme="dark"] {
-  --paper: rgba(30,38,32,calc(.58 * var(--glass-strength,1))); --paper-2: rgba(18,26,21,calc(.4 * var(--glass-strength,1))); --paper-3: rgba(40,48,42,calc(.5 * var(--glass-strength,1)));
-  --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1))); --line-2: rgba(255,255,255,calc(.16 * var(--glass-strength,1)));
+  --paper: rgba(30,38,32,calc(.58 * var(--glass-strength,1.7))); --paper-2: rgba(18,26,21,calc(.4 * var(--glass-strength,1.7))); --paper-3: rgba(40,48,42,calc(.5 * var(--glass-strength,1.7)));
+  --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1.7))); --line-2: rgba(255,255,255,calc(.16 * var(--glass-strength,1.7)));
 }
 /* SOW-070: the four ambient "spotlight" colors (green, blue, gold, purple). Their alpha is multiplied by
    var(--glass-glow,1) so the "Color highlight intensity" setting scales the whole glow (0 = off, default 1, higher =

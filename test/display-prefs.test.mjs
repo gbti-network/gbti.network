@@ -14,13 +14,15 @@ function fakeDom() {
   };
 }
 
-test('normalizeLayout / normalizeTheme default to flat / system', () => {
+test('normalizeLayout / normalizeTheme default to glass / dark; system is preserved', () => {
   assert.equal(normalizeLayout('glass'), 'glass');
-  assert.equal(normalizeLayout(null), 'flat');
-  assert.equal(normalizeLayout('weird'), 'flat');
+  assert.equal(normalizeLayout('flat'), 'flat');
+  assert.equal(normalizeLayout(null), 'glass'); // default glass
+  assert.equal(normalizeLayout('weird'), 'glass');
   assert.equal(normalizeTheme('light'), 'light');
   assert.equal(normalizeTheme('dark'), 'dark');
-  assert.equal(normalizeTheme(null), 'system');
+  assert.equal(normalizeTheme('system'), 'system'); // preserved (an explicit OS-follow choice)
+  assert.equal(normalizeTheme(null), 'dark'); // default dark
 });
 
 test('resolveTheme: system follows the OS preference; explicit wins', () => {
@@ -39,30 +41,32 @@ test('applyLayout persists + sets data-layout', () => {
   assert.equal(attrs['data-layout'], 'flat');
 });
 
-test('applyTheme: explicit stores + paints; system REMOVES the key + paints the OS pref', () => {
+test('applyTheme: all three choices are STORED explicitly; system follows the OS', () => {
   const { doc, storage, attrs, store } = fakeDom();
   applyTheme('dark', { doc, storage, prefersDark: false });
   assert.equal(store.get(THEME_KEY), 'dark');
   assert.equal(attrs['data-theme'], 'dark');
   applyTheme('system', { doc, storage, prefersDark: true });
-  assert.equal(store.has(THEME_KEY), false); // system follows the OS -> no stored key
+  assert.equal(store.get(THEME_KEY), 'system'); // system is stored now (the default is dark, not system)
   assert.equal(attrs['data-theme'], 'dark'); // resolved from prefersDark
+  applyTheme('system', { doc, storage, prefersDark: false });
+  assert.equal(attrs['data-theme'], 'light'); // follows the OS the other way
 });
 
-test('currentLayout / currentTheme read stored values (default flat / system)', () => {
+test('currentLayout / currentTheme read stored values (default glass / dark)', () => {
   const { storage, store } = fakeDom();
-  assert.equal(currentLayout({ storage }), 'flat');
-  assert.equal(currentTheme({ storage }), 'system');
-  store.set(LAYOUT_KEY, 'glass'); store.set(THEME_KEY, 'light');
   assert.equal(currentLayout({ storage }), 'glass');
+  assert.equal(currentTheme({ storage }), 'dark');
+  store.set(LAYOUT_KEY, 'flat'); store.set(THEME_KEY, 'light');
+  assert.equal(currentLayout({ storage }), 'flat');
   assert.equal(currentTheme({ storage }), 'light');
 });
 
-test('normalizeGlass clamps to 0..100 and defaults to 50', () => {
+test('normalizeGlass clamps to 0..100 and defaults to 85', () => {
   assert.equal(normalizeGlass(70), 70);
   assert.equal(normalizeGlass('30'), 30);
-  assert.equal(normalizeGlass(null), 50);
-  assert.equal(normalizeGlass('weird'), 50);
+  assert.equal(normalizeGlass(null), 85); // default surface opacity
+  assert.equal(normalizeGlass('weird'), 85);
   assert.equal(normalizeGlass(-20), 0);
   assert.equal(normalizeGlass(180), 100);
 });
@@ -74,13 +78,13 @@ test('glassStrength: 50% -> 1.0 (the built-in look); scales linearly', () => {
   assert.equal(glassStrength(25), 0.5);
 });
 
-test('applyGlass persists the percent + sets --glass-strength; currentGlass reads it back (default 50)', () => {
+test('applyGlass persists the percent + sets --glass-strength; currentGlass reads it back (default 85)', () => {
   const { doc, storage, store, styles } = fakeDom();
   assert.equal(applyGlass(80, { doc, storage }), 80);
   assert.equal(store.get(GLASS_KEY), '80');
   assert.equal(styles['--glass-strength'], '1.6'); // 80 / 50
   assert.equal(currentGlass({ storage }), 80);
-  assert.equal(currentGlass({ storage: fakeDom().storage }), 50); // unset -> default
+  assert.equal(currentGlass({ storage: fakeDom().storage }), 85); // unset -> default
 });
 
 test('applyGlow persists + sets --glass-glow; currentGlow reads it back (default 50)', () => {
