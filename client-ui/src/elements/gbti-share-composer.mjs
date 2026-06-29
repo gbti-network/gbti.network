@@ -14,7 +14,7 @@ const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .card { background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:14px; padding:16px; }
   h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
   .sub { margin:0 0 12px; font-size:13px; color:var(--muted); }
   textarea { width:100%; box-sizing:border-box; min-height:84px; resize:vertical; font:inherit; font-size:14px;
@@ -35,7 +35,7 @@ const CSS = `
   .msg { font-size:13px; }
   .msg.err { color:#c0392b; }
   .msg.ok { color:var(--brand); }
-  .notice { display:flex; gap:12px; align-items:flex-start; padding:16px; border:1.5px dashed var(--line); border-radius:12px; background:var(--hover, rgba(0,0,0,.03)); }
+  .notice { display:flex; gap:12px; align-items:flex-start; padding:16px; border:1.5px dashed var(--line); border-radius:12px; background:var(--hover, rgba(0,0,0,.03)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
   .notice h3 { margin-bottom:2px; }
   .notice a { color:var(--brand); font-weight:600; }
   .lock { font-size:22px; line-height:1; }

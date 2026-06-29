@@ -36,11 +36,11 @@ const MEMBERSHIP_LABEL = { paid: 'Paid member', trial: 'Trial', trialing: 'Trial
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:2px; padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* SOW-052 squared aesthetic: 2px nav bar */
+  .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:2px; padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* SOW-052 squared aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:2px; cursor:pointer; }
   .tab.on { background:var(--hover); color:var(--accent); }
   .tbadge { display:inline-block; min-width:16px; margin-left:6px; padding:0 5px; border-radius:999px; background:var(--accent); color:#fff; font-size:11px; font-weight:800; line-height:16px; text-align:center; vertical-align:text-top; }
-  .profile { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:2px; padding:11px 14px; margin:0 0 14px; background:var(--panel); font-size:14px; }
+  .profile { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:2px; padding:11px 14px; margin:0 0 14px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); font-size:14px; }
   .profile .lbl { color:var(--muted); font-size:12px; }
   .profile button { margin-left:auto; }
   ul.rows { list-style:none; margin:0; padding:0; }
@@ -68,17 +68,17 @@ const CSS = `
   .back { margin:0 0 14px; }
   a { color:var(--accent); }
   /* SOW-052: the Overview hub */
-  .ov-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid var(--line); border-radius:2px; padding:14px 16px; background:var(--panel); margin:0 0 16px; }
+  .ov-hero { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; border:1px solid var(--line); border-radius:2px; padding:14px 16px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); margin:0 0 16px; }
   .ov-hero b { font-size:15px; }
   .ov-hero .muted { font-size:12.5px; }
   .ov-draft { font-size:12.5px; color:var(--accent); font-weight:700; }
-  .ov-trial { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; border:1px solid var(--accent); border-radius:2px; padding:13px 16px; background:color-mix(in srgb, var(--accent) 9%, var(--panel)); margin:0 0 16px; }
+  .ov-trial { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; border:1px solid var(--accent); border-radius:2px; padding:13px 16px; background:color-mix(in srgb, var(--accent) 9%, var(--panel)); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); margin:0 0 16px; }
   .ov-trial b { font-size:13.5px; }
   .ov-trial span { font-size:12.5px; color:var(--muted); }
   .ov-trial .ov-up { flex:none; font-weight:700; font-size:12.5px; padding:7px 14px; border-radius:2px; background:var(--accent); color:#fff; text-decoration:none; white-space:nowrap; }
   .ov-trial .ov-up:hover { filter:brightness(1.05); }
   .ov-tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px; margin:0 0 22px; }
-  .ov-tile { display:flex; flex-direction:column; gap:4px; border:1px solid var(--line); border-radius:2px; padding:14px; background:var(--panel); text-decoration:none; color:var(--fg); transition:border-color .14s, transform .14s; }
+  .ov-tile { display:flex; flex-direction:column; gap:4px; border:1px solid var(--line); border-radius:2px; padding:14px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); text-decoration:none; color:var(--fg); transition:border-color .14s, transform .14s; }
   .ov-tile:hover { border-color:var(--accent); transform:translateY(-2px); }
   .ov-n { font-weight:800; font-size:22px; line-height:1; color:var(--accent); min-height:16px; }
   .ov-nm { font-weight:600; font-size:13.5px; color:var(--fg); }

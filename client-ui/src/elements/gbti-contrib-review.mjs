@@ -17,14 +17,14 @@ const CSS = `
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:12.5px; padding:6px 14px; border-radius:999px; cursor:pointer; }
   .tab.on { background:var(--hover); color:var(--accent); }
   .file { margin:0 0 14px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
-  .file > .fh { background:var(--panel); padding:8px 12px; font-family:var(--font-mono,ui-monospace,monospace); font-size:12px; display:flex; justify-content:space-between; gap:10px; }
+  .file > .fh { background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); padding:8px 12px; font-family:var(--font-mono,ui-monospace,monospace); font-size:12px; display:flex; justify-content:space-between; gap:10px; }
   .fh .sz .add { color:var(--accent); font-weight:700; } .fh .sz .del { color:var(--danger); font-weight:700; }
   pre.diff { margin:0; overflow:auto; font-family:var(--font-mono,ui-monospace,monospace); font-size:12px; line-height:1.5; }
   .dl { display:block; padding:0 12px; white-space:pre-wrap; word-break:break-word; }
   .dl.add { background:rgba(31,158,95,.12); }
   .dl.del { background:rgba(224,108,108,.14); }
   .dl.hunk { background:var(--hover); color:var(--muted); }
-  .preview { border:1px solid var(--line); border-radius:10px; padding:16px 18px; background:var(--panel); }
+  .preview { border:1px solid var(--line); border-radius:10px; padding:16px 18px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
   .preview + .preview { margin-top:12px; }
   .pmeta { color:var(--muted); font-size:12px; font-family:var(--font-mono,ui-monospace,monospace); margin:0 0 8px; }
   .award { margin-top:16px; border:1px solid var(--line); border-radius:10px; padding:13px 15px; background:var(--hover); }

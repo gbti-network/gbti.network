@@ -93,7 +93,7 @@ class GbtiContentEditor extends GbtiElement {
         .preview { background:#201e26; border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
         .notice { background:#2a2330; border:1px solid var(--accent); border-radius:8px; padding:10px 14px; margin-bottom:12px; }
         .notice a { color: var(--accent); }
-        .rail { border:1px solid var(--line); border-radius:12px; background:var(--panel); padding:4px 14px 12px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
+        .rail { border:1px solid var(--line); border-radius:12px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); padding:4px 14px 12px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
         @media (max-width:860px) { .rail { position:static; max-height:none; } }
         .rail-h { font-family:var(--font-display, inherit); font-weight:700; font-size:15px; padding:11px 0 2px; }
         .rail details.sec { border-top:1px solid var(--line); }

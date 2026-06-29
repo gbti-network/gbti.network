@@ -31,7 +31,7 @@ const CSS = `
   .row { display:flex; gap:10px; align-items:flex-start; }
   .row .ic { flex:none; margin-top:1px; }
   .row.done .t { color:var(--muted); font-size:13px; padding-top:1px; }
-  .card { flex:1; min-width:0; border:1px solid var(--line); border-radius:10px; padding:12px 13px; background:var(--panel); }
+  .card { flex:1; min-width:0; border:1px solid var(--line); border-radius:10px; padding:12px 13px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
   .card .title { font-family:var(--font-display); font-size:16px; font-weight:700; margin:0 0 3px; }
   .card .why { font-size:12.5px; color:var(--muted); margin:0 0 7px; line-height:1.45; }
   .card .see { font-size:12px; color:var(--fg); margin:0 0 11px; display:flex; gap:6px; align-items:flex-start; }

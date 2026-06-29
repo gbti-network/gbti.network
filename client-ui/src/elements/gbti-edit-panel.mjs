@@ -51,7 +51,7 @@ class GbtiEditPanel extends GbtiElement {
     this.set(
       this.css(`
         .bar { position: fixed; right: 18px; bottom: 18px; z-index: 2147483000; display:flex; gap:8px; align-items:center;
-               background: var(--panel); border:1px solid var(--line); border-radius: 999px; padding: 8px 12px; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+               background: var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius: 999px; padding: 8px 12px; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
         .bar .muted { font-size: 13px; }
       `) +
         `<div class="bar">

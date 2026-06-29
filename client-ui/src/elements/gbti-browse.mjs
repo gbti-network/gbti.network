@@ -24,7 +24,7 @@ const TABS = [
 const CONTENT_TYPES = ['post', 'product', 'prompt'];
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .tabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
+  .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
   .tab.on { background:var(--hover); color:var(--accent); }
   ul.rows { list-style:none; margin:0; padding:0; }

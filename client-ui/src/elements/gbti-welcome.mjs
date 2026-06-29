@@ -34,7 +34,7 @@ const CSS = `
   .head h2 { font-family:var(--font-display); font-size:24px; margin:8px 0 6px; }
   .head p { color:var(--muted); margin:0 auto; max-width:46ch; line-height:1.5; }
   .up { display:inline-block; margin-top:10px; font-size:13px; font-weight:700; color:var(--accent); text-decoration:underline; }
-  .card { border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:0 0 14px; background:var(--panel); }
+  .card { border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:0 0 14px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
   .card h3 { font-family:var(--font-display); font-size:16px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
   .card .sub { color:var(--muted); font-size:13px; margin:0 0 13px; line-height:1.5; }
   .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:0; border-radius:9px;

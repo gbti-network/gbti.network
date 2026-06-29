@@ -12,7 +12,7 @@ const TYPE_LABEL = {
 
 const CSS = `
   :host { display:block; }
-  .be-blk { border:1px solid var(--line); border-radius:10px; margin:0 0 10px; background:var(--panel, transparent); }
+  .be-blk { border:1px solid var(--line); border-radius:10px; margin:0 0 10px; background:var(--panel, transparent); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
   .be-blk.be-members { border-color:var(--accent); border-style:dashed; }
   .be-blk-h { display:flex; justify-content:flex-end; gap:6px; padding:6px 8px; border-bottom:1px solid var(--line); }
   .be-blk-h select { font:inherit; font-size:12px; padding:3px 6px; border:1px solid var(--line); border-radius:6px; background:var(--paper, transparent); color:var(--fg); }
