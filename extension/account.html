@@ -17,8 +17,14 @@
     gbti-account { display: block; max-width: 720px; margin: 0 auto; }
     /* SOW-070: the splash sections become cards centered in the same 720px column as gbti-account, for one cohesive
        settings layout. Match the gbti-account .sec card look using the shell's V3 tokens (+ the glass frost in Glass). */
-    .settings-sec { max-width: 720px; margin: 16px auto 0; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; background: var(--paper); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
-    .settings-sec > h2 { margin: 0 0 4px; }
+    /* SOW-070 + GBTI Settings design: match the gbti-account card aesthetic so the splash sections read as the same
+       settings column (header over content, 1.5px border, soft radius + shadow, glass frost in Glass). */
+    .settings-sec { max-width: 720px; margin: 22px auto 0; border: 1.5px solid var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.05); padding: 20px 24px; background: var(--paper); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+    .settings-sec > h2 { font-family: var(--f-display); font-weight: 700; font-size: 20px; letter-spacing: -.005em; margin: 0 0 5px; }
+    .settings-sec > .hub-sub { font-size: 14px; line-height: 1.5; margin: 0 0 16px; }
+    /* Cleaner, mockup-styled selects within the splash settings (no markup/wiring change). */
+    .settings-sec select { border: 1.5px solid var(--line-2); border-radius: 9px; }
+    .settings-sec select:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
     /* SOW-063: the new-tab splash recurrence control */
     .splash-set { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--fg); }
     .splash-set select { font-family: var(--f-sans); font-size: 14px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); cursor: pointer; }

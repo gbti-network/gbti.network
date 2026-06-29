@@ -5567,44 +5567,53 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   var CSS8 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .sec { border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:0 0 16px; background:var(--panel); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
-  .sec h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
-  .sec .hint { margin:0 0 14px; color:var(--muted); font-size:13px; }
-  /* SOW-070: a 3-column grid (label | description | control) so the right-hand control (a button, or the Appearance
-     segmented toggle) keeps its own column and the description never crushes/wraps into it. Stacks on small screens. */
-  .row { display:grid; grid-template-columns:140px 1fr auto; align-items:center; gap:8px 14px; padding:10px 0; border-top:1px solid var(--line); }
-  .row:first-of-type { border-top:0; }
-  .row .lbl { font-weight:600; font-size:14px; }
-  .row .val { color:var(--muted); font-size:13.5px; min-width:0; overflow-wrap:anywhere; }
-  @media (max-width:560px) { .row { grid-template-columns:1fr; } }
-  .badge { display:inline-block; font-family:var(--font-mono, monospace); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; border-radius:999px; padding:2px 9px; background:var(--hover); color:var(--fg); }
-  .badge.paid { background:var(--green-tint, #e9f6ef); color:var(--green-700, #0f6f40); }
-  .badge.warn { background:#fdecea; color:#b3261e; }
-  button, a.btn { font:inherit; font-weight:600; font-size:13.5px; padding:8px 14px; border:1px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); cursor:pointer; text-decoration:none; display:inline-block; }
+  .sec { background:var(--panel); border:1.5px solid var(--line); border-radius:16px; box-shadow:0 1px 2px rgba(0,0,0,.05); overflow:hidden; margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
+  .sec-h { padding:20px 24px 16px; }
+  .sec-h h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:20px; letter-spacing:-.005em; }
+  .sec-h p { margin:5px 0 0; color:var(--muted); font-size:14px; line-height:1.5; max-width:60ch; }
+  .rows { border-top:1.5px solid var(--line); }
+  .row { display:grid; grid-template-columns:1fr auto; gap:24px; align-items:center; padding:16px 24px; }
+  .row + .row { border-top:1px solid var(--line); }
+  .row .rl { min-width:0; }
+  .row .rl .t { font-weight:600; font-size:15px; }
+  .row .rl .d { color:var(--muted); font-size:13.5px; line-height:1.45; margin-top:3px; max-width:48ch; overflow-wrap:anywhere; }
+  .row .rc { display:flex; align-items:center; justify-content:flex-end; gap:10px; min-width:0; }
+  @media (max-width:560px) { .row { grid-template-columns:1fr; } .row .rc { justify-content:flex-start; } }
+  /* segmented control (Appearance) */
+  .seg { display:inline-flex; background:var(--hover); border:1.5px solid var(--line); border-radius:9px; padding:3px; gap:2px; }
+  .seg .segbtn { border:0; background:transparent; font:inherit; font-weight:600; font-size:14px; padding:7px 16px; border-radius:6px; color:var(--muted); cursor:pointer; transition:color .14s ease, background .14s ease; }
+  .seg .segbtn.on { background:var(--brand); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.12); }
+  .seg .segbtn:not(.on):hover { color:var(--fg); }
+  /* buttons */
+  button, a.btn { font:inherit; font-weight:600; font-size:14px; padding:9px 16px; border-radius:9px; border:1.5px solid var(--line); background:var(--panel); color:var(--fg); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
   button:hover, a.btn:hover { border-color:var(--accent); color:var(--accent); }
-  button.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
-  button.primary:hover { background:var(--brand-dark, var(--brand)); color:#fff; }
-  /* SOW-070: the Appearance segmented controls (Layout + Theme). */
-  .seg { display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
-  .segbtn { font:inherit; font-weight:600; font-size:13px; padding:7px 14px; border:0; border-radius:0; background:transparent; color:var(--muted); cursor:pointer; }
-  .segbtn + .segbtn { border-left:1px solid var(--line); }
-  .segbtn.on { background:var(--brand); color:#fff; }
-  .segbtn:not(.on):hover { background:var(--hover); color:var(--fg); }
-  .copyrow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .copyrow input { flex:1; min-width:220px; font:inherit; font-size:13px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg, var(--panel)); color:var(--fg); }
-  .nudge { padding:16px; border:1.5px dashed var(--line); border-radius:12px; background:var(--panel); font-size:14px; color:var(--muted); }
+  /* membership pill + status badge */
+  .badge { display:inline-block; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; border-radius:999px; padding:3px 9px; background:var(--hover); color:var(--fg); }
+  .badge.paid { background:var(--green-tint, #e9f6ef); color:var(--green-700, #0f6f40); border:1.5px solid var(--green-tint-2, rgba(31,158,95,.22)); }
+  .badge.warn { background:#fdecea; color:#b3261e; border:1.5px solid #f0c2bd; }
+  /* membership row (avatar + identity + pill + action) */
+  .memrow { display:flex; align-items:center; gap:16px; padding:20px 24px; }
+  .memav { width:50px; height:50px; border-radius:50%; flex:none; background:var(--brand); display:flex; align-items:center; justify-content:center; color:#fff; font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:20px; }
+  .memrow .mtx { flex:1; min-width:0; }
+  .memrow .mtx .t { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  .memrow .mtx .t b { font-weight:700; font-size:16px; }
+  .memrow .mtx .d { color:var(--muted); font-size:13.5px; margin-top:3px; }
+  /* copy field */
+  .copyrow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; min-width:0; }
+  .copyrow input { flex:1; min-width:180px; max-width:320px; font:inherit; font-size:13px; padding:9px 11px; border:1.5px solid var(--line); border-radius:9px; background:var(--bg, var(--panel)); color:var(--fg); }
+  .nudge { padding:18px 20px; border:1.5px dashed var(--line); border-radius:16px; background:var(--panel); font-size:14px; color:var(--muted); margin:0 0 22px; }
   .nudge a { color:var(--brand); font-weight:600; }
-  .msg { font-size:13px; margin-top:8px; } .msg.ok { color:var(--green-700, #0f6f40); } .msg.err { color:#b3261e; }
+  .msg { font-size:13px; padding:0 24px 16px; } .msg:empty { padding:0; } .msg.ok { color:var(--green-700, #0f6f40); } .msg.err { color:#b3261e; }
   /* danger zone */
-  .danger { border:1.5px solid #f0c2bd; border-radius:14px; padding:16px 18px; background:#fff8f7; }
+  .danger { border:1.5px solid #f0c2bd; border-radius:16px; overflow:hidden; background:#fff8f7; margin:0 0 22px; }
   [data-theme="dark"] .danger { background:rgba(179,38,30,.08); border-color:rgba(179,38,30,.4); }
-  .danger h3 { color:#b3261e; }
-  .danger .row { border-top-color:#f3d4d0; }
-  [data-theme="dark"] .danger .row { border-top-color:rgba(179,38,30,.25); }
-  button.danger-btn { border-color:#e0a39d; color:#b3261e; }
-  button.danger-btn:hover { background:#b3261e; border-color:#b3261e; color:#fff; }
-  .confirm { margin-top:10px; }
-  .confirm input { font:inherit; font-size:13px; padding:7px 10px; border:1px solid #e0a39d; border-radius:8px; background:var(--panel); color:var(--fg); width:200px; }
+  .danger .sec-h h3 { color:#b3261e; }
+  .danger .rows, .danger .row + .row { border-top-color:#f3d4d0; }
+  [data-theme="dark"] .danger .rows, [data-theme="dark"] .danger .row + .row { border-top-color:rgba(179,38,30,.25); }
+  button.danger-btn, a.danger-btn { border-color:#e0a39d; color:#b3261e; }
+  button.danger-btn:hover, a.danger-btn:hover { background:#b3261e; border-color:#b3261e; color:#fff; }
+  .confirm { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+  .confirm input { font:inherit; font-size:13px; padding:9px 11px; border:1.5px solid #e0a39d; border-radius:9px; background:var(--panel); color:var(--fg); width:150px; }
 `;
   var GbtiAccount = class extends GbtiElement {
     _loaded = false;
@@ -5669,7 +5678,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
       }
       if (!this._loaded) {
-        this.set(this.css(CSS8) + appearance + `<section class="sec"><p class="hint">Loading your account…</p></section>`);
+        this.set(this.css(CSS8) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section>`);
         this._wire();
         return;
       }
@@ -5680,19 +5689,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       let sections;
       try {
-        sections = this._account() + appearance + this._billingSec() + this._referrals() + this._dangerZone();
+        sections = this._billingSec() + appearance + this._account() + this._referrals() + this._dangerZone();
       } catch {
-        sections = appearance + `<section class="sec"><h3>Account</h3><p class="hint">Some account details could not load. Reopen this page to retry.</p></section>`;
+        sections = appearance + `<section class="sec"><div class="sec-h"><h3>Account</h3><p>Some account details could not load. Reopen this page to retry.</p></div></section>`;
       }
       this.set(this.css(CSS8) + sections);
       this._wire();
     }
     _account() {
       return `<section class="sec">
-      <h3>Account</h3>
-      <p class="hint">Signed in as <b>@${esc(this._login)}</b>.</p>
-      <div class="row"><span class="lbl">Sign out</span><span class="val">End this session on this device.</span><button data-signout type="button">Sign out</button></div>
-      <div class="row"><span class="lbl">Welcome tour</span><span class="val">Show the post-setup welcome (join Discord + discover members) again.</span><button data-reset-welcome type="button">Reset</button></div>
+      <div class="sec-h"><h3>Account</h3><p>Signed in as <b>@${esc(this._login)}</b> on this device.</p></div>
+      <div class="rows">
+        <div class="row"><div class="rl"><div class="t">Sign out</div><div class="d">End this session on this device.</div></div><div class="rc"><button data-signout type="button">Sign out</button></div></div>
+        <div class="row"><div class="rl"><div class="t">Welcome tour</div><div class="d">Show the post-setup welcome (join Discord + discover members) again.</div></div><div class="rc"><button data-reset-welcome type="button">Reset</button></div></div>
+      </div>
       <div class="msg" data-account-msg aria-live="polite"></div>
     </section>`;
     }
@@ -5704,47 +5714,49 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const theme = currentTheme();
       const seg = (name, options, active) => `<div class="seg">` + options.map(([v, lbl]) => `<button type="button" class="segbtn${v === active ? " on" : ""}" data-set-${name}="${v}">${esc(lbl)}</button>`).join("") + `</div>`;
       return `<section class="sec">
-      <h3>Appearance</h3>
-      <p class="hint">Display preferences for this device. Glass is an experimental frosted layout; Flat is the classic solid look.</p>
-      <div class="row"><span class="lbl">Layout</span><span class="val">Frosted glass surfaces over an ambient backdrop, or the classic flat look.</span>${seg("layout", [["flat", "Flat"], ["glass", "Glass"]], layout)}</div>
-      <div class="row"><span class="lbl">Theme</span><span class="val">Light, dark, or follow your system.</span>${seg("theme", [["light", "Light"], ["dark", "Dark"], ["system", "System"]], theme)}</div>
+      <div class="sec-h"><h3>Appearance</h3><p>Display preferences for this device. Glass is an experimental frosted layout; Flat is the classic solid look.</p></div>
+      <div class="rows">
+        <div class="row"><div class="rl"><div class="t">Layout</div><div class="d">Frosted glass surfaces over an ambient backdrop, or the classic flat look.</div></div><div class="rc">${seg("layout", [["flat", "Flat"], ["glass", "Glass"]], layout)}</div></div>
+        <div class="row"><div class="rl"><div class="t">Theme</div><div class="d">Light, dark, or follow your system.</div></div><div class="rc">${seg("theme", [["light", "Light"], ["dark", "Dark"], ["system", "System"]], theme)}</div></div>
+      </div>
     </section>`;
     }
+    // Membership row (the design's memrow): avatar + identity + status pill + a "Manage membership" portal link.
     _billingSec() {
       const m = this._membership;
       const cls = m === "paid" ? "paid" : LOCKED2.has(m) ? "warn" : "";
       const portal = this._billing?.portal;
+      const initial = esc((this._login || "G").trim().charAt(0).toUpperCase() || "G");
       return `<section class="sec">
-      <h3>Membership & billing</h3>
-      <p class="hint">Your plan, invoices, and payment method.</p>
-      <div class="row"><span class="lbl">Status</span><span class="val"><span class="badge ${cls}">${esc(STATUS_LABEL[m] || m)}</span></span></div>
-      <div class="row"><span class="lbl">Invoices & receipts</span><span class="val">Manage your card, see invoices, and download receipts in the Stripe customer portal.</span>
-        ${portal ? `<a class="btn" href="${esc(portal)}" target="_blank" rel="noopener">Open billing portal</a>` : `<span class="val">Billing portal unavailable.</span>`}</div>
+      <div class="memrow">
+        <span class="memav">${initial}</span>
+        <div class="mtx">
+          <div class="t"><b>Membership</b><span class="badge ${cls}">${esc(STATUS_LABEL[m] || m)}</span></div>
+          <div class="d">Your plan, invoices, and payment method are managed in the Stripe customer portal.</div>
+        </div>
+        ${portal ? `<a class="btn" href="${esc(portal)}" target="_blank" rel="noopener">Manage membership</a>` : `<span class="d">Billing portal unavailable.</span>`}
+      </div>
     </section>`;
     }
     _referrals() {
       const r = this._referral || {};
       const canonical = r.link || (r.code ? `${SITE6}/join?ref=${r.code}` : null);
       const invite = this._invite?.url || null;
-      const copyField = (id, value, label) => `<div class="row"><span class="lbl">${esc(label)}</span><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div>`;
+      const copyRow = (id, value, label) => `<div class="row"><div class="rl"><div class="t">${esc(label)}</div></div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
+      const rows = `${canonical ? copyRow("ref-canonical", canonical, "Your invite link") : ""}${invite ? copyRow("discord-invite", invite, "Discord invite") : ""}`;
       return `<section class="sec">
-      <h3>Referrals & invites</h3>
-      <p class="hint">Share your invite link to earn a flat ${esc(r.invitePct || "10%")} lifetime commission on every member who joins through it (paid from the platform share, so it never reduces what content owners earn). You also earn from your published work, separately.</p>
-      ${canonical ? copyField("ref-canonical", canonical, "Your invite link") : ""}
-      ${invite ? copyField("discord-invite", invite, "Discord invite") : ""}
-      ${!canonical && !invite ? `<p class="hint">No referral link yet. Sign in as a member to generate one.</p>` : ""}
+      <div class="sec-h"><h3>Referrals & invites</h3><p>Share your invite link to earn a flat ${esc(r.invitePct || "10%")} lifetime commission on every member who joins through it (paid from the platform share, so it never reduces what content owners earn). You also earn from your published work, separately.</p></div>
+      ${rows ? `<div class="rows">${rows}</div>` : `<div class="sec-h" style="padding-top:0"><p style="margin:0">No referral link yet. Sign in as a member to generate one.</p></div>`}
       <div class="msg" data-ref-msg aria-live="polite"></div>
     </section>`;
     }
     _dangerZone() {
       const portal = this._billing?.portal;
       return `<section class="danger">
-      <h3>Danger zone</h3>
-      <p class="hint">These actions end your access or remove your data. They cannot be undone here.</p>
-      <div class="row"><span class="lbl">Cancel membership</span><span class="val">Cancel in the Stripe portal (it handles proration + the period-end choice). Your paid access ends and your published content is set to draft on lapse.</span>
-        ${portal ? `<a class="btn danger-btn" href="${esc(portal)}" target="_blank" rel="noopener">Cancel in portal</a>` : ""}</div>
-      <div class="row"><span class="lbl">Delete account</span><span class="val">Request erasure of your account + data (GDPR). Type <b>DELETE</b> to confirm. Your private data is cleared on this device immediately; your published content + billing are removed by our erasure process.</span>
-        <div class="confirm"><input data-delete-confirm type="text" placeholder="Type DELETE" aria-label="Type DELETE to confirm" autocomplete="off" /> <button data-delete type="button" class="danger-btn" disabled>Request deletion</button></div>
+      <div class="sec-h"><h3>Danger zone</h3><p>These actions end your access or remove your data. They cannot be undone here.</p></div>
+      <div class="rows">
+        <div class="row"><div class="rl"><div class="t">Cancel membership</div><div class="d">Cancel in the Stripe portal (it handles proration + the period-end choice). Your paid access ends and your published content is set to draft on lapse.</div></div><div class="rc">${portal ? `<a class="btn danger-btn" href="${esc(portal)}" target="_blank" rel="noopener">Cancel in portal</a>` : ""}</div></div>
+        <div class="row"><div class="rl"><div class="t">Delete account</div><div class="d">Request erasure of your account + data (GDPR). Type <b>DELETE</b> to confirm. Your private data is cleared on this device immediately; your published content + billing are removed by our erasure process.</div></div><div class="rc"><div class="confirm"><input data-delete-confirm type="text" placeholder="Type DELETE" aria-label="Type DELETE to confirm" autocomplete="off" /><button data-delete type="button" class="danger-btn" disabled>Request deletion</button></div></div></div>
       </div>
       <div class="msg" data-danger-msg aria-live="polite"></div>
     </section>`;
