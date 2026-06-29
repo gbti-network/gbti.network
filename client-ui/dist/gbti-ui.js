@@ -7592,21 +7592,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-subscriptions.mjs
   var SITE7 = "https://gbti.network";
-  var MEMBERSHIP = { paid: "Paid member", trial: "Trial", trialing: "Trial" };
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
   var CSS26 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
-  .card { display:flex; align-items:center; gap:12px; border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
-  .card .who { flex:1; min-width:0; }
-  .card .who b { display:block; font-size:14.5px; }
-  .card .who span { font-size:13px; color:var(--muted); }
-  .tag { flex:none; font-size:12px; font-weight:700; border-radius:999px; padding:3px 11px; background:var(--hover); color:var(--muted); }
-  .tag.ok { background:rgba(31,158,95,.14); color:var(--accent); }
-  .btn { flex:none; font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); cursor:pointer; text-decoration:none; }
-  .btn:hover { border-color:var(--accent); color:var(--accent); }
   .subtabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:4px; margin:0 0 14px; }
   .subtab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 14px; border-radius:6px; cursor:pointer; }
   .subtab.on { background:var(--hover); color:var(--accent); }
@@ -7627,7 +7618,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 `;
   var GbtiSubscriptions = class extends GbtiElement {
     connectedCallback() {
-      this._membership = null;
+      this._loaded = false;
       this._view = "members";
       this._follows = null;
       this._channels = null;
@@ -7641,12 +7632,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.render();
         return;
       }
-      try {
-        this._membership = (await this.client.status())?.membership ?? "unknown";
-      } catch {
-        this._membership = "unknown";
-      }
       await this._reloadFollows(false);
+      this._loaded = true;
       this.render();
     }
     async _reloadFollows(rerender = true) {
@@ -7693,17 +7680,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS26) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
-      if (this._membership === null) {
+      if (!this._loaded) {
         this.set(this.css(CSS26) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
-      const m = this._membership;
-      const label = MEMBERSHIP[m] || (m === "unknown" ? "Not signed in" : "Inactive");
-      const card = `<div class="card">
-      <div class="who"><b>Your membership</b><span>GBTI Network</span></div>
-      <span class="tag ${m === "paid" ? "ok" : ""}">${esc(label)}</span>
-      <a class="btn" href="${SITE7}/membership/" target="_blank" rel="noopener">Manage</a>
-    </div>`;
       const subtabs = `<div class="subtabs">
       <button class="subtab ${this._view === "members" ? "on" : ""}" data-view="members" type="button">Network members</button>
       <button class="subtab ${this._view === "channels" ? "on" : ""}" data-view="channels" type="button">News channels</button>
@@ -7711,7 +7691,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
       this.set(this.css(CSS26) + `<div class="${this._busy ? "busy" : ""}">
-      <section class="sec"><h3>Membership</h3>${card}</section>
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));

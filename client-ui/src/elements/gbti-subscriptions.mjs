@@ -1,6 +1,6 @@
 // <gbti-subscriptions> (SOW-037; renamed surface "Following"): the member's follow management, shown in the
-// workspace "Following" tab. A compact "Your membership" card (client.status()) sits on top, then a sub-tab
-// toggle splits Following into two lists:
+// workspace "Following" tab. A sub-tab toggle splits Following into two lists (the "Your membership" card was
+// removed as redundant: a signed-in member manages membership in Settings/Account, not on the Following tab):
 //   - NETWORK MEMBERS: the follow graph (SOW-023) from client.getFollows(), with an unfollow control per member.
 //   - NEWS CHANNELS: the news sources the member follows (SOW-046), from client.getNewsSources() filtered by
 //     client.getPrefs().followedChannels, with an unfollow control per channel.
@@ -9,7 +9,6 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 
 const SITE = 'https://gbti.network';
-const MEMBERSHIP = { paid: 'Paid member', trial: 'Trial', trialing: 'Trial' };
 const lc = (s) => String(s || '').toLowerCase();
 const followList = (r) => (Array.isArray(r) ? r : (r?.following ?? []));
 
@@ -17,14 +16,6 @@ const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
-  .card { display:flex; align-items:center; gap:12px; border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
-  .card .who { flex:1; min-width:0; }
-  .card .who b { display:block; font-size:14.5px; }
-  .card .who span { font-size:13px; color:var(--muted); }
-  .tag { flex:none; font-size:12px; font-weight:700; border-radius:999px; padding:3px 11px; background:var(--hover); color:var(--muted); }
-  .tag.ok { background:rgba(31,158,95,.14); color:var(--accent); }
-  .btn { flex:none; font:inherit; font-weight:600; font-size:13px; padding:8px 14px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); cursor:pointer; text-decoration:none; }
-  .btn:hover { border-color:var(--accent); color:var(--accent); }
   .subtabs { display:flex; gap:4px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:4px; margin:0 0 14px; }
   .subtab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 14px; border-radius:6px; cursor:pointer; }
   .subtab.on { background:var(--hover); color:var(--accent); }
@@ -46,7 +37,7 @@ const CSS = `
 
 class GbtiSubscriptions extends GbtiElement {
   connectedCallback() {
-    this._membership = null;
+    this._loaded = false;
     this._view = 'members'; // 'members' | 'channels' | 'topics'
     this._follows = null; // array, or null when not loaded / paid-denied
     this._channels = null; // [{ id, name, meta }] followed channels, or null
@@ -58,8 +49,8 @@ class GbtiSubscriptions extends GbtiElement {
 
   async _load() {
     if (!this.client) { this.render(); return; }
-    try { this._membership = (await this.client.status())?.membership ?? 'unknown'; } catch { this._membership = 'unknown'; }
     await this._reloadFollows(false);
+    this._loaded = true;
     this.render();
   }
 
@@ -101,15 +92,7 @@ class GbtiSubscriptions extends GbtiElement {
 
   render() {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`); return; }
-    if (this._membership === null) { this.set(this.css(CSS) + `<p class="muted">Loading your follows...</p>`); return; }
-
-    const m = this._membership;
-    const label = MEMBERSHIP[m] || (m === 'unknown' ? 'Not signed in' : 'Inactive');
-    const card = `<div class="card">
-      <div class="who"><b>Your membership</b><span>GBTI Network</span></div>
-      <span class="tag ${m === 'paid' ? 'ok' : ''}">${esc(label)}</span>
-      <a class="btn" href="${SITE}/membership/" target="_blank" rel="noopener">Manage</a>
-    </div>`;
+    if (!this._loaded) { this.set(this.css(CSS) + `<p class="muted">Loading your follows...</p>`); return; }
 
     const subtabs = `<div class="subtabs">
       <button class="subtab ${this._view === 'members' ? 'on' : ''}" data-view="members" type="button">Network members</button>
@@ -122,7 +105,6 @@ class GbtiSubscriptions extends GbtiElement {
         : this._membersHtml();
 
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
-      <section class="sec"><h3>Membership</h3>${card}</section>
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
 
