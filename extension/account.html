@@ -26,8 +26,26 @@
     .settings-sec select { border: 1.5px solid var(--line-2); border-radius: 9px; }
     .settings-sec select:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
     /* SOW-063: the new-tab splash recurrence control */
-    .splash-set { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--fg); }
-    .splash-set select { font-family: var(--f-sans); font-size: 14px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); cursor: pointer; }
+    /* SOW-070 + GBTI Settings design: the splash controls in the mockup's row style (label left, control right) with
+       pill toggles, green sliders, and chevron selects. CSS-ONLY -- the data-attribute wiring in account.mjs is
+       unchanged (the checkboxes/ranges/selects keep their type + data-* hooks). */
+    .splash-set { display: flex; align-items: center; gap: 16px; justify-content: space-between; font-size: 14px; color: var(--fg); }
+    .splash-set > span { order: 0; flex: 1; min-width: 0; }
+    .splash-set select { appearance: none; -webkit-appearance: none; font-family: var(--f-sans); font-weight: 600; font-size: 14px; padding: 10px 38px 10px 14px; border: 1.5px solid var(--line-2); border-radius: 9px; background-color: var(--paper); color: var(--fg); cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; }
+    .splash-set select:hover { border-color: var(--fg-mute); }
+    .splash-set select:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+    /* pill toggle: a styled checkbox (keeps type=checkbox + data-* so account.mjs wiring is untouched) */
+    .splash-set input[type="checkbox"] { order: 1; flex: none; appearance: none; -webkit-appearance: none; margin: 0; border: 0;
+      width: 44px; height: 25px; border-radius: 999px; cursor: pointer; background-color: var(--line-2);
+      background-image: radial-gradient(circle at 12.5px 12.5px, #fff 8.5px, transparent 9px); background-repeat: no-repeat; background-position: 0 0;
+      transition: background-color .18s ease, background-position .18s cubic-bezier(.3,.7,.4,1); }
+    .splash-set input[type="checkbox"]:checked { background-color: var(--green); background-position: 19px 0; }
+    .splash-set input[type="checkbox"]:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+    /* slider rows: label | range | value */
+    .splash-set:has(input[type="range"]) { display: grid; grid-template-columns: 130px 1fr 52px; gap: 16px; }
+    .splash-set input[type="range"] { width: 100%; accent-color: var(--green); cursor: pointer; }
+    .splash-set output { font-family: var(--f-mono); font-size: 13px; color: var(--fg-soft); text-align: right; font-variant-numeric: tabular-nums; }
     /* SOW-074: the splash background image + modes */
     .splash-bg { display: flex; flex-direction: column; gap: 16px; }
     .bg-image-ctrls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
