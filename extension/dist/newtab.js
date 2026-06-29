@@ -2608,11 +2608,11 @@
    frosts; flat leaves --glass-blur: none (a no-op). Composes with data-theme (light + dark). Green + per-type accents
    are unchanged. Contrast: the panel alphas are kept >= .5 so --fg/--muted stay AA-legible over the ambient backdrop. */
 :host-context([data-layout="glass"]) {
-  --panel: rgba(255,255,255,.55); --line: rgba(255,255,255,.66); --hover: rgba(255,255,255,.4);
+  --panel: rgba(255,255,255,calc(.55 * var(--glass-strength,1))); --line: rgba(255,255,255,calc(.66 * var(--glass-strength,1))); --hover: rgba(255,255,255,calc(.4 * var(--glass-strength,1)));
   --glass-blur: blur(20px) saturate(150%);
 }
 :host-context([data-layout="glass"][data-theme="dark"]) {
-  --panel: rgba(18,26,21,.55); --line: rgba(255,255,255,.1); --hover: rgba(255,255,255,.08);
+  --panel: rgba(18,26,21,calc(.55 * var(--glass-strength,1))); --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1))); --hover: rgba(255,255,255,calc(.08 * var(--glass-strength,1)));
 }
 `;
   var BASE_CSS = `
@@ -5551,6 +5551,31 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "system";
     }
   }
+  var GLASS_KEY = "gbti-glass";
+  function normalizeGlass(v) {
+    if (v == null || v === "") return 50;
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50;
+  }
+  function glassStrength(pct) {
+    return normalizeGlass(pct) / 50;
+  }
+  function applyGlass(pct, { doc = typeof document !== "undefined" ? document : null, storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+    const p = normalizeGlass(pct);
+    try {
+      storage?.setItem(GLASS_KEY, String(p));
+    } catch {
+    }
+    doc?.documentElement?.style?.setProperty("--glass-strength", String(glassStrength(p)));
+    return p;
+  }
+  function currentGlass({ storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+    try {
+      return normalizeGlass(storage?.getItem(GLASS_KEY));
+    } catch {
+      return 50;
+    }
+  }
 
   // client-ui/src/elements/gbti-account.mjs
   var SITE6 = "https://gbti.network";
@@ -5584,6 +5609,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .seg .segbtn { border:0; background:transparent; font:inherit; font-weight:600; font-size:14px; padding:7px 16px; border-radius:6px; color:var(--muted); cursor:pointer; transition:color .14s ease, background .14s ease; }
   .seg .segbtn.on { background:var(--brand); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.12); }
   .seg .segbtn:not(.on):hover { color:var(--fg); }
+  /* glass intensity slider (Appearance, glass only) */
+  .rng { width:170px; max-width:44vw; accent-color:var(--brand); cursor:pointer; vertical-align:middle; }
+  .rngval { font-family:var(--font-mono, monospace); font-size:13px; color:var(--muted); min-width:42px; text-align:right; font-variant-numeric:tabular-nums; }
   /* buttons */
   button, a.btn { font:inherit; font-weight:600; font-size:14px; padding:9px 16px; border-radius:9px; border:1.5px solid var(--line); background:var(--panel); color:var(--fg); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
   button:hover, a.btn:hover { border-color:var(--accent); color:var(--accent); }
@@ -5712,12 +5740,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _appearance() {
       const layout = currentLayout();
       const theme = currentTheme();
+      const glass = currentGlass();
       const seg = (name, options, active) => `<div class="seg">` + options.map(([v, lbl]) => `<button type="button" class="segbtn${v === active ? " on" : ""}" data-set-${name}="${v}">${esc(lbl)}</button>`).join("") + `</div>`;
+      const glassRow = layout === "glass" ? `<div class="row"><div class="rl"><div class="t">Glass intensity</div><div class="d">How opaque the frosted glass surfaces are. Lower is more see-through.</div></div><div class="rc"><input type="range" class="rng" min="0" max="100" step="5" value="${glass}" data-set-glass aria-label="Glass intensity" /><span class="rngval" data-glass-val>${glass}%</span></div></div>` : "";
       return `<section class="sec">
       <div class="sec-h"><h3>Appearance</h3><p>Display preferences for this device. Glass is an experimental frosted layout; Flat is the classic solid look.</p></div>
       <div class="rows">
         <div class="row"><div class="rl"><div class="t">Layout</div><div class="d">Frosted glass surfaces over an ambient backdrop, or the classic flat look.</div></div><div class="rc">${seg("layout", [["flat", "Flat"], ["glass", "Glass"]], layout)}</div></div>
         <div class="row"><div class="rl"><div class="t">Theme</div><div class="d">Light, dark, or follow your system.</div></div><div class="rc">${seg("theme", [["light", "Light"], ["dark", "Dark"], ["system", "System"]], theme)}</div></div>
+        ${glassRow}
       </div>
     </section>`;
     }
@@ -5773,6 +5804,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         applyTheme(b.dataset.setTheme);
         this.render();
       }));
+      const glassRng = this.$("[data-set-glass]");
+      if (glassRng) glassRng.addEventListener("input", () => {
+        const p = applyGlass(glassRng.value);
+        const out = this.$("[data-glass-val]");
+        if (out) out.textContent = `${p}%`;
+      });
       const confirm2 = this.$("[data-delete-confirm]");
       const delBtn = this.$("[data-delete]");
       if (confirm2 && delBtn) confirm2.addEventListener("input", () => {

@@ -32,11 +32,11 @@ export const TOKENS = `
    frosts; flat leaves --glass-blur: none (a no-op). Composes with data-theme (light + dark). Green + per-type accents
    are unchanged. Contrast: the panel alphas are kept >= .5 so --fg/--muted stay AA-legible over the ambient backdrop. */
 :host-context([data-layout="glass"]) {
-  --panel: rgba(255,255,255,.55); --line: rgba(255,255,255,.66); --hover: rgba(255,255,255,.4);
+  --panel: rgba(255,255,255,calc(.55 * var(--glass-strength,1))); --line: rgba(255,255,255,calc(.66 * var(--glass-strength,1))); --hover: rgba(255,255,255,calc(.4 * var(--glass-strength,1)));
   --glass-blur: blur(20px) saturate(150%);
 }
 :host-context([data-layout="glass"][data-theme="dark"]) {
-  --panel: rgba(18,26,21,.55); --line: rgba(255,255,255,.1); --hover: rgba(255,255,255,.08);
+  --panel: rgba(18,26,21,calc(.55 * var(--glass-strength,1))); --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1))); --hover: rgba(255,255,255,calc(.08 * var(--glass-strength,1)));
 }
 `;
 

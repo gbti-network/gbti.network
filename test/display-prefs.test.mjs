@@ -1,15 +1,16 @@
 // SOW-070: the display-preference helpers (layout Flat/Glass + theme Light/Dark/System). Pure + injectable DOM.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeLayout, normalizeTheme, resolveTheme, applyLayout, applyTheme, currentLayout, currentTheme, LAYOUT_KEY, THEME_KEY } from '../client-ui/src/display-prefs.mjs';
+import { normalizeLayout, normalizeTheme, resolveTheme, applyLayout, applyTheme, currentLayout, currentTheme, LAYOUT_KEY, THEME_KEY, normalizeGlass, glassStrength, applyGlass, currentGlass, GLASS_KEY } from '../client-ui/src/display-prefs.mjs';
 
 function fakeDom() {
   const attrs = {};
+  const styles = {};
   const store = new Map();
   return {
-    doc: { documentElement: { setAttribute: (k, v) => { attrs[k] = v; }, getAttribute: (k) => attrs[k] ?? null } },
+    doc: { documentElement: { setAttribute: (k, v) => { attrs[k] = v; }, getAttribute: (k) => attrs[k] ?? null, style: { setProperty: (k, v) => { styles[k] = v; } } } },
     storage: { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) },
-    attrs, store,
+    attrs, store, styles,
   };
 }
 
@@ -55,4 +56,29 @@ test('currentLayout / currentTheme read stored values (default flat / system)', 
   store.set(LAYOUT_KEY, 'glass'); store.set(THEME_KEY, 'light');
   assert.equal(currentLayout({ storage }), 'glass');
   assert.equal(currentTheme({ storage }), 'light');
+});
+
+test('normalizeGlass clamps to 0..100 and defaults to 50', () => {
+  assert.equal(normalizeGlass(70), 70);
+  assert.equal(normalizeGlass('30'), 30);
+  assert.equal(normalizeGlass(null), 50);
+  assert.equal(normalizeGlass('weird'), 50);
+  assert.equal(normalizeGlass(-20), 0);
+  assert.equal(normalizeGlass(180), 100);
+});
+
+test('glassStrength: 50% -> 1.0 (the built-in look); scales linearly', () => {
+  assert.equal(glassStrength(50), 1);
+  assert.equal(glassStrength(100), 2);
+  assert.equal(glassStrength(0), 0);
+  assert.equal(glassStrength(25), 0.5);
+});
+
+test('applyGlass persists the percent + sets --glass-strength; currentGlass reads it back (default 50)', () => {
+  const { doc, storage, store, styles } = fakeDom();
+  assert.equal(applyGlass(80, { doc, storage }), 80);
+  assert.equal(store.get(GLASS_KEY), '80');
+  assert.equal(styles['--glass-strength'], '1.6'); // 80 / 50
+  assert.equal(currentGlass({ storage }), 80);
+  assert.equal(currentGlass({ storage: fakeDom().storage }), 50); // unset -> default
 });

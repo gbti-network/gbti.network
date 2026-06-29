@@ -45,3 +45,27 @@ export function currentLayout({ storage = (typeof localStorage !== 'undefined' ?
 export function currentTheme({ storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
   try { return normalizeTheme(storage?.getItem(THEME_KEY)); } catch { return 'system'; }
 }
+
+// SOW-070: GLASS INTENSITY -- only meaningful when layout is Glass. Stored as an integer percent 0..100 (default 50);
+// the CSS multiplies every glass surface alpha by var(--glass-strength), where strength = percent / 50, so 50% keeps
+// the built-in look (strength 1.0), 100% nears fully opaque, and lower is more see-through. Applied as an inline
+// --glass-strength on the document root; the no-flash boot (theme-init.mjs) mirrors the same gbti-glass key.
+export const GLASS_KEY = 'gbti-glass';
+
+/** A stored glass value -> an integer percent 0..100 (default 50). */
+export function normalizeGlass(v) { if (v == null || v === '') return 50; const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 50; }
+
+/** The CSS multiplier for a glass percent: 50% -> 1.0 (the built-in look). */
+export function glassStrength(pct) { return normalizeGlass(pct) / 50; }
+
+/** Persist + apply the glass intensity (an inline --glass-strength on the root). Returns the normalized percent. */
+export function applyGlass(pct, { doc = (typeof document !== 'undefined' ? document : null), storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
+  const p = normalizeGlass(pct);
+  try { storage?.setItem(GLASS_KEY, String(p)); } catch { /* private mode */ }
+  doc?.documentElement?.style?.setProperty('--glass-strength', String(glassStrength(p)));
+  return p;
+}
+
+export function currentGlass({ storage = (typeof localStorage !== 'undefined' ? localStorage : null) } = {}) {
+  try { return normalizeGlass(storage?.getItem(GLASS_KEY)); } catch { return 50; }
+}

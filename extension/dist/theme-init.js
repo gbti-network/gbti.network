@@ -8,6 +8,11 @@
       document.documentElement.setAttribute("data-theme", t);
       var l = localStorage.getItem("gbti-layout");
       document.documentElement.setAttribute("data-layout", l === "glass" ? "glass" : "flat");
+      var g = localStorage.getItem("gbti-glass");
+      if (g != null) {
+        var gp = Math.round(Number(g));
+        if (gp === gp) document.documentElement.style.setProperty("--glass-strength", String(Math.max(0, Math.min(100, gp)) / 50));
+      }
     } catch (e) {
     }
   })();

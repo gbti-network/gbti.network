@@ -12,5 +12,10 @@
     // gbti-layout key in client-ui/src/display-prefs.mjs.
     var l = localStorage.getItem('gbti-layout');
     document.documentElement.setAttribute('data-layout', l === 'glass' ? 'glass' : 'flat');
+    // SOW-070: glass intensity (gbti-glass, percent 0..100). The CSS scales every glass surface alpha by
+    // --glass-strength (strength = percent / 50; 50% = the built-in look). Only set when stored; otherwise the CSS
+    // fallback (1) holds, so flat + an unset glass intensity are unaffected.
+    var g = localStorage.getItem('gbti-glass');
+    if (g != null) { var gp = Math.round(Number(g)); if (gp === gp) document.documentElement.style.setProperty('--glass-strength', String(Math.max(0, Math.min(100, gp)) / 50)); }
   } catch (e) {}
 })();

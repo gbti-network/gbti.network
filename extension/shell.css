@@ -29,13 +29,13 @@
    inert without it). An ambient brand-tinted backdrop behind the shell + translucent, backdrop-blurred surface tokens.
    Composes with data-theme (light + dark). The shell surfaces read backdrop-filter: var(--glass-blur). ---- */
 [data-layout="glass"] {
-  --paper: rgba(255,255,255,.55); --paper-2: rgba(255,255,255,.34); --paper-3: rgba(255,255,255,.46);
-  --line: rgba(255,255,255,.6); --line-2: rgba(255,255,255,.7);
+  --paper: rgba(255,255,255,calc(.55 * var(--glass-strength,1))); --paper-2: rgba(255,255,255,calc(.34 * var(--glass-strength,1))); --paper-3: rgba(255,255,255,calc(.46 * var(--glass-strength,1)));
+  --line: rgba(255,255,255,calc(.6 * var(--glass-strength,1))); --line-2: rgba(255,255,255,calc(.7 * var(--glass-strength,1)));
   --glass-blur: blur(20px) saturate(150%);
 }
 [data-layout="glass"][data-theme="dark"] {
-  --paper: rgba(30,38,32,.58); --paper-2: rgba(18,26,21,.4); --paper-3: rgba(40,48,42,.5);
-  --line: rgba(255,255,255,.1); --line-2: rgba(255,255,255,.16);
+  --paper: rgba(30,38,32,calc(.58 * var(--glass-strength,1))); --paper-2: rgba(18,26,21,calc(.4 * var(--glass-strength,1))); --paper-3: rgba(40,48,42,calc(.5 * var(--glass-strength,1)));
+  --line: rgba(255,255,255,calc(.1 * var(--glass-strength,1))); --line-2: rgba(255,255,255,calc(.16 * var(--glass-strength,1)));
 }
 [data-layout="glass"] body {
   background:

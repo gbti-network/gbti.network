@@ -8,7 +8,7 @@
 // divided rows (label/description left, control right). Shadow DOM + V3 tokens only; the shell rail/header are NOT
 // part of this element.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { currentLayout, currentTheme, applyLayout, applyTheme } from '../display-prefs.mjs'; // SOW-070: the Appearance segment
+import { currentLayout, currentTheme, applyLayout, applyTheme, currentGlass, applyGlass } from '../display-prefs.mjs'; // SOW-070: the Appearance segment
 
 const SITE = 'https://gbti.network';
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
@@ -43,6 +43,9 @@ const CSS = `
   .seg .segbtn { border:0; background:transparent; font:inherit; font-weight:600; font-size:14px; padding:7px 16px; border-radius:6px; color:var(--muted); cursor:pointer; transition:color .14s ease, background .14s ease; }
   .seg .segbtn.on { background:var(--brand); color:#fff; box-shadow:0 1px 2px rgba(0,0,0,.12); }
   .seg .segbtn:not(.on):hover { color:var(--fg); }
+  /* glass intensity slider (Appearance, glass only) */
+  .rng { width:170px; max-width:44vw; accent-color:var(--brand); cursor:pointer; vertical-align:middle; }
+  .rngval { font-family:var(--font-mono, monospace); font-size:13px; color:var(--muted); min-width:42px; text-align:right; font-variant-numeric:tabular-nums; }
   /* buttons */
   button, a.btn { font:inherit; font-weight:600; font-size:14px; padding:9px 16px; border-radius:9px; border:1.5px solid var(--line); background:var(--panel); color:var(--fg); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:8px; white-space:nowrap; }
   button:hover, a.btn:hover { border-color:var(--accent); color:var(--accent); }
@@ -157,14 +160,21 @@ class GbtiAccount extends GbtiElement {
   _appearance() {
     const layout = currentLayout();
     const theme = currentTheme();
+    const glass = currentGlass();
     const seg = (name, options, active) => `<div class="seg">` + options
       .map(([v, lbl]) => `<button type="button" class="segbtn${v === active ? ' on' : ''}" data-set-${name}="${v}">${esc(lbl)}</button>`)
       .join('') + `</div>`;
+    // SOW-070: Glass intensity only appears when Glass is the active layout (it is a no-op in Flat). The slider drives
+    // --glass-strength, which scales the opacity of every glass surface live.
+    const glassRow = layout === 'glass'
+      ? `<div class="row"><div class="rl"><div class="t">Glass intensity</div><div class="d">How opaque the frosted glass surfaces are. Lower is more see-through.</div></div><div class="rc"><input type="range" class="rng" min="0" max="100" step="5" value="${glass}" data-set-glass aria-label="Glass intensity" /><span class="rngval" data-glass-val>${glass}%</span></div></div>`
+      : '';
     return `<section class="sec">
       <div class="sec-h"><h3>Appearance</h3><p>Display preferences for this device. Glass is an experimental frosted layout; Flat is the classic solid look.</p></div>
       <div class="rows">
         <div class="row"><div class="rl"><div class="t">Layout</div><div class="d">Frosted glass surfaces over an ambient backdrop, or the classic flat look.</div></div><div class="rc">${seg('layout', [['flat', 'Flat'], ['glass', 'Glass']], layout)}</div></div>
         <div class="row"><div class="rl"><div class="t">Theme</div><div class="d">Light, dark, or follow your system.</div></div><div class="rc">${seg('theme', [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']], theme)}</div></div>
+        ${glassRow}
       </div>
     </section>`;
   }
@@ -224,6 +234,9 @@ class GbtiAccount extends GbtiElement {
     // SOW-070: Appearance — apply + re-render so the active segment updates (tokens.mjs + shell.css re-skin live).
     this.$$('[data-set-layout]').forEach((b) => b.addEventListener('click', () => { applyLayout(b.dataset.setLayout); this.render(); }));
     this.$$('[data-set-theme]').forEach((b) => b.addEventListener('click', () => { applyTheme(b.dataset.setTheme); this.render(); }));
+    // SOW-070: Glass intensity — apply live (the inline --glass-strength re-skins every surface instantly) + update the readout. No re-render.
+    const glassRng = this.$('[data-set-glass]');
+    if (glassRng) glassRng.addEventListener('input', () => { const p = applyGlass(glassRng.value); const out = this.$('[data-glass-val]'); if (out) out.textContent = `${p}%`; });
     // Delete: type-to-confirm enables the button only on exactly "DELETE".
     const confirm = this.$('[data-delete-confirm]');
     const delBtn = this.$('[data-delete]');
