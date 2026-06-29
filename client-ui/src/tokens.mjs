@@ -17,6 +17,7 @@ export const TOKENS = `
   --text: #24222a; --fg: #24222a; --muted: #57545e;
   --line: #e7e4e0; --hover: #f1f1f1; --danger: #c0392b;
   --radius: 12px;
+  --glass-blur: none; /* SOW-070: flat (default) = no frost; the glass layout layer below sets a real backdrop blur */
   --font-body: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
   --font-display: "Baloo Da 2", "Hanken Grotesk", system-ui, sans-serif;
 }
@@ -26,6 +27,17 @@ export const TOKENS = `
   --text: #f3f2f0; --fg: #f3f2f0; --muted: rgba(243,242,240,.72);
   --line: rgba(255,255,255,.12); --hover: #34313c; --danger: #e06c6c;
 }
+/* SOW-070: the GLASS layout skin (opt-in: data-layout="glass" on an ancestor). Re-points the surface tokens to
+   translucent values + defines --glass-blur, so any surface class that reads backdrop-filter: var(--glass-blur)
+   frosts; flat leaves --glass-blur: none (a no-op). Composes with data-theme (light + dark). Green + per-type accents
+   are unchanged. Contrast: the panel alphas are kept >= .5 so --fg/--muted stay AA-legible over the ambient backdrop. */
+:host-context([data-layout="glass"]) {
+  --panel: rgba(255,255,255,.55); --line: rgba(255,255,255,.66); --hover: rgba(255,255,255,.4);
+  --glass-blur: blur(20px) saturate(150%);
+}
+:host-context([data-layout="glass"][data-theme="dark"]) {
+  --panel: rgba(18,26,21,.55); --line: rgba(255,255,255,.1); --hover: rgba(255,255,255,.08);
+}
 `;
 
 export const BASE_CSS = `
@@ -34,7 +46,7 @@ export const BASE_CSS = `
 h1, h2, h3 { font-family: var(--font-display); margin: 0 0 .5em; }
 h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 a { color: var(--accent); }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
 input, select, textarea {
   width: 100%; padding: 9px 11px; background: var(--bg); border: 1px solid var(--line);

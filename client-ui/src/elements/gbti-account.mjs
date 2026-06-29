@@ -6,6 +6,7 @@
 // clears local data + files a GDPR erasure request — the full self-service KV/Stripe erase is the SOW-024-aligned
 // follow-up, legal-parked, so v1 surfaces the entry point + does the safe parts only).
 import { GbtiElement, define, esc } from '../base.mjs';
+import { currentLayout, currentTheme, applyLayout, applyTheme } from '../display-prefs.mjs'; // SOW-070: the Appearance segment
 
 const SITE = 'https://gbti.network';
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
@@ -20,7 +21,7 @@ const STATUS_LABEL = {
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .sec { border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:0 0 16px; background:var(--panel); }
+  .sec { border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:0 0 16px; background:var(--panel); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
   .sec .hint { margin:0 0 14px; color:var(--muted); font-size:13px; }
   .row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:9px 0; border-top:1px solid var(--line); }
@@ -34,6 +35,12 @@ const CSS = `
   button:hover, a.btn:hover { border-color:var(--accent); color:var(--accent); }
   button.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
   button.primary:hover { background:var(--brand-dark, var(--brand)); color:#fff; }
+  /* SOW-070: the Appearance segmented controls (Layout + Theme). */
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .segbtn { font:inherit; font-weight:600; font-size:13px; padding:7px 14px; border:0; border-radius:0; background:transparent; color:var(--muted); cursor:pointer; }
+  .segbtn + .segbtn { border-left:1px solid var(--line); }
+  .segbtn.on { background:var(--brand); color:#fff; }
+  .segbtn:not(.on):hover { background:var(--hover); color:var(--fg); }
   .copyrow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .copyrow input { flex:1; min-width:220px; font:inherit; font-size:13px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg, var(--panel)); color:var(--fg); }
   .nudge { padding:16px; border:1.5px dashed var(--line); border-radius:12px; background:var(--panel); font-size:14px; color:var(--muted); }
@@ -61,17 +68,24 @@ class GbtiAccount extends GbtiElement {
 
   async _load() {
     if (!this.client) return; // inert: no host -> the render() sign-in nudge stays
+    // SOW-040 follow-up: never hang on "Loading your account…". Each call is caught to null AND raced against an 8s
+    // timeout, so a background worker that goes idle, or an unsettling fetch (e.g. an expired token whose refresh
+    // never resolves), degrades to the signed-out nudge / partial data instead of a permanent spinner.
+    const guard = (p) => Promise.race([
+      Promise.resolve(p).then((v) => v, () => null),
+      new Promise((res) => { setTimeout(() => res(null), 8000); }),
+    ]);
     try {
       const [status, billing, referral, invite] = await Promise.all([
-        this.client.status?.().catch(() => null),
-        this.client.getBilling?.().catch(() => null),
-        this.client.getReferral?.().catch(() => null),
-        this.client.discordInvite?.().catch(() => null),
+        guard(this.client.status?.()),
+        guard(this.client.getBilling?.()),
+        guard(this.client.getReferral?.()),
+        guard(this.client.discordInvite?.()),
       ]);
       this._status = status; this._billing = billing; this._referral = referral; this._invite = invite;
-      this._loaded = true;
-      this.render();
-    } catch { this._loaded = true; this.render(); }
+    } catch { /* fall through and render whatever resolved */ }
+    this._loaded = true;
+    this.render();
   }
 
   get _signedIn() { return Boolean(this._status?.authenticated && this._status?.identity?.login); }
@@ -85,7 +99,7 @@ class GbtiAccount extends GbtiElement {
       this.set(this.css(CSS) + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE}/membership/">Become a member</a>.</div>`);
       return;
     }
-    this.set(this.css(CSS) + this._account() + this._billingSec() + this._referrals() + this._dangerZone());
+    this.set(this.css(CSS) + this._account() + this._appearance() + this._billingSec() + this._referrals() + this._dangerZone());
     this._wire();
   }
 
@@ -96,6 +110,23 @@ class GbtiAccount extends GbtiElement {
       <div class="row"><span class="lbl">Sign out</span><span class="val">End this session on this device.</span><button data-signout type="button">Sign out</button></div>
       <div class="row"><span class="lbl">Welcome tour</span><span class="val">Show the post-setup welcome (join Discord + discover members) again.</span><button data-reset-welcome type="button">Reset</button></div>
       <div class="msg" data-account-msg aria-live="polite"></div>
+    </section>`;
+  }
+
+  // SOW-070: Appearance — Layout (Flat/Glass) + Theme (Light/Dark/System), device-local display prefs applied as
+  // data-layout / data-theme on the document (tokens.mjs + shell.css react live). Theme shares the gbti-theme key with
+  // the header quick-toggle so the two never disagree. Flat + System are the defaults.
+  _appearance() {
+    const layout = currentLayout();
+    const theme = currentTheme();
+    const seg = (name, options, active) => `<div class="seg">` + options
+      .map(([v, lbl]) => `<button type="button" class="segbtn${v === active ? ' on' : ''}" data-set-${name}="${v}">${esc(lbl)}</button>`)
+      .join('') + `</div>`;
+    return `<section class="sec">
+      <h3>Appearance</h3>
+      <p class="hint">Display preferences for this device. Glass is an experimental frosted layout; Flat is the classic solid look.</p>
+      <div class="row"><span class="lbl">Layout</span><span class="val">Frosted glass surfaces over an ambient backdrop, or the classic flat look.</span>${seg('layout', [['flat', 'Flat'], ['glass', 'Glass']], layout)}</div>
+      <div class="row"><span class="lbl">Theme</span><span class="val">Light, dark, or follow your system.</span>${seg('theme', [['light', 'Light'], ['dark', 'Dark'], ['system', 'System']], theme)}</div>
     </section>`;
   }
 
@@ -150,6 +181,9 @@ class GbtiAccount extends GbtiElement {
     this.on('[data-signout]', 'click', () => this.emit('gbti:request-signout'));
     this.on('[data-reset-welcome]', 'click', () => this._resetWelcome());
     this.$$('[data-copy]').forEach((b) => b.addEventListener('click', () => this._copy(b.dataset.copy)));
+    // SOW-070: Appearance — apply + re-render so the active segment updates (tokens.mjs + shell.css re-skin live).
+    this.$$('[data-set-layout]').forEach((b) => b.addEventListener('click', () => { applyLayout(b.dataset.setLayout); this.render(); }));
+    this.$$('[data-set-theme]').forEach((b) => b.addEventListener('click', () => { applyTheme(b.dataset.setTheme); this.render(); }));
     // Delete: type-to-confirm enables the button only on exactly "DELETE".
     const confirm = this.$('[data-delete-confirm]');
     const delBtn = this.$('[data-delete]');

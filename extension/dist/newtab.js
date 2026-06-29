@@ -2439,20 +2439,11 @@
   function splashShowsQuote(raw) {
     return String(raw) !== "0";
   }
-  function splashKeepsDarkCards(raw) {
-    return String(raw) !== "0";
-  }
   function normalizePatternGap(raw, fallback = 16) {
     if (raw === null || raw === void 0 || raw === "") return fallback;
     const n = Math.round(Number(raw));
     if (!Number.isFinite(n)) return fallback;
     return Math.min(60, Math.max(4, n));
-  }
-  function normalizeCardBlur(raw, fallback = 10) {
-    if (raw === null || raw === void 0 || raw === "") return fallback;
-    const n = Math.round(Number(raw));
-    if (!Number.isFinite(n)) return fallback;
-    return Math.min(20, Math.max(0, n));
   }
   var ASCII_V = { top: "flex-start", center: "center", bottom: "flex-end" };
   var ASCII_H = { left: "flex-start", center: "center", right: "flex-end" };
@@ -2593,6 +2584,7 @@
   --text: #24222a; --fg: #24222a; --muted: #57545e;
   --line: #e7e4e0; --hover: #f1f1f1; --danger: #c0392b;
   --radius: 12px;
+  --glass-blur: none; /* SOW-070: flat (default) = no frost; the glass layout layer below sets a real backdrop blur */
   --font-body: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
   --font-display: "Baloo Da 2", "Hanken Grotesk", system-ui, sans-serif;
 }
@@ -2602,6 +2594,17 @@
   --text: #f3f2f0; --fg: #f3f2f0; --muted: rgba(243,242,240,.72);
   --line: rgba(255,255,255,.12); --hover: #34313c; --danger: #e06c6c;
 }
+/* SOW-070: the GLASS layout skin (opt-in: data-layout="glass" on an ancestor). Re-points the surface tokens to
+   translucent values + defines --glass-blur, so any surface class that reads backdrop-filter: var(--glass-blur)
+   frosts; flat leaves --glass-blur: none (a no-op). Composes with data-theme (light + dark). Green + per-type accents
+   are unchanged. Contrast: the panel alphas are kept >= .5 so --fg/--muted stay AA-legible over the ambient backdrop. */
+:host-context([data-layout="glass"]) {
+  --panel: rgba(255,255,255,.55); --line: rgba(255,255,255,.66); --hover: rgba(255,255,255,.4);
+  --glass-blur: blur(20px) saturate(150%);
+}
+:host-context([data-layout="glass"][data-theme="dark"]) {
+  --panel: rgba(18,26,21,.55); --line: rgba(255,255,255,.1); --hover: rgba(255,255,255,.08);
+}
 `;
   var BASE_CSS = `
 :host { display: block; color: var(--text); font: 15px/1.5 var(--font-body); box-sizing: border-box; }
@@ -2609,7 +2612,7 @@
 h1, h2, h3 { font-family: var(--font-display); margin: 0 0 .5em; }
 h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 a { color: var(--accent); }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
 input, select, textarea {
   width: 100%; padding: 9px 11px; background: var(--bg); border: 1px solid var(--line);
@@ -5489,6 +5492,60 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-settings", GbtiSettings);
 
+  // client-ui/src/display-prefs.mjs
+  var LAYOUT_KEY = "gbti-layout";
+  var THEME_KEY = "gbti-theme";
+  function normalizeLayout(v) {
+    return v === "glass" ? "glass" : "flat";
+  }
+  function normalizeTheme(v) {
+    return v === "light" || v === "dark" ? v : "system";
+  }
+  function resolveTheme(theme, prefersDark) {
+    const t = normalizeTheme(theme);
+    return t === "system" ? prefersDark ? "dark" : "light" : t;
+  }
+  var osPrefersDark = () => {
+    try {
+      return matchMedia("(prefers-color-scheme: dark)").matches;
+    } catch {
+      return false;
+    }
+  };
+  function applyLayout(layout, { doc = typeof document !== "undefined" ? document : null, storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+    const l = normalizeLayout(layout);
+    try {
+      storage?.setItem(LAYOUT_KEY, l);
+    } catch {
+    }
+    doc?.documentElement?.setAttribute("data-layout", l);
+    return l;
+  }
+  function applyTheme(theme, { doc = typeof document !== "undefined" ? document : null, storage = typeof localStorage !== "undefined" ? localStorage : null, prefersDark = osPrefersDark() } = {}) {
+    const t = normalizeTheme(theme);
+    try {
+      if (t === "system") storage?.removeItem(THEME_KEY);
+      else storage?.setItem(THEME_KEY, t);
+    } catch {
+    }
+    doc?.documentElement?.setAttribute("data-theme", resolveTheme(t, prefersDark));
+    return t;
+  }
+  function currentLayout({ storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+    try {
+      return normalizeLayout(storage?.getItem(LAYOUT_KEY));
+    } catch {
+      return "flat";
+    }
+  }
+  function currentTheme({ storage = typeof localStorage !== "undefined" ? localStorage : null } = {}) {
+    try {
+      return normalizeTheme(storage?.getItem(THEME_KEY));
+    } catch {
+      return "system";
+    }
+  }
+
   // client-ui/src/elements/gbti-account.mjs
   var SITE6 = "https://gbti.network";
   var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
@@ -5504,7 +5561,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   var CSS8 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .sec { border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:0 0 16px; background:var(--panel); }
+  .sec { border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:0 0 16px; background:var(--panel); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
   .sec .hint { margin:0 0 14px; color:var(--muted); font-size:13px; }
   .row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:9px 0; border-top:1px solid var(--line); }
@@ -5518,6 +5575,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   button:hover, a.btn:hover { border-color:var(--accent); color:var(--accent); }
   button.primary { background:var(--brand); border-color:var(--brand); color:#fff; }
   button.primary:hover { background:var(--brand-dark, var(--brand)); color:#fff; }
+  /* SOW-070: the Appearance segmented controls (Layout + Theme). */
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .segbtn { font:inherit; font-weight:600; font-size:13px; padding:7px 14px; border:0; border-radius:0; background:transparent; color:var(--muted); cursor:pointer; }
+  .segbtn + .segbtn { border-left:1px solid var(--line); }
+  .segbtn.on { background:var(--brand); color:#fff; }
+  .segbtn:not(.on):hover { background:var(--hover); color:var(--fg); }
   .copyrow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .copyrow input { flex:1; min-width:220px; font:inherit; font-size:13px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg, var(--panel)); color:var(--fg); }
   .nudge { padding:16px; border:1.5px dashed var(--line); border-radius:12px; background:var(--panel); font-size:14px; color:var(--muted); }
@@ -5543,23 +5606,27 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     async _load() {
       if (!this.client) return;
+      const guard = (p) => Promise.race([
+        Promise.resolve(p).then((v) => v, () => null),
+        new Promise((res) => {
+          setTimeout(() => res(null), 8e3);
+        })
+      ]);
       try {
         const [status, billing, referral, invite] = await Promise.all([
-          this.client.status?.().catch(() => null),
-          this.client.getBilling?.().catch(() => null),
-          this.client.getReferral?.().catch(() => null),
-          this.client.discordInvite?.().catch(() => null)
+          guard(this.client.status?.()),
+          guard(this.client.getBilling?.()),
+          guard(this.client.getReferral?.()),
+          guard(this.client.discordInvite?.())
         ]);
         this._status = status;
         this._billing = billing;
         this._referral = referral;
         this._invite = invite;
-        this._loaded = true;
-        this.render();
       } catch {
-        this._loaded = true;
-        this.render();
       }
+      this._loaded = true;
+      this.render();
     }
     get _signedIn() {
       return Boolean(this._status?.authenticated && this._status?.identity?.login);
@@ -5583,7 +5650,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS8) + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE6}/membership/">Become a member</a>.</div>`);
         return;
       }
-      this.set(this.css(CSS8) + this._account() + this._billingSec() + this._referrals() + this._dangerZone());
+      this.set(this.css(CSS8) + this._account() + this._appearance() + this._billingSec() + this._referrals() + this._dangerZone());
       this._wire();
     }
     _account() {
@@ -5593,6 +5660,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="row"><span class="lbl">Sign out</span><span class="val">End this session on this device.</span><button data-signout type="button">Sign out</button></div>
       <div class="row"><span class="lbl">Welcome tour</span><span class="val">Show the post-setup welcome (join Discord + discover members) again.</span><button data-reset-welcome type="button">Reset</button></div>
       <div class="msg" data-account-msg aria-live="polite"></div>
+    </section>`;
+    }
+    // SOW-070: Appearance — Layout (Flat/Glass) + Theme (Light/Dark/System), device-local display prefs applied as
+    // data-layout / data-theme on the document (tokens.mjs + shell.css react live). Theme shares the gbti-theme key with
+    // the header quick-toggle so the two never disagree. Flat + System are the defaults.
+    _appearance() {
+      const layout = currentLayout();
+      const theme = currentTheme();
+      const seg = (name, options, active) => `<div class="seg">` + options.map(([v, lbl]) => `<button type="button" class="segbtn${v === active ? " on" : ""}" data-set-${name}="${v}">${esc(lbl)}</button>`).join("") + `</div>`;
+      return `<section class="sec">
+      <h3>Appearance</h3>
+      <p class="hint">Display preferences for this device. Glass is an experimental frosted layout; Flat is the classic solid look.</p>
+      <div class="row"><span class="lbl">Layout</span><span class="val">Frosted glass surfaces over an ambient backdrop, or the classic flat look.</span>${seg("layout", [["flat", "Flat"], ["glass", "Glass"]], layout)}</div>
+      <div class="row"><span class="lbl">Theme</span><span class="val">Light, dark, or follow your system.</span>${seg("theme", [["light", "Light"], ["dark", "Dark"], ["system", "System"]], theme)}</div>
     </section>`;
     }
     _billingSec() {
@@ -5638,6 +5719,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.on("[data-signout]", "click", () => this.emit("gbti:request-signout"));
       this.on("[data-reset-welcome]", "click", () => this._resetWelcome());
       this.$$("[data-copy]").forEach((b) => b.addEventListener("click", () => this._copy(b.dataset.copy)));
+      this.$$("[data-set-layout]").forEach((b) => b.addEventListener("click", () => {
+        applyLayout(b.dataset.setLayout);
+        this.render();
+      }));
+      this.$$("[data-set-theme]").forEach((b) => b.addEventListener("click", () => {
+        applyTheme(b.dataset.setTheme);
+        this.render();
+      }));
       const confirm2 = this.$("[data-delete-confirm]");
       const delBtn = this.$("[data-delete]");
       if (confirm2 && delBtn) confirm2.addEventListener("input", () => {
@@ -10730,7 +10819,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     root.setAttribute("data-splash", "1");
     root.toggleAttribute("data-splash-nocards", !splashShowsCards(lsItem("gbti-splash-show-cards")));
     root.toggleAttribute("data-splash-noquote", !splashShowsQuote(lsItem("gbti-splash-show-quote")));
-    root.toggleAttribute("data-splash-lightcards", !splashKeepsDarkCards(lsItem("gbti-splash-dark-cards")));
     renderSplashQuote();
     applySplashBg();
     window.scrollTo(0, 0);
@@ -10744,7 +10832,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     root.removeAttribute("data-splash");
     root.removeAttribute("data-splash-nocards");
     root.removeAttribute("data-splash-noquote");
-    root.removeAttribute("data-splash-lightcards");
     clearSplashBg();
   }
   function snoozeSplash(dest) {
@@ -10806,7 +10893,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     root.style.removeProperty("--splash-bg");
     root.style.removeProperty("--splash-bg-dim");
     root.style.removeProperty("--card-op");
-    root.style.removeProperty("--card-blur");
     const pat = $("[data-splash-pattern]");
     if (pat) {
       pat.className = "splash-pattern";
@@ -10824,7 +10910,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const dim = (100 - normalizeBgOpacity(lsItem("gbti-splash-bg-opacity"))) / 100;
     root.style.setProperty("--splash-bg-dim", `rgba(0,0,0,${dim.toFixed(2)})`);
     root.style.setProperty("--card-op", (normalizeBgOpacity(lsItem("gbti-splash-bg-card-op"), 70) / 100).toFixed(2));
-    root.style.setProperty("--card-blur", `${normalizeCardBlur(lsItem("gbti-splash-bg-card-blur"))}px`);
     const pattern = normalizeBgPattern(lsItem("gbti-splash-bg-pattern"));
     const pat = $("[data-splash-pattern]");
     if (pat && pattern !== "none") {
