@@ -178,6 +178,12 @@ html[data-unauth] .compose-modal { display: none !important; }
 .compose-x { width: 32px; height: 32px; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--fg-mute); cursor: pointer; }
 .compose-x:hover { background: var(--paper-3); color: var(--fg); }
 .compose-x svg { width: 18px; height: 18px; }
+/* SOW-070: GLASS — the compose modal is a frosted panel over a softer brand-tinted scrim, with an inner-light top
+   border (the recipe). The panel reads var(--paper) (translucent under the glass token layer) + the backdrop blur. */
+[data-layout="glass"] .compose-modal { background: rgba(20,35,26,.2); }
+[data-layout="glass"][data-theme="dark"] .compose-modal { background: rgba(0,0,0,.36); }
+[data-layout="glass"] .compose-panel { -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: inset 0 1px 0 rgba(255,255,255,.6), var(--sh-md); }
+[data-layout="glass"][data-theme="dark"] .compose-panel { box-shadow: inset 0 1px 0 rgba(255,255,255,.12), var(--sh-md); }
 
 /* SOW-064: the active section's icon leading the page heading (sized to the heading via 1em). */
 .head-ico { display: inline-flex; align-items: center; vertical-align: -.15em; margin-right: .42em; color: var(--green); }

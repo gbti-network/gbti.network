@@ -3535,6 +3535,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .card-i[data-type]:not([data-type="news"]) { background:color-mix(in srgb, var(--cbar) 7%, var(--panel)); }
   [data-type]:not([data-type="news"]) .chip { color:var(--cbar); background:color-mix(in srgb, var(--cbar) 13%, transparent); border-color:color-mix(in srgb, var(--cbar) 26%, transparent); }
 
+  /* SOW-070: GLASS — the accent bars + gradient glyphs + colored chips above already carry over; glass just FROSTS
+     the list (ONE backdrop blur per CONTAINER, never per row, for the long-feed perf budget) and bumps the per-type
+     tint so the rows read over the ambient backdrop. Flat (default) is untouched. */
+  :host-context([data-layout="glass"]) :is(.compact, .detailed, .card) { -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
+  :host-context([data-layout="glass"]) .row-c[data-type]:not([data-type="news"]),
+  :host-context([data-layout="glass"]) .row-d[data-type]:not([data-type="news"]) { background:color-mix(in srgb, var(--cbar) 16%, transparent); border-bottom-color:color-mix(in srgb, var(--cbar) 22%, transparent); }
+  :host-context([data-layout="glass"]) .row-c[data-type]:not([data-type="news"]):hover,
+  :host-context([data-layout="glass"]) .row-d[data-type]:not([data-type="news"]):hover { background:color-mix(in srgb, var(--cbar) 26%, transparent); }
+  :host-context([data-layout="glass"]) .card-i[data-type]:not([data-type="news"]) { background:color-mix(in srgb, var(--cbar) 16%, var(--panel)); }
+
   /* Phones (responsive rule: shrink/drop the competing secondary metadata before the title loses its room). The
      compact + detailed rows otherwise crush the title to a few characters because the avatar + relative date hold
      fixed width. Below 560px: drop the "x days ago", tighten gaps/padding, shrink the glyph + avatar + chip. */
