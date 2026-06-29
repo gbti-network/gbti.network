@@ -56,7 +56,10 @@ export function readCommentsIndex(root, { files = null, readFile = (p) => fs.rea
   const index = new Map();
   for (const file of list) {
     let fm; try { fm = parseFrontmatter(readFile(file)); } catch { continue; }
-    if (!fm || fm.type !== 'comment' || !fm.targetType || !fm.targetSlug || !fm.author) continue;
+    // SOW-059 payout-audit fix: a removed comment (hideContent flips it to status:draft, leaving the file in the
+    // repo) must NOT earn a collaboration point. Mirror src/lib/comments.ts (published-only); status-less = the Zod
+    // default 'published', so a legitimately-published comment with no explicit status field still counts.
+    if (!fm || fm.type !== 'comment' || (fm.status ?? 'published') !== 'published' || !fm.targetType || !fm.targetSlug || !fm.author) continue;
     const key = typeSlugKey(fm.targetType, fm.targetSlug);
     let arr = index.get(key); if (!arr) { arr = []; index.set(key, arr); }
     arr.push({ author: String(fm.author), at: fm.createdAt ?? fm.publishedAt, authorIntro: fm.authorNote === true });

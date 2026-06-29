@@ -87,6 +87,20 @@ test('self-invite is rejected (referred_by === the converting member -> inviter 
   assert.equal(JSON.parse(kv.store.get(CONV_KEY('7'))).inviter, null);
 });
 
+test('self-pay content lane: a converting member who is their own first/last-touch owner is scrubbed (share falls to retained)', async () => {
+  // The pre-signup touch session contains ONLY content owned by the converting member ('7').
+  const selfTouch = JSON.stringify({
+    items: [{ owner: '7', type: 'post', slug: 'mine', firstAt: conv - 30 * day, lastAt: conv - 30 * day }],
+    invite: null, updatedAt: conv - 30 * day,
+  });
+  const kv = fakeKV({ [TOUCH_KEY(SID)]: selfTouch });
+  const r = await freezeAndPersist({ env: envOn(kv), customer: customer(), conversionAt: conv, now: () => 1 });
+  assert.equal(r.persisted, true);
+  const rec = JSON.parse(kv.store.get(CONV_KEY('7')));
+  assert.equal(rec.firstOwner, null); // self-owner nulled -> the 30%/10% fall to retained, never self-paid
+  assert.equal(rec.lastOwner, null);
+});
+
 test('readSnapshot + eraseSnapshot round-trip', async () => {
   const kv = fakeKV({ [TOUCH_KEY(SID)]: touchSeed() });
   await freezeAndPersist({ env: envOn(kv), customer: customer(), conversionAt: conv, now: () => 1 });

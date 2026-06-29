@@ -44,6 +44,19 @@ test('readCommentsIndex maps target type+slug -> comments (author, date, authorI
   assert.equal(list.find((c) => c.author === 'dana').authorIntro, false);
 });
 
+test('readCommentsIndex EXCLUDES a removed (status:draft) comment from the payout pool, keeps status-less + published', () => {
+  const files = ['ok.md', 'removed.md', 'explicit.md'];
+  const readFile = (f) => ({
+    'ok.md': `---\ntype: comment\nauthor: dana\ntargetType: product\ntargetSlug: b\ncreatedAt: ${before}\n---\nx`,           // status-less -> Zod default 'published' -> counts
+    'removed.md': `---\ntype: comment\nauthor: spammer\ntargetType: product\ntargetSlug: b\ncreatedAt: ${before}\nstatus: draft\n---\nx`, // hideContent removal -> excluded
+    'explicit.md': `---\ntype: comment\nauthor: erin\ntargetType: product\ntargetSlug: b\ncreatedAt: ${before}\nstatus: published\n---\nx`,
+  }[f]);
+  const list = readCommentsIndex('/root', { files, readFile }).get(typeSlugKey('product', 'b'));
+  assert.equal(list.length, 2);
+  assert.ok(!list.some((c) => c.author === 'spammer'), 'the removed (draft) comment earns no collaboration point');
+  assert.ok(list.some((c) => c.author === 'dana') && list.some((c) => c.author === 'erin'));
+});
+
 test('buildCollaborationEvents resolves actors to github_ids and drops non-members', () => {
   const contributorsByItem = new Map([[itemKey(firstItem), [{ login: 'dana', at: before }, { login: 'ghost', at: before }]]]);
   const commentsIndex = new Map([[typeSlugKey('product', 'b'), [{ author: 'dana', at: before, authorIntro: false }]]]);

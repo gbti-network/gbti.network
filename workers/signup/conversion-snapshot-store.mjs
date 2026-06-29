@@ -47,13 +47,19 @@ export async function freezeAndPersist({ env, customer, conversionAt, kv = env?.
     collaborationEvents: [], // tallied at payout from git, bounded to the frozen items + conversionAt
     inviter,
   });
+  // SOW-059 payout-audit fix (HIGH): a converting member must NEVER be their own payout recipient. The invite lane is
+  // self-rejected above; mirror that for the content lane (first/last-touch owner + their items) by scrubbing the
+  // converting member out of their own snapshot. scrubCounterpart nulls those owners -> the share falls to retained
+  // (money-safe). Collaboration self-pay is closed separately at payout (the splitInvoice member guard), since the
+  // 5% points are tallied from git there, not frozen here.
   const record = { v: 1, member: githubId, ...snapshot, frozenAt: now() };
-  await kv.put(key, JSON.stringify(record));
+  const selfScrubbed = scrubCounterpart(record, githubId) || record;
+  await kv.put(key, JSON.stringify(selfScrubbed));
 
   // The pre-signup behavioral touch record is consumed; clear it (GDPR data minimization). Best-effort.
   if (session) { try { await eraseTouches(env, session, { kv }); } catch { /* self-expires anyway */ } }
 
-  return { persisted: true, member: githubId, record };
+  return { persisted: true, member: githubId, record: selfScrubbed };
 }
 
 /** Read a member's frozen snapshot (for the payout job). Null when absent. */

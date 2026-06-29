@@ -44,6 +44,16 @@ test('splitInvoice: the full split 30/10/5/10 + conservation (recipients + retai
   assert.equal(base - sumAmounts(rs), 6750);     // retained 45%
 });
 
+test('splitInvoice self-pay guard: a converting member is NEVER paid on their OWN conversion (any lane) -> falls to retained', () => {
+  // member '7' resolved as their own first-touch owner AND a collaborator on the frozen snapshot.
+  const rs = splitInvoice({ snapshot: { member: '7', firstOwner: '7', lastOwner: 'bob', inviter: null, points: [{ member: '7', points: 1 }], conversionAt: 1, windowMs: 90 * DAY }, base: 15000 });
+  const by = Object.fromEntries(rs.map((r) => [r.id, r.amount]));
+  assert.ok(!('7' in by), 'the converting member is never a recipient on their own conversion');
+  assert.equal(by.bob, 1500);                    // a real third party (last-touch 10%) still pays
+  assert.equal(sumAmounts(rs), 1500);            // 7's first 30% + collab 5% are NOT distributed
+  assert.equal(15000 - sumAmounts(rs), 13500);   // and fall to retained (90%)
+});
+
 test('splitInvoice no-double-dip: inviter who is the first-touch owner earns the content share, not the invite', () => {
   const rs = splitInvoice({ snapshot: snap({ inviter: 'alice', points: [] }), base: 15000 });
   const by = Object.fromEntries(rs.map((r) => [r.id, r.amount]));

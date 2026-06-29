@@ -46,9 +46,15 @@ function roleOf(member, snapshot) {
 export function splitInvoice({ snapshot, base, eligible = () => true }) {
   if (!(base > 0)) return [];
   const dist = distributeSnapshot(snapshot, { eligible });
+  // SOW-059 payout-audit fix (HIGH, defense in depth): a converting member is NEVER paid on their OWN conversion, in
+  // ANY lane (first/last-touch owner, collaborator, or inviter). This catches the collaboration self-pay (the 5% pool
+  // is tallied from git at payout, after the snapshot froze) and any older snapshot frozen before the freeze-time
+  // scrub. A dropped share is simply not distributed, so it falls to retained (the platform), never over-paid.
+  const self = snapshot && snapshot.member != null ? String(snapshot.member) : null;
   const recipients = [];
   let distributed = 0;
   for (const [member, pct] of Object.entries(dist.shares)) {
+    if (self && member === self) continue;
     const amount = round((base * pct) / 100);
     if (amount > 0) { recipients.push({ id: member, role: roleOf(member, snapshot), pct, amount }); distributed += amount; }
   }
