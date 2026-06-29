@@ -119,20 +119,22 @@ class GbtiAccount extends GbtiElement {
 
   render() {
     this._maybeLoad(); // SOW-070 fix: start the load the moment the client is injected (setClient -> _onClient -> render)
-    if (!this.client) { this.set(this.css(CSS) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div>`); return; }
+    if (!this.client) { this.set(this.css(CSS) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div><slot></slot>`); return; }
     // SOW-070: the Appearance segment (Layout Flat/Glass + Theme) is device-local (localStorage only), so it renders
     // in EVERY state and is NEVER gated behind the account-data load -- a slow or failed fetch must not hide it.
     let appearance = '';
     try { appearance = this._appearance(); } catch { /* never let the display controls break the render */ }
-    if (!this._loaded) { this.set(this.css(CSS) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section>`); this._wire(); return; }
+    if (!this._loaded) { this.set(this.css(CSS) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section><slot></slot>`); this._wire(); return; }
     if (!this._signedIn) {
-      this.set(this.css(CSS) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE}/membership/">Become a member</a>.</div>`);
+      this.set(this.css(CSS) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE}/membership/">Become a member</a>.</div><slot></slot>`);
       this._wire();
       return;
     }
     // Fail-safe: a throw in any account-data section must never leave the page stuck on "Loading your account…".
+    // The <slot> projects any host-provided extra settings (the extension's New-tab splash sections) BEFORE the
+    // Danger zone, so Danger always renders as the very last card on the page.
     let sections;
-    try { sections = this._billingSec() + appearance + this._account() + this._referrals() + this._dangerZone(); }
+    try { sections = this._billingSec() + appearance + this._account() + this._referrals() + '<slot></slot>' + this._dangerZone(); }
     catch { sections = appearance + `<section class="sec"><div class="sec-h"><h3>Account</h3><p>Some account details could not load. Reopen this page to retry.</p></div></section>`; }
     this.set(this.css(CSS) + sections);
     this._wire();
@@ -192,8 +194,8 @@ class GbtiAccount extends GbtiElement {
     // resolver (the members-index), and shipping it without one would break referral attribution.
     const canonical = r.link || (r.code ? `${SITE}/join?ref=${r.code}` : null);
     const invite = this._invite?.url || null;
-    const copyRow = (id, value, label) => `<div class="row"><div class="rl"><div class="t">${esc(label)}</div></div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
-    const rows = `${canonical ? copyRow('ref-canonical', canonical, 'Your invite link') : ''}${invite ? copyRow('discord-invite', invite, 'Discord invite') : ''}`;
+    const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc(label)}</div>${desc ? `<div class="d">${esc(desc)}</div>` : ''}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
+    const rows = `${canonical ? copyRow('ref-canonical', canonical, 'Your invite link', 'Your personal referral link to share anywhere.') : ''}${invite ? copyRow('discord-invite', invite, 'Discord invite', 'The members-only GBTI community on Discord. Joining needs an active membership.') : ''}`;
     return `<section class="sec">
       <div class="sec-h"><h3>Referrals & invites</h3><p>Share your invite link to earn a flat ${esc(r.invitePct || '10%')} lifetime commission on every member who joins through it (paid from the platform share, so it never reduces what content owners earn). You also earn from your published work, separately.</p></div>
       ${rows ? `<div class="rows">${rows}</div>` : `<div class="sec-h" style="padding-top:0"><p style="margin:0">No referral link yet. Sign in as a member to generate one.</p></div>`}

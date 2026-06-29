@@ -1546,7 +1546,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       this._maybeLoad();
       if (!this.client) {
-        this.set(this.css(CSS4) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div>`);
+        this.set(this.css(CSS4) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div><slot></slot>`);
         return;
       }
       let appearance = "";
@@ -1555,18 +1555,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
       }
       if (!this._loaded) {
-        this.set(this.css(CSS4) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section>`);
+        this.set(this.css(CSS4) + appearance + `<section class="sec"><div class="sec-h"><p style="margin:0">Loading your account…</p></div></section><slot></slot>`);
         this._wire();
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS4) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE2}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS4) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE2}/membership/">Become a member</a>.</div><slot></slot>`);
         this._wire();
         return;
       }
       let sections;
       try {
-        sections = this._billingSec() + appearance + this._account() + this._referrals() + this._dangerZone();
+        sections = this._billingSec() + appearance + this._account() + this._referrals() + "<slot></slot>" + this._dangerZone();
       } catch {
         sections = appearance + `<section class="sec"><div class="sec-h"><h3>Account</h3><p>Some account details could not load. Reopen this page to retry.</p></div></section>`;
       }
@@ -1619,8 +1619,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const r = this._referral || {};
       const canonical = r.link || (r.code ? `${SITE2}/join?ref=${r.code}` : null);
       const invite = this._invite?.url || null;
-      const copyRow = (id, value, label) => `<div class="row"><div class="rl"><div class="t">${esc(label)}</div></div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
-      const rows = `${canonical ? copyRow("ref-canonical", canonical, "Your invite link") : ""}${invite ? copyRow("discord-invite", invite, "Discord invite") : ""}`;
+      const copyRow = (id, value, label, desc) => `<div class="row"><div class="rl"><div class="t">${esc(label)}</div>${desc ? `<div class="d">${esc(desc)}</div>` : ""}</div><div class="rc"><div class="copyrow"><input id="${id}" type="text" readonly value="${esc(value)}" /><button data-copy="${id}" type="button">Copy</button></div></div></div>`;
+      const rows = `${canonical ? copyRow("ref-canonical", canonical, "Your invite link", "Your personal referral link to share anywhere.") : ""}${invite ? copyRow("discord-invite", invite, "Discord invite", "The members-only GBTI community on Discord. Joining needs an active membership.") : ""}`;
       return `<section class="sec">
       <div class="sec-h"><h3>Referrals & invites</h3><p>Share your invite link to earn a flat ${esc(r.invitePct || "10%")} lifetime commission on every member who joins through it (paid from the platform share, so it never reduces what content owners earn). You also earn from your published work, separately.</p></div>
       ${rows ? `<div class="rows">${rows}</div>` : `<div class="sec-h" style="padding-top:0"><p style="margin:0">No referral link yet. Sign in as a member to generate one.</p></div>`}
