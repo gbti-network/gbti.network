@@ -5570,10 +5570,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .sec { border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:0 0 16px; background:var(--panel); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
   .sec .hint { margin:0 0 14px; color:var(--muted); font-size:13px; }
-  .row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:9px 0; border-top:1px solid var(--line); }
+  /* SOW-070: a 3-column grid (label | description | control) so the right-hand control (a button, or the Appearance
+     segmented toggle) keeps its own column and the description never crushes/wraps into it. Stacks on small screens. */
+  .row { display:grid; grid-template-columns:140px 1fr auto; align-items:center; gap:8px 14px; padding:10px 0; border-top:1px solid var(--line); }
   .row:first-of-type { border-top:0; }
-  .row .lbl { font-weight:600; font-size:14px; min-width:140px; }
-  .row .val { color:var(--muted); font-size:13.5px; flex:1; min-width:0; word-break:break-all; }
+  .row .lbl { font-weight:600; font-size:14px; }
+  .row .val { color:var(--muted); font-size:13.5px; min-width:0; overflow-wrap:anywhere; }
+  @media (max-width:560px) { .row { grid-template-columns:1fr; } }
   .badge { display:inline-block; font-family:var(--font-mono, monospace); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; border-radius:999px; padding:2px 9px; background:var(--hover); color:var(--fg); }
   .badge.paid { background:var(--green-tint, #e9f6ef); color:var(--green-700, #0f6f40); }
   .badge.warn { background:#fdecea; color:#b3261e; }
@@ -5604,14 +5607,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .confirm input { font:inherit; font-size:13px; padding:7px 10px; border:1px solid #e0a39d; border-radius:8px; background:var(--panel); color:var(--fg); width:200px; }
 `;
   var GbtiAccount = class extends GbtiElement {
+    _loaded = false;
+    _loading = false;
+    // SOW-070 fix: guards the client-ready-triggered load against re-entry
+    // The injected client may not exist yet: this element is in account.html's STATIC markup, so it upgrades when
+    // dist/account.js defines the elements -- BEFORE account.mjs calls mountPageClient()/setClient(). So we no longer
+    // load eagerly here; render() -> _maybeLoad() runs the load the moment the client arrives (setClient re-renders
+    // every subscriber via _onClient), which fixes the permanent "Loading your account…" with the client present.
     connectedCallback() {
       super.connectedCallback();
-      this._loaded = false;
-      this.render();
-      this._load();
+    }
+    // Idempotent: kick the account-data load exactly once, as soon as the client is available.
+    _maybeLoad() {
+      if (this.client && !this._loaded && !this._loading) {
+        this._loading = true;
+        this._load();
+      }
     }
     async _load() {
-      if (!this.client) return;
       const guard = (p) => Promise.race([
         Promise.resolve(p).then((v) => v, () => null),
         new Promise((res) => {
@@ -5632,6 +5645,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
       }
       this._loaded = true;
+      this._loading = false;
       this.render();
     }
     get _signedIn() {
@@ -5644,6 +5658,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return this._status?.membership || "unknown";
     }
     render() {
+      this._maybeLoad();
       if (!this.client) {
         this.set(this.css(CSS8) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div>`);
         return;
@@ -5654,7 +5669,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
       }
       if (!this._loaded) {
-        this.set(this.css(CSS8) + appearance + `<p class="hint">Loading your account…</p>`);
+        this.set(this.css(CSS8) + appearance + `<section class="sec"><p class="hint">Loading your account…</p></section>`);
         this._wire();
         return;
       }

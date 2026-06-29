@@ -24,10 +24,13 @@ const CSS = `
   .sec { border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:0 0 16px; background:var(--panel); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .sec h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
   .sec .hint { margin:0 0 14px; color:var(--muted); font-size:13px; }
-  .row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:9px 0; border-top:1px solid var(--line); }
+  /* SOW-070: a 3-column grid (label | description | control) so the right-hand control (a button, or the Appearance
+     segmented toggle) keeps its own column and the description never crushes/wraps into it. Stacks on small screens. */
+  .row { display:grid; grid-template-columns:140px 1fr auto; align-items:center; gap:8px 14px; padding:10px 0; border-top:1px solid var(--line); }
   .row:first-of-type { border-top:0; }
-  .row .lbl { font-weight:600; font-size:14px; min-width:140px; }
-  .row .val { color:var(--muted); font-size:13.5px; flex:1; min-width:0; word-break:break-all; }
+  .row .lbl { font-weight:600; font-size:14px; }
+  .row .val { color:var(--muted); font-size:13.5px; min-width:0; overflow-wrap:anywhere; }
+  @media (max-width:560px) { .row { grid-template-columns:1fr; } }
   .badge { display:inline-block; font-family:var(--font-mono, monospace); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; border-radius:999px; padding:2px 9px; background:var(--hover); color:var(--fg); }
   .badge.paid { background:var(--green-tint, #e9f6ef); color:var(--green-700, #0f6f40); }
   .badge.warn { background:#fdecea; color:#b3261e; }
@@ -59,16 +62,25 @@ const CSS = `
 `;
 
 class GbtiAccount extends GbtiElement {
+  _loaded = false;
+  _loading = false; // SOW-070 fix: guards the client-ready-triggered load against re-entry
+
+  // The injected client may not exist yet: this element is in account.html's STATIC markup, so it upgrades when
+  // dist/account.js defines the elements -- BEFORE account.mjs calls mountPageClient()/setClient(). So we no longer
+  // load eagerly here; render() -> _maybeLoad() runs the load the moment the client arrives (setClient re-renders
+  // every subscriber via _onClient), which fixes the permanent "Loading your account…" with the client present.
   connectedCallback() {
     super.connectedCallback();
-    this._loaded = false;
-    this.render();
-    this._load();
+  }
+
+  // Idempotent: kick the account-data load exactly once, as soon as the client is available.
+  _maybeLoad() {
+    if (this.client && !this._loaded && !this._loading) { this._loading = true; this._load(); }
   }
 
   async _load() {
-    if (!this.client) return; // inert: no host -> the render() sign-in nudge stays
-    // SOW-040 follow-up: never hang on "Loading your account…". Each call is caught to null AND raced against an 8s
+    // Reached only via _maybeLoad (client present). SOW-040 follow-up: never hang on "Loading your account…". Each
+    // call is caught to null AND raced against an 8s
     // timeout, so a background worker that goes idle, or an unsettling fetch (e.g. an expired token whose refresh
     // never resolves), degrades to the signed-out nudge / partial data instead of a permanent spinner.
     const guard = (p) => Promise.race([
@@ -84,7 +96,7 @@ class GbtiAccount extends GbtiElement {
       ]);
       this._status = status; this._billing = billing; this._referral = referral; this._invite = invite;
     } catch { /* fall through and render whatever resolved */ }
-    this._loaded = true;
+    this._loaded = true; this._loading = false;
     this.render();
   }
 
@@ -93,13 +105,14 @@ class GbtiAccount extends GbtiElement {
   get _membership() { return this._status?.membership || 'unknown'; }
 
   render() {
+    this._maybeLoad(); // SOW-070 fix: start the load the moment the client is injected (setClient -> _onClient -> render)
     if (!this.client) { this.set(this.css(CSS) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div>`); return; }
     // SOW-070: the Appearance segment (Layout Flat/Glass + Theme) is device-local (localStorage only), so it renders
     // in EVERY state and is NEVER gated behind the account-data load -- a slow or failed status/billing fetch must
     // not hide the display controls. Guarded so it can never itself break the page.
     let appearance = '';
     try { appearance = this._appearance(); } catch { /* never let the display controls break the render */ }
-    if (!this._loaded) { this.set(this.css(CSS) + appearance + `<p class="hint">Loading your account…</p>`); this._wire(); return; }
+    if (!this._loaded) { this.set(this.css(CSS) + appearance + `<section class="sec"><p class="hint">Loading your account…</p></section>`); this._wire(); return; }
     if (!this._signedIn) {
       this.set(this.css(CSS) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE}/membership/">Become a member</a>.</div>`);
       this._wire();

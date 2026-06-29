@@ -14,7 +14,11 @@
   <style>
     .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; margin: 0; }
     .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 4px 0 0; }
-    gbti-account { display: block; max-width: 720px; }
+    gbti-account { display: block; max-width: 720px; margin: 0 auto; }
+    /* SOW-070: the splash sections become cards centered in the same 720px column as gbti-account, for one cohesive
+       settings layout. Match the gbti-account .sec card look using the shell's V3 tokens (+ the glass frost in Glass). */
+    .settings-sec { max-width: 720px; margin: 16px auto 0; border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; background: var(--paper); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+    .settings-sec > h2 { margin: 0 0 4px; }
     /* SOW-063: the new-tab splash recurrence control */
     .splash-set { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--fg); }
     .splash-set select { font-family: var(--f-sans); font-size: 14px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); color: var(--fg); cursor: pointer; }
@@ -47,7 +51,7 @@
       <!-- SOW-080: followed-topic management moved to WorkBench -> Following -> Topics (gbti-subscriptions). -->
       <!-- SOW-063: the new-tab landing splash recurrence window (a client preference; 0 = always show). Wired in
            account.mjs (CSP forbids inline scripts). -->
-      <section style="max-width:720px;margin:30px auto 0">
+      <section class="settings-sec">
         <h2 class="hub-h" style="font-size:18px">New-tab splash</h2>
         <p class="hub-sub" style="margin:4px 0 14px">When you open a new tab and pick a destination from the splash, GBTI Network opens that view directly for a while before showing the splash again. Choose how long, or always show the splash.</p>
         <label class="splash-set">
@@ -75,7 +79,7 @@
       </section>
       <!-- SOW-074: the new-tab splash background image + modes. Wired in account.mjs (CSP forbids inline scripts).
            A per-device preference: the small settings live in localStorage, the downscaled image in chrome.storage. -->
-      <section style="max-width:720px;margin:30px auto 0">
+      <section class="settings-sec">
         <h2 class="hub-h" style="font-size:18px">New-tab splash background</h2>
         <p class="hub-sub" style="margin:4px 0 14px">Upload an image to decorate the new-tab splash. It can sit behind the splash cards, fill the whole tab, or stay off. Stored on this device only.</p>
         <div class="splash-bg">
