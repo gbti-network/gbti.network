@@ -2439,11 +2439,20 @@
   function splashShowsQuote(raw) {
     return String(raw) !== "0";
   }
+  function splashKeepsDarkCards(raw) {
+    return String(raw) !== "0";
+  }
   function normalizePatternGap(raw, fallback = 16) {
     if (raw === null || raw === void 0 || raw === "") return fallback;
     const n = Math.round(Number(raw));
     if (!Number.isFinite(n)) return fallback;
     return Math.min(60, Math.max(4, n));
+  }
+  function normalizeCardBlur(raw, fallback = 10) {
+    if (raw === null || raw === void 0 || raw === "") return fallback;
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(20, Math.max(0, n));
   }
   var ASCII_V = { top: "flex-start", center: "center", bottom: "flex-end" };
   var ASCII_H = { left: "flex-start", center: "center", right: "flex-end" };
@@ -4092,9 +4101,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       overlay.remove();
       document.removeEventListener("keydown", onEsc);
     };
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
-    });
     overlay.querySelector(".compose-x")?.addEventListener("click", close);
     overlay.addEventListener("gbti-share-posted", close);
     document.addEventListener("keydown", onEsc);
@@ -10829,6 +10835,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     root.setAttribute("data-splash", "1");
     root.toggleAttribute("data-splash-nocards", !splashShowsCards(lsItem("gbti-splash-show-cards")));
     root.toggleAttribute("data-splash-noquote", !splashShowsQuote(lsItem("gbti-splash-show-quote")));
+    root.toggleAttribute("data-splash-lightcards", !splashKeepsDarkCards(lsItem("gbti-splash-dark-cards")));
     renderSplashQuote();
     applySplashBg();
     window.scrollTo(0, 0);
@@ -10842,6 +10849,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     root.removeAttribute("data-splash");
     root.removeAttribute("data-splash-nocards");
     root.removeAttribute("data-splash-noquote");
+    root.removeAttribute("data-splash-lightcards");
     clearSplashBg();
   }
   function snoozeSplash(dest) {
@@ -10903,6 +10911,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     root.style.removeProperty("--splash-bg");
     root.style.removeProperty("--splash-bg-dim");
     root.style.removeProperty("--card-op");
+    root.style.removeProperty("--card-blur");
     const pat = $("[data-splash-pattern]");
     if (pat) {
       pat.className = "splash-pattern";
@@ -10920,6 +10929,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const dim = (100 - normalizeBgOpacity(lsItem("gbti-splash-bg-opacity"))) / 100;
     root.style.setProperty("--splash-bg-dim", `rgba(0,0,0,${dim.toFixed(2)})`);
     root.style.setProperty("--card-op", (normalizeBgOpacity(lsItem("gbti-splash-bg-card-op"), 70) / 100).toFixed(2));
+    root.style.setProperty("--card-blur", `${normalizeCardBlur(lsItem("gbti-splash-bg-card-blur"))}px`);
     const pattern = normalizeBgPattern(lsItem("gbti-splash-bg-pattern"));
     const pat = $("[data-splash-pattern]");
     if (pat && pattern !== "none") {

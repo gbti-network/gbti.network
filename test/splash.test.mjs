@@ -2,7 +2,7 @@
 // decision, and the dest->hash mapping. No DOM, no chrome, like the feed-route tests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BUNDLED_QUOTES, enabledQuotes, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, asciiAnchor, fitDimensions, GBTI_ASCII } from '../client-ui/src/splash.mjs';
+import { BUNDLED_QUOTES, enabledQuotes, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, splashKeepsDarkCards, normalizePatternGap, normalizeCardBlur, asciiAnchor, fitDimensions, GBTI_ASCII } from '../client-ui/src/splash.mjs';
 
 const TWELVE_H = 12 * 60 * 60 * 1000;
 
@@ -79,8 +79,19 @@ test('normalizeBgOpacity clamps to 0..100 and falls back on non-numeric input', 
   assert.equal(normalizeBgOpacity(null, 40), 40); // custom fallback
 });
 
-test('splashShowsCards / splashShowsQuote default to true and are only false for the stored 0', () => {
-  for (const fn of [splashShowsCards, splashShowsQuote]) {
+test('normalizeCardBlur clamps to 0..20px and defaults to 10', () => {
+  assert.equal(normalizeCardBlur(10), 10);
+  assert.equal(normalizeCardBlur('6'), 6);
+  assert.equal(normalizeCardBlur(0), 0); // no blur is valid
+  assert.equal(normalizeCardBlur(-4), 0);
+  assert.equal(normalizeCardBlur(40), 20); // clamped
+  assert.equal(normalizeCardBlur(null), 10); // default
+  assert.equal(normalizeCardBlur(''), 10);
+  assert.equal(normalizeCardBlur('abc'), 10);
+});
+
+test('splashShowsCards / splashShowsQuote / splashKeepsDarkCards default to true and are only false for the stored 0', () => {
+  for (const fn of [splashShowsCards, splashShowsQuote, splashKeepsDarkCards]) {
     for (const v of [null, undefined, '1', '', 'yes']) assert.equal(fn(v), true, String(v));
     assert.equal(fn('0'), false);
     assert.equal(fn(0), false);

@@ -318,7 +318,8 @@ function openComposeModal() {
   overlay.innerHTML = `<div class="compose-panel"><div class="compose-head"><b>Post a Share</b><button class="compose-x" type="button" aria-label="Close">${ico('x')}</button></div><gbti-share-composer></gbti-share-composer></div>`;
   const onEsc = (e) => { if (e.key === 'Escape') close(); };
   const close = () => { overlay.remove(); document.removeEventListener('keydown', onEsc); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); }); // backdrop click
+  // SOW-041 follow-up: deliberately NO backdrop-click-to-close on the Share composer — an accidental click on the
+  // overlay must never discard an in-progress draft. The member closes intentionally (the X, Esc, or a successful post).
   overlay.querySelector('.compose-x')?.addEventListener('click', close);
   overlay.addEventListener('gbti-share-posted', close); // posted -> close (the feed refreshes via its own listener)
   document.addEventListener('keydown', onEsc);

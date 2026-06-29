@@ -65,13 +65,18 @@
        mode toggle); the shell control cluster (account / theme / bell / compose) stays. */
     html[data-splash] .nt-greet-tx, html[data-splash] .nt-modes-slot { display: none; }
     .nt-splash { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 38px; min-height: 62vh; padding: 36px 0; }
-    .splash-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; width: 100%; max-width: 760px; }
-    .splash-card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 26px 24px; background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); color: var(--fg); cursor: pointer; text-align: left; transition: border-color .14s, transform .14s, box-shadow .14s; }
+    /* SOW-074 follow-up: keep the THREE quick-launch cards in ONE row down to handheld by COMPRESSING, never
+       stacking. repeat(3, minmax(0,1fr)) holds 3 columns at ANY width; clamp() shrinks the card chrome fluidly as
+       the viewport narrows (the rail hides at <=650px, so the splash ~= the viewport at handheld widths). The
+       subtitle hides on the very smallest screens. */
+    .splash-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(8px, 1.6vw, 18px); width: 100%; max-width: 760px; }
+    .splash-card { display: flex; flex-direction: column; align-items: flex-start; gap: clamp(6px, 1.4vw, 12px); padding: clamp(11px, 2.2vw, 26px) clamp(8px, 1.8vw, 24px); background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); color: var(--fg); cursor: pointer; text-align: left; transition: border-color .14s, transform .14s, box-shadow .14s; }
     .splash-card:hover { border-color: var(--green); transform: translateY(-2px); box-shadow: var(--sh-sm); }
-    .splash-card .sc-ico { display: inline-flex; width: 42px; height: 42px; align-items: center; justify-content: center; border-radius: var(--r); background: var(--green-tint); color: var(--green-700); }
-    .splash-card .sc-ico svg { width: 23px; height: 23px; }
-    .splash-card .sc-t { font-family: var(--f-display); font-weight: 800; font-size: 17px; }
-    .splash-card .sc-s { font-size: 13px; color: var(--fg-mute); line-height: 1.4; }
+    .splash-card .sc-ico { display: inline-flex; width: clamp(27px, 4.6vw, 42px); height: clamp(27px, 4.6vw, 42px); align-items: center; justify-content: center; border-radius: var(--r); background: var(--green-tint); color: var(--green-700); flex: none; }
+    .splash-card .sc-ico svg { width: clamp(15px, 2.6vw, 23px); height: clamp(15px, 2.6vw, 23px); }
+    .splash-card .sc-t { font-family: var(--f-display); font-weight: 800; font-size: clamp(12px, 1.9vw, 17px); line-height: 1.2; }
+    .splash-card .sc-s { font-size: clamp(11px, 1.4vw, 13px); color: var(--fg-mute); line-height: 1.4; }
+    @media (max-width: 400px) { .splash-card .sc-s { display: none; } }
     .splash-quote { margin: 0; max-width: 600px; text-align: center; }
     .splash-quote blockquote { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: 20px; line-height: 1.5; color: var(--fg); }
     .splash-quote figcaption { margin-top: 12px; font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); }
@@ -110,12 +115,19 @@
     html[data-splash][data-splash-nocards] .nt-splash { cursor: pointer; }
     html[data-splash][data-splash-noquote] .splash-quote { display: none; }
     /* Glassy, see-through cards (tunable --card-op, default 70%) + light quote whenever ANY background is active. */
-    html[data-splash][data-splash-bg] .splash-card { background: rgba(20,18,24, var(--card-op, .7)); border-color: rgba(255,255,255,.18); color: #fff; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+    html[data-splash][data-splash-bg] .splash-card { background: rgba(20,18,24, var(--card-op, .7)); border-color: rgba(255,255,255,.18); color: #fff; -webkit-backdrop-filter: blur(var(--card-blur, 10px)); backdrop-filter: blur(var(--card-blur, 10px)); }
     html[data-splash][data-splash-bg] .splash-card .sc-ico { background: rgba(31,158,95,.30); color: #fff; }
     html[data-splash][data-splash-bg] .splash-card .sc-s { color: rgba(255,255,255,.74); }
     html[data-splash][data-splash-bg] .splash-card:hover { border-color: var(--green); }
     html[data-splash][data-splash-bg] .splash-quote blockquote { color: #fff; }
     html[data-splash][data-splash-bg] .splash-quote figcaption { color: rgba(255,255,255,.82); }
+    /* SOW-074 follow-up: when "keep dark cards" is OFF (data-splash-lightcards; the setting is default-ENABLED) AND
+       the theme is LIGHT, give the quick-launch cards a frosted LIGHT look (80% white, dark text, blur) on ANY splash
+       background placement. Otherwise the dark glassy see-through --card-op cards above stay (the default). */
+    html[data-splash-lightcards][data-theme="light"][data-splash][data-splash-bg] .splash-card { background: rgba(255,255,255, var(--card-op, .8)); border-color: var(--line); color: var(--fg); -webkit-backdrop-filter: blur(var(--card-blur, 10px)); backdrop-filter: blur(var(--card-blur, 10px)); }
+    html[data-splash-lightcards][data-theme="light"][data-splash][data-splash-bg] .splash-card .sc-ico { background: var(--green-tint); color: var(--green-700); }
+    html[data-splash-lightcards][data-theme="light"][data-splash][data-splash-bg] .splash-card .sc-s { color: var(--fg-mute); }
+    html[data-splash-lightcards][data-theme="light"][data-splash][data-splash-bg] .splash-card:hover { border-color: var(--green); }
     /* the ascii art is anchored by inline align-items/justify-content (set by newtab.mjs from the chosen position,
        default bottom-right); the padding keeps it off the very edge. */
     .splash-pattern.p-ascii { display: flex; align-items: center; justify-content: center; padding: 5vh 5vw; box-sizing: border-box; }

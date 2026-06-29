@@ -10358,9 +10358,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       overlay.remove();
       document.removeEventListener("keydown", onEsc);
     };
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
-    });
     overlay.querySelector(".compose-x")?.addEventListener("click", close);
     overlay.addEventListener("gbti-share-posted", close);
     document.addEventListener("keydown", onEsc);
@@ -10596,11 +10593,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function splashShowsQuote(raw) {
     return String(raw) !== "0";
   }
+  function splashKeepsDarkCards(raw) {
+    return String(raw) !== "0";
+  }
   function normalizePatternGap(raw, fallback = 16) {
     if (raw === null || raw === void 0 || raw === "") return fallback;
     const n = Math.round(Number(raw));
     if (!Number.isFinite(n)) return fallback;
     return Math.min(60, Math.max(4, n));
+  }
+  function normalizeCardBlur(raw, fallback = 10) {
+    if (raw === null || raw === void 0 || raw === "") return fallback;
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(20, Math.max(0, n));
   }
   function fitDimensions(w, h, max) {
     w = Number(w);
@@ -10653,10 +10659,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var BG_PATTERN_OP_KEY = "gbti-splash-bg-pattern-op";
   var BG_PATTERN_GAP_KEY = "gbti-splash-bg-pattern-gap";
   var BG_CARD_OP_KEY = "gbti-splash-bg-card-op";
+  var BG_CARD_BLUR_KEY = "gbti-splash-bg-card-blur";
   var BG_ASCII_POS_KEY = "gbti-splash-bg-ascii-pos";
   var BG_ASCII_TEXT_KEY = "gbti-splash-bg-ascii-text";
   var SHOW_CARDS_KEY = "gbti-splash-show-cards";
   var SHOW_QUOTE_KEY = "gbti-splash-show-quote";
+  var KEEP_DARK_CARDS_KEY = "gbti-splash-dark-cards";
   var BG_IMAGE_KEY = "gbti:splash-bg-image";
   var BG_MAX_SIDE = 1600;
   var lsGet = (k) => {
@@ -10672,7 +10680,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     } catch {
     }
   };
-  for (const [sel, key, fn] of [["[data-show-cards]", SHOW_CARDS_KEY, splashShowsCards], ["[data-show-quote]", SHOW_QUOTE_KEY, splashShowsQuote]]) {
+  for (const [sel, key, fn] of [["[data-show-cards]", SHOW_CARDS_KEY, splashShowsCards], ["[data-show-quote]", SHOW_QUOTE_KEY, splashShowsQuote], ["[data-dark-cards]", KEEP_DARK_CARDS_KEY, splashKeepsDarkCards]]) {
     const el = document.querySelector(sel);
     if (!el) continue;
     el.checked = fn(lsGet(key));
@@ -10711,6 +10719,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const note = document.querySelector("[data-bg-note]");
     const cardOp = document.querySelector("[data-bg-card-op]");
     const cardOpOut = document.querySelector("[data-bg-card-op-out]");
+    const cardBlur = document.querySelector("[data-bg-card-blur]");
+    const cardBlurOut = document.querySelector("[data-bg-card-blur-out]");
     const opacity = document.querySelector("[data-bg-opacity]");
     const opacityOut = document.querySelector("[data-bg-opacity-out]");
     const pattern = document.querySelector("[data-bg-pattern]");
@@ -10730,6 +10740,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (cardOp) {
       cardOp.value = String(normalizeBgOpacity(lsGet(BG_CARD_OP_KEY), 70));
       setOut(cardOpOut, cardOp.value, "%");
+    }
+    if (cardBlur) {
+      cardBlur.value = String(normalizeCardBlur(lsGet(BG_CARD_BLUR_KEY)));
+      setOut(cardBlurOut, cardBlur.value, "px");
     }
     if (opacity) {
       opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY)));
@@ -10784,6 +10798,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const v = String(normalizeBgOpacity(cardOp.value, 70));
       setOut(cardOpOut, v, "%");
       lsSet(BG_CARD_OP_KEY, v);
+    });
+    cardBlur?.addEventListener("input", () => {
+      const v = String(normalizeCardBlur(cardBlur.value));
+      setOut(cardBlurOut, v, "px");
+      lsSet(BG_CARD_BLUR_KEY, v);
     });
     opacity?.addEventListener("input", () => {
       const v = String(normalizeBgOpacity(opacity.value));

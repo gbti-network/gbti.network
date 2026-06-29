@@ -5,7 +5,7 @@
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
 import { canSeeNews, canBrowse, upgradePromptKind } from '../../client/src/membership.mjs'; // SOW-060/077: free-tier read perks + the read-only upgrade prompt
-import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, asciiAnchor, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
+import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, splashKeepsDarkCards, normalizePatternGap, normalizeCardBlur, asciiAnchor, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
 import { mergeAll, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
 import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
@@ -192,6 +192,8 @@ function showSplash() {
   // SOW-074: the standalone splash-content toggles (any mode). No cards -> the splash is a click-anywhere screen.
   root.toggleAttribute('data-splash-nocards', !splashShowsCards(lsItem('gbti-splash-show-cards')));
   root.toggleAttribute('data-splash-noquote', !splashShowsQuote(lsItem('gbti-splash-show-quote')));
+  // SOW-074 follow-up: when the member disables "keep dark cards", light theme uses frosted LIGHT quick-launch cards.
+  root.toggleAttribute('data-splash-lightcards', !splashKeepsDarkCards(lsItem('gbti-splash-dark-cards')));
   renderSplashQuote();
   applySplashBg(); // SOW-074: apply the uploaded background (no-op until the image is read; off -> plain splash)
   window.scrollTo(0, 0);
@@ -204,6 +206,7 @@ function hideSplash() {
   root.removeAttribute('data-splash');
   root.removeAttribute('data-splash-nocards');
   root.removeAttribute('data-splash-noquote');
+  root.removeAttribute('data-splash-lightcards');
   clearSplashBg(); // SOW-074: drop the background so it never bleeds onto the feed
 }
 function snoozeSplash(dest) {
@@ -250,6 +253,7 @@ function clearSplashBg() {
   root.style.removeProperty('--splash-bg');
   root.style.removeProperty('--splash-bg-dim');
   root.style.removeProperty('--card-op');
+  root.style.removeProperty('--card-blur');
   const pat = $('[data-splash-pattern]');
   if (pat) { pat.className = 'splash-pattern'; pat.removeAttribute('style'); pat.replaceChildren(); }
 }
@@ -267,6 +271,7 @@ function applySplashBg() {
   const dim = (100 - normalizeBgOpacity(lsItem('gbti-splash-bg-opacity'))) / 100; // higher opacity = brighter image
   root.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);
   root.style.setProperty('--card-op', (normalizeBgOpacity(lsItem('gbti-splash-bg-card-op'), 70) / 100).toFixed(2));
+  root.style.setProperty('--card-blur', `${normalizeCardBlur(lsItem('gbti-splash-bg-card-blur'))}px`);
   const pattern = normalizeBgPattern(lsItem('gbti-splash-bg-pattern'));
   const pat = $('[data-splash-pattern]');
   if (pat && pattern !== 'none') {

@@ -4,7 +4,7 @@
 // the actual chrome signout + reload lives here, not in the element.
 import { mountPageClient } from './page-client.mjs'; // sets the client + defines the client-ui elements (incl. <gbti-account>)
 import { initShell } from './shell.mjs';
-import { normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, normalizePatternGap, fitDimensions } from '../../client-ui/src/splash.mjs'; // SOW-074
+import { normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, splashKeepsDarkCards, normalizePatternGap, normalizeCardBlur, fitDimensions } from '../../client-ui/src/splash.mjs'; // SOW-074
 
 mountPageClient();
 initShell({ active: 'settings', nav: 'workbench' }); // SOW-052: Account = the WorkBench "Settings" section
@@ -35,10 +35,12 @@ const BG_PATTERN_KEY = 'gbti-splash-bg-pattern';
 const BG_PATTERN_OP_KEY = 'gbti-splash-bg-pattern-op';
 const BG_PATTERN_GAP_KEY = 'gbti-splash-bg-pattern-gap';
 const BG_CARD_OP_KEY = 'gbti-splash-bg-card-op';
+const BG_CARD_BLUR_KEY = 'gbti-splash-bg-card-blur';
 const BG_ASCII_POS_KEY = 'gbti-splash-bg-ascii-pos';
 const BG_ASCII_TEXT_KEY = 'gbti-splash-bg-ascii-text';
 const SHOW_CARDS_KEY = 'gbti-splash-show-cards';
 const SHOW_QUOTE_KEY = 'gbti-splash-show-quote';
+const KEEP_DARK_CARDS_KEY = 'gbti-splash-dark-cards';
 const BG_IMAGE_KEY = 'gbti:splash-bg-image';
 const BG_MAX_SIDE = 1600;
 
@@ -46,7 +48,7 @@ const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return nu
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } };
 
 // Standalone splash-content toggles (show the destination cards / the quote), independent of the background mode.
-for (const [sel, key, fn] of [['[data-show-cards]', SHOW_CARDS_KEY, splashShowsCards], ['[data-show-quote]', SHOW_QUOTE_KEY, splashShowsQuote]]) {
+for (const [sel, key, fn] of [['[data-show-cards]', SHOW_CARDS_KEY, splashShowsCards], ['[data-show-quote]', SHOW_QUOTE_KEY, splashShowsQuote], ['[data-dark-cards]', KEEP_DARK_CARDS_KEY, splashKeepsDarkCards]]) {
   const el = document.querySelector(sel);
   if (!el) continue;
   el.checked = fn(lsGet(key));
@@ -85,6 +87,8 @@ if (bgMode) {
   const note = document.querySelector('[data-bg-note]');
   const cardOp = document.querySelector('[data-bg-card-op]');
   const cardOpOut = document.querySelector('[data-bg-card-op-out]');
+  const cardBlur = document.querySelector('[data-bg-card-blur]');
+  const cardBlurOut = document.querySelector('[data-bg-card-blur-out]');
   const opacity = document.querySelector('[data-bg-opacity]');
   const opacityOut = document.querySelector('[data-bg-opacity-out]');
   const pattern = document.querySelector('[data-bg-pattern]');
@@ -102,6 +106,7 @@ if (bgMode) {
   // Hydrate the prefs (normalized).
   bgMode.value = normalizeBgMode(lsGet(BG_MODE_KEY));
   if (cardOp) { cardOp.value = String(normalizeBgOpacity(lsGet(BG_CARD_OP_KEY), 70)); setOut(cardOpOut, cardOp.value, '%'); }
+  if (cardBlur) { cardBlur.value = String(normalizeCardBlur(lsGet(BG_CARD_BLUR_KEY))); setOut(cardBlurOut, cardBlur.value, 'px'); }
   if (opacity) { opacity.value = String(normalizeBgOpacity(lsGet(BG_OPACITY_KEY))); setOut(opacityOut, opacity.value, '%'); }
   if (pattern) pattern.value = normalizeBgPattern(lsGet(BG_PATTERN_KEY));
   if (patternOp) { patternOp.value = String(normalizeBgOpacity(lsGet(BG_PATTERN_OP_KEY), 3)); setOut(patternOpOut, patternOp.value, '%'); }
@@ -128,6 +133,7 @@ if (bgMode) {
 
   bgMode.addEventListener('change', () => { lsSet(BG_MODE_KEY, normalizeBgMode(bgMode.value)); syncBgOnCtrls(); });
   cardOp?.addEventListener('input', () => { const v = String(normalizeBgOpacity(cardOp.value, 70)); setOut(cardOpOut, v, '%'); lsSet(BG_CARD_OP_KEY, v); });
+  cardBlur?.addEventListener('input', () => { const v = String(normalizeCardBlur(cardBlur.value)); setOut(cardBlurOut, v, 'px'); lsSet(BG_CARD_BLUR_KEY, v); });
   opacity?.addEventListener('input', () => { const v = String(normalizeBgOpacity(opacity.value)); setOut(opacityOut, v, '%'); lsSet(BG_OPACITY_KEY, v); });
   pattern?.addEventListener('change', () => { lsSet(BG_PATTERN_KEY, normalizeBgPattern(pattern.value)); syncPatternCtrls(); });
   patternOp?.addEventListener('input', () => { const v = String(normalizeBgOpacity(patternOp.value, 3)); setOut(patternOpOut, v, '%'); lsSet(BG_PATTERN_OP_KEY, v); });

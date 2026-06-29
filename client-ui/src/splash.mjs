@@ -91,6 +91,12 @@ export function splashShowsQuote(raw) {
   return String(raw) !== '0';
 }
 
+/** Whether the quick-launch cards keep the dark glassy look on an active splash background, even in light theme
+ *  (default true). When false, light theme uses a frosted LIGHT card instead. Stored as '1' (keep dark) / '0'. */
+export function splashKeepsDarkCards(raw) {
+  return String(raw) !== '0';
+}
+
 /** Normalize the dots/scanlines pattern spacing to an integer px in [4,60] (default 16 on an absent/non-numeric
  *  value; an absent stored pref null/undefined/'' falls back, a real number is clamped). */
 export function normalizePatternGap(raw, fallback = 16) {
@@ -98,6 +104,15 @@ export function normalizePatternGap(raw, fallback = 16) {
   const n = Math.round(Number(raw));
   if (!Number.isFinite(n)) return fallback;
   return Math.min(60, Math.max(4, n));
+}
+
+/** SOW-074 follow-up: the quick-launch card backdrop blur radius in px, in [0,20] (default 10). 0 = no blur.
+ *  Independent of the card opacity, so the two can be tuned separately. */
+export function normalizeCardBlur(raw, fallback = 10) {
+  if (raw === null || raw === undefined || raw === '') return fallback;
+  const n = Math.round(Number(raw));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(20, Math.max(0, n));
 }
 
 const ASCII_V = { top: 'flex-start', center: 'center', bottom: 'flex-end' };

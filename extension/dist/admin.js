@@ -10358,9 +10358,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       overlay.remove();
       document.removeEventListener("keydown", onEsc);
     };
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
-    });
     overlay.querySelector(".compose-x")?.addEventListener("click", close);
     overlay.addEventListener("gbti-share-posted", close);
     document.addEventListener("keydown", onEsc);
