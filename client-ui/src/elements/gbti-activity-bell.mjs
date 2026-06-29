@@ -30,7 +30,7 @@ const CSS = `
   .btn:hover { color:var(--fg); }
   .btn svg { width:19px; height:19px; }
   .dot { position:absolute; top:-3px; right:-3px; min-width:18px; height:18px; padding:0 4px; border-radius:999px; background:var(--danger,#d8453b); color:#fff; font-family:var(--font-mono, monospace); font-size:11px; font-weight:700; line-height:18px; text-align:center; box-shadow:0 0 0 2px var(--panel); }
-  .panel { position:absolute; top:calc(100% + 8px); right:0; width:340px; max-height:70vh; overflow-y:auto; background:var(--panel); border:1.5px solid var(--line); border-radius:14px; box-shadow:0 16px 40px -12px rgba(0,0,0,.4); padding:6px; z-index:90; }
+  .panel { position:absolute; top:calc(100% + 8px); right:0; width:340px; max-height:70vh; overflow-y:auto; background:var(--panel); border:1.5px solid var(--line); border-radius:14px; box-shadow:0 16px 40px -12px rgba(0,0,0,.4); padding:6px; z-index:90; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .panel[hidden] { display:none; }
   .phead { display:flex; align-items:baseline; justify-content:space-between; padding:8px 10px 6px; }
   .phead b { font-family:var(--font-display, var(--font-body)); font-size:15px; }

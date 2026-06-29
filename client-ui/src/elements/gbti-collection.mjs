@@ -18,7 +18,7 @@ const CSS = `
   .pill:hover, .pill.on { color:var(--brand); border-color:var(--brand); }
   .pop { position:absolute; z-index:50; top:calc(100% + 8px); left:0; width:260px; max-height:340px; overflow:auto;
     background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:12px;
-    box-shadow:0 12px 36px rgba(0,0,0,.18); padding:10px; }
+    box-shadow:0 12px 36px rgba(0,0,0,.18); padding:10px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .pop h4 { margin:2px 6px 8px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
   .row { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:8px; cursor:pointer; font-size:13.5px; }
   .row:hover { background:var(--hover, rgba(0,0,0,.04)); }

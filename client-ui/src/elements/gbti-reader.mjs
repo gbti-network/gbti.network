@@ -129,7 +129,7 @@ const CSS = `
 
   /* The right drawer */
   .side { display:flex; flex-direction:column; gap:22px; }
-  .author { border:1px solid var(--line); background:var(--panel); border-radius:14px; padding:18px; }
+  .author { border:1px solid var(--line); background:var(--panel); border-radius:14px; padding:18px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .author .a-top { display:flex; align-items:center; gap:12px; }
   .author .a-av { width:48px; height:48px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center; background:var(--hover); color:var(--muted); font-weight:700; }
   .author .a-av img { width:100%; height:100%; object-fit:cover; }

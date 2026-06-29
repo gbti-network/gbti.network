@@ -53,7 +53,7 @@ const CSS = `
      reveals a hidden, absolutely-positioned floating panel on :hover / :focus-within. The .ci is keyboard
      focusable (tabindex=0) so the card is reachable without a pointer. Anchored bottom-LEFT so it never covers
      the Follow button at the row's top-right. V3 tokens => legible in both themes. */
-  .chan .hovercard { position:absolute; left:0; top:calc(100% + 6px); z-index:30; width:min(280px, 78vw); background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:11px 13px; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease; }
+  .chan .hovercard { position:absolute; left:0; top:calc(100% + 6px); z-index:30; width:min(280px, 78vw); background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:11px 13px; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s ease; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .chan .ci:hover .hovercard, .chan .ci:focus-within .hovercard { opacity:1; visibility:visible; }
   .chan .hovercard .hc-name { display:block; font-size:13.5px; color:var(--fg); }
   .chan .hovercard .hc-dom { display:block; font-size:11.5px; color:var(--accent); margin-top:1px; word-break:break-all; }
@@ -65,7 +65,7 @@ const CSS = `
   .fbtn[disabled] { opacity:.6; cursor:default; }
 
   /* the in-element summary reader */
-  .rd { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; }
+  .rd { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .rd .back { font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:transparent; border:0; padding:0; margin:0 0 12px; cursor:pointer; }
   .rd .back:hover { color:var(--accent); }
   .rd h4 { margin:0 0 6px; font-family:var(--font-display, var(--font-body)); font-size:19px; line-height:1.3; }
