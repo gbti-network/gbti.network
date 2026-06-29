@@ -5648,15 +5648,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS8) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div>`);
         return;
       }
+      let appearance = "";
+      try {
+        appearance = this._appearance();
+      } catch {
+      }
       if (!this._loaded) {
-        this.set(this.css(CSS8) + `<p class="hint">Loading your account…</p>`);
+        this.set(this.css(CSS8) + appearance + `<p class="hint">Loading your account…</p>`);
+        this._wire();
         return;
       }
       if (!this._signedIn) {
-        this.set(this.css(CSS8) + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE6}/membership/">Become a member</a>.</div>`);
+        this.set(this.css(CSS8) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE6}/membership/">Become a member</a>.</div>`);
+        this._wire();
         return;
       }
-      this.set(this.css(CSS8) + this._account() + this._appearance() + this._billingSec() + this._referrals() + this._dangerZone());
+      let sections;
+      try {
+        sections = this._account() + appearance + this._billingSec() + this._referrals() + this._dangerZone();
+      } catch {
+        sections = appearance + `<section class="sec"><h3>Account</h3><p class="hint">Some account details could not load. Reopen this page to retry.</p></section>`;
+      }
+      this.set(this.css(CSS8) + sections);
       this._wire();
     }
     _account() {

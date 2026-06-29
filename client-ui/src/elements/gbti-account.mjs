@@ -94,12 +94,22 @@ class GbtiAccount extends GbtiElement {
 
   render() {
     if (!this.client) { this.set(this.css(CSS) + `<div class="nudge">Open this in the GBTI client or extension to manage your account.</div>`); return; }
-    if (!this._loaded) { this.set(this.css(CSS) + `<p class="hint">Loading your account…</p>`); return; }
+    // SOW-070: the Appearance segment (Layout Flat/Glass + Theme) is device-local (localStorage only), so it renders
+    // in EVERY state and is NEVER gated behind the account-data load -- a slow or failed status/billing fetch must
+    // not hide the display controls. Guarded so it can never itself break the page.
+    let appearance = '';
+    try { appearance = this._appearance(); } catch { /* never let the display controls break the render */ }
+    if (!this._loaded) { this.set(this.css(CSS) + appearance + `<p class="hint">Loading your account…</p>`); this._wire(); return; }
     if (!this._signedIn) {
-      this.set(this.css(CSS) + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE}/membership/">Become a member</a>.</div>`);
+      this.set(this.css(CSS) + appearance + `<div class="nudge">Sign in with the GBTI client to manage your account. <a href="${SITE}/membership/">Become a member</a>.</div>`);
+      this._wire();
       return;
     }
-    this.set(this.css(CSS) + this._account() + this._appearance() + this._billingSec() + this._referrals() + this._dangerZone());
+    // Fail-safe: a throw in any account-data section must never leave the page stuck on "Loading your account…".
+    let sections;
+    try { sections = this._account() + appearance + this._billingSec() + this._referrals() + this._dangerZone(); }
+    catch { sections = appearance + `<section class="sec"><h3>Account</h3><p class="hint">Some account details could not load. Reopen this page to retry.</p></section>`; }
+    this.set(this.css(CSS) + sections);
     this._wire();
   }
 
