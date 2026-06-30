@@ -234,11 +234,17 @@ async function handleGithubCallback(request, env) {
   return redirect(dest, { 'Set-Cookie': sessionCookieHeader(session) });
 }
 
+// SOW Part C: the DEFERRED Discord-link callback. Signup no longer hops through Discord (it is deferred), so this
+// callback is reached only from the extension-welcome link flow (/discord/link/start), which authenticates the member
+// via their post-signup session cookie and carries the verified github_id + a per-browser nonce in the signed state.
+// runSignup is idempotent: it reuses the existing Customer, attaches discord_user_id, and assigns the role.
 async function handleDiscordCallback(request, env) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const state = await unpackState(url.searchParams.get('state'), env);
   if (!code || !state || !state.githubId) return json({ error: 'bad_oauth_state' }, 400);
+  const cookieNonce = readOauthNonce(request.headers.get('Cookie'));
+  if (!state.nonce || !cookieNonce || state.nonce !== cookieNonce) return json({ error: 'bad_oauth_state' }, 400);
 
   const { accessToken } = await discordExchangeCode(
     {
@@ -270,7 +276,26 @@ async function handleDiscordCallback(request, env) {
   });
 
   const session = await signSession({ githubId: state.githubId, githubLogin: state.githubLogin }, env.SESSION_SECRET);
-  return redirect(`${env.SITE_BASE_URL}/account`, { 'Set-Cookie': sessionCookieHeader(session) });
+  return redirect(`${env.SITE_BASE_URL}/extension/?linked=discord`, { 'Set-Cookie': sessionCookieHeader(session) });
+}
+
+// SOW Part C: deferred Discord link, step 1. The extension welcome opens this in a tab. It authenticates the member
+// via their post-signup session cookie (set on this Worker's origin at GitHub-only signup), then starts Discord OAuth
+// carrying the verified github_id + a per-browser nonce. The /signup/discord/callback (above) completes the link.
+async function handleDiscordLinkStart(request, env) {
+  const session = await verifySession(readSessionCookie(request.headers.get('Cookie')), env.SESSION_SECRET);
+  if (!session || !session.github_id) {
+    // No session on this browser (expired, or signed up elsewhere) -> land on the download page; they can retry.
+    return redirect(`${env.SITE_BASE_URL}/extension/?welcome=trial`);
+  }
+  const nonce = crypto.randomUUID();
+  const state = await packState({ githubId: session.github_id, githubLogin: session.github_login, nonce, link: true }, env);
+  const location = discordAuthorizeUrl({
+    clientId: env.DISCORD_OAUTH_CLIENT_ID,
+    redirectUri: `${env.PUBLIC_BASE_URL}/signup/discord/callback`,
+    state,
+  });
+  return redirect(location, { 'Set-Cookie': `${OAUTH_NONCE_COOKIE}=${nonce}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600` });
 }
 
 async function handleCheckout(request, env) {
@@ -430,6 +455,7 @@ export default {
       if (method === 'GET' && pathname === '/signup/start') return await handleStart(request, env);
       if (method === 'GET' && pathname === '/signup/github/callback') return await handleGithubCallback(request, env);
       if (method === 'GET' && pathname === '/signup/discord/callback') return await handleDiscordCallback(request, env);
+      if (method === 'GET' && pathname === '/discord/link/start') return await handleDiscordLinkStart(request, env); // SOW Part C: deferred Discord link
 
       if (method === 'POST' && pathname === '/checkout') return await handleCheckout(request, env);
       if (method === 'GET' && pathname === '/checkout/success') return await handleCheckoutSuccess(request, env);

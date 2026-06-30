@@ -549,6 +549,62 @@ test('GET /signup/github/callback REJECTS a replayed state with no matching nonc
   assert.ok(!res.headers.get('Set-Cookie'), 'no session is minted for a replayed state');
 });
 
+test('SOW Part C: /discord/link/start with a session -> Discord OAuth carrying the verified github_id + a nonce', async () => {
+  const env = fakeEnv();
+  const session = await signSession({ githubId: '424242', githubLogin: 'octocat' }, env.SESSION_SECRET);
+  const res = await worker.fetch(req('GET', '/discord/link/start', { headers: { Cookie: 'gbti_session=' + session } }), env, {});
+  assert.equal(res.status, 302);
+  const location = res.headers.get('Location');
+  assert.ok(location.startsWith('https://discord.com/api/oauth2/authorize'), 'redirects to Discord authorize');
+  const state = await unpackState(new URL(location).searchParams.get('state'), env);
+  assert.equal(state.githubId, '424242');
+  assert.equal(state.link, true);
+  assert.ok(state.nonce, 'carries a per-browser nonce');
+  assert.match(res.headers.get('Set-Cookie') || '', new RegExp('gbti_oauth_nonce=' + state.nonce));
+});
+
+test('SOW Part C: /discord/link/start with NO session -> no Discord OAuth, lands on the extension page', async () => {
+  const env = fakeEnv();
+  const res = await worker.fetch(req('GET', '/discord/link/start'), env, {});
+  assert.equal(res.status, 302);
+  const loc = res.headers.get('Location') || '';
+  assert.ok(loc.includes('/extension/'), 'lands on the download page');
+  assert.ok(!loc.includes('discord.com'), 'never starts Discord OAuth without a verified identity');
+});
+
+test('SOW Part C: the Discord-link callback links discord_user_id + role to the EXISTING Customer (nonce-checked)', async () => {
+  const env = fakeEnv();
+  const startState = await packState({ githubId: '5', githubLogin: 'octocat', nonce: 'n1', link: true }, env);
+  await withFetch(
+    (url) => {
+      if (url.includes('discord.com/api') && url.includes('oauth2/token')) return { status: 200, body: { access_token: 'dtok' } };
+      if (url.includes('discord.com/api') && url.includes('users/@me')) return { status: 200, body: { id: 'd-99', email: 'd@e.com' } };
+      if (url.includes('discord.com/api') && url.includes('guilds')) return { status: 204, body: '' };
+      if (url.includes('api.stripe.com/v1/customers/search')) return { status: 200, body: { data: [{ id: 'cus_x', metadata: { github_id: '5', trial_started_at: '2020-01-01T00:00:00.000Z' } }] } };
+      if (url.includes('api.stripe.com/v1/customers')) return { status: 200, body: { id: 'cus_x' } };
+      return { status: 200, body: '' };
+    },
+    async () => {
+      const res = await worker.fetch(
+        req('GET', '/signup/discord/callback?code=dcode&state=' + encodeURIComponent(startState), { headers: { Cookie: 'gbti_oauth_nonce=n1' } }),
+        env, {},
+      );
+      assert.equal(res.status, 302);
+      assert.ok((res.headers.get('Location') || '').includes('/extension/?linked=discord'), 'lands on the link-success page');
+    },
+  );
+});
+
+test('SOW Part C: the Discord-link callback REJECTS a state with no matching nonce cookie', async () => {
+  const env = fakeEnv();
+  const startState = await packState({ githubId: '5', githubLogin: 'octocat', nonce: 'n1', link: true }, env);
+  const res = await worker.fetch(
+    req('GET', '/signup/discord/callback?code=dcode&state=' + encodeURIComponent(startState), { headers: { Cookie: 'gbti_oauth_nonce=WRONG' } }),
+    env, {},
+  );
+  assert.equal(res.status, 400);
+});
+
 test('GET /signup/github/callback rejects a forged/unsigned state with 400', async () => {
   const env = fakeEnv();
   await withFetch(
