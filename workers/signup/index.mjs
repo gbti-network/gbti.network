@@ -114,10 +114,11 @@ function discordConfig(env) {
   };
 }
 
-// state is a signed blob carrying { ref, via, githubId?, githubLogin? } between the OAuth hops. The HMAC
-// signature over the blob is the CSRF control (FIX 4): a callback proceeds only when the signature
-// verifies, so the state cannot be forged or tampered with. There is no separate browser nonce; see
-// the CSRF note in the file header for why a cookie-bound nonce is not used across the external hops.
+// state is a signed blob carrying { ref, via, sid, nonce, githubId?, githubLogin? } between the OAuth hops. The HMAC
+// signature over the blob prevents forgery/tampering; the embedded `nonce` (also set as a cookie at /signup/start)
+// binds the state to the INITIATING browser, so a legitimately-signed state cannot be replayed into a victim's
+// browser. The callback rejects unless the request's nonce cookie matches the state nonce (login-CSRF /
+// session-fixation defense). A SameSite=Lax cookie survives the single GitHub hop now that Discord is deferred.
 //
 // We reuse signSession/verifySession as the signing primitive. signSession requires a non-empty
 // github_id, so we pin it to a fixed marker ('state') and carry the real payload as JSON in the
@@ -137,6 +138,22 @@ export async function unpackState(token, env) {
   } catch {
     return null;
   }
+}
+
+// SOW security fix: a per-flow nonce, set as a cookie at /signup/start AND embedded in the signed state, binds the
+// state to the initiating browser. The callback requires both to match before minting a session, closing the
+// login-CSRF / session-fixation hole (a signed-but-fungible state replayed into a victim's browser). A SameSite=Lax
+// cookie survives the single external GitHub hop (Discord is deferred), so the old "nonce cannot survive" rationale
+// no longer applies.
+const OAUTH_NONCE_COOKIE = 'gbti_oauth_nonce';
+export function readOauthNonce(cookieHeader) {
+  if (typeof cookieHeader !== 'string') return null;
+  for (const part of cookieHeader.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    if (part.slice(0, eq).trim() === OAUTH_NONCE_COOKIE) return part.slice(eq + 1).trim() || null;
+  }
+  return null;
 }
 
 async function handleStart(request, env) {
@@ -160,14 +177,15 @@ async function handleStart(request, env) {
   // no attribution binding). Carried in the signed state so the conversion handler can later locate touch:<sid>.
   const sidParam = url.searchParams.get('sid') || '';
   const sid = SESSION_RE.test(sidParam) ? sidParam : '';
-  // No browser-bound nonce: the HMAC signature over the state blob is the CSRF control (FIX 4).
-  const state = await packState({ ref, via, sid }, env);
+  // SOW security fix: bind the state to THIS browser with a per-flow nonce (cookie + embedded in the signed state).
+  const nonce = crypto.randomUUID();
+  const state = await packState({ ref, via, sid, nonce }, env);
   const location = githubAuthorizeUrl({
     clientId: env.GITHUB_OAUTH_CLIENT_ID,
     redirectUri: `${env.PUBLIC_BASE_URL}/signup/github/callback`,
     state,
   });
-  return redirect(location);
+  return redirect(location, { 'Set-Cookie': `${OAUTH_NONCE_COOKIE}=${nonce}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600` });
 }
 
 async function handleGithubCallback(request, env) {
@@ -175,6 +193,10 @@ async function handleGithubCallback(request, env) {
   const code = url.searchParams.get('code');
   const state = await unpackState(url.searchParams.get('state'), env);
   if (!code || !state) return json({ error: 'bad_oauth_state' }, 400);
+  // SOW security fix: require the per-browser nonce (the cookie set at /signup/start) to match the state's nonce. A
+  // state replayed into a DIFFERENT browser lacks the matching cookie, so it is rejected (login-CSRF / session-fixation).
+  const cookieNonce = readOauthNonce(request.headers.get('Cookie'));
+  if (!state.nonce || !cookieNonce || state.nonce !== cookieNonce) return json({ error: 'bad_oauth_state' }, 400);
 
   const accessToken = await githubExchangeCode(
     {

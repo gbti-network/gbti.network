@@ -484,7 +484,10 @@ test('GET /signup/start passes abuse checks and redirects to GitHub with a signe
       const unpacked = await unpackState(stateParam, env);
       assert.ok(unpacked, 'state verifies with SESSION_SECRET');
       assert.equal(unpacked.ref, 'alice');
-      assert.ok(!('nonce' in unpacked), 'no unused browser nonce is carried (FIX 4)');
+      assert.ok(unpacked.nonce, 'the state carries a per-browser nonce (state-browser binding)');
+      const setCookie = res.headers.get('Set-Cookie') || '';
+      assert.match(setCookie, new RegExp('gbti_oauth_nonce=' + unpacked.nonce), 'the same nonce is set as a cookie');
+      assert.match(setCookie, /HttpOnly/);
     },
   );
 });
@@ -506,7 +509,7 @@ test('GET /signup/start fails closed (403) when Turnstile rejects', async () => 
 
 test('GET /signup/github/callback completes the trial signup on GitHub ALONE (Discord deferred)', async () => {
   const env = fakeEnv();
-  const startState = await packState({ ref: 'bob' }, env);
+  const startState = await packState({ ref: 'bob', nonce: 'n1' }, env);
   await withFetch(
     (url) => {
       if (url.includes('login/oauth/access_token')) return { status: 200, body: { access_token: 'gho_token' } };
@@ -518,7 +521,7 @@ test('GET /signup/github/callback completes the trial signup on GitHub ALONE (Di
     },
     async () => {
       const res = await worker.fetch(
-        req('GET', `/signup/github/callback?code=ghcode&state=${encodeURIComponent(startState)}`),
+        req('GET', `/signup/github/callback?code=ghcode&state=${encodeURIComponent(startState)}`, { headers: { Cookie: 'gbti_oauth_nonce=n1' } }),
         env,
         {},
       );
@@ -530,6 +533,20 @@ test('GET /signup/github/callback completes the trial signup on GitHub ALONE (Di
       assert.equal(env.SIGNUP_KV.store.get('gh:424242'), 'cus_new', 'the trial Customer was created + indexed');
     },
   );
+});
+
+test('GET /signup/github/callback REJECTS a replayed state with no matching nonce cookie (login-CSRF / session-fixation defense)', async () => {
+  const env = fakeEnv();
+  const startState = await packState({ ref: 'bob', nonce: 'n1' }, env); // a legitimately-signed state...
+  // ...delivered into a DIFFERENT browser, which lacks the matching gbti_oauth_nonce cookie. Rejected BEFORE any
+  // code exchange or session mint (no global fetch needed -- the handler returns 400 first).
+  const res = await worker.fetch(
+    req('GET', `/signup/github/callback?code=ghcode&state=${encodeURIComponent(startState)}`, { headers: { Cookie: 'gbti_oauth_nonce=WRONG' } }),
+    env,
+    {},
+  );
+  assert.equal(res.status, 400);
+  assert.ok(!res.headers.get('Set-Cookie'), 'no session is minted for a replayed state');
 });
 
 test('GET /signup/github/callback rejects a forged/unsigned state with 400', async () => {
