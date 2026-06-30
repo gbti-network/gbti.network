@@ -54,13 +54,14 @@ const CSS = `
 const ROLE_RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
 
 class GbtiSuperadminDashboard extends GbtiElement {
+  // SOW-070 fix: in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client. render() retries
+  // the load the moment the client arrives (setClient re-renders subscribers) -- no eager _load() that early-returns.
   connectedCallback() {
     this._data = null; // { roster, summary }
     this._pulls = null; // open content-PR queue, or null when unavailable
     this._counts = null; // { username(lower) -> published content count }, or null
     this._error = null; // 'forbidden' | 'auth' | 'error'
     super.connectedCallback?.();
-    this._load();
   }
 
   // Per-member published content counts, from the PUBLIC per-type index JSONs (no auth, no new endpoint). Author
@@ -82,9 +83,11 @@ class GbtiSuperadminDashboard extends GbtiElement {
     try {
       const r = await this.client.overrides();
       this._data = { roster: r?.roster || [], summary: r?.summary || {} };
+      this._loading = false;
     } catch (err) {
       const code = err?.code;
       this._error = code === 'forbidden' ? 'forbidden' : (code === 'no-identity' || code === 'not-authenticated') ? 'auth' : 'error';
+      this._loading = false;
       this.render();
       return;
     }
@@ -145,7 +148,7 @@ class GbtiSuperadminDashboard extends GbtiElement {
     if (this._error === 'forbidden') { this.set(this.css(CSS) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`); return; }
     if (this._error === 'auth') { this.set(this.css(CSS) + `<p class="muted">Sign in to view the member roster.</p>`); return; }
     if (this._error) { this.set(this.css(CSS) + `<p class="muted">Could not load the member roster. Try again shortly.</p>`); return; }
-    if (!this._data) { this.set(this.css(CSS) + `<p class="muted">Loading the member roster...</p>`); return; }
+    if (!this._data) { if (!this._error && !this._loading) { this._loading = true; this._load(); } this.set(this.css(CSS) + `<p class="muted">Loading the member roster...</p>`); return; }
 
     const s = this._data.summary || {};
     const chips = `<div class="chips">

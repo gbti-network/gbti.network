@@ -30,24 +30,26 @@ const CSS = `
 `;
 
 class GbtiCategoryManager extends GbtiElement {
+  // SOW-070 fix: in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client. render() retries
+  // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load() that early-returns.
   connectedCallback() {
     super.connectedCallback();
     this._tree = null;
     this._msg = '';
     this._busy = false;
-    this.load();
   }
 
   async load() {
     if (!this.client) { this.render(); return; }
     try { this._tree = (await this.client.taxonomy())?.tree || {}; }
     catch { this._tree = {}; this._msg = 'Could not load the taxonomy.'; }
+    this._loading = false;
     this.render();
   }
 
   render() {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client (admin) to manage categories.</p>`); return; }
-    if (!this._tree) { this.set(this.css(CSS) + `<p class="muted">Loading categories...</p>`); return; }
+    if (!this._tree) { if (!this._loading) { this._loading = true; this.load(); } this.set(this.css(CSS) + `<p class="muted">Loading categories...</p>`); return; }
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
       <div class="head"><h3>Category manager</h3><span class="hint">Edits open an auto-merged house PR.</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}

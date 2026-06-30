@@ -6170,13 +6170,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 `;
   var ROLE_RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
   var GbtiSuperadminDashboard = class extends GbtiElement {
+    // SOW-070 fix: in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client. render() retries
+    // the load the moment the client arrives (setClient re-renders subscribers) -- no eager _load() that early-returns.
     connectedCallback() {
       this._data = null;
       this._pulls = null;
       this._counts = null;
       this._error = null;
       super.connectedCallback?.();
-      this._load();
     }
     // Per-member published content counts, from the PUBLIC per-type index JSONs (no auth, no new endpoint). Author
     // is the folder username; house/gbti content does not map to a member. Best-effort; a failure leaves it null.
@@ -6203,9 +6204,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const r = await this.client.overrides();
         this._data = { roster: r?.roster || [], summary: r?.summary || {} };
+        this._loading = false;
       } catch (err) {
         const code = err?.code;
         this._error = code === "forbidden" ? "forbidden" : code === "no-identity" || code === "not-authenticated" ? "auth" : "error";
+        this._loading = false;
         this.render();
         return;
       }
@@ -6276,6 +6279,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       if (!this._data) {
+        if (!this._error && !this._loading) {
+          this._loading = true;
+          this._load();
+        }
         this.set(this.css(CSS10) + `<p class="muted">Loading the member roster...</p>`);
         return;
       }
@@ -6335,12 +6342,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .busy { opacity:.55; pointer-events:none; }
 `;
   var GbtiCategoryManager = class extends GbtiElement {
+    // SOW-070 fix: in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client. render() retries
+    // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load() that early-returns.
     connectedCallback() {
       super.connectedCallback();
       this._tree = null;
       this._msg = "";
       this._busy = false;
-      this.load();
     }
     async load() {
       if (!this.client) {
@@ -6353,6 +6361,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._tree = {};
         this._msg = "Could not load the taxonomy.";
       }
+      this._loading = false;
       this.render();
     }
     render() {
@@ -6361,6 +6370,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       if (!this._tree) {
+        if (!this._loading) {
+          this._loading = true;
+          this.load();
+        }
         this.set(this.css(CSS11) + `<p class="muted">Loading categories...</p>`);
         return;
       }
@@ -6495,9 +6508,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .muted { color:var(--muted); }
 `;
   var GbtiNewsSourceManager = class extends GbtiElement {
+    // SOW-070 fix: this element is in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client.
+    // Don't load eagerly here; render() retries the load the moment the client arrives (setClient re-renders subscribers).
     connectedCallback() {
       super.connectedCallback?.();
-      this.load();
     }
     async load() {
       if (!this.client) {
@@ -6510,6 +6524,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._sources = [];
         this._msg = "Could not load the news sources.";
       }
+      this._loading = false;
       this.render();
     }
     render() {
@@ -6518,6 +6533,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       if (!this._sources) {
+        if (!this._loading) {
+          this._loading = true;
+          this.load();
+        }
         this.set(this.css(CSS12) + `<p class="muted">Loading news sources...</p>`);
         return;
       }
@@ -6612,9 +6631,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .muted { color:var(--muted); }
 `;
   var GbtiQuoteManager = class extends GbtiElement {
+    // SOW-070 fix: this element is in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client.
+    // Don't load eagerly here; render() retries the load the moment the client arrives (setClient re-renders subscribers).
     connectedCallback() {
       super.connectedCallback?.();
-      this.load();
     }
     async load() {
       if (!this.client) {
@@ -6627,6 +6647,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._quotes = [];
         this._msg = "Could not load the quotes.";
       }
+      this._loading = false;
       this.render();
     }
     render() {
@@ -6635,6 +6656,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       if (!this._quotes) {
+        if (!this._loading) {
+          this._loading = true;
+          this.load();
+        }
         this.set(this.css(CSS13) + `<p class="muted">Loading quotes...</p>`);
         return;
       }
@@ -6728,13 +6753,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 `;
   var SRC_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
   var GbtiSyndicationTracker = class extends GbtiElement {
+    // SOW-070 fix: in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client. render() retries
+    // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load() that early-returns.
     connectedCallback() {
       super.connectedCallback();
       this._data = null;
       this._msg = "";
       this._err = false;
       this._busy = false;
-      this.load();
     }
     async load() {
       if (!this.client) {
@@ -6749,6 +6775,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._err = true;
         this._msg = e?.message || "Could not load the syndication queue.";
       }
+      this._loading = false;
       this.render();
     }
     render() {
@@ -6762,6 +6789,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       if (!this._data) {
+        if (!this._err && !this._loading) {
+          this._loading = true;
+          this.load();
+        }
         this.set(this.css(CSS14) + `<p class="muted">Loading syndication queue...</p>`);
         return;
       }

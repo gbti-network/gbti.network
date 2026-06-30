@@ -37,26 +37,28 @@ const CSS = `
 const SRC_LABEL = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
 
 class GbtiSyndicationTracker extends GbtiElement {
+  // SOW-070 fix: in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client. render() retries
+  // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load() that early-returns.
   connectedCallback() {
     super.connectedCallback();
     this._data = null;
     this._msg = '';
     this._err = false;
     this._busy = false;
-    this.load();
   }
 
   async load() {
     if (!this.client) { this.render(); return; }
     try { this._data = await this.client.syndicationQueue(); this._err = false; }
     catch (e) { this._data = null; this._err = true; this._msg = e?.message || 'Could not load the syndication queue.'; }
+    this._loading = false;
     this.render();
   }
 
   render() {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client (admin) to view syndication.</p>`); return; }
     if (this._err) { this.set(this.css(CSS) + `<div class="head"><h3>Syndication</h3></div><p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`); this.$('[data-reload]')?.addEventListener('click', () => this.load()); return; }
-    if (!this._data) { this.set(this.css(CSS) + `<p class="muted">Loading syndication queue...</p>`); return; }
+    if (!this._data) { if (!this._err && !this._loading) { this._loading = true; this.load(); } this.set(this.css(CSS) + `<p class="muted">Loading syndication queue...</p>`); return; }
     const d = this._data;
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
       <div class="head"><h3>Syndication queue</h3><span class="hint">Nothing posts until a superadmin approves it. Approved items post to every enabled channel on the next tick.</span></div>

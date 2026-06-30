@@ -36,18 +36,21 @@ const CSS = `
 `;
 
 class GbtiNewsSourceManager extends GbtiElement {
-  connectedCallback() { super.connectedCallback?.(); this.load(); }
+  // SOW-070 fix: this element is in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client.
+  // Don't load eagerly here; render() retries the load the moment the client arrives (setClient re-renders subscribers).
+  connectedCallback() { super.connectedCallback?.(); }
 
   async load() {
     if (!this.client) { this.render(); return; }
     try { this._sources = (await this.client.newsSourcePool())?.sources || []; }
     catch { this._sources = []; this._msg = 'Could not load the news sources.'; }
+    this._loading = false;
     this.render();
   }
 
   render() {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client (admin) to manage news sources.</p>`); return; }
-    if (!this._sources) { this.set(this.css(CSS) + `<p class="muted">Loading news sources...</p>`); return; }
+    if (!this._sources) { if (!this._loading) { this._loading = true; this.load(); } this.set(this.css(CSS) + `<p class="muted">Loading news sources...</p>`); return; }
     const enabled = this._sources.filter((s) => s && s.enabled !== false).length;
     const rows = this._sources.map((s) => {
       const on = s && s.enabled !== false;

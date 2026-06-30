@@ -32,18 +32,21 @@ const CSS = `
 `;
 
 class GbtiQuoteManager extends GbtiElement {
-  connectedCallback() { super.connectedCallback?.(); this.load(); }
+  // SOW-070 fix: this element is in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client.
+  // Don't load eagerly here; render() retries the load the moment the client arrives (setClient re-renders subscribers).
+  connectedCallback() { super.connectedCallback?.(); }
 
   async load() {
     if (!this.client) { this.render(); return; }
     try { this._quotes = (await this.client.quotePool())?.quotes || []; }
     catch { this._quotes = []; this._msg = 'Could not load the quotes.'; }
+    this._loading = false;
     this.render();
   }
 
   render() {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client (admin) to manage quotes.</p>`); return; }
-    if (!this._quotes) { this.set(this.css(CSS) + `<p class="muted">Loading quotes...</p>`); return; }
+    if (!this._quotes) { if (!this._loading) { this._loading = true; this.load(); } this.set(this.css(CSS) + `<p class="muted">Loading quotes...</p>`); return; }
     const enabled = this._quotes.filter((q) => q && q.enabled !== false).length;
     const rows = this._quotes.map((q) => {
       const on = q && q.enabled !== false;
