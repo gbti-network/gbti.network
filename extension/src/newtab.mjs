@@ -420,14 +420,36 @@ async function api(pathname) {
   } catch { return null; }
 }
 
+const WELCOME_SEEN_KEY = 'gbti-welcome-seen';
+// SOW-029 fix: the post-setup welcome (join Discord + follow members) was reachable ONLY via the onboarding wizard's
+// "Complete Integration" click, so a member who reached the new tab any other way never saw it. Show it ONCE on the
+// first new-tab open for ANY signed-in member -- it is COMMUNITY onboarding (Discord + follow), so it is NOT gated on
+// the publish setup (fork + install). The flag is set on SHOW (so it never nags and survives an abandon); the
+// onboarding-wizard path checks + sets the same flag, so the two never double up.
+function maybeShowWelcome(signedIn) {
+  let seen = false;
+  try { seen = localStorage.getItem(WELCOME_SEEN_KEY) === '1'; } catch { /* no storage */ }
+  if (!signedIn || seen || document.querySelector('.nt-welcome-overlay')) return;
+  try { localStorage.setItem(WELCOME_SEEN_KEY, '1'); } catch { /* no storage */ }
+  const overlay = document.createElement('div');
+  overlay.className = 'nt-welcome-overlay';
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:1200; overflow:auto; background:var(--bg,#0d1117); display:flex; justify-content:center; padding:48px 16px;';
+  const w = document.createElement('gbti-welcome');
+  w.style.cssText = 'width:100%; max-width:560px;';
+  w.addEventListener('gbti:welcome-done', () => overlay.remove());
+  overlay.appendChild(w);
+  document.body.appendChild(overlay);
+}
+
 // SOW-026/029: the onboarding setup banner. Shown until the member is signed in AND set up (fork + GBTI App
 // install). The shell owns the account control + identity; this only drives the banner.
 async function loadSetupBanner() {
   const [status, ob] = await Promise.all([api('/api/status'), api('/api/onboarding-status')]);
   const signedIn = Boolean(status?.authenticated && status?.identity?.login);
+  const ready = ob ? (ob.ready || (ob.appMode === false && signedIn)) : signedIn;
+  maybeShowWelcome(signedIn); // first-run welcome, independent of the wizard's button + the publish setup
   const setup = $('[data-setup]');
   if (!setup) return;
-  const ready = ob ? (ob.ready || (ob.appMode === false && signedIn)) : signedIn;
   if (ready) { setup.classList.remove('show'); return; }
   const txt = setup.querySelector('[data-setup-txt]');
   const go = setup.querySelector('[data-setup-go]');

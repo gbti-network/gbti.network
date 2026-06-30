@@ -11350,12 +11350,34 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return null;
     }
   }
+  var WELCOME_SEEN_KEY = "gbti-welcome-seen";
+  function maybeShowWelcome(signedIn) {
+    let seen = false;
+    try {
+      seen = localStorage.getItem(WELCOME_SEEN_KEY) === "1";
+    } catch {
+    }
+    if (!signedIn || seen || document.querySelector(".nt-welcome-overlay")) return;
+    try {
+      localStorage.setItem(WELCOME_SEEN_KEY, "1");
+    } catch {
+    }
+    const overlay = document.createElement("div");
+    overlay.className = "nt-welcome-overlay";
+    overlay.style.cssText = "position:fixed; inset:0; z-index:1200; overflow:auto; background:var(--bg,#0d1117); display:flex; justify-content:center; padding:48px 16px;";
+    const w = document.createElement("gbti-welcome");
+    w.style.cssText = "width:100%; max-width:560px;";
+    w.addEventListener("gbti:welcome-done", () => overlay.remove());
+    overlay.appendChild(w);
+    document.body.appendChild(overlay);
+  }
   async function loadSetupBanner() {
     const [status, ob] = await Promise.all([api2("/api/status"), api2("/api/onboarding-status")]);
     const signedIn = Boolean(status?.authenticated && status?.identity?.login);
+    const ready = ob ? ob.ready || ob.appMode === false && signedIn : signedIn;
+    maybeShowWelcome(signedIn);
     const setup = $("[data-setup]");
     if (!setup) return;
-    const ready = ob ? ob.ready || ob.appMode === false && signedIn : signedIn;
     if (ready) {
       setup.classList.remove("show");
       return;

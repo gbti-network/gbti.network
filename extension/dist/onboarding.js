@@ -10373,8 +10373,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     });
     el.addEventListener("gbti:onboarding-ready", () => refreshAccount());
     el.addEventListener("gbti:onboarding-start", () => {
+      let seen = false;
+      try {
+        seen = localStorage.getItem("gbti-welcome-seen") === "1";
+      } catch {
+      }
+      if (seen) {
+        window.location.href = chrome.runtime.getURL("newtab.html");
+        return;
+      }
       const w = document.createElement("gbti-welcome");
       w.addEventListener("gbti:welcome-done", () => {
+        try {
+          localStorage.setItem("gbti-welcome-seen", "1");
+        } catch {
+        }
         window.location.href = chrome.runtime.getURL("newtab.html");
       });
       const shell = document.querySelector("main.shell");

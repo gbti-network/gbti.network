@@ -90,8 +90,14 @@ function mount() {
   // "Complete Integration" (SOW-029): take over the page with the post-setup welcome view (membership phase +
   // join-Discord + follow-members). When the member finishes, THEN open the extension's home (new tab).
   el.addEventListener('gbti:onboarding-start', () => {
+    // SOW-029: if the new tab already showed the welcome (flag set on show), do not re-show it -> go straight home.
+    let seen = false; try { seen = localStorage.getItem('gbti-welcome-seen') === '1'; } catch { /* no storage */ }
+    if (seen) { window.location.href = chrome.runtime.getURL('newtab.html'); return; }
     const w = document.createElement('gbti-welcome');
-    w.addEventListener('gbti:welcome-done', () => { window.location.href = chrome.runtime.getURL('newtab.html'); });
+    w.addEventListener('gbti:welcome-done', () => {
+      try { localStorage.setItem('gbti-welcome-seen', '1'); } catch { /* no storage */ } // SOW-029: don't re-show on the new tab
+      window.location.href = chrome.runtime.getURL('newtab.html');
+    });
     const shell = document.querySelector('main.shell');
     if (shell) { shell.style.gridTemplateColumns = '1fr'; shell.replaceChildren(w); }
     else { (document.getElementById('app') || document.body).replaceChildren(w); }
