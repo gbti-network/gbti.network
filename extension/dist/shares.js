@@ -2252,25 +2252,30 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-superadmin-dashboard", GbtiSuperadminDashboard);
 
   // client-ui/src/elements/gbti-category-manager.mjs
+  var CHEVRON2 = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2384818c' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E";
   var CSS8 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .head { display:flex; align-items:baseline; gap:10px; margin:0 0 6px; }
-  .head h3 { margin:0; font-size:15px; }
-  .hint { color:var(--muted); font-size:12px; }
-  .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
+  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; line-height:1.5; }
   .muted { color:var(--muted); font-size:13.5px; }
-  .add-top { display:flex; gap:6px; margin:10px 0 14px; flex-wrap:wrap; }
-  input { font:inherit; font-size:13px; padding:6px 9px; border:1px solid var(--line); border-radius:2px; background:var(--panel); color:var(--fg); }
-  input.key { width:150px; } input.lab { flex:1; min-width:120px; }
-  .btn { font:inherit; font-weight:600; font-size:13px; padding:6px 12px; border:0; border-radius:2px; background:var(--accent); color:#fff; cursor:pointer; }
-  .lk { font:inherit; font-size:12.5px; font-weight:600; color:var(--accent); background:none; border:0; cursor:pointer; padding:4px 6px; border-radius:2px; }
-  .lk:hover { background:var(--hover); }
-  .lk.danger { color:var(--danger); }
+  .add-top { display:flex; gap:8px; margin:0 0 16px; flex-wrap:wrap; align-items:center; }
+  input, select { font:inherit; font-size:13.5px; padding:9px 11px; border:1.5px solid var(--line); border-radius:9px; background:var(--bg, var(--panel)); color:var(--fg); }
+  input:focus-visible, select:focus-visible { outline:2px solid var(--brand); outline-offset:1px; border-color:var(--brand); }
+  input.key { width:170px; } input.lab { flex:1; min-width:140px; }
+  select { appearance:none; -webkit-appearance:none; cursor:pointer; padding-right:36px; background-image:url("${CHEVRON2}"); background-repeat:no-repeat; background-position:right 11px center; }
+  .btn { font:inherit; font-weight:600; font-size:13px; padding:9px 14px; border:0; border-radius:9px; background:var(--brand); color:#fff; cursor:pointer; white-space:nowrap; }
+  .btn:hover { filter:brightness(1.06); }
+  .lk { font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:none; border:0; cursor:pointer; padding:5px 9px; border-radius:7px; white-space:nowrap; }
+  .lk:hover { background:var(--hover); color:var(--fg); }
+  .lk.danger:hover { color:var(--danger); background:var(--hover); }
+  .lk.go { color:#fff; background:var(--brand); } .lk.go:hover { color:#fff; filter:brightness(1.06); }
   ul.tree { list-style:none; margin:0; padding:0 0 0 16px; } ul.tree.root { padding-left:0; }
   .node { border-top:1px solid var(--line); }
   .node:first-child { border-top:0; }
-  .row { display:flex; align-items:center; gap:8px; padding:7px 2px; }
+  .row { display:flex; align-items:center; gap:6px; padding:8px 2px; flex-wrap:wrap; }
   code.key { font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); min-width:120px; }
+  .moverow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:2px 0 10px 8px; padding:11px 13px; border-left:2px solid var(--brand); background:var(--hover); border-radius:0 10px 10px 0; }
+  .moverow .mlbl { font-size:13px; font-weight:600; }
+  .moverow select { min-width:220px; max-width:360px; }
   .busy { opacity:.55; pointer-events:none; }
 `;
   var GbtiCategoryManager = class extends GbtiElement {
@@ -2281,6 +2286,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._tree = null;
       this._msg = "";
       this._busy = false;
+      this._moving = null;
     }
     async load() {
       if (!this.client) {
@@ -2309,6 +2315,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS8) + `<p class="muted">Loading categories...</p>`);
         return;
       }
+      this._paths = this._flatten(this._tree);
       this.set(this.css(CSS8) + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add-top">
@@ -2319,6 +2326,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <ul class="tree root">${this._renderLevel(this._tree, []) || '<li class="muted">No categories yet.</li>'}</ul>
     </div>`);
       this._wire();
+    }
+    // Flatten the tree to [path, label] pairs (depth-first) -- the source for the move-picker destinations.
+    _flatten(map, path = [], acc = []) {
+      for (const [key, node] of Object.entries(map || {})) {
+        const p = [...path, key];
+        acc.push([p.join("/"), node && node.label || key]);
+        if (node && node.children) this._flatten(node.children, p, acc);
+      }
+      return acc;
     }
     _renderLevel(map, path) {
       return Object.entries(map || {}).map(([key, node]) => {
@@ -2335,9 +2351,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           <button class="lk" type="button" data-move="${esc(ps)}">Move</button>
           <button class="lk danger" type="button" data-remove="${esc(ps)}">Remove</button>
         </div>
+        ${this._moving === ps ? this._movePicker(ps) : ""}
         ${kids ? `<ul class="tree">${kids}</ul>` : ""}
       </li>`;
       }).join("");
+    }
+    // Inline destination picker for a move: every node EXCEPT the node itself, its descendants (would create a cycle),
+    // and its current parent (a no-op), plus "Top level" when it is not already top-level.
+    _movePicker(ps) {
+      const parent = ps.split("/").slice(0, -1).join("/");
+      const opts = (this._paths || []).filter(([vp]) => vp !== ps && !vp.startsWith(`${ps}/`) && vp !== parent).map(([vp, lbl]) => `<option value="${esc(vp)}">${esc(lbl)} &middot; ${esc(vp)}</option>`).join("");
+      const top = parent === "" ? "" : `<option value="">Top level</option>`;
+      return `<div class="moverow">
+      <span class="mlbl">Move under</span>
+      <select data-moveto>${top}${opts || '<option value="" disabled>No valid destination</option>'}</select>
+      <button class="lk go" type="button" data-moveconfirm="${esc(ps)}">Move here</button>
+      <button class="lk" type="button" data-movecancel>Cancel</button>
+    </div>`;
     }
     _wire() {
       this.on("[data-addtop]", "click", () => {
@@ -2365,9 +2395,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }));
       this.$$("[data-move]").forEach((b) => b.addEventListener("click", () => {
         const ps = b.dataset.move;
-        const toParent = typeof prompt === "function" ? prompt(`Move "${ps}" under which parent path? (slash-joined, blank = top level). This rewrites content under it.`) : null;
-        if (toParent !== null) this._migrate("move", ps, { toParent: toParent.trim() });
+        this._moving = this._moving === ps ? null : ps;
+        this.render();
       }));
+      this.$$("[data-moveconfirm]").forEach((b) => b.addEventListener("click", () => {
+        const ps = b.dataset.moveconfirm;
+        const toParent = this.$("[data-moveto]")?.value ?? "";
+        this._moving = null;
+        this._migrate("move", ps, { toParent });
+      }));
+      this.on("[data-movecancel]", "click", () => {
+        this._moving = null;
+        this.render();
+      });
       this.$$("[data-remove]").forEach((b) => b.addEventListener("click", () => {
         const ps = b.dataset.remove;
         if (typeof confirm === "function" && !confirm(`Remove "${ps}"? If content uses it, the migration is REFUSED unless you reassign.`)) return;
