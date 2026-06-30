@@ -8,7 +8,7 @@
 // the extension now and the npm CMS later. Emits gbti:welcome-done when the member finishes.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { phaseLabel, shuffle, excludeSelf, paginate } from '../welcome-core.mjs';
-import { DISCORD_INVITE_URL } from '../discord.mjs';
+import { DISCORD_INVITE_URL, DISCORD_LINK_URL } from '../discord.mjs';
 import './gbti-topic-picker.mjs'; // SOW-054: the followed-topics step control
 
 const SITE = 'https://gbti.network';
@@ -208,7 +208,9 @@ class GbtiWelcome extends GbtiElement {
     this.on('[data-done]', 'click', () => this.emit('gbti:welcome-done'));
 
     if (step === 'discord') {
-      // Use the resolved invite (live bot-minted URL, or the static fallback).
+      // SOW Part C: "Connect" opens the Worker's OAuth link flow (joins the guild + assigns the role + links
+      // discord_user_id, authenticated by the post-signup session cookie). "Open the invite" is the manual fallback.
+      this.on('[data-discord-connect]', 'click', () => window.open(DISCORD_LINK_URL, '_blank', 'noopener'));
       this.on('[data-discord-join]', 'click', () => window.open(this._discordInviteUrl || DISCORD_INVITE_URL, '_blank', 'noopener'));
       const cb = this.$('[data-discord-cb]');
       if (cb) cb.addEventListener('change', () => {
@@ -228,9 +230,10 @@ class GbtiWelcome extends GbtiElement {
   _discordCard() {
     const done = this._discordJoined ? 'checked' : '';
     return `<div class="card">
-      <h3>${discordIco} Join our Discord</h3>
-      <p class="sub">The community is the heart of the co-op: weekly sessions, help, and the people you build with. If you have not joined yet, hop in.</p>
-      <button class="btn" data-discord-join type="button">${discordIco} Join the Discord</button>
+      <h3>${discordIco} Connect Discord</h3>
+      <p class="sub">The community is the heart of the co-op: weekly sessions, help, and the people you build with. Connect your Discord to join the server and get your member role.</p>
+      <button class="btn" data-discord-connect type="button">${discordIco} Connect Discord account</button>
+      <button class="btn" data-discord-join type="button">Open the invite instead</button>
       <label class="check"><input type="checkbox" data-discord-cb ${done} /> I have joined the Discord</label>
     </div>`;
   }
