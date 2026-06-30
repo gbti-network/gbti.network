@@ -39,6 +39,8 @@ const nav = [
         <div class="head-menu" data-head-menu role="menu" hidden>
           <a class="hm-item" role="menuitem" data-head-me-profile href="/members/">My profile</a>
           <div class="hm-sep" role="separator"></div>
+          {/* SOW: shown only in the hint-only state (signed up, extension not installed yet) -> nudge the download. */}
+          <a class="hm-item hm-download" role="menuitem" href="/extension/" hidden>Get the extension to continue &rarr;</a>
           <button class="hm-item" role="menuitem" type="button" data-open="workspace.html">My workspace</button>
           <button class="hm-item" role="menuitem" type="button" data-open="workspace.html" data-hash="tab=post">My articles</button>
           <button class="hm-item" role="menuitem" type="button" data-open="workspace.html" data-hash="tab=prompt">My prompts</button>
@@ -139,15 +141,36 @@ const nav = [
     headMenu.querySelector('.hm-item')?.focus();
   }
 
+  // SOW: a DISPLAY-ONLY signed-in hint for the window between trial signup and installing the extension. The signup
+  // redirect carries ?u=<github_login> (the PUBLIC login, NOT auth); we stash it in localStorage and show the avatar
+  // so the header reflects "signed in". The real extension signal (once installed) always overrides the hint.
+  function readHint() {
+    let login = null;
+    try {
+      const u = new URLSearchParams(location.search).get('u');
+      if (u) { localStorage.setItem('gbti_hello', u); login = u; }
+      else login = localStorage.getItem('gbti_hello');
+    } catch { /* no storage */ }
+    return login ? { login, hintOnly: true } : null;
+  }
+  function setMenuMode(hintOnly) {
+    // The extension-relay items + Sign out only work with the extension installed; in the hint-only state we hide
+    // them and surface a "get the extension" item instead.
+    headMenu?.querySelectorAll('[data-open],[data-head-signout]').forEach((el) => { el.hidden = Boolean(hintOnly); });
+    const dl = headMenu?.querySelector('.hm-download');
+    if (dl) dl.hidden = !hintOnly;
+  }
   function applyHeaderIdentity(s) {
-    const login = s && s.login;
     if (!wrap || !signin) return;
+    const eff = (s && s.login) ? s : readHint(); // the extension signal wins; else the display-only signup hint
+    const login = eff && eff.login;
     if (login) {
-      const folder = s.username || login;
+      const folder = eff.username || login;
       if (meName) meName.textContent = '@' + login;
       if (meAv) { meAv.src = 'https://github.com/' + encodeURIComponent(login) + '.png?size=52'; meAv.alt = '@' + login; }
       if (meProfile) meProfile.href = '/members/' + encodeURIComponent(folder) + '/';
-      if (adminItem) adminItem.hidden = (RANK[s.role] ?? 0) < RANK.moderator;
+      if (adminItem) adminItem.hidden = (RANK[eff.role] ?? 0) < RANK.moderator;
+      setMenuMode(Boolean(eff.hintOnly));
       wrap.hidden = false;
       signin.style.display = 'none';
     } else {

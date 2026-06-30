@@ -52,6 +52,38 @@ const mcpPrompt = [
     <g id="i-bot"><rect x="5" y="8" width="14" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 8V4.5M12 4.5h-1.5M9 13h.01M15 13h.01M9.5 16.5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
   </defs></svg>
 
+  {/* SOW: a closable welcome ribbon shown after trial signup (?welcome=trial); dismissal persisted in localStorage. */}
+  <div class="trial-ribbon" data-trial-ribbon hidden>
+    <div class="wrap trial-ribbon-row">
+      <span class="trial-ribbon-dot" aria-hidden="true">&#127881;</span>
+      <p>Welcome to your GBTI Network trial. Download and install the extension below to start authoring and join the community.</p>
+      <button type="button" class="trial-ribbon-x" data-trial-close aria-label="Dismiss welcome">&times;</button>
+    </div>
+  </div>
+  <style>
+    .trial-ribbon { background: var(--green, #1f9e5f); color: #fff; }
+    .trial-ribbon-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; }
+    .trial-ribbon-dot { flex: none; font-size: 16px; }
+    .trial-ribbon-row p { margin: 0; flex: 1; font-size: 14.5px; font-weight: 600; line-height: 1.4; }
+    .trial-ribbon-x { flex: none; background: rgba(255,255,255,.18); color: #fff; border: 0; width: 28px; height: 28px; border-radius: 8px; font-size: 18px; line-height: 1; cursor: pointer; }
+    .trial-ribbon-x:hover { background: rgba(255,255,255,.32); }
+    .trial-ribbon[hidden] { display: none; }
+  </style>
+  <script>
+    (() => {
+      const KEY = 'gbti-trial-ribbon-dismissed';
+      const el = document.querySelector('[data-trial-ribbon]');
+      if (!el) return;
+      let show = false;
+      try { show = new URLSearchParams(location.search).get('welcome') === 'trial' && localStorage.getItem(KEY) !== '1'; } catch (e) { /* no storage */ }
+      if (show) el.hidden = false;
+      el.querySelector('[data-trial-close]')?.addEventListener('click', () => {
+        el.hidden = true;
+        try { localStorage.setItem(KEY, '1'); } catch (e) { /* no storage */ }
+      });
+    })();
+  </script>
+
   <!-- ============ HERO (download in the header) ============ -->
   <section class="ext-hero">
     <div class="wrap">
