@@ -7,10 +7,10 @@
 # falls back to the safe default below, and `enabled: false` disables the whole feature regardless of
 # the finer switches.
 referral:
-  enabled:             false   # master switch for the whole referral feature. false = fully off.
+  enabled:             true    # SOW-059 ARMED: master switch on (the feature/CTA is advertised + Connect onboarding is live).
   attribution_enabled: true    # capture referred_by at signup. Turn on EARLY so attribution is not lost.
   accrual_enabled:     true    # compute the commission ledger from day one (no payout, just the record).
-  payouts_enabled:     false   # actually transfer via Stripe Connect. Flip ON only once Connect is live.
+  payouts_enabled:     true    # SOW-059 ARMED: transfers active, but FAIL-CLOSED until a member's Connect account exists (platform registration is the owner step).
   rate:                0.30    # referrer's share of each referred member's paid invoice (gross), 0..1.
   hold_days:           90      # days a commission is held (settlement) before it becomes payable.
 

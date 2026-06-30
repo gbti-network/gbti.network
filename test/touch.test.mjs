@@ -8,8 +8,8 @@ import { TOUCH_CAPTURE_ENABLED, TOUCH_ENDPOINT, TOUCH_SID_COOKIE, sessionIdFromB
 // MUST mint ids that pass it, or every capture 400s. Keep these two in lockstep.
 const SERVER_SESSION_RE = /^[A-Za-z0-9_-]{16,128}$/;
 
-test('capture is OFF by default (must never ship enabled without an explicit flip)', () => {
-  assert.equal(TOUCH_CAPTURE_ENABLED, false);
+test('SOW-059 ACTIVATED: client capture is ON (deliberately flipped on at the owner-authorized go-live; the Worker env gate must also be set)', () => {
+  assert.equal(TOUCH_CAPTURE_ENABLED, true);
 });
 
 test('config points at the prod Worker /touch endpoint + the session cookie', () => {

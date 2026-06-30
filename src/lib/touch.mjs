@@ -5,7 +5,7 @@
 // CONTENT touch is consent-gated (it follows the analytics-consent decision in consent.mjs); the invite (?ref) is an
 // essential referral signal and is always sent when capture is enabled (first-wins is enforced server-side).
 
-export const TOUCH_CAPTURE_ENABLED = false; // flip to activate the client capture (also set the Worker env flag)
+export const TOUCH_CAPTURE_ENABLED = true; // SOW-059 ACTIVATED: client capture live (the Worker env TOUCH_CAPTURE_ENABLED is set too)
 export const TOUCH_ENDPOINT = 'https://signup.gbti.network/touch';
 export const TOUCH_SID_COOKIE = 'gbti_sid'; // a rotating, opaque, first-party session id (NOT a stable identifier)
 export const TOUCH_SID_DAYS = 90; // the attribution window

@@ -137,7 +137,8 @@ crons = ["*/5 * * * *"]
 # Worker reads in production must be listed here):
 PUBLIC_BASE_URL = "https://signup.gbti.network"
 GITHUB_CONTENT_REPO = "gbti-network/gbti.network"
-REFERRAL_ENABLED = "false"
+REFERRAL_ENABLED = "true"            # SOW-059 ARMED: the Connect onboarding routes are live (mirrors referral-config.yml enabled)
+TOUCH_CAPTURE_ENABLED = "true"       # SOW-059 ARMED: anonymous, consent-gated attribution capture + the conversion freeze are LIVE
 MEMBER_CONTENT_KID = "1"
 UPSTREAM_REPO = "gbti-network/gbti.network"   # SOW-026: canonical repo the App opens PRs into
 NEWS_API_BASE = "https://gbti-news.gbti-labs.workers.dev"   # SOW-043: the deployed gbti-news worker the news proxy calls (NEWS_API_KEY is a secret)
