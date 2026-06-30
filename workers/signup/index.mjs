@@ -204,7 +204,7 @@ async function handleGithubCallback(request, env) {
   });
 
   const session = await signSession({ githubId, githubLogin }, env.SESSION_SECRET);
-  return redirect(`${env.PUBLIC_BASE_URL}/account`, { 'Set-Cookie': sessionCookieHeader(session) });
+  return redirect(`${env.SITE_BASE_URL}/account`, { 'Set-Cookie': sessionCookieHeader(session) });
 }
 
 async function handleDiscordCallback(request, env) {
@@ -243,7 +243,7 @@ async function handleDiscordCallback(request, env) {
   });
 
   const session = await signSession({ githubId: state.githubId, githubLogin: state.githubLogin }, env.SESSION_SECRET);
-  return redirect(`${env.PUBLIC_BASE_URL}/account`, { 'Set-Cookie': sessionCookieHeader(session) });
+  return redirect(`${env.SITE_BASE_URL}/account`, { 'Set-Cookie': sessionCookieHeader(session) });
 }
 
 async function handleCheckout(request, env) {
@@ -273,7 +273,7 @@ async function handleCheckout(request, env) {
 async function handleCheckoutSuccess(request, env) {
   const url = new URL(request.url);
   const gh = url.searchParams.get('gh') || '';
-  const accountUrl = `${env.PUBLIC_BASE_URL}/account`;
+  const accountUrl = `${env.SITE_BASE_URL}/account`;
 
   const session = await verifySession(readSessionCookie(request.headers.get('Cookie')), env.SESSION_SECRET);
   // The gh param must match the authenticated session's github_id. A missing session, a missing gh,
@@ -313,7 +313,7 @@ async function handleConnectOnboard(request, env) {
 // verified server-side by the payout job (it reads the Connect account's payouts_enabled), so here we
 // only need to land the browser somewhere sane.
 async function handleConnectReturn(request, env) {
-  return redirect(`${env.PUBLIC_BASE_URL}/account?connect=done`);
+  return redirect(`${env.SITE_BASE_URL}/account?connect=done`);
 }
 
 async function handleWebhook(request, env) {

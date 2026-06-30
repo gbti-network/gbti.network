@@ -412,6 +412,7 @@ function fakeEnv(overrides = {}) {
   return {
     SESSION_SECRET: SECRET,
     PUBLIC_BASE_URL: 'https://gbti.test',
+    SITE_BASE_URL: 'https://gbti.test',
     TURNSTILE_SECRET_KEY: 'turnstile-secret',
     SIGNUP_KV: fakeKv(),
     GITHUB_OAUTH_CLIENT_ID: 'gh-client',
