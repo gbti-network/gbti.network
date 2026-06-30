@@ -49,6 +49,22 @@ const CSS = `
   .opbtn:hover { border-color:var(--accent); color:var(--accent); }
   .opbtn[disabled] { opacity:.6; cursor:default; }
   .opnote { font-size:12.5px; margin:10px 0 0; } .opnote.ok { color:var(--accent); } .opnote.err { color:var(--danger); }
+  /* SOW-070: per-row member actions (contextual ban / grandfather / role -- keyed by the row github_id, no typing). */
+  td.act-cell { text-align:right; white-space:nowrap; }
+  .manage { font:inherit; font-weight:600; font-size:12px; padding:5px 11px; border:1.5px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); cursor:pointer; white-space:nowrap; }
+  .manage:hover { border-color:var(--accent); color:var(--accent); }
+  .manage.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+  tr.actrow td { background:var(--hover); border-top:0; padding:14px 12px; }
+  .acts { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .actgrp { display:flex; align-items:center; gap:6px; }
+  .actgrp .actlbl { font-size:12.5px; color:var(--muted); font-weight:600; }
+  .abtn { font:inherit; font-weight:600; font-size:13px; padding:8px 13px; border:1.5px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); cursor:pointer; white-space:nowrap; }
+  .abtn:hover { border-color:var(--accent); color:var(--accent); }
+  .abtn.danger { border-color:#e0a39d; color:#b3261e; }
+  :host-context([data-theme="dark"]) .abtn.danger { border-color:rgba(243,147,139,.5); color:#f3938b; }
+  .abtn.danger:hover { background:#b3261e; border-color:#b3261e; color:#fff; }
+  .actrow select { font:inherit; font-size:13px; padding:7px 10px; border:1.5px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); cursor:pointer; }
+  .actmsg { margin-top:10px; font-size:12.5px; color:var(--accent); } .actmsg.err { color:var(--danger); }
 `;
 
 const ROLE_RANK = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
@@ -61,6 +77,8 @@ class GbtiSuperadminDashboard extends GbtiElement {
     this._pulls = null; // open content-PR queue, or null when unavailable
     this._counts = null; // { username(lower) -> published content count }, or null
     this._error = null; // 'forbidden' | 'auth' | 'error'
+    this._role = null; // the SIGNED-IN user's role (gates which per-row actions show); defaults to admin (roster is admin-gated)
+    this._managing = null; // the github_id whose inline action panel is open, or null
     super.connectedCallback?.();
   }
 
@@ -94,6 +112,9 @@ class GbtiSuperadminDashboard extends GbtiElement {
     // Admin confirmed (the roster loaded): also load the open content-PR queue + per-member content counts,
     // both best-effort (a failure just hides that column / panel).
     try { this._pulls = (await this.client.openPulls())?.pulls || []; } catch { this._pulls = null; }
+    // The signed-in role gates the per-row actions (role assignment is superadmin-only). The roster route is already
+    // admin-gated, so a failed status read defaults to admin (ban/grandfather shown, role hidden until confirmed).
+    try { this._role = (await this.client.status())?.role || 'admin'; } catch { this._role = 'admin'; }
     await this._loadCounts();
     this.render();
   }
@@ -143,6 +164,39 @@ class GbtiSuperadminDashboard extends GbtiElement {
     return `<span class="stat ${cls}">${esc(LABEL[m.status] || m.status)}</span>${src}`;
   }
 
+  // SOW-070: the inline per-member action panel (contextual ban / grandfather / role), keyed by the row's immutable
+  // github_id -- no typing. The buttons toggle on the member's current state; role assignment is superadmin-only.
+  _actionRow(m, rank) {
+    const msg = this._actMsg ? `<div class="actmsg${this._actErr ? ' err' : ''}">${esc(this._actMsg)}</div>` : '';
+    const roleCtl = rank >= ROLE_RANK.superadmin
+      ? `<div class="actgrp"><span class="actlbl">Role</span><select data-rolefor>${['member', 'moderator', 'admin', 'superadmin'].map((r) => `<option${r === m.role ? ' selected' : ''}>${r}</option>`).join('')}</select><button class="abtn" type="button" data-act="role">Set role</button></div>`
+      : '';
+    return `<div class="acts">
+      <button class="abtn${m.banned ? '' : ' danger'}" type="button" data-act="${m.banned ? 'unban' : 'ban'}">${m.banned ? 'Unban' : 'Ban'}</button>
+      <button class="abtn" type="button" data-act="${m.grandfathered ? 'ungrandfather' : 'grandfather'}">${m.grandfathered ? 'Remove grandfather' : 'Grandfather'}</button>
+      ${roleCtl}
+    </div>${msg}`;
+  }
+
+  // Run a member action on the open row via the immutable github_id. Each opens a house PR (the gate + CODEOWNERS are
+  // the real boundary); the roster reflects it after that PR merges + the build runs, so we just report submission.
+  async _doAction(action) {
+    const githubId = this._managing;
+    if (!githubId) return;
+    const extra = action === 'role' ? { role: this.$('[data-rolefor]')?.value || 'member' } : {};
+    this._actMsg = 'Working…'; this._actErr = false; this.render();
+    try {
+      const res = await this.client.admin(action, { githubId, ...extra });
+      this._actMsg = (res?.noop || res?.changed === false)
+        ? 'No change (already in that state).'
+        : `Submitted (PR #${res?.prNumber ?? '?'}). It takes effect once the PR merges and the build runs.`;
+      this._actErr = false;
+    } catch (err) {
+      this._actMsg = err?.message || 'The action failed.'; this._actErr = true;
+    }
+    this.render();
+  }
+
   render() {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Sign in with the GBTI client to view the member roster.</p>`); return; }
     if (this._error === 'forbidden') { this.set(this.css(CSS) + `<p class="muted">The superadmin dashboard is available to admins and superadmins.</p>`); return; }
@@ -158,6 +212,8 @@ class GbtiSuperadminDashboard extends GbtiElement {
       <span class="chip"><b>${esc(s.banned ?? 0)}</b> banned</span>
     </div>`;
 
+    const rank = ROLE_RANK[this._role] ?? 0;
+    const canManage = rank >= ROLE_RANK.admin; // the roster route is admin-gated, so this is effectively always true here
     const rows = (this._data.roster || []).map((m) => {
       const u = m.username ? esc(m.username) : '';
       const who = m.username
@@ -173,17 +229,22 @@ class GbtiSuperadminDashboard extends GbtiElement {
       if (!tags.length) tags.push(`<span class="dash">—</span>`);
       const n = this._counts && m.username ? (this._counts[m.username.toLowerCase()] || 0) : null;
       const content = n == null ? `<span class="dash">—</span>` : esc(n);
-      return `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join('')}</div></td><td class="id">${content}</td><td class="id">${esc(m.githubId)}</td></tr>`;
+      const manage = canManage ? `<button class="manage${this._managing === m.githubId ? ' on' : ''}" type="button" data-manage="${esc(m.githubId)}">Manage</button>` : '';
+      const main = `<tr><td><div class="who">${av}${who}</div></td><td>${this._statusCell(m)}</td><td><div class="tags">${tags.join('')}</div></td><td class="id">${content}</td><td class="id">${esc(m.githubId)}</td><td class="act-cell">${manage}</td></tr>`;
+      const panel = (canManage && this._managing === m.githubId) ? `<tr class="actrow"><td colspan="6">${this._actionRow(m, rank)}</td></tr>` : '';
+      return main + panel;
     }).join('');
 
     this.set(this.css(CSS) + `${chips}
-      <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>Content</th><th>github_id</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="muted">No members known yet.</td></tr>'}</tbody></table>
-      <p class="note">Effective status follows ban &gt; staff &gt; grandfather &gt; Stripe. The live Stripe tier is shown when the admin Stripe endpoint is reachable (otherwise it reads "unknown"); the override tiers (ban / staff / grandfather) are always authoritative from the public repo.</p>
+      <table><thead><tr><th>Member</th><th>Status</th><th>Overrides</th><th>Content</th><th>github_id</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">No members known yet.</td></tr>'}</tbody></table>
+      <p class="note">Effective status follows ban &gt; staff &gt; grandfather &gt; Stripe. Member actions open a house PR and take effect once it merges. The live Stripe tier shows when the admin Stripe endpoint is reachable; the override tiers (ban / staff / grandfather) are always authoritative from the public repo.</p>
       ${this._pullsSection()}
       ${this._opsSection()}`);
 
     this.$$('[data-avfor]').forEach((img) => img.addEventListener('error', () => { img.style.visibility = 'hidden'; }, { once: true }));
     this.$$('[data-op]').forEach((b) => b.addEventListener('click', () => this._runOp(b.dataset.op, b))); // SOW-038 P3
+    this.$$('[data-manage]').forEach((b) => b.addEventListener('click', () => { this._managing = this._managing === b.dataset.manage ? null : b.dataset.manage; this._actMsg = ''; this._actErr = false; this.render(); }));
+    this.$$('[data-act]').forEach((b) => b.addEventListener('click', () => this._doAction(b.dataset.act)));
   }
 }
 
