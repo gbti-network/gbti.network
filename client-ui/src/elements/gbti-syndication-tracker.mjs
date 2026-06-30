@@ -61,7 +61,7 @@ class GbtiSyndicationTracker extends GbtiElement {
     if (!this._data) { if (!this._err && !this._loading) { this._loading = true; this.load(); } this.set(this.css(CSS) + `<p class="muted">Loading syndication queue...</p>`); return; }
     const d = this._data;
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
-      <div class="head"><h3>Syndication queue</h3><span class="hint">Nothing posts until a superadmin approves it. Approved items post to every enabled channel on the next tick.</span></div>
+      <div class="head"><span class="hint">Nothing posts until a superadmin approves it. Approved items post to every enabled channel on the next tick.</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
       ${this._bucket('Pending approval', d.pending, 'pending')}
       ${this._bucket('Approved', d.approved, 'approved')}

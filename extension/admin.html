@@ -15,6 +15,13 @@
     .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; margin: 0; }
     .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 4px 0 0; }
     .hub-h2 { font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-spacing: -.01em; margin: 28px 0 12px; }
+    /* SOW-070: settings-style cards per admin section (cohesive with the member Settings page; frosts in Glass). */
+    .admin-col { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; }
+    .admin-card { border: 1.5px solid var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.05); background: var(--paper); margin: 0 0 22px; overflow: hidden; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+    .admin-card-h { padding: 20px 24px 16px; }
+    .admin-card-h h2 { font-family: var(--f-display); font-weight: 700; font-size: 20px; letter-spacing: -.005em; margin: 0; }
+    .admin-card-h p { color: var(--fg-mute); font-size: 14px; line-height: 1.5; margin: 5px 0 0; max-width: 64ch; }
+    .admin-card-b { padding: 16px 24px 20px; border-top: 1.5px solid var(--line); }
   </style>
 </head>
 <body>
@@ -23,18 +30,32 @@
       <div class="nt-top" data-topbar>
         <div><h1 class="hub-h">Admin tools</h1><p class="hub-sub">Governance and moderation.</p></div>
       </div>
-      <h2 class="hub-h2">Member roster</h2>
-      <gbti-superadmin-dashboard></gbti-superadmin-dashboard>
-      <h2 class="hub-h2">Actions</h2>
-      <gbti-admin></gbti-admin>
-      <h2 class="hub-h2">Categories</h2>
-      <gbti-category-manager></gbti-category-manager>
-      <h2 class="hub-h2">News sources</h2>
-      <gbti-news-source-manager></gbti-news-source-manager>
-      <h2 class="hub-h2">Quotes</h2>
-      <gbti-quote-manager></gbti-quote-manager>
-      <h2 class="hub-h2">Syndication</h2>
-      <gbti-syndication-tracker></gbti-syndication-tracker>
+      <div class="admin-col">
+        <section class="admin-card">
+          <div class="admin-card-h"><h2>Member roster</h2><p>Effective status, roles, bans, and grandfather grants across the network.</p></div>
+          <div class="admin-card-b"><gbti-superadmin-dashboard></gbti-superadmin-dashboard></div>
+        </section>
+        <section class="admin-card">
+          <div class="admin-card-h"><h2>Actions</h2><p>Moderate content, manage members, and assign roles. Your effective role decides what is shown.</p></div>
+          <div class="admin-card-b"><gbti-admin></gbti-admin></div>
+        </section>
+        <section class="admin-card">
+          <div class="admin-card-h"><h2>Categories</h2><p>The canonical taxonomy tree. Edits open an auto-merged house PR.</p></div>
+          <div class="admin-card-b"><gbti-category-manager></gbti-category-manager></div>
+        </section>
+        <section class="admin-card">
+          <div class="admin-card-h"><h2>News sources</h2><p>The git-native news source pool. Edits open an auto-merged house PR.</p></div>
+          <div class="admin-card-b"><gbti-news-source-manager></gbti-news-source-manager></div>
+        </section>
+        <section class="admin-card">
+          <div class="admin-card-h"><h2>Quotes</h2><p>The new-tab splash quotes. Edits open an auto-merged house PR.</p></div>
+          <div class="admin-card-b"><gbti-quote-manager></gbti-quote-manager></div>
+        </section>
+        <section class="admin-card">
+          <div class="admin-card-h"><h2>Syndication</h2><p>The cross-posting queue and its delivery status.</p></div>
+          <div class="admin-card-b"><gbti-syndication-tracker></gbti-syndication-tracker></div>
+        </section>
+      </div>
     </main>
   </div>
   <script src="dist/admin.js"></script>

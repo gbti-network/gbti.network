@@ -51,7 +51,6 @@ class GbtiCategoryManager extends GbtiElement {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client (admin) to manage categories.</p>`); return; }
     if (!this._tree) { if (!this._loading) { this._loading = true; this.load(); } this.set(this.css(CSS) + `<p class="muted">Loading categories...</p>`); return; }
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
-      <div class="head"><h3>Category manager</h3><span class="hint">Edits open an auto-merged house PR.</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
       <div class="add-top">
         <input class="key" data-newtop-key type="text" placeholder="new-key (kebab-case)" />

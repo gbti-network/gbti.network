@@ -57,7 +57,7 @@ class GbtiQuoteManager extends GbtiElement {
         + `</div></li>`;
     }).join('');
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
-      <div class="head"><h3>Splash quotes</h3><span class="hint">${this._quotes.length} quotes, ${enabled} enabled &middot; edits open an auto-merged house PR</span></div>
+      <div class="head"><span class="hint">${this._quotes.length} quotes, ${enabled} enabled</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
       <div class="add">
         <textarea data-add-text placeholder="The quote text"></textarea>
