@@ -5656,13 +5656,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .nudge { padding:18px 20px; border:1.5px dashed var(--line); border-radius:16px; background:var(--panel); font-size:14px; color:var(--muted); margin:0 0 22px; }
   .nudge a { color:var(--brand); font-weight:600; }
   .msg { font-size:13px; padding:0 24px 16px; } .msg:empty { padding:0; } .msg.ok { color:var(--green-700, #0f6f40); } .msg.err { color:#b3261e; }
-  /* danger zone */
-  .danger { border:1.5px solid #f0c2bd; border-radius:16px; overflow:hidden; background:#fff8f7; margin:0 0 22px; }
-  [data-theme="dark"] .danger { background:rgba(179,38,30,.08); border-color:rgba(179,38,30,.4); }
+  /* danger zone -- the surfaces tint the THEME-AWARE --panel/--line with red (so flat + glass, light + dark all read
+     correctly and it frosts with the other glass cards); the red TEXT needs a per-theme color via :host-context,
+     because a shadow root cannot see [data-theme] on the document root and #b3261e is too dark to read on dark. */
+  .danger { border:1.5px solid color-mix(in srgb, #b3261e 28%, var(--line)); border-radius:16px; overflow:hidden; background:color-mix(in srgb, #b3261e 11%, var(--panel)); margin:0 0 22px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .danger .sec-h h3 { color:#b3261e; }
-  .danger .rows, .danger .row + .row { border-top-color:#f3d4d0; }
-  [data-theme="dark"] .danger .rows, [data-theme="dark"] .danger .row + .row { border-top-color:rgba(179,38,30,.25); }
+  :host-context([data-theme="dark"]) .danger .sec-h h3 { color:#f3938b; }
+  .danger .rows, .danger .row + .row { border-top-color:color-mix(in srgb, #b3261e 16%, var(--line)); }
   button.danger-btn, a.danger-btn { border-color:#e0a39d; color:#b3261e; }
+  :host-context([data-theme="dark"]) .danger-btn { border-color:rgba(243,147,139,.5); color:#f3938b; }
   button.danger-btn:hover, a.danger-btn:hover { background:#b3261e; border-color:#b3261e; color:#fff; }
   .confirm { display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
   .confirm input { font:inherit; font-size:13px; padding:9px 11px; border:1.5px solid #e0a39d; border-radius:9px; background:var(--panel); color:var(--fg); width:150px; }
