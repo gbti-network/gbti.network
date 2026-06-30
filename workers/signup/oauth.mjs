@@ -11,12 +11,13 @@
 const GITHUB_AUTHORIZE = 'https://github.com/login/oauth/authorize';
 const GITHUB_TOKEN = 'https://github.com/login/oauth/access_token';
 const GITHUB_USER = 'https://api.github.com/user';
+const GITHUB_EMAILS = 'https://api.github.com/user/emails';
 
 const DISCORD_AUTHORIZE = 'https://discord.com/api/oauth2/authorize';
 const DISCORD_TOKEN = 'https://discord.com/api/oauth2/token';
 const DISCORD_USER = 'https://discord.com/api/v10/users/@me';
 
-export const GITHUB_SCOPES = 'read:user';
+export const GITHUB_SCOPES = 'read:user user:email'; // SOW: user:email lets a GitHub-only signup get the email (Discord deferred)
 export const DISCORD_SCOPES = 'identify guilds.join email';
 
 function form(params) {
@@ -91,6 +92,28 @@ export async function githubFetchUser(accessToken, fetchImpl = globalThis.fetch)
   const u = JSON.parse(text);
   if (u.id === undefined || u.id === null) throw new Error('github user fetch: missing id');
   return { githubId: String(u.id), githubLogin: u.login ? String(u.login) : '' };
+}
+
+/**
+ * Fetch the GitHub user's PRIMARY verified email (needs the `user:email` scope). Best-effort: returns '' if the
+ * scope was not granted or no verified email exists, so a GitHub-only signup still succeeds (the email only powers
+ * the Stripe Customer + the day-87 reminder, which degrade gracefully). NEVER throws.
+ */
+export async function githubFetchPrimaryEmail(accessToken, fetchImpl = globalThis.fetch) {
+  try {
+    const res = await fetchImpl(GITHUB_EMAILS, {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json', 'User-Agent': 'gbti-network-signup' },
+    });
+    if (!res.ok) return '';
+    const list = JSON.parse(await res.text());
+    if (!Array.isArray(list)) return '';
+    const pick = list.find((e) => e && e.primary && e.verified)
+      || list.find((e) => e && e.verified)
+      || list.find((e) => e && e.email);
+    return pick && pick.email ? String(pick.email) : '';
+  } catch {
+    return '';
+  }
 }
 
 // ---- Discord ----

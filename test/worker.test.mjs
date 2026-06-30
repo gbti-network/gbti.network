@@ -319,6 +319,26 @@ test('signup with an existing customer reuses it and does NOT rewrite trial_star
   assert.equal(join.opts.accessToken, 'discord-user-token');
 });
 
+test('SOW: GitHub-only signup (Discord deferred) -> Customer omits discord_user_id, no guild join, discordLinked false', async () => {
+  const stripe = fakeStripe({ searchHit: null });
+  const discord = fakeDiscord();
+  const kv = fakeKv();
+  const result = await runSignup({
+    identity: { githubId: '424242', githubLogin: 'octocat', discordUserId: null, email: 'octo@example.com', discordAccessToken: null },
+    stripe, discord, kv, config: CONFIG,
+    now: new Date('2026-06-02T00:00:00.000Z'),
+  });
+  assert.equal(result.created, true);
+  assert.equal(result.discordLinked, false);
+  const meta = stripe.calls.create[0].args.metadata;
+  assert.equal(meta.github_id, '424242');
+  assert.ok(!('discord_user_id' in meta), 'GitHub-only signup omits discord_user_id');
+  assert.equal(stripe.calls.create[0].args.email, 'octo@example.com'); // email sourced from GitHub
+  assert.equal(discord.calls.addGuildMember.length, 0, 'no guild join without Discord');
+  assert.equal(discord.calls.addRole.length, 0, 'no role assignment without Discord');
+  assert.equal(kv.store.get('gh:424242'), 'cus_new', 'KV index still written');
+});
+
 test('signup with no existing customer creates one with full metadata + trial role + KV index', async () => {
   const stripe = fakeStripe({ searchHit: null });
   const discord = fakeDiscord();
@@ -483,14 +503,16 @@ test('GET /signup/start fails closed (403) when Turnstile rejects', async () => 
   );
 });
 
-test('GET /signup/github/callback round-trips github_id into the discord-hop state', async () => {
+test('GET /signup/github/callback completes the trial signup on GitHub ALONE (Discord deferred)', async () => {
   const env = fakeEnv();
-  // Issue the first-hop state ourselves (as /signup/start would), carrying only the ref.
   const startState = await packState({ ref: 'bob' }, env);
   await withFetch(
     (url) => {
       if (url.includes('login/oauth/access_token')) return { status: 200, body: { access_token: 'gho_token' } };
+      if (url.includes('api.github.com/user/emails')) return { status: 200, body: [{ email: 'octo@example.com', primary: true, verified: true }] };
       if (url.includes('api.github.com/user')) return { status: 200, body: { id: 424242, login: 'octocat' } };
+      if (url.includes('api.stripe.com/v1/customers/search')) return { status: 200, body: { data: [] } };
+      if (url.includes('api.stripe.com/v1/customers')) return { status: 200, body: { id: 'cus_new', metadata: {} } };
       return { status: 200, body: '' };
     },
     async () => {
@@ -501,13 +523,10 @@ test('GET /signup/github/callback round-trips github_id into the discord-hop sta
       );
       assert.equal(res.status, 302);
       const location = res.headers.get('Location');
-      assert.ok(location.startsWith('https://discord.com/api/oauth2/authorize'), 'redirects to Discord authorize');
-      const nextState = new URL(location).searchParams.get('state');
-      const unpacked = await unpackState(nextState, env);
-      assert.ok(unpacked, 'next state verifies');
-      assert.equal(unpacked.githubId, '424242', 'resolved github_id is carried into the Discord hop');
-      assert.equal(unpacked.githubLogin, 'octocat');
-      assert.equal(unpacked.ref, 'bob', 'referral survives the first hop');
+      assert.ok(location.endsWith('/account'), 'completes signup -> /account, not a Discord redirect');
+      assert.ok(!location.includes('discord.com'), 'no Discord hop in the signup flow');
+      assert.ok(res.headers.get('Set-Cookie'), 'a session cookie is set (signup completed on GitHub alone)');
+      assert.equal(env.SIGNUP_KV.store.get('gh:424242'), 'cus_new', 'the trial Customer was created + indexed');
     },
   );
 });

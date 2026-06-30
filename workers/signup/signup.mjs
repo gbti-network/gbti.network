@@ -52,9 +52,11 @@ export function buildNewCustomerMetadata({ githubId, githubLogin, discordUserId,
   const metadata = {
     github_id: String(githubId),
     github_login: githubLogin ? String(githubLogin) : '',
-    discord_user_id: String(discordUserId),
     trial_started_at: trialStartedAt,
   };
+  // SOW: Discord is DEFERRED -> discord_user_id is set only when the member linked Discord (at signup or via the
+  // extension-welcome link). Omit it entirely for a GitHub-only signup; the deferred link + reconcile fill it later.
+  if (discordUserId) metadata.discord_user_id = String(discordUserId);
   if (signupSource) metadata.signup_source = String(signupSource);
   if (referredBy) metadata.referred_by = String(referredBy);
   const v = normalizeVia(via);
@@ -97,7 +99,10 @@ export function buildRefreshMetadata({ githubLogin, discordUserId }) {
 export async function runSignup({ identity, stripe, discord, kv, config, refCode, via, touchSession, resolveReferral: resolver, now = new Date() }) {
   const { githubId, githubLogin, discordUserId, email, discordAccessToken } = identity;
   if (!githubId) throw new Error('runSignup: githubId is required');
-  if (!discordUserId || !discordAccessToken) throw new Error('runSignup: discord identity + access token are required');
+  // SOW: Discord is now DEFERRED + optional. A GitHub-only signup creates the trial Customer with no
+  // discord_user_id and skips the guild join; the member links Discord later from the extension welcome (which
+  // re-runs this chain with a Discord identity, idempotently attaching discord_user_id + the role to the Customer).
+  const hasDiscord = Boolean(discordUserId && discordAccessToken);
 
   // First-touch referral, self-reject. Only used when we create a new Customer.
   const referredBy = resolveReferral({ refCode, newMemberGithubId: githubId, resolve: resolver });
@@ -143,11 +148,15 @@ export async function runSignup({ identity, stripe, discord, kv, config, refCode
   // honored ONLY when Discord actually adds a brand-new member; for a user already in the guild Discord
   // returns 204 and ignores it. So we ALSO assign the Trial role explicitly, which is idempotent and
   // works for both new and existing members. (The bot's role must sit above the Trial role.)
-  await discord.addGuildMember(config.guildId, discordUserId, {
-    accessToken: discordAccessToken,
-    roles: [config.trialRoleId],
-  });
-  await discord.addRole(config.guildId, discordUserId, config.trialRoleId);
+  // Add the user to the guild + Trial role ONLY when Discord was linked. A GitHub-only signup skips this; reconcile
+  // keeps roles in sync once discord_user_id exists, and the deferred welcome link runs this same join.
+  if (hasDiscord) {
+    await discord.addGuildMember(config.guildId, discordUserId, {
+      accessToken: discordAccessToken,
+      roles: [config.trialRoleId],
+    });
+    await discord.addRole(config.guildId, discordUserId, config.trialRoleId);
+  }
 
-  return { customerId, created, referredBy: created ? (referredBy ?? null) : null };
+  return { customerId, created, referredBy: created ? (referredBy ?? null) : null, discordLinked: hasDiscord };
 }

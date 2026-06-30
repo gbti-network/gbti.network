@@ -39,6 +39,7 @@ import {
   githubExchangeCode,
   githubRefreshToken,
   githubFetchUser,
+  githubFetchPrimaryEmail,
   discordAuthorizeUrl,
   discordExchangeCode,
   discordFetchUser,
@@ -185,15 +186,25 @@ async function handleGithubCallback(request, env) {
     globalThis.fetch,
   );
   const { githubId, githubLogin } = await githubFetchUser(accessToken, globalThis.fetch);
+  const email = await githubFetchPrimaryEmail(accessToken, globalThis.fetch); // best-effort; Discord is deferred
 
-  // Carry the resolved identity (and the first-touch ref + via + touch sid) into the Discord hop via a fresh state.
-  const nextState = await packState({ ref: state.ref, via: state.via, sid: state.sid, githubId, githubLogin }, env);
-  const location = discordAuthorizeUrl({
-    clientId: env.DISCORD_OAUTH_CLIENT_ID,
-    redirectUri: `${env.PUBLIC_BASE_URL}/signup/discord/callback`,
-    state: nextState,
+  // SOW: Discord is DEFERRED. Complete the signup on GitHub ALONE -- create the trial Customer (no discord_user_id,
+  // no guild join) and sign the session. The member links Discord later from the extension welcome (which re-runs
+  // the same Discord OAuth + idempotently attaches discord_user_id + the role to this Customer).
+  const { stripe, discord } = clientsFromEnv(env);
+  await runSignup({
+    identity: { githubId, githubLogin, discordUserId: null, email, discordAccessToken: null },
+    stripe,
+    discord,
+    kv: env.SIGNUP_KV,
+    config: discordConfig(env),
+    refCode: state.ref,
+    via: state.via,
+    touchSession: state.sid, // SOW-059: bind the touch session to this new Customer (new-customer-only)
   });
-  return redirect(location);
+
+  const session = await signSession({ githubId, githubLogin }, env.SESSION_SECRET);
+  return redirect(`${env.PUBLIC_BASE_URL}/account`, { 'Set-Cookie': sessionCookieHeader(session) });
 }
 
 async function handleDiscordCallback(request, env) {
