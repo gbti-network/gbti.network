@@ -204,7 +204,12 @@ async function handleGithubCallback(request, env) {
   });
 
   const session = await signSession({ githubId, githubLogin }, env.SESSION_SECRET);
-  return redirect(`${env.SITE_BASE_URL}/account`, { 'Set-Cookie': sessionCookieHeader(session) });
+  // SOW: after a GitHub-only trial signup, send the new member to the extension DOWNLOAD page (the trial is usable
+  // only via the extension). ?welcome=trial drives the welcome ribbon; u=<login> is a DISPLAY-ONLY hint (the public
+  // github_login, NOT auth) the site header reads into localStorage to show the signed-in avatar before the
+  // extension is installed -- once the extension is in, its SOW-030 signal takes over.
+  const dest = `${env.SITE_BASE_URL}/extension/?welcome=trial&u=${encodeURIComponent(githubLogin || '')}`;
+  return redirect(dest, { 'Set-Cookie': sessionCookieHeader(session) });
 }
 
 async function handleDiscordCallback(request, env) {

@@ -524,7 +524,7 @@ test('GET /signup/github/callback completes the trial signup on GitHub ALONE (Di
       );
       assert.equal(res.status, 302);
       const location = res.headers.get('Location');
-      assert.ok(location.endsWith('/account'), 'completes signup -> /account, not a Discord redirect');
+      assert.ok(location.includes('/extension/') && location.includes('welcome=trial'), 'completes signup -> the extension download page with the welcome flag, not a Discord redirect');
       assert.ok(!location.includes('discord.com'), 'no Discord hop in the signup flow');
       assert.ok(res.headers.get('Set-Cookie'), 'a session cookie is set (signup completed on GitHub alone)');
       assert.equal(env.SIGNUP_KV.store.get('gh:424242'), 'cus_new', 'the trial Customer was created + indexed');
