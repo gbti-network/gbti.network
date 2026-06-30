@@ -10849,4 +10849,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // extension/src/admin.mjs
   mountPageClient();
   initShell({ active: "admin", nav: "workbench" });
+  var ADMIN_TAB_KEY = "gbti-admin-tab";
+  var adminTabs = Array.from(document.querySelectorAll("[data-tab]"));
+  var adminPanels = Array.from(document.querySelectorAll("[data-panel]"));
+  function showAdminTab(name) {
+    if (!adminPanels.some((p) => p.dataset.panel === name)) name = "members";
+    adminTabs.forEach((t) => t.classList.toggle("on", t.dataset.tab === name));
+    adminPanels.forEach((p) => p.classList.toggle("on", p.dataset.panel === name));
+    try {
+      localStorage.setItem(ADMIN_TAB_KEY, name);
+    } catch (e) {
+    }
+  }
+  adminTabs.forEach((t) => t.addEventListener("click", () => showAdminTab(t.dataset.tab)));
+  var initialAdminTab = "members";
+  try {
+    initialAdminTab = localStorage.getItem(ADMIN_TAB_KEY) || "members";
+  } catch (e) {
+  }
+  showAdminTab(initialAdminTab);
 })();

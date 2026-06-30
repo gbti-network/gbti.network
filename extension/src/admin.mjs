@@ -9,3 +9,19 @@ mountPageClient();
 
 // SOW-052: mount the shell with the WorkBench rail; Admin is its "Admin tools" section (role-gated in the rail).
 initShell({ active: 'admin', nav: 'workbench' });
+
+// SOW-070: sub-section navigation -- the Members / Content / Syndication tabs show one parent group at a time
+// (the last choice persists). The hidden panels still upgrade + load their data, so switching tabs is instant.
+const ADMIN_TAB_KEY = 'gbti-admin-tab';
+const adminTabs = Array.from(document.querySelectorAll('[data-tab]'));
+const adminPanels = Array.from(document.querySelectorAll('[data-panel]'));
+function showAdminTab(name) {
+  if (!adminPanels.some((p) => p.dataset.panel === name)) name = 'members';
+  adminTabs.forEach((t) => t.classList.toggle('on', t.dataset.tab === name));
+  adminPanels.forEach((p) => p.classList.toggle('on', p.dataset.panel === name));
+  try { localStorage.setItem(ADMIN_TAB_KEY, name); } catch (e) { /* storage unavailable */ }
+}
+adminTabs.forEach((t) => t.addEventListener('click', () => showAdminTab(t.dataset.tab)));
+let initialAdminTab = 'members';
+try { initialAdminTab = localStorage.getItem(ADMIN_TAB_KEY) || 'members'; } catch (e) { /* storage unavailable */ }
+showAdminTab(initialAdminTab);

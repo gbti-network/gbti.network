@@ -26,6 +26,13 @@
     .admin-sub { padding: 18px 0; border-top: 1px solid var(--line); }
     .admin-sub:first-child { border-top: 0; }
     .admin-sub-h { font-family: var(--f-display); font-weight: 700; font-size: 16px; letter-spacing: -.005em; margin: 0 0 12px; }
+    /* SOW-070: SUB-SECTION NAVIGATION -- a row of sub-tabs switches between the parent groups (one shown at a time). */
+    .admin-tabs { display: flex; gap: 6px; max-width: 880px; margin: 0 auto 22px; padding: 6px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 1px 2px rgba(0,0,0,.05); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+    .admin-tab { flex: 1; font: inherit; font-weight: 600; font-size: 14px; padding: 10px 16px; border: 0; border-radius: 9px; background: transparent; color: var(--fg-mute); cursor: pointer; transition: color .14s ease, background .14s ease; }
+    .admin-tab:hover { color: var(--fg); }
+    .admin-tab.on { background: var(--green); color: #fff; }
+    [data-panel] { display: none; }
+    [data-panel].on { display: block; }
   </style>
 </head>
 <body>
@@ -34,15 +41,20 @@
       <div class="nt-top" data-topbar>
         <div><h1 class="hub-h">Admin tools</h1><p class="hub-sub">Governance and moderation.</p></div>
       </div>
+      <div class="admin-tabs" role="tablist">
+        <button class="admin-tab on" type="button" data-tab="members">Members</button>
+        <button class="admin-tab" type="button" data-tab="content">Content</button>
+        <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
+      </div>
       <div class="admin-col">
-        <section class="admin-card">
+        <section class="admin-card on" data-panel="members">
           <div class="admin-card-h"><h2>Members</h2><p>The member roster, plus moderation, membership, and role actions.</p></div>
           <div class="admin-card-b">
             <div class="admin-sub"><h3 class="admin-sub-h">Member roster</h3><gbti-superadmin-dashboard></gbti-superadmin-dashboard></div>
             <div class="admin-sub"><h3 class="admin-sub-h">Actions</h3><gbti-admin></gbti-admin></div>
           </div>
         </section>
-        <section class="admin-card">
+        <section class="admin-card" data-panel="content">
           <div class="admin-card-h"><h2>Content</h2><p>The canonical taxonomy, news sources, and splash quotes. Edits open an auto-merged house PR.</p></div>
           <div class="admin-card-b">
             <div class="admin-sub"><h3 class="admin-sub-h">Categories</h3><gbti-category-manager></gbti-category-manager></div>
@@ -50,7 +62,7 @@
             <div class="admin-sub"><h3 class="admin-sub-h">Quotes</h3><gbti-quote-manager></gbti-quote-manager></div>
           </div>
         </section>
-        <section class="admin-card">
+        <section class="admin-card" data-panel="syndication">
           <div class="admin-card-h"><h2>Syndication</h2><p>The cross-posting queue and its delivery status.</p></div>
           <div class="admin-card-b">
             <div class="admin-sub"><gbti-syndication-tracker></gbti-syndication-tracker></div>
