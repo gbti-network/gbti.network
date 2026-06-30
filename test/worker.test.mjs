@@ -752,6 +752,21 @@ test('SOW-059 P1c-B: a throwing onConversion is fail-soft (role swap still happe
   assert.equal(discord.calls.addRole[0].roleId, 'role-member');
 });
 
+test('SOW: a GitHub-only conversion (no discord_user_id) STILL freezes the SOW-059 snapshot; no role swap', async () => {
+  const discord = fakeRoleDiscord();
+  const stripe = fakeWebhookStripe({ github_id: '5' }); // GitHub-only member: no Discord linked yet
+  let frozen = null;
+  const summary = await handleStripeEvent({
+    event: { type: 'invoice.payment_succeeded', created: 1700, data: { object: { customer: 'cus_x', billing_reason: 'subscription_create' } } },
+    stripe, discord, config: WEBHOOK_CONFIG,
+    onConversion: async ({ githubId }) => { frozen = githubId; },
+  });
+  assert.equal(frozen, '5', 'the freeze fires for a GitHub-only member -> referral attribution is NOT lost');
+  assert.equal(discord.calls.addRole.length, 0, 'no role swap without a linked Discord');
+  assert.equal(discord.calls.removeRole.length, 0);
+  assert.match(summary, /frozen/);
+});
+
 test('SOW-059 P1c-B: onConversion does NOT fire on a renewal (only the first invoice freezes)', async () => {
   const discord = fakeRoleDiscord();
   const stripe = fakeWebhookStripe({ discord_user_id: 'd-1', github_id: '5' });

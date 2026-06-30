@@ -168,22 +168,33 @@ export async function handleStripeEvent({ event, stripe, discord, config, signal
     if (obj.billing_reason !== 'subscription_create') {
       return `payment_succeeded: renewal (billing_reason=${obj.billing_reason ?? 'unknown'}), no role change`;
     }
-    const target = await resolveDiscordTarget({ customerId, stripe });
-    if (!target) return 'payment_succeeded: no discord target, skipped';
-    // SOW-059 P1c: freeze + persist the attribution snapshot at this paid conversion. FAIL-SOFT: a freeze failure
-    // must never block the role swap or fail the webhook (which would make Stripe retry). The injected handler is
-    // flag-gated + idempotent (absent-only), so a retried delivery re-runs it harmlessly. Use the invoice paid
-    // timestamp as the conversion instant (NOT now), so the 90-day attribution window is exact.
-    if (typeof onConversion === 'function' && target.githubId) {
+    // SOW: Discord is deferred, so the common case is a Customer with a github_id but NO discord_user_id at
+    // conversion. DECOUPLE the two effects: the SOW-059 conversion freeze needs only github_id + touch_session
+    // (never Discord) and MUST run for every first-invoice conversion; the Trial->Member role swap needs Discord.
+    let customer = null;
+    try { customer = customerId ? await stripe.getCustomer(customerId) : null; } catch { customer = null; }
+    const githubId = customer?.metadata?.github_id ? String(customer.metadata.github_id) : null;
+    const discordUserId = customer?.metadata?.discord_user_id ? String(customer.metadata.discord_user_id) : null;
+
+    // SOW-059 P1c: freeze + persist the attribution snapshot at this paid conversion. FAIL-SOFT (a freeze failure
+    // must never block the role swap or fail the webhook -> Stripe retry); flag-gated + idempotent (absent-only).
+    // Runs for ANY first-invoice conversion with a github_id, with or WITHOUT a linked Discord. Use the invoice
+    // paid timestamp as the conversion instant (NOT now), so the 90-day attribution window is exact.
+    if (typeof onConversion === 'function' && githubId) {
       const paidAtSec = obj.status_transitions?.paid_at ?? obj.created ?? event?.created;
       const conversionAt = Number.isFinite(paidAtSec) ? paidAtSec * 1000 : undefined;
-      try { await onConversion({ githubId: target.githubId, customer: target.customer, conversionAt }); }
+      try { await onConversion({ githubId, customer, conversionAt }); }
       catch { /* freeze is best-effort; the role swap + webhook success must not depend on it */ }
     }
-    // Trial -> Member: add Member, remove Trial. Idempotent.
-    await discord.addRole(config.guildId, target.discordUserId, config.memberRoleId);
-    await discord.removeRole(config.guildId, target.discordUserId, config.trialRoleId);
-    return `payment_succeeded: upgraded ${target.discordUserId} to member`;
+
+    // Trial -> Member role swap: ONLY when Discord is linked. A GitHub-only member gets the swap once they link
+    // Discord (or via reconcile), so a missing discord_user_id is SKIPPED, not an error.
+    if (discordUserId) {
+      await discord.addRole(config.guildId, discordUserId, config.memberRoleId);
+      await discord.removeRole(config.guildId, discordUserId, config.trialRoleId);
+      return `payment_succeeded: upgraded ${discordUserId} to member${githubId ? ' (snapshot frozen)' : ''}`;
+    }
+    return `payment_succeeded: conversion frozen${githubId ? '' : ' (no github_id)'}, no Discord linked yet`;
   }
 
   if (type === 'customer.subscription.deleted') {
