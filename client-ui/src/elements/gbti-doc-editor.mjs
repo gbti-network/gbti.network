@@ -50,7 +50,7 @@ const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic[k]}</svg>`;
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .doc-blocks { display:flex; flex-direction:column; }
+  .doc-blocks { display:flex; flex-direction:column; position:relative; }
   /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
   .blk { position:relative; padding:2px 0; margin:2px 0; }
   .blk-tools { position:absolute; top:0; right:0; display:flex; gap:2px; align-items:center; padding:2px;
@@ -114,6 +114,14 @@ const CSS = `
     border-radius:12px; box-shadow:0 12px 34px rgba(0,0,0,.18); padding:6px; }
   .add-pop button { display:block; width:100%; text-align:left; font:inherit; font-size:13.5px; padding:8px 10px; border:0; border-radius:8px; background:transparent; color:var(--fg); cursor:pointer; }
   .add-pop button:hover { background:var(--hover); }
+  /* SOW-062 5c-2: the slash menu + the inline selection toolbar (in-shadow popovers) */
+  .slash-pop, .sel-tb { position:absolute; z-index:20; background:var(--panel); border:1.5px solid var(--line); border-radius:10px; box-shadow:0 12px 34px rgba(0,0,0,.2); }
+  .slash-pop { min-width:190px; max-height:264px; overflow:auto; padding:5px; }
+  .slash-pop button { display:block; width:100%; text-align:left; font:inherit; font-size:13.5px; padding:7px 9px; border:0; border-radius:7px; background:transparent; color:var(--fg); cursor:pointer; }
+  .slash-pop button.on, .slash-pop button:hover { background:var(--hover); }
+  .sel-tb { display:none; gap:2px; padding:4px; }
+  .sel-tb button { min-width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:6px; background:transparent; color:var(--fg); cursor:pointer; font-weight:700; font-size:13px; padding:0 6px; }
+  .sel-tb button:hover { background:var(--hover); color:var(--brand); }
 `;
 
 class GbtiDocEditor extends GbtiElement {
@@ -122,8 +130,15 @@ class GbtiDocEditor extends GbtiElement {
 
   connectedCallback() {
     if (!this._blocks) this._blocks = [];
+    if (!this._onSel) this._onSel = () => this._updateSelToolbar();
+    document.addEventListener('selectionchange', this._onSel);
     super.connectedCallback?.();
     this._render();
+  }
+
+  disconnectedCallback() {
+    if (this._onSel) document.removeEventListener('selectionchange', this._onSel);
+    super.disconnectedCallback?.();
   }
 
   _byId(id) { return (this._blocks || []).find((b) => String(b._id) === String(id)); }
@@ -142,6 +157,7 @@ class GbtiDocEditor extends GbtiElement {
       <div class="add-menu"><button class="add-btn" data-addmenu type="button">${svg('plus')} Add block</button><div class="add-pop" data-addpop hidden></div></div>
       ${hasMembers ? '' : `<button class="add-btn" data-addmembers type="button">${svg('lock')} Add members-only section</button>`}
     </div>`;
+    this._slash = null; this._tb = null; // the popovers lived in the old DOM (this.set replaced it)
     this.set(this.css(CSS) + `<div class="doc-blocks">${parts.join('')}${addRow}</div>`);
     this._wire();
   }
@@ -226,6 +242,7 @@ class GbtiDocEditor extends GbtiElement {
           if (b.type === 'paragraph') {
             const sc = this._shortcut(txt); // SOW-062 5c: '# '/'> '/'- '/'1. '/``` convert the paragraph IN PLACE
             if (sc) { const i = this._indexOf(b._id); this._blocks[i] = withId(sc); this._render(); this._focusBlock(this._blocks[i]._id); this._change(); return; }
+            if (txt.startsWith('/')) this._openSlash(el, txt.slice(1)); else this._closeSlash(); // SOW-062 5c-2: slash menu
           }
           b.text = txt;
         }
@@ -312,6 +329,12 @@ class GbtiDocEditor extends GbtiElement {
     });
     // Enter at the end of a text block inserts a new paragraph after it.
     this.$$('.ce[data-edit="text"]').forEach((el) => el.addEventListener('keydown', (e) => {
+      if (this._slash && this._slash.el === el) { // SOW-062 5c-2: slash-menu keyboard nav
+        if (e.key === 'ArrowDown') { e.preventDefault(); return this._moveSlash(1); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); return this._moveSlash(-1); }
+        if (e.key === 'Enter') { e.preventDefault(); return this._pickSlash(this._slash.idx); }
+        if (e.key === 'Escape') { e.preventDefault(); return this._closeSlash(); }
+      }
       if (e.key === 'Enter' && !e.shiftKey) {
         const b = this._byId(el.dataset.id);
         const sel = this.root.getSelection ? this.root.getSelection() : document.getSelection();
@@ -364,6 +387,89 @@ class GbtiDocEditor extends GbtiElement {
     } catch {
       if (st) st.textContent = 'Upload failed';
     }
+  }
+
+  // --- SOW-062 5c-2: slash menu (type "/" in a fresh paragraph -> a filtered block picker) ---
+  _openSlash(el, query) {
+    const q = String(query || '').toLowerCase();
+    const matches = CONVERT.filter((c) => `${c.label} ${c.key}`.toLowerCase().includes(q));
+    this._closeSlash();
+    const host = this.$('.doc-blocks'); const blk = el.closest('.blk');
+    if (!matches.length || !host || !blk) return;
+    const pop = document.createElement('div');
+    pop.className = 'slash-pop';
+    pop.style.top = `${blk.offsetTop + blk.offsetHeight + 4}px`;
+    pop.style.left = `${blk.offsetLeft}px`;
+    pop.innerHTML = matches.map((c, i) => `<button type="button" data-si="${i}"${i === 0 ? ' class="on"' : ''}>${esc(c.label)}</button>`).join('');
+    pop.querySelectorAll('[data-si]').forEach((b) => b.addEventListener('mousedown', (e) => { e.preventDefault(); this._pickSlash(Number(b.dataset.si)); }));
+    host.appendChild(pop);
+    this._slash = { el, matches, idx: 0, pop };
+  }
+
+  _closeSlash() { if (this._slash && this._slash.pop) this._slash.pop.remove(); this._slash = null; }
+
+  _moveSlash(dir) {
+    const s = this._slash; if (!s) return;
+    s.idx = (s.idx + dir + s.matches.length) % s.matches.length;
+    s.pop.querySelectorAll('[data-si]').forEach((b, i) => b.classList.toggle('on', i === s.idx));
+  }
+
+  _pickSlash(i) {
+    const s = this._slash; if (!s) return;
+    const b = this._byId(s.el.dataset.id); if (!b) { this._closeSlash(); return; }
+    const idx = this._indexOf(b._id);
+    this._blocks[idx] = withId(blockFromKey(s.matches[i].key)); // the "/query" text is discarded on convert
+    this._closeSlash();
+    this._render(); this._focusBlock(this._blocks[idx]._id); this._change();
+  }
+
+  // --- SOW-062 5c-2: inline selection toolbar (wraps the selection with literal Markdown tokens; defensive) ---
+  _ceOf(node) {
+    let n = node;
+    while (n && n !== this.root) { if (n.nodeType === 1 && n.classList && n.classList.contains('ce')) return n; n = n.parentNode || n.host; }
+    return null;
+  }
+
+  _updateSelToolbar() {
+    if (!this.isConnected) return;
+    let sel; try { sel = document.getSelection(); } catch { return; }
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) { this._hideTb(); return; }
+    const ce = this._ceOf(sel.anchorNode);
+    if (!ce || !ce.dataset || (ce.dataset.edit !== 'text' && ce.dataset.edit !== 'code')) { this._hideTb(); return; }
+    try { this._showTb(sel.getRangeAt(0)); } catch { this._hideTb(); }
+  }
+
+  _showTb(range) {
+    const host = this.$('.doc-blocks'); if (!host) return;
+    if (!this._tb) {
+      const tb = document.createElement('div'); tb.className = 'sel-tb';
+      tb.innerHTML = `<button type="button" data-w="**" title="Bold">B</button>`
+        + `<button type="button" data-w="*" title="Italic" style="font-style:italic">I</button>`
+        + `<button type="button" data-w="\`" title="Inline code" style="font-family:var(--font-mono,monospace)">&lt;&gt;</button>`
+        + `<button type="button" data-w="link" title="Link">Link</button>`;
+      tb.querySelectorAll('button').forEach((b) => b.addEventListener('mousedown', (e) => { e.preventDefault(); this._wrap(b.dataset.w); }));
+      host.appendChild(tb); this._tb = tb;
+    }
+    const hr = host.getBoundingClientRect(); const r = range.getBoundingClientRect();
+    this._tb.style.top = `${r.top - hr.top - 40}px`;
+    this._tb.style.left = `${Math.max(0, r.left - hr.left)}px`;
+    this._tb.style.display = 'flex';
+  }
+
+  _hideTb() { if (this._tb) this._tb.style.display = 'none'; }
+
+  _wrap(w) {
+    let sel; try { sel = document.getSelection(); } catch { return; }
+    if (!sel || sel.isCollapsed) return;
+    const ce = this._ceOf(sel.anchorNode); if (!ce) return;
+    const text = sel.toString();
+    let out;
+    if (w === 'link') { const url = (typeof prompt === 'function' ? prompt('Link URL', 'https://') : '') || ''; if (!url) return; out = `[${text}](${url})`; }
+    else out = `${w}${text}${w}`;
+    try { document.execCommand('insertText', false, out); } catch { return; }
+    const b = this._byId(ce.dataset.id);
+    if (b) { if (ce.dataset.edit === 'code') b.code = ce.innerText.replace(/\n$/, ''); else b.text = ce.innerText.replace(/\n$/, ''); this._change(); }
+    this._hideTb();
   }
 }
 
