@@ -5,18 +5,8 @@ interface Props {
   video: string;
   title?: string;
 }
+import { embedUrl } from '../../client/src/video-embed.mjs'; // SOW-062 5d: the ONE shared YouTube/Vimeo extractor
 const { video, title = 'Embedded video' } = Astro.props;
-
-function embedUrl(v: string): string | null {
-  const s = v.trim();
-  let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
-  if (m) return `https://www.youtube.com/embed/${m[1]}`;
-  m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-  if (m) return `https://player.vimeo.com/video/${m[1]}`;
-  if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
-  if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
-  return null;
-}
 const src = embedUrl(video);
 ---
 {src && (

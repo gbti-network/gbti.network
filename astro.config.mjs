@@ -3,6 +3,7 @@ import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import sitemap from '@astrojs/sitemap';
 import mdx from '@astrojs/mdx';
+import { remarkContentBlocks } from './src/lib/remark-content-blocks.mjs';
 
 // SOW-001: static site for gbti.network, deployed on Cloudflare Pages.
 // Output is the default `static` — Pages serves `dist/` directly; no adapter needed.
@@ -26,7 +27,8 @@ export default defineConfig({
   // One key per source (no trailing slash): with trailingSlash:'ignore' each serves both /x and /x/, and a
   // second key for the same path would collide ("route defined more than once" build warning).
   redirects: { '/model': '/revenue-model', '/about': '/revenue-model', '/co-op': '/revenue-model' },
-  markdown: { rehypePlugins: [rehypeDemoteBodyH1] },
+  // SOW-062 5d: remarkContentBlocks renders the body ```callout / ```embed fences (runs on mdast, before Shiki).
+  markdown: { remarkPlugins: [remarkContentBlocks], rehypePlugins: [rehypeDemoteBodyH1] },
   // Dev-only Astro toolbar — hidden so local testing matches the published view.
   devToolbar: { enabled: false },
   integrations: [

@@ -19706,6 +19706,18 @@ function fieldsFor(type) {
   return FIELDS[type] ?? null;
 }
 
+// client/src/video-embed.mjs
+function embedUrl(v) {
+  const s = String(v || "").trim();
+  let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if (m) return `https://player.vimeo.com/video/${m[1]}`;
+  if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
+  if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
+  return null;
+}
+
 // client/src/markdown.mjs
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -19721,6 +19733,23 @@ function inline(escaped) {
 function codeOpen(lang) {
   const tag = String(lang || "").trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9+#.-]/g, "");
   return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
+}
+var CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
+function renderFence(lang, buf) {
+  const info = String(lang || "").trim().split(/\s+/);
+  const body = buf.join("\n");
+  if (info[0] === "callout") {
+    const v = CALLOUT_VARIANTS.includes(info[1]) ? info[1] : "note";
+    const html = body.split("\n").map((l) => inline(escapeHtml(l))).join("<br/>");
+    return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
+  }
+  if (info[0] === "embed") {
+    const url2 = body.trim();
+    const src = embedUrl(url2);
+    if (src) return `<div class="md-embed"><iframe src="${escapeHtml(src)}" loading="lazy" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation" title="Embedded video"></iframe></div>`;
+    return `<p><a href="${escapeHtml(url2)}" target="_blank" rel="noopener">${escapeHtml(url2)}</a></p>`;
+  }
+  return `${codeOpen(lang)}${escapeHtml(body)}</code></pre>`;
 }
 function renderMarkdown(md) {
   const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
@@ -19748,7 +19777,7 @@ function renderMarkdown(md) {
       } else {
         inCode = false;
         flushList();
-        out.push(`${codeOpen(codeLang)}${escapeHtml(codeBuf.join("\n"))}</code></pre>`);
+        out.push(renderFence(codeLang, codeBuf));
         codeLang = "";
       }
       i++;
@@ -19812,7 +19841,7 @@ function renderMarkdown(md) {
     out.push(`<p>${inline(para.join(" "))}</p>`);
   }
   flushList();
-  if (inCode) out.push(`${codeOpen(codeLang)}${escapeHtml(codeBuf.join("\n"))}</code></pre>`);
+  if (inCode) out.push(renderFence(codeLang, codeBuf));
   return out.join("\n");
 }
 

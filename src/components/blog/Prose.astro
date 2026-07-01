@@ -48,4 +48,16 @@
   .prose-gbti pre code { background: none; padding: 0; }
   .prose-gbti hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
   .prose-gbti iframe { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; margin: 1.5em 0; border-radius: 10px; }
+  /* SOW-062 5d: body callout + embed blocks (rendered by remark-content-blocks.mjs) */
+  .prose-gbti .callout { margin: 1.4em 0; border: 1.5px solid var(--line); border-radius: 12px; padding: 14px 16px 14px 46px; position: relative; background: var(--tint, rgba(0,0,0,.02)); }
+  .prose-gbti .callout::before { content: ""; position: absolute; left: 16px; top: 17px; width: 18px; height: 18px; border-radius: 50%; }
+  .prose-gbti .callout-info { border-color: rgba(63,116,214,.4); background: rgba(63,116,214,.08); }
+  .prose-gbti .callout-info::before { background: #3f74d6; }
+  .prose-gbti .callout-note::before { background: var(--fg-mute, #888); }
+  .prose-gbti .callout-warning { border-color: rgba(216,144,26,.4); background: rgba(224,163,61,.1); }
+  .prose-gbti .callout-warning::before { background: #d8901a; }
+  .prose-gbti .callout-tip { border-color: rgba(69,192,141,.4); background: rgba(69,192,141,.1); }
+  .prose-gbti .callout-tip::before { background: var(--green, #45c08d); }
+  .prose-gbti .embed-wrap { position: relative; margin: 1.5em 0; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--ink, #000); }
+  .prose-gbti .embed-wrap iframe { width: 100%; height: 100%; margin: 0; border: 0; }
 </style>

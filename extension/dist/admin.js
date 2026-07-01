@@ -10089,6 +10089,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .body blockquote { margin:0 0 1em; padding:2px 0 2px 14px; border-left:3px solid var(--line); color:var(--muted); }
   .body > pre, .body code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
   .body :not(pre) > code { background:var(--hover); border:1px solid var(--line); border-radius:5px; padding:.08em .35em; font-size:.9em; }
+  /* SOW-062 5d: body callout + embed blocks (rendered by client/src/markdown.mjs) */
+  .body .md-callout { margin:0 0 1.2em; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px 12px 42px; position:relative; background:var(--hover); }
+  .body .md-callout::before { content:""; position:absolute; left:15px; top:15px; width:16px; height:16px; border-radius:50%; }
+  .body .md-callout-info { border-color:rgba(63,116,214,.4); background:rgba(63,116,214,.08); } .body .md-callout-info::before { background:#3f74d6; }
+  .body .md-callout-note::before { background:var(--muted); }
+  .body .md-callout-warning { border-color:rgba(216,144,26,.4); background:rgba(224,163,61,.1); } .body .md-callout-warning::before { background:#d8901a; }
+  .body .md-callout-tip { border-color:rgba(31,158,95,.35); background:rgba(31,158,95,.1); } .body .md-callout-tip::before { background:var(--accent); }
+  .body .md-embed { position:relative; margin:0 0 1.2em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
+  .body .md-embed iframe { width:100%; height:100%; border:0; }
 
   /* SOW-050: code cards (built from <pre> in _enhanceCode) — a header bar with the language + a Copy button, a
      dark, horizontally-scrollable body that preserves whitespace. */

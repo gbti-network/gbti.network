@@ -3,6 +3,8 @@
 // first (the preview is shown in the local CMS, but we still never inject raw input), then handles the
 // common blocks (headings, lists, blockquotes, fenced code, hr, paragraphs) and inline (code, links, bold,
 // italic). Pure + unit-testable.
+// SOW-062 Phase 5d: also renders the ```callout / ```embed body blocks (the shared embedUrl gives a safe iframe src).
+import { embedUrl } from './video-embed.mjs';
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -26,6 +28,27 @@ function codeOpen(lang) {
   return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : '<pre><code>';
 }
 
+// SOW-062 Phase 5d: a fence whose info string starts with `callout` or `embed` renders as a callout box / a safe
+// provider iframe instead of a code block; everything else stays a normal code block. HTML is still escaped, and the
+// iframe src is a NORMALIZED provider URL (never author HTML), so no author script executes.
+const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
+function renderFence(lang, buf) {
+  const info = String(lang || '').trim().split(/\s+/);
+  const body = buf.join('\n');
+  if (info[0] === 'callout') {
+    const v = CALLOUT_VARIANTS.includes(info[1]) ? info[1] : 'note';
+    const html = body.split('\n').map((l) => inline(escapeHtml(l))).join('<br/>');
+    return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
+  }
+  if (info[0] === 'embed') {
+    const url = body.trim();
+    const src = embedUrl(url);
+    if (src) return `<div class="md-embed"><iframe src="${escapeHtml(src)}" loading="lazy" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation" title="Embedded video"></iframe></div>`;
+    return `<p><a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(url)}</a></p>`;
+  }
+  return `${codeOpen(lang)}${escapeHtml(body)}</code></pre>`;
+}
+
 export function renderMarkdown(md) {
   const lines = String(md ?? '').replace(/\r\n/g, '\n').split('\n');
   const out = [];
@@ -47,7 +70,7 @@ export function renderMarkdown(md) {
     const line = lines[i];
     if (/^```/.test(line)) {
       if (!inCode) { inCode = true; codeBuf = []; codeLang = line.slice(3); }
-      else { inCode = false; flushList(); out.push(`${codeOpen(codeLang)}${escapeHtml(codeBuf.join('\n'))}</code></pre>`); codeLang = ''; }
+      else { inCode = false; flushList(); out.push(renderFence(codeLang, codeBuf)); codeLang = ''; }
       i++; continue;
     }
     if (inCode) { codeBuf.push(line); i++; continue; }
@@ -72,6 +95,6 @@ export function renderMarkdown(md) {
     out.push(`<p>${inline(para.join(' '))}</p>`);
   }
   flushList();
-  if (inCode) out.push(`${codeOpen(codeLang)}${escapeHtml(codeBuf.join('\n'))}</code></pre>`);
+  if (inCode) out.push(renderFence(codeLang, codeBuf));
   return out.join('\n');
 }
