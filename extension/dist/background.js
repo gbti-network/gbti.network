@@ -19405,6 +19405,19 @@ async function getDiscordLinkUrl(ctx) {
   if (!data || !data.url) throw new OperationError("discord-link-failed", "no link URL returned");
   return { url: data.url };
 }
+async function getDiscordLinkStatus(ctx) {
+  const token = ctx.store?.get?.("githubToken");
+  if (!token) return { linked: false };
+  const fetch2 = ctx.fetch ?? globalThis.fetch;
+  try {
+    const res = await fetch2(`${SIGNUP_BASE}/discord/link/status`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return { linked: false };
+    const data = await res.json().catch(() => null);
+    return { linked: Boolean(data && data.linked) };
+  } catch {
+    return { linked: false };
+  }
+}
 async function getOnboardingStatus(ctx) {
   const token = ctx.store?.get?.("githubToken");
   if (!isAppMode()) {
@@ -20562,6 +20575,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await getDiscordInvite2(ctx));
       case "/api/discord-link":
         return ok(await getDiscordLinkUrl(ctx));
+      case "/api/discord-link/status":
+        return ok(await getDiscordLinkStatus(ctx));
       case "/api/news":
         return ok(await getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || void 0 }));
       case "/api/news-sources":

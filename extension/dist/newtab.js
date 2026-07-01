@@ -3283,7 +3283,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/discord.mjs
-  var DISCORD_INVITE_URL = "https://discord.gg/gbti-network";
   var DISCORD_LINK_URL = "https://signup.gbti.network/discord/link/start";
 
   // client-ui/src/topic-picker-core.mjs
@@ -3508,6 +3507,57 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._step = 0;
       this.load();
     }
+    disconnectedCallback() {
+      super.disconnectedCallback?.();
+      this._stopDiscordPoll();
+    }
+    // SOW: after the member opens the Discord OAuth tab, poll /discord/link/status (always fresh, fail-closed) until
+    // it reports linked, then mark the step done and auto-advance. Bounded (~3 min) so a bailed-out link never spins
+    // forever; the step's Continue button stays available as a manual advance the whole time.
+    _startDiscordPoll() {
+      if (this._discordWaiting) return;
+      this._discordWaiting = true;
+      this._discordPollUntil = Date.now() + 18e4;
+      this.render();
+      const tick = async () => {
+        if (!this._discordWaiting) return;
+        let linked = false;
+        try {
+          linked = Boolean((await this.client?.discordLinkStatus?.())?.linked);
+        } catch {
+          linked = false;
+        }
+        if (!this._discordWaiting || !this.isConnected) return;
+        if (linked) {
+          this._onDiscordLinked();
+          return;
+        }
+        if (Date.now() > this._discordPollUntil) {
+          this._discordWaiting = false;
+          this.render();
+          return;
+        }
+        this._discordPollTimer = setTimeout(tick, 2500);
+      };
+      this._discordPollTimer = setTimeout(tick, 2500);
+    }
+    _onDiscordLinked() {
+      this._stopDiscordPoll();
+      this._discordJoined = true;
+      try {
+        localStorage.setItem(DISCORD_DONE_KEY, "1");
+      } catch {
+      }
+      if (STEPS[this._step] === "discord" && this._step < STEPS.length - 1) this._step++;
+      this.render();
+    }
+    _stopDiscordPoll() {
+      this._discordWaiting = false;
+      if (this._discordPollTimer) {
+        clearTimeout(this._discordPollTimer);
+        this._discordPollTimer = null;
+      }
+    }
     async load() {
       this._authGate = this.hasAttribute("auth-gate");
       let s = null;
@@ -3544,12 +3594,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._discordJoined = localStorage.getItem(DISCORD_DONE_KEY) === "1";
       } catch {
         this._discordJoined = false;
-      }
-      this._discordInviteUrl = DISCORD_INVITE_URL;
-      try {
-        const inv = await this.client?.discordInvite?.();
-        if (inv?.url) this._discordInviteUrl = inv.url;
-      } catch {
       }
       this._loaded = true;
       this.render();
@@ -3623,31 +3667,26 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ${card}
       ${nav}`);
       this.on("[data-step-next]", "click", () => {
+        this._stopDiscordPoll();
         this._step++;
         this.render();
       });
       this.on("[data-step-back]", "click", () => {
+        this._stopDiscordPoll();
         this._step--;
         this.render();
       });
       this.on("[data-done]", "click", () => this.emit("gbti:welcome-done"));
       if (step === "discord") {
         this.on("[data-discord-connect]", "click", async () => {
+          let url = DISCORD_LINK_URL;
           try {
             const r = await this.client?.discordLinkUrl?.();
-            window.open(r && r.url || DISCORD_LINK_URL, "_blank", "noopener");
-          } catch {
-            window.open(DISCORD_LINK_URL, "_blank", "noopener");
-          }
-        });
-        this.on("[data-discord-join]", "click", () => window.open(this._discordInviteUrl || DISCORD_INVITE_URL, "_blank", "noopener"));
-        const cb = this.$("[data-discord-cb]");
-        if (cb) cb.addEventListener("change", () => {
-          this._discordJoined = cb.checked;
-          try {
-            cb.checked ? localStorage.setItem(DISCORD_DONE_KEY, "1") : localStorage.removeItem(DISCORD_DONE_KEY);
+            if (r && r.url) url = r.url;
           } catch {
           }
+          window.open(url, "_blank", "noopener");
+          this._startDiscordPoll();
         });
       } else {
         this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.getAttribute("data-follow"))));
@@ -3663,13 +3702,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     }
     _discordCard() {
-      const done = this._discordJoined ? "checked" : "";
+      if (this._discordJoined) {
+        return `<div class="card">
+        <h3>${discordIco} Connect Discord</h3>
+        <p class="sub">Your Discord is connected and you have the member role in the server.</p>
+        <p class="note" style="display:flex;align-items:center;gap:7px;color:var(--accent);font-weight:700">${check} Discord connected</p>
+      </div>`;
+      }
+      const body = this._discordWaiting ? `<button class="btn" data-discord-connect type="button" disabled>${discordIco} Waiting for Discord&hellip;</button>
+         <p class="note" style="margin-top:12px">Finish the Discord sign-in in the new tab. This step continues on its own once you are connected.</p>` : `<button class="btn" data-discord-connect type="button">${discordIco} Connect Discord account</button>
+         <p class="note" style="margin-top:12px">A new tab opens for Discord sign-in. When you finish, you land in the server and this step continues automatically.</p>`;
       return `<div class="card">
       <h3>${discordIco} Connect Discord</h3>
       <p class="sub">The community is the heart of the co-op: weekly sessions, help, and the people you build with. Connect your Discord to join the server and get your member role.</p>
-      <button class="btn" data-discord-connect type="button">${discordIco} Connect Discord account</button>
-      <button class="btn" data-discord-join type="button">Open the invite instead</button>
-      <label class="check"><input type="checkbox" data-discord-cb ${done} /> I have joined the Discord</label>
+      ${body}
     </div>`;
     }
     // SOW-054: the Topics step. The shared <gbti-topic-picker> fetches the vocabulary + the member's current
@@ -11288,6 +11334,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // on-demand Discord invite -> { url, source }
       discordLinkUrl: () => request("GET", "/api/discord-link"),
       // SOW Part C: a one-time token-bound Discord-LINK URL -> { url }
+      discordLinkStatus: () => request("GET", "/api/discord-link/status"),
+      // SOW: welcome auto-detect poll -> { linked }
       getNews: ({ category, since, limit } = {}) => request("GET", `/api/news${qs({ category, since, limit })}`),
       // SOW-043: members-only news -> { items, updatedAt }
       getNewsSources: () => request("GET", "/api/news-sources"),

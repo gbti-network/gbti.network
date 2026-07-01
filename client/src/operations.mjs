@@ -884,6 +884,20 @@ export async function getDiscordLinkUrl(ctx) {
   return { url: data.url };
 }
 
+// SOW: the welcome polls this after opening the Discord OAuth tab, to auto-detect the link and advance. Read-only
+// and fail-closed: any error / no token -> { linked: false } (never throws, so a poll loop never crashes).
+export async function getDiscordLinkStatus(ctx) {
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) return { linked: false };
+  const fetch = ctx.fetch ?? globalThis.fetch;
+  try {
+    const res = await fetch(`${SIGNUP_BASE}/discord/link/status`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return { linked: false };
+    const data = await res.json().catch(() => null);
+    return { linked: Boolean(data && data.linked) };
+  } catch { return { linked: false }; }
+}
+
 // SOW-026: first-run onboarding readiness. Reads durable GitHub state (token, fork, App install) and returns the
 // first not-yet-done step, so the wizard never loops on a cleared store. Only meaningful in app-mode (classic
 // has no fork/install onboarding); in classic mode the wizard is dormant (ready once signed in).

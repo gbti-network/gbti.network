@@ -8,7 +8,7 @@
 // the extension now and the npm CMS later. Emits gbti:welcome-done when the member finishes.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { phaseLabel, shuffle, excludeSelf, paginate } from '../welcome-core.mjs';
-import { DISCORD_INVITE_URL, DISCORD_LINK_URL } from '../discord.mjs';
+import { DISCORD_LINK_URL } from '../discord.mjs';
 import './gbti-topic-picker.mjs'; // SOW-054: the followed-topics step control
 
 const SITE = 'https://gbti.network';
@@ -86,6 +86,45 @@ class GbtiWelcome extends GbtiElement {
     this.load();
   }
 
+  disconnectedCallback() {
+    super.disconnectedCallback?.();
+    this._stopDiscordPoll();
+  }
+
+  // SOW: after the member opens the Discord OAuth tab, poll /discord/link/status (always fresh, fail-closed) until
+  // it reports linked, then mark the step done and auto-advance. Bounded (~3 min) so a bailed-out link never spins
+  // forever; the step's Continue button stays available as a manual advance the whole time.
+  _startDiscordPoll() {
+    if (this._discordWaiting) return;
+    this._discordWaiting = true;
+    this._discordPollUntil = Date.now() + 180000;
+    this.render();
+    const tick = async () => {
+      if (!this._discordWaiting) return; // stopped (manual nav / disconnect)
+      let linked = false;
+      try { linked = Boolean((await this.client?.discordLinkStatus?.())?.linked); } catch { linked = false; }
+      if (!this._discordWaiting || !this.isConnected) return; // a stop() DURING the await must win: no re-arm, no stale mutation
+      if (linked) { this._onDiscordLinked(); return; }
+      if (Date.now() > this._discordPollUntil) { this._discordWaiting = false; this.render(); return; } // timed out
+      this._discordPollTimer = setTimeout(tick, 2500);
+    };
+    this._discordPollTimer = setTimeout(tick, 2500);
+  }
+
+  _onDiscordLinked() {
+    this._stopDiscordPoll();
+    this._discordJoined = true;
+    try { localStorage.setItem(DISCORD_DONE_KEY, '1'); } catch { /* storage blocked */ }
+    // Auto-advance off the Discord step to the next to-do.
+    if (STEPS[this._step] === 'discord' && this._step < STEPS.length - 1) this._step++;
+    this.render();
+  }
+
+  _stopDiscordPoll() {
+    this._discordWaiting = false;
+    if (this._discordPollTimer) { clearTimeout(this._discordPollTimer); this._discordPollTimer = null; }
+  }
+
   async load() {
     // SOW-048: in auth-gate mode this element doubles as the extension's LOGIN SPLASH. Phase + own identity + the
     // authenticated flag all come from the one status read.
@@ -122,13 +161,6 @@ class GbtiWelcome extends GbtiElement {
       this._follows = null; // unavailable -> the follow card shows a retry, not an upgrade notice
     }
     try { this._discordJoined = localStorage.getItem(DISCORD_DONE_KEY) === '1'; } catch { this._discordJoined = false; }
-    // Prefer a fresh, bot-minted invite from the Worker; fall back to the static DISCORD_INVITE_URL when the
-    // endpoint is unavailable (not provisioned / signed out). The bot token never reaches the page.
-    this._discordInviteUrl = DISCORD_INVITE_URL;
-    try {
-      const inv = await this.client?.discordInvite?.();
-      if (inv?.url) this._discordInviteUrl = inv.url;
-    } catch { /* keep the static fallback */ }
     this._loaded = true;
     this.render();
   }
@@ -203,23 +235,19 @@ class GbtiWelcome extends GbtiElement {
       ${nav}`);
 
     // Step navigation.
-    this.on('[data-step-next]', 'click', () => { this._step++; this.render(); });
-    this.on('[data-step-back]', 'click', () => { this._step--; this.render(); });
+    this.on('[data-step-next]', 'click', () => { this._stopDiscordPoll(); this._step++; this.render(); });
+    this.on('[data-step-back]', 'click', () => { this._stopDiscordPoll(); this._step--; this.render(); });
     this.on('[data-done]', 'click', () => this.emit('gbti:welcome-done'));
 
     if (step === 'discord') {
-      // SOW Part C: "Connect" opens the Worker's OAuth link flow (joins the guild + assigns the role + links
-      // discord_user_id, authenticated by the post-signup session cookie). "Open the invite" is the manual fallback.
+      // SOW: "Connect Discord account" opens the token-bound OAuth link in a new tab (joins the guild, assigns the
+      // role, links discord_user_id, then redirects the member INTO Discord). We then poll /discord/link/status and
+      // auto-advance to the next step the moment the link lands, so there is nothing else to click.
       this.on('[data-discord-connect]', 'click', async () => {
-        // Prefer the token-bound link URL (works with no website session); fall back to the session-cookie path.
-        try { const r = await this.client?.discordLinkUrl?.(); window.open((r && r.url) || DISCORD_LINK_URL, '_blank', 'noopener'); }
-        catch { window.open(DISCORD_LINK_URL, '_blank', 'noopener'); }
-      });
-      this.on('[data-discord-join]', 'click', () => window.open(this._discordInviteUrl || DISCORD_INVITE_URL, '_blank', 'noopener'));
-      const cb = this.$('[data-discord-cb]');
-      if (cb) cb.addEventListener('change', () => {
-        this._discordJoined = cb.checked;
-        try { cb.checked ? localStorage.setItem(DISCORD_DONE_KEY, '1') : localStorage.removeItem(DISCORD_DONE_KEY); } catch { /* storage blocked */ }
+        let url = DISCORD_LINK_URL;
+        try { const r = await this.client?.discordLinkUrl?.(); if (r && r.url) url = r.url; } catch { /* fall back to the static link */ }
+        window.open(url, '_blank', 'noopener');
+        this._startDiscordPoll();
       });
     } else {
       // Follow toggles + paging (the pager's Back/More is within the list, distinct from the step Back).
@@ -232,13 +260,24 @@ class GbtiWelcome extends GbtiElement {
   }
 
   _discordCard() {
-    const done = this._discordJoined ? 'checked' : '';
+    // Connected: the poll (or a prior visit) confirmed the link. Show a done state; the step auto-advances on success.
+    if (this._discordJoined) {
+      return `<div class="card">
+        <h3>${discordIco} Connect Discord</h3>
+        <p class="sub">Your Discord is connected and you have the member role in the server.</p>
+        <p class="note" style="display:flex;align-items:center;gap:7px;color:var(--accent);font-weight:700">${check} Discord connected</p>
+      </div>`;
+    }
+    // Waiting: the OAuth tab is open. We poll /discord/link/status and advance on our own once it lands.
+    const body = this._discordWaiting
+      ? `<button class="btn" data-discord-connect type="button" disabled>${discordIco} Waiting for Discord&hellip;</button>
+         <p class="note" style="margin-top:12px">Finish the Discord sign-in in the new tab. This step continues on its own once you are connected.</p>`
+      : `<button class="btn" data-discord-connect type="button">${discordIco} Connect Discord account</button>
+         <p class="note" style="margin-top:12px">A new tab opens for Discord sign-in. When you finish, you land in the server and this step continues automatically.</p>`;
     return `<div class="card">
       <h3>${discordIco} Connect Discord</h3>
       <p class="sub">The community is the heart of the co-op: weekly sessions, help, and the people you build with. Connect your Discord to join the server and get your member role.</p>
-      <button class="btn" data-discord-connect type="button">${discordIco} Connect Discord account</button>
-      <button class="btn" data-discord-join type="button">Open the invite instead</button>
-      <label class="check"><input type="checkbox" data-discord-cb ${done} /> I have joined the Discord</label>
+      ${body}
     </div>`;
   }
 

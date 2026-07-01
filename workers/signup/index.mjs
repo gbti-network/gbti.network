@@ -276,7 +276,10 @@ async function handleDiscordCallback(request, env) {
   });
 
   const session = await signSession({ githubId: state.githubId, githubLogin: state.githubLogin }, env.SESSION_SECRET);
-  return redirect(`${env.SITE_BASE_URL}/extension/?linked=discord`, { 'Set-Cookie': sessionCookieHeader(session) });
+  // SOW: land the member in Discord (the community they just joined), NOT back on the marketing site. The flow
+  // started from the extension welcome, which polls /discord/link/status and advances itself once the link lands.
+  const dest = env.DISCORD_INVITE_URL || `${env.SITE_BASE_URL}/extension/?linked=discord`;
+  return redirect(dest, { 'Set-Cookie': sessionCookieHeader(session) });
 }
 
 // SOW Part C: deferred Discord link, step 1. The extension welcome opens this in a tab. It authenticates the member
@@ -296,6 +299,27 @@ async function handleDiscordLinkInit(request, env) {
   // cannot bind a different Discord account to this github_id (account-hijack defense).
   const lt = await packState({ githubId: id.githubId, githubLogin: id.githubLogin, linkInit: true, jti: crypto.randomUUID() }, env, 120);
   return json({ url: `${env.SITE_BASE_URL}/discord/link/start?lt=${encodeURIComponent(lt)}` }, 200, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+}
+
+// SOW: link-status poll for the extension welcome. The welcome opens the Discord OAuth tab (which redirects the
+// member into Discord, never back to the site), then polls THIS endpoint until it reports linked and auto-advances.
+// Read-only + fail-closed: it verifies the member's GitHub token -> github_id, looks up the Customer, and reports
+// whether discord_user_id is attached. Any error / no token -> { linked: false } (never blocks, never opens).
+async function handleDiscordLinkStatus(request, env) {
+  const cors = { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' };
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!token) return json({ linked: false }, 200, cors);
+  let id = null;
+  try { id = await githubFetchUser(token, globalThis.fetch); } catch { id = null; }
+  if (!id || !id.githubId) return json({ linked: false }, 200, cors);
+  let linked = false;
+  try {
+    const { stripe } = clientsFromEnv(env);
+    const customer = await stripe.findCustomerByGithubId(String(id.githubId));
+    linked = Boolean(customer?.metadata?.discord_user_id);
+  } catch { linked = false; }
+  return json({ linked }, 200, cors);
 }
 
 async function handleDiscordLinkStart(request, env) {
@@ -497,6 +521,7 @@ export default {
       if (method === 'GET' && pathname === '/signup/discord/callback') return await handleDiscordCallback(request, env);
       if (method === 'GET' && pathname === '/discord/link/init') return await handleDiscordLinkInit(request, env);   // SOW Part C: mint a token-bound link URL (extension)
       if (method === 'GET' && pathname === '/discord/link/start') return await handleDiscordLinkStart(request, env); // SOW Part C: deferred Discord link
+      if (method === 'GET' && pathname === '/discord/link/status') return await handleDiscordLinkStatus(request, env); // SOW: welcome auto-detect poll
 
       if (method === 'POST' && pathname === '/checkout') return await handleCheckout(request, env);
       if (method === 'GET' && pathname === '/checkout/success') return await handleCheckoutSuccess(request, env);

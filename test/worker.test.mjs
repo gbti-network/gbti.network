@@ -573,7 +573,7 @@ test('SOW Part C: /discord/link/start with NO session -> no Discord OAuth, lands
 });
 
 test('SOW Part C: the Discord-link callback links discord_user_id + role to the EXISTING Customer (nonce-checked)', async () => {
-  const env = fakeEnv();
+  const env = fakeEnv({ DISCORD_INVITE_URL: 'https://discord.gg/test' });
   const startState = await packState({ githubId: '5', githubLogin: 'octocat', nonce: 'n1', link: true }, env);
   await withFetch(
     (url) => {
@@ -590,9 +590,37 @@ test('SOW Part C: the Discord-link callback links discord_user_id + role to the 
         env, {},
       );
       assert.equal(res.status, 302);
-      assert.ok((res.headers.get('Location') || '').includes('/extension/?linked=discord'), 'lands on the link-success page');
+      assert.equal(res.headers.get('Location'), 'https://discord.gg/test', 'redirects the member INTO Discord, not back to the site');
     },
   );
+});
+
+test('SOW: /discord/link/status reports the Customer Discord-link state, fail-closed', async () => {
+  const env = fakeEnv();
+  const linkedFetch = (url) => {
+    if (url.includes('api.github.com/user')) return { status: 200, body: { id: 777, login: 'octocat' } };
+    if (url.includes('api.stripe.com/v1/customers/search')) return { status: 200, body: { data: [{ id: 'cus_x', metadata: { github_id: '777', discord_user_id: 'd-1' } }] } };
+    return { status: 200, body: '' };
+  };
+  await withFetch(linkedFetch, async () => {
+    const res = await worker.fetch(req('GET', '/discord/link/status', { headers: { Authorization: 'Bearer tok' } }), env, {});
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { linked: true });
+  });
+  // No discord_user_id on the Customer -> not linked.
+  const unlinkedFetch = (url) => {
+    if (url.includes('api.github.com/user')) return { status: 200, body: { id: 777, login: 'octocat' } };
+    if (url.includes('api.stripe.com/v1/customers/search')) return { status: 200, body: { data: [{ id: 'cus_x', metadata: { github_id: '777' } }] } };
+    return { status: 200, body: '' };
+  };
+  await withFetch(unlinkedFetch, async () => {
+    const res = await worker.fetch(req('GET', '/discord/link/status', { headers: { Authorization: 'Bearer tok' } }), env, {});
+    assert.deepEqual(await res.json(), { linked: false });
+  });
+  // No bearer token -> fail closed to not-linked (never throws, never opens).
+  const res = await worker.fetch(req('GET', '/discord/link/status'), env, {});
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { linked: false });
 });
 
 test('SOW Part C: the Discord-link callback REJECTS a state with no matching nonce cookie', async () => {
