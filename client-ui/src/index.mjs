@@ -8,7 +8,7 @@
 // stay inert for a visitor; only a host that loads this bundle upgrades + activates them.
 
 import './elements/gbti-auth.mjs';
-import './elements/gbti-block-editor.mjs'; // SOW-062 P4: the block body editor (used by the content editor)
+import './elements/gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG body editor (replaces gbti-block-editor)
 import './elements/gbti-content-editor.mjs';
 import './elements/gbti-content-list.mjs';
 import './elements/gbti-pr-list.mjs';

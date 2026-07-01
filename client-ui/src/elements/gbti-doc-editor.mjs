@@ -1,0 +1,331 @@
+// <gbti-doc-editor> (SOW-062 Phase 5): the cohesive Markdown WYSIWYG body editor. Replaces the Phase-4
+// per-block-container editor (gbti-block-editor) with one continuous surface where blocks edit IN PLACE. Same public
+// contract as before: `.value` parses Markdown -> blocks (setter) + serializes blocks -> Markdown (getter), and it
+// emits `block-change`, so the host (gbti-content-editor) is untouched. MODEL-IS-TRUTH: `this._blocks` is the state,
+// the DOM renders it, and `.value` ALWAYS serializes from the array (never from the contenteditable HTML) -- this is
+// what protects the round-trip idempotence + the SOW-016 `<!-- members-only -->` marker. Blocks after a members
+// divider render as the "Members-only" section. In-house, node-free, CSP-safe, shadow-DOM. Phase 5c layers the slash
+// menu + selection toolbar + drag reorder on top of this engine.
+import { GbtiElement, define, esc } from '../base.mjs';
+import { parseBlocks, serializeBlocks, emptyBlock, CALLOUT_VARIANTS } from '../markdown-blocks.mjs';
+
+let UID = 0;
+const withId = (b) => { if (b && !b._id) b._id = ++UID; return b; };
+const TEXT_TYPES = new Set(['paragraph', 'heading', 'quote', 'callout']);
+
+// The "Turn into" menu: each entry maps to a concrete block shape (heading carries a level; list an ordered flag).
+const CONVERT = [
+  { key: 'paragraph', label: 'Text' },
+  { key: 'h1', label: 'Heading 1', type: 'heading', level: 1 },
+  { key: 'h2', label: 'Heading 2', type: 'heading', level: 2 },
+  { key: 'h3', label: 'Heading 3', type: 'heading', level: 3 },
+  { key: 'quote', label: 'Quote' },
+  { key: 'callout', label: 'Callout' },
+  { key: 'code', label: 'Code' },
+  { key: 'ul', label: 'Bulleted list', type: 'list', ordered: false },
+  { key: 'ol', label: 'Numbered list', type: 'list', ordered: true },
+  { key: 'image', label: 'Image' },
+  { key: 'embed', label: 'Video / embed' },
+];
+const convertKey = (b) => (b.type === 'heading' ? `h${Math.min(3, Math.max(1, b.level || 2))}` : b.type === 'list' ? (b.ordered ? 'ol' : 'ul') : b.type);
+const blockFromKey = (key) => {
+  const c = CONVERT.find((x) => x.key === key) || CONVERT[0];
+  const nb = emptyBlock(c.type || c.key);
+  if (c.level) nb.level = c.level;
+  if ('ordered' in c) nb.ordered = c.ordered;
+  return nb;
+};
+
+const ic = {
+  up: '<path d="M12 19V6M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
+  down: '<path d="M12 5v13M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  plus: '<path d="M12 5.5v13M5.5 12h13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  grip: '<circle cx="9" cy="6" r="1.5" fill="currentColor"/><circle cx="15" cy="6" r="1.5" fill="currentColor"/><circle cx="9" cy="12" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><circle cx="9" cy="18" r="1.5" fill="currentColor"/><circle cx="15" cy="18" r="1.5" fill="currentColor"/>',
+  img: '<rect x="4" y="5" width="16" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+};
+const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic[k]}</svg>`;
+
+const CSS = `
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  .doc-blocks { display:flex; flex-direction:column; }
+  /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
+  .blk { position:relative; padding:2px 0; margin:2px 0; }
+  .blk-tools { position:absolute; top:0; right:0; display:flex; gap:2px; align-items:center; padding:2px;
+    background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.08);
+    opacity:0; pointer-events:none; transition:opacity .12s ease; z-index:2; }
+  .blk:hover > .blk-tools, .blk:focus-within > .blk-tools { opacity:1; pointer-events:auto; }
+  .bt { width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:6px;
+    background:transparent; color:var(--muted); cursor:pointer; padding:0; }
+  .bt:hover { background:var(--hover); color:var(--fg); }
+  .bt.danger:hover { color:var(--danger); }
+  .bt svg { width:16px; height:16px; }
+  .bt-type { font:inherit; font-size:12px; padding:2px 4px; border:0; border-radius:6px; background:transparent; color:var(--muted); cursor:pointer; }
+  .bt-type:hover { background:var(--hover); color:var(--fg); }
+  /* the editing surfaces: borderless, "document" feel */
+  .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--brand); padding:4px 40px 4px 2px; border-radius:6px; }
+  .ce:empty::before { content:attr(data-ph); color:var(--muted); pointer-events:none; }
+  .ce:focus { background:var(--hover); }
+  .ce-p { font-size:15.5px; line-height:1.62; }
+  .ce-h1 { font-family:var(--font-display, var(--font-body)); font-weight:800; font-size:30px; line-height:1.2; letter-spacing:-.02em; margin-top:8px; }
+  .ce-h2 { font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:23px; line-height:1.25; letter-spacing:-.01em; margin-top:6px; }
+  .ce-h3 { font-family:var(--font-display, var(--font-body)); font-weight:700; font-size:18.5px; line-height:1.3; margin-top:4px; }
+  .ce-q { border-left:3px solid var(--brand); padding-left:14px; color:var(--muted); font-size:15.5px; font-style:italic; }
+  .ce-code { font-family:var(--font-mono, ui-monospace, monospace); font-size:13px; background:var(--hover); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }
+  .ce-list { padding-left:26px; font-size:15.5px; line-height:1.6; margin:0; }
+  .ce-list li { padding:1px 0; }
+  /* callout */
+  .callout { border:1.5px solid var(--line); border-radius:12px; padding:12px 14px 12px 42px; position:relative; background:var(--hover); }
+  .callout::before { content:""; position:absolute; left:14px; top:14px; width:18px; height:18px; border-radius:50%; }
+  .callout .ce { padding:0; }
+  .callout-info { border-color:rgba(63,116,214,.4); background:rgba(63,116,214,.08); } .callout-info::before { background:#3f74d6; }
+  .callout-note { border-color:var(--line); background:var(--hover); } .callout-note::before { background:var(--muted); }
+  .callout-warning { border-color:#e0a33d66; background:rgba(224,163,61,.1); } .callout-warning::before { background:#d8901a; }
+  .callout-tip { border-color:var(--green-tint-2, rgba(31,158,95,.3)); background:var(--green-tint, rgba(31,158,95,.1)); } .callout-tip::before { background:var(--brand); }
+  .callout-var { position:absolute; top:8px; right:8px; font:inherit; font-size:11.5px; padding:2px 6px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--muted); cursor:pointer; }
+  .co-lang { font:inherit; font-size:12px; color:var(--muted); background:transparent; border:0; padding:0 0 4px; }
+  /* void cards (image / embed) */
+  .card { border:1.5px solid var(--line); border-radius:12px; padding:12px; background:var(--panel); display:flex; flex-direction:column; gap:8px; }
+  .card-h { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--muted); } .card-h svg { width:18px; height:18px; }
+  .card input { width:100%; box-sizing:border-box; font:inherit; font-size:13.5px; padding:8px 10px; border:1.5px solid var(--line); border-radius:9px; background:var(--bg, var(--panel)); color:var(--fg); }
+  .card-prev { max-width:100%; border-radius:8px; border:1px solid var(--line); }
+  .up { display:flex; align-items:center; gap:10px; }
+  .up-btn { font:inherit; font-size:13px; font-weight:600; padding:7px 12px; border:1.5px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); cursor:pointer; }
+  .up-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .up-st { font-size:12px; color:var(--muted); }
+  /* members-only section divider + the tinted region after it */
+  .mem-div { display:flex; align-items:center; gap:8px; margin:16px 0 8px; color:var(--brand); font-weight:700; font-size:13px; }
+  .mem-div::after { content:""; flex:1; height:1.5px; background:linear-gradient(to right, var(--brand), transparent); }
+  .mem-div svg { width:16px; height:16px; }
+  .mem-div .rm { margin-left:auto; }
+  .blk.in-members { border-left:2px solid var(--green-tint-2, rgba(31,158,95,.35)); padding-left:12px; margin-left:2px; }
+  /* add row */
+  .add-row { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0 4px; }
+  .add-btn { display:inline-flex; align-items:center; gap:7px; font:inherit; font-weight:600; font-size:13.5px; padding:9px 14px;
+    border:1.5px dashed var(--line); border-radius:10px; background:transparent; color:var(--muted); cursor:pointer; }
+  .add-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .add-btn svg { width:16px; height:16px; }
+  .add-menu { position:relative; }
+  .add-pop { position:absolute; top:calc(100% + 6px); left:0; z-index:5; min-width:200px; background:var(--panel); border:1.5px solid var(--line);
+    border-radius:12px; box-shadow:0 12px 34px rgba(0,0,0,.18); padding:6px; }
+  .add-pop button { display:block; width:100%; text-align:left; font:inherit; font-size:13.5px; padding:8px 10px; border:0; border-radius:8px; background:transparent; color:var(--fg); cursor:pointer; }
+  .add-pop button:hover { background:var(--hover); }
+`;
+
+class GbtiDocEditor extends GbtiElement {
+  set value(md) { this._blocks = parseBlocks(md).map(withId); if (this.isConnected) this._render(); }
+  get value() { return serializeBlocks(this._blocks || []); } // serializeBlock ignores the non-serialized _id
+
+  connectedCallback() {
+    if (!this._blocks) this._blocks = [];
+    super.connectedCallback?.();
+    this._render();
+  }
+
+  _byId(id) { return (this._blocks || []).find((b) => String(b._id) === String(id)); }
+  _indexOf(id) { return (this._blocks || []).findIndex((b) => String(b._id) === String(id)); }
+  _change() { this.emit('block-change'); }
+
+  _render() {
+    const blocks = this._blocks || [];
+    const hasMembers = blocks.some((b) => b.type === 'members');
+    let inMem = false;
+    const parts = blocks.map((b) => {
+      if (b.type === 'members') { inMem = true; return this._memberDivider(b); }
+      return this._blockHtml(b, inMem);
+    });
+    const addRow = `<div class="add-row">
+      <div class="add-menu"><button class="add-btn" data-addmenu type="button">${svg('plus')} Add block</button><div class="add-pop" data-addpop hidden></div></div>
+      ${hasMembers ? '' : `<button class="add-btn" data-addmembers type="button">${svg('lock')} Add members-only section</button>`}
+    </div>`;
+    this.set(this.css(CSS) + `<div class="doc-blocks">${parts.join('')}${addRow}</div>`);
+    this._wire();
+  }
+
+  _tools(b) {
+    const id = b._id;
+    const opts = CONVERT.map((c) => `<option value="${c.key}" ${convertKey(b) === c.key ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+    return `<div class="blk-tools">
+      <select class="bt-type" data-convert="${id}" title="Turn into">${opts}</select>
+      <button class="bt" type="button" data-up="${id}" title="Move up">${svg('up')}</button>
+      <button class="bt" type="button" data-down="${id}" title="Move down">${svg('down')}</button>
+      <button class="bt danger" type="button" data-del="${id}" title="Delete">${svg('x')}</button>
+    </div>`;
+  }
+
+  _blockHtml(b, inMem) {
+    return `<div class="blk blk-${esc(b.type)}${inMem ? ' in-members' : ''}" data-id="${b._id}">${this._tools(b)}<div class="blk-in">${this._bodyHtml(b)}</div></div>`;
+  }
+
+  _ce(cls, edit, b, ph) {
+    return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || '')}">${esc(b.text || '')}</div>`;
+  }
+
+  _bodyHtml(b) {
+    switch (b.type) {
+      case 'heading': return this._ce(`ce-h${Math.min(3, Math.max(1, b.level || 2))}`, 'text', b, 'Heading');
+      case 'quote': return this._ce('ce-q', 'text', b, 'Quote');
+      case 'callout': {
+        const v = CALLOUT_VARIANTS.includes(b.variant) ? b.variant : 'note';
+        const varSel = `<select class="callout-var" data-variant="${b._id}">${CALLOUT_VARIANTS.map((x) => `<option value="${x}" ${x === v ? 'selected' : ''}>${x}</option>`).join('')}</select>`;
+        return `<div class="callout callout-${v}">${varSel}${this._ce('', 'text', b, 'Callout text')}</div>`;
+      }
+      case 'code':
+        return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || '')}" placeholder="language (optional)" />`
+          + `<div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || '')}</div>`;
+      case 'list': {
+        const tag = b.ordered ? 'ol' : 'ul';
+        const items = (Array.isArray(b.items) ? b.items : ['']).map((it) => `<li>${esc(it)}</li>`).join('') || '<li></li>';
+        return `<${tag} class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}">${items}</${tag}>`;
+      }
+      case 'image':
+        return `<div class="card"><div class="card-h">${svg('img')} Image</div>`
+          + (b.url ? `<img class="card-prev" src="${esc(b.url.startsWith('http') ? b.url : `https://gbti.network/${b.url}`)}" alt="" />` : '')
+          + `<input data-edit="url" data-id="${b._id}" value="${esc(b.url || '')}" placeholder="Image URL or repo path" />`
+          + `<input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || '')}" placeholder="Alt text" />`
+          + `<div class="up"><input type="file" accept="image/*" hidden data-imgfile="${b._id}" /><button type="button" class="up-btn" data-imgpick="${b._id}">Upload an image</button><span class="up-st" data-imgst="${b._id}"></span></div></div>`;
+      case 'embed':
+        return `<div class="card"><div class="card-h">${svg('video')} Video / embed</div>`
+          + `<input data-edit="url" data-id="${b._id}" value="${esc(b.url || '')}" placeholder="Paste a YouTube or Vimeo URL" /></div>`;
+      case 'paragraph':
+      default: return this._ce('ce-p', 'text', b, 'Write, or use the Add block button');
+    }
+  }
+
+  _memberDivider(b) {
+    return `<div class="mem-div" data-id="${b._id}">${svg('lock')} Members only <span>· only members see the content below</span>`
+      + `<button class="bt danger rm" type="button" data-del="${b._id}" title="Remove the members-only split">${svg('x')}</button></div>`;
+  }
+
+  _wire() {
+    // Live text/field edits: mutate the model in place WITHOUT re-render (preserve caret). IME-safe.
+    this.$$('[data-edit]').forEach((el) => {
+      const on = () => {
+        if (el._composing) return;
+        const b = this._byId(el.dataset.id);
+        if (!b) return;
+        const f = el.dataset.edit;
+        if (f === 'text') b.text = el.innerText.replace(/\n$/, '');
+        else if (f === 'code') b.code = el.innerText.replace(/\n$/, '');
+        else if (f === 'list') b.items = Array.from(el.querySelectorAll('li')).map((li) => li.innerText);
+        else b[f] = el.value; // lang / url / alt inputs
+        this._change();
+      };
+      el.addEventListener('input', on);
+      el.addEventListener('compositionstart', () => { el._composing = true; });
+      el.addEventListener('compositionend', () => { el._composing = false; on(); });
+      if (el.classList.contains('ce')) {
+        // paste as PLAIN TEXT only (never author HTML -> CSP + round-trip safe)
+        el.addEventListener('paste', (e) => {
+          e.preventDefault();
+          const t = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
+          document.execCommand('insertText', false, t);
+        });
+      }
+    });
+    // Convert (Turn into): re-render + restore focus to the converted block.
+    this.$$('[data-convert]').forEach((el) => el.addEventListener('change', () => {
+      const i = this._indexOf(el.dataset.convert);
+      if (i < 0) return;
+      const cur = this._blocks[i];
+      const next = withId(blockFromKey(el.value));
+      if (cur.text != null && 'text' in next) next.text = cur.text;
+      if (cur.text != null && next.type === 'code') next.code = cur.text;
+      if (cur.text != null && next.type === 'list') next.items = String(cur.text).split('\n');
+      this._blocks[i] = next;
+      this._render(); this._focusBlock(next._id); this._change();
+    }));
+    this.$$('[data-variant]').forEach((el) => el.addEventListener('change', () => {
+      const b = this._byId(el.dataset.variant);
+      if (b) { b.variant = el.value; this._render(); this._focusBlock(b._id); this._change(); }
+    }));
+    this.$$('[data-up]').forEach((el) => el.addEventListener('click', () => this._move(el.dataset.up, -1)));
+    this.$$('[data-down]').forEach((el) => el.addEventListener('click', () => this._move(el.dataset.down, 1)));
+    this.$$('[data-del]').forEach((el) => el.addEventListener('click', () => {
+      const i = this._indexOf(el.dataset.del);
+      if (i < 0) return;
+      this._blocks.splice(i, 1); this._render(); this._change();
+    }));
+    // Add block menu.
+    const menuBtn = this.$('[data-addmenu]'); const pop = this.$('[data-addpop]');
+    if (menuBtn && pop) {
+      pop.innerHTML = CONVERT.map((c) => `<button type="button" data-newkey="${c.key}">${esc(c.label)}</button>`).join('');
+      menuBtn.addEventListener('click', (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; });
+      pop.querySelectorAll('[data-newkey]').forEach((b) => b.addEventListener('click', () => {
+        const nb = withId(blockFromKey(b.dataset.newkey));
+        this._blocks.push(nb); this._render(); this._focusBlock(nb._id); this._change();
+      }));
+      document.addEventListener('click', () => { if (!pop.hidden) pop.hidden = true; }, { once: true });
+    }
+    this.$('[data-addmembers]')?.addEventListener('click', () => {
+      this._blocks.push(withId({ type: 'members' }), withId(emptyBlock('paragraph')));
+      this._render(); this._change();
+    });
+    // Image upload (reused from the Phase-4 editor).
+    this.$$('[data-imgpick]').forEach((el) => {
+      const id = el.dataset.imgpick;
+      const fileEl = this.$(`[data-imgfile="${id}"]`);
+      el.addEventListener('click', () => fileEl?.click());
+      fileEl?.addEventListener('change', (e) => this._uploadImage(e.target.files?.[0], id));
+    });
+    // Enter at the end of a text block inserts a new paragraph after it.
+    this.$$('.ce[data-edit="text"]').forEach((el) => el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        const b = this._byId(el.dataset.id);
+        const sel = this.root.getSelection ? this.root.getSelection() : document.getSelection();
+        const atEnd = sel && sel.focusOffset === (el.innerText || '').length;
+        if (b && atEnd) {
+          e.preventDefault();
+          const i = this._indexOf(b._id);
+          const nb = withId(emptyBlock('paragraph'));
+          this._blocks.splice(i + 1, 0, nb);
+          this._render(); this._focusBlock(nb._id); this._change();
+        }
+      }
+    }));
+  }
+
+  _focusBlock(id) {
+    const el = this.$(`.blk[data-id="${id}"] .ce`) || this.$(`.blk[data-id="${id}"] input`);
+    if (!el) return;
+    el.focus();
+    try {
+      const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
+      const sel = document.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    } catch { /* input focus is enough */ }
+  }
+
+  _move(id, dir) {
+    const i = this._indexOf(id); const j = i + dir;
+    if (i < 0 || j < 0 || j >= this._blocks.length) return;
+    const [b] = this._blocks.splice(i, 1);
+    this._blocks.splice(j, 0, b);
+    this._render(); this._change();
+  }
+
+  async _uploadImage(file, id) {
+    const b = this._byId(id);
+    if (!file || !b || !this.client?.stageImage) return;
+    const st = this.$(`[data-imgst="${id}"]`);
+    if (st) st.textContent = 'Uploading...';
+    try {
+      const dataBase64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result).split(',')[1] || '');
+        r.onerror = () => rej(new Error('read failed'));
+        r.readAsDataURL(file);
+      });
+      const out = await this.client.stageImage({ filename: file.name, dataBase64 });
+      b.url = out.path;
+      if (!b.alt) b.alt = file.name.replace(/\.[^.]+$/, '');
+      this._render(); this._change();
+    } catch {
+      if (st) st.textContent = 'Upload failed';
+    }
+  }
+}
+
+define('gbti-doc-editor', GbtiDocEditor);
+export { GbtiDocEditor };

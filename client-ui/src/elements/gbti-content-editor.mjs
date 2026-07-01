@@ -8,7 +8,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { gatherInput } from '../form.mjs';
 import { resolveAsset } from '../assets.mjs'; // SOW-062 P3: resolve an existing coverImage path to a preview URL
-import './gbti-block-editor.mjs'; // SOW-062 P4: the block body editor (serializes to/from Markdown via #body.value)
+import './gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG body editor (same #body.value Markdown contract)
 
 const TYPES = ['post', 'product', 'prompt', 'profile'];
 
@@ -115,7 +115,7 @@ class GbtiContentEditor extends GbtiElement {
            <div class="doc">
              ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ''}
              <label class="body-l">Body</label>
-             <gbti-block-editor id="body"></gbti-block-editor>
+             <gbti-doc-editor id="body"></gbti-doc-editor>
              <div class="actions">
                <button id="preview" class="ghost">Preview</button>
                <button id="validate" class="ghost">Validate</button>
