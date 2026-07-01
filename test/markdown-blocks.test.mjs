@@ -90,8 +90,11 @@ test('SOW-062: body embed is a fenced block; a legacy bare URL upgrades to the f
   const b = parseBlocks(md);
   assert.deepEqual([b[0].type, b[0].url], ['embed', 'https://youtu.be/abc']);
   assert.equal(serializeBlocks(b), md); // verbatim round-trip
-  // one-time normalization: a legacy bare-URL body parses to embed and re-serializes as the fence
+  // one-time normalization: a legacy bare-URL VIDEO body parses to embed and re-serializes as the fence
   assert.equal(serializeBlocks(parseBlocks('https://youtu.be/abc')), md);
+  // SOW-062 5f: a NON-video bare URL stays paragraph text (a link), never a video embed
+  assert.deepEqual(parseBlocks('https://turtlapp.com/').map((x) => x.type), ['paragraph']);
+  assert.equal(serializeBlocks(parseBlocks('https://turtlapp.com/')), 'https://turtlapp.com/');
 });
 
 test('SOW-062: callout/embed do not swallow real code, and idempotence holds with the marker', () => {

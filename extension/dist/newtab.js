@@ -4484,6 +4484,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var isListItem = (l) => /^\s*([-*]|\d+\.)\s+/.test(l);
   var isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
   var isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
+  var isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
   function serializeBlocks(blocks) {
     return (Array.isArray(blocks) ? blocks : []).map(serializeBlock).join("\n\n");
   }
@@ -4575,7 +4576,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         i++;
         continue;
       }
-      if (isBareUrl(line)) {
+      if (isBareUrl(line) && isVideoUrl(line)) {
         blocks.push({ type: "embed", url: line.trim() });
         i++;
         continue;
@@ -4583,7 +4584,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const para = [];
       while (i < n) {
         const l = lines[i];
-        if (l.trim() === "" || isMarker(l) || isFence(l) || isHeading(l) || isQuote(l) || isListItem(l) || isImageOnly(l) || isBareUrl(l)) break;
+        if (l.trim() === "" || isMarker(l) || isFence(l) || isHeading(l) || isQuote(l) || isListItem(l) || isImageOnly(l) || isBareUrl(l) && isVideoUrl(l)) break;
         para.push(l);
         i++;
       }

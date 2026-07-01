@@ -22,6 +22,10 @@ export const isQuote = (l) => /^>\s?/.test(l);
 export const isListItem = (l) => /^\s*([-*]|\d+\.)\s+/.test(l);
 const isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
 const isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
+// SOW-062 5f: a bare-URL line is an EMBED only if it is a recognized video (YouTube/Vimeo). Any other bare URL is
+// ordinary paragraph text (a link), never a video-embed block -- otherwise a plain link would render as a locked
+// video frame and migrate into a misleading ```embed fence.
+const isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
 
 /** Serialize a block list to Markdown (blocks joined by a blank line). */
 export function serializeBlocks(blocks) {
@@ -87,12 +91,12 @@ export function parseBlocks(md) {
     }
     m = line.match(/^!\[([^\]]*)\]\(([^)]*)\)\s*$/);
     if (m) { blocks.push({ type: 'image', alt: m[1], url: m[2] }); i++; continue; }
-    if (isBareUrl(line)) { blocks.push({ type: 'embed', url: line.trim() }); i++; continue; }
+    if (isBareUrl(line) && isVideoUrl(line)) { blocks.push({ type: 'embed', url: line.trim() }); i++; continue; }
     // paragraph: consecutive lines that start no other block
     const para = [];
     while (i < n) {
       const l = lines[i];
-      if (l.trim() === '' || isMarker(l) || isFence(l) || isHeading(l) || isQuote(l) || isListItem(l) || isImageOnly(l) || isBareUrl(l)) break;
+      if (l.trim() === '' || isMarker(l) || isFence(l) || isHeading(l) || isQuote(l) || isListItem(l) || isImageOnly(l) || (isBareUrl(l) && isVideoUrl(l))) break;
       para.push(l); i++;
     }
     if (para.length) blocks.push({ type: 'paragraph', text: para.join('\n') });
