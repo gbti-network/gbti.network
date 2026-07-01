@@ -114,6 +114,7 @@ function feedControlsHtml() {
 // "My WorkBench" + Sign out (the old section deep-links moved to the WorkBench rail).
 function controlsHtml() {
   return `<div class="nt-controls" data-controls>
+    <button class="nt-icobtn nt-burger" data-drawer-toggle data-ico="mCompact" type="button" title="Menu" aria-label="Open navigation" aria-expanded="false"></button>
     <span class="nt-apps" data-apps>
       <span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>
       <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
@@ -476,6 +477,23 @@ async function wireApps(root) {
  *  variant ('feed' for the new tab, 'workbench' for the management pages). SOW-052: there is no top bar anymore —
  *  the control cluster is appended to the page's top-right [data-topbar] slot (created at the top of <main> if the
  *  page does not provide one), and the rail varies by `nav`. */
+// SOW-062 5e: under 800px the rail becomes an off-canvas drawer; the top-bar hamburger toggles it. Mirrors
+// wireAccount (outside-click + Escape close); tapping a rail link closes it. Above 800px the rail is static (the
+// hamburger is CSS-hidden), so this is inert on desktop.
+function wireDrawer(root) {
+  const rail = root.querySelector('.nt-rail');
+  const btn = root.querySelector('[data-drawer-toggle]');
+  if (!rail || !btn) return;
+  let scrim = document.querySelector('.nt-scrim');
+  if (!scrim) { scrim = document.createElement('div'); scrim.className = 'nt-scrim'; document.body.appendChild(scrim); }
+  const close = () => { rail.classList.remove('open'); scrim.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); };
+  const open = () => { rail.classList.add('open'); scrim.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); };
+  btn.addEventListener('click', (e) => { e.stopPropagation(); rail.classList.contains('open') ? close() : open(); });
+  scrim.addEventListener('click', close);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && rail.classList.contains('open')) close(); });
+  rail.querySelectorAll('a').forEach((a) => a.addEventListener('click', close));
+}
+
 export function initShell({ active = null, nav = 'feed' } = {}) {
   const root = document.querySelector('[data-shell]');
   if (!root) return { ico, loadShellAccount: () => loadShellAccount(null) };
@@ -501,6 +519,7 @@ export function initShell({ active = null, nav = 'feed' } = {}) {
   wireApps(root);
   wireAccount(root);
   wireCompose(root);
+  wireDrawer(root);
   // SOW-048: gate AFTER the status round-trip. Signed in -> the app stays; signed out -> the login splash overlays
   // it (data-unauth hides the rest). Kept off the synchronous path so initShell's return shape is unchanged.
   loadShellAccount(root).then((status) => { if (!status) mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true }); });

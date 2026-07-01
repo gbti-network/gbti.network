@@ -83,7 +83,7 @@ class GbtiContentEditor extends GbtiElement {
     this.set(
       this.css(`
         .editor { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:22px; align-items:start; }
-        @media (max-width:860px) { .editor { grid-template-columns:1fr; } }
+        @media (max-width:800px) { .editor { grid-template-columns:1fr; } }
         .doc { min-width:0; }
         .doc .body-l { margin-top:0; }
         #body { display:block; min-height:30vh; }
@@ -94,8 +94,9 @@ class GbtiContentEditor extends GbtiElement {
         .notice { background:#2a2330; border:1px solid var(--accent); border-radius:8px; padding:10px 14px; margin-bottom:12px; }
         .notice a { color: var(--accent); }
         .rail { border:1px solid var(--line); border-radius:12px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); padding:4px 14px 12px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
-        @media (max-width:860px) { .rail { position:static; max-height:none; } }
+        @media (max-width:800px) { .rail { position:static; max-height:none; } }
         .rail-h { font-family:var(--font-display, inherit); font-weight:700; font-size:15px; padding:11px 0 2px; }
+        .type-ro { font-weight:600; font-size:13.5px; padding:7px 11px; border:1px solid var(--line); border-radius:8px; background:var(--hover); color:var(--fg); text-transform:capitalize; margin:2px 0 6px; }
         .rail details.sec { border-top:1px solid var(--line); }
         .rail summary { cursor:pointer; list-style:none; font-weight:600; font-size:13px; padding:10px 0; color:var(--fg); display:flex; justify-content:space-between; align-items:center; }
         .rail summary::-webkit-details-marker { display:none; }
@@ -129,18 +130,14 @@ class GbtiContentEditor extends GbtiElement {
            <aside class="rail">
              <div class="rail-h">Document</div>
              <label>Type</label>
-             <select id="type">${TYPES.map((t) => `<option ${t === this.type ? 'selected' : ''}>${t}</option>`).join('')}</select>
+             <div class="type-ro" title="The content type is fixed when you create the item">${esc(this.type)}</div>
              ${sectionsHtml}
              <div hidden>${hiddenHtml}</div>
            </aside>
          </div>`,
     );
 
-    this.on('#type', 'change', (e) => {
-      this.type = e.target.value;
-      this.preset = null;
-      this.render();
-    });
+    // SOW-062 5e: the Document Type is READ-ONLY (set when the item is created; gather() reads this.type, not the DOM).
     this.on('#preview', 'click', () => this.doPreview());
     this.on('#validate', 'click', () => this.doValidate());
     this.on('#draft', 'click', () => this.doDraft());

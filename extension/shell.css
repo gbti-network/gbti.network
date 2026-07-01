@@ -252,14 +252,22 @@ html[data-unauth] .compose-modal { display: none !important; }
 @media (max-width: 1280px) {
   [data-topbar] .date, [data-topbar] .hub-sub { display: none; }
 }
-@media (max-width: 650px) {
+@media (max-width: 800px) {
   .nt { grid-template-columns: 1fr; }
-  .nt-rail { display: none; }
+  /* SOW-062 5e: the rail becomes an off-canvas DRAWER (the top-bar hamburger toggles it) instead of vanishing, so
+     mobile keeps its navigation. Matches the editor's 800px single-column breakpoint. */
+  .nt-rail { position: fixed; left: 0; top: 0; bottom: 0; width: min(280px, 82vw); z-index: 130; transform: translateX(-100%); transition: transform .22s ease; box-shadow: var(--sh-md); }
+  .nt-rail.open { transform: none; }
   /* Below the hold point the heading + controls can no longer share a row, so STACK them with the controls (the
      menu) ON TOP of the greeting, right-aligned (owner ask). */
   [data-topbar] { flex-direction: column; align-items: stretch; gap: 10px; }
   .nt-controls { order: -1; margin-left: 0; justify-content: flex-end; }
 }
+/* SOW-062 5e: the drawer scrim + the hamburger (shown only when the rail is a drawer, i.e. under 800px). */
+.nt-scrim { position: fixed; inset: 0; z-index: 125; background: rgba(20,18,24,.42); opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+.nt-scrim.open { opacity: 1; pointer-events: auto; }
+.nt-burger { display: none; }
+@media (max-width: 800px) { .nt-burger { display: inline-flex; } }
 @media (max-width: 560px) {
   .nt-main { padding: 20px 18px 48px; }
   /* Scale the control buttons down a touch so the menu row stays comfortable on the smallest phones. */

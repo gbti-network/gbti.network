@@ -3939,6 +3939,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function controlsHtml() {
     return `<div class="nt-controls" data-controls>
+    <button class="nt-icobtn nt-burger" data-drawer-toggle data-ico="mCompact" type="button" title="Menu" aria-label="Open navigation" aria-expanded="false"></button>
     <span class="nt-apps" data-apps>
       <span class="nt-app gbti" title="GBTI Network (you are here)">GBTI</span>
       <button class="nt-app" data-open-dailydev type="button" title="Switch to daily.dev"><img data-dd-img src="https://app.daily.dev/favicon.ico" alt="daily.dev" /></button>
@@ -4333,6 +4334,36 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     if (installed === true || installed === null) apps.classList.add("show");
   }
+  function wireDrawer(root) {
+    const rail = root.querySelector(".nt-rail");
+    const btn = root.querySelector("[data-drawer-toggle]");
+    if (!rail || !btn) return;
+    let scrim = document.querySelector(".nt-scrim");
+    if (!scrim) {
+      scrim = document.createElement("div");
+      scrim.className = "nt-scrim";
+      document.body.appendChild(scrim);
+    }
+    const close = () => {
+      rail.classList.remove("open");
+      scrim.classList.remove("open");
+      btn.setAttribute("aria-expanded", "false");
+    };
+    const open = () => {
+      rail.classList.add("open");
+      scrim.classList.add("open");
+      btn.setAttribute("aria-expanded", "true");
+    };
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      rail.classList.contains("open") ? close() : open();
+    });
+    scrim.addEventListener("click", close);
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && rail.classList.contains("open")) close();
+    });
+    rail.querySelectorAll("a").forEach((a) => a.addEventListener("click", close));
+  }
   function initShell({ active = null, nav = "feed" } = {}) {
     const root = document.querySelector("[data-shell]");
     if (!root) return { ico, loadShellAccount: () => loadShellAccount(null) };
@@ -4361,6 +4392,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     wireApps(root);
     wireAccount(root);
     wireCompose(root);
+    wireDrawer(root);
     loadShellAccount(root).then((status) => {
       if (!status) mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true });
     });
@@ -5227,7 +5259,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-content-editor.mjs
-  var TYPES = ["post", "product", "prompt", "profile"];
   var HIDDEN_KEYS = /* @__PURE__ */ new Set(["canonicalUrl"]);
   var RAIL_SECTIONS = [
     { name: "Publishing", keys: ["status", "visibility"] },
@@ -5289,7 +5320,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.set(
         this.css(`
         .editor { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:22px; align-items:start; }
-        @media (max-width:860px) { .editor { grid-template-columns:1fr; } }
+        @media (max-width:800px) { .editor { grid-template-columns:1fr; } }
         .doc { min-width:0; }
         .doc .body-l { margin-top:0; }
         #body { display:block; min-height:30vh; }
@@ -5300,8 +5331,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .notice { background:#2a2330; border:1px solid var(--accent); border-radius:8px; padding:10px 14px; margin-bottom:12px; }
         .notice a { color: var(--accent); }
         .rail { border:1px solid var(--line); border-radius:12px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); padding:4px 14px 12px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
-        @media (max-width:860px) { .rail { position:static; max-height:none; } }
+        @media (max-width:800px) { .rail { position:static; max-height:none; } }
         .rail-h { font-family:var(--font-display, inherit); font-weight:700; font-size:15px; padding:11px 0 2px; }
+        .type-ro { font-weight:600; font-size:13.5px; padding:7px 11px; border:1px solid var(--line); border-radius:8px; background:var(--hover); color:var(--fg); text-transform:capitalize; margin:2px 0 6px; }
         .rail details.sec { border-top:1px solid var(--line); }
         .rail summary { cursor:pointer; list-style:none; font-weight:600; font-size:13px; padding:10px 0; color:var(--fg); display:flex; justify-content:space-between; align-items:center; }
         .rail summary::-webkit-details-marker { display:none; }
@@ -5334,17 +5366,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
            <aside class="rail">
              <div class="rail-h">Document</div>
              <label>Type</label>
-             <select id="type">${TYPES.map((t) => `<option ${t === this.type ? "selected" : ""}>${t}</option>`).join("")}</select>
+             <div class="type-ro" title="The content type is fixed when you create the item">${esc(this.type)}</div>
              ${sectionsHtml}
              <div hidden>${hiddenHtml}</div>
            </aside>
          </div>`
       );
-      this.on("#type", "change", (e) => {
-        this.type = e.target.value;
-        this.preset = null;
-        this.render();
-      });
       this.on("#preview", "click", () => this.doPreview());
       this.on("#validate", "click", () => this.doValidate());
       this.on("#draft", "click", () => this.doDraft());
