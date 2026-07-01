@@ -62,6 +62,8 @@ const CSS = `
   .bt:hover { background:var(--hover); color:var(--fg); }
   .bt.danger:hover { color:var(--danger); }
   .bt svg { width:16px; height:16px; }
+  .grip { cursor:grab; } .grip:active { cursor:grabbing; }
+  .blk.drop-over { box-shadow:inset 0 2.5px 0 var(--brand); }
   .bt-type { font:inherit; font-size:12px; padding:2px 4px; border:0; border-radius:6px; background:transparent; color:var(--muted); cursor:pointer; }
   .bt-type:hover { background:var(--hover); color:var(--fg); }
   /* the editing surfaces: borderless, "document" feel */
@@ -148,6 +150,7 @@ class GbtiDocEditor extends GbtiElement {
     const id = b._id;
     const opts = CONVERT.map((c) => `<option value="${c.key}" ${convertKey(b) === c.key ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
     return `<div class="blk-tools">
+      <span class="bt grip" draggable="true" data-grip="${id}" title="Drag to reorder">${svg('grip')}</span>
       <select class="bt-type" data-convert="${id}" title="Turn into">${opts}</select>
       <button class="bt" type="button" data-up="${id}" title="Move up">${svg('up')}</button>
       <button class="bt" type="button" data-down="${id}" title="Move down">${svg('down')}</button>
@@ -194,6 +197,17 @@ class GbtiDocEditor extends GbtiElement {
     }
   }
 
+  // SOW-062 5c: a leading Markdown token in a fresh paragraph converts it to the block type (Notion-style).
+  _shortcut(txt) {
+    let m;
+    if ((m = txt.match(/^(#{1,3})\s(.*)$/))) { const b = emptyBlock('heading'); b.level = m[1].length; b.text = m[2]; return b; }
+    if ((m = txt.match(/^>\s(.*)$/))) { const b = emptyBlock('quote'); b.text = m[1]; return b; }
+    if ((m = txt.match(/^[-*]\s(.*)$/))) { const b = emptyBlock('list'); b.ordered = false; b.items = [m[1]]; return b; }
+    if ((m = txt.match(/^1\.\s(.*)$/))) { const b = emptyBlock('list'); b.ordered = true; b.items = [m[1]]; return b; }
+    if (txt === '```') return emptyBlock('code');
+    return null;
+  }
+
   _memberDivider(b) {
     return `<div class="mem-div" data-id="${b._id}">${svg('lock')} Members only <span>· only members see the content below</span>`
       + `<button class="bt danger rm" type="button" data-del="${b._id}" title="Remove the members-only split">${svg('x')}</button></div>`;
@@ -207,7 +221,14 @@ class GbtiDocEditor extends GbtiElement {
         const b = this._byId(el.dataset.id);
         if (!b) return;
         const f = el.dataset.edit;
-        if (f === 'text') b.text = el.innerText.replace(/\n$/, '');
+        if (f === 'text') {
+          const txt = el.innerText.replace(/\n$/, '');
+          if (b.type === 'paragraph') {
+            const sc = this._shortcut(txt); // SOW-062 5c: '# '/'> '/'- '/'1. '/``` convert the paragraph IN PLACE
+            if (sc) { const i = this._indexOf(b._id); this._blocks[i] = withId(sc); this._render(); this._focusBlock(this._blocks[i]._id); this._change(); return; }
+          }
+          b.text = txt;
+        }
         else if (f === 'code') b.code = el.innerText.replace(/\n$/, '');
         else if (f === 'list') b.items = Array.from(el.querySelectorAll('li')).map((li) => li.innerText);
         else b[f] = el.value; // lang / url / alt inputs
@@ -262,6 +283,25 @@ class GbtiDocEditor extends GbtiElement {
     this.$('[data-addmembers]')?.addEventListener('click', () => {
       this._blocks.push(withId({ type: 'members' }), withId(emptyBlock('paragraph')));
       this._render(); this._change();
+    });
+    // SOW-062 5c: drag reorder via the grip handle only (native DnD; the contenteditable body is not draggable).
+    this.$$('[data-grip]').forEach((g) => {
+      g.addEventListener('dragstart', (e) => { this._dragId = g.dataset.grip; if (e.dataTransfer) { e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', g.dataset.grip); } catch { /* Firefox needs data */ } } });
+      g.addEventListener('dragend', () => { this._dragId = null; this.$$('.blk.drop-over').forEach((b) => b.classList.remove('drop-over')); });
+    });
+    this.$$('.blk[data-id]').forEach((blk) => {
+      blk.addEventListener('dragover', (e) => { if (this._dragId != null) { e.preventDefault(); blk.classList.add('drop-over'); } });
+      blk.addEventListener('dragleave', () => blk.classList.remove('drop-over'));
+      blk.addEventListener('drop', (e) => {
+        e.preventDefault(); blk.classList.remove('drop-over');
+        if (this._dragId == null || this._dragId === blk.dataset.id) { this._dragId = null; return; }
+        const from = this._indexOf(this._dragId);
+        if (from < 0) return;
+        const [moved] = this._blocks.splice(from, 1);
+        const to = this._indexOf(blk.dataset.id); // recompute after the splice; insert BEFORE the drop target
+        this._blocks.splice(to < 0 ? this._blocks.length : to, 0, moved);
+        this._dragId = null; this._render(); this._change();
+      });
     });
     // Image upload (reused from the Phase-4 editor).
     this.$$('[data-imgpick]').forEach((el) => {
