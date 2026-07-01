@@ -193,7 +193,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/markdown-blocks.mjs
   var MEMBERS_MARKER = "<!-- members-only -->";
-  var BLOCK_TYPES = ["paragraph", "heading", "code", "quote", "list", "image", "embed", "members"];
+  var BLOCK_TYPES = ["paragraph", "heading", "code", "quote", "list", "image", "embed", "callout", "members"];
+  var CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
+  var normalizeVariant = (v) => CALLOUT_VARIANTS.includes(v) ? v : "note";
   var isMarker = (l) => l.trim() === MEMBERS_MARKER;
   var isFence = (l) => /^```/.test(l);
   var isHeading = (l) => /^#{1,6}\s+/.test(l);
@@ -213,6 +215,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return `${"#".repeat(Math.min(6, Math.max(1, b.level || 2)))} ${b.text ?? ""}`;
       case "code":
         return "```" + (b.lang ?? "") + "\n" + (b.code ?? "") + "\n```";
+      case "callout":
+        return "```callout " + normalizeVariant(b.variant) + "\n" + (b.text ?? "") + "\n```";
       case "quote":
         return String(b.text ?? "").split("\n").map((l) => l ? `> ${l}` : ">").join("\n");
       case "list": {
@@ -222,7 +226,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       case "image":
         return `![${b.alt ?? ""}](${b.url ?? ""})`;
       case "embed":
-        return String(b.url ?? "");
+        return "```embed\n" + (b.url ?? "") + "\n```";
       case "paragraph":
       default:
         return String(b.text ?? "");
@@ -246,6 +250,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (isFence(line)) {
         const lang = line.replace(/^```/, "").trim();
+        const info = lang.split(/\s+/);
         const code = [];
         i++;
         while (i < n && !/^```\s*$/.test(lines[i])) {
@@ -253,7 +258,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           i++;
         }
         i++;
-        blocks.push({ type: "code", lang, code: code.join("\n") });
+        if (info[0] === "callout") blocks.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
+        else if (info[0] === "embed") blocks.push({ type: "embed", url: code.join("\n").trim() });
+        else blocks.push({ type: "code", lang, code: code.join("\n") });
         continue;
       }
       let m = line.match(/^(#{1,6})\s+(.*)$/);
@@ -318,6 +325,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return { type: "image", alt: "", url: "" };
       case "embed":
         return { type: "embed", url: "" };
+      case "callout":
+        return { type: "callout", variant: "note", text: "" };
       case "members":
         return { type: "members" };
       default:

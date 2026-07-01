@@ -2,7 +2,7 @@
 // so parse->serialize must preserve the body, and the SOW-016 members-only marker must round-trip EXACTLY.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseBlocks, serializeBlocks, MEMBERS_MARKER, emptyBlock } from '../client-ui/src/markdown-blocks.mjs';
+import { parseBlocks, serializeBlocks, MEMBERS_MARKER, emptyBlock, CALLOUT_VARIANTS, isHeading, isQuote, isListItem, isFence } from '../client-ui/src/markdown-blocks.mjs';
 
 test('parseBlocks classifies the core block types', () => {
   const md = '# Heading\n\npara line one\npara line two\n\n- a\n- b\n\n> quote\n\n![alt](url.png)';
@@ -71,4 +71,48 @@ test('empty + marker-only + bare-url embed', () => {
   const e = parseBlocks('https://youtu.be/abc');
   assert.deepEqual([e[0].type, e[0].url], ['embed', 'https://youtu.be/abc']);
   assert.equal(emptyBlock('heading').level, 2);
+});
+
+test('SOW-062: callout is a fenced block with a variant, round-trips + defaults/normalizes', () => {
+  const md = '```callout warning\nHeads up, this matters.\n```';
+  const b = parseBlocks(md);
+  assert.equal(b[0].type, 'callout');
+  assert.equal(b[0].variant, 'warning');
+  assert.equal(b[0].text, 'Heads up, this matters.');
+  assert.equal(serializeBlocks(b), md); // verbatim round-trip
+  assert.equal(parseBlocks('```callout\nx\n```')[0].variant, 'note'); // missing -> note
+  assert.equal(parseBlocks('```callout danger\nx\n```')[0].variant, 'note'); // unknown -> note
+  assert.equal(emptyBlock('callout').variant, 'note');
+});
+
+test('SOW-062: body embed is a fenced block; a legacy bare URL upgrades to the fence on save', () => {
+  const md = '```embed\nhttps://youtu.be/abc\n```';
+  const b = parseBlocks(md);
+  assert.deepEqual([b[0].type, b[0].url], ['embed', 'https://youtu.be/abc']);
+  assert.equal(serializeBlocks(b), md); // verbatim round-trip
+  // one-time normalization: a legacy bare-URL body parses to embed and re-serializes as the fence
+  assert.equal(serializeBlocks(parseBlocks('https://youtu.be/abc')), md);
+});
+
+test('SOW-062: callout/embed do not swallow real code, and idempotence holds with the marker', () => {
+  const md = [
+    '# Doc', '',
+    '```callout info', 'A note with a [link](https://x).', '```', '',
+    '<!-- members-only -->', '',
+    '```embed', 'https://vimeo.com/12345', '```', '',
+    '```js', 'const callout = 1;', '```',
+  ].join('\n');
+  const once = serializeBlocks(parseBlocks(md));
+  const twice = serializeBlocks(parseBlocks(once));
+  assert.equal(once, twice); // no drift across edit cycles
+  assert.deepEqual(parseBlocks(md).map((b) => b.type), ['heading', 'callout', 'members', 'embed', 'code']); // ```js stays code
+  assert.ok(once.includes(MEMBERS_MARKER)); // the marker survives verbatim
+});
+
+test('SOW-062: the shortcut regexes are exported for the editor', () => {
+  assert.ok(isHeading('## x') && !isHeading('x'));
+  assert.ok(isQuote('> x') && !isQuote('x'));
+  assert.ok(isListItem('- x') && isListItem('1. x') && !isListItem('x'));
+  assert.ok(isFence('```js') && !isFence('x'));
+  assert.deepEqual(CALLOUT_VARIANTS, ['info', 'note', 'warning', 'tip']);
 });
