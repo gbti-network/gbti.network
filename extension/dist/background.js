@@ -19389,6 +19389,22 @@ async function getDiscordInvite2(ctx) {
     throw new OperationError("invite-failed", err?.message || "the Discord invite request failed");
   }
 }
+async function getDiscordLinkUrl(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  if (!token) throw new OperationError("not-authenticated", "Sign in to connect Discord.");
+  const fetch2 = ctx.fetch ?? globalThis.fetch;
+  let res;
+  try {
+    res = await fetch2(`${SIGNUP_BASE}/discord/link/init`, { headers: { Authorization: `Bearer ${token}` } });
+  } catch (err) {
+    throw new OperationError("discord-link-failed", err?.message || "the Discord link request failed");
+  }
+  if (!res.ok) throw new OperationError("discord-link-failed", `the Discord link request failed (${res.status})`);
+  const data = await res.json().catch(() => null);
+  if (!data || !data.url) throw new OperationError("discord-link-failed", "no link URL returned");
+  return { url: data.url };
+}
 async function getOnboardingStatus(ctx) {
   const token = ctx.store?.get?.("githubToken");
   if (!isAppMode()) {
@@ -20544,6 +20560,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await ogPreview2(ctx, body ?? {}));
       case "/api/discord-invite":
         return ok(await getDiscordInvite2(ctx));
+      case "/api/discord-link":
+        return ok(await getDiscordLinkUrl(ctx));
       case "/api/news":
         return ok(await getNews(ctx, { category: query.category, since: query.since, limit: Number(query.limit) || void 0 }));
       case "/api/news-sources":

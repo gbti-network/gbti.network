@@ -125,9 +125,9 @@ function discordConfig(env) {
 // github_login slot. A short 600-second TTL bounds replay of an issued state token.
 const STATE_SUBJECT = 'state';
 
-export async function packState(payload, env) {
+export async function packState(payload, env, ttlSeconds = 600) {
   return signSession({ githubId: STATE_SUBJECT, githubLogin: JSON.stringify(payload) }, env.SESSION_SECRET, {
-    ttlSeconds: 600,
+    ttlSeconds,
   });
 }
 export async function unpackState(token, env) {
@@ -185,7 +185,7 @@ async function handleStart(request, env) {
     redirectUri: `${env.PUBLIC_BASE_URL}/signup/github/callback`,
     state,
   });
-  return redirect(location, { 'Set-Cookie': `${OAUTH_NONCE_COOKIE}=${nonce}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600` });
+  return redirect(location, { 'Set-Cookie': `${OAUTH_NONCE_COOKIE}=${nonce}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, 'Referrer-Policy': 'no-referrer' });
 }
 
 async function handleGithubCallback(request, env) {
@@ -282,20 +282,60 @@ async function handleDiscordCallback(request, env) {
 // SOW Part C: deferred Discord link, step 1. The extension welcome opens this in a tab. It authenticates the member
 // via their post-signup session cookie (set on this Worker's origin at GitHub-only signup), then starts Discord OAuth
 // carrying the verified github_id + a per-browser nonce. The /signup/discord/callback (above) completes the link.
+// SOW Part C: deferred Discord link, INIT (the robust extension path). The extension (which holds the member's
+// GitHub App token) calls this; we verify the token -> github_id and return a one-time SIGNED link URL the extension
+// opens in a tab. This binds the link to the EXTENSION identity, so it works with NO website session.
+async function handleDiscordLinkInit(request, env) {
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!token) return json({ error: 'no_token' }, 401, MEMBERSHIP_CORS);
+  let id = null;
+  try { id = await githubFetchUser(token, globalThis.fetch); } catch { id = null; }
+  if (!id || !id.githubId) return json({ error: 'bad_token' }, 401, MEMBERSHIP_CORS);
+  // The lt is a ONE-TIME, short-lived token (jti -> KV-consumed in /discord/link/start) so a replayed/leaked lt
+  // cannot bind a different Discord account to this github_id (account-hijack defense).
+  const lt = await packState({ githubId: id.githubId, githubLogin: id.githubLogin, linkInit: true, jti: crypto.randomUUID() }, env, 120);
+  return json({ url: `${env.SITE_BASE_URL}/discord/link/start?lt=${encodeURIComponent(lt)}` }, 200, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+}
+
 async function handleDiscordLinkStart(request, env) {
-  const session = await verifySession(readSessionCookie(request.headers.get('Cookie')), env.SESSION_SECRET);
-  if (!session || !session.github_id) {
-    // No session on this browser (expired, or signed up elsewhere) -> land on the download page; they can retry.
+  const url = new URL(request.url);
+  // Authenticate the linker by EITHER a one-time link token (the extension's GitHub-App identity, the robust path)
+  // OR the post-signup session cookie (the website path). Either yields the SERVER-verified github_id.
+  let githubId = null;
+  let githubLogin = '';
+  const lt = url.searchParams.get('lt');
+  if (lt) {
+    const tok = await unpackState(lt, env);
+    if (tok && tok.linkInit && tok.githubId && tok.jti) {
+      // SOW security: consume the ONE-TIME jti in KV. A replayed/stolen lt finds the jti already used and sets NO
+      // identity -> it falls through to the session check (which fails for an attacker lacking the victim's session),
+      // so a leaked lt cannot bind a different Discord account to this github_id.
+      const jtiKey = `linkjti:${tok.jti}`;
+      const used = env.SIGNUP_KV ? await env.SIGNUP_KV.get(jtiKey) : null;
+      if (!used) {
+        if (env.SIGNUP_KV) { try { await env.SIGNUP_KV.put(jtiKey, '1', { expirationTtl: 600 }); } catch { /* best-effort consume */ } }
+        githubId = String(tok.githubId);
+        githubLogin = tok.githubLogin || '';
+      }
+    }
+  }
+  if (!githubId) {
+    const session = await verifySession(readSessionCookie(request.headers.get('Cookie')), env.SESSION_SECRET);
+    if (session && session.github_id) { githubId = String(session.github_id); githubLogin = session.github_login || ''; }
+  }
+  if (!githubId) {
+    // No identity (no/expired link token AND no session) -> land on the download page; they can retry from the welcome.
     return redirect(`${env.SITE_BASE_URL}/extension/?welcome=trial`);
   }
   const nonce = crypto.randomUUID();
-  const state = await packState({ githubId: session.github_id, githubLogin: session.github_login, nonce, link: true }, env);
+  const state = await packState({ githubId, githubLogin, nonce, link: true }, env);
   const location = discordAuthorizeUrl({
     clientId: env.DISCORD_OAUTH_CLIENT_ID,
     redirectUri: `${env.PUBLIC_BASE_URL}/signup/discord/callback`,
     state,
   });
-  return redirect(location, { 'Set-Cookie': `${OAUTH_NONCE_COOKIE}=${nonce}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600` });
+  return redirect(location, { 'Set-Cookie': `${OAUTH_NONCE_COOKIE}=${nonce}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`, 'Referrer-Policy': 'no-referrer' });
 }
 
 async function handleCheckout(request, env) {
@@ -455,6 +495,7 @@ export default {
       if (method === 'GET' && pathname === '/signup/start') return await handleStart(request, env);
       if (method === 'GET' && pathname === '/signup/github/callback') return await handleGithubCallback(request, env);
       if (method === 'GET' && pathname === '/signup/discord/callback') return await handleDiscordCallback(request, env);
+      if (method === 'GET' && pathname === '/discord/link/init') return await handleDiscordLinkInit(request, env);   // SOW Part C: mint a token-bound link URL (extension)
       if (method === 'GET' && pathname === '/discord/link/start') return await handleDiscordLinkStart(request, env); // SOW Part C: deferred Discord link
 
       if (method === 'POST' && pathname === '/checkout') return await handleCheckout(request, env);

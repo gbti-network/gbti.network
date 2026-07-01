@@ -210,7 +210,11 @@ class GbtiWelcome extends GbtiElement {
     if (step === 'discord') {
       // SOW Part C: "Connect" opens the Worker's OAuth link flow (joins the guild + assigns the role + links
       // discord_user_id, authenticated by the post-signup session cookie). "Open the invite" is the manual fallback.
-      this.on('[data-discord-connect]', 'click', () => window.open(DISCORD_LINK_URL, '_blank', 'noopener'));
+      this.on('[data-discord-connect]', 'click', async () => {
+        // Prefer the token-bound link URL (works with no website session); fall back to the session-cookie path.
+        try { const r = await this.client?.discordLinkUrl?.(); window.open((r && r.url) || DISCORD_LINK_URL, '_blank', 'noopener'); }
+        catch { window.open(DISCORD_LINK_URL, '_blank', 'noopener'); }
+      });
       this.on('[data-discord-join]', 'click', () => window.open(this._discordInviteUrl || DISCORD_INVITE_URL, '_blank', 'noopener'));
       const cb = this.$('[data-discord-cb]');
       if (cb) cb.addEventListener('change', () => {

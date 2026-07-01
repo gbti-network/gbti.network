@@ -3632,7 +3632,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       });
       this.on("[data-done]", "click", () => this.emit("gbti:welcome-done"));
       if (step === "discord") {
-        this.on("[data-discord-connect]", "click", () => window.open(DISCORD_LINK_URL, "_blank", "noopener"));
+        this.on("[data-discord-connect]", "click", async () => {
+          try {
+            const r = await this.client?.discordLinkUrl?.();
+            window.open(r && r.url || DISCORD_LINK_URL, "_blank", "noopener");
+          } catch {
+            window.open(DISCORD_LINK_URL, "_blank", "noopener");
+          }
+        });
         this.on("[data-discord-join]", "click", () => window.open(this._discordInviteUrl || DISCORD_INVITE_URL, "_blank", "noopener"));
         const cb = this.$("[data-discord-cb]");
         if (cb) cb.addEventListener("change", () => {
@@ -10831,6 +10838,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-041: the generic thread for any content type
       discordInvite: () => request("GET", "/api/discord-invite"),
       // on-demand Discord invite -> { url, source }
+      discordLinkUrl: () => request("GET", "/api/discord-link"),
+      // SOW Part C: a one-time token-bound Discord-LINK URL -> { url }
       getNews: ({ category, since, limit } = {}) => request("GET", `/api/news${qs({ category, since, limit })}`),
       // SOW-043: members-only news -> { items, updatedAt }
       getNewsSources: () => request("GET", "/api/news-sources"),

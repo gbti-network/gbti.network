@@ -605,6 +605,56 @@ test('SOW Part C: the Discord-link callback REJECTS a state with no matching non
   assert.equal(res.status, 400);
 });
 
+test('SOW Part C: /discord/link/init verifies the GitHub token -> a SIGNED link URL carrying the verified github_id', async () => {
+  const env = fakeEnv();
+  await withFetch(
+    (url) => {
+      if (url.includes('api.github.com/user')) return { status: 200, body: { id: 777, login: 'octocat' } };
+      return { status: 200, body: '' };
+    },
+    async () => {
+      const res = await worker.fetch(req('GET', '/discord/link/init', { headers: { Authorization: 'Bearer gho_tok' } }), env, {});
+      assert.equal(res.status, 200);
+      const data = await res.json();
+      assert.ok(data.url.includes('/discord/link/start?lt='));
+      const lt = new URL(data.url).searchParams.get('lt');
+      const tok = await unpackState(lt, env);
+      assert.equal(tok.githubId, '777', 'the github_id is the SERVER-verified one (from the token), not user input');
+      assert.equal(tok.linkInit, true);
+    },
+  );
+});
+
+test('SOW Part C: /discord/link/init rejects a missing token (401)', async () => {
+  const env = fakeEnv();
+  const res = await worker.fetch(req('GET', '/discord/link/init'), env, {});
+  assert.equal(res.status, 401);
+});
+
+test('SOW Part C: /discord/link/start with a link token starts Discord OAuth (no website session needed)', async () => {
+  const env = fakeEnv();
+  const lt = await packState({ githubId: '777', githubLogin: 'octocat', linkInit: true, jti: 'jti-ok' }, env);
+  const res = await worker.fetch(req('GET', '/discord/link/start?lt=' + encodeURIComponent(lt)), env, {});
+  assert.equal(res.status, 302);
+  const location = res.headers.get('Location');
+  assert.ok(location.startsWith('https://discord.com/api/oauth2/authorize'), 'starts Discord OAuth from the token (no session)');
+  const state = await unpackState(new URL(location).searchParams.get('state'), env);
+  assert.equal(state.githubId, '777');
+  assert.equal(state.link, true);
+  assert.ok(state.nonce);
+});
+
+test('SOW Part C: a REPLAYED link token (same jti, second use) is rejected -> no Discord OAuth (hijack defense)', async () => {
+  const env = fakeEnv();
+  const lt = await packState({ githubId: '777', githubLogin: 'octocat', linkInit: true, jti: 'jti-replay' }, env);
+  await worker.fetch(req('GET', '/discord/link/start?lt=' + encodeURIComponent(lt)), env, {}); // first use consumes the jti
+  const res2 = await worker.fetch(req('GET', '/discord/link/start?lt=' + encodeURIComponent(lt)), env, {});
+  assert.equal(res2.status, 302);
+  const loc = res2.headers.get('Location') || '';
+  assert.ok(loc.includes('/extension/'), 'a replayed lt lands on the download page, not Discord');
+  assert.ok(!loc.includes('discord.com'), 'a replayed lt never starts Discord OAuth');
+});
+
 test('GET /signup/github/callback rejects a forged/unsigned state with 400', async () => {
   const env = fakeEnv();
   await withFetch(

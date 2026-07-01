@@ -868,6 +868,22 @@ export async function getDiscordInvite(ctx) {
   }
 }
 
+// SOW Part C: ask the Worker (with the member's GitHub App token) for a one-time SIGNED Discord-link URL the host
+// opens in a tab. Token-bound (not website-session-bound), so it works for any signed-in extension member.
+export async function getDiscordLinkUrl(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) throw new OperationError('not-authenticated', 'Sign in to connect Discord.');
+  const fetch = ctx.fetch ?? globalThis.fetch;
+  let res;
+  try { res = await fetch(`${SIGNUP_BASE}/discord/link/init`, { headers: { Authorization: `Bearer ${token}` } }); }
+  catch (err) { throw new OperationError('discord-link-failed', err?.message || 'the Discord link request failed'); }
+  if (!res.ok) throw new OperationError('discord-link-failed', `the Discord link request failed (${res.status})`);
+  const data = await res.json().catch(() => null);
+  if (!data || !data.url) throw new OperationError('discord-link-failed', 'no link URL returned');
+  return { url: data.url };
+}
+
 // SOW-026: first-run onboarding readiness. Reads durable GitHub state (token, fork, App install) and returns the
 // first not-yet-done step, so the wizard never loops on a cleared store. Only meaningful in app-mode (classic
 // has no fork/install onboarding); in classic mode the wizard is dormant (ready once signed in).
