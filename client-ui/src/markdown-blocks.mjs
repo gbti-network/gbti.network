@@ -119,3 +119,29 @@ export function emptyBlock(type) {
     default: return { type: 'paragraph', text: '' };
   }
 }
+
+// SOW-062 Phase 6: the INLINE presentation transform at the DOM boundary. The block model carries Markdown in
+// b.text; the WYSIWYG renders it as inline HTML (bold/italic/code/link/strike) in a contenteditable, then reads it
+// back to Markdown on edit. Block STRUCTURE (headings/lists/fences/the members marker) is NOT their concern -- these
+// only handle the inline layer. Pure + node-safe, exported so the editor and its round-trip test share one copy.
+export function inlineMdToHtml(md) {
+  let h = String(md ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  h = h.replace(/~~([^~]+)~~/g, '<s>$1</s>');
+  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+  return h.replace(/\n/g, '<br>');
+}
+export function inlineHtmlToMd(html) {
+  let s = String(html ?? '');
+  s = s.replace(/<a [^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)');
+  s = s.replace(/<(strong|b)>([\s\S]*?)<\/\1>/gi, '**$2**');
+  s = s.replace(/<(em|i)>([\s\S]*?)<\/\1>/gi, '*$2*');
+  s = s.replace(/<(s|strike|del)>([\s\S]*?)<\/\1>/gi, '~~$2~~');
+  s = s.replace(/<code>([\s\S]*?)<\/code>/gi, '`$1`');
+  s = s.replace(/<br\s*\/?>/gi, '\n');
+  s = s.replace(/<div>/gi, '\n').replace(/<\/div>/gi, ''); // contenteditable wraps soft lines in <div>
+  s = s.replace(/<[^>]+>/g, ''); // drop any stray markup (paste is hardened; nothing else should appear)
+  return s.replace(/&nbsp;/gi, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}

@@ -351,6 +351,27 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return { type: "paragraph", text: "" };
     }
   }
+  function inlineMdToHtml(md) {
+    let h = String(md ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    h = h.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    h = h.replace(/~~([^~]+)~~/g, "<s>$1</s>");
+    h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
+    return h.replace(/\n/g, "<br>");
+  }
+  function inlineHtmlToMd(html) {
+    let s = String(html ?? "");
+    s = s.replace(/<a [^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, "[$2]($1)");
+    s = s.replace(/<(strong|b)>([\s\S]*?)<\/\1>/gi, "**$2**");
+    s = s.replace(/<(em|i)>([\s\S]*?)<\/\1>/gi, "*$2*");
+    s = s.replace(/<(s|strike|del)>([\s\S]*?)<\/\1>/gi, "~~$2~~");
+    s = s.replace(/<code>([\s\S]*?)<\/code>/gi, "`$1`");
+    s = s.replace(/<br\s*\/?>/gi, "\n");
+    s = s.replace(/<div>/gi, "\n").replace(/<\/div>/gi, "");
+    s = s.replace(/<[^>]+>/g, "");
+    return s.replace(/&nbsp;/gi, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+  }
 
   // client-ui/src/elements/gbti-doc-editor.mjs
   var UID = 0;
@@ -420,6 +441,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .ce-code { font-family:var(--font-mono, ui-monospace, monospace); font-size:13.5px; line-height:1.6; color:#e6e4ee; background:var(--ink); border:1.5px solid var(--s-line-2); border-radius:8px; padding:13px 16px; margin:8px 0; }
   .ce-list { padding-left:26px; font-size:17px; line-height:1.6; margin:6px 0; }
   .ce-list li { padding:1px 0; }
+  /* SOW-062 P6: inline formatting rendered inside the contenteditable (bold/italic/link/code/strike) */
+  .ce a { color:var(--s-green-fg); text-decoration:underline; text-underline-offset:2px; }
+  .ce strong, .ce b { font-weight:700; }
+  .ce em, .ce i { font-style:italic; }
+  .ce s, .ce del { text-decoration:line-through; opacity:.8; }
+  .ce code { font-family:var(--font-mono, ui-monospace, monospace); font-size:.88em; background:var(--s-surface-2); padding:2px 5px; border-radius:5px; }
   /* callout */
   .callout { border:1.5px solid var(--s-line); border-radius:8px; padding:14px 16px 14px 44px; position:relative; background:var(--s-tint); margin:8px 0; }
   .callout::before { content:""; position:absolute; left:16px; top:17px; width:18px; height:18px; border-radius:50%; }
@@ -529,7 +556,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<div class="blk blk-${esc(b.type)}${inMem ? " in-members" : ""}" data-id="${b._id}">${this._tools(b)}<div class="blk-in">${this._bodyHtml(b)}</div></div>`;
     }
     _ce(cls, edit, b, ph) {
-      return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || "")}">${esc(b.text || "")}</div>`;
+      return `<div class="ce ${cls}" contenteditable="true" data-edit="${edit}" data-id="${b._id}" data-ph="${esc(ph || "")}">${inlineMdToHtml(b.text || "")}</div>`;
     }
     _bodyHtml(b) {
       switch (b.type) {
@@ -546,7 +573,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || "")}</div>`;
         case "list": {
           const tag = b.ordered ? "ol" : "ul";
-          const items = (Array.isArray(b.items) ? b.items : [""]).map((it) => `<li>${esc(it)}</li>`).join("") || "<li></li>";
+          const items = (Array.isArray(b.items) ? b.items : [""]).map((it) => `<li>${inlineMdToHtml(it)}</li>`).join("") || "<li></li>";
           return `<${tag} class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}">${items}</${tag}>`;
         }
         case "image":
@@ -598,9 +625,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           if (!b) return;
           const f = el.dataset.edit;
           if (f === "text") {
-            const txt = el.innerText.replace(/\n$/, "");
+            const plain = el.innerText.replace(/\n$/, "");
             if (b.type === "paragraph") {
-              const sc = this._shortcut(txt);
+              const sc = this._shortcut(plain);
               if (sc) {
                 const i = this._indexOf(b._id);
                 this._blocks[i] = withId(sc);
@@ -609,12 +636,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
                 this._change();
                 return;
               }
-              if (txt.startsWith("/")) this._openSlash(el, txt.slice(1));
+              if (plain.startsWith("/")) this._openSlash(el, plain.slice(1));
               else this._closeSlash();
             }
-            b.text = txt;
+            b.text = inlineHtmlToMd(el.innerHTML).replace(/\n$/, "");
           } else if (f === "code") b.code = el.innerText.replace(/\n$/, "");
-          else if (f === "list") b.items = Array.from(el.querySelectorAll("li")).map((li) => li.innerText);
+          else if (f === "list") b.items = Array.from(el.querySelectorAll("li")).map((li) => inlineHtmlToMd(li.innerHTML));
           else b[f] = el.value;
           this._change();
         };
@@ -898,7 +925,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!this._tb) {
         const tb = document.createElement("div");
         tb.className = "sel-tb";
-        tb.innerHTML = `<button type="button" data-w="**" title="Bold">B</button><button type="button" data-w="*" title="Italic" style="font-style:italic">I</button><button type="button" data-w="\`" title="Inline code" style="font-family:var(--font-mono,monospace)">&lt;&gt;</button><button type="button" data-w="link" title="Link">Link</button>`;
+        tb.innerHTML = `<button type="button" data-w="bold" title="Bold">B</button><button type="button" data-w="italic" title="Italic" style="font-style:italic">I</button><button type="button" data-w="code" title="Inline code" style="font-family:var(--font-mono,monospace)">&lt;&gt;</button><button type="button" data-w="link" title="Link">Link</button>`;
         tb.querySelectorAll("button").forEach((b) => b.addEventListener("mousedown", (e) => {
           e.preventDefault();
           this._wrap(b.dataset.w);
@@ -925,25 +952,36 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!sel || sel.isCollapsed) return;
       const ce = this._ceOf(sel.anchorNode);
       if (!ce) return;
-      const text = sel.toString();
-      let out;
+      if (ce.dataset.edit === "code") return;
       if (w === "link") {
         const url = (typeof prompt === "function" ? prompt("Link URL", "https://") : "") || "";
-        if (!url) return;
-        out = `[${text}](${url})`;
-      } else out = `${w}${text}${w}`;
-      try {
-        document.execCommand("insertText", false, out);
-      } catch {
-        return;
-      }
+        if (url && typeof document !== "undefined") document.execCommand("createLink", false, url);
+      } else if (w === "code") this._toggleInline(sel, "code");
+      else if (typeof document !== "undefined") document.execCommand(w);
       const b = this._byId(ce.dataset.id);
       if (b) {
-        if (ce.dataset.edit === "code") b.code = ce.innerText.replace(/\n$/, "");
-        else b.text = ce.innerText.replace(/\n$/, "");
+        b.text = inlineHtmlToMd(ce.innerHTML).replace(/\n$/, "");
         this._change();
       }
       this._hideTb();
+    }
+    // SOW-062 P6: toggle an inline tag around the selection (execCommand has no 'code'); ported from the design.
+    _toggleInline(sel, tag) {
+      if (!sel.rangeCount || sel.isCollapsed) return;
+      const r = sel.getRangeAt(0);
+      const host = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
+      const existing = host && host.closest ? host.closest(tag) : null;
+      if (existing) {
+        const txt = document.createTextNode(existing.textContent);
+        existing.replaceWith(txt);
+        return;
+      }
+      const node = document.createElement(tag);
+      try {
+        node.appendChild(r.extractContents());
+        r.insertNode(node);
+      } catch {
+      }
     }
   };
   define("gbti-doc-editor", GbtiDocEditor);
