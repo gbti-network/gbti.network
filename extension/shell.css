@@ -275,3 +275,9 @@ html[data-unauth] .compose-modal { display: none !important; }
   .nt-icobtn svg { width: 17px; height: 17px; }
   .nt-acct .av { width: 30px; height: 30px; }
 }
+
+/* SOW-062 Phase 6: the content editor is a SOLID document surface (its own --s-* palette, decoupled from glass).
+   While editing, paint the .nt-main region opaque so the fixed glass ambient gradient never bleeds through the
+   editing area or its gutter. The class is toggled by gbti-workspace when it mounts <gbti-content-editor>. */
+body.gbti-editing .nt-main { background: #f4f2ef; }
+[data-theme="dark"] body.gbti-editing .nt-main { background: #18161d; }

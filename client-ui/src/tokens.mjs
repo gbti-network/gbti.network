@@ -40,6 +40,29 @@ export const TOKENS = `
 }
 `;
 
+// SOW-062 Phase 6: the content editor's own SOLID surface palette, ported verbatim from the hi-fi design
+// (gbti-editor.css --s-* tokens). The editor is a solid document surface, DECOUPLED from glass mode -- it never
+// reads --panel/--glass-blur, so the shell's ambient gradient can never bleed through it. Scoped to :host (not
+// :root) so these tokens stay inside the editor components' shadow trees and do NOT leak to sibling components.
+export const EDITOR_SURFACE = `
+:host {
+  --s-app:#f4f2ef; --s-surface:#ffffff; --s-surface-2:#f7f6f4; --s-surface-3:#efedea;
+  --s-line:#e7e4e0; --s-line-2:#ddd9d4; --s-fg:#24222a; --s-fg-soft:#57545e; --s-fg-mute:#8a8792;
+  --s-green:#1f9e5f; --s-green-fg:#0f6f40; --s-tint:#e9f6ef; --s-tint-2:#dcefe3; --s-canvas:#ffffff;
+  --s-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04);
+  --s-shadow-md:0 12px 30px rgba(37,35,43,.10),0 3px 8px rgba(37,35,43,.06);
+  --s-pop:0 14px 40px rgba(37,35,43,.18),0 4px 10px rgba(37,35,43,.10);
+  --s-sel:rgba(31,158,95,.16); --ink:#201d27;
+}
+:host-context([data-theme="dark"]) {
+  --s-app:#18161d; --s-surface:#232029; --s-surface-2:#2a2731; --s-surface-3:#322f3a;
+  --s-line:rgba(255,255,255,.085); --s-line-2:rgba(255,255,255,.16); --s-fg:#f3f2f0; --s-fg-soft:#bdbac4; --s-fg-mute:#847f8d;
+  --s-green:#28b06d; --s-green-fg:#5fd49a; --s-tint:rgba(95,212,154,.13); --s-tint-2:rgba(95,212,154,.22); --s-canvas:#201d27;
+  --s-shadow:none; --s-shadow-md:0 18px 40px rgba(0,0,0,.4); --s-pop:0 18px 50px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.4);
+  --s-sel:rgba(95,212,154,.22); --ink:#17151c;
+}
+`;
+
 export const BASE_CSS = `
 :host { display: block; color: var(--text); font: 15px/1.5 var(--font-body); box-sizing: border-box; }
 *, *::before, *::after { box-sizing: border-box; }
