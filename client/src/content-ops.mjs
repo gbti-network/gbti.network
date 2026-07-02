@@ -123,7 +123,9 @@ export function shareId(createdAt, title) {
  */
 export function buildShareFile({ username, input, body = '' }) {
   if (!username) throw new Error('buildShareFile: username is required');
-  const cleaned = stripUndefined({ ...(input ?? {}), type: 'share', author: username });
+  // A published share must carry status:published in its frontmatter, or the readers (which filter on
+  // status === 'published') skip it. Default to published; an explicit input.status still wins.
+  const cleaned = stripUndefined({ status: 'published', ...(input ?? {}), type: 'share', author: username });
   const result = shareSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError('share', result.error.issues);
   const id = cleaned.id;

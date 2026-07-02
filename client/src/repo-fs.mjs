@@ -138,7 +138,7 @@ export function createReader(repoPath) {
           if (!/\.(md|mdx)$/.test(f)) continue;
           let parsed;
           try { parsed = parseContentFile(fs.readFileSync(path.join(sharesDir, f), 'utf8')); } catch { continue; }
-          if (parsed.frontmatter?.status !== 'published') continue; // drafts never surface
+          if ((parsed.frontmatter?.status ?? 'published') !== 'published') continue; // missing status = published (schema default); only an explicit draft is skipped
           out.push(shareSummary(`members/${u.name}/shares/${f}`, parsed.frontmatter, parsed.body));
         }
       }
@@ -167,7 +167,7 @@ export function createReader(repoPath) {
           let parsed;
           try { parsed = parseContentFile(fs.readFileSync(path.join(commentsDir, f), 'utf8')); } catch { continue; }
           const fm = parsed.frontmatter || {};
-          if (fm.status !== 'published') continue; // drafts never surface
+          if ((fm.status ?? 'published') !== 'published') continue; // missing status = published (schema default); only an explicit draft is skipped
           if (fm.targetType !== targetType || fm.targetSlug !== targetSlug) continue;
           out.push(commentSummary(`${relPrefix}/comments/${f}`, fm, parsed.body));
         }

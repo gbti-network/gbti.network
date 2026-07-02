@@ -105,6 +105,18 @@ test('repo-fs listShares: walks members/*/shares, published-only, newest-first, 
   fs.rmSync(repo, { recursive: true, force: true });
 });
 
+test('SOW-093: a share with NO status field is surfaced (treated as published); an explicit draft is still hidden', () => {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'gbti-shares-nostatus-'));
+  const write = (rel, txt) => { fs.mkdirSync(path.dirname(path.join(repo, rel)), { recursive: true }); fs.writeFileSync(path.join(repo, rel), txt); };
+  // the real composer bug: buildShareFile did not write status, so the merged file has NO status field.
+  write('members/alice/shares/20260701000000-nostatus.md', '---\ntype: share\nid: 20260701000000-nostatus\nauthor: alice\nvisibility: public\ncreatedAt: 2026-07-01T00:00:00Z\n---\n\nno status field, must appear\n');
+  // an EXPLICIT draft must still be withheld.
+  write('members/alice/shares/20260601000000-draft.md', '---\ntype: share\nid: 20260601000000-draft\nauthor: alice\nstatus: draft\nvisibility: public\ncreatedAt: 2026-06-01T00:00:00Z\n---\n\ndraft, must not appear\n');
+  const items = createReader(repo).listShares();
+  assert.deepEqual(items.map((i) => i.id), ['20260701000000-nostatus'], 'the status-less share appears; the explicit draft does not');
+  fs.rmSync(repo, { recursive: true, force: true });
+});
+
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 const SHARE = (id, vis, created, body = '') =>
   `---\ntype: share\nid: ${id}\nauthor: a\nstatus: ${id.includes('draft') ? 'draft' : 'published'}\nvisibility: ${vis}\ncreatedAt: ${created}\n---\n\n${body}\n`;

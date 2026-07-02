@@ -107,8 +107,9 @@ export function contributionTarget(paths, ownedFolder) {
 
 /**
  * The OWNER-side mirror of contributionTarget (SOW-028, the in-client review inbox). True when a PR is an
- * incoming contribution to `ownerFolder`: every changed path is canonical AND sits entirely inside
- * members/<ownerFolder>/, with at least one path. Because every path is under the owner's own prefix, no
+ * incoming contribution to `ownerFolder`: every changed path is canonical AND sits inside a REVIEWABLE
+ * content dir of members/<ownerFolder>/ (posts/products/prompts/comments per CONTENT_DIRS, NOT a
+ * personal-activity dir like shares/), with at least one path. Because every path is under the owner's own prefix, no
  * other-member folder and no house/infra (Tier A/S) path can be present, so this exactly identifies the set
  * the gate would classify as a contribution awaiting THIS owner's approval (the caller still excludes PRs the
  * owner authored). Fail closed: no folder, a non-array, an empty list, or any unclean/out-of-folder path -> false.
@@ -116,7 +117,12 @@ export function contributionTarget(paths, ownedFolder) {
 export function isContributionToFolder(paths, ownerFolder) {
   if (!ownerFolder || !Array.isArray(paths) || paths.length === 0) return false;
   const prefix = `members/${ownerFolder}/`;
-  return paths.every((p) => isCleanPath(p) && p.startsWith(prefix));
+  return paths.every((p) => {
+    if (!isCleanPath(p) || !p.startsWith(prefix)) return false;
+    // Only a reviewable content dir is a contribution; personal-activity paths (shares/, favorites/, ...)
+    // are the member's own stream, never an incoming contribution to review (a share PR was wrongly here).
+    return CONTENT_DIRS.includes(p.slice(prefix.length).split('/')[0]);
+  });
 }
 
 /** Which content types an own-folder PR publishes (for labelling/notification). */

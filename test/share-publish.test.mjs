@@ -43,6 +43,15 @@ test('buildShareFile: rejects a Share with no createdAt (schema failure)', () =>
   assert.throws(() => buildShareFile({ username: 'alice', input: { id: 'x', visibility: 'members' }, body: 'hi' }), /invalid share/);
 });
 
+test('SOW-093: buildShareFile writes status:published so the readers surface it (they filter on status===published)', () => {
+  const built = buildShareFile({ username: 'alice', input: { id: '20260701-x', visibility: 'public', createdAt: '2026-07-01T00:00:00Z' }, body: 'a note' });
+  assert.equal(built.frontmatter.status, 'published', 'a published share carries status:published, not a missing field');
+  assert.match(built.markdown, /status: published/);
+  // an explicit input status still wins (a future draft path)
+  const draft = buildShareFile({ username: 'alice', input: { id: '20260701-y', visibility: 'public', status: 'draft', createdAt: '2026-07-01T00:00:00Z' }, body: 'a note' });
+  assert.equal(draft.frontmatter.status, 'draft');
+});
+
 test('planMemberFiles: a members Share encrypts its whole body to an _enc/ sibling (Mode A)', async () => {
   const built = buildShareFile({
     username: 'alice',

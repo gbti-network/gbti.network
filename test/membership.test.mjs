@@ -289,6 +289,10 @@ test('isContributionToFolder is the owner-side mirror of contributionTarget (SOW
   assert.equal(isContributionToFolder(['members/bob/../carol/x.md'], 'bob'), false); // non-canonical
   assert.equal(isContributionToFolder(['members/bobby/posts/x/index.md'], 'bob'), false); // prefix is not a path boundary
   assert.equal(isContributionToFolder([], 'bob'), false); // empty
+  // SOW-093: a share is the member's own activity stream, not a contribution to review (was wrongly true).
+  assert.equal(isContributionToFolder(['members/bob/shares/20260701-x.md'], 'bob'), false);
+  assert.equal(isContributionToFolder(['members/bob/posts/x/index.md', 'members/bob/shares/s.md'], 'bob'), false); // a post + a share is not a clean contribution
+  assert.equal(isContributionToFolder(['members/bob/comments/c1.md'], 'bob'), true); // comments still count (unchanged by the shares fix)
   assert.equal(isContributionToFolder(['members/bob/posts/x/index.md'], null), false); // no owner folder
 });
 

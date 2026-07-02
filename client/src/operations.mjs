@@ -208,7 +208,7 @@ export function validateContent(ctx, { type, input, body } = {}) {
 }
 
 /** Build + publish a content change as (or into) a PR through the gate. */
-export async function publish(ctx, { type, input, body, message, title, prBody } = {}) {
+export async function publish(ctx, { type, input, body, message, title, prBody, authorNote } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   // SOW-011: publishing to the canonical repo is paid-only. Block a KNOWN non-paid (trial / lapsed) member
@@ -247,10 +247,43 @@ export async function publish(ctx, { type, input, body, message, title, prBody }
     }
     throw err;
   }
+  // SOW-014: a published product/prompt must carry a from-the-author intro comment IN THE SAME PR. When authorNote
+  // is provided, seed intro-<slug>.md (public, authorNote:true) into this same publish, so validate-content's
+  // diff-scoped intro check passes and a compliant prompt/product ships in ONE PR (deterministic id -> a re-publish
+  // updates the same comment, never duplicating it).
+  const introFile = buildIntroCommentFile({ username: id.username, built, authorNote, now: ctx.now?.() });
+  if (introFile) {
+    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
+    return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message, title, body: prBody });
+  }
   if (plan) {
     return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message, title, body: prBody });
   }
   return publishContent({ repo, change: built, message, title, body: prBody });
+}
+
+/**
+ * SOW-014: build the from-the-author intro comment file for a NEW product/prompt, to commit in the SAME publish PR.
+ * Returns { path, content } or null (no note, or a type that needs no intro). Pure + exported for unit tests. The id
+ * is deterministic (intro-<slug>) so a re-publish updates the same comment file, never duplicating it.
+ */
+export function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
+  const note = String(authorNote ?? '').trim();
+  if (!note || !built?.slug || !['product', 'prompt'].includes(built.type)) return null;
+  const introBuilt = buildCommentFile({
+    username,
+    input: {
+      id: `intro-${built.slug}`,
+      targetType: built.type,
+      targetSlug: built.slug,
+      createdAt: now ?? new Date().toISOString(),
+      status: 'published',
+      visibility: 'public',
+      authorNote: true,
+    },
+    body: note,
+  });
+  return { path: introBuilt.path, content: introBuilt.markdown };
 }
 
 /**

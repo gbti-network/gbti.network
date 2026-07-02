@@ -138,13 +138,34 @@ const CSS = `
 
   /* The right drawer */
   .side { display:flex; flex-direction:column; gap:22px; }
-  .author { border:1px solid var(--line); background:var(--panel); border-radius:14px; padding:18px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
+  .author { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:18px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .author .a-top { display:flex; align-items:center; gap:12px; }
   .author .a-av { width:48px; height:48px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center; background:var(--hover); color:var(--muted); font-weight:700; }
   .author .a-av img { width:100%; height:100%; object-fit:cover; }
   .author .a-name { font-family:var(--font-display); font-size:17px; font-weight:700; line-height:1.2; }
   .author .a-user { font-size:12px; color:var(--muted); }
   .author .a-note { font-size:13.5px; line-height:1.5; color:var(--fg); margin:12px 0 0; }
+  /* A Share reads as: the OG/SEO summary (the link description), then the member's own note framed as a
+     distinct "Comment by <author>" author note (the note itself in quotes), so it never looks like an
+     auto-imported description. */
+  .share-summary { font-size:15px; line-height:1.6; color:var(--muted); margin:0 0 16px; }
+  .author-note { border-left:3px solid var(--accent); background:var(--hover); border-radius:0 10px 10px 0; padding:12px 15px; margin:0 0 20px; }
+  .author-note .an-eyebrow { font-family:var(--font-mono, ui-monospace, monospace); font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); margin:0 0 6px; }
+  .author-note .body { font-size:15px; }
+  .author-note .body p:last-child { margin-bottom:0; }
+  /* enclose the member's comment in quotes */
+  .author-note .body.quoted p:first-child::before { content:'"'; }
+  .author-note .body.quoted p:last-child::after { content:'"'; }
+  /* the author card "Shared by" eyebrow, above the member name, for a Share */
+  .author .a-shared { font-family:var(--font-mono, ui-monospace, monospace); font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 3px; }
+  /* a large "open the link" button in the sidebar (Share only), under the member card, above the discussion.
+     FLAT (default): a solid brand fill (--brand is theme-stable #1f9e5f, so white text stays AA in light +
+     dark; --accent flips to a light mint in dark where white would fail). GLASS: a translucent brand fill
+     that frosts via --glass-blur (SOW-070), per the gbti-card-list glass pattern. Composes with light/dark. */
+  .side-open { display:flex; align-items:center; justify-content:center; gap:9px; width:100%; box-sizing:border-box; margin:8px 0 6px; padding:14px 16px; border-radius:7px; background:var(--brand); color:#fff; font-family:var(--font-display); font-weight:700; font-size:15.5px; text-decoration:none; border:1px solid var(--brand); box-shadow:0 6px 16px rgba(31,158,95,.25); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
+  .side-open:hover { filter:brightness(1.06); }
+  .side-open svg { width:18px; height:18px; flex:none; }
+  :host-context([data-layout="glass"]) .side-open { background:color-mix(in srgb, var(--brand) 68%, transparent); border-color:color-mix(in srgb, var(--brand) 60%, transparent); box-shadow:0 6px 20px rgba(31,158,95,.3); }
   .author .follow { display:inline-flex; align-items:center; justify-content:center; gap:6px; margin-top:14px; width:100%; font:inherit; font-size:13px; font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; text-decoration:none; }
   .author .follow.on { background:transparent; color:var(--fg); border-color:var(--line); }
   .author .follow.muted { background:transparent; color:var(--muted); border-color:var(--line); cursor:default; }
@@ -288,7 +309,7 @@ class GbtiReader extends GbtiElement {
     const socials = chips.length ? `<div class="socials">${chips.join('')}</div>` : '';
     return `<div class="author"><div class="a-top">`
       + `<span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`
-      + `<div><div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>`
+      + `<div>${it.type === 'share' ? '<div class="a-shared">Shared by</div>' : ''}<div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>`
       + `${note}${follow}${socials}</div>`;
   }
 
@@ -307,6 +328,16 @@ class GbtiReader extends GbtiElement {
     let body;
     if (this._html === null) body = `<p class="muted">Loading...</p>`;
     else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
+    else if (it.type === 'share') {
+      // A Share's body is the member's OWN note about the link, not a description of it. Frame it as a
+      // "From <author>" author note so it does not read as an auto-imported description; and show the
+      // OG/SEO summary (shortDescription, pulled from the link's meta at post time) above it, if present.
+      const authorDisplay = this._author?.entry?.displayName || authorName(it.author);
+      const summary = it.shortDescription ? `<p class="share-summary">${esc(it.shortDescription)}</p>` : '';
+      const note = (typeof this._html === 'string' && this._html.trim())
+        ? `<div class="author-note"><p class="an-eyebrow">Comment by ${esc(authorDisplay)}</p><div class="body quoted">${this._html}</div></div>` : '';
+      body = `${summary}${note}`;
+    }
     else body = `<div class="body">${typeof this._html === 'string' ? this._html : ''}</div>`;
 
     const resolved = this._html !== null;
@@ -314,8 +345,12 @@ class GbtiReader extends GbtiElement {
     const discussion = (resolved && slug)
       ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></section>`
       : '';
+    // A large "open the link" button in the sidebar for a Share, under the member card and above the discussion.
+    const sideLink = (it.type === 'share' && it.url)
+      ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>`
+      : '';
     // The author drawer only renders once resolved (so its data is present); while loading the side column is empty.
-    const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${discussion}</aside>` : '<aside class="side"></aside>';
+    const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
 
     // SOW-057: an upvote control on a Share (extension-only), hidden for the share's own author (whose vote never counts).
     const shareUpvote = (it.type === 'share' && slug && this._author && !this._author.isSelf)

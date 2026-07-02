@@ -177,7 +177,7 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
         const text = await readFile(rel);
         if (text == null) continue;
         const { frontmatter, body } = parseContentFile(text);
-        if (frontmatter?.status !== 'published') continue;
+        if ((frontmatter?.status ?? 'published') !== 'published') continue; // missing status = published (schema default); only an explicit draft is skipped
         out.push(shareSummary(rel, frontmatter, body));
       }
       out.sort(byShareNewest);
@@ -208,7 +208,7 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
         const text = await readFile(rel);
         if (text == null) continue;
         const { frontmatter, body } = parseContentFile(text);
-        if (frontmatter?.status !== 'published') continue;
+        if ((frontmatter?.status ?? 'published') !== 'published') continue; // missing status = published (schema default); only an explicit draft is skipped
         if (frontmatter?.targetType !== targetType || frontmatter?.targetSlug !== targetSlug) continue;
         out.push(commentSummary(rel, frontmatter, body));
       }
