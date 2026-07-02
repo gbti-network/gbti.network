@@ -18857,14 +18857,38 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
     throw err;
   }
   const introFile = buildIntroCommentFile({ username: id.username, built, authorNote, now: ctx.now?.() });
+  const desc = describeContentPublish(built, { hasIntro: Boolean(introFile) });
+  const msg = message ?? desc.message;
+  const ttl = title ?? desc.title;
+  const bdy = prBody2 ?? desc.body;
   if (introFile) {
     const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message, title, body: prBody2 });
+    return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message: msg, title: ttl, body: bdy });
   }
   if (plan) {
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message, title, body: prBody2 });
+    return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message: msg, title: ttl, body: bdy });
   }
-  return publishContent({ repo, change: built, message, title, body: prBody2 });
+  return publishContent({ repo, change: built, message: msg, title: ttl, body: bdy });
+}
+function describeContentPublish(built, { hasIntro } = {}) {
+  const LABEL = { post: "article", product: "product", prompt: "prompt", profile: "profile" };
+  const label = LABEL[built?.type] ?? built?.type ?? "content";
+  if (built?.type === "profile") {
+    const t = `Update the ${built.username} member profile`;
+    return { title: t, message: t, body: `Update the ${built.username} member profile.` };
+  }
+  const name = built?.frontmatter?.title || built?.slug || label;
+  const title = `Publish ${label}: ${name}`;
+  const blurb = built?.frontmatter?.shortDescription || built?.frontmatter?.excerpt || "";
+  const cats = Array.isArray(built?.frontmatter?.categories) ? built.frontmatter.categories.join(" > ") : "";
+  const lines = [`## ${name}`, ""];
+  if (blurb) lines.push(blurb, "");
+  lines.push(`- Type: ${label}`);
+  if (cats) lines.push(`- Category: ${cats}`);
+  lines.push(`- Path: \`${built?.path ?? ""}\``);
+  if (hasIntro) lines.push("- Includes the from-the-author intro comment.");
+  lines.push("", "_Published through the GBTI Network client._");
+  return { title, message: title, body: lines.join("\n") };
 }
 function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
   const note = String(authorNote ?? "").trim();

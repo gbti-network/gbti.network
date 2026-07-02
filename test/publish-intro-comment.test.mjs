@@ -4,19 +4,19 @@
 // forward `authorNote` to publish(), so this covers all three MCP tools.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { publish, buildIntroCommentFile } from '../client/src/operations.mjs';
+import { publish, buildIntroCommentFile, describeContentPublish } from '../client/src/operations.mjs';
 import { buildContentFile } from '../client/src/content-ops.mjs';
 
-const fakeRepo = (puts = []) => ({
+const fakeRepo = (puts = [], opens = []) => ({
   upstream: 'gbti-network/gbti.network',
   async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
   async getDefaultBranch() { return 'main'; },
   async getBranchSha() { return 'sha'; },
   async ensureBranch() {},
   async getFileSha() { return null; },
-  async putFile(_full, path, opts) { puts.push({ path, content: opts?.contentBase64 }); },
+  async putFile(_full, path, opts) { puts.push({ path, content: opts?.contentBase64, message: opts?.message }); },
   async findOpenPull() { return null; },
-  async openPull() { return { number: 7, html_url: 'u' }; },
+  async openPull(opts) { opens.push(opts); return { number: 7, html_url: 'u' }; },
 });
 
 function ctxFor({ membership = 'paid', repo = fakeRepo(), now = '2026-07-02T00:00:00Z' } = {}) {
@@ -71,4 +71,36 @@ test('publish: a prompt WITHOUT authorNote stays a single-file PR (no regression
   const puts = [];
   await publish(ctxFor({ repo: fakeRepo(puts) }), { type: 'prompt', input: { title: 'P', slug: 'no-intro', shortDescription: 'x' }, body: 'Body' });
   assert.deepEqual(puts.map((p) => p.path), ['members/alice/prompts/no-intro/index.md']);
+});
+
+test('describeContentPublish: a human-readable title + body from the content (not the slug)', () => {
+  const built = buildContentFile({ type: 'prompt', username: 'alice', input: { title: 'Author a GBTI SOW', slug: 'author-a-gbti-sow', shortDescription: 'A step-by-step skill.', categories: ['skill'] }, body: 'B' });
+  const d = describeContentPublish(built, { hasIntro: true });
+  assert.equal(d.title, 'Publish prompt: Author a GBTI SOW');
+  assert.equal(d.message, d.title);
+  assert.match(d.body, /## Author a GBTI SOW/);
+  assert.match(d.body, /A step-by-step skill\./);
+  assert.match(d.body, /Category: skill/);
+  assert.match(d.body, /intro comment/);
+});
+
+test('publish: opens the PR with a DESCRIPTIVE title + non-empty body (not the bare "Update")', async () => {
+  const opens = [];
+  await publish(ctxFor({ repo: fakeRepo([], opens) }), {
+    type: 'prompt', input: { title: 'Author a GBTI SOW', slug: 'author-a-gbti-sow', shortDescription: 'A skill.', categories: ['skill'] }, body: 'Body', authorNote: 'Why I made this.',
+  });
+  assert.equal(opens.length, 1);
+  assert.equal(opens[0].title, 'Publish prompt: Author a GBTI SOW');
+  assert.notEqual(opens[0].title, 'Update');
+  assert.ok(opens[0].body && opens[0].body.length > 0, 'the PR body is not empty');
+  assert.match(opens[0].body, /Author a GBTI SOW/);
+});
+
+test('publish: an explicit title/prBody still wins over the descriptive default', async () => {
+  const opens = [];
+  await publish(ctxFor({ repo: fakeRepo([], opens) }), {
+    type: 'prompt', input: { title: 'T', slug: 's', shortDescription: 'x' }, body: 'B', title: 'My exact title', prBody: 'My exact body',
+  });
+  assert.equal(opens[0].title, 'My exact title');
+  assert.equal(opens[0].body, 'My exact body');
 });

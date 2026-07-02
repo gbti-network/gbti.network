@@ -252,14 +252,46 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   // diff-scoped intro check passes and a compliant prompt/product ships in ONE PR (deterministic id -> a re-publish
   // updates the same comment, never duplicating it).
   const introFile = buildIntroCommentFile({ username: id.username, built, authorNote, now: ctx.now?.() });
+  // A descriptive PR title / commit message / body (used only when the caller gave none), so the pull request
+  // reads clearly and the activity feed (which shows the PR title) is not a bare "Update".
+  const desc = describeContentPublish(built, { hasIntro: Boolean(introFile) });
+  const msg = message ?? desc.message;
+  const ttl = title ?? desc.title;
+  const bdy = prBody ?? desc.body;
   if (introFile) {
     const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message, title, body: prBody });
+    return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message: msg, title: ttl, body: bdy });
   }
   if (plan) {
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message, title, body: prBody });
+    return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message: msg, title: ttl, body: bdy });
   }
-  return publishContent({ repo, change: built, message, title, body: prBody });
+  return publishContent({ repo, change: built, message: msg, title: ttl, body: bdy });
+}
+
+/**
+ * A descriptive PR title, commit message, and PR body for a content publish, built from the human title (not the
+ * slug) plus the one-line description and category. Fixes the bare "Update" PR + the identical activity-feed entry
+ * (gbti-activity-bell reads the PR title). Pure + exported for unit tests.
+ */
+export function describeContentPublish(built, { hasIntro } = {}) {
+  const LABEL = { post: 'article', product: 'product', prompt: 'prompt', profile: 'profile' };
+  const label = LABEL[built?.type] ?? built?.type ?? 'content';
+  if (built?.type === 'profile') {
+    const t = `Update the ${built.username} member profile`;
+    return { title: t, message: t, body: `Update the ${built.username} member profile.` };
+  }
+  const name = built?.frontmatter?.title || built?.slug || label;
+  const title = `Publish ${label}: ${name}`;
+  const blurb = built?.frontmatter?.shortDescription || built?.frontmatter?.excerpt || '';
+  const cats = Array.isArray(built?.frontmatter?.categories) ? built.frontmatter.categories.join(' > ') : '';
+  const lines = [`## ${name}`, ''];
+  if (blurb) lines.push(blurb, '');
+  lines.push(`- Type: ${label}`);
+  if (cats) lines.push(`- Category: ${cats}`);
+  lines.push(`- Path: \`${built?.path ?? ''}\``);
+  if (hasIntro) lines.push('- Includes the from-the-author intro comment.');
+  lines.push('', '_Published through the GBTI Network client._');
+  return { title, message: title, body: lines.join('\n') };
 }
 
 /**
