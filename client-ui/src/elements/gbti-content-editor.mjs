@@ -11,6 +11,13 @@ import { resolveAsset } from '../assets.mjs'; // SOW-062 P3: resolve an existing
 import './gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG body editor (same #body.value Markdown contract)
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
 
+// SOW-062 P6: inline icons for the edhead toolbar + section headers (the design's sprite is not in the shadow root).
+const _svg = (p) => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+const DOC = _svg('<path d="M7 3h7l4 4v14H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M13.5 3.2V7.5H18M9 12.5h6M9 16h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>');
+const EYE = _svg('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>');
+const SAVE = _svg('<path d="M5 4h10l4 4v12H5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8 4v5h6V4M8 20v-6h8v6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>');
+const MERGE = _svg('<circle cx="6" cy="6" r="2.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="6" cy="18" r="2.3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="13" r="2.3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M6 8.3v7.4M6 10.5c.4 3.4 3 5 9.4 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>');
+
 const TYPES = ['post', 'product', 'prompt', 'profile'];
 
 // SOW-062 Phase 2: fields HIDDEN from the editor UI but PRESERVED on save. They are still rendered into the DOM
@@ -66,75 +73,106 @@ class GbtiContentEditor extends GbtiElement {
     const blocked = membership !== 'paid' && membership !== 'unknown';
     const p = this.preset?.input ?? {};
     const getValPreset = (k) => this.presetStr(p[k]);
-    // SOW-062 Phase 2: group the meta fields into rail sections; the HIDDEN_KEYS render into a preserved-but-hidden
-    // block (so gather() still re-submits their existing values).
+    // SOW-062 Phase 6: title/tagline/slug render as the INLINE document header (contenteditable, two-way bound to
+    // their hidden [data-key] inputs), so they are pulled OUT of the rail into the hidden block -- gather() still
+    // reads them. The rest group into rail sections; HIDDEN_KEYS also render hidden-but-preserved.
+    const taglineKey = this.fields.find((f) => f.key === 'excerpt') ? 'excerpt' : (this.fields.find((f) => f.key === 'shortDescription') ? 'shortDescription' : null);
+    const headerKeys = new Set(['title', 'slug', taglineKey].filter(Boolean));
     const grouped = {};
     const hiddenFields = [];
     for (const f of this.fields) {
-      if (HIDDEN_KEYS.has(f.key)) { hiddenFields.push(f); continue; }
+      if (HIDDEN_KEYS.has(f.key) || headerKeys.has(f.key)) { hiddenFields.push(f); continue; }
       const sec = sectionFor(f.key);
       (grouped[sec] = grouped[sec] || []).push(f);
     }
     const order = ['Details', ...RAIL_SECTIONS.map((s) => s.name)];
     const sectionsHtml = order.filter((n) => grouped[n]?.length).map((n) => {
       const inner = grouped[n].map((f) => this.fieldHtml(f, p[f.key], this.fieldVisible(f, getValPreset))).join('');
-      return `<details open class="sec"><summary>${esc(n)}</summary><div class="grid">${inner}</div></details>`;
+      return `<details open class="rsec"><summary>${esc(n)}</summary><div class="rbody">${inner}</div></details>`;
     }).join('');
     const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join('');
+    const typePath = ({ post: 'blog', product: 'products', prompt: 'prompts' })[this.type] || this.type;
+    const isPub = String(p.status || '').toLowerCase() === 'published';
+    const statusLabel = isPub ? (p.publishedAt ? String(p.publishedAt).slice(0, 10) : 'published') : 'draft';
     this.set(
       this.css(EDITOR_SURFACE + `
-        :host { display:block; background:var(--s-app); color:var(--s-fg); }
-        .editor { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:22px; align-items:start; }
-        @media (max-width:800px) { .editor { grid-template-columns:1fr; } }
-        .doc { min-width:0; background:var(--s-canvas); border:1px solid var(--s-line); border-radius:16px; box-shadow:var(--s-shadow); padding:22px 26px; color:var(--s-fg); }
-        .doc .body-l { margin-top:0; }
-        #body { display:block; min-height:30vh; }
-        .grid { display:grid; gap:2px; }
-        .actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
-        #out { margin-top:12px; }
-        .preview { background:var(--s-surface-2); border:1px solid var(--s-line); border-radius:10px; padding:12px 14px; color:var(--s-fg); }
-        .notice { background:var(--s-tint); border:1px solid var(--s-green); border-radius:10px; padding:10px 14px; margin-bottom:12px; color:var(--s-fg); }
-        .notice a { color: var(--s-green-fg); }
-        .rail { border:1px solid var(--s-line); border-radius:16px; background:var(--s-surface); box-shadow:var(--s-shadow); padding:4px 14px 12px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
+        :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); }
+        .edhead { display:flex; align-items:center; gap:12px; padding:4px 2px 16px; flex-wrap:wrap; }
+        .etype { font-family:var(--font-mono,monospace); font-size:10.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--s-green-fg); background:var(--s-tint); border:1.5px solid var(--s-tint-2); border-radius:999px; padding:5px 12px; }
+        .edhead-sp { flex:1; }
+        .savechip { font-size:13px; color:var(--s-fg-mute); font-weight:500; }
+        .ebtn { font:inherit; font-weight:600; font-size:14px; padding:9px 16px; border-radius:8px; border:1.5px solid var(--s-line-2); background:var(--s-surface); color:var(--s-fg); cursor:pointer; display:inline-flex; align-items:center; gap:7px; white-space:nowrap; }
+        .ebtn:hover { border-color:var(--s-fg-mute); }
+        .ebtn svg { width:16px; height:16px; }
+        .ebtn-primary { background:var(--s-green); border-color:var(--s-green); color:#fff; box-shadow:0 8px 20px rgba(31,158,95,.26); }
+        .ebtn-primary:hover { filter:brightness(.96); border-color:var(--s-green); }
+        .edgrid { display:grid; grid-template-columns:minmax(0,1fr) 350px; gap:34px; align-items:start; }
+        @media (max-width:800px) { .edgrid { grid-template-columns:1fr; } }
+        .doc { min-width:0; background:var(--s-canvas); border:1.5px solid var(--s-line); border-radius:12px; box-shadow:var(--s-shadow-md); padding:40px 46px 52px; color:var(--s-fg); }
+        .doc-title { font-family:var(--font-display); font-weight:800; font-size:34px; line-height:1.14; letter-spacing:-.015em; color:var(--s-fg); outline:none; margin-bottom:6px; }
+        .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.55; }
+        .doc-tagline { font-size:18px; line-height:1.5; font-weight:500; color:var(--s-fg-soft); outline:none; margin:2px 0 14px; }
+        .doc-tagline:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.5; }
+        .doc-slug { display:flex; align-items:center; gap:9px; flex-wrap:wrap; font-family:var(--font-mono,monospace); font-size:12.5px; color:var(--s-fg-mute); margin-bottom:6px; }
+        .doc-slug .slug-val { color:var(--s-green-fg); font-weight:600; outline:none; border-bottom:1.5px dashed transparent; }
+        .doc-slug .slug-val:hover { border-bottom-color:var(--s-line-2); }
+        .doc-slug .slug-val:focus { border-bottom-color:var(--s-green); }
+        .doc-slug .slug-meta { display:inline-flex; align-items:center; gap:7px; }
+        .doc-slug .pubdot { width:7px; height:7px; border-radius:50%; background:var(--s-fg-mute); }
+        .doc-slug .slug-meta.pub .pubdot { background:var(--s-green); }
+        .docsec { margin-top:38px; padding-top:30px; border-top:1.5px solid var(--s-line); }
+        .docsec#secMain { margin-top:14px; padding-top:0; border-top:none; }
+        .docsec-h { font-family:var(--font-mono,monospace); font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--s-fg-mute); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+        .docsec-h svg { width:15px; height:15px; }
+        #body { display:block; min-height:24vh; }
+        .notice { background:var(--s-tint); border:1px solid var(--s-green); border-radius:10px; padding:10px 14px; margin-bottom:16px; color:var(--s-fg); font-size:13.5px; }
+        .notice a { color:var(--s-green-fg); }
+        #out { margin-top:14px; }
+        .preview { background:var(--s-surface-2); border:1px solid var(--s-line); border-radius:10px; padding:12px 14px; color:var(--s-fg); margin-top:12px; }
+        .rail { display:flex; flex-direction:column; gap:14px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
         @media (max-width:800px) { .rail { position:static; max-height:none; } }
-        .rail-h { font-family:var(--font-display, inherit); font-weight:700; font-size:15px; padding:11px 0 2px; }
-        .type-ro { font-weight:600; font-size:13.5px; padding:7px 11px; border:1px solid var(--line); border-radius:8px; background:var(--hover); color:var(--fg); text-transform:capitalize; margin:2px 0 6px; }
-        .rail details.sec { border-top:1px solid var(--line); }
-        .rail summary { cursor:pointer; list-style:none; font-weight:600; font-size:13px; padding:10px 0; color:var(--fg); display:flex; justify-content:space-between; align-items:center; }
-        .rail summary::-webkit-details-marker { display:none; }
-        .rail summary::after { content:'⌄'; color:var(--muted); font-size:12px; }
-        .rail details[open] summary::after { content:'⌃'; }
-        .rail .grid { padding-bottom:10px; }
+        .rsec { background:var(--s-surface); border:1.5px solid var(--s-line); border-radius:10px; box-shadow:var(--s-shadow); overflow:hidden; }
+        .rsec > summary { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; padding:13px 15px; font-weight:700; font-size:14px; color:var(--s-fg); }
+        .rsec > summary::-webkit-details-marker { display:none; }
+        .rsec > summary::after { content:'⌄'; color:var(--s-fg-mute); font-size:12px; }
+        .rsec[open] > summary::after { content:'⌃'; }
+        .rbody { padding:2px 15px 14px; display:grid; gap:8px; }
+        .rbody label { font-size:12px; color:var(--s-fg-mute); font-weight:600; }
+        .type-ro { font-weight:600; font-size:13px; padding:7px 11px; border:1px solid var(--s-line); border-radius:8px; background:var(--s-surface-2); color:var(--s-fg); text-transform:capitalize; }
         .cover-frames { display:flex; gap:12px; align-items:flex-end; margin:6px 0 10px; }
         .cover-frames.empty { display:none; }
         .cf { margin:0; }
-        .cf img { display:block; background:var(--hover); border:1px solid var(--line); border-radius:8px; }
+        .cf img { display:block; background:var(--s-surface-2); border:1px solid var(--s-line); border-radius:8px; }
         .cf-43 img { width:116px; aspect-ratio:4/3; object-fit:cover; }
         .cf-hero img { width:184px; height:auto; max-height:150px; object-fit:contain; }
-        .cf figcaption { font-size:11px; color:var(--muted); margin-top:4px; text-align:center; }
+        .cf figcaption { font-size:11px; color:var(--s-fg-mute); margin-top:4px; text-align:center; }
         .cover-actions { display:flex; gap:8px; }
       `) +
-        `<div class="editor">
-           <div class="doc">
+        `<div class="edhead">
+           <span class="etype">${esc(this.type)}</span>
+           <span class="edhead-sp"></span>
+           <span class="savechip" id="savechip"></span>
+           <button class="ebtn" id="preview" type="button">${EYE} Preview</button>
+           <button class="ebtn" id="validate" type="button">Validate</button>
+           ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ''}
+           <button class="ebtn${blocked ? '' : ' ebtn-primary'}" id="publish" type="button"${blocked ? ' title="Publishing requires a paid membership"' : ''}>${blocked ? 'Membership required' : `${MERGE} Publish`}</button>
+         </div>
+         <div class="edgrid">
+           <article class="doc">
              ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ''}
-             <label class="body-l">Body</label>
-             <gbti-doc-editor id="body"></gbti-doc-editor>
-             <div class="actions">
-               <button id="preview" class="ghost">Preview</button>
-               <button id="validate" class="ghost">Validate</button>
-               ${canStage ? `<button id="draft" title="Save a draft to your own fork (does not publish)">Save draft</button>` : ''}
-               <button id="publish"${blocked ? ' title="Publishing requires a paid membership"' : ''}>${blocked ? 'Membership required to publish' : 'Publish (open PR)'}</button>
-               <input type="file" id="img" accept="image/*" style="display:none" />
-               <button id="imgbtn" class="ghost">Add image</button>
-             </div>
+             <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || '')}</div>
+             ${taglineKey ? `<div class="doc-tagline" contenteditable="true" data-header="${taglineKey}" data-ph="Add a tagline…">${esc(this.presetStr(p[taglineKey]) || '')}</div>` : ''}
+             <div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span><span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || '')}</span><span class="slug-meta${isPub ? ' pub' : ''}"><span class="pubdot"></span><span>${esc(statusLabel)}</span></span></div>
+             <section class="docsec" id="secMain">
+               <div class="docsec-h">${DOC} Main content</div>
+               <gbti-doc-editor id="body"></gbti-doc-editor>
+             </section>
              <div id="out" class="muted"></div>
-           </div>
-           <aside class="rail">
-             <div class="rail-h">Document</div>
-             <label>Type</label>
-             <div class="type-ro" title="The content type is fixed when you create the item">${esc(this.type)}</div>
-             ${sectionsHtml}
              <div hidden>${hiddenHtml}</div>
+           </article>
+           <aside class="rail">
+             <details open class="rsec"><summary>Document</summary><div class="rbody"><label>Type</label><div class="type-ro">${esc(this.type)}</div></div></details>
+             ${sectionsHtml}
            </aside>
          </div>`,
     );
@@ -144,8 +182,7 @@ class GbtiContentEditor extends GbtiElement {
     this.on('#validate', 'click', () => this.doValidate());
     this.on('#draft', 'click', () => this.doDraft());
     this.on('#publish', 'click', () => this.doPublish());
-    this.on('#imgbtn', 'click', () => this.$('#img').click());
-    this.on('#img', 'change', (e) => this.doImage(e.target.files?.[0]));
+    this._bindHeader(); // SOW-062 P6: the inline title/tagline/slug mirror to their hidden [data-key] inputs
 
     // SOW-062 P3: the rich cover-image control(s) — preview + Choose/Replace/Remove (the kind:'image' field).
     this.$$('[data-cover]').forEach((c) => {
@@ -239,7 +276,24 @@ class GbtiContentEditor extends GbtiElement {
     };
   }
 
+  // SOW-062 P6: two-way bind the inline document header (title/tagline/slug contenteditables) to their hidden
+  // [data-key] meta inputs, so gather() -- which reads [data-key] -- stays the single source of truth for publish.
+  _bindHeader() {
+    this.$$('[data-header]').forEach((el) => {
+      const input = this.$(`[data-key="${el.dataset.header}"]`);
+      if (!input) return;
+      const sync = () => { input.value = el.textContent.trim(); };
+      el.addEventListener('input', sync);
+      el.addEventListener('blur', sync);
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); }); // single-line header fields
+      el.addEventListener('paste', (e) => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData)?.getData('text/plain') || ''; if (typeof document !== 'undefined') document.execCommand('insertText', false, t.replace(/\s+/g, ' ').trim()); });
+      sync();
+    });
+  }
+
   gather() {
+    // SOW-062 P6: flush the inline header contenteditables into their [data-key] inputs before reading.
+    this.$$('[data-header]').forEach((el) => { const i = this.$(`[data-key="${el.dataset.header}"]`); if (i) i.value = el.textContent.trim(); });
     // Only gather fields that are currently visible, so a hidden conditional field (e.g. a stale image on
     // a prompt whose image-gen target was removed) is never submitted.
     const getVal = (k) => {
