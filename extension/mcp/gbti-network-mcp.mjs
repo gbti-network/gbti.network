@@ -17530,7 +17530,7 @@ function createReader(repoPath) {
           } catch {
             continue;
           }
-          if (parsed.frontmatter?.status !== "published") continue;
+          if ((parsed.frontmatter?.status ?? "published") !== "published") continue;
           out.push(shareSummary(`members/${u.name}/shares/${f}`, parsed.frontmatter, parsed.body));
         }
       }
@@ -17568,7 +17568,7 @@ function createReader(repoPath) {
             continue;
           }
           const fm = parsed.frontmatter || {};
-          if (fm.status !== "published") continue;
+          if ((fm.status ?? "published") !== "published") continue;
           if (fm.targetType !== targetType || fm.targetSlug !== targetSlug) continue;
           out.push(commentSummary(`${relPrefix}/comments/${f}`, fm, parsed.body));
         }
@@ -18276,6 +18276,7 @@ var PRIVILEGED_ROLES = /* @__PURE__ */ new Set([ROLE2.moderator, ROLE2.admin, RO
 var ADMIN_ROLES = /* @__PURE__ */ new Set([ROLE2.admin, ROLE2.superadmin]);
 
 // membership/classify-pr.mjs
+var CONTENT_DIRS = ["posts", "products", "prompts", "comments"];
 var ROLE_RANK = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
 function isCleanPath(p) {
   if (typeof p !== "string" || p.length === 0) return false;
@@ -18287,7 +18288,10 @@ function isCleanPath(p) {
 function isContributionToFolder(paths, ownerFolder) {
   if (!ownerFolder || !Array.isArray(paths) || paths.length === 0) return false;
   const prefix = `members/${ownerFolder}/`;
-  return paths.every((p) => isCleanPath(p) && p.startsWith(prefix));
+  return paths.every((p) => {
+    if (!isCleanPath(p) || !p.startsWith(prefix)) return false;
+    return CONTENT_DIRS.includes(p.slice(prefix.length).split("/")[0]);
+  });
 }
 
 // client/src/operations.mjs

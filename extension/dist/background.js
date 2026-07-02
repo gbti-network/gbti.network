@@ -17212,7 +17212,7 @@ function shareId(createdAt, title) {
 }
 function buildShareFile({ username, input, body = "" }) {
   if (!username) throw new Error("buildShareFile: username is required");
-  const cleaned = stripUndefined({ ...input ?? {}, type: "share", author: username });
+  const cleaned = stripUndefined({ status: "published", ...input ?? {}, type: "share", author: username });
   const result = shareSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError("share", result.error.issues);
   const id = cleaned.id;
@@ -17457,7 +17457,7 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
         const text = await readFile(rel);
         if (text == null) continue;
         const { frontmatter, body } = parseContentFile(text);
-        if (frontmatter?.status !== "published") continue;
+        if ((frontmatter?.status ?? "published") !== "published") continue;
         out.push(shareSummary(rel, frontmatter, body));
       }
       out.sort(byShareNewest);
@@ -17486,7 +17486,7 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
         const text = await readFile(rel);
         if (text == null) continue;
         const { frontmatter, body } = parseContentFile(text);
-        if (frontmatter?.status !== "published") continue;
+        if ((frontmatter?.status ?? "published") !== "published") continue;
         if (frontmatter?.targetType !== targetType || frontmatter?.targetSlug !== targetSlug) continue;
         out.push(commentSummary(rel, frontmatter, body));
       }
@@ -18546,6 +18546,7 @@ function effectiveStatus(githubId, derived, overrides, now = /* @__PURE__ */ new
 }
 
 // membership/classify-pr.mjs
+var CONTENT_DIRS = ["posts", "products", "prompts", "comments"];
 var ROLE_RANK = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
 function isCleanPath(p) {
   if (typeof p !== "string" || p.length === 0) return false;
@@ -18557,7 +18558,10 @@ function isCleanPath(p) {
 function isContributionToFolder(paths, ownerFolder) {
   if (!ownerFolder || !Array.isArray(paths) || paths.length === 0) return false;
   const prefix = `members/${ownerFolder}/`;
-  return paths.every((p) => isCleanPath(p) && p.startsWith(prefix));
+  return paths.every((p) => {
+    if (!isCleanPath(p) || !p.startsWith(prefix)) return false;
+    return CONTENT_DIRS.includes(p.slice(prefix.length).split("/")[0]);
+  });
 }
 
 // membership/superadmin-roster.mjs
