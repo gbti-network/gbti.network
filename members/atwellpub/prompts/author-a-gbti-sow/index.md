@@ -2,9 +2,10 @@
 title: Author a GBTI Network SOW
 slug: author-a-gbti-sow
 shortDescription: >-
-  A step-by-step skill for authoring or improving a GBTI Network Statement of Work. It enforces the
-  pre-checks: reuse an existing SOW, ground the work in a code audit, cite the completed SOWs it
-  builds on, place it in the right lane, and follow the writing and plan-mode conventions.
+  A step-by-step skill for authoring or improving a GBTI Network Statement of Work. It adds a /sow
+  init command that scaffolds the lane framework, then enforces the pre-checks: reuse an existing
+  SOW, ground the work in a code audit, cite the completed SOWs it builds on, place it in the right
+  lane, and follow the writing and plan-mode conventions.
 categories:
   - skill
 targets:
@@ -19,7 +20,23 @@ type: prompt
 author: atwellpub
 ---
 
-When you are asked to author or improve a GBTI Network SOW (Statement of Work), do these steps IN ORDER before writing anything. SOWs live in .data/sow/ (local planning), organized into lanes: 0_queue, 1_progressing, 2_waiting_review, 3_completed, with a _staging side-lane for items parked on an external blocker. Each lane has extension, cf-server, and website subfolders. Keep one canonical markdown file per SOW.
+GBTI Network SOWs (Statements of Work) live in .data/sow/ (local planning), organized into lanes: 0_queue, 1_progressing, 2_waiting_review, 3_completed, with a _staging side-lane for items parked on an external blocker. Each lane has extension, cf-server, and website subfolders. Keep one canonical markdown file per SOW.
+
+## Initialize (/sow init)
+
+When invoked as /sow init (or when the lane folders do not exist yet), scaffold the framework idempotently, then stop (this command only builds the folders, it does not author a SOW):
+
+```bash
+mkdir -p .data/sow/{_staging,0_queue,1_progressing,2_waiting_review,3_completed}
+[ -f .data/sow/todo.md ] || printf '# SOW todo\n' > .data/sow/todo.md
+grep -qxF '.data/' .gitignore 2>/dev/null || echo '.data/' >> .gitignore
+```
+
+It creates only what is missing and never overwrites an existing todo.md. The .data/ folder stays gitignored (local planning, never committed).
+
+## Authoring a SOW
+
+When you author or improve a SOW, do these steps IN ORDER before writing anything.
 
 ## 1. Improve an existing SOW first (do not duplicate)
 
