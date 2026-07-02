@@ -443,7 +443,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     lock: '<rect x="5" y="11" width="14" height="9" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/>',
     grip: '<circle cx="9" cy="6" r="1.5" fill="currentColor"/><circle cx="15" cy="6" r="1.5" fill="currentColor"/><circle cx="9" cy="12" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><circle cx="9" cy="18" r="1.5" fill="currentColor"/><circle cx="15" cy="18" r="1.5" fill="currentColor"/>',
     img: '<rect x="4" y="5" width="16" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
-    video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>'
+    video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+    gear: '<path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13c.05-.33.08-.66.08-1s-.03-.67-.08-1l1.86-1.43-1.8-3.12-2.2.88a7 7 0 0 0-1.73-1l-.33-2.33h-3.6l-.33 2.33a7 7 0 0 0-1.73 1l-2.2-.88-1.8 3.12L7.1 11c-.05.33-.08.66-.08 1s.03.67.08 1l-1.86 1.43 1.8 3.12 2.2-.88c.52.4 1.1.74 1.73 1l.33 2.33h3.6l.33-2.33a7 7 0 0 0 1.73-1l2.2.88 1.8-3.12L19.4 13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+    info: '<circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="8" r="1.05" fill="currentColor"/>'
   };
   var svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic[k]}</svg>`;
   var CSS = `
@@ -483,14 +485,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .ce s, .ce del { text-decoration:line-through; opacity:.8; }
   .ce code { font-family:var(--font-mono, ui-monospace, monospace); font-size:.88em; background:var(--s-surface-2); padding:2px 5px; border-radius:5px; }
   /* callout */
-  .callout { border:1.5px solid var(--s-line); border-radius:8px; padding:14px 16px 14px 44px; position:relative; background:var(--s-tint); margin:8px 0; }
-  .callout::before { content:""; position:absolute; left:16px; top:17px; width:18px; height:18px; border-radius:50%; }
-  .callout .ce { padding:0; font-size:15.5px; line-height:1.6; }
-  .callout-info { background:color-mix(in srgb, #3f74c9 11%, var(--s-canvas)); border-color:color-mix(in srgb, #3f74c9 32%, transparent); } .callout-info::before { background:#3f74c9; }
-  .callout-note { background:var(--s-tint); border-color:var(--s-tint-2); } .callout-note::before { background:var(--s-green-fg); }
-  .callout-warning { background:color-mix(in srgb, #c9892b 13%, var(--s-canvas)); border-color:color-mix(in srgb, #c9892b 34%, transparent); } .callout-warning::before { background:#c9892b; }
-  .callout-tip { background:color-mix(in srgb, #7a5cc0 12%, var(--s-canvas)); border-color:color-mix(in srgb, #7a5cc0 32%, transparent); } .callout-tip::before { background:#7a5cc0; }
-  .callout-var { position:absolute; top:8px; right:8px; font:inherit; font-size:11px; font-weight:600; padding:3px 8px; border:1.5px solid var(--s-line-2); border-radius:7px; background:var(--s-surface-2); color:var(--s-fg-soft); cursor:pointer; }
+  .cwrap { margin:8px 0; }
+  .cvar { display:inline-flex; align-items:center; gap:5px; margin-bottom:9px; padding:4px 4px 4px 6px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:7px; }
+  .cvar-lab { display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono,monospace); font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--s-fg-mute); padding-right:6px; border-right:1.5px solid var(--s-line-2); white-space:nowrap; }
+  .cvar-lab svg { width:13px; height:13px; }
+  .cvar button { font:inherit; font-size:11px; font-weight:600; padding:3px 9px; border-radius:7px; border:0; background:transparent; color:var(--s-fg-soft); cursor:pointer; text-transform:capitalize; }
+  .cvar button.on { background:var(--s-green); color:#fff; }
+  .callout { display:flex; gap:13px; padding:15px 17px; border-radius:8px; border:1.5px solid var(--s-tint-2); background:var(--s-tint); margin:0; }
+  .callout .cicon { width:24px; height:24px; flex:none; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .callout .cicon svg { width:21px; height:21px; }
+  .callout .ce { padding:0; font-size:15.5px; line-height:1.6; flex:1; }
+  .callout-info { background:color-mix(in srgb, #3f74c9 11%, var(--s-canvas)); border-color:color-mix(in srgb, #3f74c9 32%, transparent); } .callout-info .cicon { color:#3f74c9; }
+  .callout-note { background:var(--s-tint); border-color:var(--s-tint-2); } .callout-note .cicon { color:var(--s-green-fg); }
+  .callout-warning { background:color-mix(in srgb, #c9892b 13%, var(--s-canvas)); border-color:color-mix(in srgb, #c9892b 34%, transparent); } .callout-warning .cicon { color:#c9892b; }
+  .callout-tip { background:color-mix(in srgb, #7a5cc0 12%, var(--s-canvas)); border-color:color-mix(in srgb, #7a5cc0 32%, transparent); } .callout-tip .cicon { color:#7a5cc0; }
   .co-lang { font:inherit; font-size:12px; color:var(--s-fg-mute); background:transparent; border:0; padding:0 0 4px; }
   /* void cards (image / embed) */
   .card { border:1.5px solid var(--s-line); border-radius:12px; padding:12px; background:var(--s-surface); display:flex; flex-direction:column; gap:8px; }
@@ -601,8 +609,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           return this._ce("ce-q", "text", b, "Quote");
         case "callout": {
           const v = CALLOUT_VARIANTS.includes(b.variant) ? b.variant : "note";
-          const varSel = `<select class="callout-var" data-variant="${b._id}">${CALLOUT_VARIANTS.map((x) => `<option value="${x}" ${x === v ? "selected" : ""}>${x}</option>`).join("")}</select>`;
-          return `<div class="callout callout-${v}">${varSel}${this._ce("", "text", b, "Callout text")}</div>`;
+          const bar = `<div class="cvar"><span class="cvar-lab">${svg("gear")} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v ? "on" : ""}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join("")}</div>`;
+          return `<div class="cwrap">${bar}<div class="callout callout-${v}"><span class="cicon">${svg("info")}</span>${this._ce("", "text", b, "Callout text")}</div></div>`;
         }
         case "code":
           return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || "")}</div>`;
@@ -709,10 +717,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._focusBlock(next._id);
         this._change();
       }));
-      this.$$("[data-variant]").forEach((el) => el.addEventListener("change", () => {
-        const b = this._byId(el.dataset.variant);
+      this.$$("[data-cvar]").forEach((el) => el.addEventListener("click", () => {
+        const b = this._byId(el.dataset.cvar);
         if (b) {
-          b.variant = el.value;
+          b.variant = el.dataset.cval;
           this._render();
           this._focusBlock(b._id);
           this._change();
@@ -10413,13 +10421,34 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   /* The right drawer */
   .side { display:flex; flex-direction:column; gap:22px; }
-  .author { border:1px solid var(--line); background:var(--panel); border-radius:14px; padding:18px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
+  .author { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:18px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
   .author .a-top { display:flex; align-items:center; gap:12px; }
   .author .a-av { width:48px; height:48px; border-radius:50%; overflow:hidden; flex:none; display:grid; place-items:center; background:var(--hover); color:var(--muted); font-weight:700; }
   .author .a-av img { width:100%; height:100%; object-fit:cover; }
   .author .a-name { font-family:var(--font-display); font-size:17px; font-weight:700; line-height:1.2; }
   .author .a-user { font-size:12px; color:var(--muted); }
   .author .a-note { font-size:13.5px; line-height:1.5; color:var(--fg); margin:12px 0 0; }
+  /* A Share reads as: the OG/SEO summary (the link description), then the member's own note framed as a
+     distinct "Comment by <author>" author note (the note itself in quotes), so it never looks like an
+     auto-imported description. */
+  .share-summary { font-size:15px; line-height:1.6; color:var(--muted); margin:0 0 16px; }
+  .author-note { border-left:3px solid var(--accent); background:var(--hover); border-radius:0 10px 10px 0; padding:12px 15px; margin:0 0 20px; }
+  .author-note .an-eyebrow { font-family:var(--font-mono, ui-monospace, monospace); font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); margin:0 0 6px; }
+  .author-note .body { font-size:15px; }
+  .author-note .body p:last-child { margin-bottom:0; }
+  /* enclose the member's comment in quotes */
+  .author-note .body.quoted p:first-child::before { content:'"'; }
+  .author-note .body.quoted p:last-child::after { content:'"'; }
+  /* the author card "Shared by" eyebrow, above the member name, for a Share */
+  .author .a-shared { font-family:var(--font-mono, ui-monospace, monospace); font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 3px; }
+  /* a large "open the link" button in the sidebar (Share only), under the member card, above the discussion.
+     FLAT (default): a solid brand fill (--brand is theme-stable #1f9e5f, so white text stays AA in light +
+     dark; --accent flips to a light mint in dark where white would fail). GLASS: a translucent brand fill
+     that frosts via --glass-blur (SOW-070), per the gbti-card-list glass pattern. Composes with light/dark. */
+  .side-open { display:flex; align-items:center; justify-content:center; gap:9px; width:100%; box-sizing:border-box; margin:8px 0 6px; padding:14px 16px; border-radius:7px; background:var(--brand); color:#fff; font-family:var(--font-display); font-weight:700; font-size:15.5px; text-decoration:none; border:1px solid var(--brand); box-shadow:0 6px 16px rgba(31,158,95,.25); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
+  .side-open:hover { filter:brightness(1.06); }
+  .side-open svg { width:18px; height:18px; flex:none; }
+  :host-context([data-layout="glass"]) .side-open { background:color-mix(in srgb, var(--brand) 68%, transparent); border-color:color-mix(in srgb, var(--brand) 60%, transparent); box-shadow:0 6px 20px rgba(31,158,95,.3); }
   .author .follow { display:inline-flex; align-items:center; justify-content:center; gap:6px; margin-top:14px; width:100%; font:inherit; font-size:13px; font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; text-decoration:none; }
   .author .follow.on { background:transparent; color:var(--fg); border-color:var(--line); }
   .author .follow.muted { background:transparent; color:var(--muted); border-color:var(--line); cursor:default; }
@@ -10540,7 +10569,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         chips.push(`<span class="soc discord" tabindex="0" role="img" aria-label="Discord: ${esc(handle)}">${socialIcon("discord")}<span class="tip" role="tooltip">Discord: ${esc(handle)}</span></span>`);
       }
       const socials = chips.length ? `<div class="socials">${chips.join("")}</div>` : "";
-      return `<div class="author"><div class="a-top"><span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span><div><div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>${note}${follow}${socials}</div>`;
+      return `<div class="author"><div class="a-top"><span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span><div>${it.type === "share" ? '<div class="a-shared">Shared by</div>' : ""}<div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>${note}${follow}${socials}</div>`;
     }
     render() {
       const it = this._item;
@@ -10556,11 +10585,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;
-      else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
+      else if (it.type === "share") {
+        const authorDisplay = this._author?.entry?.displayName || authorName4(it.author);
+        const summary = it.shortDescription ? `<p class="share-summary">${esc(it.shortDescription)}</p>` : "";
+        const note = typeof this._html === "string" && this._html.trim() ? `<div class="author-note"><p class="an-eyebrow">Comment by ${esc(authorDisplay)}</p><div class="body quoted">${this._html}</div></div>` : "";
+        body = `${summary}${note}`;
+      } else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
       const resolved = this._html !== null;
       const slug = targetSlugFor(it);
       const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></section>` : "";
-      const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${discussion}</aside>` : '<aside class="side"></aside>';
+      const sideLink = it.type === "share" && it.url ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf2(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>` : "";
+      const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS32) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${shareUpvote}</article>${side}</div></div>`);
       if (resolved) {

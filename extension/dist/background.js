@@ -18828,7 +18828,7 @@ function validateContent(ctx, { type, input, body } = {}) {
     return { valid: false, error: err.message };
   }
 }
-async function publish(ctx, { type, input, body, message, title, prBody: prBody2 } = {}) {
+async function publish(ctx, { type, input, body, message, title, prBody: prBody2, authorNote } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const membership = await ctx.membership?.() ?? "unknown";
@@ -18856,10 +18856,33 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
     }
     throw err;
   }
+  const introFile = buildIntroCommentFile({ username: id.username, built, authorNote, now: ctx.now?.() });
+  if (introFile) {
+    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
+    return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message, title, body: prBody2 });
+  }
   if (plan) {
     return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message, title, body: prBody2 });
   }
   return publishContent({ repo, change: built, message, title, body: prBody2 });
+}
+function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
+  const note = String(authorNote ?? "").trim();
+  if (!note || !built?.slug || !["product", "prompt"].includes(built.type)) return null;
+  const introBuilt = buildCommentFile({
+    username,
+    input: {
+      id: `intro-${built.slug}`,
+      targetType: built.type,
+      targetSlug: built.slug,
+      createdAt: now ?? (/* @__PURE__ */ new Date()).toISOString(),
+      status: "published",
+      visibility: "public",
+      authorNote: true
+    },
+    body: note
+  });
+  return { path: introBuilt.path, content: introBuilt.markdown };
 }
 async function planMemberFiles({ built, body, encrypt }) {
   if (!built?.slug) return null;

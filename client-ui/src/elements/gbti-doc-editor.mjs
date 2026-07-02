@@ -46,6 +46,8 @@ const ic = {
   grip: '<circle cx="9" cy="6" r="1.5" fill="currentColor"/><circle cx="15" cy="6" r="1.5" fill="currentColor"/><circle cx="9" cy="12" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><circle cx="9" cy="18" r="1.5" fill="currentColor"/><circle cx="15" cy="18" r="1.5" fill="currentColor"/>',
   img: '<rect x="4" y="5" width="16" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
   video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  gear: '<path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13c.05-.33.08-.66.08-1s-.03-.67-.08-1l1.86-1.43-1.8-3.12-2.2.88a7 7 0 0 0-1.73-1l-.33-2.33h-3.6l-.33 2.33a7 7 0 0 0-1.73 1l-2.2-.88-1.8 3.12L7.1 11c-.05.33-.08.66-.08 1s.03.67.08 1l-1.86 1.43 1.8 3.12 2.2-.88c.52.4 1.1.74 1.73 1l.33 2.33h3.6l.33-2.33a7 7 0 0 0 1.73-1l2.2.88 1.8-3.12L19.4 13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
+  info: '<circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="8" r="1.05" fill="currentColor"/>',
 };
 const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic[k]}</svg>`;
 
@@ -86,14 +88,20 @@ const CSS = `
   .ce s, .ce del { text-decoration:line-through; opacity:.8; }
   .ce code { font-family:var(--font-mono, ui-monospace, monospace); font-size:.88em; background:var(--s-surface-2); padding:2px 5px; border-radius:5px; }
   /* callout */
-  .callout { border:1.5px solid var(--s-line); border-radius:8px; padding:14px 16px 14px 44px; position:relative; background:var(--s-tint); margin:8px 0; }
-  .callout::before { content:""; position:absolute; left:16px; top:17px; width:18px; height:18px; border-radius:50%; }
-  .callout .ce { padding:0; font-size:15.5px; line-height:1.6; }
-  .callout-info { background:color-mix(in srgb, #3f74c9 11%, var(--s-canvas)); border-color:color-mix(in srgb, #3f74c9 32%, transparent); } .callout-info::before { background:#3f74c9; }
-  .callout-note { background:var(--s-tint); border-color:var(--s-tint-2); } .callout-note::before { background:var(--s-green-fg); }
-  .callout-warning { background:color-mix(in srgb, #c9892b 13%, var(--s-canvas)); border-color:color-mix(in srgb, #c9892b 34%, transparent); } .callout-warning::before { background:#c9892b; }
-  .callout-tip { background:color-mix(in srgb, #7a5cc0 12%, var(--s-canvas)); border-color:color-mix(in srgb, #7a5cc0 32%, transparent); } .callout-tip::before { background:#7a5cc0; }
-  .callout-var { position:absolute; top:8px; right:8px; font:inherit; font-size:11px; font-weight:600; padding:3px 8px; border:1.5px solid var(--s-line-2); border-radius:7px; background:var(--s-surface-2); color:var(--s-fg-soft); cursor:pointer; }
+  .cwrap { margin:8px 0; }
+  .cvar { display:inline-flex; align-items:center; gap:5px; margin-bottom:9px; padding:4px 4px 4px 6px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:7px; }
+  .cvar-lab { display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono,monospace); font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--s-fg-mute); padding-right:6px; border-right:1.5px solid var(--s-line-2); white-space:nowrap; }
+  .cvar-lab svg { width:13px; height:13px; }
+  .cvar button { font:inherit; font-size:11px; font-weight:600; padding:3px 9px; border-radius:7px; border:0; background:transparent; color:var(--s-fg-soft); cursor:pointer; text-transform:capitalize; }
+  .cvar button.on { background:var(--s-green); color:#fff; }
+  .callout { display:flex; gap:13px; padding:15px 17px; border-radius:8px; border:1.5px solid var(--s-tint-2); background:var(--s-tint); margin:0; }
+  .callout .cicon { width:24px; height:24px; flex:none; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  .callout .cicon svg { width:21px; height:21px; }
+  .callout .ce { padding:0; font-size:15.5px; line-height:1.6; flex:1; }
+  .callout-info { background:color-mix(in srgb, #3f74c9 11%, var(--s-canvas)); border-color:color-mix(in srgb, #3f74c9 32%, transparent); } .callout-info .cicon { color:#3f74c9; }
+  .callout-note { background:var(--s-tint); border-color:var(--s-tint-2); } .callout-note .cicon { color:var(--s-green-fg); }
+  .callout-warning { background:color-mix(in srgb, #c9892b 13%, var(--s-canvas)); border-color:color-mix(in srgb, #c9892b 34%, transparent); } .callout-warning .cicon { color:#c9892b; }
+  .callout-tip { background:color-mix(in srgb, #7a5cc0 12%, var(--s-canvas)); border-color:color-mix(in srgb, #7a5cc0 32%, transparent); } .callout-tip .cicon { color:#7a5cc0; }
   .co-lang { font:inherit; font-size:12px; color:var(--s-fg-mute); background:transparent; border:0; padding:0 0 4px; }
   /* void cards (image / embed) */
   .card { border:1.5px solid var(--s-line); border-radius:12px; padding:12px; background:var(--s-surface); display:flex; flex-direction:column; gap:8px; }
@@ -195,8 +203,8 @@ class GbtiDocEditor extends GbtiElement {
       case 'quote': return this._ce('ce-q', 'text', b, 'Quote');
       case 'callout': {
         const v = CALLOUT_VARIANTS.includes(b.variant) ? b.variant : 'note';
-        const varSel = `<select class="callout-var" data-variant="${b._id}">${CALLOUT_VARIANTS.map((x) => `<option value="${x}" ${x === v ? 'selected' : ''}>${x}</option>`).join('')}</select>`;
-        return `<div class="callout callout-${v}">${varSel}${this._ce('', 'text', b, 'Callout text')}</div>`;
+        const bar = `<div class="cvar"><span class="cvar-lab">${svg('gear')} Callout style</span>${CALLOUT_VARIANTS.map((x) => `<button type="button" class="${x === v ? 'on' : ''}" data-cvar="${b._id}" data-cval="${x}">${x}</button>`).join('')}</div>`;
+        return `<div class="cwrap">${bar}<div class="callout callout-${v}"><span class="cicon">${svg('info')}</span>${this._ce('', 'text', b, 'Callout text')}</div></div>`;
       }
       case 'code':
         return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || '')}" placeholder="language (optional)" />`
@@ -282,9 +290,9 @@ class GbtiDocEditor extends GbtiElement {
       this._blocks[i] = next;
       this._render(); this._focusBlock(next._id); this._change();
     }));
-    this.$$('[data-variant]').forEach((el) => el.addEventListener('change', () => {
-      const b = this._byId(el.dataset.variant);
-      if (b) { b.variant = el.value; this._render(); this._focusBlock(b._id); this._change(); }
+    this.$$('[data-cvar]').forEach((el) => el.addEventListener('click', () => {
+      const b = this._byId(el.dataset.cvar);
+      if (b) { b.variant = el.dataset.cval; this._render(); this._focusBlock(b._id); this._change(); }
     }));
     this.$$('[data-up]').forEach((el) => el.addEventListener('click', () => this._move(el.dataset.up, -1)));
     this.$$('[data-down]').forEach((el) => el.addEventListener('click', () => this._move(el.dataset.down, 1)));

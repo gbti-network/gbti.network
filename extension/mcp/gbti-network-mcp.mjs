@@ -18389,7 +18389,7 @@ function validateContent(ctx2, { type, input, body } = {}) {
     return { valid: false, error: err.message };
   }
 }
-async function publish(ctx2, { type, input, body, message, title, prBody } = {}) {
+async function publish(ctx2, { type, input, body, message, title, prBody, authorNote } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
   const membership = await ctx2.membership?.() ?? "unknown";
@@ -18417,10 +18417,33 @@ async function publish(ctx2, { type, input, body, message, title, prBody } = {})
     }
     throw err;
   }
+  const introFile = buildIntroCommentFile({ username: id.username, built, authorNote, now: ctx2.now?.() });
+  if (introFile) {
+    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
+    return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message, title, body: prBody });
+  }
   if (plan) {
     return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message, title, body: prBody });
   }
   return publishContent({ repo, change: built, message, title, body: prBody });
+}
+function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
+  const note = String(authorNote ?? "").trim();
+  if (!note || !built?.slug || !["product", "prompt"].includes(built.type)) return null;
+  const introBuilt = buildCommentFile({
+    username,
+    input: {
+      id: `intro-${built.slug}`,
+      targetType: built.type,
+      targetSlug: built.slug,
+      createdAt: now ?? (/* @__PURE__ */ new Date()).toISOString(),
+      status: "published",
+      visibility: "public",
+      authorNote: true
+    },
+    body: note
+  });
+  return { path: introBuilt.path, content: introBuilt.markdown };
 }
 async function planMemberFiles({ built, body, encrypt }) {
   if (!built?.slug) return null;
@@ -18836,9 +18859,9 @@ var TOOLS = [
   },
   {
     name: "publish_content",
-    description: "Validate and publish a content object as a pull request (forces author/owner fields; goes through the gate). Returns the PR number + url.",
+    description: "Validate and publish a content object as a pull request (forces author/owner fields; goes through the gate). Returns the PR number + url. For a new product/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.",
     inputSchema: obj(
-      { type: TYPE_ENUM, input: { type: "object" }, body: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } },
+      { type: TYPE_ENUM, input: { type: "object" }, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } },
       ["type", "input"]
     ),
     handler: (ctx2, args) => publish(ctx2, args ?? {})
@@ -18848,14 +18871,14 @@ var TOOLS = [
   // signed-in member; publishing is paid-only). Call validate_content first if unsure which fields are required.
   {
     name: "add_prompt",
-    description: "Create + publish a PROMPT as a pull request. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you.",
-    inputSchema: obj({ input: { type: "object" }, body: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["input"]),
+    description: "Create + publish a PROMPT as a pull request. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.",
+    inputSchema: obj({ input: { type: "object" }, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["input"]),
     handler: (ctx2, args) => publish(ctx2, { ...args ?? {}, type: "prompt" })
   },
   {
     name: "add_product",
-    description: "Create + publish a PRODUCT as a pull request. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the product description. author is forced to you. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)",
-    inputSchema: obj({ input: { type: "object" }, body: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["input"]),
+    description: "Create + publish a PRODUCT as a pull request. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the product description. author is forced to you. SOW-014: a new product needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)",
+    inputSchema: obj({ input: { type: "object" }, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["input"]),
     handler: (ctx2, args) => publish(ctx2, { ...args ?? {}, type: "product" })
   },
   {
