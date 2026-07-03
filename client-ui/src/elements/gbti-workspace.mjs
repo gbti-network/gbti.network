@@ -451,7 +451,7 @@ class GbtiWorkspace extends GbtiElement {
       this.on('[data-back]', 'click', () => { this._editing = null; this.render(); });
       const ed = this.$('gbti-content-editor');
       const e = this._editing;
-      if (ed?.load) ed.load(e.type, e.frontmatter, e.body);
+      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path); // SOW-062 P6: path resolves a repo-relative cover preview
       // SOW-073: publishing/editing from the embedded editor invalidates the affected type (+ Overview + PRs) so the
       // workbench reflects the change immediately on return, never a stale list.
       ed?.addEventListener('gbti-published', () => this._onPublished(e.type));
@@ -623,7 +623,7 @@ class GbtiWorkspace extends GbtiElement {
     if (!path) return;
     try {
       const full = await this.client.getContentItem({ path });
-      this._editing = { type, frontmatter: full.frontmatter, body: full.body };
+      this._editing = { type, frontmatter: full.frontmatter, body: full.body, path };
       this.render();
     } catch { /* could not load: stay on the list */ }
   }
@@ -635,7 +635,7 @@ class GbtiWorkspace extends GbtiElement {
     this._draftMsg = null;
     try {
       const full = await this.client.readDraft({ type: d.type, slug: d.slug });
-      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body };
+      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || '' };
       this.render();
     } catch { this._draftMsg = 'Could not open that draft.'; this.render(); }
   }

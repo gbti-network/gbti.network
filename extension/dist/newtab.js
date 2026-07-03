@@ -5341,6 +5341,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var IMG = _svg(`<rect x="4" y="5" width="16" height="14" rx="2.2" ${S} stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" ${S} stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`);
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
   var TYPE_LABEL = { post: "Article", product: "Product", prompt: "Prompt", profile: "Profile" };
+  var CONTENT_REPO = "gbti-network/gbti.network";
   var RAIL_SCHEMA = {
     post: [
       { title: "Details", open: true, keys: ["visibility", "excerpt", "categories", "tags"] },
@@ -5365,10 +5366,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.preset = null;
     }
     /** Seed the editor from an existing item (used by the inline editor + "edit" from My Content). */
-    load(type, input, body) {
+    load(type, input, body, path) {
       this.type = type || this.type;
       this.preset = { input: input || {}, body: body || "" };
+      this.itemPath = path || null;
       if (this.isConnected) this.render();
+    }
+    // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
+    // (/_astro/) url passes through resolveAsset; a repo-relative `./images/x.webp` is served from the item's folder
+    // via jsDelivr over GitHub (the built site only serves the /_astro/-optimized variant, whose path the editor does
+    // not have). This is why resolveAsset alone produced a broken `gbti.network/./images/...` url. Falls back safely.
+    resolveCover(value) {
+      if (!value) return "";
+      const s = String(value);
+      if (/^https?:\/\//.test(s) || /^\/_astro\//.test(s) || s.startsWith("//")) return resolveAsset(s) || s;
+      if (this.itemPath) {
+        const folder2 = String(this.itemPath).replace(/\/index\.md$/, "").replace(/^\/+/, "");
+        return `https://cdn.jsdelivr.net/gh/${CONTENT_REPO}@main/${folder2}/${s.replace(/^\.?\/+/, "")}`;
+      }
+      return resolveAsset(s) || "";
     }
     async render() {
       if (!this.client) return;
@@ -5590,7 +5606,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return wrap(`${label}<div class="chips" data-chips="${f.key}" data-accent="${accent}">${chips}<input type="text" placeholder="${esc(f.placeholder || "Add…")}"></div><input data-key="${f.key}" data-kind="array" type="hidden" value="${esc(arr.join(", "))}" />`);
       }
       if (f.kind === "image") {
-        const url = v ? resolveAsset(v) : "";
+        const url = v ? this.resolveCover(v) : "";
         const has = !!url;
         return `<div class="fld cover-field" data-fkey="${f.key}"${visible ? "" : " hidden"}>${label}
         <div class="cover" data-cover>
@@ -10245,7 +10261,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         });
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
-        if (ed?.load) ed.load(e.type, e.frontmatter, e.body);
+        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path);
         ed?.addEventListener("gbti-published", () => this._onPublished(e.type));
         ed?.addEventListener("gbti-draft-saved", () => this._onDraftSaved());
         return;
@@ -10396,7 +10412,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!path) return;
       try {
         const full = await this.client.getContentItem({ path });
-        this._editing = { type, frontmatter: full.frontmatter, body: full.body };
+        this._editing = { type, frontmatter: full.frontmatter, body: full.body, path };
         this.render();
       } catch {
       }
@@ -10408,7 +10424,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._draftMsg = null;
       try {
         const full = await this.client.readDraft({ type: d.type, slug: d.slug });
-        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body };
+        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || "" };
         this.render();
       } catch {
         this._draftMsg = "Could not open that draft.";
