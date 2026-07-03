@@ -18971,6 +18971,17 @@ async function saveDraft(ctx, { type, input, body, message } = {}) {
   await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
   return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: built.path, state: "staged" };
 }
+async function forkContentMatchesLive(ctx, path, forkText) {
+  try {
+    const staged = parseContentFile(forkText);
+    if (staged.frontmatter?.encryptedBody) return false;
+    const live = await ctx.reader?.read?.(path);
+    if (!live) return false;
+    return String(staged.body ?? "").trim() === String(live.body ?? "").trim() && JSON.stringify(staged.frontmatter ?? {}) === JSON.stringify(live.frontmatter ?? {});
+  } catch {
+    return false;
+  }
+}
 async function listDrafts(ctx, { type } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
@@ -19005,6 +19016,13 @@ async function listDrafts(ctx, { type } = {}) {
       pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
     } catch {
       pull = null;
+    }
+    if (!pull && await forkContentMatchesLive(ctx, path, text)) {
+      try {
+        await repo.deleteBranch(fork.full_name, branch);
+      } catch {
+      }
+      continue;
     }
     drafts.push({
       type: meta3.type,

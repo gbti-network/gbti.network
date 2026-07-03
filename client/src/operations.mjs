@@ -424,6 +424,23 @@ export async function saveDraft(ctx, { type, input, body, message } = {}) {
 /** List the member's fork-staged drafts (the gbti/* branches on their fork). Each draft carries enough to render
  *  a row + open the editor; `pull` is the matched OPEN PR (or null) so the UI computes the lifecycle state via
  *  classifyDraft. Fail-soft per draft (an unreadable branch is skipped). */
+/**
+ * SOW-106 Phase 2: is a fork-staged file byte-identical to the LIVE network version (fully merged, nothing
+ * pending)? Reads the live content via the reader (upstream is public) and compares the parsed frontmatter + body.
+ * ANY difference, an unreadable live file, or a member-only item (encrypted body, which the stub alone cannot
+ * compare) returns false, so a pending edit is NEVER mistaken for merged. Read-only; never throws.
+ */
+export async function forkContentMatchesLive(ctx, path, forkText) {
+  try {
+    const staged = parseContentFile(forkText);
+    if (staged.frontmatter?.encryptedBody) return false; // member-only: the stub cannot prove the .enc is unchanged
+    const live = await ctx.reader?.read?.(path);
+    if (!live) return false;
+    return String(staged.body ?? '').trim() === String(live.body ?? '').trim()
+      && JSON.stringify(staged.frontmatter ?? {}) === JSON.stringify(live.frontmatter ?? {});
+  } catch { return false; }
+}
+
 export async function listDrafts(ctx, { type } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
@@ -443,6 +460,14 @@ export async function listDrafts(ctx, { type } = {}) {
     try { fm = parseContentFile(text).frontmatter ?? {}; } catch { fm = {}; }
     let pull = null;
     try { pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }); } catch { pull = null; }
+    // SOW-106 Phase 2: a staged draft with NO open PR whose content EXACTLY matches the LIVE network version is
+    // fully merged (nothing pending). Clean up the lingering fork branch (member token; the content is preserved on
+    // the network, so this loses nothing) and drop it, so a published item never lingers as a "Staged" draft.
+    // Conservative: any pending edit, an open PR, or a member-only item keeps the draft.
+    if (!pull && (await forkContentMatchesLive(ctx, path, text))) {
+      try { await repo.deleteBranch(fork.full_name, branch); } catch { /* best-effort; a stale fork branch is harmless */ }
+      continue;
+    }
     drafts.push({
       type: meta.type,
       slug: meta.slug,
