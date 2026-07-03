@@ -10798,37 +10798,27 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
   var CSS31 = `
-  :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
-  .wrap { max-width:1160px; margin:0 auto; }
-  .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
-  @media (max-width:960px) { .cols { grid-template-columns:1fr; gap:28px; } }
-  .main { min-width:0; }
-  .side { display:flex; flex-direction:column; gap:22px; }
-  .hero { display:block; width:100%; aspect-ratio:16 / 9; object-fit:cover; border-radius:7px; margin:0 0 18px; background:var(--hover); }
-  h2 { font-family:var(--font-display, var(--font-body)); font-size:26px; line-height:1.3; margin:0 0 14px; }
-  .sum { font-size:15.5px; line-height:1.65; color:var(--fg); margin:0 0 20px; }
+  :host { display:block; font-family:var(--font-body); color:var(--fg); max-width:760px; }
+  .pub { display:flex; align-items:center; gap:12px; padding:0 0 16px; margin:0 0 16px; border-bottom:1px solid var(--line); }
+  .pav { position:relative; width:40px; height:40px; border-radius:10px; overflow:hidden; flex:none; background:var(--hover); }
+  .pav img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .pub .pi { min-width:0; flex:1; }
+  .pub .pi b { display:block; font-size:15px; }
+  .pub .pi .d { display:block; color:var(--muted); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fbtn { flex:none; font:inherit; font-weight:600; font-size:12.5px; padding:7px 15px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--fg); cursor:pointer; }
+  .fbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .fbtn.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+  .fbtn[disabled] { opacity:.6; cursor:default; }
+  .hero { display:block; width:100%; aspect-ratio:16 / 9; object-fit:cover; border-radius:12px; margin:0 0 18px; background:var(--hover); }
+  h2 { font-family:var(--font-display, var(--font-body)); font-size:23px; line-height:1.3; margin:0 0 12px; }
+  .sum { font-size:15px; line-height:1.6; color:var(--fg); margin:0 0 20px; }
   .acts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   a.src { font:inherit; font-weight:600; font-size:13.5px; padding:9px 16px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); text-decoration:none; }
   a.src:hover { border-color:var(--accent); color:var(--accent); }
   button.disc { font:inherit; font-weight:700; font-size:13.5px; padding:9px 16px; border:1px solid var(--brand); border-radius:9px; background:var(--brand); color:#fff; cursor:pointer; }
   button.disc[disabled] { opacity:.6; cursor:default; }
   .note { font-size:12.5px; margin:12px 0 0; } .note.ok { color:var(--brand); } .note.err { color:#d4495a; }
-
-  /* the news channel meta as a sidebar card, above the discussion (7px, frosts in glass like the reader author card) */
-  .chan-card { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:16px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
-  .chan-card .cc-eyebrow { font-family:var(--font-mono, ui-monospace, monospace); font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 9px; }
-  .chan-card .cc-top { display:flex; align-items:center; gap:12px; }
-  .pav { position:relative; width:40px; height:40px; border-radius:10px; overflow:hidden; flex:none; background:var(--hover); }
-  .pav img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .chan-card .cc-name { font-family:var(--font-display, var(--font-body)); font-size:16px; font-weight:700; line-height:1.2; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-  .chan-card .cc-desc { font-size:13px; line-height:1.5; color:var(--muted); margin:12px 0 0; }
-  .chan-card .cc-count { display:block; font-size:11.5px; color:var(--muted); margin:8px 0 0; }
-  .fbtn { width:100%; margin-top:14px; font:inherit; font-weight:600; font-size:13px; padding:9px 12px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); cursor:pointer; }
-  .fbtn:hover { border-color:var(--accent); color:var(--accent); }
-  .fbtn.on { background:var(--brand); border-color:var(--brand); color:#fff; }
-  .fbtn[disabled] { opacity:.6; cursor:default; }
-
+  .disc-wrap { margin-top:24px; padding-top:18px; border-top:1px solid var(--line); }
   .disc-wrap h4 { margin:0 0 12px; font-family:var(--font-display, var(--font-body)); font-size:15px; }
   .muted { color:var(--muted); }
 `;
@@ -10916,6 +10906,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const pub = this._publisher;
       const followable = Boolean(this.client?.setPrefs && it.source && this._followed);
       const followed = followable && this._followed.has(lc6(it.source));
+      const meta = [pub?.description, pub?.count != null ? `${pub.count} items` : null].filter(Boolean).join(" · ");
       const open = it.openHref || (it.link ? utmLink(it.link) : "");
       const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
       const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc(this._postNote.msg)}</p>` : "";
@@ -10923,11 +10914,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const discussion = slug ? `<div class="disc-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const heroSrc = it.thumb || it.image || "";
       const hero = heroSrc ? `<img class="hero" src="${esc(heroSrc)}" alt="" loading="lazy">` : "";
-      const chanDesc = pub?.description ? `<p class="cc-desc">${esc(pub.description)}</p>` : "";
-      const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
-      const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
-      const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      this.set(this.css(CSS31) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2><p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS31) + `<div class="pub"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="pi"><b>${esc(pub?.name || it.source || "Publisher")}</b>${meta ? `<span class="d">${esc(meta)}</span>` : ""}</div>` + (followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "") + `</div>` + hero + `<h2>${esc(it.title || "News")}</h2><p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + discussion);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
