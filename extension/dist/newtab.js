@@ -6034,14 +6034,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .dotpill { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; padding:6px 12px; border-radius:999px; background:var(--s-tint); color:var(--s-green-fg); border:1.5px solid var(--s-tint-2); }
         .dotpill .d { width:7px; height:7px; border-radius:50%; background:var(--s-green); }
         .cover-field .ebtn { font-size:13px; padding:7px 12px; }
-        .cover-frames { display:flex; gap:12px; align-items:flex-end; margin:6px 0 10px; }
-        .cover-frames.empty { display:none; }
-        .cf { margin:0; }
-        .cf img { display:block; background:var(--s-surface-2); border:1px solid var(--s-line); border-radius:8px; }
-        .cf-43 img { width:116px; aspect-ratio:4/3; object-fit:cover; }
-        .cf-hero img { width:184px; height:auto; max-height:150px; object-fit:contain; }
-        .cf figcaption { font-size:11px; color:var(--s-fg-mute); margin-top:4px; text-align:center; }
-        .cover-actions { display:flex; gap:8px; }
+        /* SOW-062 P6: reframable cover preview (single 4:3-card / Hero frame + striped placeholder) */
+        .cover { display:flex; flex-direction:column; gap:10px; margin:6px 0 4px; }
+        .framepick { display:inline-flex; gap:2px; padding:2px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:7px; align-self:flex-start; }
+        .framepick button { font:inherit; font-size:11.5px; font-weight:600; padding:4px 10px; border:0; background:transparent; color:var(--s-fg-mute); border-radius:5px; cursor:pointer; }
+        .framepick button.on { background:var(--s-surface); color:var(--s-fg); box-shadow:0 1px 2px rgba(0,0,0,.1); }
+        .coverframe { border:1.5px solid var(--s-line-2); border-radius:8px; overflow:hidden; background:var(--s-surface-2); position:relative; }
+        .coverframe.card4 { aspect-ratio:4/3; } .coverframe.hero { aspect-ratio:16/7; }
+        .coverframe .ph { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; color:var(--s-fg-mute); background-image:repeating-linear-gradient(45deg, var(--s-surface-3) 0 12px, transparent 12px 24px); }
+        .coverframe .ph svg { width:26px; height:26px; opacity:.5; } .coverframe .ph .mono { font-family:var(--font-mono,monospace); font-size:11px; }
+        .coverframe img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+        .coverbtns { display:flex; gap:8px; }
         /* SOW-062 P6: product links[] row editor */
         .linkrows { display:flex; flex-direction:column; gap:9px; margin-bottom:8px; }
         .linkrow { display:flex; flex-direction:column; gap:8px; padding:10px; border:1.5px solid var(--s-line-2); border-radius:8px; background:var(--s-surface-2); }
@@ -6173,6 +6176,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         c.querySelector("[data-cover-pick]")?.addEventListener("click", () => file?.click());
         file?.addEventListener("change", (e) => this.doCoverImage(e.target.files?.[0], c));
         c.querySelector("[data-cover-clear]")?.addEventListener("click", () => this.clearCover(c));
+        c.querySelectorAll("[data-frame]").forEach((fb) => fb.addEventListener("click", () => {
+          c.querySelectorAll("[data-frame]").forEach((b) => b.classList.toggle("on", b === fb));
+          const cf = c.querySelector("[data-coverframe]");
+          if (cf) cf.className = "coverframe " + (fb.dataset.frame === "hero" ? "hero" : "card4");
+        }));
       });
       const be = this.$("#body");
       if (be) be.value = this.preset?.body ?? "";
@@ -6227,12 +6235,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const has = !!url;
         return `<div class="fld cover-field" data-fkey="${f.key}"${visible ? "" : " hidden"}>${label}
         <div class="cover" data-cover>
-          <div class="cover-frames${has ? "" : " empty"}">
-            <figure class="cf cf-43"><img data-cimg src="${esc(url)}" alt="" /><figcaption>4:3 card</figcaption></figure>
-            <figure class="cf cf-hero"><img data-cimg src="${esc(url)}" alt="" /><figcaption>Hero (full)</figcaption></figure>
-          </div>
+          <div class="framepick"><button type="button" class="on" data-frame="card4">4:3 card</button><button type="button" data-frame="hero">Hero</button></div>
+          <div class="coverframe card4" data-coverframe>${this._coverFrameInner(url)}</div>
           <input type="file" accept="image/*" hidden data-cover-file />
-          <div class="cover-actions"><button type="button" class="ebtn" data-cover-pick>${has ? "Replace image" : "Choose image"}</button><button type="button" class="ebtn" data-cover-clear${has ? "" : " hidden"}>Remove</button></div>
+          <div class="coverbtns"><button type="button" class="ebtn" data-cover-pick>${has ? "Replace image" : "Choose image"}</button><button type="button" class="ebtn" data-cover-clear${has ? "" : " hidden"}>Remove</button></div>
           <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc(v)}" />
         </div></div>`;
       }
@@ -6573,15 +6579,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
       }
     }
-    // SOW-062 P3: stage a picked cover image — update both framing previews from the file immediately, then stage it
-    // and drop the returned repo path into the field's hidden input (gather() picks it up like any field).
+    // SOW-062 P6: the inner of the reframable cover preview -- the image (object-fit:cover) when set, else the
+    // striped "no image yet" placeholder. Used by the initial render, doCoverImage, and clearCover.
+    _coverFrameInner(url) {
+      return url ? `<img data-cimg src="${esc(url)}" alt="" />` : `<div class="ph">${IMG}<span class="mono">no image yet</span></div>`;
+    }
+    // SOW-062 P3/P6: stage a picked cover image — drop it into the reframable preview immediately, then stage it and
+    // put the returned repo path into the field's hidden input (gather() picks it up like any field).
     async doCoverImage(file, control) {
       if (!file || !control) return;
       const dataUrl = await fileToDataUrl(file);
-      control.querySelectorAll("[data-cimg]").forEach((img) => {
-        img.src = dataUrl;
-      });
-      control.querySelector(".cover-frames")?.classList.remove("empty");
+      const cf = control.querySelector("[data-coverframe]");
+      if (cf) {
+        cf.innerHTML = '<img data-cimg alt="" />';
+        const img = cf.querySelector("[data-cimg]");
+        if (img) img.src = dataUrl;
+      }
       control.querySelector("[data-cover-clear]")?.removeAttribute("hidden");
       const pick = control.querySelector("[data-cover-pick]");
       if (pick) pick.textContent = "Replace image";
@@ -6599,10 +6612,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!control) return;
       const el = control.querySelector("[data-key]");
       if (el) el.value = "";
-      control.querySelectorAll("[data-cimg]").forEach((img) => {
-        img.removeAttribute("src");
-      });
-      control.querySelector(".cover-frames")?.classList.add("empty");
+      const cf = control.querySelector("[data-coverframe]");
+      if (cf) cf.innerHTML = this._coverFrameInner("");
       control.querySelector("[data-cover-clear]")?.setAttribute("hidden", "");
       const pick = control.querySelector("[data-cover-pick]");
       if (pick) pick.textContent = "Choose image";
