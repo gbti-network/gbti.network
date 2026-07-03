@@ -33,3 +33,6 @@ quotes:
   - text: Nature does not hurry, yet everything is accomplished.
     author: Lao Tzu
     enabled: true
+  - text: '"Better to be too early and have to try again, than be too late and have to catch up."'
+    author: Paul Graham
+    enabled: true
