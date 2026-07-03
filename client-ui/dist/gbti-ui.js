@@ -515,6 +515,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .card-h { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--s-fg-mute); } .card-h svg { width:18px; height:18px; }
   .card input { width:100%; box-sizing:border-box; font:inherit; font-size:13.5px; padding:8px 10px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--bg, var(--s-surface)); color:var(--s-fg); }
   .card-prev { max-width:100%; border-radius:8px; border:1px solid var(--s-line); }
+  /* SOW-062 P6: image drop-zone placeholder (striped) + the preview frame */
+  .imgframe { border:1.5px solid var(--s-line-2); border-radius:9px; overflow:hidden; background:var(--s-surface-2); }
+  .imgframe img { width:100%; display:block; }
+  .imgph { aspect-ratio:16/8; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; color:var(--s-fg-mute); cursor:pointer;
+    background-image:repeating-linear-gradient(45deg, var(--s-surface-3) 0 12px, transparent 12px 24px); transition:color .14s ease, box-shadow .14s ease; }
+  .imgph:hover { color:var(--s-green-fg); }
+  .imgph.drag { color:var(--s-green-fg); background:var(--s-tint); box-shadow:inset 0 0 0 2px var(--s-green); }
+  .imgph svg { width:30px; height:30px; opacity:.55; }
+  .imgph-t { font-family:var(--font-mono,monospace); font-size:12px; }
   .up { display:flex; align-items:center; gap:10px; }
   .up-btn { font:inherit; font-size:13px; font-weight:600; padding:7px 12px; border:1.5px solid var(--s-line); border-radius:9px; background:var(--s-surface); color:var(--s-fg); cursor:pointer; }
   .up-btn:hover { border-color:var(--s-green); color:var(--s-green); }
@@ -634,8 +643,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           const items = (Array.isArray(b.items) ? b.items : [""]).map((it) => `<li>${inlineMdToHtml(it)}</li>`).join("") || "<li></li>";
           return `<${tag} class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}">${items}</${tag}>`;
         }
-        case "image":
-          return `<div class="card"><div class="card-h">${svg("img")} Image</div>` + (b.url ? `<img class="card-prev" src="${esc(b.url.startsWith("http") ? b.url : `https://gbti.network/${b.url}`)}" alt="" />` : "") + `<input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Image URL or repo path" /><input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || "")}" placeholder="Alt text" /><div class="up"><input type="file" accept="image/*" hidden data-imgfile="${b._id}" /><button type="button" class="up-btn" data-imgpick="${b._id}">Upload an image</button><span class="up-st" data-imgst="${b._id}"></span></div></div>`;
+        case "image": {
+          const hasUrl = !!b.url;
+          const src = hasUrl ? esc(b.url.startsWith("http") ? b.url : `https://gbti.network/${b.url}`) : "";
+          return `<div class="card"><div class="card-h">${svg("img")} Image</div><div class="imgframe">` + (hasUrl ? `<img src="${src}" alt="" />` : `<div class="imgph" data-imgdrop="${b._id}" title="Drop an image here, or click to upload">${svg("img")}<span class="imgph-t">Drop an image here, or click to upload</span></div>`) + `<input type="file" accept="image/*" hidden data-imgfile="${b._id}" /></div><input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Image URL or repo path" /><input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || "")}" placeholder="Alt text" /><div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg("img")} ${hasUrl ? "Replace image" : "Choose image"}</button><span class="up-st" data-imgst="${b._id}"></span></div></div>`;
+        }
         case "embed":
           return `<div class="card"><div class="card-h">${svg("video")} Video / embed</div><input data-edit="url" data-id="${b._id}" value="${esc(b.url || "")}" placeholder="Paste a YouTube or Vimeo URL" /></div>`;
         case "paragraph":
@@ -820,6 +832,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const fileEl = this.$(`[data-imgfile="${id}"]`);
         el.addEventListener("click", () => fileEl?.click());
         fileEl?.addEventListener("change", (e) => this._uploadImage(e.target.files?.[0], id));
+      });
+      this.$$("[data-imgdrop]").forEach((zone) => {
+        const id = zone.dataset.imgdrop;
+        const fileEl = this.$(`[data-imgfile="${id}"]`);
+        zone.addEventListener("click", () => fileEl?.click());
+        zone.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          zone.classList.add("drag");
+        });
+        zone.addEventListener("dragleave", () => zone.classList.remove("drag"));
+        zone.addEventListener("drop", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          zone.classList.remove("drag");
+          const f = e.dataTransfer?.files?.[0];
+          if (f && f.type.startsWith("image/")) this._uploadImage(f, id);
+        });
       });
       this.$$('.ce[data-edit="text"]').forEach((el) => el.addEventListener("keydown", (e) => {
         if (this._slash && this._slash.el === el) {
