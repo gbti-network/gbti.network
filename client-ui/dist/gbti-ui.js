@@ -1165,15 +1165,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var IMG = _svg(`<rect x="4" y="5" width="16" height="14" rx="2.2" ${S} stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" ${S} stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`);
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
   var TYPE_LABEL = { post: "Article", product: "Product", prompt: "Prompt", profile: "Profile" };
-  var HIDDEN_KEYS = /* @__PURE__ */ new Set(["canonicalUrl"]);
-  var RAIL_SECTIONS = [
-    { name: "Publishing", keys: ["status", "visibility"] },
-    { name: "Taxonomy", keys: ["categories", "tags"] },
-    { name: "Pricing", keys: ["pricing", "pricingUrl"] },
-    { name: "Links", keys: ["links"] },
-    { name: "Media", keys: ["coverImage", "coverAlt", "image", "imageAlt", "alt", "video"] }
-  ];
-  var sectionFor = (key) => RAIL_SECTIONS.find((s) => s.keys.includes(key))?.name || "Details";
+  var RAIL_SCHEMA = {
+    post: [
+      { title: "Details", open: true, keys: ["visibility", "excerpt", "categories", "tags"] },
+      { title: "Media", open: false, keys: ["coverImage", "coverAlt"] }
+    ],
+    product: [
+      { title: "Details", open: true, keys: ["visibility", "shortDescription", "categories", "tags"] },
+      { title: "Pricing", open: true, keys: ["pricing", "pricingUrl"] },
+      { title: "Links", open: true, keys: ["links"] },
+      { title: "Media", open: true, keys: ["icon", "featuredImage", "banner"] }
+    ],
+    prompt: [
+      { title: "Details", open: true, keys: ["visibility", "shortDescription", "targets", "categories", "tags"] },
+      { title: "Media", open: false, keys: ["image"] }
+    ]
+  };
   var GbtiContentEditor = class extends GbtiElement {
     constructor() {
       super();
@@ -1207,23 +1214,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const blocked = membership !== "paid" && membership !== "unknown";
       const p = this.preset?.input ?? {};
       const getValPreset = (k) => this.presetStr(p[k]);
-      const taglineKey = this.fields.find((f) => f.key === "excerpt") ? "excerpt" : this.fields.find((f) => f.key === "shortDescription") ? "shortDescription" : null;
-      const headerKeys = new Set(["title", "slug", taglineKey].filter(Boolean));
-      const grouped = {};
-      const hiddenFields = [];
-      for (const f of this.fields) {
-        if (HIDDEN_KEYS.has(f.key) || headerKeys.has(f.key)) {
-          hiddenFields.push(f);
-          continue;
-        }
-        if (f.key === "publicStub") continue;
-        const sec = sectionFor(f.key);
-        (grouped[sec] = grouped[sec] || []).push(f);
-      }
-      const order = ["Details", ...RAIL_SECTIONS.map((s) => s.name)];
-      const sectionsHtml = order.filter((n) => grouped[n]?.length).map((n) => {
-        const inner = grouped[n].map((f) => this.fieldHtml(f, p[f.key], this.fieldVisible(f, getValPreset))).join("");
-        return `<details ${["Details", "Publishing", "Taxonomy"].includes(n) ? "open" : ""} class="rsec"><summary><span class="st"><span class="si">${SECTION_ICON[n] || DOC}</span>${esc(n)}</span><span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
+      const headerKeys = /* @__PURE__ */ new Set(["title", "slug"]);
+      const schema = RAIL_SCHEMA[this.type] || RAIL_SCHEMA.post;
+      const schemaKeys = new Set(schema.flatMap((s) => s.keys));
+      const fieldByKey = new Map(this.fields.map((f) => [f.key, f]));
+      const hiddenFields = this.fields.filter((f) => !headerKeys.has(f.key) && !schemaKeys.has(f.key) && f.key !== "publicStub");
+      const sectionsHtml = schema.map((sec) => {
+        const inner = sec.keys.map((key) => {
+          const f = fieldByKey.get(key);
+          return f ? this.fieldHtml(f, p[key], this.fieldVisible(f, getValPreset)) : "";
+        }).join("");
+        if (!inner) return "";
+        return `<details ${sec.open ? "open" : ""} class="rsec"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span><span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
       }).join("");
       const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join("");
       const typePath = { post: "blog", product: "products", prompt: "prompts" }[this.type] || this.type;
@@ -1231,7 +1233,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const statusLabel = isPub ? p.publishedAt ? String(p.publishedAt).slice(0, 10) : "published" : "draft";
       this.set(
         this.css(EDITOR_SURFACE + `
-        :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); }
+        :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); container-type:inline-size; }
         .edhead { display:flex; align-items:center; gap:12px; padding:4px 2px 16px; flex-wrap:wrap; }
         .etype { font-family:var(--font-mono,monospace); font-size:10.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--s-green-fg); background:var(--s-tint); border:1.5px solid var(--s-tint-2); border-radius:999px; padding:5px 12px; }
         .edhead-sp { flex:1; }
@@ -1242,7 +1244,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .ebtn-primary { background:var(--s-green); border-color:var(--s-green); color:#fff; box-shadow:0 8px 20px rgba(31,158,95,.26); }
         .ebtn-primary:hover { filter:brightness(.96); border-color:var(--s-green); }
         .edgrid { display:grid; grid-template-columns:minmax(0,1fr) 350px; gap:34px; align-items:start; }
-        @media (max-width:800px) { .edgrid { grid-template-columns:1fr; } }
+        @container (max-width:1140px) { .edgrid { grid-template-columns:1fr; } }
         .doc { min-width:0; background:var(--s-canvas); border:1.5px solid var(--s-line); border-radius:12px; box-shadow:var(--s-shadow-md); padding:40px 46px 52px; color:var(--s-fg); }
         .doc-title { font-family:var(--font-display); font-weight:800; font-size:34px; line-height:1.14; letter-spacing:-.015em; color:var(--s-fg); outline:none; margin-bottom:6px; }
         .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.55; }
@@ -1265,7 +1267,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         #out { margin-top:14px; }
         .preview { background:var(--s-surface-2); border:1px solid var(--s-line); border-radius:10px; padding:12px 14px; color:var(--s-fg); margin-top:12px; }
         .rail { display:flex; flex-direction:column; gap:14px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
-        @media (max-width:800px) { .rail { position:static; max-height:none; } }
+        @container (max-width:1140px) { .rail { position:static; max-height:none; } }
         .rsec { background:var(--s-surface); border:1.5px solid var(--s-line); border-radius:10px; box-shadow:var(--s-shadow); overflow:hidden; }
         .rsec > summary { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; padding:13px 15px; font-weight:700; font-size:14px; color:var(--s-fg); }
         .rsec > summary::-webkit-details-marker { display:none; }
@@ -1337,7 +1339,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
            <article class="doc">
              ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
              <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || "")}</div>
-             ${taglineKey ? `<div class="doc-tagline" contenteditable="true" data-header="${taglineKey}" data-ph="Add a tagline…">${esc(this.presetStr(p[taglineKey]) || "")}</div>` : ""}
              <div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span><span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || "")}</span><span class="slug-meta${isPub ? " pub" : ""}"><span class="pubdot"></span><span>${esc(statusLabel)}</span></span></div>
              <section class="docsec" id="secMain">
                <div class="docsec-h">${DOC} Main content</div>
@@ -1594,6 +1595,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.out("Publishing…");
       try {
         const { type, input, body } = this.gather();
+        if (this.fields.some((f) => f.key === "status")) input.status = "published";
         const res = await this.client.publish({ type, input, body });
         this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`);
         this.emit("gbti-published", res);
@@ -1608,6 +1610,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.out("Saving draft…");
       try {
         const { type, input, body } = this.gather();
+        if (this.fields.some((f) => f.key === "status")) input.status = "draft";
         const res = await this.client.saveDraft({ type, input, body });
         this.out('<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
         this.emit("gbti-draft-saved", res);
@@ -10158,27 +10161,37 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
   var CSS31 = `
-  :host { display:block; font-family:var(--font-body); color:var(--fg); max-width:760px; }
-  .pub { display:flex; align-items:center; gap:12px; padding:0 0 16px; margin:0 0 16px; border-bottom:1px solid var(--line); }
-  .pav { position:relative; width:40px; height:40px; border-radius:10px; overflow:hidden; flex:none; background:var(--hover); }
-  .pav img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .pub .pi { min-width:0; flex:1; }
-  .pub .pi b { display:block; font-size:15px; }
-  .pub .pi .d { display:block; color:var(--muted); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .fbtn { flex:none; font:inherit; font-weight:600; font-size:12.5px; padding:7px 15px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--fg); cursor:pointer; }
-  .fbtn:hover { border-color:var(--accent); color:var(--accent); }
-  .fbtn.on { background:var(--brand); border-color:var(--brand); color:#fff; }
-  .fbtn[disabled] { opacity:.6; cursor:default; }
-  .hero { display:block; width:100%; aspect-ratio:16 / 9; object-fit:cover; border-radius:12px; margin:0 0 18px; background:var(--hover); }
-  h2 { font-family:var(--font-display, var(--font-body)); font-size:23px; line-height:1.3; margin:0 0 12px; }
-  .sum { font-size:15px; line-height:1.6; color:var(--fg); margin:0 0 20px; }
+  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
+  .wrap { max-width:1160px; margin:0 auto; }
+  .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
+  @media (max-width:960px) { .cols { grid-template-columns:1fr; gap:28px; } }
+  .main { min-width:0; }
+  .side { display:flex; flex-direction:column; gap:22px; }
+  .hero { display:block; width:100%; aspect-ratio:16 / 9; object-fit:cover; border-radius:7px; margin:0 0 18px; background:var(--hover); }
+  h2 { font-family:var(--font-display, var(--font-body)); font-size:26px; line-height:1.3; margin:0 0 14px; }
+  .sum { font-size:15.5px; line-height:1.65; color:var(--fg); margin:0 0 20px; }
   .acts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   a.src { font:inherit; font-weight:600; font-size:13.5px; padding:9px 16px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); text-decoration:none; }
   a.src:hover { border-color:var(--accent); color:var(--accent); }
   button.disc { font:inherit; font-weight:700; font-size:13.5px; padding:9px 16px; border:1px solid var(--brand); border-radius:9px; background:var(--brand); color:#fff; cursor:pointer; }
   button.disc[disabled] { opacity:.6; cursor:default; }
   .note { font-size:12.5px; margin:12px 0 0; } .note.ok { color:var(--brand); } .note.err { color:#d4495a; }
-  .disc-wrap { margin-top:24px; padding-top:18px; border-top:1px solid var(--line); }
+
+  /* the news channel meta as a sidebar card, above the discussion (7px, frosts in glass like the reader author card) */
+  .chan-card { border:1px solid var(--line); background:var(--panel); border-radius:7px; padding:16px; -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
+  .chan-card .cc-eyebrow { font-family:var(--font-mono, ui-monospace, monospace); font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 9px; }
+  .chan-card .cc-top { display:flex; align-items:center; gap:12px; }
+  .pav { position:relative; width:40px; height:40px; border-radius:10px; overflow:hidden; flex:none; background:var(--hover); }
+  .pav img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .chan-card .cc-name { font-family:var(--font-display, var(--font-body)); font-size:16px; font-weight:700; line-height:1.2; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .chan-card .cc-desc { font-size:13px; line-height:1.5; color:var(--muted); margin:12px 0 0; }
+  .chan-card .cc-count { display:block; font-size:11.5px; color:var(--muted); margin:8px 0 0; }
+  .fbtn { width:100%; margin-top:14px; font:inherit; font-weight:600; font-size:13px; padding:9px 12px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); cursor:pointer; }
+  .fbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .fbtn.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+  .fbtn[disabled] { opacity:.6; cursor:default; }
+
   .disc-wrap h4 { margin:0 0 12px; font-family:var(--font-display, var(--font-body)); font-size:15px; }
   .muted { color:var(--muted); }
 `;
@@ -10266,7 +10279,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const pub = this._publisher;
       const followable = Boolean(this.client?.setPrefs && it.source && this._followed);
       const followed = followable && this._followed.has(lc6(it.source));
-      const meta = [pub?.description, pub?.count != null ? `${pub.count} items` : null].filter(Boolean).join(" · ");
       const open = it.openHref || (it.link ? utmLink(it.link) : "");
       const disc = this._canCurate ? `<button class="disc" data-disc type="button">Add to Discord</button>` : "";
       const note = this._postNote ? `<p class="note ${this._postNote.ok ? "ok" : "err"}">${esc(this._postNote.msg)}</p>` : "";
@@ -10274,7 +10286,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const discussion = slug ? `<div class="disc-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="news" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const heroSrc = it.thumb || it.image || "";
       const hero = heroSrc ? `<img class="hero" src="${esc(heroSrc)}" alt="" loading="lazy">` : "";
-      this.set(this.css(CSS31) + `<div class="pub"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="pi"><b>${esc(pub?.name || it.source || "Publisher")}</b>${meta ? `<span class="d">${esc(meta)}</span>` : ""}</div>` + (followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "") + `</div>` + hero + `<h2>${esc(it.title || "News")}</h2><p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}` + discussion);
+      const chanDesc = pub?.description ? `<p class="cc-desc">${esc(pub.description)}</p>` : "";
+      const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
+      const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
+      const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
+      this.set(this.css(CSS31) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2><p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;

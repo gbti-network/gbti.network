@@ -37,16 +37,26 @@ const TYPES = ['post', 'product', 'prompt', 'profile'];
 // (a hidden block) carrying their preset value, and gather() filters by showIf (not DOM-hidden), so it still reads
 // + re-submits them — editing an item that already has a `canonicalUrl` never strips it.
 const HIDDEN_KEYS = new Set(['canonicalUrl']);
-// SOW-062 Phase 2: the right-hand document side rail groups the meta fields into collapsible sections. Anything not
-// matched here falls into "Details" (rendered first, open). Keys vary by type; unmatched keys degrade gracefully.
-const RAIL_SECTIONS = [
-  { name: 'Publishing', keys: ['status', 'visibility'] },
-  { name: 'Taxonomy', keys: ['categories', 'tags'] },
-  { name: 'Pricing', keys: ['pricing', 'pricingUrl'] },
-  { name: 'Links', keys: ['links'] },
-  { name: 'Media', keys: ['coverImage', 'coverAlt', 'image', 'imageAlt', 'alt', 'video'] },
-];
-const sectionFor = (key) => RAIL_SECTIONS.find((s) => s.keys.includes(key))?.name || 'Details';
+// SOW-062 Phase 6: the rail follows the hi-fi mockup's CURATED per-type schema (gbti-editor-data.js RAILS), not the
+// exhaustive formFields grouping. Each section lists the field keys to show, in order. Any formField NOT listed here
+// is preserved HIDDEN (gather() still submits its existing value). status + publishedAt surface in the slug-meta.
+// (Article deliberately has no Video section -- owner: the video sidebar is not needed for the article edit page.)
+const RAIL_SCHEMA = {
+  post: [
+    { title: 'Details', open: true, keys: ['visibility', 'excerpt', 'categories', 'tags'] },
+    { title: 'Media', open: false, keys: ['coverImage', 'coverAlt'] },
+  ],
+  product: [
+    { title: 'Details', open: true, keys: ['visibility', 'shortDescription', 'categories', 'tags'] },
+    { title: 'Pricing', open: true, keys: ['pricing', 'pricingUrl'] },
+    { title: 'Links', open: true, keys: ['links'] },
+    { title: 'Media', open: true, keys: ['icon', 'featuredImage', 'banner'] },
+  ],
+  prompt: [
+    { title: 'Details', open: true, keys: ['visibility', 'shortDescription', 'targets', 'categories', 'tags'] },
+    { title: 'Media', open: false, keys: ['image'] },
+  ],
+};
 
 class GbtiContentEditor extends GbtiElement {
   constructor() {
@@ -86,23 +96,18 @@ class GbtiContentEditor extends GbtiElement {
     const blocked = membership !== 'paid' && membership !== 'unknown';
     const p = this.preset?.input ?? {};
     const getValPreset = (k) => this.presetStr(p[k]);
-    // SOW-062 Phase 6: title/tagline/slug render as the INLINE document header (contenteditable, two-way bound to
-    // their hidden [data-key] inputs), so they are pulled OUT of the rail into the hidden block -- gather() still
-    // reads them. The rest group into rail sections; HIDDEN_KEYS also render hidden-but-preserved.
-    const taglineKey = this.fields.find((f) => f.key === 'excerpt') ? 'excerpt' : (this.fields.find((f) => f.key === 'shortDescription') ? 'shortDescription' : null);
-    const headerKeys = new Set(['title', 'slug', taglineKey].filter(Boolean));
-    const grouped = {};
-    const hiddenFields = [];
-    for (const f of this.fields) {
-      if (HIDDEN_KEYS.has(f.key) || headerKeys.has(f.key)) { hiddenFields.push(f); continue; }
-      if (f.key === 'publicStub') continue; // SOW-062 P6: folded into the visibility switch (its input lives there)
-      const sec = sectionFor(f.key);
-      (grouped[sec] = grouped[sec] || []).push(f);
-    }
-    const order = ['Details', ...RAIL_SECTIONS.map((s) => s.name)];
-    const sectionsHtml = order.filter((n) => grouped[n]?.length).map((n) => {
-      const inner = grouped[n].map((f) => this.fieldHtml(f, p[f.key], this.fieldVisible(f, getValPreset))).join('');
-      return `<details ${['Details', 'Publishing', 'Taxonomy'].includes(n) ? 'open' : ''} class="rsec"><summary><span class="st"><span class="si">${SECTION_ICON[n] || DOC}</span>${esc(n)}</span><span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
+    // SOW-062 Phase 6: header = title + slug ONLY (the description moved into the rail Details per the mockup). The
+    // rail renders the per-type RAIL_SCHEMA in order; fields NOT in the schema (nor header, nor publicStub which the
+    // visibility switch folds in) are preserved HIDDEN so gather() still submits their existing values.
+    const headerKeys = new Set(['title', 'slug']);
+    const schema = RAIL_SCHEMA[this.type] || RAIL_SCHEMA.post;
+    const schemaKeys = new Set(schema.flatMap((s) => s.keys));
+    const fieldByKey = new Map(this.fields.map((f) => [f.key, f]));
+    const hiddenFields = this.fields.filter((f) => !headerKeys.has(f.key) && !schemaKeys.has(f.key) && f.key !== 'publicStub');
+    const sectionsHtml = schema.map((sec) => {
+      const inner = sec.keys.map((key) => { const f = fieldByKey.get(key); return f ? this.fieldHtml(f, p[key], this.fieldVisible(f, getValPreset)) : ''; }).join('');
+      if (!inner) return '';
+      return `<details ${sec.open ? 'open' : ''} class="rsec"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span><span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
     }).join('');
     const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join('');
     const typePath = ({ post: 'blog', product: 'products', prompt: 'prompts' })[this.type] || this.type;
@@ -110,7 +115,7 @@ class GbtiContentEditor extends GbtiElement {
     const statusLabel = isPub ? (p.publishedAt ? String(p.publishedAt).slice(0, 10) : 'published') : 'draft';
     this.set(
       this.css(EDITOR_SURFACE + `
-        :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); }
+        :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); container-type:inline-size; }
         .edhead { display:flex; align-items:center; gap:12px; padding:4px 2px 16px; flex-wrap:wrap; }
         .etype { font-family:var(--font-mono,monospace); font-size:10.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--s-green-fg); background:var(--s-tint); border:1.5px solid var(--s-tint-2); border-radius:999px; padding:5px 12px; }
         .edhead-sp { flex:1; }
@@ -121,7 +126,7 @@ class GbtiContentEditor extends GbtiElement {
         .ebtn-primary { background:var(--s-green); border-color:var(--s-green); color:#fff; box-shadow:0 8px 20px rgba(31,158,95,.26); }
         .ebtn-primary:hover { filter:brightness(.96); border-color:var(--s-green); }
         .edgrid { display:grid; grid-template-columns:minmax(0,1fr) 350px; gap:34px; align-items:start; }
-        @media (max-width:800px) { .edgrid { grid-template-columns:1fr; } }
+        @container (max-width:1140px) { .edgrid { grid-template-columns:1fr; } }
         .doc { min-width:0; background:var(--s-canvas); border:1.5px solid var(--s-line); border-radius:12px; box-shadow:var(--s-shadow-md); padding:40px 46px 52px; color:var(--s-fg); }
         .doc-title { font-family:var(--font-display); font-weight:800; font-size:34px; line-height:1.14; letter-spacing:-.015em; color:var(--s-fg); outline:none; margin-bottom:6px; }
         .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.55; }
@@ -144,7 +149,7 @@ class GbtiContentEditor extends GbtiElement {
         #out { margin-top:14px; }
         .preview { background:var(--s-surface-2); border:1px solid var(--s-line); border-radius:10px; padding:12px 14px; color:var(--s-fg); margin-top:12px; }
         .rail { display:flex; flex-direction:column; gap:14px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
-        @media (max-width:800px) { .rail { position:static; max-height:none; } }
+        @container (max-width:1140px) { .rail { position:static; max-height:none; } }
         .rsec { background:var(--s-surface); border:1.5px solid var(--s-line); border-radius:10px; box-shadow:var(--s-shadow); overflow:hidden; }
         .rsec > summary { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; padding:13px 15px; font-weight:700; font-size:14px; color:var(--s-fg); }
         .rsec > summary::-webkit-details-marker { display:none; }
@@ -217,7 +222,6 @@ class GbtiContentEditor extends GbtiElement {
            <article class="doc">
              ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ''}
              <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || '')}</div>
-             ${taglineKey ? `<div class="doc-tagline" contenteditable="true" data-header="${taglineKey}" data-ph="Add a tagline…">${esc(this.presetStr(p[taglineKey]) || '')}</div>` : ''}
              <div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span><span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || '')}</span><span class="slug-meta${isPub ? ' pub' : ''}"><span class="pubdot"></span><span>${esc(statusLabel)}</span></span></div>
              <section class="docsec" id="secMain">
                <div class="docsec-h">${DOC} Main content</div>
@@ -464,6 +468,7 @@ class GbtiContentEditor extends GbtiElement {
     this.out('Publishing…');
     try {
       const { type, input, body } = this.gather();
+      if (this.fields.some((f) => f.key === 'status')) input.status = 'published'; // SOW-062 P6: status is action-driven (no rail dropdown)
       const res = await this.client.publish({ type, input, body });
       this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`); // SOW-072 P2: consistent ack (esc: out() writes innerHTML)
       this.emit('gbti-published', res);
@@ -479,6 +484,7 @@ class GbtiContentEditor extends GbtiElement {
     this.out('Saving draft…');
     try {
       const { type, input, body } = this.gather();
+      if (this.fields.some((f) => f.key === 'status')) input.status = 'draft'; // SOW-062 P6: status is action-driven (no rail dropdown)
       const res = await this.client.saveDraft({ type, input, body });
       this.out('<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
       this.emit('gbti-draft-saved', res);
