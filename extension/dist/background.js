@@ -18841,7 +18841,7 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
   }
   let built;
   try {
-    built = buildContentFile({ type, username: id.username, input, body });
+    built = buildContentFile({ type, username: id.username, input: { ...input ?? {}, status: input && input.status || "published" }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
@@ -18951,7 +18951,7 @@ async function saveDraft(ctx, { type, input, body, message } = {}) {
   }
   let built;
   try {
-    built = buildContentFile({ type, username: id.username, input, body });
+    built = buildContentFile({ type, username: id.username, input: { ...input ?? {}, status: input && input.status || "published" }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }

@@ -4,7 +4,7 @@
 // forward `authorNote` to publish(), so this covers all three MCP tools.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { publish, buildIntroCommentFile, describeContentPublish } from '../client/src/operations.mjs';
+import { publish, saveDraft, authorContent, buildIntroCommentFile, describeContentPublish, OperationError } from '../client/src/operations.mjs';
 import { buildContentFile } from '../client/src/content-ops.mjs';
 
 const fakeRepo = (puts = [], opens = []) => ({
@@ -103,4 +103,50 @@ test('publish: an explicit title/prBody still wins over the descriptive default'
   });
   assert.equal(opens[0].title, 'My exact title');
   assert.equal(opens[0].body, 'My exact body');
+});
+
+// SOW-106 Phase 1: publishing merges to the network repo, and merged content is PUBLIC.
+const docFor = (puts, re) => Buffer.from(puts.find((p) => re.test(p.path)).content, 'base64').toString('utf8');
+
+test('publish: forces status: published (no silent hidden merged draft)', async () => {
+  const puts = [];
+  await publish(ctxFor({ repo: fakeRepo(puts) }), { type: 'prompt', input: { title: 'T', slug: 'p1', shortDescription: 'x' }, body: 'B' });
+  assert.match(docFor(puts, /prompts\/p1\/index\.md$/), /^status: published$/m);
+});
+
+test('publish: respects an explicit status: draft (member self-unpublish)', async () => {
+  const puts = [];
+  await publish(ctxFor({ repo: fakeRepo(puts) }), { type: 'prompt', input: { title: 'T', slug: 'p2', shortDescription: 'x', status: 'draft' }, body: 'B' });
+  assert.match(docFor(puts, /prompts\/p2\/index\.md$/), /^status: draft$/m);
+});
+
+test('saveDraft: a fork-staged draft carries status: published and opens NO pull request', async () => {
+  const puts = [];
+  const opens = [];
+  await saveDraft(ctxFor({ repo: fakeRepo(puts, opens) }), { type: 'prompt', input: { title: 'T', slug: 'p3', shortDescription: 'x' }, body: 'B' });
+  assert.match(docFor(puts, /prompts\/p3\/index\.md$/), /^status: published$/m);
+  assert.equal(opens.length, 0, 'saveDraft stages on the fork with no PR');
+});
+
+// SOW-106 Phase 5: the MCP author entry forces an explicit publish-vs-draft intent.
+test('authorContent: status published routes to publish (opens a PR)', async () => {
+  const opens = [];
+  const out = await authorContent(ctxFor({ repo: fakeRepo([], opens) }), { type: 'prompt', input: { title: 'T', slug: 'a1', shortDescription: 'x' }, body: 'B', status: 'published' });
+  assert.equal(out.prNumber, 7);
+  assert.equal(opens.length, 1, 'published -> a PR is opened');
+});
+
+test('authorContent: status draft routes to saveDraft (fork stage, no PR)', async () => {
+  const opens = [];
+  const puts = [];
+  await authorContent(ctxFor({ repo: fakeRepo(puts, opens) }), { type: 'prompt', input: { title: 'T', slug: 'a2', shortDescription: 'x' }, body: 'B', status: 'draft' });
+  assert.equal(opens.length, 0, 'draft -> staged on the fork, no PR');
+  assert.ok(puts.some((p) => /prompts\/a2\/index\.md$/.test(p.path)), 'draft is committed to the fork branch');
+});
+
+test('authorContent: a missing status throws status-required (forced intent, nothing silently drafts)', async () => {
+  await assert.rejects(
+    authorContent(ctxFor(), { type: 'prompt', input: { title: 'T', slug: 'a3', shortDescription: 'x' }, body: 'B' }),
+    (e) => e instanceof OperationError && e.code === 'status-required',
+  );
 });

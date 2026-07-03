@@ -207,6 +207,20 @@ export function validateContent(ctx, { type, input, body } = {}) {
   }
 }
 
+/**
+ * SOW-106: the MCP author entry. The caller MUST declare intent via `status`: "published" publishes (merge into
+ * the network repo, which is public) and "draft" stages on the member fork for review. The status is the INTENT
+ * and is NOT written into the content input (publish/saveDraft set the content status themselves, defaulting to
+ * published), so nothing silently drafts. Throws `status-required` if the caller omits or mis-spells it.
+ */
+export async function authorContent(ctx, { type, input, body, status, message, title, prBody, authorNote } = {}) {
+  if (status !== 'draft' && status !== 'published') {
+    throw new OperationError('status-required', 'Specify status: "published" to publish (merge and go live on the network) or "draft" to stage on your fork for review before publishing.');
+  }
+  if (status === 'draft') return saveDraft(ctx, { type, input, body, message });
+  return publish(ctx, { type, input, body, message, title, prBody, authorNote });
+}
+
 /** Build + publish a content change as (or into) a PR through the gate. */
 export async function publish(ctx, { type, input, body, message, title, prBody, authorNote } = {}) {
   const id = requireIdentity(ctx);
@@ -225,7 +239,9 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   }
   let built;
   try {
-    built = buildContentFile({ type, username: id.username, input, body });
+    // SOW-106: publishing merges into the network repo, and merged content is PUBLIC. Force status: published (an
+    // explicit caller status still wins), so a publish can never silently produce a hidden merged draft.
+    built = buildContentFile({ type, username: id.username, input: { ...(input ?? {}), status: (input && input.status) || 'published' }, body });
   } catch (err) {
     throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
   }
@@ -381,7 +397,10 @@ export async function saveDraft(ctx, { type, input, body, message } = {}) {
   }
   let built;
   try {
-    built = buildContentFile({ type, username: id.username, input, body });
+    // SOW-106: a fork-staged draft carries status: published (it is ready to publish; the "draft" is the fork
+    // LOCATION, and the Drafts tab derives Staged/Submitted from the PR, not this field). So it merges public with
+    // no publishDraft content rewrite. status: draft is reserved for the unpublish/disable state in the canonical repo.
+    built = buildContentFile({ type, username: id.username, input: { ...(input ?? {}), status: (input && input.status) || 'published' }, body });
   } catch (err) {
     throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
   }

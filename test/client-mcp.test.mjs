@@ -79,14 +79,14 @@ test('tools/call validate_content: valid and invalid both return cleanly', async
 
 test('tools/call publish_content: opens a PR via the repo client', async () => {
   const ctx = ctxFor({ repoPath: tmpRepo(), repo: fakeRepo() });
-  const res = await call('publish_content', { type: 'post', input: { title: 'T', slug: 'my-post' } }, ctx);
+  const res = await call('publish_content', { type: 'post', status: 'published', input: { title: 'T', slug: 'my-post' } }, ctx);
   assert.notEqual(res.result.isError, true);
   assert.equal(textOf(res).prNumber, 11);
 });
 
 test('tools/call publish_content without auth is an isError tool result, not a transport error', async () => {
   const ctx = ctxFor({ repoPath: tmpRepo(), repo: null });
-  const res = await call('publish_content', { type: 'post', input: { title: 'T', slug: 'my-post' } }, ctx);
+  const res = await call('publish_content', { type: 'post', status: 'published', input: { title: 'T', slug: 'my-post' } }, ctx);
   assert.equal(res.result.isError, true);
   assert.equal(textOf(res).error, 'not-authenticated');
 });
@@ -96,25 +96,33 @@ test('tools/call add_prompt: publishes a prompt (the prompt schema applies) into
   const puts = [];
   const repo = { ...fakeRepo(), async putFile(_full, path) { puts.push(path); } };
   const ctx = ctxFor({ repoPath: tmpRepo(), repo });
-  const ok = await call('add_prompt', { input: { title: 'P', slug: 'my-prompt', shortDescription: 'a one-liner' }, body: 'do the thing' }, ctx);
+  const ok = await call('add_prompt', { status: 'published', input: { title: 'P', slug: 'my-prompt', shortDescription: 'a one-liner' }, body: 'do the thing' }, ctx);
   assert.notEqual(ok.result.isError, true);
   assert.equal(textOf(ok).prNumber, 11);
   assert.ok(puts.some((p) => p.includes('/prompts/my-prompt/')), `expected a prompts/ path, got ${JSON.stringify(puts)}`);
   // missing shortDescription -> invalid as a PROMPT (proving the prompt schema, not the post schema, is applied)
-  const bad = await call('add_prompt', { input: { title: 'P', slug: 'no-desc' } }, ctxFor({ repoPath: tmpRepo(), repo: fakeRepo() }));
+  const bad = await call('add_prompt', { status: 'published', input: { title: 'P', slug: 'no-desc' } }, ctxFor({ repoPath: tmpRepo(), repo: fakeRepo() }));
   assert.equal(bad.result.isError, true);
   assert.equal(textOf(bad).error, 'invalid-content');
 });
 
 test('tools/call add_product: requires the product image fields (invalid-content without them)', async () => {
-  const res = await call('add_product', { input: { title: 'X', slug: 'a-product', shortDescription: 'sd' } }, ctxFor({ repoPath: tmpRepo(), repo: fakeRepo() }));
+  const res = await call('add_product', { status: 'published', input: { title: 'X', slug: 'a-product', shortDescription: 'sd' } }, ctxFor({ repoPath: tmpRepo(), repo: fakeRepo() }));
   assert.equal(res.result.isError, true);
   assert.equal(textOf(res).error, 'invalid-content'); // missing icon + featuredImage
 });
 
+// SOW-106: the publish tools require an explicit status; omitting it is a forced-intent error, not a silent draft.
+test('tools/call add_prompt without status is a status-required isError (forced intent)', async () => {
+  const ctx = ctxFor({ repoPath: tmpRepo(), repo: fakeRepo() });
+  const res = await call('add_prompt', { input: { title: 'P', slug: 'no-status', shortDescription: 'x' }, body: 'b' }, ctx);
+  assert.equal(res.result.isError, true);
+  assert.equal(textOf(res).error, 'status-required');
+});
+
 test('tools/call with invalid content surfaces invalid-content as isError', async () => {
   const ctx = ctxFor({ repoPath: tmpRepo(), repo: fakeRepo() });
-  const res = await call('publish_content', { type: 'post', input: { title: 'T', slug: 'Bad Slug' } }, ctx);
+  const res = await call('publish_content', { type: 'post', status: 'published', input: { title: 'T', slug: 'Bad Slug' } }, ctx);
   assert.equal(res.result.isError, true);
   assert.equal(textOf(res).error, 'invalid-content');
 });

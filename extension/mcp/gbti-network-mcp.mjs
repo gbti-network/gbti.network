@@ -18389,6 +18389,13 @@ function validateContent(ctx2, { type, input, body } = {}) {
     return { valid: false, error: err.message };
   }
 }
+async function authorContent(ctx2, { type, input, body, status, message, title, prBody, authorNote } = {}) {
+  if (status !== "draft" && status !== "published") {
+    throw new OperationError("status-required", 'Specify status: "published" to publish (merge and go live on the network) or "draft" to stage on your fork for review before publishing.');
+  }
+  if (status === "draft") return saveDraft(ctx2, { type, input, body, message });
+  return publish(ctx2, { type, input, body, message, title, prBody, authorNote });
+}
 async function publish(ctx2, { type, input, body, message, title, prBody, authorNote } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
@@ -18402,7 +18409,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
   }
   let built;
   try {
-    built = buildContentFile({ type, username: id.username, input, body });
+    built = buildContentFile({ type, username: id.username, input: { ...input ?? {}, status: input && input.status || "published" }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
@@ -18497,6 +18504,35 @@ async function planMemberFiles({ built, body, encrypt }) {
     encPath,
     assetId
   };
+}
+async function saveDraft(ctx2, { type, input, body, message } = {}) {
+  const id = requireIdentity(ctx2);
+  const repo = requireRepo(ctx2);
+  const membership = await ctx2.membership?.() ?? "unknown";
+  if (membership !== "unknown" && !canStageDrafts(membership)) {
+    throw new OperationError("forbidden", "Saving drafts requires an active trial or paid membership.", { membership });
+  }
+  let built;
+  try {
+    built = buildContentFile({ type, username: id.username, input: { ...input ?? {}, status: input && input.status || "published" }, body });
+  } catch (err) {
+    throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
+  }
+  const branch = branchName(built.type, built.slug);
+  const token = ctx2.store?.get?.("githubToken");
+  const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
+  let plan;
+  try {
+    plan = await planMemberFiles({ built, body, encrypt });
+  } catch (err) {
+    if (err instanceof MemberContentLockedError) {
+      throw new OperationError("membership-required", "Staging members-only content requires a paid membership. Save it as public, or upgrade to a paid membership.", { membership });
+    }
+    throw err;
+  }
+  const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
+  return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: built.path, state: "staged" };
 }
 var commentSuffix = () => Math.random().toString(36).slice(2, 8);
 async function planAndPublishComment(ctx2, repo, built, body, { message, title, prBody }) {
@@ -18837,6 +18873,7 @@ function logout(ctx2) {
 var PROTOCOL_VERSION = "2024-11-05";
 var obj = (properties, required2 = []) => ({ type: "object", properties, required: required2, additionalProperties: true });
 var TYPE_ENUM = { type: "string", enum: ["post", "product", "prompt", "profile"] };
+var STATUS_ENUM = { type: "string", enum: ["draft", "published"], description: 'REQUIRED: "published" merges and goes live on the network; "draft" stages on your fork for review.' };
 var COMMENT_TARGET = { type: "string", enum: ["post", "product", "prompt", "share", "news"] };
 var TOOLS = [
   {
@@ -18883,33 +18920,33 @@ var TOOLS = [
   },
   {
     name: "publish_content",
-    description: "Validate and publish a content object as a pull request (forces author/owner fields; goes through the gate). Returns the PR number + url. For a new product/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.",
+    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" stages it on your fork for review (no PR). Forces author/owner fields; goes through the gate. For a new product/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
     inputSchema: obj(
-      { type: TYPE_ENUM, input: { type: "object" }, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } },
-      ["type", "input"]
+      { type: TYPE_ENUM, input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } },
+      ["type", "input", "status"]
     ),
-    handler: (ctx2, args) => publish(ctx2, args ?? {})
+    handler: (ctx2, args) => authorContent(ctx2, args ?? {})
   },
   // SOW-025: per-type "add content" shortcuts so an agent gets guided tools instead of the generic
   // publish_content. Each pre-sets `type` and forwards to the same gated publish flow (author is forced to the
   // signed-in member; publishing is paid-only). Call validate_content first if unsure which fields are required.
   {
     name: "add_prompt",
-    description: "Create + publish a PROMPT as a pull request. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.",
-    inputSchema: obj({ input: { type: "object" }, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["input"]),
-    handler: (ctx2, args) => publish(ctx2, { ...args ?? {}, type: "prompt" })
+    description: 'Author a PROMPT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
+    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["input", "status"]),
+    handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "prompt" })
   },
   {
     name: "add_product",
-    description: "Create + publish a PRODUCT as a pull request. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the product description. author is forced to you. SOW-014: a new product needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)",
-    inputSchema: obj({ input: { type: "object" }, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["input"]),
-    handler: (ctx2, args) => publish(ctx2, { ...args ?? {}, type: "product" })
+    description: 'Author a PRODUCT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the product description. author is forced to you. SOW-014: a new product needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["input", "status"]),
+    handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "product" })
   },
   {
     name: "add_post",
-    description: "Create + publish a BLOG POST as a pull request. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article. author is forced to you.",
-    inputSchema: obj({ input: { type: "object" }, body: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["input"]),
-    handler: (ctx2, args) => publish(ctx2, { ...args ?? {}, type: "post" })
+    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article. author is forced to you.',
+    inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" } }, ["input", "status"]),
+    handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "post" })
   },
   {
     name: "list_prs",

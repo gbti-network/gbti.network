@@ -14,6 +14,7 @@ import {
   getContentItem,
   validateContent,
   publish,
+  authorContent,
   listPRs,
   prStatus,
   listIncomingContributions,
@@ -29,6 +30,8 @@ const PROTOCOL_VERSION = '2024-11-05';
 
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: true });
 const TYPE_ENUM = { type: 'string', enum: ['post', 'product', 'prompt', 'profile'] };
+// SOW-106: the REQUIRED author intent. "published" merges to the network (public); "draft" stages on the fork.
+const STATUS_ENUM = { type: 'string', enum: ['draft', 'published'], description: 'REQUIRED: "published" merges and goes live on the network; "draft" stages on your fork for review.' };
 const COMMENT_TARGET = { type: 'string', enum: ['post', 'product', 'prompt', 'share', 'news'] }; // SOW-072
 
 // The managed-abstraction tools. Each handler returns a plain JSON-serializable result (or throws an
@@ -78,33 +81,33 @@ export const TOOLS = [
   },
   {
     name: 'publish_content',
-    description: 'Validate and publish a content object as a pull request (forces author/owner fields; goes through the gate). Returns the PR number + url. For a new product/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
+    description: 'Author a content object. REQUIRED `status`: "published" merges it (public, goes live on the network) and returns the PR number + url; "draft" stages it on your fork for review (no PR). Forces author/owner fields; goes through the gate. For a new product/prompt, pass `authorNote` (markdown) to seed the required SOW-014 from-the-author intro comment into the SAME PR.',
     inputSchema: obj(
-      { type: TYPE_ENUM, input: { type: 'object' }, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } },
-      ['type', 'input'],
+      { type: TYPE_ENUM, input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } },
+      ['type', 'input', 'status'],
     ),
-    handler: (ctx, args) => publish(ctx, args ?? {}),
+    handler: (ctx, args) => authorContent(ctx, args ?? {}),
   },
   // SOW-025: per-type "add content" shortcuts so an agent gets guided tools instead of the generic
   // publish_content. Each pre-sets `type` and forwards to the same gated publish flow (author is forced to the
   // signed-in member; publishing is paid-only). Call validate_content first if unsure which fields are required.
   {
     name: 'add_prompt',
-    description: 'Create + publish a PROMPT as a pull request. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
-    inputSchema: obj({ input: { type: 'object' }, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } }, ['input']),
-    handler: (ctx, args) => publish(ctx, { ...(args ?? {}), type: 'prompt' }),
+    description: 'Author a PROMPT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug (kebab-case), shortDescription; optional: targets[], categories[] (taxonomy path), tags[], variables[], sourceUrl. The markdown `body` is the prompt text. author is forced to you. SOW-014: a new prompt needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR.',
+    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } }, ['input', 'status']),
+    handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'prompt' }),
   },
   {
     name: 'add_product',
-    description: 'Create + publish a PRODUCT as a pull request. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the product description. author is forced to you. SOW-014: a new product needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
-    inputSchema: obj({ input: { type: 'object' }, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } }, ['input']),
-    handler: (ctx, args) => publish(ctx, { ...(args ?? {}), type: 'product' }),
+    description: 'Author a PRODUCT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the product description. author is forced to you. SOW-014: a new product needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } }, ['input', 'status']),
+    handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'product' }),
   },
   {
     name: 'add_post',
-    description: 'Create + publish a BLOG POST as a pull request. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article. author is forced to you.',
-    inputSchema: obj({ input: { type: 'object' }, body: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } }, ['input']),
-    handler: (ctx, args) => publish(ctx, { ...(args ?? {}), type: 'post' }),
+    description: 'Author a BLOG POST. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug (kebab-case); optional: excerpt, categories[], tags[], coverImage, publishedAt. The markdown `body` is the article. author is forced to you.',
+    inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' } }, ['input', 'status']),
+    handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'post' }),
   },
   {
     name: 'list_prs',
