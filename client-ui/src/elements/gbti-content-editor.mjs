@@ -196,7 +196,10 @@ class GbtiContentEditor extends GbtiElement {
     const schema = RAIL_SCHEMA[this.type] || RAIL_SCHEMA.post;
     const schemaKeys = new Set(schema.flatMap((s) => s.keys));
     const fieldByKey = new Map(this.fields.map((f) => [f.key, f]));
-    const hiddenFields = this.fields.filter((f) => !headerKeys.has(f.key) && !schemaKeys.has(f.key) && !docSecKeys.has(f.key) && f.key !== 'publicStub');
+    // NOTE: headerKeys (title, slug) MUST stay in hiddenFields so their hidden [data-key] mirror inputs are rendered
+    // -- the inline header contenteditables (data-header) mirror INTO those inputs via _bindHeader, and gather()
+    // reads them. Excluding headerKeys here drops title + slug from every publish/draft-save (both are required).
+    const hiddenFields = this.fields.filter((f) => !schemaKeys.has(f.key) && !docSecKeys.has(f.key) && f.key !== 'publicStub');
     const sectionsHtml = schema.map((sec) => {
       const inner = sec.keys.map((key) => { const f = fieldByKey.get(key); return f ? this.fieldHtml(f, p[key], this.fieldVisible(f, getValPreset)) : ''; }).join('');
       if (!inner) return '';

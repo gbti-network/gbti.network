@@ -4644,7 +4644,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function inlineMdToHtml(md) {
     let h = String(md ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) => /^\s*(?:javascript|data|vbscript):/i.test(url) ? text : `<a href="${String(url).replace(/"/g, "&quot;").replace(/'/g, "&#39;")}">${text}</a>`);
     h = h.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
     h = h.replace(/~~([^~]+)~~/g, "<s>$1</s>");
@@ -5022,9 +5022,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const pop = this.$("[data-addpop]");
       if (menuBtn && pop) {
         pop.innerHTML = CONVERT.map((c) => paletteRow(c, `data-newkey="${c.key}"`)).join("");
+        const hideAddPop = () => {
+          pop.hidden = true;
+          document.removeEventListener("click", hideAddPop);
+        };
         menuBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           pop.hidden = !pop.hidden;
+          document.removeEventListener("click", hideAddPop);
+          if (!pop.hidden) document.addEventListener("click", hideAddPop);
         });
         pop.querySelectorAll("[data-newkey]").forEach((b) => b.addEventListener("click", () => {
           const nb = withId(blockFromKey(b.dataset.newkey));
@@ -5033,9 +5039,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._focusBlock(nb._id);
           this._change();
         }));
-        document.addEventListener("click", () => {
-          if (!pop.hidden) pop.hidden = true;
-        }, { once: true });
       }
       this.$("[data-addmembers]")?.addEventListener("click", () => {
         this._blocks.push(withId({ type: "members" }), withId(emptyBlock("paragraph")));
@@ -5910,7 +5913,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const schema = RAIL_SCHEMA[this.type] || RAIL_SCHEMA.post;
       const schemaKeys = new Set(schema.flatMap((s) => s.keys));
       const fieldByKey = new Map(this.fields.map((f) => [f.key, f]));
-      const hiddenFields = this.fields.filter((f) => !headerKeys.has(f.key) && !schemaKeys.has(f.key) && !docSecKeys.has(f.key) && f.key !== "publicStub");
+      const hiddenFields = this.fields.filter((f) => !schemaKeys.has(f.key) && !docSecKeys.has(f.key) && f.key !== "publicStub");
       const sectionsHtml = schema.map((sec) => {
         const inner = sec.keys.map((key) => {
           const f = fieldByKey.get(key);

@@ -126,7 +126,10 @@ export function emptyBlock(type) {
 // only handle the inline layer. Pure + node-safe, exported so the editor and its round-trip test share one copy.
 export function inlineMdToHtml(md) {
   let h = String(md ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  // Escape the URL before it goes into the href attribute (& < > are already escaped above; the double-quote is
+  // not, so an unescaped " would break out of href=""), and neutralize dangerous URL schemes.
+  h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, text, url) =>
+    /^\s*(?:javascript|data|vbscript):/i.test(url) ? text : `<a href="${String(url).replace(/"/g, '&quot;').replace(/'/g, '&#39;')}">${text}</a>`);
   h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
   h = h.replace(/~~([^~]+)~~/g, '<s>$1</s>');

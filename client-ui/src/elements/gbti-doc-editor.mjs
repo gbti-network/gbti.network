@@ -339,12 +339,19 @@ class GbtiDocEditor extends GbtiElement {
     const menuBtn = this.$('[data-addmenu]'); const pop = this.$('[data-addpop]');
     if (menuBtn && pop) {
       pop.innerHTML = CONVERT.map((c) => paletteRow(c, `data-newkey="${c.key}"`)).join('');
-      menuBtn.addEventListener('click', (e) => { e.stopPropagation(); pop.hidden = !pop.hidden; });
+      // SOW-062 P6 fix: arm the outside-click dismiss on EACH open (the old once-per-render {once:true} listener
+      // stopped working after the first open/close cycle, since re-opening did not re-arm it).
+      const hideAddPop = () => { pop.hidden = true; document.removeEventListener('click', hideAddPop); };
+      menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        pop.hidden = !pop.hidden;
+        document.removeEventListener('click', hideAddPop);
+        if (!pop.hidden) document.addEventListener('click', hideAddPop);
+      });
       pop.querySelectorAll('[data-newkey]').forEach((b) => b.addEventListener('click', () => {
         const nb = withId(blockFromKey(b.dataset.newkey));
         this._blocks.push(nb); this._render(); this._focusBlock(nb._id); this._change();
       }));
-      document.addEventListener('click', () => { if (!pop.hidden) pop.hidden = true; }, { once: true });
     }
     this.$('[data-addmembers]')?.addEventListener('click', () => {
       this._blocks.push(withId({ type: 'members' }), withId(emptyBlock('paragraph')));
