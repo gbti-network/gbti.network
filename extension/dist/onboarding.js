@@ -380,18 +380,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return b;
   };
   var CONVERT = [
-    { key: "paragraph", label: "Text" },
-    { key: "h1", label: "Heading 1", type: "heading", level: 1 },
-    { key: "h2", label: "Heading 2", type: "heading", level: 2 },
-    { key: "h3", label: "Heading 3", type: "heading", level: 3 },
-    { key: "quote", label: "Quote" },
-    { key: "callout", label: "Callout" },
-    { key: "code", label: "Code" },
-    { key: "ul", label: "Bulleted list", type: "list", ordered: false },
-    { key: "ol", label: "Numbered list", type: "list", ordered: true },
-    { key: "image", label: "Image" },
-    { key: "embed", label: "Video / embed" }
+    { key: "paragraph", label: "Text", icon: "text", desc: "Plain paragraph" },
+    { key: "h1", label: "Heading 1", type: "heading", level: 1, icon: "h1", desc: "Big section title" },
+    { key: "h2", label: "Heading 2", type: "heading", level: 2, icon: "h2", desc: "Section heading" },
+    { key: "h3", label: "Heading 3", type: "heading", level: 3, icon: "h3", desc: "Sub-section" },
+    { key: "quote", label: "Quote", icon: "quote", desc: "Call out a passage" },
+    { key: "callout", label: "Callout", icon: "info", desc: "Info, note or warning" },
+    { key: "code", label: "Code", icon: "code", desc: "A code block" },
+    { key: "ul", label: "Bulleted list", type: "list", ordered: false, icon: "listul", desc: "A simple list" },
+    { key: "ol", label: "Numbered list", type: "list", ordered: true, icon: "listol", desc: "An ordered list" },
+    { key: "image", label: "Image", icon: "img", desc: "Upload or embed a picture" },
+    { key: "embed", label: "Video / embed", icon: "video", desc: "YouTube or Vimeo" }
   ];
+  var paletteRow = (c, dataAttr, sel = false) => `<div class="mi${sel ? " on" : ""}" ${dataAttr}><span class="mi-ic">${svg(c.icon)}</span><span class="mi-tx"><span class="mi-nm">${esc(c.label)}</span><span class="mi-ds">${esc(c.desc)}</span></span></div>`;
   var convertKey = (b) => b.type === "heading" ? `h${Math.min(3, Math.max(1, b.level || 2))}` : b.type === "list" ? b.ordered ? "ol" : "ul" : b.type;
   var blockFromKey = (key) => {
     const c = CONVERT.find((x) => x.key === key) || CONVERT[0];
@@ -410,7 +411,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     img: '<rect x="4" y="5" width="16" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     video: '<rect x="3.5" y="6" width="11" height="12" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     gear: '<path d="M12 8.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13c.05-.33.08-.66.08-1s-.03-.67-.08-1l1.86-1.43-1.8-3.12-2.2.88a7 7 0 0 0-1.73-1l-.33-2.33h-3.6l-.33 2.33a7 7 0 0 0-1.73 1l-2.2-.88-1.8 3.12L7.1 11c-.05.33-.08.66-.08 1s.03.67.08 1l-1.86 1.43 1.8 3.12 2.2-.88c.52.4 1.1.74 1.73 1l.33 2.33h3.6l.33-2.33a7 7 0 0 0 1.73-1l2.2.88 1.8-3.12L19.4 13z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
-    info: '<circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="8" r="1.05" fill="currentColor"/>'
+    info: '<circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="8" r="1.05" fill="currentColor"/>',
+    // SOW-062 P6: block-palette glyphs for the rich slash / add-block menu rows (from the hi-fi sprite).
+    text: '<path d="M5 6h14M5 6v1.5M19 6v1.5M12 6v13M9.5 19h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    h1: '<path d="M4 6v12M12 6v12M4 12h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 9l2.5-1.2V18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    h2: '<path d="M3 6v12M10 6v12M3 12h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M14.5 9.2a2.3 2.3 0 0 1 4 1.5c0 2-4 3-4 5.8h4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    h3: '<path d="M3 6v12M10 6v12M3 12h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M14.5 8.5a2.2 2.2 0 1 1 1.7 3.6 2.3 2.3 0 1 1-1.5 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    quote: '<path d="M9 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3M19 7c-2.2 0-4 1.8-4 4 0 2.2 1.8 3.7 4 3.7.2 1.8-.9 2.6-2.4 3.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+    code: '<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+    listul: '<circle cx="5" cy="7" r="1.4" fill="currentColor"/><circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="5" cy="17" r="1.4" fill="currentColor"/><path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+    listol: '<path d="M9.5 7h10M9.5 12h10M9.5 17h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6l1-.5V9M3.6 15.5c.3-.8 1.8-.8 1.8.3 0 .8-1.6 1.2-1.8 2.2H5.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>'
   };
   var svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic[k]}</svg>`;
   var CSS = `
@@ -487,15 +497,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .add-btn:hover { border-color:var(--s-green); color:var(--s-green); }
   .add-btn svg { width:16px; height:16px; }
   .add-menu { position:relative; }
-  .add-pop { position:absolute; top:calc(100% + 6px); left:0; z-index:5; min-width:200px; background:var(--s-surface); border:1.5px solid var(--s-line);
+  .add-pop { position:absolute; top:calc(100% + 6px); left:0; z-index:5; min-width:268px; background:var(--s-surface); border:1.5px solid var(--s-line);
     border-radius:12px; box-shadow:0 12px 34px rgba(0,0,0,.18); padding:6px; }
-  .add-pop button { display:block; width:100%; text-align:left; font:inherit; font-size:13.5px; padding:8px 10px; border:0; border-radius:8px; background:transparent; color:var(--s-fg); cursor:pointer; }
-  .add-pop button:hover { background:var(--s-surface-2); }
   /* SOW-062 5c-2: the slash menu + the inline selection toolbar (in-shadow popovers) */
   .slash-pop, .sel-tb { position:absolute; z-index:20; background:var(--s-surface); border:1.5px solid var(--s-line); border-radius:10px; box-shadow:0 12px 34px rgba(0,0,0,.2); }
-  .slash-pop { min-width:190px; max-height:264px; overflow:auto; padding:5px; }
-  .slash-pop button { display:block; width:100%; text-align:left; font:inherit; font-size:13.5px; padding:7px 9px; border:0; border-radius:7px; background:transparent; color:var(--s-fg); cursor:pointer; }
-  .slash-pop button.on, .slash-pop button:hover { background:var(--s-surface-2); }
+  .slash-pop { min-width:268px; max-height:300px; overflow:auto; padding:5px; }
+  /* SOW-062 P6: rich palette rows (icon box + name + description), shared by the add-block + slash menus */
+  .mi { display:flex; align-items:center; gap:11px; padding:8px 9px; border-radius:8px; cursor:pointer; }
+  .mi:hover, .mi.on { background:var(--s-surface-2); }
+  .mi-ic { width:32px; height:32px; flex:none; border-radius:7px; border:1.5px solid var(--s-line); background:var(--s-surface); display:flex; align-items:center; justify-content:center; color:var(--s-fg-soft); }
+  .mi.on .mi-ic { border-color:var(--s-green); color:var(--s-green-fg); background:var(--s-tint); }
+  .mi-ic svg { width:18px; height:18px; }
+  .mi-tx { display:flex; flex-direction:column; min-width:0; }
+  .mi-nm { font-weight:600; font-size:14px; }
+  .mi-ds { font-size:11.5px; color:var(--s-fg-mute); margin-top:1px; }
   .sel-tb { display:none; gap:1px; padding:4px; background:var(--ink); border:0; box-shadow:0 12px 30px rgba(0,0,0,.4); }
   .sel-tb button { min-width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; border:0; border-radius:7px; background:transparent; color:#e6e4ee; cursor:pointer; font-weight:700; font-size:13px; padding:0 6px; }
   .sel-tb button:hover { background:rgba(255,255,255,.12); color:#fff; }
@@ -703,7 +718,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const menuBtn = this.$("[data-addmenu]");
       const pop = this.$("[data-addpop]");
       if (menuBtn && pop) {
-        pop.innerHTML = CONVERT.map((c) => `<button type="button" data-newkey="${c.key}">${esc(c.label)}</button>`).join("");
+        pop.innerHTML = CONVERT.map((c) => paletteRow(c, `data-newkey="${c.key}"`)).join("");
         menuBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           pop.hidden = !pop.hidden;
@@ -862,7 +877,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       pop.className = "slash-pop";
       pop.style.top = `${blk.offsetTop + blk.offsetHeight + 4}px`;
       pop.style.left = `${blk.offsetLeft}px`;
-      pop.innerHTML = matches.map((c, i) => `<button type="button" data-si="${i}"${i === 0 ? ' class="on"' : ""}>${esc(c.label)}</button>`).join("");
+      pop.innerHTML = matches.map((c, i) => paletteRow(c, `data-si="${i}"`, i === 0)).join("");
       pop.querySelectorAll("[data-si]").forEach((b) => b.addEventListener("mousedown", (e) => {
         e.preventDefault();
         this._pickSlash(Number(b.dataset.si));
@@ -878,7 +893,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const s = this._slash;
       if (!s) return;
       s.idx = (s.idx + dir + s.matches.length) % s.matches.length;
-      s.pop.querySelectorAll("[data-si]").forEach((b, i) => b.classList.toggle("on", i === s.idx));
+      s.pop.querySelectorAll("[data-si]").forEach((b, i) => {
+        const on = i === s.idx;
+        b.classList.toggle("on", on);
+        if (on) b.scrollIntoView({ block: "nearest" });
+      });
     }
     _pickSlash(i) {
       const s = this._slash;
