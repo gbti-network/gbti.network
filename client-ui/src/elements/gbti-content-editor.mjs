@@ -9,6 +9,7 @@ import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the 
 import { gatherInput } from '../form.mjs';
 import { resolveAsset } from '../assets.mjs'; // SOW-062 P3: resolve an existing coverImage path to a preview URL
 import './gbti-doc-editor.mjs'; // SOW-062 P5: the cohesive WYSIWYG body editor (same #body.value Markdown contract)
+import './gbti-discussion.mjs'; // SOW-062 P6: the shared discussion thread, embedded in the editor for published items
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
 
 // SOW-062 P6: inline icons for the edhead toolbar + section headers (the design's sprite is not in the shadow root).
@@ -33,7 +34,13 @@ const COPY = _svg(`<rect x="8" y="8" width="11" height="12" rx="2" ${S} stroke-w
 const CODE = _svg(`<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`); // SOW-062 P6: markdown view toggle
 const PLUS = _svg(`<path d="M12 5.5v13M5.5 12h13" ${S} stroke-width="2" stroke-linecap="round"/>`); // SOW-062 P6: add link row
 const TRASH = _svg(`<path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12" ${S} stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`); // SOW-062 P6: remove link row
+const VIDEO = _svg(`<rect x="3.5" y="6" width="11" height="12" rx="2.2" ${S} stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`); // SOW-062 P6: product video section
+const CHAT = _svg(`<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4H6.5" ${S} stroke-width="1.8" stroke-linejoin="round"/>`); // SOW-062 P6: from-the-author section
+const USERS = _svg(`<circle cx="9" cy="8" r="3.2" ${S} stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" ${S} stroke-width="1.8" stroke-linecap="round"/>`); // SOW-062 P6: discussion section
 const SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
+// SOW-062 P6: keys rendered in a DOCUMENT-CANVAS section (not the rail) for a given type, so they are excluded from
+// the preserved-hidden block to avoid a duplicate [data-key]. `video` -> the product Video section.
+const DOC_SECTION_KEYS = { product: new Set(['video']) };
 const TYPE_LABEL = { post: 'Article', product: 'Product', prompt: 'Prompt', profile: 'Profile' };
 const CONTENT_REPO = 'gbti-network/gbti.network'; // SOW-062 P6: resolve a repo-relative cover to a jsDelivr preview URL
 
@@ -169,10 +176,12 @@ class GbtiContentEditor extends GbtiElement {
     // unreachable) shows no notice and does not block, matching the fail-open publish gate.
     let membership = 'unknown';
     let canStage = true; // SOW-082: Save-draft is allowed for trial+paid; 'unknown' fails OPEN like publish
+    let authorInitial = 'A'; // SOW-062 P6: the from-the-author avatar monogram
     try {
       const st = await this.client.status();
       membership = st?.membership ?? 'unknown';
       canStage = membership === 'unknown' || st?.canStageDrafts === true;
+      authorInitial = (st?.identity?.login || '').slice(0, 1).toUpperCase() || 'A';
     } catch {
       membership = 'unknown';
     }
@@ -183,10 +192,11 @@ class GbtiContentEditor extends GbtiElement {
     // rail renders the per-type RAIL_SCHEMA in order; fields NOT in the schema (nor header, nor publicStub which the
     // visibility switch folds in) are preserved HIDDEN so gather() still submits their existing values.
     const headerKeys = new Set(['title', 'slug']);
+    const docSecKeys = DOC_SECTION_KEYS[this.type] || new Set(); // keys rendered in a doc section, not the hidden block
     const schema = RAIL_SCHEMA[this.type] || RAIL_SCHEMA.post;
     const schemaKeys = new Set(schema.flatMap((s) => s.keys));
     const fieldByKey = new Map(this.fields.map((f) => [f.key, f]));
-    const hiddenFields = this.fields.filter((f) => !headerKeys.has(f.key) && !schemaKeys.has(f.key) && f.key !== 'publicStub');
+    const hiddenFields = this.fields.filter((f) => !headerKeys.has(f.key) && !schemaKeys.has(f.key) && !docSecKeys.has(f.key) && f.key !== 'publicStub');
     const sectionsHtml = schema.map((sec) => {
       const inner = sec.keys.map((key) => { const f = fieldByKey.get(key); return f ? this.fieldHtml(f, p[key], this.fieldVisible(f, getValPreset)) : ''; }).join('');
       if (!inner) return '';
@@ -197,6 +207,27 @@ class GbtiContentEditor extends GbtiElement {
     const isPub = String(p.status || '').toLowerCase() === 'published';
     const statusLabel = isPub ? (p.publishedAt ? String(p.publishedAt).slice(0, 10) : 'published') : 'draft';
     const cheat = this.cheatData(); // SOW-062 P6: per-type markdown cheatsheet content for the modal
+    // SOW-062 P6: the document-canvas sections below the body (all `.docsec`, so the md-view rule hides them).
+    const slug = this.presetStr(p.slug) || '';
+    const videoField = fieldByKey.get('video');
+    const videoSection = (docSecKeys.has('video') && videoField) ? `
+             <section class="docsec" id="secVideo">
+               <div class="docsec-h">${VIDEO} Video <span class="dsub">YouTube or Vimeo, shown at the top of the product page</span></div>
+               <input class="inp" data-key="video" data-kind="${esc(videoField.kind || 'text')}" type="text" value="${esc(this.presetStr(p.video) || '')}" placeholder="https://youtube.com/watch?v=…" />
+             </section>` : '';
+    const showAuthorNote = this.type === 'product' || this.type === 'prompt';
+    const authorSection = showAuthorNote ? `
+             <section class="docsec" id="secAuthorNote">
+               <div class="docsec-h">${CHAT} From the author <span class="dsub">a personal note shown under the content (published in the same PR)</span></div>
+               <div class="authornote"><span class="an-av">${esc(authorInitial)}</span>
+                 <textarea class="an-text" id="authornote" placeholder="Add a personal note for readers…"></textarea></div>
+             </section>` : '';
+    const discussionSection = (isPub && slug && ['post', 'product', 'prompt'].includes(this.type)) ? `
+             <section class="docsec" id="secDiscussion">
+               <div class="docsec-h">${USERS} Discussion <span class="dsub">public and members-only comments</span></div>
+               <gbti-discussion data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion>
+             </section>` : '';
+    const docSections = videoSection + authorSection + discussionSection;
     this.set(
       this.css(EDITOR_SURFACE + `
         :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); container-type:inline-size; }
@@ -336,6 +367,14 @@ class GbtiContentEditor extends GbtiElement {
         .docmd-bar svg { width:15px; height:15px; color:var(--s-green-fg); }
         .docmd-note { margin-left:auto; font-family:var(--font-mono,monospace); font-size:11px; font-weight:500; color:var(--s-fg-mute); }
         .docmd { display:block; width:100%; box-sizing:border-box; border:0; resize:vertical; min-height:60vh; padding:20px 22px; font-family:var(--font-mono,monospace); font-size:13px; line-height:1.7; color:var(--s-fg); background:var(--s-surface); outline:none; white-space:pre; tab-size:2; }
+        /* SOW-062 P6: the document-canvas sections (Video, From-the-author, Discussion) below the body */
+        .docsec-h .dsub { text-transform:none; letter-spacing:0; font-weight:500; color:var(--s-fg-mute); }
+        #secVideo .inp { width:100%; box-sizing:border-box; }
+        .authornote { display:flex; gap:12px; align-items:flex-start; }
+        .an-av { flex:none; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; font-size:14px; color:#fff; background:var(--s-green); }
+        .an-text { flex:1; min-width:0; font:inherit; font-size:14px; line-height:1.55; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:9px; padding:11px 13px; outline:none; resize:vertical; min-height:70px; box-sizing:border-box; }
+        .an-text:focus { border-color:var(--s-green); background:var(--s-surface); }
+        #secDiscussion gbti-discussion { display:block; margin-top:2px; }
       `) +
         `<div class="edhead">
            <span class="etype">${esc(this.type)}</span>
@@ -359,7 +398,7 @@ class GbtiContentEditor extends GbtiElement {
              <section class="docsec" id="secMain">
                <div class="docsec-h">${DOC} Main content</div>
                <gbti-doc-editor id="body"></gbti-doc-editor>
-             </section>
+             </section>${docSections}
              <div class="docmd-wrap" id="docmdwrap" hidden>
                <div class="docmd-bar">${CODE} <span>Full document as markdown</span><span class="docmd-note">Read-only source view</span></div>
                <textarea class="docmd" id="docmd" spellcheck="false" readonly></textarea>
@@ -397,6 +436,14 @@ class GbtiContentEditor extends GbtiElement {
     this._bindHeader(); // SOW-062 P6: the inline title/tagline/slug mirror to their hidden [data-key] inputs
     this._wireRail(); // SOW-062 P6: chips / toggles / visibility switch / status dots
     this._wireLinks(); // SOW-062 P6: the product links[] row editor (serializes into the hidden json input)
+    // SOW-062 P6: prefill the from-the-author note from the existing intro-<slug> comment (product/prompt, existing item).
+    const introSlug = (this.type === 'product' || this.type === 'prompt') ? this.presetStr(this.preset?.input?.slug) : '';
+    if (introSlug) {
+      this.client?.getComment?.({ id: `intro-${introSlug}` }).then((c) => {
+        const ta = this.$('#authornote');
+        if (ta && !ta.value && c?.body) ta.value = c.body;
+      }).catch(() => {});
+    }
 
     // SOW-062 P3: the rich cover-image control(s) — preview + Choose/Replace/Remove (the kind:'image' field).
     this.$$('[data-cover]').forEach((c) => {
@@ -727,7 +774,9 @@ class GbtiContentEditor extends GbtiElement {
     try {
       const { type, input, body } = this.gather();
       if (this.fields.some((f) => f.key === 'status')) input.status = 'published'; // SOW-062 P6: status is action-driven (no rail dropdown)
-      const res = await this.client.publish({ type, input, body });
+      // SOW-062 P6: the from-the-author note seeds/updates the intro-<slug> comment in the same PR (product/prompt).
+      const authorNote = this.$('#authornote')?.value?.trim() || undefined;
+      const res = await this.client.publish({ type, input, body, authorNote });
       this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`); // SOW-072 P2: consistent ack (esc: out() writes innerHTML)
       this.emit('gbti-published', res);
     } catch (err) {
