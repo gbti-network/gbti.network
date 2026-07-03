@@ -348,14 +348,6 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
       return req('DELETE', `/repos/${repoFullName}/git/refs/heads/${branch}`);
     },
 
-    /** SOW-106 Phase 3: sync the member fork's default branch to the parent (network) repo, so a per-item branch
-     *  created off it starts from CURRENT content and a re-publish of an already-merged item is a clean modify-diff,
-     *  not an add/add conflict. Best-effort: a 409 (dirty fork / merge conflict) or 422 leaves the fork as-is and
-     *  returns null rather than throwing; the caller's reset-if-merged step + the gate still make the publish safe. */
-    async mergeUpstream(repoFullName, branch = 'main') {
-      try { return await req('POST', `/repos/${repoFullName}/merge-upstream`, { branch }); } catch { return null; }
-    },
-
     /** The decoded text of a file at a ref on a SPECIFIC repo (the member's fork), or null if absent. Unlike
      *  getFileContent (which targets the upstream / Worker), this reads the fork directly with the member token. */
     async getForkFileContent(repoFullName, path, ref) {
