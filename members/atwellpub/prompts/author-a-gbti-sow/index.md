@@ -1,6 +1,7 @@
 ---
 title: Author a GBTI Network SOW
 slug: author-a-gbti-sow
+status: published
 shortDescription: >-
   A step-by-step skill for authoring or improving a GBTI Network Statement of Work. It enforces the
   pre-checks: reuse an existing SOW, ground the work in a code audit, cite the completed SOWs it
