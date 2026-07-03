@@ -11552,9 +11552,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   async function fetchCreateContent() {
     const types2 = ["post", "prompt", "product"];
-    const results = await Promise.all(types2.map((t) => api("/api/content", { type: t })));
-    const mk = _lastStatus?.identity?.githubId || _lastStatus?.identity?.login || null;
+    const [draftsRes, ...results] = await Promise.all([
+      api("/api/drafts"),
+      ...types2.map((t) => api("/api/content", { type: t }))
+    ]);
     const items = [];
+    const stagedKeys = /* @__PURE__ */ new Set();
+    for (const d of Array.isArray(draftsRes?.drafts) ? draftsRes.drafts : []) {
+      stagedKeys.add(`${d.type}:${d.slug}`);
+      items.push({ type: d.type, title: d.title || d.slug || "Untitled", status: "draft" });
+    }
+    const mk = _lastStatus?.identity?.githubId || _lastStatus?.identity?.login || null;
     results.forEach((r, i) => {
       const full = Array.isArray(r?.items) ? r.items : null;
       if (mk && full) {
@@ -11564,6 +11572,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       }
       for (const it of full || []) {
+        if (stagedKeys.has(`${types2[i]}:${it.slug}`)) continue;
         items.push({ type: types2[i], title: it.title || it.slug || "Untitled", status: it.status || "" });
       }
     });

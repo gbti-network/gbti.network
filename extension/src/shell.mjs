@@ -396,16 +396,29 @@ function createCacheSet(key, val) {
 }
 async function fetchCreateContent() {
   const types = ['post', 'prompt', 'product'];
-  const results = await Promise.all(types.map((t) => api('/api/content', { type: t })));
+  // The WorkBench "Drafts" tab lists the member's FORK-STAGED drafts (listDrafts / gbti/<type>-<slug> branches),
+  // which are NOT in the committed /api/content set. Fetch them too and list them FIRST, so the popup's Recent
+  // drafts matches the Drafts tab (staged drafts before committed content). One extra request, cached 24h.
+  const [draftsRes, ...results] = await Promise.all([
+    api('/api/drafts'),
+    ...types.map((t) => api('/api/content', { type: t })),
+  ]);
+  const items = [];
+  // Staged drafts first (forced status 'draft' so they badge as drafts and sort ahead of published content).
+  const stagedKeys = new Set();
+  for (const d of (Array.isArray(draftsRes?.drafts) ? draftsRes.drafts : [])) {
+    stagedKeys.add(`${d.type}:${d.slug}`);
+    items.push({ type: d.type, title: d.title || d.slug || 'Untitled', status: 'draft' });
+  }
   // SOW-073 P5: the workbench SWR cache reads the SAME per-type content. Warm it here from the FULL items this
   // prefetch already fetched (free, no extra request), so the first workbench open is an instant cache hit.
   // Success-only: api() returns null on failure, so a missing items array never poisons the cache.
   const mk = _lastStatus?.identity?.githubId || _lastStatus?.identity?.login || null;
-  const items = [];
   results.forEach((r, i) => {
     const full = Array.isArray(r?.items) ? r.items : null;
     if (mk && full) { try { wbCacheSet(String(mk), types[i], full, { allowEmpty: true }); } catch { /* best-effort */ } }
     for (const it of full || []) {
+      if (stagedKeys.has(`${types[i]}:${it.slug}`)) continue; // already shown as a staged draft above
       items.push({ type: types[i], title: it.title || it.slug || 'Untitled', status: it.status || '' });
     }
   });
