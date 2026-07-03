@@ -4528,7 +4528,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
   var CSS16 = `
-  :host { display:block; font-family:var(--font-body); color:var(--fg); }
+  :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
   /* The glyph wrapper must FILL the media so the svg's % sizing + centering resolve (an unsized .gl made the
@@ -4536,7 +4536,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .media .gl { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
   .media .gl svg { width:55%; height:55%; display:block; }
   .media .cimg { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); background:var(--hover); border:1px solid transparent; border-radius:6px; padding:3px 8px; white-space:nowrap; flex:none; }
+  .chip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); background:var(--hover); border:1px solid transparent; border-radius:var(--feed-radius); padding:3px 8px; white-space:nowrap; flex:none; }
   .lock { display:inline-flex; align-items:center; gap:4px; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 8px 2px 6px; white-space:nowrap; }
   .lock svg { width:11px; height:11px; }
   .meta { display:inline-flex; align-items:center; gap:7px; font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); white-space:nowrap; }
@@ -4558,14 +4558,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .row-c:hover, .row-d:hover { background:var(--hover); }
 
   .row-c { display:flex; align-items:center; gap:12px; padding:12px 8px 12px 15px; }
-  .row-c .media { width:38px; height:38px; border-radius:9px; }
+  .row-c .media { width:38px; height:38px; border-radius:var(--feed-radius); }
   .row-c .title { flex:1; min-width:0; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row-c:hover .title { color:var(--accent); }
   .row-c .right { display:flex; align-items:center; gap:10px; flex:none; }
 
   .row-d { display:grid; grid-template-columns:62px 1fr; gap:15px; align-items:center; padding:14px 8px 14px 17px; }
   .row-d.no-media { grid-template-columns:1fr; } /* SOW-049: news has no left media -> the title spans full width */
-  .row-d .media { width:62px; height:62px; border-radius:10px; }
+  .row-d .media { width:62px; height:62px; border-radius:var(--feed-radius); }
   .row-d .body { min-width:0; }
   .row-d .top { display:flex; align-items:center; gap:9px; margin:0 0 4px; }
   .row-d .title { font-size:15.5px; }
@@ -4574,7 +4574,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   /* MODE card — boxed grid, image-led (mirrors the /prompts grid card: 4:3 cover image up top, body below) */
   .card { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:13px; }
-  .card-i { position:relative; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:0; cursor:pointer; overflow:hidden; transition:border-color .14s, box-shadow .14s, transform .14s; }
+  .card-i { position:relative; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:var(--feed-radius); padding:0; cursor:pointer; overflow:hidden; transition:border-color .14s, box-shadow .14s, transform .14s; }
   .card-i:hover { border-color:var(--accent); transform:translateY(-2px); }
   /* The lead media: full-bleed at the top, a 4:3 box like /prompts .va-lead, object-fit cover. The card rounds
      only its top corners (overflow:hidden), so the image's BOTTOM edge is square (no rounded bottom). */
@@ -4588,9 +4588,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   /* SOW-067: the category leaf label beside the type pill (card mode only), grouped left; the lock stays right. */
   .card-i .top { gap:6px; }
   .tcluster { display:inline-flex; align-items:center; gap:6px; min-width:0; }
-  .catchip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); background:var(--hover); border-radius:2px; padding:3px 7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:130px; }
+  .catchip { display:inline-flex; align-items:center; font-family:var(--font-mono, monospace); font-size:10px; font-weight:600; color:var(--muted); background:var(--hover); border-radius:var(--feed-radius); padding:3px 7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:130px; }
   /* SOW-067: the SOW-052 squared aesthetic in CARD MODE ONLY (scoped to .card-i so compact/detailed keep their radii). */
-  .card-i, .card-i .media, .card-i .chip, .card-i .lock, .card-i .av, .card-i .catchip { border-radius:2px; }
+  /* SOW-086: card mode squares only the rectangular pieces to the feed radius; the avatar (.av) stays a
+     circle, the lock stays a pill, and the full-bleed .card-i .media stays 0 (clipped by the card corners). */
+  .card-i, .card-i .chip, .card-i .catchip { border-radius:var(--feed-radius); }
 
   /* SEPARATION — member contributions stand out from the (non-member, high-volume) News stream: each member
      type gets a 3px type-color accent bar + a faint tint + a colored chip; NEWS stays plain so it recedes.
