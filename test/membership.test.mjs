@@ -271,6 +271,29 @@ test('members-only: a trial member is a member but cannot publish (rejected-not-
   assert.equal(d.label, 'rejected-not-paid'); // not 'rejected-not-a-member' (trial IS a member) and not held
 });
 
+test('SOW-108: a superadmin auto-merges any path they touch, including house/** and Tier S', () => {
+  const sup = (paths) => decide({ paths, role: ROLE.superadmin, effective: PAID });
+  const q = sup(['house/quotes.yml']);
+  assert.equal(q.check, 'pass');
+  assert.equal(q.autoMerge, true);
+  assert.equal(q.label, 'superadmin-automerge');
+  // Tier S too (roles.yml, CODEOWNERS, .github) -> the owner-elected removal of the two-person review
+  assert.equal(sup(['house/roles.yml']).autoMerge, true);
+  assert.equal(sup(['CODEOWNERS']).autoMerge, true);
+  assert.equal(sup(['.github/workflows/x.yml']).autoMerge, true);
+});
+
+test('SOW-108: an admin house edit still needs review; a non-privileged Tier/house PR still hard-fails', () => {
+  const admin = decide({ paths: ['house/quotes.yml'], role: ROLE.admin, effective: PAID });
+  assert.equal(admin.check, 'pass');
+  assert.equal(admin.autoMerge, false); // admins are unchanged: house edits fall to code-owner review
+  assert.equal(admin.label, 'admin-review');
+  // an admin cannot touch Tier S (roles.yml) at all
+  assert.equal(decide({ paths: ['house/roles.yml'], role: ROLE.admin, effective: PAID }).label, 'rejected-escalation');
+  // a plain member touching house is rejected
+  assert.equal(decide({ paths: ['house/quotes.yml'], role: ROLE.member, effective: PAID }).label, 'rejected-escalation');
+});
+
 test('contributionTarget resolves a single other owner, else null', () => {
   assert.equal(contributionTarget(['members/bob/posts/x/index.md'], 'octocat'), 'bob');
   assert.equal(contributionTarget(['members/octocat/posts/x/index.md'], 'octocat'), null); // own folder

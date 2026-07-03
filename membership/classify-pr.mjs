@@ -210,8 +210,12 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
 
   // 5. Privileged authors are authorized for every path they touched and are membership-exempt.
   if (isModPlus) {
-    // Auto-merge only when the PR stays inside the author's own folder; cross-folder / house
-    // changes fall to the protected-paths ruleset (code-owner review), so auto-merge is off.
+    // A SUPERADMIN auto-merges ANY path they touch, including house/** and Tier S (owner-elected: superadmin
+    // actions merge automatically with no second code-owner review). The escalation hard-fails above already
+    // protect every non-superadmin, so this loosens nothing for anyone else.
+    if (effectiveRole === ROLE.superadmin) return pass('superadmin-automerge', true, `superadmin (${effectiveRole})`);
+    // An admin / moderator auto-merges only inside their own folder; their cross-folder / house changes fall
+    // to the protected-paths ruleset (code-owner review), so auto-merge is off.
     return pass(c.ownFolderOnly ? 'paid' : 'admin-review', c.ownFolderOnly, `privileged author (${effectiveRole})`);
   }
 

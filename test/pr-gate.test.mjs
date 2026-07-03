@@ -257,6 +257,11 @@ test('shouldAutoMerge: a passing own-folder member PR auto-merges; a protected-p
   // empty / missing paths -> never (cannot prove own-folder)
   assert.equal(shouldAutoMerge({ check: 'pass', autoMerge: true }, []), false);
   assert.equal(shouldAutoMerge({ check: 'pass', autoMerge: true }, undefined), false);
+  // SOW-108: a superadmin-automerge decision fires on ANY path, including house/** + Tier S
+  assert.equal(shouldAutoMerge({ check: 'pass', autoMerge: true, label: 'superadmin-automerge' }, ['house/quotes.yml']), true);
+  assert.equal(shouldAutoMerge({ check: 'pass', autoMerge: true, label: 'superadmin-automerge' }, ['house/roles.yml', 'CODEOWNERS']), true);
+  // ...but only when the gate actually passed with autoMerge set (the label alone never merges a failing PR)
+  assert.equal(shouldAutoMerge({ check: 'fail', autoMerge: true, label: 'superadmin-automerge' }, ['house/quotes.yml']), false);
 });
 
 test('CLOSE_NUDGE distinguishes the non-member sign-up nudge from the trial upgrade nudge', () => {

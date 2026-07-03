@@ -65,20 +65,20 @@ export function shouldAutoClose(label, stripeHealthy) {
 
 /**
  * SOW-072: pure decision for the auto-merge actuator. The gate computes autoMerge (paid/admin own-folder content)
- * but nothing acted on it, so passing member PRs sat open. We auto-merge ONLY when the gate passed AND autoMerge is
- * set AND every changed path is under members/ — a defense-in-depth floor so a protected-path PR (house/**,
- * .github/**, root) is NEVER machine-merged even if a future bug set the flag; those always require CODEOWNER
+ * but nothing acted on it, so passing member PRs sat open. We auto-merge when the gate passed AND autoMerge is set
+ * AND either (a) every changed path is under members/ (a member's own-folder content), OR (b) the decision label is
+ * `superadmin-automerge` (SOW-108: an owner-elected superadmin PR merges automatically on ANY path, including
+ * house/** and Tier S). For everyone else the members/ floor is defense-in-depth so a protected-path PR (house/**,
+ * .github/**, root) is NEVER machine-merged even if a future bug set the flag; those still require CODEOWNER
  * review. The caller merges directly (main has no branch protection, so a "clean" PR cannot use GitHub native
  * auto-merge); it is fail-open-safe, so a merge error just leaves the PR open for a manual merge.
  */
 export function shouldAutoMerge(decision, paths) {
-  return (
-    decision?.check === 'pass' &&
-    decision?.autoMerge === true &&
-    Array.isArray(paths) &&
-    paths.length > 0 &&
-    paths.every((p) => typeof p === 'string' && p.startsWith('members/'))
-  );
+  if (decision?.check !== 'pass' || decision?.autoMerge !== true) return false;
+  // SOW-108: a superadmin PR auto-merges on any path (the gate decision already authorized it).
+  if (decision?.label === 'superadmin-automerge') return true;
+  // Everyone else: auto-merge stays scoped to a member's own folder (house/** for an admin still needs review).
+  return Array.isArray(paths) && paths.length > 0 && paths.every((p) => typeof p === 'string' && p.startsWith('members/'));
 }
 
 /**
