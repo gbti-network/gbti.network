@@ -31,6 +31,8 @@ const IMG = _svg(`<rect x="4" y="5" width="16" height="14" rx="2.2" ${S} stroke-
 const BOOK = _svg(`<path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z" ${S} stroke-width="1.8" stroke-linejoin="round"/>`); // SOW-062 P6: markdown cheatsheet
 const COPY = _svg(`<rect x="8" y="8" width="11" height="12" rx="2" ${S} stroke-width="1.7"/><path d="M5 15.5V5.5a1.5 1.5 0 0 1 1.5-1.5H15" ${S} stroke-width="1.7" stroke-linecap="round"/>`); // SOW-062 P6: copy content id
 const CODE = _svg(`<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`); // SOW-062 P6: markdown view toggle
+const PLUS = _svg(`<path d="M12 5.5v13M5.5 12h13" ${S} stroke-width="2" stroke-linecap="round"/>`); // SOW-062 P6: add link row
+const TRASH = _svg(`<path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12" ${S} stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`); // SOW-062 P6: remove link row
 const SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
 const TYPE_LABEL = { post: 'Article', product: 'Product', prompt: 'Prompt', profile: 'Profile' };
 const CONTENT_REPO = 'gbti-network/gbti.network'; // SOW-062 P6: resolve a repo-relative cover to a jsDelivr preview URL
@@ -290,6 +292,19 @@ class GbtiContentEditor extends GbtiElement {
         .cf-hero img { width:184px; height:auto; max-height:150px; object-fit:contain; }
         .cf figcaption { font-size:11px; color:var(--s-fg-mute); margin-top:4px; text-align:center; }
         .cover-actions { display:flex; gap:8px; }
+        /* SOW-062 P6: product links[] row editor */
+        .linkrows { display:flex; flex-direction:column; gap:9px; margin-bottom:8px; }
+        .linkrow { display:flex; flex-direction:column; gap:8px; padding:10px; border:1.5px solid var(--s-line-2); border-radius:8px; background:var(--s-surface-2); }
+        .linkrow .lr-top, .linkrow .lr-bot { display:flex; align-items:center; gap:8px; }
+        .linkrow .lk-type { flex:none; width:118px; }
+        .linkrow .lk-url, .linkrow .lk-label { flex:1; min-width:0; }
+        .linkrow .inp { padding:7px 9px; font-size:12.5px; }
+        .lr-del { flex:none; width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; border:1.5px solid var(--s-line-2); border-radius:7px; background:var(--s-surface); color:var(--s-fg-mute); cursor:pointer; }
+        .lr-del:hover { color:#c0392b; border-color:#c0392b; } .lr-del svg { width:16px; height:16px; }
+        .lr-vis { display:inline-flex; padding:2px; gap:2px; background:var(--s-surface); border:1.5px solid var(--s-line-2); border-radius:7px; flex:none; }
+        .lr-vis button { font:inherit; font-size:10.5px; font-weight:600; padding:5px 9px; border:0; background:transparent; color:var(--s-fg-soft); border-radius:6px; cursor:pointer; }
+        .lr-vis button.on { background:var(--s-fg); color:var(--s-canvas); }
+        .addrow { font-size:13px; padding:8px 12px; align-self:flex-start; }
         /* SOW-062 P6: markdown cheatsheet modal (ported from gbti-editor.css .mdRefModal onto the component tokens) */
         .mdRefModal { position:fixed; inset:0; z-index:1200; display:none; }
         .mdRefModal.show { display:block; }
@@ -381,6 +396,7 @@ class GbtiContentEditor extends GbtiElement {
     this.on('#publish', 'click', () => this.doPublish());
     this._bindHeader(); // SOW-062 P6: the inline title/tagline/slug mirror to their hidden [data-key] inputs
     this._wireRail(); // SOW-062 P6: chips / toggles / visibility switch / status dots
+    this._wireLinks(); // SOW-062 P6: the product links[] row editor (serializes into the hidden json input)
 
     // SOW-062 P3: the rich cover-image control(s) — preview + Choose/Replace/Remove (the kind:'image' field).
     this.$$('[data-cover]').forEach((c) => {
@@ -460,6 +476,12 @@ class GbtiContentEditor extends GbtiElement {
           <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc(v)}" />
         </div></div>`;
     }
+    // SOW-062 P6: the product links[] editor -> structured rows (was a raw JSON textarea). The rows serialize back
+    // into the SAME hidden [data-key="links"] json input gather() reads, and each row preserves its original extra
+    // fields (primary, encrypted, ...) so the round-trip never drops data.
+    if (f.kind === 'json' && f.key === 'links') {
+      return wrap(this._linksInner(f, value));
+    }
     // textarea / json -> .ta
     if (f.kind === 'textarea' || f.kind === 'json') {
       return wrap(`${label}<textarea class="ta" data-key="${f.key}" data-kind="${f.kind}" rows="${f.rows || 3}" placeholder="${esc(f.placeholder || '')}">${esc(v)}</textarea>`);
@@ -467,6 +489,80 @@ class GbtiContentEditor extends GbtiElement {
     // text / date / number -> .inp
     const mono = f.kind === 'date' || f.key === 'slug';
     return wrap(`${label}<input class="inp${mono ? ' mono' : ''}" data-key="${f.key}" data-kind="${f.kind}" type="text" value="${esc(v)}" placeholder="${esc(f.placeholder || '')}" />`);
+  }
+
+  // SOW-062 P6: the product links[] editor. One row per link + an Add button + a hidden json input that gather()
+  // reads (unchanged contract). _serializeLinks rebuilds the array on every edit, preserving each row's extra fields.
+  _linksInner(f, value) {
+    let links = [];
+    try { links = Array.isArray(value) ? value : (typeof value === 'string' && value ? JSON.parse(value) : []); } catch { links = []; }
+    const rows = links.map((l, i) => this._linkRowHtml(l, i)).join('');
+    return `<label>Links <span class="hint">· buttons on the product page</span></label>
+      <div class="linkrows" data-links>${rows}</div>
+      <button class="ebtn addrow" type="button" data-addlink>${PLUS} Add link</button>
+      <datalist id="lk-types">${['download', 'product', 'repository', 'github', 'website', 'docs', 'demo'].map((k) => `<option value="${k}"></option>`).join('')}</datalist>
+      <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc(JSON.stringify(links))}" />`;
+  }
+
+  _linkRowHtml(l = {}, i) {
+    const { type, kind, url, label, visibility, ...extra } = l || {};
+    const t = esc(type || kind || '');
+    const vis = visibility === 'members' ? 'members' : 'public';
+    return `<div class="linkrow" data-li="${i}" data-hadvis="${visibility != null ? '1' : '0'}" data-extra="${esc(JSON.stringify(extra))}">
+      <div class="lr-top">
+        <input class="inp lk-type" list="lk-types" placeholder="type" value="${t}" />
+        <input class="inp lk-url" type="text" placeholder="https://" value="${esc(url || '')}" />
+        <button class="lr-del" type="button" data-lrdel title="Remove">${TRASH}</button>
+      </div>
+      <div class="lr-bot">
+        <input class="inp lk-label" type="text" placeholder="Button label" value="${esc(label || '')}" />
+        <div class="lr-vis" data-lrvis>${['public', 'members'].map((x) => `<button type="button" data-vis="${x}" class="${vis === x ? 'on' : ''}">${x}</button>`).join('')}</div>
+      </div>
+    </div>`;
+  }
+
+  _serializeLinks() {
+    const wrap = this.$('[data-links]');
+    const hidden = this.$('[data-key="links"]');
+    if (!wrap || !hidden) return;
+    const links = [];
+    wrap.querySelectorAll('.linkrow').forEach((row) => {
+      const url = (row.querySelector('.lk-url')?.value || '').trim();
+      if (!url) return; // an empty row is not a link
+      let extra = {};
+      try { extra = JSON.parse(row.dataset.extra || '{}'); } catch { extra = {}; }
+      const type = (row.querySelector('.lk-type')?.value || '').trim();
+      const label = (row.querySelector('.lk-label')?.value || '').trim();
+      const vis = row.querySelector('.lr-vis button.on')?.dataset.vis || 'public';
+      const link = {};
+      if (type) link.type = type;
+      link.url = url;
+      if (label) link.label = label;
+      // only emit visibility if the user chose members OR the original link carried it (keeps existing PRs clean)
+      if (vis === 'members' || row.dataset.hadvis === '1') link.visibility = vis;
+      Object.assign(link, extra); // preserve primary / encrypted / any other original field
+      links.push(link);
+    });
+    hidden.value = JSON.stringify(links);
+  }
+
+  _wireLinks() {
+    const wrap = this.$('[data-links]');
+    if (!wrap) return;
+    wrap.addEventListener('input', () => this._serializeLinks());
+    wrap.addEventListener('click', (e) => {
+      const del = e.target.closest('[data-lrdel]');
+      if (del) { e.preventDefault(); del.closest('.linkrow')?.remove(); this._serializeLinks(); return; }
+      const vb = e.target.closest('.lr-vis button');
+      if (vb) { e.preventDefault(); vb.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b === vb)); this._serializeLinks(); }
+    });
+    this.$('[data-addlink]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      const tmp = document.createElement('div');
+      tmp.innerHTML = this._linkRowHtml({}, wrap.children.length);
+      const row = tmp.firstElementChild;
+      if (row) { wrap.appendChild(row); this._serializeLinks(); row.querySelector('.lk-type')?.focus(); }
+    });
   }
 
   _presetBool(key) { return !!this.preset?.input?.[key]; }
