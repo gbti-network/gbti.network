@@ -274,6 +274,9 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
   const bdy = prBody ?? desc.body;
+  // SOW-106 Phase 3: sync the fork + reset a fully-merged stale branch, so re-publishing an already-merged item is a
+  // clean modify-diff rather than an add/add conflict. Loss-safe: only a fully-merged branch is reset.
+  await syncForkForPublish(ctx, repo, built);
   if (introFile) {
     const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
     return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message: msg, title: ttl, body: bdy });
@@ -332,6 +335,38 @@ export function buildIntroCommentFile({ username, built, authorNote, now } = {})
     body: note,
   });
   return { path: introBuilt.path, content: introBuilt.markdown };
+}
+
+/**
+ * SOW-106 Phase 3: sync-then-publish. Refresh the member fork's main to the current network main, then, if this
+ * item's branch already exists AND its content is FULLY MERGED (byte-identical to the live version, so nothing is
+ * pending and no live PR is open), delete it so the commit recreates it off current main and the PR is a clean
+ * modify-diff instead of an add/add conflict against already-merged content (the PR #44 failure). A branch with ANY
+ * pending edit is left untouched, so member fork work is NEVER lost. Best-effort + never throws: the SOW-005 gate is
+ * the backstop if a stale branch still conflicts.
+ */
+export async function syncForkForPublish(ctx, repo, built) {
+  if (!built?.slug) return; // profiles + slugless types have nothing to reset
+  const branch = branchName(built.type, built.slug);
+  let fork;
+  try { fork = await repo.ensureFork(); } catch { return; }
+  // Sync the fork's DEFAULT branch (not a hardcoded name) to the network, and only proceed to a reset when the sync
+  // CONFIRMED (a dirty-fork 409 returns null). Recreating a branch off a STALE main would reintroduce the add/add
+  // conflict, so on an unconfirmed sync we leave the branch alone and let the SOW-005 gate be the backstop.
+  const base = (await repo.getDefaultBranch?.(repo.upstream).catch(() => null)) || 'main';
+  let synced = null;
+  try { synced = await repo.mergeUpstream?.(fork.full_name, base); } catch { synced = null; }
+  if (!synced) return;
+  try {
+    const existing = await repo.getForkFileContent(fork.full_name, built.path, branch).catch(() => null);
+    let openPull = null;
+    try { openPull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }); } catch { openPull = null; }
+    // Reset ONLY a fully-merged branch with NO open PR: byte-identical to live (nothing pending) AND nothing in
+    // review. A pending edit or an in-flight PR is never touched, so member work AND review threads survive.
+    if (existing && !openPull && (await forkContentMatchesLive(ctx, built.path, existing))) {
+      await repo.deleteBranch(fork.full_name, branch); // the commit below recreates it off the now-current main
+    }
+  } catch { /* best-effort */ }
 }
 
 /**
@@ -436,7 +471,9 @@ export async function forkContentMatchesLive(ctx, path, forkText) {
     if (staged.frontmatter?.encryptedBody) return false; // member-only: the stub cannot prove the .enc is unchanged
     const live = await ctx.reader?.read?.(path);
     if (!live) return false;
-    return String(staged.body ?? '').trim() === String(live.body ?? '').trim()
+    // Exact (un-trimmed) body compare, so even a whitespace-only pending edit keeps the draft rather than being
+    // treated as merged and discarded.
+    return String(staged.body ?? '') === String(live.body ?? '')
       && JSON.stringify(staged.frontmatter ?? {}) === JSON.stringify(live.frontmatter ?? {});
   } catch { return false; }
 }

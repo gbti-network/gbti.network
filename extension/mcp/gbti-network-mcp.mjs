@@ -17946,6 +17946,17 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
     async deleteBranch(repoFullName, branch) {
       return req("DELETE", `/repos/${repoFullName}/git/refs/heads/${branch}`);
     },
+    /** SOW-106 Phase 3: sync the member fork's default branch to the parent (network) repo, so a per-item branch
+     *  created off it starts from CURRENT content and a re-publish of an already-merged item is a clean modify-diff,
+     *  not an add/add conflict. Best-effort: a 409 (dirty fork / merge conflict) or 422 leaves the fork as-is and
+     *  returns null rather than throwing; the caller's reset-if-merged step + the gate still make the publish safe. */
+    async mergeUpstream(repoFullName, branch = "main") {
+      try {
+        return await req("POST", `/repos/${repoFullName}/merge-upstream`, { branch });
+      } catch {
+        return null;
+      }
+    },
     /** The decoded text of a file at a ref on a SPECIFIC repo (the member's fork), or null if absent. Unlike
      *  getFileContent (which targets the upstream / Worker), this reads the fork directly with the member token. */
     async getForkFileContent(repoFullName, path4, ref) {
@@ -18429,6 +18440,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
   const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
   const bdy = prBody ?? desc.body;
+  await syncForkForPublish(ctx2, repo, built);
   if (introFile) {
     const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
     return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message: msg, title: ttl, body: bdy });
@@ -18475,6 +18487,37 @@ function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
     body: note
   });
   return { path: introBuilt.path, content: introBuilt.markdown };
+}
+async function syncForkForPublish(ctx2, repo, built) {
+  if (!built?.slug) return;
+  const branch = branchName(built.type, built.slug);
+  let fork;
+  try {
+    fork = await repo.ensureFork();
+  } catch {
+    return;
+  }
+  const base2 = await repo.getDefaultBranch?.(repo.upstream).catch(() => null) || "main";
+  let synced = null;
+  try {
+    synced = await repo.mergeUpstream?.(fork.full_name, base2);
+  } catch {
+    synced = null;
+  }
+  if (!synced) return;
+  try {
+    const existing = await repo.getForkFileContent(fork.full_name, built.path, branch).catch(() => null);
+    let openPull = null;
+    try {
+      openPull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
+    } catch {
+      openPull = null;
+    }
+    if (existing && !openPull && await forkContentMatchesLive(ctx2, built.path, existing)) {
+      await repo.deleteBranch(fork.full_name, branch);
+    }
+  } catch {
+  }
 }
 async function planMemberFiles({ built, body, encrypt }) {
   if (!built?.slug) return null;
@@ -18533,6 +18576,17 @@ async function saveDraft(ctx2, { type, input, body, message } = {}) {
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
   await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
   return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: built.path, state: "staged" };
+}
+async function forkContentMatchesLive(ctx2, path4, forkText) {
+  try {
+    const staged = parseContentFile(forkText);
+    if (staged.frontmatter?.encryptedBody) return false;
+    const live = await ctx2.reader?.read?.(path4);
+    if (!live) return false;
+    return String(staged.body ?? "") === String(live.body ?? "") && JSON.stringify(staged.frontmatter ?? {}) === JSON.stringify(live.frontmatter ?? {});
+  } catch {
+    return false;
+  }
 }
 var commentSuffix = () => Math.random().toString(36).slice(2, 8);
 async function planAndPublishComment(ctx2, repo, built, body, { message, title, prBody }) {
