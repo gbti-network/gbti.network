@@ -5348,6 +5348,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var COIN = _svg(`<circle cx="12" cy="12" r="8" ${S} stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.3c-.6-.7-1.5-1-2.5-1-1.4 0-2.5.7-2.5 1.9 0 2.6 5 1.4 5 4 0 1.2-1.1 2-2.5 2-1 0-2-.4-2.6-1.1" ${S} stroke-width="1.6" stroke-linecap="round"/>`);
   var LINK = _svg(`<path d="M10 14a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5L11 8" ${S} stroke-width="1.7" stroke-linecap="round"/><path d="M14 10a3.5 3.5 0 0 0-5 0l-2.5 2.5a3.5 3.5 0 0 0 5 5L13 16" ${S} stroke-width="1.7" stroke-linecap="round"/>`);
   var IMG = _svg(`<rect x="4" y="5" width="16" height="14" rx="2.2" ${S} stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" ${S} stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`);
+  var BOOK = _svg(`<path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z" ${S} stroke-width="1.8" stroke-linejoin="round"/>`);
+  var COPY = _svg(`<rect x="8" y="8" width="11" height="12" rx="2" ${S} stroke-width="1.7"/><path d="M5 15.5V5.5a1.5 1.5 0 0 1 1.5-1.5H15" ${S} stroke-width="1.7" stroke-linecap="round"/>`);
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
   var TYPE_LABEL = { post: "Article", product: "Product", prompt: "Prompt", profile: "Profile" };
   var CONTENT_REPO = "gbti-network/gbti.network";
@@ -5366,6 +5368,109 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       { title: "Details", open: true, keys: ["visibility", "shortDescription", "targets", "categories", "tags"] },
       { title: "Media", open: false, keys: ["image"] }
     ]
+  };
+  var _lines = (a) => a.join("\n");
+  var MEM_MARKER = "<!-- members-only -->";
+  var MD_CHEAT = {
+    article: {
+      label: "Article",
+      blurb: "Long-form posts. The full markdown palette, plus a callout block and a members-only split.",
+      directives: [
+        ["```callout note", "aside / highlight (note, tip, warning)"],
+        [MEM_MARKER, "everything below is members-only"]
+      ],
+      body: _lines([
+        "# Heading 1",
+        "## Heading 2",
+        "### Heading 3",
+        "",
+        "Paragraph with **bold**, _italic_, `inline code`,",
+        "and [a link](https://url).",
+        "",
+        "- Bulleted item",
+        "- Another item",
+        "",
+        "1. Numbered item",
+        "2. Another item",
+        "",
+        "> A blockquote.",
+        "",
+        "```js",
+        "// fenced code block",
+        "const x = 1;",
+        "```",
+        "",
+        "```callout warning",
+        "A highlighted aside. Variants: note, tip, warning.",
+        "```",
+        "",
+        MEM_MARKER,
+        "",
+        "Everything below the marker is visible to members only."
+      ])
+    },
+    prompt: {
+      label: "Prompt",
+      blurb: "Reusable prompts. A pure markdown body, with an optional members-only split for extra guidance.",
+      directives: [
+        [MEM_MARKER, "everything below is members-only"]
+      ],
+      body: _lines([
+        "# Heading",
+        "",
+        "Plain markdown body with **bold**, _italic_,",
+        "`inline code`, and [links](https://url).",
+        "",
+        "- Bulleted item",
+        "1. Numbered item",
+        "",
+        "> A blockquote.",
+        "",
+        "```json",
+        '{ "mcpServers": {} }',
+        "```",
+        "",
+        MEM_MARKER,
+        "",
+        "Extra guidance reserved for members."
+      ])
+    },
+    product: {
+      label: "Product",
+      blurb: "Software products. Adds a callout, a video embed, and a members-only split.",
+      directives: [
+        ["```callout tip", "aside / highlight (note, tip, warning)"],
+        ["```embed", "video embed (YouTube or Vimeo URL)"],
+        [MEM_MARKER, "everything below is members-only"]
+      ],
+      body: _lines([
+        "# Heading",
+        "",
+        "Paragraph with **bold**, _italic_, `inline code`,",
+        "and [a link](https://url).",
+        "",
+        "- Bulleted item",
+        "1. Numbered item",
+        "",
+        "> A blockquote.",
+        "",
+        "```bash",
+        "composer require gbti/taxonomy",
+        "```",
+        "",
+        "```callout tip",
+        "A highlighted aside.",
+        "```",
+        "",
+        "```embed",
+        "https://youtube.com/watch?v=...",
+        "```",
+        "",
+        MEM_MARKER,
+        "",
+        "Content only members can read."
+      ])
+    }
   };
   var GbtiContentEditor = class extends GbtiElement {
     constructor() {
@@ -5429,9 +5534,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return `<details ${sec.open ? "open" : ""} class="rsec"><summary><span class="st"><span class="si">${SECTION_ICON[sec.title] || DOC}</span>${esc(sec.title)}</span><span class="chev">${CHEV}</span></summary><div class="rbody">${inner}</div></details>`;
       }).join("");
       const hiddenHtml = hiddenFields.map((f) => this.fieldHtml(f, p[f.key], false)).join("");
-      const typePath = { post: "blog", product: "products", prompt: "prompts" }[this.type] || this.type;
+      const typePath = { post: "articles", product: "products", prompt: "prompts" }[this.type] || this.type;
       const isPub = String(p.status || "").toLowerCase() === "published";
       const statusLabel = isPub ? p.publishedAt ? String(p.publishedAt).slice(0, 10) : "published" : "draft";
+      const cheat = this.cheatData();
       this.set(
         this.css(EDITOR_SURFACE + `
         :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); container-type:inline-size; }
@@ -5527,12 +5633,32 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .cf-hero img { width:184px; height:auto; max-height:150px; object-fit:contain; }
         .cf figcaption { font-size:11px; color:var(--s-fg-mute); margin-top:4px; text-align:center; }
         .cover-actions { display:flex; gap:8px; }
+        /* SOW-062 P6: markdown cheatsheet modal (ported from gbti-editor.css .mdRefModal onto the component tokens) */
+        .mdRefModal { position:fixed; inset:0; z-index:1200; display:none; }
+        .mdRefModal.show { display:block; }
+        .mr-scrim { position:absolute; inset:0; background:rgba(15,14,18,.55); backdrop-filter:blur(3px); }
+        .mr-panel { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(680px, calc(100% - 36px)); max-height:calc(100% - 48px); display:flex; flex-direction:column; background:var(--s-surface); border:1.5px solid var(--s-line-2); border-radius:12px; box-shadow:var(--s-shadow-md); overflow:hidden; }
+        .mr-head { display:flex; align-items:flex-start; gap:14px; padding:22px 24px 16px; border-bottom:1.5px solid var(--s-line); }
+        .mr-head > div { flex:1; }
+        .mr-head h3 { font-family:var(--font-display); font-weight:800; font-size:21px; letter-spacing:-.01em; color:var(--s-fg); }
+        .mr-head p { font-size:13px; color:var(--s-fg-mute); margin-top:5px; line-height:1.5; }
+        .mm-x { width:36px; height:36px; flex:none; border-radius:8px; border:1.5px solid var(--s-line-2); background:var(--s-surface); color:var(--s-fg-soft); cursor:pointer; display:flex; align-items:center; justify-content:center; }
+        .mm-x:hover { background:var(--s-surface-2); } .mm-x svg { width:18px; height:18px; }
+        .mr-scroll { overflow-y:auto; padding:18px 24px 24px; }
+        .mr-blurb { font-size:13px; color:var(--s-fg-mute); line-height:1.55; margin-bottom:14px; }
+        .mr-legend { padding:14px 16px; border-radius:8px; background:var(--s-surface-2); border:1.5px solid var(--s-line); margin-bottom:18px; }
+        .mr-legend > b { font-size:12px; font-weight:700; color:var(--s-fg); }
+        .mr-leg-grid { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; margin-top:10px; align-items:center; }
+        .mr-leg-grid code { font-family:var(--font-mono,monospace); font-size:12px; color:var(--s-green-fg); white-space:pre; }
+        .mr-leg-grid span { font-size:12.5px; color:var(--s-fg-mute); }
+        .mr-code { font-family:var(--font-mono,monospace); font-size:12.5px; line-height:1.7; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line); border-radius:8px; padding:15px 16px; overflow-x:auto; white-space:pre; tab-size:2; margin:0; }
       `) + `<div class="edhead">
            <span class="etype">${esc(this.type)}</span>
            <span class="edhead-sp"></span>
            <span class="savechip" id="savechip"></span>
-           <button class="ebtn" id="preview" type="button">${EYE} Preview</button>
-           <button class="ebtn" id="validate" type="button">Validate</button>
+           <button class="ebtn" id="mdref" type="button" title="Markdown cheatsheet">${BOOK} <span class="lbl">Cheatsheet</span></button>
+           ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's ID (its repo path) for the MCP server">${COPY} <span class="lbl">Copy ID</span></button>` : ""}
+           ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ""}
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ""}
            <button class="ebtn${blocked ? "" : " ebtn-primary"}" id="publish" type="button"${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required" : `${MERGE} Publish`}</button>
          </div>
@@ -5552,10 +5678,32 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
              <details open class="rsec"><summary><span class="st"><span class="si">${DOC}</span>Type</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><div class="urlprev" style="color:var(--s-fg-soft)">This is a <b>${esc(this.typeLabel())}</b>. Type is set at creation and can't be changed here.</div></div></div></details>
              ${sectionsHtml}
            </aside>
+         </div>
+         <div class="mdRefModal" id="mdrefmodal">
+           <div class="mr-scrim" data-mrclose></div>
+           <div class="mr-panel">
+             <div class="mr-head"><div><h3>Markdown cheatsheet</h3><p>How to write ${esc(cheat.label.toLowerCase())} content in markdown: the standard elements plus the GBTI-specific blocks.</p></div><button class="mm-x" type="button" data-mrclose title="Close">${X}</button></div>
+             <div class="mr-scroll">
+               <p class="mr-blurb">${esc(cheat.blurb)}</p>
+               <div class="mr-legend"><b>GBTI blocks</b><div class="mr-leg-grid">${cheat.directives.map(([d, t]) => `<code>${esc(d)}</code><span>${esc(t)}</span>`).join("")}</div></div>
+               <pre class="mr-code">${esc(cheat.body)}</pre>
+             </div>
+           </div>
          </div>`
       );
-      this.on("#preview", "click", () => this.doPreview());
-      this.on("#validate", "click", () => this.doValidate());
+      this.on("#mdref", "click", () => this.$("#mdrefmodal")?.classList.add("show"));
+      this.$$("[data-mrclose]").forEach((el) => el.addEventListener("click", () => this.$("#mdrefmodal")?.classList.remove("show")));
+      if (!this._escWired) {
+        this._escWired = true;
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") this.$("#mdrefmodal")?.classList.remove("show");
+        });
+      }
+      if (this.itemPath) this.on("#copyid", "click", () => this.copyContentId());
+      this.on("#viewpub", "click", () => {
+        const u = this.publicUrl();
+        if (u) window.open(u, "_blank", "noopener");
+      });
       this.on("#draft", "click", () => this.doDraft());
       this.on("#publish", "click", () => this.doPublish());
       this._bindHeader();
@@ -5773,24 +5921,40 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         o.innerHTML = html;
       }
     }
-    async doPreview() {
+    // SOW-062 Phase 6: pick the cheatsheet content for the current type (post maps to the mockup's "article" key).
+    cheatData() {
+      const key = this.type === "post" ? "article" : this.type;
+      return MD_CHEAT[key] || MD_CHEAT.article;
+    }
+    // SOW-062 Phase 6: the "content ID" the MCP server (and every /api content route) addresses is the item's
+    // repo-relative path. Copy it to the clipboard so an author can hand it to their agent. Only wired when editing an
+    // existing item (a new item has no path yet, so the button is not rendered).
+    async copyContentId() {
+      const id = this.itemPath;
+      if (!id) return;
+      const lbl = this.$("#copyid")?.querySelector(".lbl");
       try {
-        const res = await this.client.preview({ body: this.$("#body").value });
-        this.out(`<div class="preview">${res.html || ""}</div>`);
-      } catch (err) {
-        const h = failHint(err);
-        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
+        if (!navigator.clipboard?.writeText) throw new Error("no clipboard");
+        await navigator.clipboard.writeText(id);
+        if (lbl) {
+          const o = lbl.textContent;
+          lbl.textContent = "Copied";
+          setTimeout(() => {
+            lbl.textContent = o;
+          }, 1200);
+        }
+      } catch {
+        this.out(`Content ID: <code>${esc(id)}</code> (copy it manually)`);
       }
     }
-    async doValidate() {
-      try {
-        const { type, input, body } = this.gather();
-        const res = await this.client.validateContent({ type, input, body });
-        this.out(res.valid ? `<span class="tag ok">valid</span> ${esc(res.path || "")}` : `<span class="danger">${esc(res.error)}</span>`);
-      } catch (err) {
-        const h = failHint(err);
-        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
-      }
+    // SOW-062 Phase 6: the live public URL for a published item (post -> /articles/, product -> /products/,
+    // prompt -> /prompts/). Drives the "View Public Entry" button, which is only shown when the item is published.
+    publicUrl() {
+      const p = this.preset?.input ?? {};
+      const slug = this.presetStr(p.slug) || (this.$('[data-header="slug"]')?.textContent || "").trim();
+      const base = { post: "articles", product: "products", prompt: "prompts" }[this.type];
+      if (!slug || !base) return "";
+      return `https://gbti.network/${base}/${slug}/`;
     }
     async doPublish() {
       this.out("Publishing…");
