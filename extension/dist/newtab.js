@@ -5350,6 +5350,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var IMG = _svg(`<rect x="4" y="5" width="16" height="14" rx="2.2" ${S} stroke-width="1.8"/><circle cx="9" cy="10" r="1.7" ${S} stroke-width="1.6"/><path d="M5 17.5l4.2-4.2L13 17l2.6-2.6L19 17.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`);
   var BOOK = _svg(`<path d="M7 4h10a1 1 0 0 1 1 1v15l-6-4-6 4V5a1 1 0 0 1 1-1z" ${S} stroke-width="1.8" stroke-linejoin="round"/>`);
   var COPY = _svg(`<rect x="8" y="8" width="11" height="12" rx="2" ${S} stroke-width="1.7"/><path d="M5 15.5V5.5a1.5 1.5 0 0 1 1.5-1.5H15" ${S} stroke-width="1.7" stroke-linecap="round"/>`);
+  var CODE = _svg(`<path d="M9 8l-4 4 4 4M15 8l4 4-4 4" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
   var TYPE_LABEL = { post: "Article", product: "Product", prompt: "Prompt", profile: "Profile" };
   var CONTENT_REPO = "gbti-network/gbti.network";
@@ -5652,6 +5653,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .mr-leg-grid code { font-family:var(--font-mono,monospace); font-size:12px; color:var(--s-green-fg); white-space:pre; }
         .mr-leg-grid span { font-size:12.5px; color:var(--s-fg-mute); }
         .mr-code { font-family:var(--font-mono,monospace); font-size:12.5px; line-height:1.7; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line); border-radius:8px; padding:15px 16px; overflow-x:auto; white-space:pre; tab-size:2; margin:0; }
+        /* SOW-062 P6: Visual / Markdown doc-view toggle + the read-only full-document markdown panel */
+        .doc-view { display:inline-flex; gap:3px; padding:4px; margin:0 0 26px; border-radius:8px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); }
+        .doc-view button { display:inline-flex; align-items:center; gap:7px; padding:7px 15px; border:0; border-radius:7px; background:transparent; font:inherit; font-size:13px; font-weight:600; color:var(--s-fg-mute); cursor:pointer; white-space:nowrap; transition:color .14s ease; }
+        .doc-view button svg { width:15px; height:15px; }
+        .doc-view button.on { background:var(--s-surface); color:var(--s-fg); box-shadow:0 1px 3px rgba(0,0,0,.12); border:1.5px solid var(--s-line-2); padding:5.5px 13.5px; }
+        .doc.md-view > .doc-title, .doc.md-view > .doc-slug, .doc.md-view > .docsec { display:none; }
+        .docmd-wrap { border:1.5px solid var(--s-line-2); border-radius:8px; overflow:hidden; background:var(--s-surface); }
+        .docmd-wrap[hidden] { display:none; }
+        .docmd-bar { display:flex; align-items:center; gap:8px; padding:11px 15px; border-bottom:1.5px solid var(--s-line); background:var(--s-surface-2); font-size:13px; font-weight:600; color:var(--s-fg-soft); }
+        .docmd-bar svg { width:15px; height:15px; color:var(--s-green-fg); }
+        .docmd-note { margin-left:auto; font-family:var(--font-mono,monospace); font-size:11px; font-weight:500; color:var(--s-fg-mute); }
+        .docmd { display:block; width:100%; box-sizing:border-box; border:0; resize:vertical; min-height:60vh; padding:20px 22px; font-family:var(--font-mono,monospace); font-size:13px; line-height:1.7; color:var(--s-fg); background:var(--s-surface); outline:none; white-space:pre; tab-size:2; }
       `) + `<div class="edhead">
            <span class="etype">${esc(this.type)}</span>
            <span class="edhead-sp"></span>
@@ -5667,10 +5680,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
              ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
              <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || "")}</div>
              <div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span><span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || "")}</span><span class="slug-meta${isPub ? " pub" : ""}"><span class="pubdot"></span><span>${esc(statusLabel)}</span></span></div>
+             <div class="doc-view" id="docview">
+               <button type="button" class="on" data-view="visual">${DOC} Visual</button>
+               <button type="button" data-view="markdown">${CODE} Markdown</button>
+             </div>
              <section class="docsec" id="secMain">
                <div class="docsec-h">${DOC} Main content</div>
                <gbti-doc-editor id="body"></gbti-doc-editor>
              </section>
+             <div class="docmd-wrap" id="docmdwrap" hidden>
+               <div class="docmd-bar">${CODE} <span>Full document as markdown</span><span class="docmd-note">Read-only source view</span></div>
+               <textarea class="docmd" id="docmd" spellcheck="false" readonly></textarea>
+             </div>
              <div id="out" class="muted"></div>
              <div hidden>${hiddenHtml}</div>
            </article>
@@ -5704,6 +5725,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const u = this.publicUrl();
         if (u) window.open(u, "_blank", "noopener");
       });
+      this.$$("#docview [data-view]").forEach((b) => b.addEventListener("click", () => this.setDocView(b.dataset.view)));
       this.on("#draft", "click", () => this.doDraft());
       this.on("#publish", "click", () => this.doPublish());
       this._bindHeader();
@@ -5955,6 +5977,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const base = { post: "articles", product: "products", prompt: "prompts" }[this.type];
       if (!slug || !base) return "";
       return `https://gbti.network/${base}/${slug}/`;
+    }
+    // SOW-062 Phase 6: the Visual / Markdown doc-view toggle. Visual is the block editor; Markdown is a READ-ONLY
+    // projection of the whole body as source (the same #body.value the serializer produces), matching the hi-fi
+    // "full document as markdown" panel. It never edits the model, so there is no round-trip parse risk.
+    setDocView(mode) {
+      const on = mode === "markdown";
+      this.$(".doc")?.classList.toggle("md-view", on);
+      const wrap = this.$("#docmdwrap");
+      if (wrap) {
+        wrap.hidden = !on;
+        if (on) {
+          const ta = this.$("#docmd");
+          if (ta) ta.value = this.$("#body")?.value ?? "";
+        }
+      }
+      this.$$("#docview [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === mode));
     }
     async doPublish() {
       this.out("Publishing…");
