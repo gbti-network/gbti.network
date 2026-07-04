@@ -6151,7 +6151,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .doc-view-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 26px; }
         .doc-view { display:inline-flex; gap:3px; padding:4px; border-radius:8px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); }
         .dv-cheat { padding:6px 12px; font-size:12.5px; }
-        .dv-cheat[hidden] { display:none; } /* [hidden] must beat .ebtn's display:inline-flex */
+        .ebtn[hidden] { display:none; } /* [hidden] must beat .ebtn's display:inline-flex (cheatsheet + publish) */
         /* SOW-062 P6: the publish-expectation banner above the toolbar */
         .pubinfo { display:flex; align-items:flex-start; gap:9px; padding:11px 14px; margin:0 2px 12px; border-radius:10px; background:var(--s-tint); border:1.5px solid var(--s-tint-2); font-size:12.5px; line-height:1.5; color:var(--s-fg-soft); }
         .pubinfo svg { width:16px; height:16px; flex:none; margin-top:1px; color:var(--s-green-fg); } .pubinfo b { color:var(--s-fg); font-weight:700; }
@@ -6182,7 +6182,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
            ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's ID (its repo path) for the MCP server">${COPY} <span class="lbl">Copy ID</span></button>` : ""}
            ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ""}
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ""}
-           <button class="ebtn${blocked ? "" : " ebtn-primary"}" id="publish" type="button"${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required" : `${MERGE} Publish`}</button>
+           <button class="ebtn${blocked ? "" : " ebtn-primary"}" id="publish" type="button"${isPub ? " hidden" : ""}${blocked ? ' title="Publishing requires a paid membership"' : ""}>${blocked ? "Membership required" : `${MERGE} Publish`}</button>
          </div>
          <div class="edgrid">
            <article class="doc">
@@ -6241,6 +6241,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.$$("#docview [data-view]").forEach((b) => b.addEventListener("click", () => this.setDocView(b.dataset.view)));
       this.on("#draft", "click", () => this.doDraft());
       this.on("#publish", "click", () => this.doPublish());
+      this._dirty = false;
+      if (!this._dirtyRootWired) {
+        this._dirtyRootWired = true;
+        this.root.addEventListener("input", () => this._markDirty());
+        this.root.addEventListener("change", () => this._markDirty());
+      }
+      this.$("#body")?.addEventListener("block-change", () => this._markDirty());
+      this.$(".rail")?.addEventListener("click", (e) => {
+        if (e.target.closest("button:not([data-frame]), [data-rm]") && !e.target.closest("summary")) this._markDirty();
+      });
       this._bindHeader();
       this._wireRail();
       this._wireLinks();
@@ -6649,6 +6659,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         b.innerHTML = orig;
       };
     }
+    // SOW-062 P6: the content has diverged from the loaded/published version -> reveal the Publish button (once).
+    _markDirty() {
+      if (this._dirty) return;
+      this._dirty = true;
+      this.$("#publish")?.removeAttribute("hidden");
+    }
     async doPublish() {
       const restore = this._btnBusy("#publish", "Publishing…");
       this._setChip("Publishing…", "busy");
@@ -6664,6 +6680,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         const res = await this.client.publish({ type, input, body, authorNote });
         this._setChip(`${CHECK} Published`, "ok");
+        this._dirty = false;
+        this.$("#publish")?.setAttribute("hidden", "");
         this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`);
         this.emit("gbti-published", res);
       } catch (err) {
