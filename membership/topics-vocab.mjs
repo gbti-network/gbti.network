@@ -51,3 +51,12 @@ export function topicVocabLabel(parsed, key) {
 export function topicVocabKeys(parsed) {
   return Object.keys(topicsVocabFromParsed(parsed));
 }
+
+// SOW-087: reconcile mirrors the vocabulary to this KV key so the signup Worker can suggest a share category
+// (workers/signup/topic-suggest.mjs) without a redeploy when topics change (the synd:config mirror precedent).
+export const TOPICS_MIRROR_KEY = 'topics:vocab';
+
+/** The secret-free KV mirror payload for house/topics.yml: the clean { key: { label, group? } } map. */
+export function toTopicsMirror(parsed, now = () => new Date().toISOString()) {
+  return { generatedAt: now(), topics: topicsVocabFromParsed(parsed) };
+}

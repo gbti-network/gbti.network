@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import yaml from 'js-yaml';
-import { topicsVocabFromParsed, topicVocabList, topicVocabLabel, topicVocabKeys } from '../membership/topics-vocab.mjs';
+import { topicsVocabFromParsed, topicVocabList, topicVocabLabel, topicVocabKeys, toTopicsMirror, TOPICS_MIRROR_KEY } from '../membership/topics-vocab.mjs';
 
 test('topicsVocabFromParsed accepts {topics:{}} + a bare map; string|object|null values; defaults the label', () => {
   const m = topicsVocabFromParsed({ topics: { ai: { label: 'AI' }, 'home-network': 'Home Network', foo: null } });
@@ -40,4 +40,11 @@ test('the real house/topics.yml parses; keys are unique + kebab-case', () => {
   assert.ok(keys.length >= 14, 'has at least the seeded topics');
   assert.equal(keys.length, new Set(keys).size, 'unique keys');
   for (const k of keys) assert.match(k, /^[a-z0-9]+(?:-[a-z0-9]+)*$/, `${k} is kebab-case`);
+});
+
+// SOW-087: the topics:vocab KV mirror payload for the share category suggester.
+test('toTopicsMirror wraps the clean vocabulary with a generatedAt stamp', () => {
+  const m = toTopicsMirror({ topics: { ai: { label: 'AI' }, 'BAD KEY': 'x' } }, () => 'T0');
+  assert.deepEqual(m, { generatedAt: 'T0', topics: { ai: { label: 'AI' } } });
+  assert.equal(TOPICS_MIRROR_KEY, 'topics:vocab');
 });

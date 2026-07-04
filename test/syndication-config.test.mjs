@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_SYNDICATION_CONFIG, CHANNELS, syndicationConfigFromParsed, isSyndicationEnabled, holdMs,
-  upvoteThreshold, isChannelEnabled, enabledChannelNames, toSyndicationMirror,
+  upvoteThreshold, isChannelEnabled, enabledChannelNames, toSyndicationMirror, classifyMode,
 } from '../membership/syndication-config.mjs';
 
 test('a missing/empty config fails closed to the safe defaults', () => {
@@ -46,14 +46,23 @@ test('channel switches accept yes/on/1 string forms and default false', () => {
 test('toSyndicationMirror returns the secret-free shape for KV', () => {
   const m = toSyndicationMirror({ enabled: true, hold_minutes: 60, upvote_threshold: 2, channels: { discord: true } });
   assert.deepEqual(m, {
-    enabled: true, require_approval: true, hold_minutes: 60, upvote_threshold: 2,
+    enabled: true, require_approval: true, hold_minutes: 60, upvote_threshold: 2, classify: 'ai',
     channels: { discord: true, x: false, linkedin: false, mastodon: false, bluesky: false },
   });
   // No surprise keys (no token/secret fields).
-  assert.deepEqual(Object.keys(m).sort(), ['channels', 'enabled', 'hold_minutes', 'require_approval', 'upvote_threshold']);
+  assert.deepEqual(Object.keys(m).sort(), ['channels', 'classify', 'enabled', 'hold_minutes', 'require_approval', 'upvote_threshold']);
 });
 
 test('DEFAULT_SYNDICATION_CONFIG is frozen and disabled', () => {
   assert.ok(Object.isFrozen(DEFAULT_SYNDICATION_CONFIG));
   assert.equal(DEFAULT_SYNDICATION_CONFIG.enabled, false);
+});
+
+// SOW-087: the share category suggestion knob.
+test('classifyMode normalizes ai|keyword|off and falls back to ai', () => {
+  assert.equal(classifyMode(syndicationConfigFromParsed({ syndication: { classify: 'keyword' } })), 'keyword');
+  assert.equal(classifyMode(syndicationConfigFromParsed({ syndication: { classify: ' OFF ' } })), 'off');
+  assert.equal(classifyMode(syndicationConfigFromParsed({ syndication: { classify: 'llm' } })), 'ai'); // unknown -> default
+  assert.equal(classifyMode(syndicationConfigFromParsed({})), 'ai');
+  assert.equal(classifyMode(undefined), 'ai');
 });

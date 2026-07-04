@@ -83,3 +83,15 @@ test('planMemberFiles: a public Share is a plain single file (no encryption)', a
   assert.equal(plan, null); // null -> the caller publishes the single plain file
   assert.equal(called, false);
 });
+
+// SOW-087: the optional topic category flows through to the share frontmatter (and stays optional).
+test('buildShareFile carries the optional category', () => {
+  const withCat = buildShareFile({
+    username: 'alice',
+    input: { id: '20260704000000-c', visibility: 'public', category: 'devops', createdAt: '2026-07-04T00:00:00Z' },
+    body: 'a devops find',
+  });
+  assert.equal(withCat.frontmatter.category, 'devops');
+  const bare = buildShareFile({ username: 'alice', input: { id: '20260704000001-d', visibility: 'public', createdAt: '2026-07-04T00:00:01Z' }, body: 'note' });
+  assert.equal(bare.frontmatter.category, undefined);
+});

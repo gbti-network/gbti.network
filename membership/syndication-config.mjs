@@ -27,11 +27,16 @@ export const SYNDICATION_MIRROR_KEY = 'synd:config';
 // The canonical channel set. Adding a channel here makes it a recognized, normalizable flag.
 export const CHANNELS = Object.freeze(['discord', 'x', 'linkedin', 'mastodon', 'bluesky']);
 
+// SOW-087: how a share's topic category is suggested at compose time. `ai` = Workers AI with a keyword
+// fallback; `keyword` = the free keyword match only; `off` = no suggestion (the member picks by hand).
+export const CLASSIFY_MODES = Object.freeze(['ai', 'keyword', 'off']);
+
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,
   require_approval: true, // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
   hold_minutes: 60,
   upvote_threshold: 2,
+  classify: 'ai', // SOW-087: the share category suggestion mode
   channels: Object.freeze({ discord: false, x: false, linkedin: false, mastodon: false, bluesky: false }),
 });
 
@@ -59,6 +64,11 @@ function asThreshold(v, fallback) {
   return i >= 1 ? i : fallback; // never below 1 (a threshold of 0 would syndicate on any single vote)
 }
 
+function asClassifyMode(v, fallback) {
+  const s = typeof v === 'string' ? v.trim().toLowerCase() : '';
+  return CLASSIFY_MODES.includes(s) ? s : fallback;
+}
+
 function normalizeChannels(raw) {
   const out = {};
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -78,6 +88,7 @@ export function syndicationConfigFromParsed(parsed) {
     require_approval: asBool(raw.require_approval, d.require_approval),
     hold_minutes: asHoldMinutes(raw.hold_minutes, d.hold_minutes),
     upvote_threshold: asThreshold(raw.upvote_threshold, d.upvote_threshold),
+    classify: asClassifyMode(raw.classify, d.classify),
     channels: normalizeChannels(raw.channels),
   });
 }
@@ -103,6 +114,11 @@ export function upvoteThreshold(cfg) {
   return asThreshold(cfg?.upvote_threshold, DEFAULT_SYNDICATION_CONFIG.upvote_threshold);
 }
 
+/** SOW-087: the share category suggestion mode (`ai` | `keyword` | `off`). Invalid/missing = `ai`. */
+export function classifyMode(cfg) {
+  return asClassifyMode(cfg?.classify, DEFAULT_SYNDICATION_CONFIG.classify);
+}
+
 /** Is a given channel switched on in config? (Its secret presence is checked separately at drain time.) */
 export function isChannelEnabled(cfg, name) {
   return cfg?.channels?.[name] === true;
@@ -116,7 +132,7 @@ export function enabledChannelNames(cfg) {
 /** The small, secret-free object reconcile writes to the KV mirror (synd:config) and the Worker reads back. */
 export function toSyndicationMirror(cfg) {
   const c = syndicationConfigFromParsed(cfg);
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, channels: { ...c.channels } };
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, channels: { ...c.channels } };
 }
 
 /** Read + normalize house/syndication-config.yml from a repo root. Missing/unparseable file = safe defaults. */

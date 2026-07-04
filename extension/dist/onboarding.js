@@ -4977,8 +4977,54 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-subscribe", GbtiSubscribe);
 
+  // client-ui/src/topic-picker-core.mjs
+  function topicsFromJson(data) {
+    const list = Array.isArray(data && data.topics) ? data.topics : [];
+    return list.filter((t) => t && typeof t.key === "string" && t.key).map((t) => ({
+      key: t.key,
+      label: typeof t.label === "string" && t.label ? t.label : t.key,
+      ...typeof t.group === "string" && t.group ? { group: t.group } : {}
+    }));
+  }
+  function filterTopics(list, query) {
+    const q = String(query || "").trim().toLowerCase();
+    const arr = Array.isArray(list) ? list : [];
+    if (!q) return arr;
+    return arr.filter((t) => String(t && t.label || "").toLowerCase().includes(q) || String(t && t.key || "").toLowerCase().includes(q));
+  }
+  function groupTopics(list) {
+    const arr = Array.isArray(list) ? list : [];
+    const order = [];
+    const byGroup = /* @__PURE__ */ new Map();
+    for (const t of arr) {
+      const g = t && typeof t.group === "string" && t.group ? t.group : "";
+      if (!byGroup.has(g)) {
+        byGroup.set(g, []);
+        if (g) order.push(g);
+      }
+      byGroup.get(g).push(t);
+    }
+    const out = order.map((g) => ({ group: g, topics: byGroup.get(g) }));
+    if (byGroup.has("")) out.push({ group: "", topics: byGroup.get("") });
+    return out;
+  }
+  function toggleTopic(selection, key) {
+    const cur = (Array.isArray(selection) ? selection : []).filter((k) => typeof k === "string" && k);
+    if (!key || typeof key !== "string") return [...new Set(cur)];
+    const set = new Set(cur);
+    if (set.has(key)) {
+      set.delete(key);
+      return cur.filter((k) => k !== key);
+    }
+    return [.../* @__PURE__ */ new Set([...cur, key])];
+  }
+  function selectedTopics(categories) {
+    return [...new Set((Array.isArray(categories) ? categories : []).filter((k) => typeof k === "string" && k))];
+  }
+
   // client-ui/src/elements/gbti-share-composer.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  var SITE4 = "https://gbti.network";
   var CSS17 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .card { background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:14px; padding:16px; }
@@ -5067,7 +5113,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <textarea placeholder="What are you reading, building, or finding?" maxlength="4000"></textarea>
         <div class="row">
           <input type="url" placeholder="https://… (optional link)" />
-          <select aria-label="Visibility">
+          <select class="cat" aria-label="Category">
+            <option value="">Category (optional)</option>
+          </select>
+          <select class="vis" aria-label="Visibility">
             <option value="members">Members only</option>
             <option value="public">Public</option>
           </select>
@@ -5079,8 +5128,33 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         </div>
       </div>`);
       this._image = null;
+      this._suggested = null;
       this.on(".post", "click", () => this._post());
       this.on("input[type=url]", "change", () => this._fetchPreview());
+      this._loadTopics();
+    }
+    // SOW-087: populate the category select from the public topic vocabulary (/topics.json). The vocabulary is
+    // static per session, so it is fetched once and reused across re-renders. A fetch failure leaves the select
+    // with only the empty option (category stays optional).
+    async _loadTopics() {
+      if (!this._topics) {
+        try {
+          const r = await fetch(`${SITE4}/topics.json`, { cache: "no-cache" });
+          this._topics = topicsFromJson(await r.json());
+        } catch {
+          this._topics = [];
+        }
+      }
+      const sel = this.$("select.cat");
+      if (!sel) return;
+      sel.innerHTML = `<option value="">Category (optional)</option>` + this._topics.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join("");
+      this._applySuggested();
+    }
+    // Pre-select the Worker's suggestion, but NEVER clobber an author's own pick.
+    _applySuggested() {
+      const sel = this.$("select.cat");
+      if (!sel || !this._suggested || sel.value) return;
+      if ([...sel.options].some((o) => o.value === this._suggested)) sel.value = this._suggested;
     }
     // Fetch the link preview server-side (the Worker is SSRF-guarded). Updates ONLY the preview area + soft-prefills
     // EMPTY title/desc fields (never clobbering author text), so it does not re-render the composer.
@@ -5102,6 +5176,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (t && !t.value.trim() && og?.title) t.value = String(og.title).slice(0, 80);
         const d = this.$("input.desc");
         if (d && !d.value.trim() && og?.description) d.value = String(og.description).slice(0, 200);
+        this._suggested = og?.suggestedCategory || null;
+        this._applySuggested();
         this._image = og?.image || null;
         if (this._image) {
           box.innerHTML = `<img class="ogimg" src="${esc(this._image)}" alt="" /><button class="ogclear" type="button" data-ogclear>Remove image</button>`;
@@ -5127,7 +5203,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const shortDescription = (this.$("input.desc")?.value || "").trim();
       const body = (this.$("textarea")?.value || "").trim();
       const url = (this.$("input[type=url]")?.value || "").trim();
-      const visibility = this.$("select")?.value || "members";
+      const visibility = this.$("select.vis")?.value || "members";
+      const category = this.$("select.cat")?.value || "";
       const msg = this.$(".msg");
       if (!body && !url && !title) {
         this._say(msg, "Add a title, a note, or a link first.", "err");
@@ -5139,6 +5216,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (title) input.title = title;
         if (shortDescription) input.shortDescription = shortDescription;
         if (url) input.url = url;
+        if (category) input.category = category;
         if (this._image) input.image = this._image;
         const res = await this.client.postShare({ input, body });
         this._say(msg, submitAck({ prNumber: res?.prNumber, autoMerge: true }), "ok");
@@ -5146,7 +5224,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           const el = this.$(sel);
           if (el) el.value = "";
         }
+        const cat = this.$("select.cat");
+        if (cat) cat.value = "";
         this._image = null;
+        this._suggested = null;
         const ogBox = this.$("[data-og]");
         if (ogBox) {
           ogBox.hidden = true;
@@ -8411,53 +8492,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/discord.mjs
   var DISCORD_LINK_URL = "https://signup.gbti.network/discord/link/start";
 
-  // client-ui/src/topic-picker-core.mjs
-  function topicsFromJson(data) {
-    const list = Array.isArray(data && data.topics) ? data.topics : [];
-    return list.filter((t) => t && typeof t.key === "string" && t.key).map((t) => ({
-      key: t.key,
-      label: typeof t.label === "string" && t.label ? t.label : t.key,
-      ...typeof t.group === "string" && t.group ? { group: t.group } : {}
-    }));
-  }
-  function filterTopics(list, query) {
-    const q = String(query || "").trim().toLowerCase();
-    const arr = Array.isArray(list) ? list : [];
-    if (!q) return arr;
-    return arr.filter((t) => String(t && t.label || "").toLowerCase().includes(q) || String(t && t.key || "").toLowerCase().includes(q));
-  }
-  function groupTopics(list) {
-    const arr = Array.isArray(list) ? list : [];
-    const order = [];
-    const byGroup = /* @__PURE__ */ new Map();
-    for (const t of arr) {
-      const g = t && typeof t.group === "string" && t.group ? t.group : "";
-      if (!byGroup.has(g)) {
-        byGroup.set(g, []);
-        if (g) order.push(g);
-      }
-      byGroup.get(g).push(t);
-    }
-    const out = order.map((g) => ({ group: g, topics: byGroup.get(g) }));
-    if (byGroup.has("")) out.push({ group: "", topics: byGroup.get("") });
-    return out;
-  }
-  function toggleTopic(selection, key) {
-    const cur = (Array.isArray(selection) ? selection : []).filter((k) => typeof k === "string" && k);
-    if (!key || typeof key !== "string") return [...new Set(cur)];
-    const set = new Set(cur);
-    if (set.has(key)) {
-      set.delete(key);
-      return cur.filter((k) => k !== key);
-    }
-    return [.../* @__PURE__ */ new Set([...cur, key])];
-  }
-  function selectedTopics(categories) {
-    return [...new Set((Array.isArray(categories) ? categories : []).filter((k) => typeof k === "string" && k))];
-  }
-
   // client-ui/src/elements/gbti-topic-picker.mjs
-  var SITE4 = "https://gbti.network";
+  var SITE5 = "https://gbti.network";
   var MAX_TOPICS = 40;
   var CSS24 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -8485,7 +8521,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     async _load() {
       try {
-        const r = await fetch(`${SITE4}/topics.json`, { cache: "no-cache" });
+        const r = await fetch(`${SITE5}/topics.json`, { cache: "no-cache" });
         this._topics = topicsFromJson(await r.json());
       } catch {
         this._topics = [];
@@ -8565,7 +8601,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-topic-picker", GbtiTopicPicker);
 
   // client-ui/src/elements/gbti-welcome.mjs
-  var SITE5 = "https://gbti.network";
+  var SITE6 = "https://gbti.network";
   var PAGE_SIZE = 10;
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
   var STEPS = ["discord", "follow", "topics"];
@@ -8702,7 +8738,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       try {
-        const res = await fetch(`${SITE5}/members-index.json`, { cache: "no-cache" });
+        const res = await fetch(`${SITE6}/members-index.json`, { cache: "no-cache" });
         if (!res.ok) throw new Error(String(res.status));
         const data = await res.json();
         this._members = excludeSelf(shuffle(Array.isArray(data?.members) ? data.members : []), this._own);
@@ -8751,7 +8787,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>
       <div class="card">
         ${expired}${action}
-        <p class="note" style="margin-top:14px">New here? <a href="${SITE5}/membership/" target="_blank" rel="noopener">Become a member</a> &mdash; the trial is free.</p>
+        <p class="note" style="margin-top:14px">New here? <a href="${SITE6}/membership/" target="_blank" rel="noopener">Become a member</a> &mdash; the trial is free.</p>
       </div>`);
       this.on("[data-auth-signin]", "click", () => this.emit("gbti:welcome-signin"));
       this.on("[data-copy]", "click", () => {
@@ -8771,7 +8807,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const ph = phaseLabel(this._membership);
-      const up = ph.upgrade ? `<a class="up" href="${SITE5}/membership/" target="_blank" rel="noopener">Upgrade to publish</a>` : "";
+      const up = ph.upgrade ? `<a class="up" href="${SITE6}/membership/" target="_blank" rel="noopener">Upgrade to publish</a>` : "";
       if (this._step < 0) this._step = 0;
       if (this._step > STEPS.length - 1) this._step = STEPS.length - 1;
       const step = STEPS[this._step];
@@ -8975,7 +9011,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-saved.mjs
-  var SITE6 = "https://gbti.network";
+  var SITE7 = "https://gbti.network";
   var CSS26 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
@@ -9028,7 +9064,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         await Promise.all(SAVED_TYPES.map(async (t) => {
           const file = indexFileFor(t);
           if (!file) return;
-          const res = await fetch(`${SITE6}/${file}`, { cache: "no-cache" });
+          const res = await fetch(`${SITE7}/${file}`, { cache: "no-cache" });
           perType[t] = res.ok ? (await res.json()).items || [] : [];
         }));
         this._index = buildItemIndex(perType);
@@ -9082,7 +9118,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _itemRow(item, { fav, cid } = {}) {
       const title = esc(item.title);
-      const t = item.url ? `<a class="t" href="${SITE6}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
+      const t = item.url ? `<a class="t" href="${SITE7}${esc(item.url)}" target="_blank" rel="noopener">${title}</a>` : `<span class="t">${title}</span>`;
       const rm = fav ? `<button class="lk danger" data-unfav data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>` : `<button class="lk danger" data-rmitem data-cid="${esc(cid)}" data-type="${esc(item.type)}" data-slug="${esc(item.slug)}" type="button">Remove</button>`;
       return `<li class="row"><span class="badge">${esc(typeLabel(item.type))}</span>${t}${rm}</li>`;
     }
@@ -9127,7 +9163,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-saved", GbtiSaved);
 
   // client-ui/src/elements/gbti-subscriptions.mjs
-  var SITE7 = "https://gbti.network";
+  var SITE8 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
   var CSS27 = `
@@ -9238,20 +9274,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _membersHtml() {
       if (this._follows === null) {
-        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE7}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">We could not load your follows right now. You can follow members any time from a member profile.</p><div class="find"><a href="${SITE8}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       if (!this._follows.length) {
-        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE7}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+        return `<p class="muted">You are not following any members yet.</p><div class="find"><a href="${SITE8}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
       }
       const rows = this._follows.map((f) => {
         const u = esc(f.username);
         return `<li class="row">
         <img class="av" src="https://github.com/${encodeURIComponent(f.username)}.png?size=60" alt="" loading="lazy" data-avfor="${u}" />
-        <a class="nm" href="${SITE7}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
+        <a class="nm" href="${SITE8}/members/${u}/" target="_blank" rel="noopener">@${u}</a>
         <button class="lk" data-unfollow="${u}" type="button">Unfollow</button>
       </li>`;
       }).join("");
-      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE7}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
+      return `<ul class="rows">${rows}</ul><div class="find"><a href="${SITE8}/members/" target="_blank" rel="noopener">Find members to follow &rarr;</a></div>`;
     }
     // SOW-080: followed-topic management moved here from the extension Settings page. The shared <gbti-topic-picker>
     // self-loads /topics.json + self-persists prefs.categories via the global client (base.mjs get client()), so this
@@ -10042,7 +10078,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-activity-bell.mjs
-  var SITE8 = "https://gbti.network";
+  var SITE9 = "https://gbti.network";
   var POLL_MS = 12e4;
   var SEEN_KEY = "gbti-bell-seen";
   var MAX_OWN_SHARES = 20;
@@ -10175,7 +10211,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           // no reliable timestamp in both host modes; the number is a recency proxy for display sort
           title: p.title || `PR #${p.number}`,
           sub: lc8.needsAttention ? "Declined — open to see why" : "Accepted",
-          href: lc8.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE8
+          href: lc8.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE9
         };
       });
     }
@@ -10183,7 +10219,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const f = await this.client.getFollows() || {};
       const set = new Set((f.following || []).map((x) => String(x?.username || "").toLowerCase()).filter(Boolean));
       if (!set.size) return [];
-      const res = await fetch(`${SITE8}/activity-index.json`, { cache: "no-cache" });
+      const res = await fetch(`${SITE9}/activity-index.json`, { cache: "no-cache" });
       const data = res.ok ? await res.json() : {};
       const entries = Array.isArray(data?.entries) ? data.entries : [];
       return entries.filter((e) => set.has(String(e.author).toLowerCase())).map((e) => ({
@@ -10191,7 +10227,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ts: toMs(e.publishedAt),
         title: e.title || "New activity",
         sub: `@${e.author}`,
-        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE8}${e.url || ""}`
+        href: e.path ? `newtab.html#${buildReadHash(e.type, e.path)}` : `${SITE9}${e.url || ""}`
       }));
     }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
@@ -10372,8 +10408,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-news.mjs
-  var SITE9 = "https://gbti.network";
-  var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE9}/membership/">Become a member</a> to unlock the news feed.</div>`;
+  var SITE10 = "https://gbti.network";
+  var nudge = (msg) => `<div class="nudge">${esc(msg)} <a href="${SITE10}/membership/">Become a member</a> to unlock the news feed.</div>`;
   var lc5 = (s) => String(s ?? "").toLowerCase();
   function domainOf(url) {
     const s = String(url ?? "").trim();
@@ -10478,7 +10514,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         try {
           const [prefs, tj] = await Promise.all([
             this.client.getPrefs ? this.client.getPrefs() : Promise.resolve(null),
-            fetch(`${SITE9}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
+            fetch(`${SITE10}/topics.json`, { cache: "no-cache" }).then((r) => r.json())
           ]);
           const map = Object.fromEntries((tj?.topics || []).map((t) => [t.key, t.newsCategories || []]));
           raw = prioritizeNewsByTopics(raw, newsCategoriesForTopics(prefs?.categories, map));
@@ -10827,7 +10863,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-reader.mjs
-  var SITE10 = "https://gbti.network";
+  var SITE11 = "https://gbti.network";
   var lc7 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
     const x = lc7(a);
@@ -10850,11 +10886,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return "";
     }
   };
-  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE10}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE11}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
   var _directory = null;
   function loadDirectory() {
     if (_directory) return _directory;
-    _directory = fetch(`${SITE10}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => new Map((j.members || []).map((m) => [lc7(m.username), m]))).catch(() => /* @__PURE__ */ new Map());
+    _directory = fetch(`${SITE11}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => new Map((j.members || []).map((m) => [lc7(m.username), m]))).catch(() => /* @__PURE__ */ new Map());
     return _directory;
   }
   var SOCIALS = [
@@ -11073,7 +11109,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       let follow = "";
       if (a.isSelf) follow = ["post", "product", "prompt"].includes(it.type) ? `<a class="follow edit" href="workspace.html#tab=${esc(it.type)}">Edit in workspace</a>` : "";
       else if (a.canFollow) follow = `<button class="follow${a.following ? " on" : ""}" data-follow type="button">${a.following ? "Following" : "Follow"}</button>`;
-      else follow = `<a class="follow muted" href="${SITE10}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
+      else follow = `<a class="follow muted" href="${SITE11}/membership/" target="_blank" rel="noopener" title="Members can follow other members">Follow</a>`;
       const links = e.links || {};
       const chips = [];
       for (const [key, label, base] of SOCIALS) {
@@ -11094,7 +11130,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS32));
         return;
       }
-      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE10 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE11 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = this._metaHtml(it, when);
       const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
@@ -11211,7 +11247,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-browse.mjs
-  var SITE11 = "https://gbti.network";
+  var SITE12 = "https://gbti.network";
   var TABS2 = [
     { id: "all", label: "All" },
     { id: "post", label: "Articles", json: "blog-index.json" },
@@ -11311,7 +11347,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const tab = TABS2.find((t) => t.id === id);
       if (!tab?.json || this._cache[id]) return;
       try {
-        const res = await fetch(`${SITE11}/${tab.json}`, { cache: "no-cache" });
+        const res = await fetch(`${SITE12}/${tab.json}`, { cache: "no-cache" });
         this._cache[id] = res.ok ? (await res.json()).items || [] : [];
       } catch {
         this._cache[id] = [];
@@ -11694,7 +11730,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     });
   });
   setClient(client);
-  var SITE12 = "https://gbti.network";
+  var SITE13 = "https://gbti.network";
   var LOCKED5 = ["expired", "cancelled", "none", "banned"];
   async function status() {
     const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/status", query: {} } });
@@ -11716,11 +11752,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     const id = s?.identity;
     if (id && s.authenticated) {
-      const lapsed = LOCKED5.includes(s.membership) ? ` Your membership has lapsed. <a href="${SITE12}/membership/" target="_blank" rel="noopener">Renew</a> to publish again.` : "";
+      const lapsed = LOCKED5.includes(s.membership) ? ` Your membership has lapsed. <a href="${SITE13}/membership/" target="_blank" rel="noopener">Renew</a> to publish again.` : "";
       el.innerHTML = `Signed in as <strong>@${esc2(id.login)}</strong>. <button class="linkbtn" data-signout type="button">Sign out</button>${lapsed}`;
       el.querySelector("[data-signout]")?.addEventListener("click", signOut);
     } else {
-      el.innerHTML = `Not a member yet? <a href="${SITE12}/membership/" target="_blank" rel="noopener">Join GBTI Network</a> to publish.`;
+      el.innerHTML = `Not a member yet? <a href="${SITE13}/membership/" target="_blank" rel="noopener">Join GBTI Network</a> to publish.`;
     }
   }
   function mount() {

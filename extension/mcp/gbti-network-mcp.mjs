@@ -17168,6 +17168,8 @@ var shareSchema = external_exports.object({
   url: external_exports.string().url().optional(),
   image: external_exports.string().optional(),
   // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
+  category: external_exports.string().optional(),
+  // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post
   tags: external_exports.array(external_exports.string()).default([]),
   createdAt: external_exports.coerce.date(),
   updatedAt: external_exports.coerce.date().optional()

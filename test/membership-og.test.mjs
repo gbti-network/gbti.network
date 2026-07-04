@@ -76,3 +76,26 @@ test('handler: a missing url is a 400', async () => {
   const r = await handleOgPreview(req({}), {}, { fetchImpl: async () => ({}), fetchUser });
   assert.equal(r.status, 400);
 });
+
+// SOW-087: the preview carries the page's declared tags + a topic-category suggestion (injectable, fail-open).
+test('handler: the preview includes tags and the suggested category from the suggester', async () => {
+  const html = '<head><meta property="og:title" content="Hi"><meta property="article:tag" content="DevOps"></head>';
+  const fetchImpl = async () => ({ ok: true, headers: { get: () => 'text/html' }, text: async () => html });
+  let saw = null;
+  const suggest = async (_env, input) => { saw = input; return 'devops'; };
+  const r = await handleOgPreview(req({ url: 'https://ex.com/a' }), {}, { fetchImpl, fetchUser, suggest });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.tags, ['DevOps']);
+  assert.equal(r.body.suggestedCategory, 'devops');
+  assert.deepEqual(saw, { title: 'Hi', description: '', tags: ['DevOps'] });
+});
+
+test('handler: a throwing suggester still returns the preview with suggestedCategory:null', async () => {
+  const html = '<head><meta property="og:title" content="Hi"></head>';
+  const fetchImpl = async () => ({ ok: true, headers: { get: () => 'text/html' }, text: async () => html });
+  const suggest = async () => { throw new Error('ai down'); };
+  const r = await handleOgPreview(req({ url: 'https://ex.com/a' }), {}, { fetchImpl, fetchUser, suggest });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.title, 'Hi');
+  assert.equal(r.body.suggestedCategory, null);
+});

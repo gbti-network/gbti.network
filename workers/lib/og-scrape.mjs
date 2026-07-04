@@ -43,14 +43,21 @@ function metaMap(html) {
   const keys = [
     'og:image', 'og:image:secure_url', 'twitter:image', 'twitter:image:src',
     'og:title', 'twitter:title', 'og:description', 'twitter:description', 'description',
+    'keywords', 'news_keywords', // SOW-087: declared keyword hints feed the share category suggestion
   ];
   const out = {};
   for (const k of keys) out[k] = '';
+  out._articleTags = []; // SOW-087: article:tag repeats once per tag; collect them all
   const META_RE = /<meta\b[^>]*>/gi;
   let m;
   while ((m = META_RE.exec(head))) {
     const tag = m[0];
     const key = (attr(tag, 'property') || attr(tag, 'name')).toLowerCase();
+    if (key === 'article:tag') {
+      const c = attr(tag, 'content');
+      if (c) out._articleTags.push(c);
+      continue;
+    }
     if (key in out && !out[key]) {
       const c = attr(tag, 'content');
       if (c) out[key] = c;
@@ -73,15 +80,37 @@ export function scrapeOgImage(html, baseUrl = '') {
   return absolutize(raw, baseUrl);
 }
 
+// SOW-087: bound the declared-tag hints (a page can claim anything; these only feed a SUGGESTION the member confirms).
+const MAX_TAGS = 12;
+const MAX_TAG_LEN = 48;
+
+/** Collect the page's declared keyword/tag hints: every article:tag plus the comma-split keywords/news_keywords.
+ *  Deduped case-insensitively, length- and count-capped. Pure. */
+function collectTags(m) {
+  const out = [];
+  const seen = new Set();
+  const push = (raw) => {
+    const t = decodeEntities(raw).replace(/\s+/g, ' ').trim();
+    if (!t || t.length > MAX_TAG_LEN || out.length >= MAX_TAGS) return;
+    const k = t.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(t);
+  };
+  for (const t of m._articleTags) push(t);
+  for (const src of [m['keywords'], m['news_keywords']]) for (const part of String(src || '').split(',')) push(part);
+  return out;
+}
+
 /**
- * Pull a full link preview from a page's HTML: { image, title, description }. image is an absolute URL or ''.
+ * Pull a full link preview from a page's HTML: { image, title, description, tags }. image is an absolute URL or ''.
  * title falls back og:title -> twitter:title -> <title>; description falls back og:description -> twitter:description
- * -> meta description. Pure; never throws.
+ * -> meta description; tags (SOW-087) are the page's declared article:tag/keywords hints. Pure; never throws.
  */
 export function scrapeOgPreview(html, baseUrl = '') {
   const m = metaMap(html);
   const image = absolutize(m['og:image'] || m['og:image:secure_url'] || m['twitter:image'] || m['twitter:image:src'] || m._linkImg, baseUrl);
   const title = decodeEntities(m['og:title'] || m['twitter:title'] || m._docTitle);
   const description = decodeEntities(m['og:description'] || m['twitter:description'] || m['description']);
-  return { image, title, description };
+  return { image, title, description, tags: collectTags(m) };
 }
