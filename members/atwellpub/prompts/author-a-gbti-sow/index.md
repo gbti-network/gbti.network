@@ -7,7 +7,7 @@ shortDescription: >-
   commands for quickly creating and scaling scopes of work. See description for more details.
 categories:
   - skill
-status: draft
+status: published
 visibility: public
 publicStub: false
 pricing: free
