@@ -37,6 +37,7 @@ const TRASH = _svg(`<path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12" ${S} stroke-widt
 const VIDEO = _svg(`<rect x="3.5" y="6" width="11" height="12" rx="2.2" ${S} stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`); // SOW-062 P6: product video section
 const CHAT = _svg(`<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4H6.5" ${S} stroke-width="1.8" stroke-linejoin="round"/>`); // SOW-062 P6: from-the-author section
 const USERS = _svg(`<circle cx="9" cy="8" r="3.2" ${S} stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" ${S} stroke-width="1.8" stroke-linecap="round"/>`); // SOW-062 P6: discussion section
+const CHECK = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`); // SOW-062 P6: save-chip "saved" tick
 const SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
 // SOW-062 P6: keys rendered in a DOCUMENT-CANVAS section (not the rail) for a given type, so they are excluded from
 // the preserved-hidden block to avoid a duplicate [data-key]. `video` -> the product Video section.
@@ -254,7 +255,13 @@ class GbtiContentEditor extends GbtiElement {
         .edhead { display:flex; align-items:center; gap:12px; padding:4px 2px 16px; flex-wrap:wrap; }
         .etype { font-family:var(--font-mono,monospace); font-size:10.5px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--s-green-fg); background:var(--s-tint); border:1.5px solid var(--s-tint-2); border-radius:999px; padding:5px 12px; }
         .edhead-sp { flex:1; }
-        .savechip { font-size:13px; color:var(--s-fg-mute); font-weight:500; }
+        .savechip { font-size:13px; color:var(--s-fg-mute); font-weight:500; display:inline-flex; align-items:center; gap:3px; }
+        .savechip svg { width:14px; height:14px; }
+        .savechip.ok { color:var(--s-green-fg); font-weight:600; }
+        .savechip.busy { color:var(--s-fg-soft); }
+        .ebtn[disabled] { opacity:.7; cursor:default; }
+        .ebtn .spin { display:inline-block; width:13px; height:13px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:ed-spin .7s linear infinite; }
+        @keyframes ed-spin { to { transform:rotate(360deg); } }
         .ebtn { font:inherit; font-weight:600; font-size:14px; padding:9px 16px; border-radius:8px; border:1.5px solid var(--s-line-2); background:var(--s-surface); color:var(--s-fg); cursor:pointer; display:inline-flex; align-items:center; gap:7px; white-space:nowrap; }
         .ebtn:hover { border-color:var(--s-fg-mute); }
         .ebtn svg { width:16px; height:16px; }
@@ -813,35 +820,65 @@ class GbtiContentEditor extends GbtiElement {
     this.$$('#docview [data-view]').forEach((b) => b.classList.toggle('on', b.dataset.view === mode));
   }
 
+  // SOW-062 P6: immediate feedback at the toolbar (the #out message sits far down the canvas, so a click read as
+  // "no feedback"). _setChip updates the save-chip next to the buttons; _btnBusy spins + disables the button, and
+  // returns a restore fn.
+  _setChip(html, cls = '') { const c = this.$('#savechip'); if (c) { c.className = 'savechip' + (cls ? ' ' + cls : ''); c.innerHTML = html; } }
+  _btnBusy(sel, label) {
+    const b = this.$(sel);
+    if (!b) return () => {};
+    const orig = b.innerHTML;
+    b.disabled = true; b.setAttribute('aria-busy', 'true'); b.innerHTML = `<span class="spin"></span> ${esc(label)}`;
+    return () => { b.disabled = false; b.removeAttribute('aria-busy'); b.innerHTML = orig; };
+  }
+
   async doPublish() {
+    const restore = this._btnBusy('#publish', 'Publishing…');
+    this._setChip('Publishing…', 'busy');
     this.out('Publishing…');
     try {
       const { type, input, body } = this.gather();
-      if (this.fields.some((f) => f.key === 'status')) input.status = 'published'; // SOW-062 P6: status is action-driven (no rail dropdown)
       // SOW-062 P6: the from-the-author note seeds/updates the intro-<slug> comment in the same PR (product/prompt).
       const authorNote = this.$('#authornote')?.value?.trim() || undefined;
+      // Auto-save the current content to the member's OWN FORK first (a staged backup before the network PR), so
+      // their work is never only in-flight. Best-effort: a fork-save hiccup must not block publishing.
+      this._setChip('Saving to your fork…', 'busy');
+      try { await this.client.saveDraft({ type, input, body }); } catch { /* non-fatal */ }
+      // Then publish to the network. status is action-driven (no rail dropdown).
+      this._setChip('Publishing…', 'busy');
+      if (this.fields.some((f) => f.key === 'status')) input.status = 'published';
       const res = await this.client.publish({ type, input, body, authorNote });
+      this._setChip(`${CHECK} Published`, 'ok');
       this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`); // SOW-072 P2: consistent ack (esc: out() writes innerHTML)
       this.emit('gbti-published', res);
     } catch (err) {
+      this._setChip('');
       const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
       this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
+    } finally {
+      restore();
     }
   }
 
   // SOW-082: Save the current content as a draft on the member's own fork (no PR). Allowed for trial + paid; a
   // trial member's members-only content is refused server-side with a clean upgrade nudge (membership-required).
   async doDraft() {
+    const restore = this._btnBusy('#draft', 'Saving…');
+    this._setChip('Saving…', 'busy');
     this.out('Saving draft…');
     try {
       const { type, input, body } = this.gather();
       if (this.fields.some((f) => f.key === 'status')) input.status = 'draft'; // SOW-062 P6: status is action-driven (no rail dropdown)
       const res = await this.client.saveDraft({ type, input, body });
+      this._setChip(`${CHECK} Draft saved`, 'ok');
       this.out('<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
       this.emit('gbti-draft-saved', res);
     } catch (err) {
+      this._setChip('');
       const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
       this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
+    } finally {
+      restore();
     }
   }
 
