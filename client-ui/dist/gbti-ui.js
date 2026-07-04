@@ -1749,6 +1749,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const typePath = { post: "articles", product: "products", prompt: "prompts" }[this.type] || this.type;
       const isPub = String(p.status || "").toLowerCase() === "published";
       const statusLabel = isPub ? p.publishedAt ? String(p.publishedAt).slice(0, 10) : "published" : "draft";
+      const fmtD = (d) => {
+        if (!d) return "";
+        const t = new Date(d);
+        return Number.isNaN(t.getTime()) ? "" : t.toISOString().slice(0, 10);
+      };
+      const liveLabel = isPub ? fmtD(p.publishedAt) ? `Live ${fmtD(p.publishedAt)}` : "Live" : "Draft";
+      const localLabel = fmtD(p.updatedAt) ? `Local ${fmtD(p.updatedAt)}` : "";
       const cheat = this.cheatData();
       const slug = this.presetStr(p.slug) || "";
       const videoField = fieldByKey.get("video");
@@ -1920,7 +1927,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .mr-leg-grid span { font-size:12.5px; color:var(--s-fg-mute); }
         .mr-code { font-family:var(--font-mono,monospace); font-size:12.5px; line-height:1.7; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line); border-radius:8px; padding:15px 16px; overflow-x:auto; white-space:pre; tab-size:2; margin:0; }
         /* SOW-062 P6: Visual / Markdown doc-view toggle + the read-only full-document markdown panel */
-        .doc-view { display:inline-flex; gap:3px; padding:4px; margin:0 0 26px; border-radius:8px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); }
+        .doc-view-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 26px; }
+        .doc-view { display:inline-flex; gap:3px; padding:4px; border-radius:8px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); }
+        .dv-cheat { padding:6px 12px; font-size:12.5px; }
+        .dv-cheat[hidden] { display:none; } /* [hidden] must beat .ebtn's display:inline-flex */
+        /* SOW-062 P6: the publish-expectation banner above the toolbar */
+        .pubinfo { display:flex; align-items:flex-start; gap:9px; padding:11px 14px; margin:0 2px 12px; border-radius:10px; background:var(--s-tint); border:1.5px solid var(--s-tint-2); font-size:12.5px; line-height:1.5; color:var(--s-fg-soft); }
+        .pubinfo svg { width:16px; height:16px; flex:none; margin-top:1px; color:var(--s-green-fg); } .pubinfo b { color:var(--s-fg); font-weight:700; }
+        .doc-slug .meta-local { color:var(--s-fg-mute); }
         .doc-view button { display:inline-flex; align-items:center; gap:7px; padding:7px 15px; border:0; border-radius:7px; background:transparent; font:inherit; font-size:13px; font-weight:600; color:var(--s-fg-mute); cursor:pointer; white-space:nowrap; transition:color .14s ease; }
         .doc-view button svg { width:15px; height:15px; }
         .doc-view button.on { background:var(--s-surface); color:var(--s-fg); box-shadow:0 1px 3px rgba(0,0,0,.12); border:1.5px solid var(--s-line-2); padding:5.5px 13.5px; }
@@ -1939,11 +1953,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .an-text { flex:1; min-width:0; font:inherit; font-size:14px; line-height:1.55; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:9px; padding:11px 13px; outline:none; resize:vertical; min-height:70px; box-sizing:border-box; }
         .an-text:focus { border-color:var(--s-green); background:var(--s-surface); }
         #secDiscussion gbti-discussion { display:block; margin-top:2px; }
-      `) + `<div class="edhead">
+      `) + `<div class="pubinfo">${INFO}<span>Publishing is not instant. It opens a pull request that auto-merges, then the site rebuilds, so your change reaches the live edge in about 2 to 3 minutes. Track it in your <b>WorkBench</b> under Pull requests.</span></div>
+         <div class="edhead">
            <span class="etype">${esc(this.type)}</span>
            <span class="edhead-sp"></span>
            <span class="savechip" id="savechip"></span>
-           <button class="ebtn" id="mdref" type="button" title="Markdown cheatsheet">${BOOK} <span class="lbl">Cheatsheet</span></button>
            ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's ID (its repo path) for the MCP server">${COPY} <span class="lbl">Copy ID</span></button>` : ""}
            ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ""}
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ""}
@@ -1953,10 +1967,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
            <article class="doc">
              ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
              <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || "")}</div>
-             <div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span><span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || "")}</span><span class="slug-meta${isPub ? " pub" : ""}"><span class="pubdot"></span><span>${esc(statusLabel)}</span></span></div>
-             <div class="doc-view" id="docview">
-               <button type="button" class="on" data-view="visual">${DOC} Visual</button>
-               <button type="button" data-view="markdown">${CODE} Markdown</button>
+             <div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span><span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || "")}</span><span class="slug-meta${isPub ? " pub" : ""}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ""}</span></div>
+             <div class="doc-view-row">
+               <div class="doc-view" id="docview">
+                 <button type="button" class="on" data-view="visual">${DOC} Visual</button>
+                 <button type="button" data-view="markdown">${CODE} Markdown</button>
+               </div>
+               <button class="ebtn dv-cheat" id="mdref" type="button" title="Markdown cheatsheet" hidden>${BOOK} <span class="lbl">Cheatsheet</span></button>
              </div>
              <section class="docsec" id="secMain">
                <div class="docsec-h">${DOC} Main content</div>
@@ -2384,6 +2401,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       }
       this.$$("#docview [data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === mode));
+      const md = this.$("#mdref");
+      if (md) md.hidden = !on;
     }
     // SOW-062 P6: immediate feedback at the toolbar (the #out message sits far down the canvas, so a click read as
     // "no feedback"). _setChip updates the save-chip next to the buttons; _btnBusy spins + disables the button, and
@@ -2417,6 +2436,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const { type, input, body } = this.gather();
         const authorNote = this.$("#authornote")?.value?.trim() || void 0;
         if (this.fields.some((f) => f.key === "status")) input.status = "published";
+        if (["post", "product", "prompt"].includes(type)) {
+          const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+          input.updatedAt = nowIso;
+          input.publishedAt = nowIso;
+        }
         const res = await this.client.publish({ type, input, body, authorNote });
         this._setChip(`${CHECK} Published`, "ok");
         this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`);
@@ -2438,6 +2462,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const { type, input, body } = this.gather();
         if (this.fields.some((f) => f.key === "status")) input.status = "draft";
+        if (["post", "product", "prompt"].includes(type)) input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
         const res = await this.client.saveDraft({ type, input, body });
         this._setChip(`${CHECK} Draft saved`, "ok");
         this.out('<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
