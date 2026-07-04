@@ -20,11 +20,11 @@ const FACTORIES = {
 };
 
 /** Build every adapter (keyed by name). Pure construction; no network until post() is called.
- *  SOW-087: `channelMap` (the KV-mirrored house/content-channels.yml) feeds the discord-category adapter;
- *  the other factories ignore it. */
-export function buildAdapters({ env = {}, fetchImpl = globalThis.fetch, channelMap = null } = {}) {
+ *  SOW-087: `channelMap` (the KV-mirrored house/content-channels.yml) feeds the discord-category adapter and
+ *  `cfg` carries the per-type Discord templates; the other factories ignore both. */
+export function buildAdapters({ env = {}, fetchImpl = globalThis.fetch, channelMap = null, cfg = null } = {}) {
   const out = {};
-  for (const [name, make] of Object.entries(FACTORIES)) out[name] = make({ env, fetchImpl, channelMap });
+  for (const [name, make] of Object.entries(FACTORIES)) out[name] = make({ env, fetchImpl, channelMap, cfg });
   return out;
 }
 
@@ -34,7 +34,7 @@ export function buildAdapters({ env = {}, fetchImpl = globalThis.fetch, channelM
  * Returns { ready: [adapter...], skipped: [name...] }.
  */
 export function resolveAdapterRun({ cfg, env = {}, adapters = null, fetchImpl = globalThis.fetch, channelMap = null } = {}) {
-  const all = adapters ?? buildAdapters({ env, fetchImpl, channelMap });
+  const all = adapters ?? buildAdapters({ env, fetchImpl, channelMap, cfg });
   const ready = [];
   const skipped = [];
   for (const name of enabledChannelNames(cfg)) {

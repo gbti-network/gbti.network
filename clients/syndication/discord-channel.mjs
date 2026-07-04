@@ -8,9 +8,10 @@
 // the per-type channel, is a clean recorded no-op (status "skipped"), never a retry loop.
 
 import { createDiscordClient } from '../discord.mjs';
-import { buildChannelText } from '../../membership/syndication-format.mjs';
+import { buildChannelText, renderTemplate } from '../../membership/syndication-format.mjs';
 import { channelLimit } from '../../membership/syndication-channels.mjs';
 import { channelForCategory } from '../../membership/news-channels.mjs';
+import { templateFor } from '../../membership/syndication-config.mjs';
 
 const CHANNEL_ENV = {
   post: 'DISCORD_CHANNEL_POSTS',
@@ -25,12 +26,21 @@ function allowedMentionsFor(mention) {
   return m ? { parse: [], users: [m[1]] } : { parse: [] };
 }
 
-/** Post one item to one channel id. Shared by both Discord adapters. */
-async function postToChannel(channelId, item, { env, fetchImpl, client }) {
+/** Post one item to one channel id. Shared by both Discord adapters.
+ *  SOW-087: a configured per-type template (house/syndication-config.yml `templates:`) replaces the built-in
+ *  message; the default share template is "Shared by {memberdiscord} {shareurl}" (no-ping full name when the
+ *  mention does not resolve). allowed_mentions still caps pings to the author id either way. */
+async function postToChannel(channelId, item, { env, fetchImpl, client, cfg }) {
   const discord = client ?? createDiscordClient({ botToken: env.DISCORD_BOT_TOKEN, fetch: fetchImpl });
-  // Discord protects mass mentions via allowed_mentions, so the author mention may be a real <@id> here.
-  const text = buildChannelText(item, { limit: channelLimit('discord') - 32, sanitize: false });
-  const content = item.mention ? `${item.mention} ${text}` : text;
+  const template = templateFor(cfg, item.source);
+  let content;
+  if (template) {
+    content = renderTemplate(template, item, { limit: channelLimit('discord') });
+  } else {
+    // Discord protects mass mentions via allowed_mentions, so the author mention may be a real <@id> here.
+    const text = buildChannelText(item, { limit: channelLimit('discord') - 32, sanitize: false });
+    content = item.mention ? `${item.mention} ${text}` : text;
+  }
   const res = await discord.postChannelMessage(channelId, content, { allowedMentions: allowedMentionsFor(item.mention) });
   const id = res?.id || null;
   const url = id && (res?.channel_id || channelId) ? `https://discord.com/channels/${env.DISCORD_GUILD_ID || '@me'}/${res?.channel_id || channelId}/${id}` : null;
@@ -38,20 +48,20 @@ async function postToChannel(channelId, item, { env, fetchImpl, client }) {
 }
 
 /** The FEATURED per-type post (#articles/#products/#prompts/#shares). */
-export function createDiscordAdapter({ env = {}, fetchImpl = globalThis.fetch, client = null } = {}) {
+export function createDiscordAdapter({ env = {}, fetchImpl = globalThis.fetch, client = null, cfg = null } = {}) {
   return {
     name: 'discord',
     enabled() { return Boolean(env.DISCORD_BOT_TOKEN); },
     async post(item) {
       const channelId = env[CHANNEL_ENV[item.source]] || null;
       if (!channelId) return { ok: false, error: `no Discord channel configured for ${item.source}` };
-      return postToChannel(channelId, item, { env, fetchImpl, client });
+      return postToChannel(channelId, item, { env, fetchImpl, client, cfg });
     },
   };
 }
 
 /** SOW-087: the SECOND post, to the item's category-mapped channel (house/content-channels.yml via KV). */
-export function createDiscordCategoryAdapter({ env = {}, fetchImpl = globalThis.fetch, client = null, channelMap = null } = {}) {
+export function createDiscordCategoryAdapter({ env = {}, fetchImpl = globalThis.fetch, client = null, channelMap = null, cfg = null } = {}) {
   return {
     name: 'discord-category',
     enabled() { return Boolean(env.DISCORD_BOT_TOKEN); },
@@ -61,7 +71,7 @@ export function createDiscordCategoryAdapter({ env = {}, fetchImpl = globalThis.
       if (!mapped) return { ok: true, skipped: true, reason: item.category ? `no channel mapped for category "${item.category}"` : 'no category on the item' };
       // Misconfiguration guard: the category channel equals the per-type channel; never double-post one channel.
       if (mapped === (env[CHANNEL_ENV[item.source]] || null)) return { ok: true, skipped: true, reason: 'the category channel equals the per-type channel' };
-      return postToChannel(mapped, item, { env, fetchImpl, client });
+      return postToChannel(mapped, item, { env, fetchImpl, client, cfg });
     },
   };
 }

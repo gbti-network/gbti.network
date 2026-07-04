@@ -1,7 +1,7 @@
 // SOW-058: the pure message formatter. Sanitization, truncation, URL preservation, no body leak.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChannelText, sanitizeMentions, hostOf } from '../membership/syndication-format.mjs';
+import { buildChannelText, sanitizeMentions, hostOf, renderTemplate } from '../membership/syndication-format.mjs';
 
 test('sanitizeMentions neutralizes @mentions and Discord mass-ping tokens', () => {
   assert.ok(!/@everyone/.test(sanitizeMentions('hey @everyone')));
@@ -32,4 +32,40 @@ test('buildChannelText keeps the URL intact when truncating to a tight limit', (
 test('hostOf strips www and tolerates garbage', () => {
   assert.equal(hostOf('https://www.example.com/x'), 'example.com');
   assert.equal(hostOf('not a url'), '');
+});
+
+// ---- SOW-087: the configurable Discord template ----
+
+const T = 'Shared by {memberdiscord} {shareurl}';
+
+test('renderTemplate: a resolved mention pings; no mention falls back to the no-ping full name', () => {
+  const withMention = renderTemplate(T, { mention: '<@123>', authorName: 'Alice Q', url: 'https://ex.com/a' });
+  assert.equal(withMention, 'Shared by <@123> https://ex.com/a');
+  const noMention = renderTemplate(T, { mention: '@alice', authorName: 'Alice Q', url: 'https://ex.com/a' });
+  assert.ok(noMention.startsWith('Shared by Alice Q'));
+  assert.ok(!noMention.includes('<@')); // no ping token
+  const noName = renderTemplate(T, { author: 'alice', url: 'https://ex.com/a' });
+  assert.ok(noName.includes('alice')); // @login text fallback (zero-width-space neutralized)
+});
+
+test('renderTemplate sanitizes every author-controlled variable (never a mass mention)', () => {
+  const out = renderTemplate('{title} {fullName} {category}', {
+    title: '@everyone free stuff <@&999>',
+    authorName: '@here Bob',
+    category: 'devops',
+  });
+  assert.ok(!out.includes('@everyone'));
+  assert.ok(!out.includes('@here'));
+  assert.ok(!out.includes('<@&999>'));
+  assert.ok(out.includes('devops'));
+  // a forged mention token in authorName is stripped, not passed through as {memberdiscord}
+  const forged = renderTemplate(T, { authorName: '<@666>', url: 'https://x.y' });
+  assert.ok(!forged.includes('<@666>'));
+});
+
+test('renderTemplate: unknown tokens render empty, case-insensitive names, truncation applies', () => {
+  assert.equal(renderTemplate('A {nope} B', {}), 'A B');
+  assert.equal(renderTemplate('{TITLE}!', { title: 'Hi' }), 'Hi!');
+  const long = renderTemplate('{title}', { title: 'x'.repeat(50) }, { limit: 10 });
+  assert.equal(long.length, 10);
 });

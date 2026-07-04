@@ -33,6 +33,36 @@ function truncate(text, limit) {
  * Build the message body for a queue item, sanitized + truncated to `limit`. `includeUrl` appends the link on its
  * own line (skip it for channels that attach the link via a separate facet/card). Pure.
  */
+/**
+ * SOW-087: render a configured Discord post template over a queue item. Variables:
+ *   {memberdiscord}  the resolved `<@id>` mention; when none resolves it falls back to the NO-PING full name
+ *   {fullName}       the profile displayName (fallback @login text; sanitized, never pings)
+ *   {author}         the @login text (sanitized, never pings)
+ *   {shareurl} {url} the item's link
+ *   {title} {category}  the item metadata
+ * Every substitution EXCEPT the validated `<@id>` mention passes through sanitizeMentions, so an
+ * author-controlled displayName/title can never fire a mass mention (the adapter's allowed_mentions guard
+ * additionally caps pings to the author id). Unknown {tokens} render empty; whitespace collapses. Pure.
+ */
+export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
+  const mention = /^<@!?\d+>$/.test(String(item.mention || '')) ? item.mention : null;
+  const fullName = sanitizeMentions(item.authorName || (item.author ? `@${item.author}` : 'a member'));
+  const vars = {
+    memberdiscord: mention || fullName, // the owner-decided fallback: full name, no ping
+    fullname: fullName,
+    author: sanitizeMentions(item.author ? `@${item.author}` : 'a member'),
+    shareurl: String(item.url || ''),
+    url: String(item.url || ''),
+    title: sanitizeMentions(item.title || ''),
+    category: sanitizeMentions(item.category || ''),
+  };
+  const text = String(template || '')
+    .replace(/\{([a-zA-Z]+)\}/g, (_, name) => vars[name.toLowerCase()] ?? '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+  return truncate(text, limit);
+}
+
 export function buildChannelText(item = {}, { limit = 280, includeUrl = true, sanitize = true } = {}) {
   const label = TYPE_LABEL[item.source] || item.source || 'update';
   const who = item.author ? `@${item.author}` : 'a member';

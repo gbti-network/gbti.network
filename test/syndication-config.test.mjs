@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_SYNDICATION_CONFIG, CHANNELS, syndicationConfigFromParsed, isSyndicationEnabled, holdMs,
-  upvoteThreshold, isChannelEnabled, enabledChannelNames, toSyndicationMirror, classifyMode,
+  upvoteThreshold, isChannelEnabled, enabledChannelNames, toSyndicationMirror, classifyMode, templateFor,
 } from '../membership/syndication-config.mjs';
 
 test('a missing/empty config fails closed to the safe defaults', () => {
@@ -47,10 +47,11 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
   const m = toSyndicationMirror({ enabled: true, hold_minutes: 60, upvote_threshold: 2, channels: { discord: true } });
   assert.deepEqual(m, {
     enabled: true, require_approval: true, hold_minutes: 60, upvote_threshold: 2, classify: 'ai',
+    templates: { share: 'Shared by {memberdiscord} {shareurl}' },
     channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false },
   });
   // No surprise keys (no token/secret fields).
-  assert.deepEqual(Object.keys(m).sort(), ['channels', 'classify', 'enabled', 'hold_minutes', 'require_approval', 'upvote_threshold']);
+  assert.deepEqual(Object.keys(m).sort(), ['channels', 'classify', 'enabled', 'hold_minutes', 'require_approval', 'templates', 'upvote_threshold']);
 });
 
 test('DEFAULT_SYNDICATION_CONFIG is frozen and disabled', () => {
@@ -65,4 +66,14 @@ test('classifyMode normalizes ai|keyword|off and falls back to ai', () => {
   assert.equal(classifyMode(syndicationConfigFromParsed({ syndication: { classify: 'llm' } })), 'ai'); // unknown -> default
   assert.equal(classifyMode(syndicationConfigFromParsed({})), 'ai');
   assert.equal(classifyMode(undefined), 'ai');
+});
+
+// SOW-087: the per-type Discord templates.
+test('templateFor: configured template wins, blank/missing falls back to the type default or null', () => {
+  const cfg = syndicationConfigFromParsed({ syndication: { templates: { share: '{title} by {author}', post: '  ' } } });
+  assert.equal(templateFor(cfg, 'share'), '{title} by {author}');
+  assert.equal(templateFor(cfg, 'post'), null); // blank + no default = built-in message
+  assert.equal(templateFor(syndicationConfigFromParsed({}), 'share'), 'Shared by {memberdiscord} {shareurl}');
+  assert.equal(templateFor(undefined, 'share'), 'Shared by {memberdiscord} {shareurl}');
+  assert.equal(templateFor(undefined, 'product'), null);
 });

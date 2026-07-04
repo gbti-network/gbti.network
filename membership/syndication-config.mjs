@@ -34,12 +34,21 @@ export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'link
 // fallback; `keyword` = the free keyword match only; `off` = no suggestion (the member picks by hand).
 export const CLASSIFY_MODES = Object.freeze(['ai', 'keyword', 'off']);
 
+// SOW-087: per-type Discord post templates. Variables: {memberdiscord} (the resolved <@id> mention, falling
+// back to the no-ping full name when none resolves), {fullName}, {author}, {shareurl}/{url}, {title},
+// {category}. A type with no template keeps the built-in buildChannelText message. Discord adapters only.
+export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt']);
+export const DEFAULT_TEMPLATES = Object.freeze({
+  share: 'Shared by {memberdiscord} {shareurl}', // the owner-decided default share repost
+});
+
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,
   require_approval: true, // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
   hold_minutes: 60,
   upvote_threshold: 2,
   classify: 'ai', // SOW-087: the share category suggestion mode
+  templates: DEFAULT_TEMPLATES, // SOW-087: per-type Discord templates (missing/empty type = its default)
   channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false }),
 });
 
@@ -72,6 +81,19 @@ function asClassifyMode(v, fallback) {
   return CLASSIFY_MODES.includes(s) ? s : fallback;
 }
 
+// SOW-087: a missing/blank per-type template falls back to its default (an absent default = built-in message).
+function normalizeTemplates(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const t of TEMPLATE_TYPES) {
+    const v = typeof src[t] === 'string' ? src[t].trim() : '';
+    const d = DEFAULT_TEMPLATES[t];
+    if (v) out[t] = v;
+    else if (d) out[t] = d;
+  }
+  return Object.freeze(out);
+}
+
 function normalizeChannels(raw) {
   const out = {};
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -92,6 +114,7 @@ export function syndicationConfigFromParsed(parsed) {
     hold_minutes: asHoldMinutes(raw.hold_minutes, d.hold_minutes),
     upvote_threshold: asThreshold(raw.upvote_threshold, d.upvote_threshold),
     classify: asClassifyMode(raw.classify, d.classify),
+    templates: normalizeTemplates(raw.templates),
     channels: normalizeChannels(raw.channels),
   });
 }
@@ -122,6 +145,12 @@ export function classifyMode(cfg) {
   return asClassifyMode(cfg?.classify, DEFAULT_SYNDICATION_CONFIG.classify);
 }
 
+/** SOW-087: the configured Discord template for a source type, or null (= the built-in message). */
+export function templateFor(cfg, source) {
+  const t = cfg?.templates?.[source];
+  return typeof t === 'string' && t.trim() ? t.trim() : (DEFAULT_TEMPLATES[source] ?? null);
+}
+
 /** Is a given channel switched on in config? (Its secret presence is checked separately at drain time.) */
 export function isChannelEnabled(cfg, name) {
   return cfg?.channels?.[name] === true;
@@ -135,7 +164,7 @@ export function enabledChannelNames(cfg) {
 /** The small, secret-free object reconcile writes to the KV mirror (synd:config) and the Worker reads back. */
 export function toSyndicationMirror(cfg) {
   const c = syndicationConfigFromParsed(cfg);
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, channels: { ...c.channels } };
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: { ...c.templates }, channels: { ...c.channels } };
 }
 
 /** Read + normalize house/syndication-config.yml from a repo root. Missing/unparseable file = safe defaults. */
