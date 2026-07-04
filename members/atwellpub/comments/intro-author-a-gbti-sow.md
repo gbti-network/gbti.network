@@ -10,10 +10,17 @@ type: comment
 author: atwellpub
 ---
 
-This is the skill I reach for whenever an agent needs to author or manage a Statement of Work. To set it up in a fresh project, run /sow init. That scaffolds the lane folders (0_queue, 1_progressing, 2_waiting_review, and a _staging side-lane) plus a todo file, and it never overwrites anything you already have. It is a one-time step, and it only builds the folders, it does not write a SOW.
+A Claude Code skill for authoring and managing Statements of Work (SOWs) as local, lane-based planning documents.
 
-To add a new Statement of Work, describe the work in plain language, for example "add a SOW for the new billing webhook". The skill writes one canonical markdown file for it. Here is the subtle part worth knowing: a new SOW lands in 0_queue by default. It only starts in 1_progressing when you say so explicitly, for example "add a SOW for the billing webhook and start it in progress". So if you do not name a lane, expect the SOW to wait in the queue until you move it forward.
+**`/sow init`** scaffolds the framework in the current project. It is idempotent and builds folders only, so it never authors a SOW:
 
-Before it creates anything new, the skill searches the open SOWs first. It reads what is already sitting in the queue and in progress (and anything waiting for review) to decide whether your addition belongs inside a SOW that already exists. If it finds a good home, it tucks the change into that file as a new phase, a decision, or a resolved open question, instead of spawning a duplicate. A brand new SOW file only appears when nothing open is a reasonable fit, and it will tell you that it checked first.
+- creates the lane folders `0_queue`, `1_progressing`, `2_waiting_review`, and a `_staging` side-lane
+- creates a `todo.md` when one is missing, and never overwrites an existing one
+- keeps the `.data/` planning folder out of version control
 
-After that, every SOW follows the same discipline: ground it in a real code audit so it cites file and line rather than guesses, reference the completed work it builds on, and keep its status in sync as it moves across the lanes. It is project-agnostic, so point any agent at it and your planning docs come out uniform and grounded.
+**`/sow "<request>"`** authors or updates a SOW from a plain-language request, for example `/sow "add a SOW for the new billing webhook"`:
+
+- searches the open SOWs first (queue, in progress, and waiting review) and folds the request into an existing SOW when one fits, instead of creating a duplicate
+- creates a new canonical markdown file only when nothing open is a reasonable home, and reports that it checked first
+- places a new SOW in `0_queue` by default, and starts it in `1_progressing` only when the request says so explicitly, for example `/sow "add the billing webhook SOW and start it in progress"`
+- grounds each SOW in a code audit that cites file and line, references the completed work it builds on, and keeps its status in sync as the SOW moves across the lanes
