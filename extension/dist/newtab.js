@@ -6601,12 +6601,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const { type, input, body } = this.gather();
         const authorNote = this.$("#authornote")?.value?.trim() || void 0;
-        this._setChip("Saving to your fork…", "busy");
-        try {
-          await this.client.saveDraft({ type, input, body });
-        } catch {
-        }
-        this._setChip("Publishing…", "busy");
         if (this.fields.some((f) => f.key === "status")) input.status = "published";
         const res = await this.client.publish({ type, input, body, authorNote });
         this._setChip(`${CHECK} Published`, "ok");

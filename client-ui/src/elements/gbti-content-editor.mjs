@@ -840,13 +840,9 @@ class GbtiContentEditor extends GbtiElement {
       const { type, input, body } = this.gather();
       // SOW-062 P6: the from-the-author note seeds/updates the intro-<slug> comment in the same PR (product/prompt).
       const authorNote = this.$('#authornote')?.value?.trim() || undefined;
-      // Auto-save the current content to the member's OWN FORK first (a staged backup before the network PR), so
-      // their work is never only in-flight. Best-effort: a fork-save hiccup must not block publishing.
-      this._setChip('Saving to your fork…', 'busy');
-      try { await this.client.saveDraft({ type, input, body }); } catch { /* non-fatal */ }
-      // Then publish to the network. status is action-driven (no rail dropdown).
-      this._setChip('Publishing…', 'busy');
-      if (this.fields.some((f) => f.key === 'status')) input.status = 'published';
+      if (this.fields.some((f) => f.key === 'status')) input.status = 'published'; // status is action-driven (no rail dropdown)
+      // publish() already stages to the member's OWN fork first (publishFiles -> commitToBranchOnFork) and opens the
+      // network PR FROM that fork branch, so no separate pre-publish saveDraft is needed.
       const res = await this.client.publish({ type, input, body, authorNote });
       this._setChip(`${CHECK} Published`, 'ok');
       this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`); // SOW-072 P2: consistent ack (esc: out() writes innerHTML)
