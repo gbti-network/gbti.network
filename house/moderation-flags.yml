@@ -1,0 +1,59 @@
+# Moderation word lists (SOW-087). When a syndication queue item's POSTED surface (title + blurb) matches a
+# term below, the item is stamped with that list's name in `flags` and it ALWAYS waits for a superadmin
+# approval before posting to any channel, even if require_approval is switched off in
+# house/syndication-config.yml. Matching is case-insensitive on whole words; a multi-word term matches as a
+# phrase. These lists gate BRAND-ACCOUNT reach only (what the bot reposts); they never block a member from
+# publishing content.
+#
+# Superadmin-owned (CODEOWNERS). Curate freely: the seed lists below are starters, not policy. Edited from the
+# extension admin tools page or by hand. Empty lists are valid (nothing flags).
+lists:
+  political:
+    - election
+    - electoral
+    - ballot
+    - democrat
+    - democrats
+    - republican
+    - republicans
+    - liberal
+    - conservative
+    - leftist
+    - right-wing
+    - left-wing
+    - socialism
+    - socialist
+    - communism
+    - communist
+    - fascism
+    - fascist
+    - congress
+    - senate
+    - parliament
+    - president
+    - presidential
+    - politician
+    - politics
+    - political
+    - campaign trail
+    - white house
+    - supreme court
+    - immigration policy
+    - culture war
+  profanity:
+    - fuck
+    - fucking
+    - fucked
+    - shit
+    - shitty
+    - bullshit
+    - asshole
+    - bitch
+    - bastard
+    - damn
+    - goddamn
+    - cunt
+    - dick
+    - piss
+    - slut
+    - whore

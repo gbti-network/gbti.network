@@ -70,10 +70,10 @@ jobs:
 
       - name: Enqueue for approval (apply)
         if: steps.diff.outputs.added != ''
-        # SOW-058: ENQUEUE each published post/product/prompt into the syndication queue (KV) instead of posting to
-        # Discord directly. Each item is `pending` and waits for a superadmin to APPROVE it in the tracker; the Worker
-        # cron drain then posts it to every enabled channel. Shares are NOT enqueued here (they enqueue via the
-        # SOW-057 upvote threshold). Paths flow through SYNDICATE_ADDED (env), never interpolated -> no injection.
+        # SOW-058: ENQUEUE each published post/product/prompt/share into the syndication queue (KV) instead of
+        # posting to Discord directly. Each item is `pending` and waits for a superadmin to APPROVE it in the
+        # tracker; the Worker cron drain then posts it to every enabled channel. Paths flow through
+        # SYNDICATE_ADDED (env), never interpolated -> no injection.
         run: node scripts/enqueue-syndication.mjs --apply
         env:
           SYNDICATE_ADDED: ${{ steps.diff.outputs.added }}

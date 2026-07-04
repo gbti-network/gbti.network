@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildQueueItem, dedupeKey, normalizeItem, isDue, planDrain, canCancel, markClaimed,
+  buildQueueItem, dedupeKey, normalizeItem, isDue, planDrain, canCancel, markClaimed, markApproved,
   recordChannel, channelDone, pendingChannels, markSent, markFailed, markCancelled,
   SyndicationError, DEFAULT_HOLD_MS,
 } from '../membership/syndication-queue.mjs';
@@ -102,4 +102,36 @@ test('markSent + markFailed set terminal status + timestamps', () => {
   const a = buildQueueItem({ source: 'post', targetSlug: 'a' }, { now: at(0) });
   assert.equal(markSent(a, { now: at(7) }).sentAt, 7);
   assert.equal(markFailed(a, { now: at(8) }).failedAt, 8);
+});
+
+// SOW-087: the routing category, the profile displayName, and the moderation flags ride the item.
+test('buildQueueItem + normalizeItem carry category, authorName, and clean flags', () => {
+  const item = buildQueueItem({
+    source: 'share', targetSlug: 'alice/n1', author: 'alice', authorName: ' Alice Q ',
+    category: ' devops ', flags: ['political', 'political', '', null],
+  }, { now: () => 1000 });
+  assert.equal(item.category, 'devops');
+  assert.equal(item.authorName, 'Alice Q');
+  assert.deepEqual(item.flags, ['political']);
+  const rehydrated = normalizeItem(JSON.parse(JSON.stringify(item)));
+  assert.equal(rehydrated.category, 'devops');
+  assert.equal(rehydrated.authorName, 'Alice Q');
+  assert.deepEqual(rehydrated.flags, ['political']);
+  // absent inputs normalize safely
+  const bare = normalizeItem(buildQueueItem({ source: 'post', targetSlug: 'x' }, { now: () => 1 }));
+  assert.equal(bare.category, null);
+  assert.equal(bare.authorName, null);
+  assert.deepEqual(bare.flags, []);
+});
+
+test('SOW-087: a flagged item is due ONLY when approved, even with require_approval off', () => {
+  const flagged = buildQueueItem({ source: 'share', targetSlug: 'a/n', flags: ['profanity'] }, { now: () => 0, holdMs: 0 });
+  // require_approval OFF and the hold elapsed: an unflagged item would post; the flagged one must not.
+  assert.equal(isDue(flagged, 10, { requireApproval: false }), false);
+  const unflagged = buildQueueItem({ source: 'share', targetSlug: 'a/m' }, { now: () => 0, holdMs: 0 });
+  assert.equal(isDue(unflagged, 10, { requireApproval: false }), true);
+  // approval unlocks the flagged item
+  const approved = markApproved(flagged, { now: () => 5, actor: 'root' });
+  assert.equal(isDue(approved, 10, { requireApproval: false }), true);
+  assert.equal(isDue(approved, 10, { requireApproval: true }), true);
 });

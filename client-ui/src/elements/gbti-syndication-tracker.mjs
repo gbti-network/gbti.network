@@ -21,6 +21,9 @@ const CSS = `
   .it { flex:1; min-width:0; }
   .it b { font-size:14px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .it .d { font-size:12px; color:var(--muted); }
+  .flags { display:inline-flex; gap:4px; margin-left:6px; }
+  .flag { font-size:11px; font-weight:700; color:#8a5a00; background:rgba(240,170,20,.18); border:1px solid rgba(240,170,20,.5); border-radius:6px; padding:1px 6px; }
+  .cat { font-size:11px; color:var(--muted); margin-left:6px; }
   .src { flex:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
   .when { flex:none; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .chs { display:flex; gap:5px; flex-wrap:wrap; }
@@ -87,7 +90,12 @@ class GbtiSyndicationTracker extends GbtiElement {
       } else {
         right = `<span class="chs">${this._channels(it.perChannel)}</span>`;
       }
-      return `<li class="row"><span class="src">${esc(src)}</span><span class="it"><b>${esc(title)}</b>${it.url ? `<span class="d">${esc(it.url)}</span>` : ''}</span>${right}</li>`;
+      // SOW-087: moderation word-list hits. A flagged item always needs an explicit approval, so make it loud.
+      const flags = Array.isArray(it.flags) && it.flags.length
+        ? `<span class="flags">${it.flags.map((f) => `<span class="flag">⚠ ${esc(f)}</span>`).join('')}</span>`
+        : '';
+      const cat = it.category ? `<span class="cat">#${esc(it.category)}</span>` : '';
+      return `<li class="row"><span class="src">${esc(src)}</span><span class="it"><b>${esc(title)}</b>${flags}${cat}${it.url ? `<span class="d">${esc(it.url)}</span>` : ''}</span>${right}</li>`;
     }).join('');
     return `<div class="bucket"><h4>${esc(label)} (${list.length})</h4><ul class="rows">${rows}</ul></div>`;
   }
