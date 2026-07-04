@@ -36,3 +36,6 @@ quotes:
   - text: '"Better to be too early and have to try again, than be too late and have to catch up."'
     author: Paul Graham
     enabled: true
+  - text: To crave the result but not the process, is to guarantee disappointment.
+    author: James Clear
+    enabled: true
