@@ -18,6 +18,12 @@ syndication:
                             # mention, falling back to the no-ping full name), {fullName}, {author}, {shareurl},
                             # {url}, {title}, {category}. A missing/blank type keeps its default or the built-in text.
     share: "Shared by {memberdiscord} {shareurl}"
+  news_engagement:          # SOW-111: engagement-triggered news auto-share (to the item's mapped category channel
+                            # in the Worker var NEWS_CHANNELS; never the member #shares channel; unmapped = no post).
+    enabled: true           # master switch for both engagement signals
+    open_threshold: 2       # distinct members opening the detail view before the item auto-posts
+    tier: paid              # whose engagement counts: paid | paid-trial | signed-in (banned never counts)
+    comment_autopost: true  # one comment posts the item immediately (a comment is deliberate engagement)
   channels:                 # full syndication: all channels attempted on approval (one still needs its secret, else skipped)
     discord: true
     discord-category: true  # SOW-087: the SECOND Discord post, to the category channel in house/content-channels.yml

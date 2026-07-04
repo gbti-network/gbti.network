@@ -34,6 +34,17 @@ export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'link
 // fallback; `keyword` = the free keyword match only; `off` = no suggestion (the member picks by hand).
 export const CLASSIFY_MODES = Object.freeze(['ai', 'keyword', 'off']);
 
+// SOW-111: which membership tiers count toward the news engagement auto-share. Banned is ALWAYS excluded
+// (the Worker gates by effective status, and a banned account is denied before any KV write).
+export const NEWS_ENGAGEMENT_TIERS = Object.freeze(['paid', 'paid-trial', 'signed-in']);
+
+export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
+  enabled: false, // fail-closed: nothing auto-posts until the owner flips it in house/syndication-config.yml
+  open_threshold: 2, // distinct members opening the detail view before the item auto-posts
+  tier: 'paid', // whose engagement counts (owner-toggleable in the admin Channels tab)
+  comment_autopost: true, // one comment posts immediately (deliberate engagement)
+});
+
 // SOW-087: per-type Discord post templates. Variables: {memberdiscord} (the resolved <@id> mention, falling
 // back to the no-ping full name when none resolves), {fullName}, {author}, {shareurl}/{url}, {title},
 // {category}. A type with no template keeps the built-in buildChannelText message. Discord adapters only.
@@ -49,6 +60,7 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   upvote_threshold: 2,
   classify: 'ai', // SOW-087: the share category suggestion mode
   templates: DEFAULT_TEMPLATES, // SOW-087: per-type Discord templates (missing/empty type = its default)
+  news_engagement: DEFAULT_NEWS_ENGAGEMENT, // SOW-111: engagement-triggered news auto-share
   channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false }),
 });
 
@@ -79,6 +91,20 @@ function asThreshold(v, fallback) {
 function asClassifyMode(v, fallback) {
   const s = typeof v === 'string' ? v.trim().toLowerCase() : '';
   return CLASSIFY_MODES.includes(s) ? s : fallback;
+}
+
+// SOW-111: normalize the news engagement block; every field falls back to its fail-closed default.
+function normalizeNewsEngagement(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const d = DEFAULT_NEWS_ENGAGEMENT;
+  const tier = typeof src.tier === 'string' && NEWS_ENGAGEMENT_TIERS.includes(src.tier.trim().toLowerCase())
+    ? src.tier.trim().toLowerCase() : d.tier;
+  return Object.freeze({
+    enabled: asBool(src.enabled, d.enabled),
+    open_threshold: asThreshold(src.open_threshold, d.open_threshold),
+    tier,
+    comment_autopost: asBool(src.comment_autopost, d.comment_autopost),
+  });
 }
 
 // SOW-087: a missing/blank per-type template falls back to its default (an absent default = built-in message).
@@ -115,6 +141,7 @@ export function syndicationConfigFromParsed(parsed) {
     upvote_threshold: asThreshold(raw.upvote_threshold, d.upvote_threshold),
     classify: asClassifyMode(raw.classify, d.classify),
     templates: normalizeTemplates(raw.templates),
+    news_engagement: normalizeNewsEngagement(raw.news_engagement),
     channels: normalizeChannels(raw.channels),
   });
 }
@@ -145,6 +172,11 @@ export function classifyMode(cfg) {
   return asClassifyMode(cfg?.classify, DEFAULT_SYNDICATION_CONFIG.classify);
 }
 
+/** SOW-111: the normalized news engagement settings ({ enabled, open_threshold, tier, comment_autopost }). */
+export function newsEngagement(cfg) {
+  return normalizeNewsEngagement(cfg?.news_engagement);
+}
+
 /** SOW-087: the configured Discord template for a source type, or null (= the built-in message). */
 export function templateFor(cfg, source) {
   const t = cfg?.templates?.[source];
@@ -164,7 +196,7 @@ export function enabledChannelNames(cfg) {
 /** The small, secret-free object reconcile writes to the KV mirror (synd:config) and the Worker reads back. */
 export function toSyndicationMirror(cfg) {
   const c = syndicationConfigFromParsed(cfg);
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: { ...c.templates }, channels: { ...c.channels } };
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: { ...c.templates }, news_engagement: { ...c.news_engagement }, channels: { ...c.channels } };
 }
 
 /** Read + normalize house/syndication-config.yml from a repo root. Missing/unparseable file = safe defaults. */

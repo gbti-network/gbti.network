@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setChannel, removeChannel, ContentChannelEditError } from '../membership/content-channels-edits.mjs';
 import { addFlagTerm, removeFlagTerm, ModerationFlagEditError } from '../membership/moderation-flags-edits.mjs';
-import { setTemplate, TemplateEditError } from '../membership/syndication-template-edits.mjs';
+import { setTemplate, setNewsEngagement, TemplateEditError } from '../membership/syndication-template-edits.mjs';
 import { templateFor, syndicationConfigFromParsed } from '../membership/syndication-config.mjs';
 
 const ctx = { actor: { githubId: '42', login: 'root' }, now: '2026-07-04T00:00:00Z' };
@@ -58,4 +58,24 @@ test('setTemplate writes/clears syndication.templates and round-trips through te
   // the rest of the config survives the edit
   assert.equal(clear.next.syndication.enabled, true);
   assert.throws(() => setTemplate(doc, { type: 'news', template: 'x' }, ctx), TemplateEditError);
+});
+
+// SOW-111: the news engagement settings edit (same file as the templates).
+test('setNewsEngagement patches only the supplied fields, validates hard, and is idempotent', () => {
+  const doc = { syndication: { enabled: true, templates: { share: 'x' } } };
+  const set = setNewsEngagement(doc, { enabled: true, openThreshold: 3, tier: 'paid-trial' }, ctx);
+  assert.equal(set.changed, true);
+  assert.deepEqual(set.next.syndication.news_engagement, { enabled: true, open_threshold: 3, tier: 'paid-trial', comment_autopost: true });
+  assert.equal(set.next.syndication.templates.share, 'x'); // the rest of the config survives
+  assert.equal(set.audit.action, 'news-engagement.set');
+  // idempotent against the normalized current state
+  assert.equal(setNewsEngagement(set.next, { openThreshold: 3 }, ctx).changed, false);
+  // partial patch: only the tier changes
+  const tierOnly = setNewsEngagement(set.next, { tier: 'signed-in' }, ctx);
+  assert.equal(tierOnly.next.syndication.news_engagement.open_threshold, 3);
+  assert.equal(tierOnly.next.syndication.news_engagement.tier, 'signed-in');
+  // hard validation
+  assert.throws(() => setNewsEngagement(doc, { tier: 'everyone' }, ctx), TemplateEditError);
+  assert.throws(() => setNewsEngagement(doc, { openThreshold: 0 }, ctx), TemplateEditError);
+  assert.throws(() => setNewsEngagement(doc, { enabled: 'yes' }, ctx), TemplateEditError);
 });

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DEFAULT_SYNDICATION_CONFIG, CHANNELS, syndicationConfigFromParsed, isSyndicationEnabled, holdMs,
-  upvoteThreshold, isChannelEnabled, enabledChannelNames, toSyndicationMirror, classifyMode, templateFor,
+  upvoteThreshold, isChannelEnabled, enabledChannelNames, toSyndicationMirror, classifyMode, templateFor, newsEngagement,
 } from '../membership/syndication-config.mjs';
 
 test('a missing/empty config fails closed to the safe defaults', () => {
@@ -48,10 +48,11 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
   assert.deepEqual(m, {
     enabled: true, require_approval: true, hold_minutes: 60, upvote_threshold: 2, classify: 'ai',
     templates: { share: 'Shared by {memberdiscord} {shareurl}' },
+    news_engagement: { enabled: false, open_threshold: 2, tier: 'paid', comment_autopost: true },
     channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false },
   });
   // No surprise keys (no token/secret fields).
-  assert.deepEqual(Object.keys(m).sort(), ['channels', 'classify', 'enabled', 'hold_minutes', 'require_approval', 'templates', 'upvote_threshold']);
+  assert.deepEqual(Object.keys(m).sort(), ['channels', 'classify', 'enabled', 'hold_minutes', 'news_engagement', 'require_approval', 'templates', 'upvote_threshold']);
 });
 
 test('DEFAULT_SYNDICATION_CONFIG is frozen and disabled', () => {
@@ -76,4 +77,18 @@ test('templateFor: configured template wins, blank/missing falls back to the typ
   assert.equal(templateFor(syndicationConfigFromParsed({}), 'share'), 'Shared by {memberdiscord} {shareurl}');
   assert.equal(templateFor(undefined, 'share'), 'Shared by {memberdiscord} {shareurl}');
   assert.equal(templateFor(undefined, 'product'), null);
+});
+
+// SOW-111: the news engagement auto-share block.
+test('newsEngagement: fail-closed defaults, normalization, and a bad tier falls back to paid', () => {
+  const d = newsEngagement(syndicationConfigFromParsed({}));
+  assert.deepEqual(d, { enabled: false, open_threshold: 2, tier: 'paid', comment_autopost: true });
+  const c = newsEngagement(syndicationConfigFromParsed({ syndication: { news_engagement: {
+    enabled: 'yes', open_threshold: '3', tier: ' Signed-In ', comment_autopost: 'off',
+  } } }));
+  assert.deepEqual(c, { enabled: true, open_threshold: 3, tier: 'signed-in', comment_autopost: false });
+  const bad = newsEngagement(syndicationConfigFromParsed({ syndication: { news_engagement: { tier: 'everyone', open_threshold: 0 } } }));
+  assert.equal(bad.tier, 'paid');
+  assert.equal(bad.open_threshold, 2); // below-1 falls back
+  assert.deepEqual(newsEngagement(undefined), d);
 });

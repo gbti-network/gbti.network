@@ -1,10 +1,11 @@
-// SOW-087: the PURE Discord-template edit core over the PARSED house/syndication-config.yml. setTemplate
-// writes syndication.templates[type]; an EMPTY template deletes the key so the type falls back to its default
-// (or the built-in message). Returns { next, changed, audit } (the news-source-edits shape). Node-free.
+// SOW-087 (+ SOW-111): the PURE house/syndication-config.yml edit cores. setTemplate writes
+// syndication.templates[type] (an EMPTY template deletes the key so the type falls back to its default or the
+// built-in message); setNewsEngagement writes the SOW-111 news auto-share settings. Both return
+// { next, changed, audit } (the news-source-edits shape). Node-free.
 //
 // SECURITY: this only COMPUTES the file edit. CODEOWNERS + the gate are the real boundary.
 
-import { TEMPLATE_TYPES } from './syndication-config.mjs';
+import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement } from './syndication-config.mjs';
 
 export class TemplateEditError extends Error {}
 
@@ -25,6 +26,56 @@ function auditEntry(ctx, type, detail) {
     target: { type },
     detail: detail ?? null,
   };
+}
+
+/**
+ * SOW-111: SET the news engagement auto-share settings (a partial patch: only the supplied fields change).
+ * Values are validated hard (a bad tier or threshold is an error, never silently coerced into policy).
+ * Idempotent against the CURRENT normalized settings.
+ */
+export function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost } = {}, ctx = {}) {
+  const d = structuredClone(doc && typeof doc === 'object' ? doc : {});
+  if (!d.syndication || typeof d.syndication !== 'object' || Array.isArray(d.syndication)) d.syndication = {};
+  const cur = newsEngagement({ news_engagement: d.syndication.news_engagement });
+  const next = { ...cur };
+  if (enabled !== undefined) {
+    if (typeof enabled !== 'boolean') throw new TemplateEditError('enabled must be true or false');
+    next.enabled = enabled;
+  }
+  if (openThreshold !== undefined) {
+    const n = Number(openThreshold);
+    if (!Number.isInteger(n) || n < 1 || n > 1000) throw new TemplateEditError('openThreshold must be an integer from 1 to 1000');
+    next.open_threshold = n;
+  }
+  if (tier !== undefined) {
+    const t = String(tier || '').trim().toLowerCase();
+    if (!NEWS_ENGAGEMENT_TIERS.includes(t)) throw new TemplateEditError(`tier must be one of: ${NEWS_ENGAGEMENT_TIERS.join(', ')}`);
+    next.tier = t;
+  }
+  if (commentAutopost !== undefined) {
+    if (typeof commentAutopost !== 'boolean') throw new TemplateEditError('commentAutopost must be true or false');
+    next.comment_autopost = commentAutopost;
+  }
+  const audit = (detail) => {
+    const a = ctx?.actor || null;
+    return {
+      at: isoOf(ctx?.now),
+      actor: a ? { github_id: a.githubId != null ? String(a.githubId) : (a.github_id != null ? String(a.github_id) : null), login: a.login ?? null } : null,
+      action: 'news-engagement.set',
+      target: { file: 'house/syndication-config.yml' },
+      detail,
+    };
+  };
+  const same = next.enabled === cur.enabled && next.open_threshold === cur.open_threshold
+    && next.tier === cur.tier && next.comment_autopost === cur.comment_autopost;
+  if (same) return { next: d, changed: false, audit: audit({ ...next, noop: true }) };
+  d.syndication.news_engagement = {
+    enabled: next.enabled,
+    open_threshold: next.open_threshold,
+    tier: next.tier,
+    comment_autopost: next.comment_autopost,
+  };
+  return { next: d, changed: true, audit: audit({ ...next }) };
 }
 
 /** SET (or clear, with an empty string) the Discord template for one content type. Idempotent. */
