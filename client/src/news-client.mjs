@@ -86,3 +86,16 @@ export async function workerNewsDiscussed({ token, signupBase, fetch = globalThi
   if (!res.ok) throw new NewsClientError('could not reflect the discussion (' + res.status + ')');
   return res.json();
 }
+
+// SOW-111: the news detail-open engagement beacon. Best-effort: a caller outside the configured tier, a
+// disabled config, or an unposted/unmapped item is a clean { counted:false } no-op server-side; only auth and
+// transport failures throw (the reader swallows them; an open must never surface an error).
+export async function workerNewsOpened({ token, signupBase, fetch = globalThis.fetch, guid, source } = {}) {
+  if (!token || !signupBase) throw new NewsClientError('not signed in');
+  const g = String(guid || '').trim();
+  if (!g) throw new NewsClientError('a news item is required');
+  const res = await fetch(`${base(signupBase)}/membership/news-opened`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ guid: g, ...(source ? { source: String(source) } : {}) }) });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError('not signed in');
+  if (!res.ok) throw new NewsClientError('could not record the open (' + res.status + ')');
+  return res.json();
+}

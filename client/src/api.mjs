@@ -44,7 +44,7 @@ import {
   getPrefs,
   setPrefs,
   publishNews,
-  reflectNewsDiscussion,
+  reflectNewsDiscussion, recordNewsOpen,
   getOnboardingStatus,
   getOverridesRoster,
   getOpenPulls,
@@ -148,6 +148,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/prefs') return run(() => setPrefs(ctx, body)); // SOW-046: set categories / follow a channel
   if (method === 'POST' && pathname === '/api/news-publish') return run(() => publishNews(ctx, body ?? {})); // SOW-046 C: curator -> Discord
   if (method === 'POST' && pathname === '/api/news-discussed') return run(() => reflectNewsDiscussion(ctx, body ?? {})); // SOW-046 D: reflect discussion onto Discord
+  if (method === 'POST' && pathname === '/api/news-opened') return run(() => recordNewsOpen(ctx, body ?? {})); // SOW-111: the detail-open beacon
   if (method === 'GET' && pathname === '/api/onboarding-status') return run(() => getOnboardingStatus(ctx)); // SOW-026
   if (method === 'GET' && pathname === '/api/prs') return run(() => listPRs(ctx));
   if (method === 'GET' && pathname === '/api/pr-status') return run(() => prStatus(ctx, { number: query.number }));

@@ -74,6 +74,9 @@ class GbtiNewsReader extends GbtiElement {
     this._followed = null;
     this.render();
     if (!item || !this.client) return;
+    // SOW-111: the detail-open engagement beacon (fire-and-forget; the Worker answers a clean no-op for an
+    // out-of-tier caller or a disabled config, so an open never surfaces an error).
+    if (item.guid && this.client.newsOpened) Promise.resolve(this.client.newsOpened(item.guid, item.source)).catch(() => {});
     // Enrich: the curator capability (UI hint), the publisher record (description + count), and the follow state.
     // Each is best-effort — the title/summary/favicon already render without them.
     try {

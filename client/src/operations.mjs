@@ -22,7 +22,7 @@ import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsCl
 import { upvote as workerUpvote, UpvoteClientError } from './member-upvote-client.mjs'; // SOW-057
 import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.mjs'; // SOW-057
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
-import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, NewsClientError } from './news-client.mjs'; // SOW-043/046: members-only news proxy + prefs + curator publish + discussion reflect
+import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, NewsClientError } from './news-client.mjs'; // SOW-043/046: members-only news proxy + prefs + curator publish + discussion reflect
 import { probeReadiness } from './github-app-probe.mjs';
 import {
   nextStep as onboardingNextStep, STEPS as ONBOARDING_STEPS, forkFullName,
@@ -960,6 +960,19 @@ export async function reflectNewsDiscussion(ctx, { guid } = {}) {
     if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', 'Sign in first.');
     if (err instanceof NewsClientError && /paid membership/i.test(err.message)) throw new OperationError('membership-required', 'News discussion is a members-only perk.');
     throw new OperationError('news-failed', err?.message || 'could not reflect the discussion');
+  }
+}
+
+// SOW-111: best-effort record of a news detail-open (the engagement beacon). Fire-and-forget from the reader;
+// the Worker answers { counted:false } for out-of-tier or disabled config, so only auth/transport errors reach
+// here and the reader swallows them (an open must never surface an error).
+export async function recordNewsOpen(ctx, { guid, source } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  try { return await workerNewsOpened({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, guid, source }); }
+  catch (err) {
+    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError('not-authenticated', 'Sign in first.');
+    throw new OperationError('news-failed', err?.message || 'could not record the open');
   }
 }
 
