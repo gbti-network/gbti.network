@@ -41,6 +41,16 @@ const SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LIN
 // SOW-062 P6: keys rendered in a DOCUMENT-CANVAS section (not the rail) for a given type, so they are excluded from
 // the preserved-hidden block to avoid a duplicate [data-key]. `video` -> the product Video section.
 const DOC_SECTION_KEYS = { product: new Set(['video']) };
+// SOW-062 P6 rail-2: the stat tiles (hi-fi rail footer). Discussions is live now (client.listComments count); the
+// rest are wired to an optional client.itemStats() that a later backend phase provides -- until then they show a
+// pending dash. Order matches the mockup.
+const STAT_DEFS = [
+  { key: 'revisions', label: 'Live revisions' },
+  { key: 'forkRevisions', label: 'Draft revisions' },
+  { key: 'contributions', label: 'Contributions' },
+  { key: 'referrals', label: 'Referrals' },
+  { key: 'discussions', label: 'Discussions' },
+];
 const TYPE_LABEL = { post: 'Article', product: 'Product', prompt: 'Prompt', profile: 'Profile' };
 const CONTENT_REPO = 'gbti-network/gbti.network'; // SOW-062 P6: resolve a repo-relative cover to a jsDelivr preview URL
 
@@ -231,6 +241,13 @@ class GbtiContentEditor extends GbtiElement {
                <gbti-discussion data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion>
              </section>` : '';
     const docSections = videoSection + authorSection + discussionSection;
+    // SOW-062 P6 rail-2: the stat tiles footer, shown for a published post/product/prompt (in the rail).
+    const showStats = isPub && slug && ['post', 'product', 'prompt'].includes(this.type);
+    const railFootHtml = showStats ? `
+             <div class="rail-foot">
+               <div class="rail-stats">${STAT_DEFS.map((s) => `<div class="rstat"><span class="rs-n" data-statn="${s.key}">${s.key === 'discussions' ? '…' : '—'}</span><span class="rs-l">${esc(s.label)}</span></div>`).join('')}</div>
+               <p class="rail-foot-note">Live once published. Revisions, contributions, and referrals arrive with the stats backend.</p>
+             </div>` : '';
     this.set(
       this.css(EDITOR_SURFACE + `
         :host { display:block; background:var(--s-app); color:var(--s-fg); font-family:var(--font-body); container-type:inline-size; }
@@ -342,6 +359,13 @@ class GbtiContentEditor extends GbtiElement {
         .lr-vis button { font:inherit; font-size:10.5px; font-weight:600; padding:5px 9px; border:0; background:transparent; color:var(--s-fg-soft); border-radius:6px; cursor:pointer; }
         .lr-vis button.on { background:var(--s-fg); color:var(--s-canvas); }
         .addrow { font-size:13px; padding:8px 12px; align-self:flex-start; }
+        /* SOW-062 P6 rail-2: the stat tiles footer (Discussions live; the rest pending their backend) */
+        .rail-foot { margin-top:6px; padding:16px 2px 4px; border-top:1.5px solid var(--s-line); }
+        .rail-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+        .rstat { display:flex; flex-direction:column; align-items:center; gap:3px; padding:12px 6px; border:1.5px solid var(--s-line); border-radius:8px; background:var(--s-surface); }
+        .rstat .rs-n { font-family:var(--font-display); font-weight:800; font-size:22px; line-height:1; color:var(--s-fg); }
+        .rstat .rs-l { font-size:10.5px; font-weight:600; color:var(--s-fg-mute); text-align:center; line-height:1.25; }
+        .rail-foot-note { font-size:11.5px; line-height:1.45; color:var(--s-fg-mute); margin-top:10px; text-align:center; }
         /* SOW-062 P6: markdown cheatsheet modal (ported from gbti-editor.css .mdRefModal onto the component tokens) */
         .mdRefModal { position:fixed; inset:0; z-index:1200; display:none; }
         .mdRefModal.show { display:block; }
@@ -415,6 +439,7 @@ class GbtiContentEditor extends GbtiElement {
            <aside class="rail">
              <details open class="rsec"><summary><span class="st"><span class="si">${DOC}</span>Type</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><div class="urlprev" style="color:var(--s-fg-soft)">This is a <b>${esc(this.typeLabel())}</b>. Type is set at creation and can't be changed here.</div></div></div></details>
              ${sectionsHtml}
+             ${railFootHtml}
            </aside>
          </div>
          <div class="mdRefModal" id="mdrefmodal">
@@ -449,6 +474,15 @@ class GbtiContentEditor extends GbtiElement {
         const ta = this.$('#authornote');
         if (ta && !ta.value && c?.body) ta.value = c.body;
       }).catch(() => {});
+    }
+    // SOW-062 P6 rail-2: fill the Discussions stat tile from the live comment count; fill the rest from an optional
+    // client.itemStats() once a later backend phase provides it (until then they stay a pending dash).
+    if (showStats) {
+      const setStat = (key, n) => { const el = this.$(`[data-statn="${key}"]`); if (el && n != null) el.textContent = String(n); };
+      this.client?.listComments?.({ targetType: this.type, targetSlug: slug })
+        .then((res) => setStat('discussions', (res?.items || []).length)).catch(() => setStat('discussions', 0));
+      this.client?.itemStats?.({ type: this.type, slug, path: this.itemPath })
+        .then((st) => { if (st) STAT_DEFS.forEach((s) => setStat(s.key, st[s.key])); }).catch(() => {});
     }
 
     // SOW-062 P3: the rich cover-image control(s) — preview + Choose/Replace/Remove (the kind:'image' field).
