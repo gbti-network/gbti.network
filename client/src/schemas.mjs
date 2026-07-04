@@ -190,6 +190,7 @@ export const shareSchema = z.object({
   shortDescription: z.string().max(200).optional(), // SOW-032: optional one-line blurb (mirrors src/content.config.ts)
   url: z.string().url().optional(),
   image: z.string().optional(), // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
+  category: z.string().optional(), // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post
   tags: z.array(z.string()).default([]),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date().optional(),

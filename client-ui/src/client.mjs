@@ -82,6 +82,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     setPrefs: (patch) => request('POST', '/api/prefs', patch), // SOW-046: { categories } or { followChannel: { id, on } } -> { categories, followedChannels }
     publishNews: (item) => request('POST', '/api/news-publish', { item }), // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
     newsDiscussed: (guid) => request('POST', '/api/news-discussed', { guid }), // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
+    newsOpened: (guid, source) => request('POST', '/api/news-opened', { guid, ...(source ? { source } : {}) }), // SOW-111: the detail-open engagement beacon -> { ok, counted, posted }
     postComment: (b) => request('POST', '/api/comment', b), // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
     editComment: (b) => request('POST', '/api/comment/edit', b), // SOW-027: { id, body, authorNote? } -> { id, edited }
     getComment: ({ id }) => request('GET', `/api/comment${qs({ id })}`), // SOW-027: edit prefill -> { path, frontmatter, body }
@@ -138,6 +139,16 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     removeNewsSource: ({ id }) => request('POST', '/api/admin', { action: 'news-source-remove', id }), // SOW-056 P2
     setNewsSourceEnabled: ({ id, enabled }) => request('POST', '/api/admin', { action: 'news-source-toggle', id, enabled }), // SOW-056 P2
     quotePool: () => request('GET', '/api/quote-pool'), // SOW-063 P3: the splash quote pool { quotes } for the manager
+    contentChannelPool: () => request('GET', '/api/content-channel-pool'), // SOW-087: the category -> Discord-channel map { channels }
+    setContentChannel: ({ category, channelId }) => request('POST', '/api/admin', { action: 'content-channel-set', category, channelId }), // SOW-087
+    removeContentChannel: ({ category }) => request('POST', '/api/admin', { action: 'content-channel-remove', category }), // SOW-087
+    moderationFlagPool: () => request('GET', '/api/moderation-flag-pool'), // SOW-087: the moderation word lists { lists }
+    addModerationFlagTerm: ({ list, term }) => request('POST', '/api/admin', { action: 'flag-term-add', list, term }), // SOW-087
+    removeModerationFlagTerm: ({ list, term }) => request('POST', '/api/admin', { action: 'flag-term-remove', list, term }), // SOW-087
+    syndicationTemplatePool: () => request('GET', '/api/syndication-template-pool'), // SOW-087: { templates, types }
+    setSyndicationTemplate: ({ type, template }) => request('POST', '/api/admin', { action: 'syndication-template-set', type, template }), // SOW-087
+    newsEngagementSettings: () => request('GET', '/api/news-engagement'), // SOW-111: { settings, tiers }
+    setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request('POST', '/api/admin', { action: 'news-engagement-set', enabled, openThreshold, tier, commentAutopost }), // SOW-111
     addQuote: ({ text, author }) => request('POST', '/api/admin', { action: 'quote-add', text, author }), // SOW-063 P3
     removeQuote: ({ text }) => request('POST', '/api/admin', { action: 'quote-remove', text }), // SOW-063 P3
     setQuoteEnabled: ({ text, enabled }) => request('POST', '/api/admin', { action: 'quote-toggle', text, enabled }), // SOW-063 P3

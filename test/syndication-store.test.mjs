@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  enqueue, getItem, listPending, listDue, listAll, removeFromPending, readSyndicationConfig,
+  enqueue, getItem, listPending, listDue, listAll, removeFromPending, readSyndicationConfig, readContentChannels,
   SYND_ITEM_KEY, SYND_CONFIG_KEY,
 } from '../workers/signup/syndication-store.mjs';
 
@@ -71,4 +71,17 @@ test('listAll returns items of any status via the prefix list', async () => {
   await enqueue({ SIGNUP_KV: kv }, { source: 'share', targetSlug: 'a/x' }, { kv, now: at(0) });
   await enqueue({ SIGNUP_KV: kv }, { source: 'share', targetSlug: 'b/y' }, { kv, now: at(1) });
   assert.equal((await listAll(kv)).length, 2);
+});
+
+// SOW-087: the synd:channels mirror reader (fail-closed to null).
+test('readContentChannels returns the mirrored map, and null when missing/malformed/broken', async () => {
+  const good = fakeKV({ 'synd:channels': JSON.stringify({ generatedAt: 'T0', channels: [{ category: 'ai', channelId: '5' }] }) });
+  assert.deepEqual((await readContentChannels(good)).channels, [{ category: 'ai', channelId: '5' }]);
+  const missing = fakeKV();
+  assert.equal(await readContentChannels(missing), null);
+  const malformed = fakeKV({ 'synd:channels': JSON.stringify({ nope: true }) });
+  assert.equal(await readContentChannels(malformed), null);
+  const broken = { get: async () => { throw new Error('kv down'); } };
+  assert.equal(await readContentChannels(broken), null);
+  assert.equal(await readContentChannels(null), null);
 });

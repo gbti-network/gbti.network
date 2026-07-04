@@ -9,8 +9,13 @@
 // is structurally incapable of copying a body field; the leak-guard test asserts this).
 //
 // Shape (synd:item:<id>):
-//   { id, source, targetType, targetSlug, author, title, blurb, url, image, visibility, membersOnly, mention,
-//     trigger, enqueuedAt, availableAt, status, claimedAt, perChannel, sentAt, failedAt, cancelledAt, cancelledBy }
+//   { id, source, targetType, targetSlug, author, authorName, title, blurb, url, image, category, visibility,
+//     membersOnly, mention, flags, trigger, enqueuedAt, availableAt, status, claimedAt, perChannel, sentAt,
+//     failedAt, cancelledAt, cancelledBy }
+//
+// SOW-087: `category` (one flat topic key for a share, or the top-level taxonomy key for content) routes the
+// second, category-channel Discord post; `authorName` (the profile displayName) feeds the no-ping template;
+// `flags` (moderation word-list hits, membership/moderation-flags.mjs) forces superadmin approval in isDue.
 
 export const QUEUE_TYPES = new Set(['share', 'post', 'product', 'prompt']);
 // SOW-058 (approval model): 'pending' = enqueued, AWAITING superadmin approval (never posts on its own);
@@ -27,6 +32,19 @@ const str = (v) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 const trimOrNull = (v) => {
   const s = str(v).trim();
   return s === '' ? null : s;
+};
+// SOW-087: moderation flag names — clean, deduped strings (order preserved; flagText already sorts).
+const normFlags = (v) => {
+  if (!Array.isArray(v)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const f of v) {
+    const s = str(f).trim();
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
 };
 
 /** The idempotency key for an item: one logical thing being syndicated maps to exactly one key. */
@@ -55,13 +73,16 @@ export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HO
     targetType: str(input.targetType) || source,
     targetSlug,
     author: trimOrNull(input.author),
+    authorName: trimOrNull(input.authorName), // SOW-087: the profile displayName for the no-ping template
     title: trimOrNull(input.title),
     blurb: trimOrNull(input.blurb),
     url: trimOrNull(input.url),
     image: trimOrNull(input.image),
+    category: trimOrNull(input.category), // SOW-087: routes the category-channel Discord post
     visibility,
     membersOnly: visibility === 'members',
     mention: trimOrNull(input.mention),
+    flags: normFlags(input.flags), // SOW-087: moderation word-list hits; non-empty forces approval
     trigger: trimOrNull(input.trigger) || 'publish',
     enqueuedAt,
     availableAt: enqueuedAt + hold,
@@ -99,13 +120,16 @@ export function normalizeItem(raw) {
     targetType: str(raw.targetType) || source,
     targetSlug,
     author: trimOrNull(raw.author),
+    authorName: trimOrNull(raw.authorName),
     title: trimOrNull(raw.title),
     blurb: trimOrNull(raw.blurb),
     url: trimOrNull(raw.url),
     image: trimOrNull(raw.image),
+    category: trimOrNull(raw.category),
     visibility,
     membersOnly: visibility === 'members',
     mention: trimOrNull(raw.mention),
+    flags: normFlags(raw.flags),
     trigger: trimOrNull(raw.trigger) || 'publish',
     enqueuedAt: num(raw.enqueuedAt) ?? 0,
     availableAt: num(raw.availableAt) ?? 0,
@@ -129,6 +153,8 @@ export function normalizeItem(raw) {
  */
 export function isDue(item, now = Date.now(), { requireApproval = false } = {}) {
   if (!item) return false;
+  // SOW-087: a moderation-flagged item ALWAYS waits for a superadmin, even when require_approval is off.
+  if (Array.isArray(item.flags) && item.flags.length) return item.status === 'approved';
   if (requireApproval) return item.status === 'approved';
   return item.status === 'pending' && Number(now) >= Number(item.availableAt);
 }

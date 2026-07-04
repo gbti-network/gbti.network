@@ -6,18 +6,18 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, saveDraft, listDrafts, readDraft, discardDraft, publishDraft, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, listComments } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, saveDraft, listDrafts, readDraft, discardDraft, publishDraft, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, recordNewsOpen, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, listComments } from '../../client/src/operations.mjs';
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from '../../client/src/roles.mjs';
-import { banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent, getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, addNewsSource, removeNewsSource, setNewsSourceEnabled, getQuotePool, addQuote, removeQuote, setQuoteEnabled } from '../../client/src/admin-ops.mjs';
+import { banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent, getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, addNewsSource, removeNewsSource, setNewsSourceEnabled, getQuotePool, addQuote, removeQuote, setQuoteEnabled, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, getNewsEngagementSettings, setNewsEngagementSettings } from '../../client/src/admin-ops.mjs';
 import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates; SOW-082: draft staging
 
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
 // host-portable / async-safe) and commits via the repo client; capability is UX-gated here while the SOW-005
 // gate + CODEOWNERS stay the real boundary (an extension can no more merge a forbidden PR than the npm host can).
-const ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, 'category-add': addContentCategory, 'category-rename': renameContentCategoryLabel, 'news-source-add': addNewsSource, 'news-source-remove': removeNewsSource, 'news-source-toggle': setNewsSourceEnabled, 'quote-add': addQuote, 'quote-remove': removeQuote, 'quote-toggle': setQuoteEnabled };
+const ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, 'category-add': addContentCategory, 'category-rename': renameContentCategoryLabel, 'news-source-add': addNewsSource, 'news-source-remove': removeNewsSource, 'news-source-toggle': setNewsSourceEnabled, 'quote-add': addQuote, 'quote-remove': removeQuote, 'quote-toggle': setQuoteEnabled, 'content-channel-set': setContentChannel, 'content-channel-remove': removeContentChannel, 'flag-term-add': addModerationFlagTerm, 'flag-term-remove': removeModerationFlagTerm, 'syndication-template-set': setSyndicationTemplate, 'news-engagement-set': setNewsEngagementSettings };
 
 const CODE_STATUS = Object.freeze({
   'no-identity': 409,
@@ -94,6 +94,11 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
     if (pathname === '/api/taxonomy') return ok(await getTaxonomy(ctx));
     if (pathname === '/api/news-source-pool') return ok(await getNewsSourcePool(ctx));
     if (pathname === '/api/quote-pool') return ok(await getQuotePool(ctx));
+    // SOW-087: the channel-map / moderation-flag / template pools are public git data (display reads).
+    if (pathname === '/api/content-channel-pool') return ok(await getContentChannelPool(ctx));
+    if (pathname === '/api/moderation-flag-pool') return ok(await getModerationFlagPool(ctx));
+    if (pathname === '/api/syndication-template-pool') return ok(await getSyndicationTemplatePool(ctx));
+    if (pathname === '/api/news-engagement') return ok(await getNewsEngagementSettings(ctx));
 
     const username = id?.username;
     if (!username) throw new OperationError('no-identity', 'no signed-in identity; sign in first');

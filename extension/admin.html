@@ -49,6 +49,7 @@
         <button class="admin-tab" type="button" data-tab="news">News sources</button>
         <button class="admin-tab" type="button" data-tab="quotes">Quotes</button>
         <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
+        <button class="admin-tab" type="button" data-tab="channels">Channels</button>
       </div>
       <div class="admin-col">
         <section class="admin-card on" data-panel="members">
@@ -80,6 +81,10 @@
           <div class="admin-card-b">
             <div class="admin-sub"><gbti-syndication-tracker></gbti-syndication-tracker></div>
           </div>
+        </section>
+        <section class="admin-card" data-panel="channels">
+          <div class="admin-card-h"><h2>Channels</h2><p>The category to Discord-channel map, the Discord post templates, and the moderation word lists. Edits open a house PR.</p></div>
+          <div class="admin-card-b"><div class="admin-sub"><gbti-channel-map-manager></gbti-channel-map-manager></div></div>
         </section>
       </div>
     </main>

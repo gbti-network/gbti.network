@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  deleteKvKey, eraseActivity, eraseFollows, eraseLookupCache, eraseShareVotes, planErasure, runErasure,
+  deleteKvKey, eraseActivity, eraseFollows, eraseLookupCache, eraseShareVotes, eraseNewsOpens, planErasure, runErasure,
   eraseDiscordRoles, eraseContent, eraseStripeCustomer, ACTIVITY_KEY, FOLLOWS_KEY, LOOKUP_KEY, MEMBERS_INDEX_PATH,
 } from '../scripts/lib/erase-member.mjs';
 import { parseArgs } from '../scripts/erase-member.mjs';
@@ -258,4 +258,35 @@ test('CLI parseArgs: dry-run default, --apply opt-in, --delete-stripe + --operat
   assert.equal(parseArgs(['--github-id', '5', '--apply', '--delete-stripe']).deleteStripe, true);
   assert.equal(parseArgs(['--github-id', '5', '--operator', 'hudson']).operator, 'hudson');
   assert.equal(parseArgs([]).githubId, null);
+});
+
+// SOW-111: the per-item news detail-open sets join the erasure sweep.
+test('eraseNewsOpens scrubs the id from every news-opens:* set (and only writes changed sets)', async () => {
+  const puts = [];
+  const fetchImpl = async (url, init) => {
+    if (url.includes('/keys')) {
+      return { ok: true, json: async () => ({ result: [{ name: 'news-opens:g1' }, { name: 'news-opens:g2' }], result_info: { cursor: '' } }) };
+    }
+    if ((init?.method || 'GET') === 'GET' && url.includes('/values/')) {
+      const key = decodeURIComponent(url.split('/values/')[1]);
+      const store = {
+        'news-opens:g1': { openers: ['42', '7'], postedAt: null, updatedAt: 1 },
+        'news-opens:g2': { openers: ['7'], postedAt: 5, updatedAt: 1 }, // does not include 42 -> unchanged
+      };
+      return { ok: true, json: async () => store[key] };
+    }
+    if (init?.method === 'PUT') { puts.push({ url, body: JSON.parse(init.body) }); return { ok: true }; }
+    return { ok: true };
+  };
+  const r = await eraseNewsOpens({ githubId: '42', env: CF, fetchImpl });
+  assert.equal(r.scrubbed, 1); // only g1 contained '42'
+  assert.equal(puts.length, 1);
+  assert.deepEqual(puts[0].body.openers, ['7']);
+});
+
+test('planErasure includes the news-opens auto step', () => {
+  const plan = planErasure({ githubId: '42', username: 'alice' });
+  const step = plan.find((s) => s.step === 'news-opens');
+  assert.ok(step);
+  assert.equal(step.auto, true);
 });

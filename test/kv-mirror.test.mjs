@@ -3,7 +3,10 @@
 // API error throws (so the reconcile fails the run). Injected fetch: no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildOverridesMirror, mirrorOverridesToKv, OVERRIDES_KV_KEY, mirrorSyndicationConfigToKv } from '../scripts/lib/kv-mirror.mjs';
+import {
+  buildOverridesMirror, mirrorOverridesToKv, OVERRIDES_KV_KEY, mirrorSyndicationConfigToKv,
+  buildContentChannelsMirror, mirrorContentChannelsToKv, mirrorTopicsToKv, CONTENT_CHANNELS_KV_KEY, TOPICS_KV_KEY,
+} from '../scripts/lib/kv-mirror.mjs';
 
 const raw = { roles: { admins: [{ github_id: '4' }] }, bans: { bans: [{ github_id: '7' }] }, grandfathered: { grandfathered: [] } };
 const NOW = new Date('2026-06-06T00:00:00Z');
@@ -71,4 +74,34 @@ test('mirrorSyndicationConfigToKv PUTs the normalized config (incl require_appro
 
 test('OVERRIDES_KV_KEY matches the Worker endpoint key', () => {
   assert.equal(OVERRIDES_KV_KEY, 'overrides:mirror');
+});
+
+// ---- SOW-087: the content-channels + topics mirrors ----
+
+test('buildContentChannelsMirror wraps the channels list with a generatedAt stamp', () => {
+  const m = buildContentChannelsMirror({ channels: [{ category: 'devops', channelId: '7' }] }, new Date('2026-07-04T00:00:00Z'));
+  assert.deepEqual(m, { generatedAt: '2026-07-04T00:00:00.000Z', channels: [{ category: 'devops', channelId: '7' }] });
+  assert.deepEqual(buildContentChannelsMirror(null).channels, []);
+});
+
+test('mirrorContentChannelsToKv PUTs to synd:channels; mirrorTopicsToKv PUTs the clean vocabulary to topics:vocab', async () => {
+  const puts = [];
+  const fetchImpl = async (url, opts) => { puts.push({ url, body: opts.body }); return { ok: true }; };
+  const env = { CF_ACCOUNT_ID: 'a', CF_KV_NAMESPACE_ID: 'n', CF_API_TOKEN: 't' };
+  const r1 = await mirrorContentChannelsToKv({ raw: { channels: [{ category: 'ai', channelId: '5' }] }, env, fetchImpl });
+  assert.equal(r1.written, true);
+  assert.equal(r1.key, CONTENT_CHANNELS_KV_KEY);
+  assert.ok(puts[0].url.includes(encodeURIComponent('synd:channels')));
+  assert.deepEqual(JSON.parse(puts[0].body).channels, [{ category: 'ai', channelId: '5' }]);
+  const r2 = await mirrorTopicsToKv({ raw: { topics: { ai: { label: 'AI' } } }, env, fetchImpl });
+  assert.equal(r2.written, true);
+  assert.equal(r2.key, TOPICS_KV_KEY);
+  assert.deepEqual(JSON.parse(puts[1].body).topics, { ai: { label: 'AI' } });
+});
+
+test('the SOW-087 mirrors are creds-gated no-ops without CF credentials', async () => {
+  const r1 = await mirrorContentChannelsToKv({ raw: { channels: [] }, env: {}, fetchImpl: async () => { throw new Error('never'); } });
+  assert.equal(r1.written, false);
+  const r2 = await mirrorTopicsToKv({ raw: {}, env: {}, fetchImpl: async () => { throw new Error('never'); } });
+  assert.equal(r2.written, false);
 });

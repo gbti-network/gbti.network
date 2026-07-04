@@ -26,7 +26,7 @@ test('scrapeOgPreview returns image + title + description with fallbacks', () =>
       <title>doc title</title>
     </head>`;
   assert.deepEqual(scrapeOgPreview(html, 'https://ex.com/a'), {
-    image: 'https://cdn.ex.com/og.jpg', title: 'The headline', description: 'why it matters',
+    image: 'https://cdn.ex.com/og.jpg', title: 'The headline', description: 'why it matters', tags: [],
   });
 });
 
@@ -40,5 +40,27 @@ test('scrapeOgPreview falls back to <title> and meta description, and decodes en
 
 test('scrapeOgPreview never throws on garbage', () => {
   assert.doesNotThrow(() => scrapeOgPreview(null));
-  assert.deepEqual(scrapeOgPreview(''), { image: '', title: '', description: '' });
+  assert.deepEqual(scrapeOgPreview(''), { image: '', title: '', description: '', tags: [] });
+});
+
+// SOW-087: the declared keyword/tag hints feed the share category suggestion.
+test('scrapeOgPreview collects article:tag + comma-split keywords, deduped and capped', () => {
+  const html = `
+    <head>
+      <meta property="article:tag" content="DevOps">
+      <meta property="article:tag" content="Kubernetes">
+      <meta property="article:tag" content="devops">
+      <meta name="keywords" content="cloud, DevOps , observability,">
+      <meta name="news_keywords" content="platform engineering">
+    </head>`;
+  const p = scrapeOgPreview(html, 'https://ex.com');
+  assert.deepEqual(p.tags, ['DevOps', 'Kubernetes', 'cloud', 'observability', 'platform engineering']);
+});
+
+test('scrapeOgPreview drops over-long tags and stops at the tag cap', () => {
+  const many = Array.from({ length: 20 }, (_, i) => `<meta property="article:tag" content="tag-${i}">`).join('');
+  const long = `<meta property="article:tag" content="${'x'.repeat(60)}">`;
+  const p = scrapeOgPreview(`<head>${long}${many}</head>`, 'https://ex.com');
+  assert.equal(p.tags.length, 12); // MAX_TAGS
+  assert.ok(!p.tags.some((t) => t.length > 48));
 });

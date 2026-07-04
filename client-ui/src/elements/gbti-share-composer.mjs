@@ -9,8 +9,10 @@
 // The host holds the GitHub token; this element only calls the injected client.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
+import { topicsFromJson } from '../topic-picker-core.mjs'; // SOW-087: the flat topic vocabulary for the category select
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
+const SITE = 'https://gbti.network';
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -103,7 +105,10 @@ class GbtiShareComposer extends GbtiElement {
         <textarea placeholder="What are you reading, building, or finding?" maxlength="4000"></textarea>
         <div class="row">
           <input type="url" placeholder="https://… (optional link)" />
-          <select aria-label="Visibility">
+          <select class="cat" aria-label="Category">
+            <option value="">Category (optional)</option>
+          </select>
+          <select class="vis" aria-label="Visibility">
             <option value="members">Members only</option>
             <option value="public">Public</option>
           </select>
@@ -115,9 +120,37 @@ class GbtiShareComposer extends GbtiElement {
         </div>
       </div>`);
     this._image = null;
+    this._suggested = null; // SOW-087: the Worker's category suggestion, applied once topics are loaded
     this.on('.post', 'click', () => this._post());
     // SOW-057: fetch the link's OpenGraph preview on blur/enter so we can attach a featured image + soft-prefill.
     this.on('input[type=url]', 'change', () => this._fetchPreview());
+    this._loadTopics();
+  }
+
+  // SOW-087: populate the category select from the public topic vocabulary (/topics.json). The vocabulary is
+  // static per session, so it is fetched once and reused across re-renders. A fetch failure leaves the select
+  // with only the empty option (category stays optional).
+  async _loadTopics() {
+    if (!this._topics) {
+      try {
+        const r = await fetch(`${SITE}/topics.json`, { cache: 'no-cache' });
+        this._topics = topicsFromJson(await r.json());
+      } catch {
+        this._topics = [];
+      }
+    }
+    const sel = this.$('select.cat');
+    if (!sel) return;
+    sel.innerHTML = `<option value="">Category (optional)</option>` +
+      this._topics.map((t) => `<option value="${esc(t.key)}">${esc(t.label)}</option>`).join('');
+    this._applySuggested();
+  }
+
+  // Pre-select the Worker's suggestion, but NEVER clobber an author's own pick.
+  _applySuggested() {
+    const sel = this.$('select.cat');
+    if (!sel || !this._suggested || sel.value) return;
+    if ([...sel.options].some((o) => o.value === this._suggested)) sel.value = this._suggested;
   }
 
   // Fetch the link preview server-side (the Worker is SSRF-guarded). Updates ONLY the preview area + soft-prefills
@@ -133,6 +166,9 @@ class GbtiShareComposer extends GbtiElement {
       const og = await this.client.ogPreview({ url });
       const t = this.$('input.title'); if (t && !t.value.trim() && og?.title) t.value = String(og.title).slice(0, 80);
       const d = this.$('input.desc'); if (d && !d.value.trim() && og?.description) d.value = String(og.description).slice(0, 200);
+      // SOW-087: soft-prefill the category from the Worker's suggestion (the author can always override).
+      this._suggested = og?.suggestedCategory || null;
+      this._applySuggested();
       this._image = og?.image || null;
       if (this._image) {
         box.innerHTML = `<img class="ogimg" src="${esc(this._image)}" alt="" /><button class="ogclear" type="button" data-ogclear>Remove image</button>`;
@@ -148,7 +184,8 @@ class GbtiShareComposer extends GbtiElement {
     const shortDescription = (this.$('input.desc')?.value || '').trim();
     const body = (this.$('textarea')?.value || '').trim();
     const url = (this.$('input[type=url]')?.value || '').trim();
-    const visibility = this.$('select')?.value || 'members';
+    const visibility = this.$('select.vis')?.value || 'members';
+    const category = this.$('select.cat')?.value || ''; // SOW-087: the optional topic category
     const msg = this.$('.msg');
     if (!body && !url && !title) { this._say(msg, 'Add a title, a note, or a link first.', 'err'); return; }
     card?.classList.add('busy');
@@ -157,11 +194,14 @@ class GbtiShareComposer extends GbtiElement {
       if (title) input.title = title;
       if (shortDescription) input.shortDescription = shortDescription;
       if (url) input.url = url;
+      if (category) input.category = category; // SOW-087: routes the share's category Discord post
       if (this._image) input.image = this._image; // SOW-057: the featured image (OG-fetched, author-clearable)
       const res = await this.client.postShare({ input, body });
       this._say(msg, submitAck({ prNumber: res?.prNumber, autoMerge: true }), 'ok'); // SOW-072 P2: consistent ack
       for (const sel of ['input.title', 'input.desc', 'textarea', 'input[type=url]']) { const el = this.$(sel); if (el) el.value = ''; }
+      const cat = this.$('select.cat'); if (cat) cat.value = '';
       this._image = null;
+      this._suggested = null;
       const ogBox = this.$('[data-og]'); if (ogBox) { ogBox.hidden = true; ogBox.innerHTML = ''; }
       this.emit('gbti-share-posted', res);
     } catch (err) {

@@ -7,6 +7,7 @@
 // Per-channel character caps for the formatted message body. Conservative; the adapter truncates to this.
 export const CHANNEL_LIMITS = Object.freeze({
   discord: 2000,
+  'discord-category': 2000, // SOW-087: the category-channel Discord post
   x: 280,
   linkedin: 3000,
   mastodon: 500,
@@ -17,6 +18,7 @@ export const CHANNEL_LIMITS = Object.freeze({
 // channel id is resolved separately at post time). The social channels need their brand-account credentials.
 export const CHANNEL_SECRET_KEYS = Object.freeze({
   discord: ['DISCORD_BOT_TOKEN'],
+  'discord-category': ['DISCORD_BOT_TOKEN'], // SOW-087: the same bot posts the category-channel copy
   x: ['X_API_KEY', 'X_API_SECRET', 'X_ACCESS_TOKEN', 'X_ACCESS_SECRET'],
   linkedin: ['LINKEDIN_ACCESS_TOKEN', 'LINKEDIN_ORG_URN'],
   mastodon: ['MASTODON_BASE_URL', 'MASTODON_ACCESS_TOKEN'],

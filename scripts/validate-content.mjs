@@ -30,6 +30,16 @@ const TAXONOMY = (() => {
   }
 })();
 
+// SOW-087: the flat topic vocabulary (house/topics.yml). A share's optional `category` must be one of these
+// keys so the category -> Discord-channel map can resolve it.
+const TOPIC_KEYS = (() => {
+  try {
+    return new Set(topicVocabKeys(yaml.load(fs.readFileSync(path.join(ROOT, 'house/topics.yml'), 'utf8'))));
+  } catch {
+    return new Set();
+  }
+})();
+
 function validCategoryPath(arr) {
   if (!Array.isArray(arr) || arr.length === 0) return true; // uncategorized is allowed
   let level = TAXONOMY;
@@ -152,6 +162,11 @@ function checkContent(file, owner, type) {
     // already enforces author === folder owner.
     const fmc = frontmatter(txt) || {};
     checkMemberGating(fmc, rel, bodyOf(txt));
+    // SOW-087: a share's optional `category` is ONE flat topic key (house/topics.yml), not a taxonomy path; it
+    // routes the share's category Discord post, so an unknown key would silently never route.
+    if (type === 'share' && fmc.category != null && !TOPIC_KEYS.has(String(fmc.category))) {
+      errors.push(`${rel}: share category "${fmc.category}" is not a topic key in house/topics.yml (SOW-087)`);
+    }
     // SOW-032: a share comment is identified by the composite "<author>/<shareId>" targetSlug (a Share id is a
     // member-scoped timestamp-slug, not globally unique), so it stays unambiguous across members. The shareId stamp
     // is VARIABLE length: shareId() slices the createdAt digits to 14, so a date-only createdAt yields an 8-digit
@@ -357,6 +372,19 @@ function validateNewsChannelsConfig() {
   for (const err of validateNewsChannels(parsed)) errors.push(err);
 }
 validateNewsChannelsConfig();
+
+// SOW-087: the content/share category -> Discord channel map (house/content-channels.yml). The same shape and
+// rules as the news map (a list of { category, numeric channelId }, no duplicate category), validated by the
+// same pure core with the file label swapped.
+function validateContentChannelsConfig() {
+  const rel = 'house/content-channels.yml';
+  if (!has(path.join(ROOT, rel))) return; // optional config
+  let parsed;
+  try { parsed = yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')); }
+  catch { errors.push(`${rel}: not valid YAML`); return; }
+  for (const err of validateNewsChannels(parsed, { file: 'content-channels.yml' })) errors.push(err);
+}
+validateContentChannelsConfig();
 
 // SOW-054 + SOW-080: the followed-topic -> news-category map (house/topic-map.yml). Absent is fine; when present,
 // every topic must be a real topic in house/topics.yml (the flat vocabulary, no longer the content taxonomy) and

@@ -17,6 +17,10 @@ import { ban, unban, grandfather, revokeGrandfather, grantRole, SuperadminAction
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs';
 import { addSource as addSourceEdit, removeSource as removeSourceEdit, setSourceEnabled as setSourceEnabledEdit, NewsSourceEditError } from '../../membership/news-source-edits.mjs'; // SOW-056 P2
 import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabled as setQuoteEnabledEdit, QuoteEditError } from '../../membership/quote-edits.mjs'; // SOW-063 P3
+import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // SOW-087
+import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
+import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111
+import { syndicationConfigFromParsed, TEMPLATE_TYPES, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111
 import { parseContentFile } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 
@@ -345,4 +349,118 @@ export async function setQuoteEnabled(ctx, { text, enabled } = {}) {
   const on = !!enabled;
   return editQuotes(ctx, (parsed) => setQuoteEnabledEdit(parsed, { text, enabled: on }, actionCtx(ctx)),
     { branch: `gbti/quote-${on ? 'enable' : 'disable'}-${quoteSlug(text)}`, message: `${on ? 'Enable' : 'Disable'} quote`, title: `${on ? 'Enable' : 'Disable'} quote`, noopMsg: `quote already ${on ? 'enabled' : 'disabled'}` });
+}
+
+// SOW-087: the superadmin channel-map + template + flag-word editors. Same shape as the news-source manager
+// (a pure edit core over the parsed house yaml + a publishFiles PR preserving the doc header), but gated
+// SUPERADMIN (canManageRoles): house/content-channels.yml and house/moderation-flags.yml are
+// superadmin-CODEOWNED, and the template lives in house/syndication-config.yml (same ownership tier).
+const CONTENT_CHANNELS_PATH = 'house/content-channels.yml';
+const MODERATION_FLAGS_PATH = 'house/moderation-flags.yml';
+const SYNDICATION_CONFIG_PATH = 'house/syndication-config.yml';
+
+/** Read the category -> Discord-channel map for the manager UI. Public data; read-only. */
+export async function getContentChannelPool(ctx) {
+  const parsed = await readYaml(ctx, CONTENT_CHANNELS_PATH);
+  return { channels: Array.isArray(parsed.channels) ? parsed.channels : [] };
+}
+
+/** Read the moderation word lists for the manager UI. Public data (the file is in the public repo); read-only. */
+export async function getModerationFlagPool(ctx) {
+  const parsed = await readYaml(ctx, MODERATION_FLAGS_PATH);
+  const lists = parsed.lists && typeof parsed.lists === 'object' && !Array.isArray(parsed.lists) ? parsed.lists : {};
+  return { lists };
+}
+
+/** Read the per-type Discord templates (configured + normalized with defaults) for the manager UI. Read-only. */
+export async function getSyndicationTemplatePool(ctx) {
+  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
+  return { templates: syndicationConfigFromParsed(parsed).templates, types: [...TEMPLATE_TYPES] };
+}
+
+async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType }) {
+  requireRole(ctx, canManageRoles, 'superadmin');
+  const { repo } = requireRepo(ctx);
+  const raw = (await ctx.reader?.readFile?.(relPath)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  let result;
+  try { result = edit(parsed); }
+  catch (err) { if (err instanceof errType) throw new OperationError('bad-request', err.message); throw err; }
+  if (!result.changed) return noop(noopMsg, result.audit);
+  const pr = await publishFiles({ repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
+}
+
+export async function setContentChannel(ctx, { category, channelId } = {}) {
+  const slug = slugOf(String(category || ''));
+  return editHouseYaml(ctx, CONTENT_CHANNELS_PATH, (parsed) => setChannelEdit(parsed, { category, channelId }, actionCtx(ctx)), {
+    branch: `gbti/content-channel-set-${slug}`,
+    message: `Map category ${category} to Discord channel ${channelId}`,
+    title: `Map category to Discord channel: ${category}`,
+    noopMsg: `category already mapped to that channel: ${category}`,
+    errType: ContentChannelEditError,
+  });
+}
+
+export async function removeContentChannel(ctx, { category } = {}) {
+  const slug = slugOf(String(category || ''));
+  return editHouseYaml(ctx, CONTENT_CHANNELS_PATH, (parsed) => removeChannelEdit(parsed, { category }, actionCtx(ctx)), {
+    branch: `gbti/content-channel-remove-${slug}`,
+    message: `Unmap category ${category} from its Discord channel`,
+    title: `Unmap category channel: ${category}`,
+    noopMsg: `no channel mapping for category: ${category}`,
+    errType: ContentChannelEditError,
+  });
+}
+
+export async function addModerationFlagTerm(ctx, { list, term } = {}) {
+  const slug = slugOf(`${list}-${String(term || '').slice(0, 24)}`);
+  return editHouseYaml(ctx, MODERATION_FLAGS_PATH, (parsed) => addFlagTermEdit(parsed, { list, term }, actionCtx(ctx)), {
+    branch: `gbti/flag-term-add-${slug}`,
+    message: `Add a ${list} moderation term`,
+    title: `Add moderation term (${list})`,
+    noopMsg: `term already in ${list}`,
+    errType: ModerationFlagEditError,
+  });
+}
+
+export async function removeModerationFlagTerm(ctx, { list, term } = {}) {
+  const slug = slugOf(`${list}-${String(term || '').slice(0, 24)}`);
+  return editHouseYaml(ctx, MODERATION_FLAGS_PATH, (parsed) => removeFlagTermEdit(parsed, { list, term }, actionCtx(ctx)), {
+    branch: `gbti/flag-term-remove-${slug}`,
+    message: `Remove a ${list} moderation term`,
+    title: `Remove moderation term (${list})`,
+    noopMsg: `term not in ${list}`,
+    errType: ModerationFlagEditError,
+  });
+}
+
+export async function setSyndicationTemplate(ctx, { type, template } = {}) {
+  const slug = slugOf(String(type || ''));
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplateEdit(parsed, { type, template }, actionCtx(ctx)), {
+    branch: `gbti/syndication-template-${slug}`,
+    message: `Set the ${type} Discord template`,
+    title: `Set Discord template: ${type}`,
+    noopMsg: `template unchanged: ${type}`,
+    errType: TemplateEditError,
+  });
+}
+
+// SOW-111: the news engagement auto-share settings (house/syndication-config.yml `news_engagement`).
+
+/** Read the normalized news engagement settings for the manager UI. Public data; read-only. */
+export async function getNewsEngagementSettings(ctx) {
+  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
+  return { settings: { ...newsEngagement(syndicationConfigFromParsed(parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS] };
+}
+
+export async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, commentAutopost } = {}) {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setNewsEngagementEdit(parsed, { enabled, openThreshold, tier, commentAutopost }, actionCtx(ctx)), {
+    branch: 'gbti/news-engagement-set',
+    message: 'Set the news engagement auto-share settings',
+    title: 'Set news auto-share settings',
+    noopMsg: 'news engagement settings unchanged',
+    errType: TemplateEditError,
+  });
 }

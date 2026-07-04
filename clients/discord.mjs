@@ -68,6 +68,12 @@ export function createDiscordClient({ botToken, fetch = globalThis.fetch, baseUr
       return req('PATCH', `/channels/${channelId}/messages/${messageId}`, { content, allowed_mentions: allowedMentions });
     },
 
+    /** SOW-087: list a guild's channels (id, name, type, parent_id). Read-only; used by the
+     *  seed-content-channels script to name-match category channels. Needs the bot in the guild. */
+    async listGuildChannels(guildId) {
+      return req('GET', `/guilds/${guildId}/channels`);
+    },
+
     /**
      * Create an instant invite to a channel (on-demand guild invite). Needs CREATE_INSTANT_INVITE on the
      * channel for the bot. `maxAgeSeconds` 0 = never expires; `maxUses` 0 = unlimited; `unique: true` forces a

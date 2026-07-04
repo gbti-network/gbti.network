@@ -12,9 +12,21 @@ syndication:
   enabled: true            # ACTIVE 2026-06-24. Approval-gated: nothing posts until a superadmin approves it.
   require_approval: true    # SOW-058: opt-IN. NOTHING posts until a superadmin approves it in the tracker.
   hold_minutes: 60          # legacy auto-hold; IGNORED while require_approval is true (approval is the gate)
-  upvote_threshold: 2       # SOW-057: distinct non-author members required to ENQUEUE a share (the author is excluded)
+  upvote_threshold: 2       # retired as a syndication trigger (SOW-087: shares enqueue on publish); kept for the news follow-up
+  classify: ai              # SOW-087: the share category suggestion (ai = Workers AI + keyword fallback | keyword | off)
+  templates:                # SOW-087: per-type Discord post templates. Variables: {memberdiscord} (the resolved
+                            # mention, falling back to the no-ping full name), {fullName}, {author}, {shareurl},
+                            # {url}, {title}, {category}. A missing/blank type keeps its default or the built-in text.
+    share: "Shared by {memberdiscord} {shareurl}"
+  news_engagement:          # SOW-111: engagement-triggered news auto-share (to the item's mapped category channel
+                            # in the Worker var NEWS_CHANNELS; never the member #shares channel; unmapped = no post).
+    enabled: true           # master switch for both engagement signals
+    open_threshold: 2       # distinct members opening the detail view before the item auto-posts
+    tier: paid              # whose engagement counts: paid | paid-trial | signed-in (banned never counts)
+    comment_autopost: true  # one comment posts the item immediately (a comment is deliberate engagement)
   channels:                 # full syndication: all channels attempted on approval (one still needs its secret, else skipped)
     discord: true
+    discord-category: true  # SOW-087: the SECOND Discord post, to the category channel in house/content-channels.yml
     x: true
     linkedin: true
     mastodon: true

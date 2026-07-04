@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 // SOW-058 P4: the content-publish ENQUEUE runner (replaces the immediate Discord post in syndicate-content.mjs).
 // Given the content files ADDED in a push to main, it builds a syndication queue item per publishable
-// post/product/prompt and ENQUEUES it via the Cloudflare KV REST API. NOTHING posts here: each item is `pending` and
-// waits for a superadmin to APPROVE it in the tracker, after which the Worker drain posts it to every enabled
-// channel. SHARES are NOT enqueued on publish (they enqueue via the SOW-057 upvote threshold, server-side). Metadata
-// only (url + title + blurb + image); a members-only / Mode A body is NEVER read. The author's Discord mention is
-// resolved at enqueue time (Stripe) and stored on the item, so the drain stays network-free for identity.
+// post/product/prompt/SHARE and ENQUEUES it via the Cloudflare KV REST API. NOTHING posts here: each item is
+// `pending` and waits for a superadmin to APPROVE it in the tracker, after which the Worker drain posts it to
+// every enabled channel. SOW-087: shares now enqueue HERE at publish time (the SOW-057 upvote trigger is
+// retired); each item carries its `category` (a share's flat topic key, or the content's top-level taxonomy
+// key) for the category-channel Discord post, the author's profile displayName (`authorName`, for the no-ping
+// template), and its moderation `flags` (house/moderation-flags.yml over title + blurb; a flagged item always
+// waits for superadmin approval). Metadata only (url + title + blurb + image); a members-only / Mode A body is
+// NEVER read. The author's Discord mention is resolved at enqueue time (Stripe) and stored on the item, so the
+// drain stays network-free for identity.
 //   node scripts/enqueue-syndication.mjs --added members/alice/posts/x/index.md        # dry-run (no KV write)
 //   node scripts/enqueue-syndication.mjs --apply --added <path> [<path> ...]           # enqueue to KV
 // Requires (for --apply): CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN; STRIPE_SECRET_KEY enables @mentions.
@@ -19,6 +23,7 @@ import { createStripeClient } from '../clients/stripe.mjs';
 import { buildSyndicationItem, publicUrlFor } from './lib/content-syndication.mjs';
 import { reverseMembersIndex, createMentionResolver } from './lib/discord-mention.mjs';
 import { enqueueViaKvRest } from './lib/syndication-rest.mjs';
+import { flagText } from '../membership/moderation-flags.mjs'; // SOW-087: the moderation word-list gate
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -58,19 +63,31 @@ export function pathKey(rel) {
   return String(rel).replace(/\/index\.md$/, '').replace(/\.md$/, '');
 }
 
+/** SOW-087: the routing category — a share carries ONE flat topic key; content routes by its top-level taxonomy key. */
+export function categoryOf(item, fm) {
+  if (item.type === 'share') return typeof fm.category === 'string' ? fm.category : null;
+  return Array.isArray(fm.categories) && typeof fm.categories[0] === 'string' ? fm.categories[0] : null;
+}
+
 /** Map a buildSyndicationItem result + its frontmatter to a buildQueueItem INPUT (metadata only, never the body). */
-export function toQueueInput({ item, fm, rel, mention, siteOrigin }) {
+export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = null, moderation = null }) {
+  const title = item.title;
+  const blurb = (fm.shortDescription || fm.excerpt || fm.description || '').toString().trim() || null;
   return {
     source: item.type,
     targetType: item.type,
     targetSlug: pathKey(rel),
     author: item.author,
-    title: item.title,
-    blurb: (fm.shortDescription || fm.excerpt || fm.description || '').toString().trim() || null,
-    url: publicUrlFor(item, siteOrigin) || null, // null for a Mode A members-only item (no public page)
+    authorName: authorName || null, // SOW-087: profile displayName, feeds the no-ping template
+    title,
+    blurb,
+    // A share posts its off-network link; content posts its public page (null for Mode A members-only).
+    url: (item.type === 'share' ? item.shareUrl : publicUrlFor(item, siteOrigin)) || null,
     image: fm.coverImage || fm.image || null,
+    category: categoryOf(item, fm), // SOW-087: routes the category-channel Discord post
     visibility: item.visibility,
     mention: mention || null,
+    flags: flagText(moderation, `${title || ''} ${blurb || ''}`), // SOW-087: the posted surface only
     trigger: 'publish',
   };
 }
@@ -86,7 +103,7 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   });
   const siteOrigin = env.SITE_ORIGIN || 'https://gbti.network';
 
-  // Build a publishable item from each added path; SHARES are excluded (they enqueue via the SOW-057 upvote path).
+  // Build a publishable item from each added path (SOW-087: shares now enqueue here too, at publish time).
   const built = [];
   for (const rel of added) {
     const txt = readFile(rel);
@@ -94,7 +111,7 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
     let fm;
     try { fm = parseContentFile(txt).frontmatter; } catch { continue; }
     const item = buildSyndicationItem(rel, fm);
-    if (item && item.type !== 'share') built.push({ item, fm, rel });
+    if (item) built.push({ item, fm, rel });
   }
   console.log(`enqueue-syndication: ${added.length} changed path(s), ${built.length} publishable item(s)${apply ? '' : ' (dry-run)'}`);
   if (!built.length) {
@@ -107,9 +124,42 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   const stripe = deps.stripe ?? (env.STRIPE_SECRET_KEY ? createStripeClient({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl }) : null);
   const resolveMention = deps.resolveMention ?? createMentionResolver({ reverseIndex, stripe, overrides: parseOverrides(env) });
 
+  // SOW-087: the moderation word lists (working copy) + the author's profile displayName (for the no-ping template).
+  let moderation = null;
+  try { moderation = yaml.load(readFile('house/moderation-flags.yml') ?? '') ?? null; } catch { moderation = null; }
+  const nameCache = new Map();
+  const resolveAuthorName = deps.resolveAuthorName ?? ((author) => {
+    const a = String(author || '');
+    if (!a) return null;
+    if (a === 'gbti' || a === 'house') return 'GBTI Network';
+    if (nameCache.has(a)) return nameCache.get(a);
+    let name = null;
+    try {
+      const profile = readFile(`members/${a}/profile.md`);
+      if (profile != null) name = parseContentFile(profile).frontmatter?.displayName || null;
+    } catch { name = null; }
+    nameCache.set(a, name);
+    return name;
+  });
+
   const inputs = [];
-  for (const b of built) inputs.push(toQueueInput({ ...b, mention: await resolveMention(b.item.author), siteOrigin }));
-  for (const inp of inputs) console.log(`  -> ${inp.source}: ${inp.targetSlug}${inp.url ? '' : ' (members-only, link-less)'}`);
+  for (const b of built) {
+    inputs.push(toQueueInput({
+      ...b,
+      mention: await resolveMention(b.item.author),
+      siteOrigin,
+      authorName: resolveAuthorName(b.item.author),
+      moderation,
+    }));
+  }
+  for (const inp of inputs) {
+    const notes = [
+      inp.url ? '' : ' (members-only, link-less)',
+      inp.category ? ` [${inp.category}]` : '',
+      inp.flags.length ? ` FLAGGED: ${inp.flags.join(', ')}` : '',
+    ].join('');
+    console.log(`  -> ${inp.source}: ${inp.targetSlug}${notes}`);
+  }
 
   if (!apply) {
     console.log('\nDry-run only. Re-run with --apply to enqueue to KV (items then wait for superadmin approval).');

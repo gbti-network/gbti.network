@@ -1,0 +1,98 @@
+// SOW-087 (+ SOW-111): the PURE house/syndication-config.yml edit cores. setTemplate writes
+// syndication.templates[type] (an EMPTY template deletes the key so the type falls back to its default or the
+// built-in message); setNewsEngagement writes the SOW-111 news auto-share settings. Both return
+// { next, changed, audit } (the news-source-edits shape). Node-free.
+//
+// SECURITY: this only COMPUTES the file edit. CODEOWNERS + the gate are the real boundary.
+
+import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement } from './syndication-config-core.mjs';
+
+export class TemplateEditError extends Error {}
+
+const MAX_TEMPLATE = 500;
+
+function isoOf(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new TemplateEditError('invalid timestamp');
+  return d.toISOString();
+}
+
+function auditEntry(ctx, type, detail) {
+  const a = ctx?.actor || null;
+  return {
+    at: isoOf(ctx?.now),
+    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : (a.github_id != null ? String(a.github_id) : null), login: a.login ?? null } : null,
+    action: 'syndication-template.set',
+    target: { type },
+    detail: detail ?? null,
+  };
+}
+
+/**
+ * SOW-111: SET the news engagement auto-share settings (a partial patch: only the supplied fields change).
+ * Values are validated hard (a bad tier or threshold is an error, never silently coerced into policy).
+ * Idempotent against the CURRENT normalized settings.
+ */
+export function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost } = {}, ctx = {}) {
+  const d = structuredClone(doc && typeof doc === 'object' ? doc : {});
+  if (!d.syndication || typeof d.syndication !== 'object' || Array.isArray(d.syndication)) d.syndication = {};
+  const cur = newsEngagement({ news_engagement: d.syndication.news_engagement });
+  const next = { ...cur };
+  if (enabled !== undefined) {
+    if (typeof enabled !== 'boolean') throw new TemplateEditError('enabled must be true or false');
+    next.enabled = enabled;
+  }
+  if (openThreshold !== undefined) {
+    const n = Number(openThreshold);
+    if (!Number.isInteger(n) || n < 1 || n > 1000) throw new TemplateEditError('openThreshold must be an integer from 1 to 1000');
+    next.open_threshold = n;
+  }
+  if (tier !== undefined) {
+    const t = String(tier || '').trim().toLowerCase();
+    if (!NEWS_ENGAGEMENT_TIERS.includes(t)) throw new TemplateEditError(`tier must be one of: ${NEWS_ENGAGEMENT_TIERS.join(', ')}`);
+    next.tier = t;
+  }
+  if (commentAutopost !== undefined) {
+    if (typeof commentAutopost !== 'boolean') throw new TemplateEditError('commentAutopost must be true or false');
+    next.comment_autopost = commentAutopost;
+  }
+  const audit = (detail) => {
+    const a = ctx?.actor || null;
+    return {
+      at: isoOf(ctx?.now),
+      actor: a ? { github_id: a.githubId != null ? String(a.githubId) : (a.github_id != null ? String(a.github_id) : null), login: a.login ?? null } : null,
+      action: 'news-engagement.set',
+      target: { file: 'house/syndication-config.yml' },
+      detail,
+    };
+  };
+  const same = next.enabled === cur.enabled && next.open_threshold === cur.open_threshold
+    && next.tier === cur.tier && next.comment_autopost === cur.comment_autopost;
+  if (same) return { next: d, changed: false, audit: audit({ ...next, noop: true }) };
+  d.syndication.news_engagement = {
+    enabled: next.enabled,
+    open_threshold: next.open_threshold,
+    tier: next.tier,
+    comment_autopost: next.comment_autopost,
+  };
+  return { next: d, changed: true, audit: audit({ ...next }) };
+}
+
+/** SET (or clear, with an empty string) the Discord template for one content type. Idempotent. */
+export function setTemplate(doc, { type, template } = {}, ctx = {}) {
+  const d = structuredClone(doc && typeof doc === 'object' ? doc : {});
+  if (!d.syndication || typeof d.syndication !== 'object' || Array.isArray(d.syndication)) d.syndication = {};
+  const t = String(type || '').trim();
+  if (!TEMPLATE_TYPES.includes(t)) throw new TemplateEditError(`the type must be one of: ${TEMPLATE_TYPES.join(', ')}`);
+  const value = String(template ?? '').trim();
+  if (value.length > MAX_TEMPLATE) throw new TemplateEditError(`a template is capped at ${MAX_TEMPLATE} characters`);
+  const cur = d.syndication.templates && typeof d.syndication.templates === 'object' && !Array.isArray(d.syndication.templates)
+    ? d.syndication.templates : {};
+  const existing = typeof cur[t] === 'string' ? cur[t].trim() : '';
+  if (existing === value) return { next: d, changed: false, audit: auditEntry(ctx, t, { template: value || null, noop: true }) };
+  const nextTemplates = { ...cur };
+  if (value) nextTemplates[t] = value;
+  else delete nextTemplates[t]; // fall back to the type default / the built-in message
+  d.syndication.templates = nextTemplates;
+  return { next: d, changed: true, audit: auditEntry(ctx, t, { template: value || null }) };
+}

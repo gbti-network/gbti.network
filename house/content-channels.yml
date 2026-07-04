@@ -1,0 +1,21 @@
+# SOW-087: content/share category -> Discord channel id (superadmin-owned house config).
+#
+# The syndication drain posts every approved member item to its per-type FEATURED channel (#articles /
+# #products / #prompts / #shares, the DISCORD_CHANNEL_* Worker vars) exactly as before, and ADDITIONALLY posts
+# it to the channel mapped here for the item's category (the `discord-category` channel in
+# house/syndication-config.yml). A category with NO mapping here means only the featured post happens
+# (fail-closed, no error). A mapping that equals the per-type channel is skipped (never a double post).
+#
+# `category` keys come from TWO vocabularies, both matched case-insensitively:
+#   - a SHARE carries one flat topic key from house/topics.yml (ai, devops, gardening, ...)
+#   - a post/product/prompt routes by the TOP-LEVEL key of its taxonomy path (house/taxonomy.yml: devops, ai,
+#     imagegen, blockchain, entertainment, minecraft, business, writing, design, ...)
+# Where the vocabularies share a key (ai, devops, design, ...) one row serves both.
+#
+# `channelId` is the numeric Discord channel id the bot posts into (the bot must be in the guild + have send
+# permission). Channel ids are non-secret.
+#
+# Seed/refresh with `node scripts/seed-content-channels.mjs` (dry-run; add --apply to write): it lists the
+# guild's channels and name-matches them against the topic + taxonomy keys. Reconcile mirrors this file to the
+# KV key `synd:channels` so the Worker drain reads it without a redeploy.
+channels: []

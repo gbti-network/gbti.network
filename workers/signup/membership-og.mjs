@@ -1,14 +1,18 @@
 // SOW-057: POST /membership/og-preview — fetch a link's OpenGraph preview SERVER-SIDE so the share composer can
 // prefill a featured image (the browser/extension cannot fetch arbitrary cross-origin pages). Returns
-// { ok, image, title, description }. Authenticated by the GitHub bearer token (any signed-in member; a trial may
-// stage drafts). The fetch is SSRF-guarded (no private/loopback/link-local/metadata targets), bounded, timed out,
-// and NEVER throws (a bad target page returns { ok: true, image: null }).
+// { ok, image, title, description, tags, suggestedCategory }. Authenticated by the GitHub bearer token (any
+// signed-in member; a trial may stage drafts). The fetch is SSRF-guarded (no private/loopback/link-local/metadata
+// targets), bounded, timed out, and NEVER throws (a bad target page returns { ok: true, image: null }).
 //
-// Uses the shared regex scraper (workers/lib/og-scrape.mjs). Pure over injected deps (fetchImpl/fetchUser), so it
-// is unit-tested with fakes (no network, no secrets).
+// SOW-087: alongside the preview, the page's declared tags feed a topic-category SUGGESTION (topic-suggest.mjs,
+// AI-assisted, fail-open to null) that pre-fills the composer's category select; the member always confirms.
+//
+// Uses the shared regex scraper (workers/lib/og-scrape.mjs). Pure over injected deps (fetchImpl/fetchUser/suggest),
+// so it is unit-tested with fakes (no network, no secrets).
 
 import { githubFetchUser } from './oauth.mjs';
 import { scrapeOgPreview } from '../lib/og-scrape.mjs';
+import { suggestTopic } from './topic-suggest.mjs';
 
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_BYTES = 60000;
@@ -61,9 +65,12 @@ async function authMember(request, { fetchImpl, fetchUser }) {
   return { ok: true, githubId: String(user.githubId) };
 }
 
+const EMPTY_PREVIEW = { ok: true, image: null, title: null, description: null, tags: [], suggestedCategory: null };
+
 export async function handleOgPreview(request, env, {
   fetchImpl = globalThis.fetch,
   fetchUser = githubFetchUser,
+  suggest = suggestTopic, // SOW-087: injectable for tests
 } = {}) {
   if (request.method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
 
@@ -90,18 +97,32 @@ export async function handleOgPreview(request, env, {
       headers: { 'User-Agent': 'gbti-link-preview/0.1 (+https://gbti.network)', Accept: 'text/html,application/xhtml+xml' },
       cf: { cacheTtl: 1800, cacheEverything: true },
     });
-    if (!res || !res.ok) return { status: 200, body: { ok: true, image: null, title: null, description: null } };
+    if (!res || !res.ok) return { status: 200, body: { ...EMPTY_PREVIEW } };
     const ct = res.headers?.get?.('content-type') || '';
-    if (ct && !/html|xml/i.test(ct)) return { status: 200, body: { ok: true, image: null, title: null, description: null } };
+    if (ct && !/html|xml/i.test(ct)) return { status: 200, body: { ...EMPTY_PREVIEW } };
     let html = await res.text();
     if (typeof html === 'string' && html.length > MAX_BYTES) html = html.slice(0, MAX_BYTES);
     const preview = scrapeOgPreview(html, target.url);
+    // SOW-087: a topic-category suggestion for the composer (fail-open: any error just means no suggestion).
+    let suggestedCategory = null;
+    try {
+      suggestedCategory = await suggest(env, { title: preview.title, description: preview.description, tags: preview.tags });
+    } catch {
+      suggestedCategory = null;
+    }
     return {
       status: 200,
-      body: { ok: true, image: preview.image || null, title: preview.title || null, description: preview.description || null },
+      body: {
+        ok: true,
+        image: preview.image || null,
+        title: preview.title || null,
+        description: preview.description || null,
+        tags: preview.tags || [],
+        suggestedCategory: suggestedCategory || null,
+      },
     };
   } catch {
-    return { status: 200, body: { ok: true, image: null, title: null, description: null } };
+    return { status: 200, body: { ...EMPTY_PREVIEW } };
   } finally {
     clearTimeout(timer);
   }

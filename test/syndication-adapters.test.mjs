@@ -1,7 +1,7 @@
 // SOW-058: the channel adapters + the run resolver. Fake fetch / fake Discord client; no network, no secrets.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createDiscordAdapter } from '../clients/syndication/discord-channel.mjs';
+import { createDiscordAdapter, createDiscordCategoryAdapter } from '../clients/syndication/discord-channel.mjs';
 import { createMastodonAdapter } from '../clients/syndication/mastodon.mjs';
 import { createBlueskyAdapter } from '../clients/syndication/bluesky.mjs';
 import { createXAdapter } from '../clients/syndication/x.mjs';
@@ -21,7 +21,14 @@ test('discord adapter posts to the per-source channel with a ping-safe author me
   assert.equal(r.id, 'm1');
   assert.equal(calls[0].channelId, 'chan-share');
   assert.deepEqual(calls[0].opts.allowedMentions, { parse: [], users: ['123'] }); // only the author may be pinged
-  assert.match(calls[0].content, /^<@123> /);
+  // SOW-087: the default share template renders "Shared by <mention> <url>".
+  assert.equal(calls[0].content, 'Shared by <@123> https://ex.com/a');
+  // a POST (no template configured by default) keeps the built-in mention-prefixed message
+  const postCalls = [];
+  const clientB = { postChannelMessage: async (channelId, content, opts) => { postCalls.push({ content }); return { id: 'm2' }; } };
+  const b = createDiscordAdapter({ env: { DISCORD_BOT_TOKEN: 't', DISCORD_CHANNEL_POSTS: 'chan-posts' }, client: clientB });
+  await b.post({ ...item, source: 'post' });
+  assert.match(postCalls[0].content, /^<@123> /);
 });
 
 test('discord adapter fails cleanly when no channel is configured for the source', async () => {
@@ -79,4 +86,46 @@ test('resolveAdapterRun splits ready (configured) vs skipped (enabled-but-no-sec
   const { ready, skipped } = resolveAdapterRun({ cfg, env });
   assert.deepEqual(ready.map((a) => a.name), ['discord']);
   assert.deepEqual(skipped, ['x']); // mastodon is not enabled in cfg, so it is omitted
+});
+
+// SOW-087: the second Discord post, routed by the item's category via the KV-mirrored map.
+test('discord-category adapter posts to the mapped channel for the item category', async () => {
+  const calls = [];
+  const client = { postChannelMessage: async (channelId, content, opts) => { calls.push({ channelId, content, opts }); return { id: 'm2', channel_id: channelId }; } };
+  const channelMap = { channels: [{ category: 'devops', channelId: '777' }] };
+  const a = createDiscordCategoryAdapter({ env: { DISCORD_BOT_TOKEN: 't', DISCORD_CHANNEL_SHARES: 'chan-share' }, client, channelMap });
+  assert.equal(a.name, 'discord-category');
+  const r = await a.post({ ...item, category: 'DevOps' }); // case-insensitive match
+  assert.equal(r.ok, true);
+  assert.equal(calls[0].channelId, '777');
+  assert.deepEqual(calls[0].opts.allowedMentions, { parse: [], users: ['123'] }); // same ping-safety as discord
+});
+
+test('discord-category adapter is a clean skip for an unmapped/absent category or a duplicate channel', async () => {
+  let posted = 0;
+  const client = { postChannelMessage: async () => { posted++; return { id: 'x' }; } };
+  const channelMap = { channels: [{ category: 'devops', channelId: 'chan-share' }] };
+  const a = createDiscordCategoryAdapter({ env: { DISCORD_BOT_TOKEN: 't', DISCORD_CHANNEL_SHARES: 'chan-share' }, client, channelMap });
+  const unmapped = await a.post({ ...item, category: 'gardening' });
+  assert.equal(unmapped.ok, true);
+  assert.equal(unmapped.skipped, true);
+  const noCategory = await a.post({ ...item, category: null });
+  assert.equal(noCategory.skipped, true);
+  // the mapped channel equals the per-type channel: never double-post one channel
+  const dupe = await a.post({ ...item, category: 'devops' });
+  assert.equal(dupe.skipped, true);
+  assert.equal(posted, 0);
+});
+
+test('resolveAdapterRun readies discord-category off the same bot token and hands it the channel map', async () => {
+  const cfg = syndicationConfigFromParsed({ syndication: { enabled: true, channels: { 'discord-category': true } } });
+  const channelMap = { channels: [{ category: 'ai', channelId: '555' }] };
+  const calls = [];
+  const fetchImpl = async (url, opts) => { calls.push({ url, opts }); return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'm9', channel_id: '555' }) }; };
+  const { ready, skipped } = resolveAdapterRun({ cfg, env: { DISCORD_BOT_TOKEN: 't' }, fetchImpl, channelMap });
+  assert.deepEqual(ready.map((a) => a.name), ['discord-category']);
+  assert.deepEqual(skipped, []);
+  const r = await ready[0].post({ ...item, category: 'ai' });
+  assert.equal(r.ok, true);
+  assert.ok(calls[0].url.includes('/channels/555/messages'));
 });
