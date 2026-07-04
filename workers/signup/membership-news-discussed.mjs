@@ -17,7 +17,7 @@
 import { authorizePaid } from './membership-content.mjs';
 import { NEWS_POSTED_KEY, postNewsItemOnce } from './membership-news-publish.mjs';
 import { readSyndicationConfig } from './syndication-store.mjs';
-import { newsEngagement } from '../../membership/syndication-config.mjs';
+import { newsEngagement } from '../../membership/syndication-config-core.mjs';
 import { createDiscordClient } from '../../clients/discord.mjs';
 
 const NOTICE = '\n\n💬 Members are discussing this in the GBTI extension.';

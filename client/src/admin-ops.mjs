@@ -20,7 +20,7 @@ import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabl
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // SOW-087
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
 import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111
-import { syndicationConfigFromParsed, TEMPLATE_TYPES, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config.mjs'; // SOW-087 + SOW-111
+import { syndicationConfigFromParsed, TEMPLATE_TYPES, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111
 import { parseContentFile } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 

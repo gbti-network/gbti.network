@@ -6,7 +6,7 @@
 
 import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue } from '../../membership/syndication-queue.mjs';
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
-import { isSyndicationEnabled, requiresApproval } from '../../membership/syndication-config.mjs';
+import { isSyndicationEnabled, requiresApproval } from '../../membership/syndication-config-core.mjs';
 import { readSyndicationConfig, readContentChannels, getItem, putItem, listDue, removeFromPending } from './syndication-store.mjs';
 
 export async function drainSyndication(env, {

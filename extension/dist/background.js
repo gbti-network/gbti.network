@@ -17334,8 +17334,8 @@ var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
 function decodeBase64Utf8(b64) {
-  const clean3 = String(b64 || "").replace(/\s/g, "");
-  const bytes = Uint8Array.from(atob(clean3), (c) => c.charCodeAt(0));
+  const clean5 = String(b64 || "").replace(/\s/g, "");
+  const bytes = Uint8Array.from(atob(clean5), (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
 function safeRel(relPath) {
@@ -17527,9 +17527,9 @@ function toBase64(text) {
   return btoa(bin);
 }
 function fromBase64(b64) {
-  const clean3 = String(b64 || "").replace(/\s+/g, "");
-  if (typeof Buffer !== "undefined") return Buffer.from(clean3, "base64").toString("utf8");
-  const bin = atob(clean3);
+  const clean5 = String(b64 || "").replace(/\s+/g, "");
+  if (typeof Buffer !== "undefined") return Buffer.from(clean5, "base64").toString("utf8");
+  const bin = atob(clean5);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
   return new TextDecoder().decode(bytes);
@@ -20215,6 +20215,296 @@ function removeQuote(doc, { text } = {}, ctx = {}) {
   return { next: d, changed: true, audit: auditEntry3(ctx, "quote.remove", gone?.text ?? normText(text), null) };
 }
 
+// membership/content-channels-edits.mjs
+var ContentChannelEditError = class extends Error {
+};
+var KEY_RE2 = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+var CHANNEL_ID_RE = /^[0-9]{5,25}$/;
+function isoOf5(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new ContentChannelEditError("invalid timestamp");
+  return d.toISOString();
+}
+function auditEntry4(ctx, action, category, detail) {
+  const a = ctx?.actor || null;
+  return {
+    at: isoOf5(ctx?.now),
+    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+    action,
+    target: { category },
+    detail: detail ?? null
+  };
+}
+function clean3(doc) {
+  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
+  if (!Array.isArray(d.channels)) d.channels = [];
+  return d;
+}
+function setChannel(doc, { category, channelId } = {}, ctx = {}) {
+  const d = clean3(doc);
+  const cat = String(category || "").trim().toLowerCase();
+  const ch = String(channelId || "").trim();
+  if (!KEY_RE2.test(cat)) throw new ContentChannelEditError("the category must be a kebab-case key (a topic key or a top-level taxonomy key)");
+  if (!CHANNEL_ID_RE.test(ch)) throw new ContentChannelEditError("the channelId must be a numeric Discord channel id");
+  const existing = d.channels.find((e) => String(e?.category || "").trim().toLowerCase() === cat);
+  if (existing) {
+    if (String(existing.channelId ?? "").trim() === ch) return { next: d, changed: false, audit: auditEntry4(ctx, "content-channel.set", cat, { channelId: ch, noop: true }) };
+    existing.channelId = ch;
+    return { next: d, changed: true, audit: auditEntry4(ctx, "content-channel.set", cat, { channelId: ch, updated: true }) };
+  }
+  d.channels.push({ category: cat, channelId: ch });
+  d.channels.sort((a, b) => String(a.category).localeCompare(String(b.category)));
+  return { next: d, changed: true, audit: auditEntry4(ctx, "content-channel.set", cat, { channelId: ch }) };
+}
+function removeChannel(doc, { category } = {}, ctx = {}) {
+  const d = clean3(doc);
+  const cat = String(category || "").trim().toLowerCase();
+  const i = d.channels.findIndex((e) => String(e?.category || "").trim().toLowerCase() === cat);
+  if (i < 0) throw new ContentChannelEditError(`no channel mapping for category: ${cat}`);
+  d.channels.splice(i, 1);
+  return { next: d, changed: true, audit: auditEntry4(ctx, "content-channel.remove", cat, null) };
+}
+
+// membership/moderation-flags-edits.mjs
+var ModerationFlagEditError = class extends Error {
+};
+var LIST_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+var MAX_TERM = 64;
+function isoOf6(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new ModerationFlagEditError("invalid timestamp");
+  return d.toISOString();
+}
+function auditEntry5(ctx, action, list, detail) {
+  const a = ctx?.actor || null;
+  return {
+    at: isoOf6(ctx?.now),
+    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+    action,
+    target: { list },
+    detail: detail ?? null
+  };
+}
+function clean4(doc) {
+  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
+  if (!d.lists || typeof d.lists !== "object" || Array.isArray(d.lists)) d.lists = {};
+  for (const [name, terms] of Object.entries(d.lists)) {
+    if (!Array.isArray(terms)) d.lists[name] = [];
+  }
+  return d;
+}
+var normTerm = (t) => String(t || "").replace(/\s+/g, " ").trim();
+function requireListAndTerm(d, list, term) {
+  const name = String(list || "").trim();
+  if (!LIST_RE.test(name)) throw new ModerationFlagEditError("the list name must be kebab-case");
+  if (!(name in d.lists)) throw new ModerationFlagEditError(`no such flag list: ${name} (lists: ${Object.keys(d.lists).join(", ") || "none"})`);
+  const t = normTerm(term);
+  if (!t) throw new ModerationFlagEditError("a non-empty term is required");
+  if (t.length > MAX_TERM) throw new ModerationFlagEditError(`a term is capped at ${MAX_TERM} characters`);
+  return { name, t };
+}
+function addFlagTerm(doc, { list, term } = {}, ctx = {}) {
+  const d = clean4(doc);
+  const { name, t } = requireListAndTerm(d, list, term);
+  if (d.lists[name].some((x) => normTerm(x).toLowerCase() === t.toLowerCase())) {
+    return { next: d, changed: false, audit: auditEntry5(ctx, "flag-term.add", name, { term: t, noop: true }) };
+  }
+  d.lists[name].push(t);
+  d.lists[name].sort((a, b) => String(a).localeCompare(String(b)));
+  return { next: d, changed: true, audit: auditEntry5(ctx, "flag-term.add", name, { term: t }) };
+}
+function removeFlagTerm(doc, { list, term } = {}, ctx = {}) {
+  const d = clean4(doc);
+  const { name, t } = requireListAndTerm(d, list, term);
+  const i = d.lists[name].findIndex((x) => normTerm(x).toLowerCase() === t.toLowerCase());
+  if (i < 0) throw new ModerationFlagEditError(`term not in ${name}: ${t}`);
+  d.lists[name].splice(i, 1);
+  return { next: d, changed: true, audit: auditEntry5(ctx, "flag-term.remove", name, { term: t }) };
+}
+
+// membership/syndication-config-core.mjs
+var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky"]);
+var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
+var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
+var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
+  enabled: false,
+  // fail-closed: nothing auto-posts until the owner flips it in house/syndication-config.yml
+  open_threshold: 2,
+  // distinct members opening the detail view before the item auto-posts
+  tier: "paid",
+  // whose engagement counts (owner-toggleable in the admin Channels tab)
+  comment_autopost: true
+  // one comment posts immediately (deliberate engagement)
+});
+var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
+var DEFAULT_TEMPLATES = Object.freeze({
+  share: "Shared by {memberdiscord} {shareurl}"
+  // the owner-decided default share repost
+});
+var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
+  enabled: false,
+  require_approval: true,
+  // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
+  hold_minutes: 60,
+  upvote_threshold: 2,
+  classify: "ai",
+  // SOW-087: the share category suggestion mode
+  templates: DEFAULT_TEMPLATES,
+  // SOW-087: per-type Discord templates (missing/empty type = its default)
+  news_engagement: DEFAULT_NEWS_ENGAGEMENT,
+  // SOW-111: engagement-triggered news auto-share
+  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false })
+});
+function asBool(v, fallback) {
+  if (v === true || v === false) return v;
+  if (v === 1 || v === 0) return v === 1;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (s === "true" || s === "yes" || s === "on" || s === "1") return true;
+    if (s === "false" || s === "no" || s === "off" || s === "0") return false;
+  }
+  return fallback;
+}
+function asHoldMinutes(v, fallback) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.floor(n));
+}
+function asThreshold(v, fallback) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  const i = Math.floor(n);
+  return i >= 1 ? i : fallback;
+}
+function asClassifyMode(v, fallback) {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  return CLASSIFY_MODES.includes(s) ? s : fallback;
+}
+function normalizeNewsEngagement(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const d = DEFAULT_NEWS_ENGAGEMENT;
+  const tier = typeof src.tier === "string" && NEWS_ENGAGEMENT_TIERS.includes(src.tier.trim().toLowerCase()) ? src.tier.trim().toLowerCase() : d.tier;
+  return Object.freeze({
+    enabled: asBool(src.enabled, d.enabled),
+    open_threshold: asThreshold(src.open_threshold, d.open_threshold),
+    tier,
+    comment_autopost: asBool(src.comment_autopost, d.comment_autopost)
+  });
+}
+function normalizeTemplates(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const t of TEMPLATE_TYPES) {
+    const v = typeof src[t] === "string" ? src[t].trim() : "";
+    const d = DEFAULT_TEMPLATES[t];
+    if (v) out[t] = v;
+    else if (d) out[t] = d;
+  }
+  return Object.freeze(out);
+}
+function normalizeChannels(raw) {
+  const out = {};
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  for (const name of CHANNELS) out[name] = asBool(src[name], DEFAULT_SYNDICATION_CONFIG.channels[name]);
+  return Object.freeze(out);
+}
+function syndicationConfigFromParsed(parsed) {
+  const raw = parsed?.syndication ?? parsed ?? {};
+  const d = DEFAULT_SYNDICATION_CONFIG;
+  return Object.freeze({
+    enabled: asBool(raw.enabled, d.enabled),
+    require_approval: asBool(raw.require_approval, d.require_approval),
+    hold_minutes: asHoldMinutes(raw.hold_minutes, d.hold_minutes),
+    upvote_threshold: asThreshold(raw.upvote_threshold, d.upvote_threshold),
+    classify: asClassifyMode(raw.classify, d.classify),
+    templates: normalizeTemplates(raw.templates),
+    news_engagement: normalizeNewsEngagement(raw.news_engagement),
+    channels: normalizeChannels(raw.channels)
+  });
+}
+function newsEngagement(cfg) {
+  return normalizeNewsEngagement(cfg?.news_engagement);
+}
+
+// membership/syndication-template-edits.mjs
+var TemplateEditError = class extends Error {
+};
+var MAX_TEMPLATE = 500;
+function isoOf7(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new TemplateEditError("invalid timestamp");
+  return d.toISOString();
+}
+function auditEntry6(ctx, type, detail) {
+  const a = ctx?.actor || null;
+  return {
+    at: isoOf7(ctx?.now),
+    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+    action: "syndication-template.set",
+    target: { type },
+    detail: detail ?? null
+  };
+}
+function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost } = {}, ctx = {}) {
+  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
+  if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
+  const cur = newsEngagement({ news_engagement: d.syndication.news_engagement });
+  const next = { ...cur };
+  if (enabled !== void 0) {
+    if (typeof enabled !== "boolean") throw new TemplateEditError("enabled must be true or false");
+    next.enabled = enabled;
+  }
+  if (openThreshold !== void 0) {
+    const n = Number(openThreshold);
+    if (!Number.isInteger(n) || n < 1 || n > 1e3) throw new TemplateEditError("openThreshold must be an integer from 1 to 1000");
+    next.open_threshold = n;
+  }
+  if (tier !== void 0) {
+    const t = String(tier || "").trim().toLowerCase();
+    if (!NEWS_ENGAGEMENT_TIERS.includes(t)) throw new TemplateEditError(`tier must be one of: ${NEWS_ENGAGEMENT_TIERS.join(", ")}`);
+    next.tier = t;
+  }
+  if (commentAutopost !== void 0) {
+    if (typeof commentAutopost !== "boolean") throw new TemplateEditError("commentAutopost must be true or false");
+    next.comment_autopost = commentAutopost;
+  }
+  const audit2 = (detail) => {
+    const a = ctx?.actor || null;
+    return {
+      at: isoOf7(ctx?.now),
+      actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+      action: "news-engagement.set",
+      target: { file: "house/syndication-config.yml" },
+      detail
+    };
+  };
+  const same = next.enabled === cur.enabled && next.open_threshold === cur.open_threshold && next.tier === cur.tier && next.comment_autopost === cur.comment_autopost;
+  if (same) return { next: d, changed: false, audit: audit2({ ...next, noop: true }) };
+  d.syndication.news_engagement = {
+    enabled: next.enabled,
+    open_threshold: next.open_threshold,
+    tier: next.tier,
+    comment_autopost: next.comment_autopost
+  };
+  return { next: d, changed: true, audit: audit2({ ...next }) };
+}
+function setTemplate(doc, { type, template } = {}, ctx = {}) {
+  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
+  if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
+  const t = String(type || "").trim();
+  if (!TEMPLATE_TYPES.includes(t)) throw new TemplateEditError(`the type must be one of: ${TEMPLATE_TYPES.join(", ")}`);
+  const value = String(template ?? "").trim();
+  if (value.length > MAX_TEMPLATE) throw new TemplateEditError(`a template is capped at ${MAX_TEMPLATE} characters`);
+  const cur = d.syndication.templates && typeof d.syndication.templates === "object" && !Array.isArray(d.syndication.templates) ? d.syndication.templates : {};
+  const existing = typeof cur[t] === "string" ? cur[t].trim() : "";
+  if (existing === value) return { next: d, changed: false, audit: auditEntry6(ctx, t, { template: value || null, noop: true }) };
+  const nextTemplates = { ...cur };
+  if (value) nextTemplates[t] = value;
+  else delete nextTemplates[t];
+  d.syndication.templates = nextTemplates;
+  return { next: d, changed: true, audit: auditEntry6(ctx, t, { template: value || null }) };
+}
+
 // client/src/admin-ops.mjs
 function requireRole(ctx, check2, need) {
   const role = ctx.role?.() ?? "member";
@@ -20243,13 +20533,13 @@ function actionCtx(ctx) {
     now: ctx.now ? ctx.now() : void 0
   };
 }
-function prBody(reason, auditEntry4) {
+function prBody(reason, auditEntry7) {
   const head = reason ? `Reason: ${reason}
 
 ` : "";
-  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry4)} -->`;
+  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry7)} -->`;
 }
-var noop = (message, auditEntry4) => ({ changed: false, noop: true, message, audit: auditEntry4 });
+var noop = (message, auditEntry7) => ({ changed: false, noop: true, message, audit: auditEntry7 });
 function requireId(githubId) {
   if (githubId === void 0 || githubId === null || String(githubId).trim() === "") {
     throw new OperationError("bad-request", "githubId is required");
@@ -20546,9 +20836,109 @@ async function setQuoteEnabled2(ctx, { text, enabled } = {}) {
     { branch: `gbti/quote-${on ? "enable" : "disable"}-${quoteSlug(text)}`, message: `${on ? "Enable" : "Disable"} quote`, title: `${on ? "Enable" : "Disable"} quote`, noopMsg: `quote already ${on ? "enabled" : "disabled"}` }
   );
 }
+var CONTENT_CHANNELS_PATH = "house/content-channels.yml";
+var MODERATION_FLAGS_PATH = "house/moderation-flags.yml";
+var SYNDICATION_CONFIG_PATH = "house/syndication-config.yml";
+async function getContentChannelPool(ctx) {
+  const parsed = await readYaml(ctx, CONTENT_CHANNELS_PATH);
+  return { channels: Array.isArray(parsed.channels) ? parsed.channels : [] };
+}
+async function getModerationFlagPool(ctx) {
+  const parsed = await readYaml(ctx, MODERATION_FLAGS_PATH);
+  const lists = parsed.lists && typeof parsed.lists === "object" && !Array.isArray(parsed.lists) ? parsed.lists : {};
+  return { lists };
+}
+async function getSyndicationTemplatePool(ctx) {
+  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
+  return { templates: syndicationConfigFromParsed(parsed).templates, types: [...TEMPLATE_TYPES] };
+}
+async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType }) {
+  requireRole(ctx, canManageRoles, "superadmin");
+  const { repo } = requireRepo2(ctx);
+  const raw = await ctx.reader?.readFile?.(relPath) || "";
+  let parsed;
+  try {
+    parsed = index_vite_proxy_tmp_default.load(raw) || {};
+  } catch {
+    parsed = {};
+  }
+  let result;
+  try {
+    result = edit(parsed);
+  } catch (err) {
+    if (err instanceof errType) throw new OperationError("bad-request", err.message);
+    throw err;
+  }
+  if (!result.changed) return noop(noopMsg, result.audit);
+  const pr = await publishFiles({ repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
+}
+async function setContentChannel(ctx, { category, channelId } = {}) {
+  const slug = slugOf(String(category || ""));
+  return editHouseYaml(ctx, CONTENT_CHANNELS_PATH, (parsed) => setChannel(parsed, { category, channelId }, actionCtx(ctx)), {
+    branch: `gbti/content-channel-set-${slug}`,
+    message: `Map category ${category} to Discord channel ${channelId}`,
+    title: `Map category to Discord channel: ${category}`,
+    noopMsg: `category already mapped to that channel: ${category}`,
+    errType: ContentChannelEditError
+  });
+}
+async function removeContentChannel(ctx, { category } = {}) {
+  const slug = slugOf(String(category || ""));
+  return editHouseYaml(ctx, CONTENT_CHANNELS_PATH, (parsed) => removeChannel(parsed, { category }, actionCtx(ctx)), {
+    branch: `gbti/content-channel-remove-${slug}`,
+    message: `Unmap category ${category} from its Discord channel`,
+    title: `Unmap category channel: ${category}`,
+    noopMsg: `no channel mapping for category: ${category}`,
+    errType: ContentChannelEditError
+  });
+}
+async function addModerationFlagTerm(ctx, { list, term } = {}) {
+  const slug = slugOf(`${list}-${String(term || "").slice(0, 24)}`);
+  return editHouseYaml(ctx, MODERATION_FLAGS_PATH, (parsed) => addFlagTerm(parsed, { list, term }, actionCtx(ctx)), {
+    branch: `gbti/flag-term-add-${slug}`,
+    message: `Add a ${list} moderation term`,
+    title: `Add moderation term (${list})`,
+    noopMsg: `term already in ${list}`,
+    errType: ModerationFlagEditError
+  });
+}
+async function removeModerationFlagTerm(ctx, { list, term } = {}) {
+  const slug = slugOf(`${list}-${String(term || "").slice(0, 24)}`);
+  return editHouseYaml(ctx, MODERATION_FLAGS_PATH, (parsed) => removeFlagTerm(parsed, { list, term }, actionCtx(ctx)), {
+    branch: `gbti/flag-term-remove-${slug}`,
+    message: `Remove a ${list} moderation term`,
+    title: `Remove moderation term (${list})`,
+    noopMsg: `term not in ${list}`,
+    errType: ModerationFlagEditError
+  });
+}
+async function setSyndicationTemplate(ctx, { type, template } = {}) {
+  const slug = slugOf(String(type || ""));
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplate(parsed, { type, template }, actionCtx(ctx)), {
+    branch: `gbti/syndication-template-${slug}`,
+    message: `Set the ${type} Discord template`,
+    title: `Set Discord template: ${type}`,
+    noopMsg: `template unchanged: ${type}`,
+    errType: TemplateEditError
+  });
+}
+async function getNewsEngagementSettings(ctx) {
+  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
+  return { settings: { ...newsEngagement(syndicationConfigFromParsed(parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS] };
+}
+async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, commentAutopost } = {}) {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setNewsEngagement(parsed, { enabled, openThreshold, tier, commentAutopost }, actionCtx(ctx)), {
+    branch: "gbti/news-engagement-set",
+    message: "Set the news engagement auto-share settings",
+    title: "Set news auto-share settings",
+    noopMsg: "news engagement settings unchanged",
+    errType: TemplateEditError
+  });
+}
 
 // extension/src/ext-dispatch.mjs
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2 };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "news-engagement-set": setNewsEngagementSettings };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -20607,6 +20997,10 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/taxonomy") return ok(await getTaxonomy(ctx));
     if (pathname === "/api/news-source-pool") return ok(await getNewsSourcePool(ctx));
     if (pathname === "/api/quote-pool") return ok(await getQuotePool(ctx));
+    if (pathname === "/api/content-channel-pool") return ok(await getContentChannelPool(ctx));
+    if (pathname === "/api/moderation-flag-pool") return ok(await getModerationFlagPool(ctx));
+    if (pathname === "/api/syndication-template-pool") return ok(await getSyndicationTemplatePool(ctx));
+    if (pathname === "/api/news-engagement") return ok(await getNewsEngagementSettings(ctx));
     const username = id?.username;
     if (!username) throw new OperationError("no-identity", "no signed-in identity; sign in first");
     switch (pathname) {

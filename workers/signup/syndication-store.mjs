@@ -13,7 +13,7 @@ import {
 } from '../../membership/syndication-queue.mjs';
 import {
   syndicationConfigFromParsed, isSyndicationEnabled, holdMs, DEFAULT_SYNDICATION_CONFIG,
-} from '../../membership/syndication-config.mjs';
+} from '../../membership/syndication-config-core.mjs';
 
 export const SYND_ITEM_KEY = (id) => `synd:item:${id}`;
 export const SYND_PENDING_KEY = 'synd:pending';

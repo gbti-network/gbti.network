@@ -11,7 +11,7 @@ import { createDiscordClient } from '../discord.mjs';
 import { buildChannelText, renderTemplate } from '../../membership/syndication-format.mjs';
 import { channelLimit } from '../../membership/syndication-channels.mjs';
 import { channelForCategory } from '../../membership/news-channels.mjs';
-import { templateFor } from '../../membership/syndication-config.mjs';
+import { templateFor } from '../../membership/syndication-config-core.mjs';
 
 const CHANNEL_ENV = {
   post: 'DISCORD_CHANNEL_POSTS',

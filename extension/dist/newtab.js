@@ -8730,6 +8730,195 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-syndication-tracker", GbtiSyndicationTracker);
 
+  // client-ui/src/elements/gbti-channel-map-manager.mjs
+  var CSS18 = `
+  :host { display:block; }
+  h4 { margin:18px 0 8px; font-family:var(--font-display, inherit); font-size:15px; }
+  h4:first-child { margin-top:0; }
+  .hint { font-size:12.5px; color:var(--muted); }
+  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
+  .busy { opacity:.55; pointer-events:none; }
+  .add { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 12px; }
+  .add input, .add select { flex:1 1 140px; min-width:0; font:inherit; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:7px 9px; }
+  .btn { flex:none; border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:7px; font:inherit; font-weight:700; font-size:13px; padding:7px 14px; cursor:pointer; }
+  .list { list-style:none; margin:0 0 6px; padding:0; }
+  .row { display:flex; align-items:center; gap:10px; padding:7px 2px; border-top:1px solid var(--line); }
+  .list .row:first-child { border-top:0; }
+  .key { font-family:var(--font-mono, monospace); font-size:12.5px; color:var(--fg); font-weight:600; }
+  .val { font-family:var(--font-mono, monospace); font-size:12px; color:var(--muted); }
+  .sp { flex:1; }
+  .lk { flex:none; border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); border-radius:7px; font:inherit; font-size:12.5px; font-weight:600; padding:4px 10px; cursor:pointer; }
+  .lk:hover { border-color:var(--danger, #e06c6c); color:var(--danger, #e06c6c); }
+  .tmpl { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0 0 8px; }
+  .tmpl .t { flex:none; width:70px; font-family:var(--font-mono, monospace); font-size:12.5px; color:var(--muted); }
+  .tmpl input { flex:1 1 260px; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:7px 9px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:999px; padding:3px 10px; }
+  .chip button { border:0; background:none; color:var(--muted); cursor:pointer; font:inherit; padding:0; }
+  .chip button:hover { color:var(--danger, #e06c6c); }
+  .muted { color:var(--muted); }
+`;
+  var GbtiChannelMapManager = class extends GbtiElement {
+    connectedCallback() {
+      super.connectedCallback?.();
+    }
+    async load() {
+      if (!this.client) {
+        this.render();
+        return;
+      }
+      try {
+        const [channels, flags, templates, engagement] = await Promise.all([
+          this.client.contentChannelPool(),
+          this.client.moderationFlagPool(),
+          this.client.syndicationTemplatePool(),
+          this.client.newsEngagementSettings ? this.client.newsEngagementSettings() : null
+        ]);
+        this._channels = channels?.channels || [];
+        this._lists = flags?.lists || {};
+        this._templates = templates?.templates || {};
+        this._types = templates?.types || ["share", "post", "product", "prompt"];
+        this._engagement = engagement?.settings || null;
+        this._tiers = engagement?.tiers || ["paid", "paid-trial", "signed-in"];
+      } catch {
+        this._channels = [];
+        this._lists = {};
+        this._templates = {};
+        this._engagement = null;
+        this._msg = "Could not load the channel map.";
+      }
+      this._loading = false;
+      this.render();
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS18) + `<p class="muted">Open in the GBTI client (superadmin) to manage category channels.</p>`);
+        return;
+      }
+      if (!this._channels) {
+        if (!this._loading) {
+          this._loading = true;
+          this.load();
+        }
+        this.set(this.css(CSS18) + `<p class="muted">Loading the channel map...</p>`);
+        return;
+      }
+      const rows = this._channels.map((c) => `<li class="row">
+        <span class="key">${esc(c.category || "")}</span><span class="val">#${esc(c.channelId || "")}</span><span class="sp"></span>
+        <button class="lk" type="button" data-unmap="${esc(c.category)}">Unmap</button>
+      </li>`).join("");
+      const tmplRows = (this._types || []).map((t) => `<div class="tmpl">
+        <span class="t">${esc(t)}</span>
+        <input data-tmpl="${esc(t)}" type="text" maxlength="500" value="${esc(this._templates?.[t] || "")}" placeholder="built-in message" />
+        <button class="btn" type="button" data-tmpl-save="${esc(t)}">Save</button>
+      </div>`).join("");
+      const listBlocks = Object.entries(this._lists || {}).map(([name, terms]) => {
+        const chips = (Array.isArray(terms) ? terms : []).map((w) => `<span class="chip">${esc(w)}<button type="button" data-term-remove data-list="${esc(name)}" data-term="${esc(w)}" aria-label="Remove ${esc(w)}">✕</button></span>`).join("");
+        return `<h4>${esc(name)} terms <span class="hint">(a title/blurb hit holds the item for approval)</span></h4>
+        <div class="chips">${chips || '<span class="muted">No terms.</span>'}</div>
+        <div class="add">
+          <input data-term-input="${esc(name)}" type="text" maxlength="64" placeholder="Add a ${esc(name)} term or phrase" />
+          <button class="btn" type="button" data-term-add="${esc(name)}">Add</button>
+        </div>`;
+      }).join("");
+      this.set(this.css(CSS18) + `<div class="${this._busy ? "busy" : ""}">
+      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      <h4>Category channels <span class="hint">(${this._channels.length} mapped; an unmapped category only posts to its featured channel)</span></h4>
+      <ul class="list">${rows || '<li class="muted">No categories mapped yet. Seed with scripts/seed-content-channels.mjs or add one below.</li>'}</ul>
+      <div class="add">
+        <input data-map-cat type="text" placeholder="category key (topic or top-level taxonomy)" />
+        <input data-map-ch type="text" inputmode="numeric" placeholder="Discord channel id" />
+        <button class="btn" type="button" data-map-add>Map</button>
+      </div>
+      <h4>Discord post templates <span class="hint">(variables: {memberdiscord} {fullName} {author} {shareurl} {title} {category}; blank = default)</span></h4>
+      ${tmplRows}
+      ${this._engagementHtml()}
+      ${listBlocks}
+    </div>`);
+      this._wire();
+    }
+    // SOW-111: the news auto-share settings (an item posts to its mapped category channel on member engagement).
+    _engagementHtml() {
+      const e = this._engagement;
+      if (!e) return "";
+      const tierOpts = (this._tiers || []).map((t) => `<option value="${esc(t)}" ${e.tier === t ? "selected" : ""}>${esc(t)}</option>`).join("");
+      return `<h4>News auto-share <span class="hint">(engagement posts a news item to its mapped category channel; one comment posts immediately)</span></h4>
+      <div class="add">
+        <select data-eng-enabled aria-label="News auto-share on or off">
+          <option value="true" ${e.enabled ? "selected" : ""}>On</option>
+          <option value="false" ${e.enabled ? "" : "selected"}>Off</option>
+        </select>
+        <input data-eng-threshold type="number" min="1" max="1000" value="${esc(String(e.open_threshold))}" aria-label="Distinct opens before auto-post" />
+        <select data-eng-tier aria-label="Whose engagement counts">${tierOpts}</select>
+        <select data-eng-comment aria-label="A comment posts immediately">
+          <option value="true" ${e.comment_autopost ? "selected" : ""}>Comment posts</option>
+          <option value="false" ${e.comment_autopost ? "" : "selected"}>Comment does not post</option>
+        </select>
+        <button class="btn" type="button" data-eng-save>Save</button>
+      </div>
+      <p class="hint" style="margin:-6px 0 14px">Opens count distinct members at the threshold; banned accounts never count. Applies after the next reconcile mirror sync.</p>`;
+    }
+    _wire() {
+      this.on("[data-eng-save]", "click", () => {
+        const enabled = this.$("[data-eng-enabled]")?.value === "true";
+        const openThreshold = Number(this.$("[data-eng-threshold]")?.value || 0);
+        const tier = this.$("[data-eng-tier]")?.value || "paid";
+        const commentAutopost = this.$("[data-eng-comment]")?.value === "true";
+        if (!Number.isInteger(openThreshold) || openThreshold < 1) {
+          this._msg = "The open threshold must be a whole number of 1 or more.";
+          this.render();
+          return;
+        }
+        this._run(() => this.client.setNewsEngagement({ enabled, openThreshold, tier, commentAutopost }));
+      });
+      this.on("[data-map-add]", "click", () => {
+        const category = (this.$("[data-map-cat]")?.value || "").trim().toLowerCase();
+        const channelId = (this.$("[data-map-ch]")?.value || "").trim();
+        if (!category || !channelId) {
+          this._msg = "A category key and a Discord channel id are required.";
+          this.render();
+          return;
+        }
+        this._run(() => this.client.setContentChannel({ category, channelId }));
+      });
+      this.$$("[data-unmap]").forEach((b) => b.addEventListener("click", () => {
+        const category = b.dataset.unmap;
+        if (typeof confirm === "function" && !confirm(`Unmap category "${category}"?`)) return;
+        this._run(() => this.client.removeContentChannel({ category }));
+      }));
+      this.$$("[data-tmpl-save]").forEach((b) => b.addEventListener("click", () => {
+        const type = b.dataset.tmplSave;
+        const template = (this.$(`[data-tmpl="${type}"]`)?.value || "").trim();
+        this._run(() => this.client.setSyndicationTemplate({ type, template }));
+      }));
+      this.$$("[data-term-add]").forEach((b) => b.addEventListener("click", () => {
+        const list = b.dataset.termAdd;
+        const term = (this.$(`[data-term-input="${list}"]`)?.value || "").trim();
+        if (!term) {
+          this._msg = "Enter a term first.";
+          this.render();
+          return;
+        }
+        this._run(() => this.client.addModerationFlagTerm({ list, term }));
+      }));
+      this.$$("[data-term-remove]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.removeModerationFlagTerm({ list: b.dataset.list, term: b.dataset.term }))));
+    }
+    async _run(fn) {
+      this._busy = true;
+      this._msg = "";
+      this.render();
+      try {
+        const r = await fn();
+        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
+      } catch (e) {
+        this._msg = e?.message || "That edit failed.";
+      }
+      this._busy = false;
+      await this.load();
+    }
+  };
+  define("gbti-channel-map-manager", GbtiChannelMapManager);
+
   // client-ui/src/inline.mjs
   var TYPE_RE = /^(post|product|prompt|profile)$/;
   function readHooks(dataset = {}) {
@@ -8958,7 +9147,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS18 = `
+  var CSS19 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -8979,7 +9168,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const c = Math.max(0, this._count);
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       this.set(
-        this.css(CSS18) + `<button class="pill ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS19) + `<button class="pill ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -9014,7 +9203,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS19 = `
+  var CSS20 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -9040,7 +9229,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const open = this._open ? this._renderPop() : "";
       const label = !this.client ? "Sign in to save to a collection" : "Save to a collection";
-      this.set(this.css(CSS19) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}">${folder}<span>Save</span></button>${open}`);
+      this.set(this.css(CSS20) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}">${folder}<span>Save</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -9160,7 +9349,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-subscribe.mjs
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
-  var CSS20 = `
+  var CSS21 = `
   .btn { display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font-body);
     font-size:14px; font-weight:600; border-radius:10px; padding:9px 16px;
     border:1.5px solid var(--brand); background:var(--brand); color:#08231a;
@@ -9192,7 +9381,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const label = !known ? "Subscribe to activity" : following ? "Following" : "Subscribe to activity";
       const onCls = following ? "on" : "";
       this.set(
-        this.css(CSS20) + `<button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>`
+        this.css(CSS21) + `<button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>`
       );
       this.on(".btn", "click", () => this._onClick());
       if (this.client && username && !this._loaded) this._loadState(username);
@@ -9346,7 +9535,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS21 = `
+  var CSS22 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -9523,11 +9712,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS21) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS22) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS21) + body);
+      this.set(this.css(CSS22) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -9552,7 +9741,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-upvote.mjs
   var arrow = (filled) => `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4l8 9h-5v7h-6v-7H4z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>`;
-  var CSS22 = `
+  var CSS23 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -9573,7 +9762,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const c = Math.max(0, this._count);
       const label = !this.client ? "Sign in to upvote" : this._voted ? "Remove upvote" : "Upvote";
       this.set(
-        this.css(CSS22) + `<button class="pill ${this._voted ? "on" : ""}" type="button" aria-pressed="${this._voted}" aria-label="${label}" title="${label}">${arrow(this._voted)}<span class="c">${c}</span></button>`
+        this.css(CSS23) + `<button class="pill ${this._voted ? "on" : ""}" type="button" aria-pressed="${this._voted}" aria-label="${label}" title="${label}">${arrow(this._voted)}<span class="c">${c}</span></button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -9608,7 +9797,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED4 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS23 = `
+  var CSS24 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -9679,10 +9868,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     async reload() {
       if (!this.client) {
-        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      this.set(this.css(CSS23) + `<p class="muted">Loading the co-op stream…</p>`);
+      this.set(this.css(CSS24) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st = await this.client.status();
@@ -9699,7 +9888,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         this._items = (await this.client.listShares())?.items ?? [];
       } catch {
-        this.set(this.css(CSS23) + `<p class="muted">Could not load Shares right now.</p>`);
+        this.set(this.css(CSS24) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       this.render();
@@ -9718,11 +9907,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const head = `<div class="head"><h3>Co-op stream</h3><button class="refresh" type="button">Refresh</button></div>`;
       const items = this._items || [];
       if (!items.length) {
-        this.set(this.css(CSS23) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS24) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
-      this.set(this.css(CSS23) + head + `<div data-list></div>`);
+      this.set(this.css(CSS24) + head + `<div data-list></div>`);
       this.on(".refresh", "click", () => this.reload());
       const list = document.createElement("gbti-card-list");
       list.mode = "detailed";
@@ -9755,7 +9944,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS23) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS24) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime3(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -9795,21 +9984,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     }
     _splash() {
-      this.set(this.css(CSS23) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS24) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS24 = `
+  var CSS25 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS24) + `<div class="stack">
+      this.set(this.css(CSS25) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -9819,7 +10008,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-shares", GbtiShares);
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS25 = `
+  var CSS26 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -9835,7 +10024,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS25) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS26) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -9843,7 +10032,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         membership = "unknown";
       }
       if (isLockedMembership(membership)) {
-        this.set(this.css(CSS25) + `<div class="splash">
+        this.set(this.css(CSS26) + `<div class="splash">
         <div class="lock">🔒</div>
         <h2>Your access is locked</h2>
         <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
@@ -9852,7 +10041,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>`);
         return;
       }
-      this.set(this.css(CSS25) + `<slot></slot>`);
+      this.set(this.css(CSS26) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -9865,7 +10054,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
     install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
   };
-  var CSS26 = `
+  var CSS27 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
@@ -9962,11 +10151,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const s = this._status;
       if (!s) {
-        this.set(this.css(CSS26) + `<p class="note">Checking your setup...</p>`);
+        this.set(this.css(CSS27) + `<p class="note">Checking your setup...</p>`);
         return;
       }
       if (s.ready) {
-        this.set(this.css(CSS26) + `<div class="ready">${check2(true)}<div class="big">You are ready to publish</div>
+        this.set(this.css(CSS27) + `<div class="ready">${check2(true)}<div class="big">You are ready to publish</div>
         <p class="note">Your drafts save to your copy, and we open the review request for you.</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
@@ -9982,7 +10171,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return `<li class="row"><span class="ic">${check2(false)}</span>${this._card(id, meta, s)}</li>`;
       }).filter(Boolean).join("");
       const reached = s.reachedGithub !== false;
-      this.set(this.css(CSS26) + `
+      this.set(this.css(CSS27) + `
       <div class="head"><h2>Set up publishing</h2><span class="count">${nDone} of 3</span></div>
       <div class="bar"><i style="width:${Math.round(nDone / 3 * 100)}%"></i></div>
       <ul>${rows}</ul>
@@ -10033,7 +10222,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE9 = "https://gbti.network";
-  var CSS27 = `
+  var CSS28 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -10105,15 +10294,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS27) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS28) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS27) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS28) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS27) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS28) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -10129,7 +10318,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS27) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS28) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
@@ -10187,7 +10376,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var SITE10 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS28 = `
+  var CSS29 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -10270,11 +10459,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS28) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS29) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS28) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS29) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -10283,7 +10472,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS28) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS29) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -10385,7 +10574,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-052: placeholder for referrals + rewards (SOW-007/008)
   ];
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS29 = `
+  var CSS30 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:2px; padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* SOW-052 squared aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:2px; cursor:pointer; }
@@ -10824,7 +11013,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._clearPolls();
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS29) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS30) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this.render();
@@ -10837,7 +11026,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       if (this._reviewing != null) {
-        this.set(this.css(CSS29) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+        this.set(this.css(CSS30) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
         this.on("[data-back]", "click", () => {
           this._reviewing = null;
           this.render();
@@ -10853,7 +11042,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const badge = t.id === "inbox" && this._inboxCount ? `<span class="tbadge">${esc(this._inboxCount)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS29) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+      this.set(this.css(CSS30) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this.render();
@@ -11107,7 +11296,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS30 = `
+  var CSS31 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -11267,12 +11456,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS30) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS31) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS30) + head + `<div data-body></div>`);
+      this.set(this.css(CSS31) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -11383,7 +11572,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS31 = `
+  var CSS32 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -11443,6 +11632,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._followed = null;
       this.render();
       if (!item || !this.client) return;
+      if (item.guid && this.client.newsOpened) Promise.resolve(this.client.newsOpened(item.guid, item.source)).catch(() => {
+      });
       try {
         const [status, srcs, prefs] = await Promise.all([
           this.client.status?.().catch(() => null),
@@ -11490,12 +11681,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS31) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS32) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS31) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS32) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -11513,7 +11704,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      this.set(this.css(CSS31) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2><p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS32) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2><p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -11597,7 +11788,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS32 = `
+  var CSS33 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -11813,7 +12004,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS32));
+        this.set(this.css(CSS33));
         return;
       }
       const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE12 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
@@ -11836,7 +12027,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const sideLink = it.type === "share" && it.url ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
-      this.set(this.css(CSS32) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${shareUpvote}</article>${side}</div></div>`);
+      this.set(this.css(CSS33) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${shareUpvote}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -11944,7 +12135,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-043: a self-loading members-only feed (not a per-type index)
   ];
   var CONTENT_TYPES = ["post", "product", "prompt"];
-  var CSS33 = `
+  var CSS34 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -12073,7 +12264,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS33) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS34) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -12086,7 +12277,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS33) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS34) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -12288,6 +12479,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
       newsDiscussed: (guid) => request("POST", "/api/news-discussed", { guid }),
       // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
+      newsOpened: (guid, source) => request("POST", "/api/news-opened", { guid, ...source ? { source } : {} }),
+      // SOW-111: the detail-open engagement beacon -> { ok, counted, posted }
       postComment: (b) => request("POST", "/api/comment", b),
       // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
       editComment: (b) => request("POST", "/api/comment/edit", b),
@@ -12368,6 +12561,26 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-056 P2
       quotePool: () => request("GET", "/api/quote-pool"),
       // SOW-063 P3: the splash quote pool { quotes } for the manager
+      contentChannelPool: () => request("GET", "/api/content-channel-pool"),
+      // SOW-087: the category -> Discord-channel map { channels }
+      setContentChannel: ({ category, channelId }) => request("POST", "/api/admin", { action: "content-channel-set", category, channelId }),
+      // SOW-087
+      removeContentChannel: ({ category }) => request("POST", "/api/admin", { action: "content-channel-remove", category }),
+      // SOW-087
+      moderationFlagPool: () => request("GET", "/api/moderation-flag-pool"),
+      // SOW-087: the moderation word lists { lists }
+      addModerationFlagTerm: ({ list, term }) => request("POST", "/api/admin", { action: "flag-term-add", list, term }),
+      // SOW-087
+      removeModerationFlagTerm: ({ list, term }) => request("POST", "/api/admin", { action: "flag-term-remove", list, term }),
+      // SOW-087
+      syndicationTemplatePool: () => request("GET", "/api/syndication-template-pool"),
+      // SOW-087: { templates, types }
+      setSyndicationTemplate: ({ type, template }) => request("POST", "/api/admin", { action: "syndication-template-set", type, template }),
+      // SOW-087
+      newsEngagementSettings: () => request("GET", "/api/news-engagement"),
+      // SOW-111: { settings, tiers }
+      setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request("POST", "/api/admin", { action: "news-engagement-set", enabled, openThreshold, tier, commentAutopost }),
+      // SOW-111
       addQuote: ({ text, author }) => request("POST", "/api/admin", { action: "quote-add", text, author }),
       // SOW-063 P3
       removeQuote: ({ text }) => request("POST", "/api/admin", { action: "quote-remove", text }),

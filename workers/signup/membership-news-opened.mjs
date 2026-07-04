@@ -15,7 +15,7 @@
 
 import { authorizeMember } from './membership-content.mjs';
 import { readSyndicationConfig } from './syndication-store.mjs';
-import { newsEngagement } from '../../membership/syndication-config.mjs';
+import { newsEngagement } from '../../membership/syndication-config-core.mjs';
 import { normalizeNewsOpens, applyOpen, distinctOpenerCount, shouldPost, markPosted } from '../../membership/news-opens.mjs';
 import { postNewsItemOnce } from './membership-news-publish.mjs';
 

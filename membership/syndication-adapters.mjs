@@ -7,7 +7,7 @@ import { createXAdapter } from '../clients/syndication/x.mjs';
 import { createLinkedinAdapter } from '../clients/syndication/linkedin.mjs';
 import { createMastodonAdapter } from '../clients/syndication/mastodon.mjs';
 import { createBlueskyAdapter } from '../clients/syndication/bluesky.mjs';
-import { enabledChannelNames } from './syndication-config.mjs';
+import { enabledChannelNames } from './syndication-config-core.mjs';
 import { secretsPresent } from './syndication-channels.mjs';
 
 const FACTORIES = {

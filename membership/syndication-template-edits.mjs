@@ -5,7 +5,7 @@
 //
 // SECURITY: this only COMPUTES the file edit. CODEOWNERS + the gate are the real boundary.
 
-import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement } from './syndication-config.mjs';
+import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement } from './syndication-config-core.mjs';
 
 export class TemplateEditError extends Error {}
 

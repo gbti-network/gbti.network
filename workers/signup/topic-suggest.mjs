@@ -10,7 +10,7 @@
 // house/syndication-config.yml flips to `keyword` (free) or `off` if quotas ever tighten.
 
 import { TOPICS_MIRROR_KEY } from '../../membership/topics-vocab.mjs';
-import { classifyMode } from '../../membership/syndication-config.mjs';
+import { classifyMode } from '../../membership/syndication-config-core.mjs';
 import { readSyndicationConfig } from './syndication-store.mjs';
 
 /** Read the mirrored topic vocabulary ({ key: { label, group? } }) from KV. Missing/invalid = {} (no suggestion). */
