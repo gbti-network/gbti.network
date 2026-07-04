@@ -47,7 +47,7 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
   const m = toSyndicationMirror({ enabled: true, hold_minutes: 60, upvote_threshold: 2, channels: { discord: true } });
   assert.deepEqual(m, {
     enabled: true, require_approval: true, hold_minutes: 60, upvote_threshold: 2, classify: 'ai',
-    channels: { discord: true, x: false, linkedin: false, mastodon: false, bluesky: false },
+    channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false },
   });
   // No surprise keys (no token/secret fields).
   assert.deepEqual(Object.keys(m).sort(), ['channels', 'classify', 'enabled', 'hold_minutes', 'require_approval', 'upvote_threshold']);

@@ -25,7 +25,10 @@ export const SYNDICATION_CONFIG_PATH = 'house/syndication-config.yml';
 export const SYNDICATION_MIRROR_KEY = 'synd:config';
 
 // The canonical channel set. Adding a channel here makes it a recognized, normalizable flag.
-export const CHANNELS = Object.freeze(['discord', 'x', 'linkedin', 'mastodon', 'bluesky']);
+// SOW-087: `discord-category` is the SECOND Discord post — the same item posted again to the channel mapped to
+// its category in house/content-channels.yml (the featured per-type `discord` post is unchanged). A first-class
+// channel so it gets its own on/off switch and its own per-channel idempotency in the queue.
+export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky']);
 
 // SOW-087: how a share's topic category is suggested at compose time. `ai` = Workers AI with a keyword
 // fallback; `keyword` = the free keyword match only; `off` = no suggestion (the member picks by hand).
@@ -37,7 +40,7 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   hold_minutes: 60,
   upvote_threshold: 2,
   classify: 'ai', // SOW-087: the share category suggestion mode
-  channels: Object.freeze({ discord: false, x: false, linkedin: false, mastodon: false, bluesky: false }),
+  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false }),
 });
 
 function asBool(v, fallback) {

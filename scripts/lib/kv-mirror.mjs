@@ -7,9 +7,12 @@
 // those are not set (local dry-runs, tests), it is a no-op that reports the reason. Injected fetch for tests.
 
 import { toSyndicationMirror } from '../../membership/syndication-config.mjs';
+import { toTopicsMirror, TOPICS_MIRROR_KEY } from '../../membership/topics-vocab.mjs';
 
 export const OVERRIDES_KV_KEY = 'overrides:mirror';
 export const SYNDICATION_KV_KEY = 'synd:config';
+export const CONTENT_CHANNELS_KV_KEY = 'synd:channels'; // SOW-087: house/content-channels.yml
+export const TOPICS_KV_KEY = TOPICS_MIRROR_KEY; // SOW-087: house/topics.yml (the share category suggester)
 
 /** Build the compact mirror blob the Worker reads. Stores the RAW parsed YAML (the Worker rebuilds Maps). */
 export function buildOverridesMirror(raw, now = new Date()) {
@@ -54,10 +57,14 @@ export async function mirrorOverridesToKv({ raw, env = process.env, now = new Da
  * Same REST + creds-gated no-op pattern as the overrides mirror; throws only on a real API error.
  */
 export async function mirrorSyndicationConfigToKv({ raw, env = process.env, fetchImpl = globalThis.fetch, key = SYNDICATION_KV_KEY } = {}) {
+  return putKvJson({ label: 'syndication config', body: JSON.stringify(toSyndicationMirror(raw ?? {})), env, fetchImpl, key });
+}
+
+/** Shared creds-gated KV REST PUT (the overrides-mirror pattern). Throws only on a real API error. */
+async function putKvJson({ label, body, env = process.env, fetchImpl = globalThis.fetch, key }) {
   const accountId = env.CF_ACCOUNT_ID;
   const namespaceId = env.CF_KV_NAMESPACE_ID;
   const apiToken = env.CF_API_TOKEN;
-  const body = JSON.stringify(toSyndicationMirror(raw ?? {}));
   if (!accountId || !namespaceId || !apiToken) {
     return { written: false, key, bytes: body.length, reason: 'CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN not set' };
   }
@@ -69,7 +76,22 @@ export async function mirrorSyndicationConfigToKv({ raw, env = process.env, fetc
   });
   if (!res || !res.ok) {
     const detail = res && res.text ? await res.text().catch(() => '') : '';
-    throw new Error(`syndication config mirror write failed: ${res ? res.status : 'no response'} ${String(detail).slice(0, 200)}`);
+    throw new Error(`${label} mirror write failed: ${res ? res.status : 'no response'} ${String(detail).slice(0, 200)}`);
   }
   return { written: true, key, bytes: body.length };
+}
+
+/** SOW-087: the category -> Discord-channel map mirror ({ generatedAt, channels }). `raw` is parsed YAML. */
+export function buildContentChannelsMirror(raw, now = new Date()) {
+  return { generatedAt: now.toISOString(), channels: Array.isArray(raw?.channels) ? raw.channels : [] };
+}
+
+/** SOW-087: PUT house/content-channels.yml -> KV synd:channels, so the drain routes category posts live. */
+export async function mirrorContentChannelsToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = CONTENT_CHANNELS_KV_KEY } = {}) {
+  return putKvJson({ label: 'content channels', body: JSON.stringify(buildContentChannelsMirror(raw, now)), env, fetchImpl, key });
+}
+
+/** SOW-087: PUT house/topics.yml -> KV topics:vocab, so the Worker's share category suggester sees the live vocabulary. */
+export async function mirrorTopicsToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = TOPICS_KV_KEY } = {}) {
+  return putKvJson({ label: 'topics vocabulary', body: JSON.stringify(toTopicsMirror(raw, () => now.toISOString())), env, fetchImpl, key });
 }

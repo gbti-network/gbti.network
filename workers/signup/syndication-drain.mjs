@@ -4,10 +4,10 @@
 // is honored because the item is re-read immediately before posting. A failed channel is retried next tick up to
 // MAX_DRAIN_ATTEMPTS, then the item is marked failed. Pure over an injected kv/now/fetch/adapters (unit-tested).
 
-import { markClaimed, markSent, markFailed, recordChannel, channelDone } from '../../membership/syndication-queue.mjs';
+import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue } from '../../membership/syndication-queue.mjs';
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
 import { isSyndicationEnabled, requiresApproval } from '../../membership/syndication-config.mjs';
-import { readSyndicationConfig, getItem, putItem, listDue, removeFromPending } from './syndication-store.mjs';
+import { readSyndicationConfig, readContentChannels, getItem, putItem, listDue, removeFromPending } from './syndication-store.mjs';
 
 export async function drainSyndication(env, {
   kv = env?.SIGNUP_KV,
@@ -24,16 +24,19 @@ export async function drainSyndication(env, {
   const cap = Number(limit ?? env?.MAX_DRAIN_PER_TICK ?? 10);
   // SOW-058: with require_approval (the default), ONLY superadmin-approved items are due; a pending item never posts.
   const requireApproval = requiresApproval(cfg);
-  const eligibleStatus = requireApproval ? 'approved' : 'pending';
   const due = await listDue(kv, { now, limit: cap, requireApproval });
-  const { ready, skipped } = resolveAdapterRun({ cfg, env, adapters, fetchImpl });
+  // SOW-087: the category -> channel map feeds the discord-category adapter (null = category posts no-op).
+  const channelMap = await readContentChannels(kv);
+  const { ready, skipped } = resolveAdapterRun({ cfg, env, adapters, fetchImpl, channelMap });
 
   let sent = 0;
   let failed = 0;
   for (const stale of due) {
     // Fresh read to honor a cancel that landed since the list snapshot, and to claim against a cron overlap.
+    // isDue re-checks eligibility on the fresh item (SOW-087: an approved FLAGGED item is due even when
+    // require_approval is off, so a plain status compare would wrongly skip it).
     let item = await getItem(kv, stale.id);
-    if (!item || item.status !== eligibleStatus) continue; // re-read guard: never post an unapproved/cancelled item
+    if (!item || !isDue(item, Number(now()), { requireApproval })) continue; // never post an unapproved/cancelled item
     item = markClaimed(item, { now });
     item = { ...item, attempts: (item.attempts || 0) + 1 };
     await putItem(kv, item);
@@ -52,7 +55,10 @@ export async function drainSyndication(env, {
       } catch (e) {
         result = { ok: false, error: String(e?.message || e) };
       }
-      if (result?.ok) {
+      if (result?.ok && result.skipped) {
+        // SOW-087: a clean per-item no-op (e.g. no category channel mapped). Terminal, never retried.
+        item = recordChannel(item, adapter.name, { status: 'skipped', reason: result.reason || 'skipped', at: Number(now()) });
+      } else if (result?.ok) {
         item = recordChannel(item, adapter.name, { status: 'sent', id: result.id || null, url: result.url || null, at: Number(now()) });
       } else {
         anyFail = true;

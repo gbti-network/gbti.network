@@ -29,7 +29,7 @@ import { deriveStatusFromCustomer, STATUS } from '../membership/derive-status.mj
 import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '../membership/overrides.mjs';
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv } from './lib/kv-mirror.mjs';
 import { syncFavoriteCounts, readCountsFromDisk } from './lib/favorite-counts.mjs';
 import { syncUpvoteCounts, readCountsFromDisk as readUpvoteCountsFromDisk } from './lib/upvote-counts.mjs';
 import { mergeState, alreadyLabeled, conflictComment, CONFLICT_LABEL } from './lib/pr-conflict.mjs';
@@ -536,6 +536,27 @@ async function main() {
       console.log(r.written ? `reconcile: mirrored syndication config to KV (${r.bytes} bytes).` : `reconcile: syndication config KV mirror SKIPPED (${r.reason}).`);
     } catch (e) {
       console.error('reconcile: syndication config KV mirror FAILED:', e?.message ?? e);
+      process.exitCode = 1;
+    }
+  }
+
+  // SOW-087: mirror house/content-channels.yml -> KV synd:channels (the drain's category -> channel routing)
+  // and house/topics.yml -> KV topics:vocab (the Worker's share category suggester). Same pattern as above.
+  for (const { file, run, key } of [
+    { file: 'content-channels.yml', run: mirrorContentChannelsToKv, key: 'synd:channels' },
+    { file: 'topics.yml', run: mirrorTopicsToKv, key: 'topics:vocab' },
+  ]) {
+    let rawDoc = {};
+    try { rawDoc = yaml.load(fs.readFileSync(path.join(ROOT, 'house', file), 'utf8')) || {}; } catch { rawDoc = {}; }
+    if (dryRun) {
+      console.log(`reconcile: DRY RUN would mirror house/${file} to KV (key ${key}).`);
+      continue;
+    }
+    try {
+      const r = await run({ raw: rawDoc, env });
+      console.log(r.written ? `reconcile: mirrored house/${file} to KV (${r.bytes} bytes).` : `reconcile: house/${file} KV mirror SKIPPED (${r.reason}).`);
+    } catch (e) {
+      console.error(`reconcile: house/${file} KV mirror FAILED:`, e?.message ?? e);
       process.exitCode = 1;
     }
   }

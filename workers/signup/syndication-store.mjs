@@ -19,6 +19,7 @@ export const SYND_ITEM_KEY = (id) => `synd:item:${id}`;
 export const SYND_PENDING_KEY = 'synd:pending';
 export const SYND_DEDUPE_KEY = (key) => `synd:dedupe:${key}`;
 export const SYND_CONFIG_KEY = 'synd:config';
+export const SYND_CHANNELS_KEY = 'synd:channels'; // SOW-087: the mirrored house/content-channels.yml
 
 const TERMINAL_TTL_SECONDS = 30 * 24 * 60 * 60; // self-prune a sent/cancelled/failed item after ~30 days
 
@@ -28,6 +29,18 @@ export async function readSyndicationConfig(kv) {
   let raw = null;
   try { raw = await kv.get(SYND_CONFIG_KEY, 'json'); } catch { raw = null; }
   return syndicationConfigFromParsed(raw ?? DEFAULT_SYNDICATION_CONFIG);
+}
+
+/** SOW-087: the category -> Discord-channel map mirror ({ channels: [{ category, channelId }] }). A missing or
+ *  unreadable mirror is null: the category post is then a recorded no-op (fail-closed, featured post unaffected). */
+export async function readContentChannels(kv) {
+  if (!kv) return null;
+  try {
+    const raw = await kv.get(SYND_CHANNELS_KEY, 'json');
+    return raw && typeof raw === 'object' && Array.isArray(raw.channels) ? raw : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getItem(kv, id) {

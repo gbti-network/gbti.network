@@ -373,6 +373,19 @@ function validateNewsChannelsConfig() {
 }
 validateNewsChannelsConfig();
 
+// SOW-087: the content/share category -> Discord channel map (house/content-channels.yml). The same shape and
+// rules as the news map (a list of { category, numeric channelId }, no duplicate category), validated by the
+// same pure core with the file label swapped.
+function validateContentChannelsConfig() {
+  const rel = 'house/content-channels.yml';
+  if (!has(path.join(ROOT, rel))) return; // optional config
+  let parsed;
+  try { parsed = yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')); }
+  catch { errors.push(`${rel}: not valid YAML`); return; }
+  for (const err of validateNewsChannels(parsed, { file: 'content-channels.yml' })) errors.push(err);
+}
+validateContentChannelsConfig();
+
 // SOW-054 + SOW-080: the followed-topic -> news-category map (house/topic-map.yml). Absent is fine; when present,
 // every topic must be a real topic in house/topics.yml (the flat vocabulary, no longer the content taxonomy) and
 // every mapped news category must be canonical. Pure validation lives in membership/topic-map.mjs.

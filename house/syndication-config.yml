@@ -12,9 +12,11 @@ syndication:
   enabled: true            # ACTIVE 2026-06-24. Approval-gated: nothing posts until a superadmin approves it.
   require_approval: true    # SOW-058: opt-IN. NOTHING posts until a superadmin approves it in the tracker.
   hold_minutes: 60          # legacy auto-hold; IGNORED while require_approval is true (approval is the gate)
-  upvote_threshold: 2       # SOW-057: distinct non-author members required to ENQUEUE a share (the author is excluded)
+  upvote_threshold: 2       # retired as a syndication trigger (SOW-087: shares enqueue on publish); kept for the news follow-up
+  classify: ai              # SOW-087: the share category suggestion (ai = Workers AI + keyword fallback | keyword | off)
   channels:                 # full syndication: all channels attempted on approval (one still needs its secret, else skipped)
     discord: true
+    discord-category: true  # SOW-087: the SECOND Discord post, to the category channel in house/content-channels.yml
     x: true
     linkedin: true
     mastodon: true

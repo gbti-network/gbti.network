@@ -125,3 +125,51 @@ test('an APPROVED item IS posted on the next drain tick', async () => {
   assert.equal(calls.length, 1);
   assert.equal((await getItem(kv, r.id)).status, 'sent');
 });
+
+// ---- SOW-087: the category channel map + the flag-approval gate in the drain ----
+
+test('drain records a skipped adapter result (unmapped category) as terminal, never retried', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg({ discord: true, 'discord-category': true }) });
+  const r = await enqueue({ SIGNUP_KV: kv }, { source: 'share', targetSlug: 'a/x', url: 'https://ex.com', category: 'gardening' }, { kv, now: at(0) });
+  const posts = [];
+  const adapters = {
+    discord: { name: 'discord', enabled: () => true, post: async () => { posts.push('discord'); return { ok: true, id: 'm1' }; } },
+    'discord-category': { name: 'discord-category', enabled: () => true, post: async () => ({ ok: true, skipped: true, reason: 'no channel mapped' }) },
+  };
+  const out = await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters });
+  assert.equal(out.drained, 1);
+  const item = await getItem(kv, r.id);
+  assert.equal(item.status, 'sent');
+  assert.equal(item.perChannel['discord-category'].status, 'skipped');
+  assert.equal(item.perChannel.discord.status, 'sent');
+});
+
+test('drain reads the synd:channels mirror and hands it to the real discord-category adapter', async () => {
+  const kv = fakeKV({
+    [SYND_CONFIG_KEY]: cfg({ 'discord-category': true }),
+    'synd:channels': JSON.stringify({ generatedAt: 'T0', channels: [{ category: 'devops', channelId: '777' }] }),
+  });
+  const r = await enqueue({ SIGNUP_KV: kv }, { source: 'share', targetSlug: 'a/y', url: 'https://ex.com', category: 'devops' }, { kv, now: at(0) });
+  const calls = [];
+  const fetchImpl = async (url, opts) => { calls.push(url); return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'm7', channel_id: '777' }) }; };
+  const out = await drainSyndication(env(), { kv, now: at(AFTER_HOLD), fetchImpl });
+  assert.equal(out.drained, 1);
+  assert.ok(calls.some((u) => u.includes('/channels/777/messages')));
+  const item = await getItem(kv, r.id);
+  assert.equal(item.perChannel['discord-category'].status, 'sent');
+});
+
+test('SOW-087: a flagged item never posts unapproved with require_approval off, and posts once approved', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg({ discord: true }) });
+  const r = await enqueue({ SIGNUP_KV: kv }, { source: 'share', targetSlug: 'a/f', url: 'https://ex.com', flags: ['profanity'] }, { kv, now: at(0) });
+  const calls = [];
+  let out = await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk(calls) });
+  assert.equal(out.drained, 0);
+  assert.equal(calls.length, 0); // flagged: waits for a superadmin even though require_approval is off
+  // superadmin approves -> the next tick posts it (the fresh-read guard must honor the approved flagged item)
+  const item = await getItem(kv, r.id);
+  await kv.put(`synd:item:${r.id}`, JSON.stringify({ ...item, status: 'approved', approvedAt: 1, approvedBy: 'root' }));
+  out = await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk(calls) });
+  assert.equal(out.drained, 1);
+  assert.equal(calls.length, 1);
+});
