@@ -61,6 +61,7 @@ import {
   getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, getQuotePool,
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate,
+  getNewsEngagementSettings, setNewsEngagementSettings,
 } from './admin-ops.mjs';
 
 export { CLIENT_VERSION } from './operations.mjs';
@@ -81,6 +82,7 @@ const ADMIN_ACTIONS = {
   'flag-term-add': addModerationFlagTerm, // SOW-087: moderation word lists
   'flag-term-remove': removeModerationFlagTerm, // SOW-087
   'syndication-template-set': setSyndicationTemplate, // SOW-087: the per-type Discord template
+  'news-engagement-set': setNewsEngagementSettings, // SOW-111: the news auto-share settings
 };
 
 const STATUS_FOR = {
@@ -177,6 +179,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/content-channel-pool') return run(() => getContentChannelPool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/moderation-flag-pool') return run(() => getModerationFlagPool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/syndication-template-pool') return run(() => getSyndicationTemplatePool(ctx)); // SOW-087
+  if (method === 'GET' && pathname === '/api/news-engagement') return run(() => getNewsEngagementSettings(ctx)); // SOW-111
   if (method === 'GET' && pathname === '/api/open-pulls') return run(() => getOpenPulls(ctx)); // SOW-038 P2: open content-PR queue (admin-gated)
   if (method === 'GET' && pathname === '/api/syndication') return run(() => getSyndicationQueue(ctx)); // SOW-058: superadmin syndication tracker
   if (method === 'POST' && pathname === '/api/syndication/approve') return run(() => approveSyndication(ctx, body ?? {})); // SOW-058: superadmin approve

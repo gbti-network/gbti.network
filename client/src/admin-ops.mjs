@@ -19,8 +19,8 @@ import { addSource as addSourceEdit, removeSource as removeSourceEdit, setSource
 import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabled as setQuoteEnabledEdit, QuoteEditError } from '../../membership/quote-edits.mjs'; // SOW-063 P3
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // SOW-087
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
-import { setTemplate as setTemplateEdit, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087
-import { syndicationConfigFromParsed, TEMPLATE_TYPES } from '../../membership/syndication-config.mjs'; // SOW-087
+import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111
+import { syndicationConfigFromParsed, TEMPLATE_TYPES, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config.mjs'; // SOW-087 + SOW-111
 import { parseContentFile } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 
@@ -443,6 +443,24 @@ export async function setSyndicationTemplate(ctx, { type, template } = {}) {
     message: `Set the ${type} Discord template`,
     title: `Set Discord template: ${type}`,
     noopMsg: `template unchanged: ${type}`,
+    errType: TemplateEditError,
+  });
+}
+
+// SOW-111: the news engagement auto-share settings (house/syndication-config.yml `news_engagement`).
+
+/** Read the normalized news engagement settings for the manager UI. Public data; read-only. */
+export async function getNewsEngagementSettings(ctx) {
+  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
+  return { settings: { ...newsEngagement(syndicationConfigFromParsed(parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS] };
+}
+
+export async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, commentAutopost } = {}) {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setNewsEngagementEdit(parsed, { enabled, openThreshold, tier, commentAutopost }, actionCtx(ctx)), {
+    branch: 'gbti/news-engagement-set',
+    message: 'Set the news engagement auto-share settings',
+    title: 'Set news auto-share settings',
+    noopMsg: 'news engagement settings unchanged',
     errType: TemplateEditError,
   });
 }

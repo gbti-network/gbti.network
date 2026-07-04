@@ -147,6 +147,8 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     removeModerationFlagTerm: ({ list, term }) => request('POST', '/api/admin', { action: 'flag-term-remove', list, term }), // SOW-087
     syndicationTemplatePool: () => request('GET', '/api/syndication-template-pool'), // SOW-087: { templates, types }
     setSyndicationTemplate: ({ type, template }) => request('POST', '/api/admin', { action: 'syndication-template-set', type, template }), // SOW-087
+    newsEngagementSettings: () => request('GET', '/api/news-engagement'), // SOW-111: { settings, tiers }
+    setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request('POST', '/api/admin', { action: 'news-engagement-set', enabled, openThreshold, tier, commentAutopost }), // SOW-111
     addQuote: ({ text, author }) => request('POST', '/api/admin', { action: 'quote-add', text, author }), // SOW-063 P3
     removeQuote: ({ text }) => request('POST', '/api/admin', { action: 'quote-remove', text }), // SOW-063 P3
     setQuoteEnabled: ({ text, enabled }) => request('POST', '/api/admin', { action: 'quote-toggle', text, enabled }), // SOW-063 P3

@@ -17,6 +17,7 @@ import yaml from 'js-yaml';
 import { flipStatus } from '../reconcile.mjs';
 import { buildAuditRecord, storeAuditRecord } from './erase-audit.mjs';
 import { scrubVoter } from '../../membership/share-votes.mjs';
+import { scrubOpener } from '../../membership/news-opens.mjs'; // SOW-111: per-item news detail-open sets
 import { scrubCounterpart } from '../../workers/signup/conversion-snapshot-store.mjs'; // SOW-059 P1c
 
 export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
@@ -138,6 +139,26 @@ export async function eraseShareVotes({ githubId, env = process.env, fetchImpl =
   return { scrubbed };
 }
 
+/**
+ * SOW-111 GDPR: scrub the member's github_id from every per-item news detail-open set (`news-opens:*`). These
+ * sets are keyed by news guid (not by member), so the per-member activity: delete does not reach them.
+ * Mirrors eraseShareVotes (list -> scrub -> write back). Reported no-op without CF creds.
+ */
+export async function eraseNewsOpens({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (!githubId) throw new Error('a github_id is required');
+  const listed = await listKvByPrefix({ prefix: 'news-opens:', env, fetchImpl });
+  if (!listed.available) return { skipped: true, reason: listed.reason };
+  let scrubbed = 0;
+  for (const { key, value } of listed.entries) {
+    const { record, changed } = scrubOpener(value, String(githubId));
+    if (changed) {
+      await putKvValue({ key, value: JSON.stringify(record), env, fetchImpl });
+      scrubbed++;
+    }
+  }
+  return { scrubbed };
+}
+
 /** Hard-delete the member's OWN frozen conversion snapshot (SOW-059: their attribution + invite/collaboration record). */
 export async function eraseConversionSnapshot({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   if (!githubId) throw new Error('a github_id is required');
@@ -176,6 +197,7 @@ export function planErasure({ githubId, username } = {}) {
     { step: 'activity', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the edge-store keys ${ACTIVITY_KEY(githubId)} (favorites + collections) and ${FOLLOWS_KEY(githubId)} (the follow graph).` },
     { step: 'lookup-cache', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the lookup-cache key ${LOOKUP_KEY(githubId)} (github_id -> Stripe customer_id).` },
     { step: 'share-votes', auto: true, tool: 'erase-member.mjs --apply', action: `Scrub github_id ${githubId} from every per-target share-vote set (upvotes:share:*); syndication queue items auto-expire via TTL.` },
+    { step: 'news-opens', auto: true, tool: 'erase-member.mjs --apply', action: `Scrub github_id ${githubId} from every per-item news detail-open set (news-opens:*, SOW-111).` },
     { step: 'conv-snapshot', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the member's frozen conversion snapshot ${CONV_SNAPSHOT_KEY(githubId)} (SOW-059).` },
     { step: 'conv-counterpart', auto: true, tool: 'erase-member.mjs --apply', action: `Scrub github_id ${githubId} from every OTHER member's frozen snapshot (conv:*) where they are a first/last-touch owner, inviter, or collaborator.` },
     { step: 'discord', auto: true, tool: 'erase-member.mjs --apply', action: 'Remove the member\'s managed Discord roles (Member/Trial/Locked).' },
@@ -358,6 +380,7 @@ export async function runErasure({
   await runStep('prefs', () => erasePrefs({ githubId, env, fetchImpl })); // SOW-046: categories + followed news channels
   await runStep('lookup-cache', () => eraseLookupCache({ githubId, env, fetchImpl }));
   await runStep('share-votes', () => eraseShareVotes({ githubId, env, fetchImpl })); // SOW-057: per-target voter sets
+  await runStep('news-opens', () => eraseNewsOpens({ githubId, env, fetchImpl })); // SOW-111: per-item opener sets
   await runStep('conv-snapshot', () => eraseConversionSnapshot({ githubId, env, fetchImpl })); // SOW-059: own frozen snapshot
   await runStep('conv-counterpart', () => scrubConversionSnapshots({ githubId, env, fetchImpl })); // SOW-059: scrub as counterpart
   await runStep('discord', () => eraseDiscordRoles({ githubId, stripe, discord, env }));

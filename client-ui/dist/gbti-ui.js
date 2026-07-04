@@ -4547,19 +4547,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       try {
-        const [channels, flags, templates] = await Promise.all([
+        const [channels, flags, templates, engagement] = await Promise.all([
           this.client.contentChannelPool(),
           this.client.moderationFlagPool(),
-          this.client.syndicationTemplatePool()
+          this.client.syndicationTemplatePool(),
+          this.client.newsEngagementSettings ? this.client.newsEngagementSettings() : null
         ]);
         this._channels = channels?.channels || [];
         this._lists = flags?.lists || {};
         this._templates = templates?.templates || {};
         this._types = templates?.types || ["share", "post", "product", "prompt"];
+        this._engagement = engagement?.settings || null;
+        this._tiers = engagement?.tiers || ["paid", "paid-trial", "signed-in"];
       } catch {
         this._channels = [];
         this._lists = {};
         this._templates = {};
+        this._engagement = null;
         this._msg = "Could not load the channel map.";
       }
       this._loading = false;
@@ -4607,11 +4611,45 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>
       <h4>Discord post templates <span class="hint">(variables: {memberdiscord} {fullName} {author} {shareurl} {title} {category}; blank = default)</span></h4>
       ${tmplRows}
+      ${this._engagementHtml()}
       ${listBlocks}
     </div>`);
       this._wire();
     }
+    // SOW-111: the news auto-share settings (an item posts to its mapped category channel on member engagement).
+    _engagementHtml() {
+      const e = this._engagement;
+      if (!e) return "";
+      const tierOpts = (this._tiers || []).map((t) => `<option value="${esc(t)}" ${e.tier === t ? "selected" : ""}>${esc(t)}</option>`).join("");
+      return `<h4>News auto-share <span class="hint">(engagement posts a news item to its mapped category channel; one comment posts immediately)</span></h4>
+      <div class="add">
+        <select data-eng-enabled aria-label="News auto-share on or off">
+          <option value="true" ${e.enabled ? "selected" : ""}>On</option>
+          <option value="false" ${e.enabled ? "" : "selected"}>Off</option>
+        </select>
+        <input data-eng-threshold type="number" min="1" max="1000" value="${esc(String(e.open_threshold))}" aria-label="Distinct opens before auto-post" />
+        <select data-eng-tier aria-label="Whose engagement counts">${tierOpts}</select>
+        <select data-eng-comment aria-label="A comment posts immediately">
+          <option value="true" ${e.comment_autopost ? "selected" : ""}>Comment posts</option>
+          <option value="false" ${e.comment_autopost ? "" : "selected"}>Comment does not post</option>
+        </select>
+        <button class="btn" type="button" data-eng-save>Save</button>
+      </div>
+      <p class="hint" style="margin:-6px 0 14px">Opens count distinct members at the threshold; banned accounts never count. Applies after the next reconcile mirror sync.</p>`;
+    }
     _wire() {
+      this.on("[data-eng-save]", "click", () => {
+        const enabled = this.$("[data-eng-enabled]")?.value === "true";
+        const openThreshold = Number(this.$("[data-eng-threshold]")?.value || 0);
+        const tier = this.$("[data-eng-tier]")?.value || "paid";
+        const commentAutopost = this.$("[data-eng-comment]")?.value === "true";
+        if (!Number.isInteger(openThreshold) || openThreshold < 1) {
+          this._msg = "The open threshold must be a whole number of 1 or more.";
+          this.render();
+          return;
+        }
+        this._run(() => this.client.setNewsEngagement({ enabled, openThreshold, tier, commentAutopost }));
+      });
       this.on("[data-map-add]", "click", () => {
         const category = (this.$("[data-map-cat]")?.value || "").trim().toLowerCase();
         const channelId = (this.$("[data-map-ch]")?.value || "").trim();
@@ -10948,6 +10986,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._followed = null;
       this.render();
       if (!item || !this.client) return;
+      if (item.guid && this.client.newsOpened) Promise.resolve(this.client.newsOpened(item.guid, item.source)).catch(() => {
+      });
       try {
         const [status, srcs, prefs] = await Promise.all([
           this.client.status?.().catch(() => null),
@@ -11793,6 +11833,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
       newsDiscussed: (guid) => request("POST", "/api/news-discussed", { guid }),
       // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
+      newsOpened: (guid, source) => request("POST", "/api/news-opened", { guid, ...source ? { source } : {} }),
+      // SOW-111: the detail-open engagement beacon -> { ok, counted, posted }
       postComment: (b) => request("POST", "/api/comment", b),
       // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
       editComment: (b) => request("POST", "/api/comment/edit", b),
@@ -11889,6 +11931,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-087: { templates, types }
       setSyndicationTemplate: ({ type, template }) => request("POST", "/api/admin", { action: "syndication-template-set", type, template }),
       // SOW-087
+      newsEngagementSettings: () => request("GET", "/api/news-engagement"),
+      // SOW-111: { settings, tiers }
+      setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request("POST", "/api/admin", { action: "news-engagement-set", enabled, openThreshold, tier, commentAutopost }),
+      // SOW-111
       addQuote: ({ text, author }) => request("POST", "/api/admin", { action: "quote-add", text, author }),
       // SOW-063 P3
       removeQuote: ({ text }) => request("POST", "/api/admin", { action: "quote-remove", text }),

@@ -293,3 +293,24 @@ test('SOW-087: the editor writes are superadmin-only (an admin is forbidden) and
   const tmplSet = await dispatch(ctxFor({ repo: adminRepo(), files: { ...superFiles, 'house/syndication-config.yml': 'syndication:\n  enabled: true\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'syndication-template-set', type: 'post', template: '{title} {url}' } });
   assert.equal(tmplSet.status, 200);
 });
+
+test('SOW-111: the news-engagement settings read is public; the write is superadmin-gated', async () => {
+  const files = {
+    'house/syndication-config.yml': 'syndication:\n  enabled: true\n  news_engagement:\n    enabled: true\n    open_threshold: 3\n    tier: paid-trial\n',
+  };
+  const pool = await dispatch(ctxFor({ identity: null, token: null, files }), { pathname: '/api/news-engagement' });
+  assert.equal(pool.status, 200);
+  assert.deepEqual(pool.json.settings, { enabled: true, open_threshold: 3, tier: 'paid-trial', comment_autopost: true });
+  assert.ok(pool.json.tiers.includes('signed-in'));
+
+  const superFiles = { ...files, 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' };
+  const repo = adminRepo();
+  const w = await dispatch(ctxFor({ repo, files: superFiles }), { pathname: '/api/admin', method: 'POST', body: { action: 'news-engagement-set', openThreshold: 5 } });
+  assert.equal(w.status, 200);
+  assert.equal(w.json.prNumber, 88);
+  assert.match(repo.puts[0].content, /open_threshold: 5/);
+  assert.match(repo.puts[0].content, /tier: paid-trial/, 'the unpatched fields survive');
+
+  const adminOnly = await dispatch(ctxFor({ repo: adminRepo(), files: { ...files, 'house/roles.yml': 'admins:\n  - github_id: "1"\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'news-engagement-set', openThreshold: 5 } });
+  assert.equal(adminOnly.status, 403);
+});
