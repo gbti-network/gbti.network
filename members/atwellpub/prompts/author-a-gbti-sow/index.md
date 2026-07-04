@@ -2,6 +2,7 @@
 title: Manage Statements of Work with Claude Code
 slug: author-a-gbti-sow
 status: published
+publishedAt: 2026-07-02
 shortDescription: >-
   This is a Claude Code skill that assists with scope of work (SOW) management. It comes with commands
   to ship a kanban style lane management system for markdown scope of work files, as well as commands
