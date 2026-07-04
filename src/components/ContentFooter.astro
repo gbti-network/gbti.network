@@ -15,10 +15,12 @@ interface Props {
   author: string;
   publishedAt?: Date;
   via?: string; // referral attribution tag; defaults to "<type>:<slug>"
+  wide?: boolean; // span the full content-column width (e.g. inside the prompt main column) instead of the centered reading column
+  hideAuthor?: boolean; // skip the "Written by" box when the page already shows the author elsewhere (e.g. the prompt sidebar Author card)
 }
-const { type, slug, author, publishedAt, via } = Astro.props;
+const { type, slug, author, publishedAt, via, wide = false, hideAuthor = false } = Astro.props;
 const viaTag = via ?? `${type}:${slug}`;
 ---
 <CommunityInvite author={author} via={viaTag} />
-<AuthorBox author={author} publishedAt={publishedAt} />
-<Comments targetType={type} targetSlug={slug} author={author} />
+{!hideAuthor && <AuthorBox author={author} publishedAt={publishedAt} />}
+<Comments targetType={type} targetSlug={slug} author={author} wide={wide} />

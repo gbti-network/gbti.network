@@ -102,6 +102,9 @@ const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.netw
               {!isStub(prompt) && d.encryptedBody && <LockedBody encPath={d.encryptedBody} kind="section" />}
             </div>
           </div>
+          <!-- The author note + discussion live in the MAIN column, full-width to match the prompt block (the
+               author already appears in the sidebar card, so the "Written by" box is hidden here). -->
+          <ContentFooter type="prompt" slug={d.slug} author={d.author} publishedAt={d.publishedAt} wide hideAuthor />
         </div>
 
         <!-- SIDEBAR: meta — summary, author + see-more, categories, tags, targets -->
@@ -170,8 +173,6 @@ const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.netw
           )}
         </aside>
       </div>
-
-      <ContentFooter type="prompt" slug={d.slug} author={d.author} publishedAt={d.publishedAt} />
     </div>
   </section>
   <EditHooks type="prompt" owner={d.author} slug={d.slug} />
