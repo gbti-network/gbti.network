@@ -59,6 +59,8 @@ import { renderMarkdown } from './markdown.mjs';
 import {
   banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent,
   getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, getQuotePool,
+  getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
+  setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate,
 } from './admin-ops.mjs';
 
 export { CLIENT_VERSION } from './operations.mjs';
@@ -74,6 +76,11 @@ const ADMIN_ACTIONS = {
   republish: republishContent, // SOW-071: the inverse of deplatform (un-hide)
   'category-add': addContentCategory, // SOW-055: category manager (add a category/subcategory)
   'category-rename': renameContentCategoryLabel, // SOW-055: rename a category's display label
+  'content-channel-set': setContentChannel, // SOW-087: map a category to a Discord channel
+  'content-channel-remove': removeContentChannel, // SOW-087
+  'flag-term-add': addModerationFlagTerm, // SOW-087: moderation word lists
+  'flag-term-remove': removeModerationFlagTerm, // SOW-087
+  'syndication-template-set': setSyndicationTemplate, // SOW-087: the per-type Discord template
 };
 
 const STATUS_FOR = {
@@ -166,6 +173,9 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/taxonomy') return run(() => getTaxonomy(ctx)); // SOW-055: the canonical category tree for the manager UI
   if (method === 'GET' && pathname === '/api/news-source-pool') return run(() => getNewsSourcePool(ctx)); // SOW-056/079: news-source pool (npm parity with the extension)
   if (method === 'GET' && pathname === '/api/quote-pool') return run(() => getQuotePool(ctx)); // SOW-063/079: splash quote pool (npm parity with the extension)
+  if (method === 'GET' && pathname === '/api/content-channel-pool') return run(() => getContentChannelPool(ctx)); // SOW-087
+  if (method === 'GET' && pathname === '/api/moderation-flag-pool') return run(() => getModerationFlagPool(ctx)); // SOW-087
+  if (method === 'GET' && pathname === '/api/syndication-template-pool') return run(() => getSyndicationTemplatePool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/open-pulls') return run(() => getOpenPulls(ctx)); // SOW-038 P2: open content-PR queue (admin-gated)
   if (method === 'GET' && pathname === '/api/syndication') return run(() => getSyndicationQueue(ctx)); // SOW-058: superadmin syndication tracker
   if (method === 'POST' && pathname === '/api/syndication/approve') return run(() => approveSyndication(ctx, body ?? {})); // SOW-058: superadmin approve

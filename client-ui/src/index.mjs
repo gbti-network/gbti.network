@@ -24,6 +24,7 @@ import './elements/gbti-category-manager.mjs'; // SOW-055: superadmin category m
 import './elements/gbti-news-source-manager.mjs'; // SOW-056 P2: superadmin news-source manager
 import './elements/gbti-quote-manager.mjs'; // SOW-063 P3: superadmin splash-quote manager
 import './elements/gbti-syndication-tracker.mjs'; // SOW-058: superadmin syndication tracker
+import './elements/gbti-channel-map-manager.mjs'; // SOW-087: superadmin category-channel map + template + flag-word editor
 import './elements/gbti-edit-panel.mjs';
 import './elements/gbti-locked-content.mjs';
 import './elements/gbti-favorite.mjs';

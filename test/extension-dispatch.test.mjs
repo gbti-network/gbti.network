@@ -244,3 +244,52 @@ test('pr-status: rejects non-positive-integer PR numbers before hitting GitHub (
   assert.equal(good.status, 200);
   assert.deepEqual(calls, [7], 'a valid number reaches gateStatus coerced to an integer');
 });
+
+// ---- SOW-087: the channel-map / template / flag-word editors from the extension ----
+
+test('SOW-087: the channel-map public reads load WITHOUT identity; a superadmin write opens the house PR', async () => {
+  const files = {
+    'house/content-channels.yml': '# SOW-087 doc header\nchannels:\n  - category: ai\n    channelId: "11111"\n',
+    'house/moderation-flags.yml': 'lists:\n  political:\n    - election\n  profanity: []\n',
+    'house/syndication-config.yml': 'syndication:\n  enabled: true\n  templates:\n    share: "Shared by {memberdiscord} {shareurl}"\n',
+  };
+  const noId = () => ctxFor({ identity: null, token: null, files });
+  const pool = await dispatch(noId(), { pathname: '/api/content-channel-pool' });
+  assert.equal(pool.status, 200);
+  assert.deepEqual(pool.json.channels, [{ category: 'ai', channelId: '11111' }]);
+  const flags = await dispatch(noId(), { pathname: '/api/moderation-flag-pool' });
+  assert.equal(flags.status, 200);
+  assert.deepEqual(flags.json.lists.political, ['election']);
+  const tmpl = await dispatch(noId(), { pathname: '/api/syndication-template-pool' });
+  assert.equal(tmpl.status, 200);
+  assert.equal(tmpl.json.templates.share, 'Shared by {memberdiscord} {shareurl}');
+  assert.ok(tmpl.json.types.includes('share'));
+
+  // a SUPERADMIN maps a category -> a house/content-channels.yml PR
+  const repo = adminRepo();
+  const superFiles = { ...files, 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' };
+  const r = await dispatch(ctxFor({ repo, files: superFiles }), { pathname: '/api/admin', method: 'POST', body: { action: 'content-channel-set', category: 'devops', channelId: '22222' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.prNumber, 88);
+  assert.equal(repo.puts[0].path, 'house/content-channels.yml');
+  assert.match(repo.puts[0].content, /devops/);
+  assert.match(repo.puts[0].content, /22222/);
+  assert.match(repo.puts[0].content, /^# SOW-087 doc header\n/, 'the yaml doc header is preserved');
+});
+
+test('SOW-087: the editor writes are superadmin-only (an admin is forbidden) and flag typos never create lists', async () => {
+  const files = {
+    'house/roles.yml': 'admins:\n  - github_id: "1"\n', // the caller is only an ADMIN
+    'house/content-channels.yml': 'channels: []\n',
+    'house/moderation-flags.yml': 'lists:\n  political: []\n',
+  };
+  const admin = await dispatch(ctxFor({ repo: adminRepo(), files }), { pathname: '/api/admin', method: 'POST', body: { action: 'content-channel-set', category: 'ai', channelId: '11111' } });
+  assert.equal(admin.status, 403);
+  const superFiles = { ...files, 'house/roles.yml': 'superadmins:\n  - github_id: "1"\n' };
+  const typo = await dispatch(ctxFor({ repo: adminRepo(), files: superFiles }), { pathname: '/api/admin', method: 'POST', body: { action: 'flag-term-add', list: 'poltical', term: 'x' } });
+  assert.equal(typo.status, 400); // unknown list = bad-request, never a silently created list
+  const termAdd = await dispatch(ctxFor({ repo: adminRepo(), files: superFiles }), { pathname: '/api/admin', method: 'POST', body: { action: 'flag-term-add', list: 'political', term: 'ballot' } });
+  assert.equal(termAdd.status, 200);
+  const tmplSet = await dispatch(ctxFor({ repo: adminRepo(), files: { ...superFiles, 'house/syndication-config.yml': 'syndication:\n  enabled: true\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'syndication-template-set', type: 'post', template: '{title} {url}' } });
+  assert.equal(tmplSet.status, 200);
+});

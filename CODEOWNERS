@@ -14,6 +14,11 @@
 # until a separate admin team exists (swap an @org/admins team in here later without touching
 # the superadmin-owned paths above).
 /house/                  @atwellpub @gbtilabs
+
+# SOW-087: brand-reach controls (the category -> Discord-channel map + the moderation word lists) are
+# superadmin-tier by intent; the two superadmins own them explicitly even if /house/ is later delegated.
+/house/content-channels.yml  @atwellpub @gbtilabs
+/house/moderation-flags.yml  @atwellpub @gbtilabs
 # SOW-022: applets are a SUPERADMIN-only content type (GBTI does not host member code). Explicit so the rule
 # holds even if /house/ is later delegated to an admin team. The collection glob also excludes member folders,
 # and validate-content rejects any members/*/applets/.
