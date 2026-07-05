@@ -61,12 +61,14 @@ let SHARES = null;
 let SHARES_LOADED = false;
 let NEWS = null;
 let NEWS_LOADED = false;
-// SOW-111 QA follow-up: every view PAGINATES in chunks (the index now carries 40 per type, and the single-type
-// directories are uncapped, so nothing renders unbounded). The page window resets when the view/type/search
-// changes; "Show more" widens it.
+// SOW-111 QA follow-up (owner-refined): every view renders in 40-item chunks and AUTO-LOADS the next chunk as
+// the reader nears the bottom (an IntersectionObserver sentinel with a 600px pre-load margin, so scrolling
+// feels continuous; the rows are already in memory, only the DOM grows). The window resets when the
+// view/type/search changes.
 const PAGE_SIZE = 40;
 let VISIBLE = PAGE_SIZE;
 let PAGE_KEY = '';
+let MORE_IO = null; // the active bottom sentinel observer (disconnected on every re-render)
 
 // The per-mode row/card markup + its atoms (thumb, chip, lock, meta) live in the shared <gbti-card-list>
 // (SOW-042), so the activity feed and Browse render through ONE source of truth. Content + Shares open IN PLACE
@@ -146,13 +148,20 @@ function renderFeed(filter = '') {
   list.items = rows; // already card items (toCardItem / newsToItem)
   list.addEventListener('card-open', (e) => openReader(e.detail?.item)); // content + Shares open IN PLACE
   feed.replaceChildren(list);
+  if (MORE_IO) { MORE_IO.disconnect(); MORE_IO = null; }
   if (total > rows.length) {
-    const more = document.createElement('button');
-    more.type = 'button';
-    more.className = 'nt-more';
-    more.textContent = `Show more (${rows.length} of ${total})`;
-    more.addEventListener('click', () => { VISIBLE += PAGE_SIZE; renderFeed($('[data-filter]')?.value || ''); });
-    feed.appendChild(more);
+    const sentinel = document.createElement('div');
+    sentinel.className = 'nt-more';
+    sentinel.textContent = `Showing ${rows.length} of ${total}…`;
+    feed.appendChild(sentinel);
+    MORE_IO = new IntersectionObserver((ents) => {
+      if (!ents.some((x) => x.isIntersecting)) return;
+      MORE_IO.disconnect();
+      MORE_IO = null;
+      VISIBLE += PAGE_SIZE;
+      renderFeed($('[data-filter]')?.value || '');
+    }, { rootMargin: '600px' });
+    MORE_IO.observe(sentinel);
   }
 }
 

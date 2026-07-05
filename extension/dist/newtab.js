@@ -12695,6 +12695,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var PAGE_SIZE2 = 40;
   var VISIBLE = PAGE_SIZE2;
   var PAGE_KEY = "";
+  var MORE_IO = null;
   var toCardItem = (e) => ({
     ...e,
     // pass the reader fields through: gbti-reader.open needs `path` for content, author+id+body for a Share
@@ -12746,16 +12747,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     list.items = rows;
     list.addEventListener("card-open", (e) => openReader(e.detail?.item));
     feed.replaceChildren(list);
+    if (MORE_IO) {
+      MORE_IO.disconnect();
+      MORE_IO = null;
+    }
     if (total > rows.length) {
-      const more = document.createElement("button");
-      more.type = "button";
-      more.className = "nt-more";
-      more.textContent = `Show more (${rows.length} of ${total})`;
-      more.addEventListener("click", () => {
+      const sentinel = document.createElement("div");
+      sentinel.className = "nt-more";
+      sentinel.textContent = `Showing ${rows.length} of ${total}…`;
+      feed.appendChild(sentinel);
+      MORE_IO = new IntersectionObserver((ents) => {
+        if (!ents.some((x) => x.isIntersecting)) return;
+        MORE_IO.disconnect();
+        MORE_IO = null;
         VISIBLE += PAGE_SIZE2;
         renderFeed($("[data-filter]")?.value || "");
-      });
-      feed.appendChild(more);
+      }, { rootMargin: "600px" });
+      MORE_IO.observe(sentinel);
     }
   }
   function openReader(item) {
