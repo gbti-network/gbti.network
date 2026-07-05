@@ -27,6 +27,12 @@ function longDate() {
 }
 
 let ENTRIES = [];
+// SOW-111 QA fix: the single-type views are the UNCAPPED directories, but /activity-index.json is a capped
+// river (40 newest), so filtering it silently dropped older items (e.g. only 8 of 46 articles). Each content
+// type lazily loads its full per-type index (SOW-031) and the narrow view renders from THAT.
+const DIRECTORY_URL = { post: 'blog-index.json', product: 'products-index.json', prompt: 'prompts-index.json' };
+const DIRECTORY = { post: null, product: null, prompt: null };
+const DIRECTORY_LOADING = new Set();
 // SOW-023: the personalized "Following" view. FOLLOWING is a Set of followed usernames once loaded for an
 // effective-paid member, or null when unknown (not signed in, trial, or the paid-only Worker denied the read).
 let VIEW = 'latest';
@@ -96,7 +102,10 @@ function renderFeed(filter = '') {
   // The per-view source matrix (pure, node-tested): Activity ('all') = member content + Shares, NO news; News
   // ('news') = news BLENDED with member content + Shares; the single-type directories narrow to their type.
   const { wantNews, wantShares, narrow } = feedSources(TYPE);
-  let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
+  // A single content-type view renders from its full directory once loaded (the capped river is the fallback
+  // until the fetch lands, so the switch is instant and then fills in).
+  const directory = narrow ? DIRECTORY[TYPE] : null;
+  let rows = mergeAll({ items: directory ?? ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
   // SOW-046 G: strip openHref so a news card opens the in-extension expanded reader (card-open) instead of bouncing
   // to the source; the reader still offers an "Open source" link (it rebuilds the UTM link from item.link).
   if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n)); // SOW-060: news is a free-tier (signed-in) perk
@@ -319,6 +328,24 @@ function selectType(next) {
   // Then refresh the sources this view needs in the BACKGROUND; each re-renders (re-sorts) the list when it lands.
   ensureSharesForFilter();
   ensureNewsForFilter();
+  ensureDirectoryForFilter();
+}
+
+/** SOW-111 QA fix: lazily load the ACTIVE content type's full per-type index (uncapped, SOW-031) so the
+ *  Articles/Products/Prompts views show everything, not the capped river's slice. Cached per type; a failed
+ *  fetch leaves the capped fallback in place and retries on the next visit to that view. */
+async function ensureDirectoryForFilter() {
+  const t = TYPE;
+  if (!(t in DIRECTORY) || DIRECTORY[t] || DIRECTORY_LOADING.has(t)) return;
+  DIRECTORY_LOADING.add(t);
+  try {
+    const res = await fetch(`${SITE}/${DIRECTORY_URL[t]}`, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    DIRECTORY[t] = Array.isArray(data?.items) ? data.items : [];
+    if (TYPE === t) renderFeed($('[data-filter]')?.value || '');
+  } catch { /* keep the capped fallback; the next visit retries */ }
+  finally { DIRECTORY_LOADING.delete(t); }
 }
 
 /** Load Shares once for any signed-in member (SOW-077). The op + mergeAll filter by tier: paid/trial see member +
@@ -553,6 +580,7 @@ function init() {
   // SOW-077: status drives the read-only upgrade banner + the feed's Shares (public-vs-member) + News visibility;
   // once it resolves, pull whatever the default/persisted filter needs and re-render. No hard lock anymore.
   applyMembershipState().then(() => { ensureSharesForFilter(); ensureNewsForFilter(); });
+  ensureDirectoryForFilter(); // a #type=<content> deep link starts on a directory view
   // Hydrate the news cache for an INSTANT first paint (a #type=news tab shows the last-known news while the live
   // fetch runs); skip if a fresh fetch already landed. Render gating is canSeeNews (SOW-077: any signed-in member,
   // including banned), and a signed-out visitor is held by the forced-sign-in gate. The live loadNews re-sorts in place.

@@ -12666,6 +12666,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return (/* @__PURE__ */ new Date()).toLocaleDateString(void 0, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   }
   var ENTRIES = [];
+  var DIRECTORY_URL = { post: "blog-index.json", product: "products-index.json", prompt: "prompts-index.json" };
+  var DIRECTORY = { post: null, product: null, prompt: null };
+  var DIRECTORY_LOADING = /* @__PURE__ */ new Set();
   var VIEW = "latest";
   var FOLLOWING = null;
   var FOLLOWS_LOADED = false;
@@ -12714,7 +12717,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
     }
     const { wantNews, wantShares, narrow } = feedSources(TYPE);
-    let rows = mergeAll({ items: ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
+    const directory = narrow ? DIRECTORY[TYPE] : null;
+    let rows = mergeAll({ items: directory ?? ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
     if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n));
     if (narrow) rows = rows.filter((e) => e.type === TYPE);
     if (VIEW === "following") {
@@ -12931,6 +12935,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     renderFeed($("[data-filter]")?.value || "");
     ensureSharesForFilter();
     ensureNewsForFilter();
+    ensureDirectoryForFilter();
+  }
+  async function ensureDirectoryForFilter() {
+    const t = TYPE;
+    if (!(t in DIRECTORY) || DIRECTORY[t] || DIRECTORY_LOADING.has(t)) return;
+    DIRECTORY_LOADING.add(t);
+    try {
+      const res = await fetch(`${SITE14}/${DIRECTORY_URL[t]}`, { cache: "no-cache" });
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      DIRECTORY[t] = Array.isArray(data?.items) ? data.items : [];
+      if (TYPE === t) renderFeed($("[data-filter]")?.value || "");
+    } catch {
+    } finally {
+      DIRECTORY_LOADING.delete(t);
+    }
   }
   async function loadShares() {
     SHARES_LOADED = true;
@@ -13159,6 +13179,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ensureSharesForFilter();
       ensureNewsForFilter();
     });
+    ensureDirectoryForFilter();
     readNewsCache().then((cached) => {
       if (cached && !NEWS_LOADED) {
         NEWS = cached;
