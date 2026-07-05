@@ -35,11 +35,13 @@ To demonstrate our progress we first used [DALL-E](https://labs.openai.com/) to 
 
 We’ve used Dalle to generate colorful image with dinosaurs and the python logo.
 
-Now that we’ve chosen a very colorful base image to begin with, we run it through [code base](https://github.com/gbti-labs/py-animate-hue) with an instruction to animate from **\-180 to 180 degrees** over **30 frames** and a few minutes later we have generated this **mp4**:
+Now that we’ve chosen a very colorful base image to begin with, we run it through [code base](https://github.com/gbti-labs/py-animate-hue) with an instruction to animate from **\-180 to 180 degrees** over **30 frames** and a few minutes later we have generated this **animation**:
 
-We also generated the animation as [a gif](./images/python-sample-b.webp). The MP4, though, is under **2mb** and loads nearly instantly on this blog post where we have set it to autoplay and loop (autoplay may not work on mobile).
+![The base image with its hue cycling from -180 to 180 degrees over 30 frames](/media/python-hue-animation.webp)
 
-[The gif](./images/python-sample-b.webp), however, being **30 frames**, at the size of **1024 x 1024**, comes out to be a whopping **18mb**.
+The animation above is a WebP that loops automatically and stays under **1mb**, so it loads nearly instantly on this blog post (autoplay may not work on mobile).
+
+We also generated the original as an mp4 and as a gif. The gif, being **30 frames** at **1024 x 1024**, came out to a whopping **18mb**, which is why the lightweight WebP above is the version shown here.
 
 ## Py Animate Hue – How to Download and Features
 
