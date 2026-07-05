@@ -61,7 +61,12 @@ let SHARES = null;
 let SHARES_LOADED = false;
 let NEWS = null;
 let NEWS_LOADED = false;
-const FEED_CAP = 40; // the Activity feed is a capped river (Browse "All" is the uncapped directory)
+// SOW-111 QA follow-up: every view PAGINATES in chunks (the index now carries 40 per type, and the single-type
+// directories are uncapped, so nothing renders unbounded). The page window resets when the view/type/search
+// changes; "Show more" widens it.
+const PAGE_SIZE = 40;
+let VISIBLE = PAGE_SIZE;
+let PAGE_KEY = '';
 
 // The per-mode row/card markup + its atoms (thumb, chip, lock, meta) live in the shared <gbti-card-list>
 // (SOW-042), so the activity feed and Browse render through ONE source of truth. Content + Shares open IN PLACE
@@ -118,10 +123,12 @@ function renderFeed(filter = '') {
       : (FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()))));
   }
   rows.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt)); // newest-first across all three sources
-  // "All" is the capped recent river; a specific type filter is the uncapped directory for that type (so the rail's
-  // Articles/Products/Prompts/Shares/News shortcuts show everything, not just the latest 40).
-  if (TYPE === 'all') rows = rows.slice(0, FEED_CAP);
   if (q) rows = rows.filter((e) => `${e.title} ${authorName(e.author)}`.toLowerCase().includes(q));
+  // Pagination window: reset on a view/type/search change, widen via the Show more button below the list.
+  const pageKey = `${VIEW}|${TYPE}|${q}`;
+  if (pageKey !== PAGE_KEY) { PAGE_KEY = pageKey; VISIBLE = PAGE_SIZE; }
+  const total = rows.length;
+  rows = rows.slice(0, VISIBLE);
 
   if (!rows.length) {
     // Cold start: if this view is still fetching news (nothing cached yet), say "loading", not "no news" — the
@@ -139,6 +146,14 @@ function renderFeed(filter = '') {
   list.items = rows; // already card items (toCardItem / newsToItem)
   list.addEventListener('card-open', (e) => openReader(e.detail?.item)); // content + Shares open IN PLACE
   feed.replaceChildren(list);
+  if (total > rows.length) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'nt-more';
+    more.textContent = `Show more (${rows.length} of ${total})`;
+    more.addEventListener('click', () => { VISIBLE += PAGE_SIZE; renderFeed($('[data-filter]')?.value || ''); });
+    feed.appendChild(more);
+  }
 }
 
 /** Open an item IN the page reader, hiding the feed; Back restores it. The feed IS the browser now (no Browse-page

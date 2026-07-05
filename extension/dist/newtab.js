@@ -12692,7 +12692,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var SHARES_LOADED = false;
   var NEWS = null;
   var NEWS_LOADED = false;
-  var FEED_CAP = 40;
+  var PAGE_SIZE2 = 40;
+  var VISIBLE = PAGE_SIZE2;
+  var PAGE_KEY = "";
   var toCardItem = (e) => ({
     ...e,
     // pass the reader fields through: gbti-reader.open needs `path` for content, author+id+body for a Share
@@ -12725,8 +12727,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       rows = rows.filter((e) => e.type === "news" ? FOLLOWED_CHANNELS && FOLLOWED_CHANNELS.has(String(e.source ?? e.author).toLowerCase()) : FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()));
     }
     rows.sort((a, b) => toMs(b.createdAt) - toMs(a.createdAt));
-    if (TYPE === "all") rows = rows.slice(0, FEED_CAP);
     if (q) rows = rows.filter((e) => `${e.title} ${authorName5(e.author)}`.toLowerCase().includes(q));
+    const pageKey = `${VIEW}|${TYPE}|${q}`;
+    if (pageKey !== PAGE_KEY) {
+      PAGE_KEY = pageKey;
+      VISIBLE = PAGE_SIZE2;
+    }
+    const total = rows.length;
+    rows = rows.slice(0, VISIBLE);
     if (!rows.length) {
       const newsLoading = wantNews && canSeeNews(MEMBERSHIP) && !NEWS_LOADED;
       const empty = VIEW === "following" ? q ? "No followed activity matches that filter." : "No recent activity from the members you follow." : q ? "No activity matches that filter." : newsLoading ? "Loading the latest news…" : TYPE === "share" ? "No Shares yet." : TYPE === "news" ? "No news right now. Check back soon." : "No activity yet.";
@@ -12738,6 +12746,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     list.items = rows;
     list.addEventListener("card-open", (e) => openReader(e.detail?.item));
     feed.replaceChildren(list);
+    if (total > rows.length) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "nt-more";
+      more.textContent = `Show more (${rows.length} of ${total})`;
+      more.addEventListener("click", () => {
+        VISIBLE += PAGE_SIZE2;
+        renderFeed($("[data-filter]")?.value || "");
+      });
+      feed.appendChild(more);
+    }
   }
   function openReader(item) {
     if (!item) return;
