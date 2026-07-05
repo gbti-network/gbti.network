@@ -22,6 +22,9 @@ const CSS = `
   .hero { display:block; width:100%; aspect-ratio:16 / 9; object-fit:cover; border-radius:7px; margin:0 0 18px; background:var(--hover); }
   h2 { font-family:var(--font-display, var(--font-body)); font-size:26px; line-height:1.3; margin:0 0 14px; }
   .sum { font-size:15.5px; line-height:1.65; color:var(--fg); margin:0 0 20px; }
+  .metarow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 12px; }
+  .catchip { display:inline-block; font-size:12px; font-weight:700; color:var(--accent); border:1px solid var(--accent); border-radius:999px; padding:3px 10px; }
+  .metarow .mlabel { font-size:12px; color:var(--muted); }
   .acts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   a.src { font:inherit; font-weight:600; font-size:13.5px; padding:9px 16px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--fg); text-decoration:none; }
   a.src:hover { border-color:var(--accent); color:var(--accent); }
@@ -111,9 +114,10 @@ class GbtiNewsReader extends GbtiElement {
     this._postNote = null;
     try {
       const r = await this.client.publishNews(it);
+      const cat = it.category ? ` (category: ${it.category})` : '';
       this._postNote = r?.posted ? { ok: true, msg: 'Posted to Discord.' }
         : r?.alreadyPosted ? { ok: true, msg: 'Already posted to Discord.' }
-        : { ok: false, msg: r?.reason || 'No Discord channel is mapped for this category yet.' };
+        : { ok: false, msg: `${r?.reason || 'No Discord channel is mapped for this category yet.'}${cat}` };
     } catch (err) { this._postNote = { ok: false, msg: err?.message || 'Could not post to Discord.' }; }
     this.render();
   }
@@ -146,6 +150,8 @@ class GbtiNewsReader extends GbtiElement {
       + `<div class="wrap"><div class="cols"><div class="main">`
       + hero
       + `<h2>${esc(it.title || 'News')}</h2>`
+      // SOW-111 QA: reveal the classifier category (it decides the Discord channel the item routes to).
+      + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : '')
       + `<p class="sum">${esc(it.excerpt || 'No summary available.')}</p>`
       + `<div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ''}${disc}</div>${note}`
       + `</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);

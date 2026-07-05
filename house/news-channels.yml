@@ -21,4 +21,26 @@
 #       channelId: "111111111111111111"
 #     - category: devops/cloud
 #       channelId: "222222222222222222"
-channels: []
+channels:
+  - category: ai/ml
+    channelId: "1523419934338715720"   # the AI section #general
+  - category: devops/cloud
+    channelId: "1074035726569701386"   # the Devops section #general
+  - category: web dev
+    channelId: "1074035726569701386"   # the Devops section #general
+  - category: frameworks/libraries
+    channelId: "1074035726569701386"   # the Devops section #general
+  - category: programming languages
+    channelId: "1074035726569701386"   # the Devops section #general
+  - category: open source
+    channelId: "1159535175219302480"   # #foss
+  - category: security
+    channelId: "1199744593546195024"   # #security
+  - category: hardware
+    channelId: "1078549780394954773"   # #hardware
+  - category: blockchain
+    channelId: "1523419333924098058"   # the Blockchain section #general
+  - category: energy
+    channelId: "1078551113487372328"   # #energy
+  - category: business/funding
+    channelId: "1078550840807260160"   # #business

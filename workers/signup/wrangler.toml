@@ -153,7 +153,7 @@ NEWS_API_BASE = "https://gbti-news.gbti-labs.workers.dev"   # SOW-043: the deplo
 # SOW-046 C: the news-category -> Discord-channel map for the curator "Add to Discord" action, as a JSON string of
 # house/news-channels.yml's shape ({ "channels": [{ "category": "ai", "channelId": "123..." }] }). Non-secret config.
 # Empty (no channels) until the owner provisions the channel ids; an unmapped category posts nothing (fail-closed).
-NEWS_CHANNELS = "{\"channels\":[]}"
+NEWS_CHANNELS = "{\"channels\":[{\"category\":\"ai/ml\",\"channelId\":\"1523419934338715720\"},{\"category\":\"devops/cloud\",\"channelId\":\"1074035726569701386\"},{\"category\":\"web dev\",\"channelId\":\"1074035726569701386\"},{\"category\":\"frameworks/libraries\",\"channelId\":\"1074035726569701386\"},{\"category\":\"programming languages\",\"channelId\":\"1074035726569701386\"},{\"category\":\"open source\",\"channelId\":\"1159535175219302480\"},{\"category\":\"security\",\"channelId\":\"1199744593546195024\"},{\"category\":\"hardware\",\"channelId\":\"1078549780394954773\"},{\"category\":\"blockchain\",\"channelId\":\"1523419333924098058\"},{\"category\":\"energy\",\"channelId\":\"1078551113487372328\"},{\"category\":\"business/funding\",\"channelId\":\"1078550840807260160\"}]}"
 # LIVE-only values: fill before the production deploy.
 STRIPE_PRICE_ID = "price_1Tg5NHBFxyhSkuibXFrQyqaN"            # the live $150/yr recurring price (prod_UfQDvczTRPCOOq)
 GITHUB_OAUTH_CLIENT_ID = "Ov23li18yffp7NHSM6l6"
