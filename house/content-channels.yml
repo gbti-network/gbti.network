@@ -19,101 +19,105 @@
 # guild's channels and name-matches them against the topic + taxonomy keys. Reconcile mirrors this file to the
 # KV key `synd:channels` so the Worker drain reads it without a redeploy.
 channels:
-  - category: 3d-printing
-    channelId: "1180150623346372638"
-  - category: agriculture
-    channelId: "1189362812615655464"
-  - category: bicycles
-    channelId: "1154939934050885672"
-  - category: branding
-    channelId: "1078551210317058058"
-  - category: business
-    channelId: "1078550840807260160"
-  - category: charity
-    channelId: "1170414854381768854"
-  - category: cinema
-    channelId: "1127622083640316104"
-  - category: cooking
-    channelId: "1078551329896669204"
-  - category: design
-    channelId: "1078550479946133655"
-  - category: devops
-    channelId: "1079774498661875784"
-  - category: education
-    channelId: "1186027230153932900"
-  - category: energy
-    channelId: "1078551113487372328"
-  - category: entertainment
-    channelId: "1190152810126389362"
-  - category: entrepreneurship
-    channelId: "1154765772061671504"
-  - category: esoteric
-    channelId: "1078551021271400488"
-  - category: finance
-    channelId: "1078551517772132412"
-  - category: gaming
-    channelId: "1078551590383923222"
-  - category: gardening
-    channelId: "1156779365070295082"
-  - category: hardware
-    channelId: "1078549780394954773"
-  - category: health
-    channelId: "1306668775000768603"
-  - category: home-network
-    channelId: "1276249041138880673"
-  - category: homesteading
-    channelId: "1078550290845933688"
-  - category: imagegen
-    channelId: "1074034221385007225"
-  - category: iot
-    channelId: "1299423000197730365"
-  - category: law
-    channelId: "1478391400512098528"
-  - category: leadership
-    channelId: "1078551787793035275"
-  - category: makers
-    channelId: "1078550334634479637"
-  - category: marketing
-    channelId: "1078550424535187456"
-  - category: materials
-    channelId: "1254937392918298825"
-  - category: mechanics
-    channelId: "1404185703213961286"
-  - category: medicine
-    channelId: "1222646980107436224"
-  - category: memes
-    channelId: "1199522486136610857"
-  - category: metaverse
-    channelId: "1187083800367333517"
-  - category: mindset
-    channelId: "1395110148527095881"
-  - category: music
-    channelId: "1125183539508428860"
-  - category: nature
-    channelId: "1078552085680898120"
-  - category: novelty
-    channelId: "1078552150860374066"
-  - category: open-source
-    channelId: "1309635710185373698"
-  - category: outdoors
-    channelId: "1521330402651013131"
-  - category: photography
-    channelId: "1152469129673068645"
-  - category: pixel-art
-    channelId: "1130164055068389466"
-  - category: production
-    channelId: "1078552265662664714"
-  - category: realestate
-    channelId: "1127621892694610010"
-  - category: religion
-    channelId: "1217186025911357541"
-  - category: sales
-    channelId: "1152303353800433766"
-  - category: space
-    channelId: "1340735761364025394"
-  - category: startups
-    channelId: "1393699108169977968"
-  - category: transportation
-    channelId: "1263140332862963724"
-  - category: writing
-    channelId: "1230664947885936711"
+- category: 3d-printing
+  channelId: '1180150623346372638'
+- category: agriculture
+  channelId: '1189362812615655464'
+- category: ai
+  channelId: '1523419934338715720'
+- category: bicycles
+  channelId: '1154939934050885672'
+- category: blockchain
+  channelId: '1523419333924098058'
+- category: branding
+  channelId: '1078551210317058058'
+- category: business
+  channelId: '1078550840807260160'
+- category: charity
+  channelId: '1170414854381768854'
+- category: cinema
+  channelId: '1127622083640316104'
+- category: cooking
+  channelId: '1078551329896669204'
+- category: design
+  channelId: '1078550479946133655'
+- category: devops
+  channelId: '1074035726569701386'
+- category: education
+  channelId: '1186027230153932900'
+- category: energy
+  channelId: '1078551113487372328'
+- category: entertainment
+  channelId: '1190152810126389362'
+- category: entrepreneurship
+  channelId: '1154765772061671504'
+- category: esoteric
+  channelId: '1078551021271400488'
+- category: finance
+  channelId: '1078551517772132412'
+- category: gaming
+  channelId: '1078551590383923222'
+- category: gardening
+  channelId: '1156779365070295082'
+- category: hardware
+  channelId: '1078549780394954773'
+- category: health
+  channelId: '1306668775000768603'
+- category: home-network
+  channelId: '1276249041138880673'
+- category: homesteading
+  channelId: '1078550290845933688'
+- category: imagegen
+  channelId: '1074034221385007225'
+- category: iot
+  channelId: '1299423000197730365'
+- category: law
+  channelId: '1478391400512098528'
+- category: leadership
+  channelId: '1078551787793035275'
+- category: makers
+  channelId: '1078550334634479637'
+- category: marketing
+  channelId: '1078550424535187456'
+- category: materials
+  channelId: '1254937392918298825'
+- category: mechanics
+  channelId: '1404185703213961286'
+- category: medicine
+  channelId: '1222646980107436224'
+- category: memes
+  channelId: '1199522486136610857'
+- category: metaverse
+  channelId: '1187083800367333517'
+- category: mindset
+  channelId: '1395110148527095881'
+- category: music
+  channelId: '1125183539508428860'
+- category: nature
+  channelId: '1078552085680898120'
+- category: novelty
+  channelId: '1078552150860374066'
+- category: open-source
+  channelId: '1309635710185373698'
+- category: outdoors
+  channelId: '1521330402651013131'
+- category: photography
+  channelId: '1152469129673068645'
+- category: pixel-art
+  channelId: '1130164055068389466'
+- category: production
+  channelId: '1078552265662664714'
+- category: realestate
+  channelId: '1127621892694610010'
+- category: religion
+  channelId: '1217186025911357541'
+- category: sales
+  channelId: '1152303353800433766'
+- category: space
+  channelId: '1340735761364025394'
+- category: startups
+  channelId: '1393699108169977968'
+- category: transportation
+  channelId: '1263140332862963724'
+- category: writing
+  channelId: '1230664947885936711'
