@@ -4,8 +4,12 @@
 // house/taxonomy.yml). The owner confirmed the gbti guild's category channels are named after the category keys
 // (3d-printing, agriculture, ..., writing), so the seed is mechanical; unmatched keys are reported, not invented.
 //
+// The seed FILLS GAPS ONLY: an existing row in house/content-channels.yml is NEVER overwritten (hand-set rows
+// like the ai/blockchain/devops section-general mappings, or a pick between duplicate channel names, are the
+// curated truth). Remove a row first if you want the seed to re-match it.
+//
 //   node scripts/seed-content-channels.mjs            # dry-run: report the matches + the misses
-//   node scripts/seed-content-channels.mjs --apply    # rewrite house/content-channels.yml (header preserved)
+//   node scripts/seed-content-channels.mjs --apply    # add the new matches (header + existing rows preserved)
 //
 // Requires DISCORD_BOT_TOKEN + DISCORD_GUILD_ID (read-only: one GET /guilds/<id>/channels call).
 
@@ -78,21 +82,29 @@ export async function main({ argv = process.argv.slice(2), env = process.env, fe
 
   const client = discord ?? createDiscordClient({ botToken: token, fetch: fetchImpl });
   const channels = (await client.listGuildChannels(guildId)) || [];
-  const { mapped, unmatchedKeys, extraChannels } = matchChannels({ keys, channels });
 
-  console.log(`seed-content-channels: ${keys.length} category keys, ${channels.length} guild channels, ${mapped.length} matched${apply ? '' : ' (dry-run)'}`);
-  for (const m of mapped) console.log(`  ${m.category} -> ${m.channelId}`);
-  if (unmatchedKeys.length) console.log(`\nNo channel found for ${unmatchedKeys.length} key(s) (these fall back to the featured per-type channel):\n  ${unmatchedKeys.join(', ')}`);
+  // Existing rows are the curated truth: only keys WITHOUT a row are up for a name match.
+  const existingRaw = fs.existsSync(MAP_PATH) ? fs.readFileSync(MAP_PATH, 'utf8') : '';
+  let existingRows = [];
+  try { existingRows = yaml.load(existingRaw)?.channels ?? []; } catch { existingRows = []; }
+  const existingByCat = new Map(existingRows.map((e) => [String(e?.category || '').toLowerCase(), e]).filter(([k]) => k));
+  const openKeys = keys.filter((k) => !existingByCat.has(k));
+
+  const { mapped, unmatchedKeys, extraChannels } = matchChannels({ keys: openKeys, channels });
+  const merged = [...existingByCat.values(), ...mapped].sort((a, b) => String(a.category).localeCompare(String(b.category)));
+
+  console.log(`seed-content-channels: ${keys.length} category keys, ${existingByCat.size} already mapped (kept), ${channels.length} guild channels, ${mapped.length} new match(es)${apply ? '' : ' (dry-run)'}`);
+  for (const m of mapped) console.log(`  + ${m.category} -> ${m.channelId}`);
+  if (unmatchedKeys.length) console.log(`\nNo channel found for ${unmatchedKeys.length} unmapped key(s) (these fall back to the featured per-type channel):\n  ${unmatchedKeys.join(', ')}`);
   if (extraChannels.length) console.log(`\nGuild text channels with no category key (ignored):\n  ${extraChannels.join(', ')}`);
 
   if (!apply) {
-    console.log('\nDry-run only. Re-run with --apply to rewrite house/content-channels.yml.');
-    return { mapped, unmatchedKeys, extraChannels };
+    console.log('\nDry-run only. Re-run with --apply to add the new matches to house/content-channels.yml.');
+    return { mapped, merged, unmatchedKeys, extraChannels };
   }
-  const existing = fs.existsSync(MAP_PATH) ? fs.readFileSync(MAP_PATH, 'utf8') : '';
-  fs.writeFileSync(MAP_PATH, renderMapFile(existing, mapped));
-  console.log(`\nWrote ${mapped.length} mapping(s) to house/content-channels.yml. Run a reconcile --apply to mirror it to KV.`);
-  return { mapped, unmatchedKeys, extraChannels };
+  fs.writeFileSync(MAP_PATH, renderMapFile(existingRaw, merged));
+  console.log(`\nWrote ${merged.length} mapping(s) (${mapped.length} new) to house/content-channels.yml. Run a reconcile --apply to mirror it to KV.`);
+  return { mapped, merged, unmatchedKeys, extraChannels };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

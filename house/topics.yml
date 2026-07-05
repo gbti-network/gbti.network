@@ -24,6 +24,44 @@ topics:
   space: { label: Space }
   energy: { label: Energy }
   production: { label: Production }
+  # Tech & Building: the AI Discord section subchannels (SOW-087: each maps to its same-named channel)
+  llm: { label: LLM }
+  musicgen: { label: MusicGen }
+  voice: { label: Voice }
+  video: { label: Video }
+  persona: { label: Persona }
+  mcp: { label: MCP }
+  prompting: { label: Prompting }
+  # Tech & Building: the Devops Discord section subchannels
+  accessibility: { label: Accessibility }
+  aws: { label: AWS }
+  browsers: { label: Browsers }
+  css: { label: CSS }
+  docker: { label: Docker }
+  fonts: { label: Fonts }
+  git: { label: Git }
+  go: { label: Go }
+  hosting: { label: Hosting }
+  javascript: { label: JavaScript }
+  laravel: { label: Laravel }
+  nextjs: { label: Next.js }
+  node: { label: Node }
+  p2p: { label: P2P }
+  php: { label: PHP }
+  python: { label: Python }
+  react: { label: React }
+  rust: { label: Rust }
+  saas: { label: SaaS }
+  threejs: { label: Three.js }
+  wordpress: { label: WordPress }
+  # Tech & Building: the Blockchain Discord section subchannels
+  web3: { label: Web3 }
+  nfts: { label: NFTs }
+  dapps: { label: dApps }
+  btc: { label: BTC }
+  mining: { label: Mining }
+  rwa: { label: RWA }
+  blockchain-gaming: { label: Blockchain Gaming }
   # Business & Work
   business: { label: Business }
   entrepreneurship: { label: Entrepreneurship }
