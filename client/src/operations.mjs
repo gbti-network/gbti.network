@@ -481,26 +481,30 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   await syncForkIfCreatingBranch(ctx, repo, branch);
   let renameFiles = [];
   if (renaming) {
-    // The delete half needs the old file ON the branch base (the fork sync provides it). Fail closed: never a
-    // half-move that publishes the new path while the old one stays live (publishFiles silently SKIPS a delete
-    // whose file is absent from the branch, which would leave the old page up).
+    // The delete half needs the old file ON THE REF THE COMMITS LAND ON (publishFiles silently SKIPS a delete
+    // whose file is absent, which would leave the old page live — a half-rename). That ref is the existing
+    // draft branch when there is one, else the fork main a new branch will be cut from. So: always freshen the
+    // fork main first (fail-soft, idempotent fast-forward; the create-only gate above skips existing branches,
+    // and a rename depends on base freshness more than any other publish), then check ON THE RIGHT REF, and
+    // REBUILD a stale branch from the fresh main — safe precisely here: this publish rebuilds every file from
+    // the submitted content (the branch is superseded), and never while a PR is open (deleting would close it).
     const fork = await repo.ensureFork();
     const base = await repo.getDefaultBranch(repo.upstream);
-    let oldOnBase = await repo.getFileSha(fork.full_name, origin.oldPath, base).catch(() => null);
-    if (!oldOnBase) {
-      // The create-only sync gate skipped (the draft branch already exists, created from a base that predates
-      // this file). Sync the fork main DIRECTLY, then REBUILD the stale branch from the fresh base. Safe here
-      // and only here: this publish rebuilds every file from the submitted content (the branch is superseded),
-      // and never while a PR is open on it (deleting the branch would close the PR).
-      const token = ctx.store?.get?.('githubToken');
-      await workerSyncFork({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-      oldOnBase = await repo.getFileSha(fork.full_name, origin.oldPath, base).catch(() => null);
-      if (oldOnBase) {
+    const token = ctx.store?.get?.('githubToken');
+    await workerSyncFork({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    const branchSha = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
+    let oldPresent = await repo.getFileSha(fork.full_name, origin.oldPath, branchSha ? branch : base).catch(() => null);
+    if (!oldPresent && branchSha) {
+      const onMain = await repo.getFileSha(fork.full_name, origin.oldPath, base).catch(() => null);
+      if (onMain) {
         const pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }).catch(() => null);
-        if (!pull) await repo.deleteBranch(fork.full_name, branch).catch(() => {});
+        if (!pull) {
+          await repo.deleteBranch(fork.full_name, branch).catch(() => {});
+          oldPresent = onMain;
+        }
       }
     }
-    if (!oldOnBase) {
+    if (!oldPresent) {
       throw new OperationError('bad-request', 'the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — your draft is saved; try publishing again later or contact the co-op');
     }
     renameFiles.push({ path: origin.oldPath, content: null });

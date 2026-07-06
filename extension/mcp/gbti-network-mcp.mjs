@@ -18507,18 +18507,22 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
   if (renaming) {
     const fork = await repo.ensureFork();
     const base2 = await repo.getDefaultBranch(repo.upstream);
-    let oldOnBase = await repo.getFileSha(fork.full_name, origin.oldPath, base2).catch(() => null);
-    if (!oldOnBase) {
-      const token2 = ctx2.store?.get?.("githubToken");
-      await workerSyncFork({ token: token2, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
-      oldOnBase = await repo.getFileSha(fork.full_name, origin.oldPath, base2).catch(() => null);
-      if (oldOnBase) {
+    const token2 = ctx2.store?.get?.("githubToken");
+    await workerSyncFork({ token: token2, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
+    const branchSha = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
+    let oldPresent = await repo.getFileSha(fork.full_name, origin.oldPath, branchSha ? branch : base2).catch(() => null);
+    if (!oldPresent && branchSha) {
+      const onMain = await repo.getFileSha(fork.full_name, origin.oldPath, base2).catch(() => null);
+      if (onMain) {
         const pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }).catch(() => null);
-        if (!pull) await repo.deleteBranch(fork.full_name, branch).catch(() => {
-        });
+        if (!pull) {
+          await repo.deleteBranch(fork.full_name, branch).catch(() => {
+          });
+          oldPresent = onMain;
+        }
       }
     }
-    if (!oldOnBase) {
+    if (!oldPresent) {
       throw new OperationError("bad-request", "the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — your draft is saved; try publishing again later or contact the co-op");
     }
     renameFiles.push({ path: origin.oldPath, content: null });

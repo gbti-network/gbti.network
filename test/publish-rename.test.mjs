@@ -152,9 +152,19 @@ test('rename recovers a stale draft branch: direct sync + branch rebuild, then t
   const repo = fakeRepo({ baseHasOld: false });
   let synced = false;
   const branchDeletes = [];
-  repo.getBranchSha = async (r, b) => (b === 'main' ? 'main-sha' : 'stale-branch-sha'); // the draft branch EXISTS
-  repo.getFileSha = async (r, p, ref) => (ref === 'main' ? (synced && p === OLD ? 'old-sha' : null) : 'blob');
-  repo.deleteBranch = async (r, b) => { branchDeletes.push(b); };
+  let staleBranchGone = false;
+  repo.getBranchSha = async (r, b) => {
+    if (b === 'main') return 'main-sha';
+    if (staleBranchGone) throw new Error('404');
+    return 'stale-branch-sha'; // the draft branch EXISTS (created from a base that predates the item)
+  };
+  // ref-aware: the stale branch NEVER has the old file; main gains it once the sync runs.
+  repo.getFileSha = async (r, p, ref) => {
+    if (p !== OLD) return 'blob';
+    if (ref === 'main') return synced ? 'old-sha' : null;
+    return staleBranchGone ? 'old-sha' : null; // the rebuilt branch (from fresh main) has it; the stale one did not
+  };
+  repo.deleteBranch = async (r, b) => { branchDeletes.push(b); staleBranchGone = true; };
   const ctx = ctxFor({ repo });
   ctx.store = { get: (k) => (k === 'githubToken' ? 'tok' : null) };
   ctx.fetch = async () => { synced = true; return { ok: true, json: async () => ({ ok: true, synced: true }) }; };
@@ -164,9 +174,33 @@ test('rename recovers a stale draft branch: direct sync + branch rebuild, then t
   assert.ok(repo.deletes.includes(OLD)); // and the delete half shipped
 });
 
+// The half-rename hole: fork main is ALREADY fresh (say a manual Sync fork click) but the stale branch still
+// lacks the old file. The guard must check THE BRANCH (where commits land), not main, and rebuild.
+test('rename rebuilds a stale branch even when the fork main is already fresh', async () => {
+  const repo = fakeRepo();
+  const branchDeletes = [];
+  let staleBranchGone = false;
+  repo.getBranchSha = async (r, b) => {
+    if (b === 'main') return 'main-sha';
+    if (staleBranchGone) throw new Error('404');
+    return 'stale-branch-sha';
+  };
+  repo.getFileSha = async (r, p, ref) => {
+    if (p !== OLD) return 'blob';
+    if (ref === 'main') return 'old-sha'; // fresh main HAS the file
+    return staleBranchGone ? 'old-sha' : null; // the stale branch does not; the rebuilt one does
+  };
+  repo.deleteBranch = async (r, b) => { branchDeletes.push(b); staleBranchGone = true; };
+  const res = await publish(ctxFor({ repo }), { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD });
+  assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
+  assert.deepEqual(branchDeletes, ['gbti/prompt-old-name']);
+  assert.ok(repo.deletes.includes(OLD)); // the delete would have been silently skipped without the rebuild
+});
+
 test('rename still fails closed when the direct sync cannot provide the old file', async () => {
   const repo = fakeRepo({ baseHasOld: false });
   repo.getBranchSha = async (r, b) => (b === 'main' ? 'main-sha' : 'stale-branch-sha');
+  repo.getFileSha = async () => null; // nothing anywhere
   const ctx = ctxFor({ repo });
   ctx.store = { get: (k) => (k === 'githubToken' ? 'tok' : null) };
   ctx.fetch = async () => ({ ok: false, status: 422, json: async () => ({}) }); // permission still missing
