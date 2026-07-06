@@ -145,3 +145,33 @@ test('publishDraft without a pending rename opens the PR from the branch untouch
   assert.equal(repo.puts.length, 0); // no rebuild: the branch ships as-is
   assert.equal(repo.pulls[0].head, 'alice:gbti/prompt-old-name');
 });
+
+// SOW-112 QA: the create-only sync gate skips an EXISTING draft branch (created from a stale base before the
+// App permission), so the rename must recover: sync the fork main directly, then rebuild the branch.
+test('rename recovers a stale draft branch: direct sync + branch rebuild, then the move ships', async () => {
+  const repo = fakeRepo({ baseHasOld: false });
+  let synced = false;
+  const branchDeletes = [];
+  repo.getBranchSha = async (r, b) => (b === 'main' ? 'main-sha' : 'stale-branch-sha'); // the draft branch EXISTS
+  repo.getFileSha = async (r, p, ref) => (ref === 'main' ? (synced && p === OLD ? 'old-sha' : null) : 'blob');
+  repo.deleteBranch = async (r, b) => { branchDeletes.push(b); };
+  const ctx = ctxFor({ repo });
+  ctx.store = { get: (k) => (k === 'githubToken' ? 'tok' : null) };
+  ctx.fetch = async () => { synced = true; return { ok: true, json: async () => ({ ok: true, synced: true }) }; };
+  const res = await publish(ctx, { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD });
+  assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
+  assert.deepEqual(branchDeletes, ['gbti/prompt-old-name']); // the stale branch rebuilt from the fresh base
+  assert.ok(repo.deletes.includes(OLD)); // and the delete half shipped
+});
+
+test('rename still fails closed when the direct sync cannot provide the old file', async () => {
+  const repo = fakeRepo({ baseHasOld: false });
+  repo.getBranchSha = async (r, b) => (b === 'main' ? 'main-sha' : 'stale-branch-sha');
+  const ctx = ctxFor({ repo });
+  ctx.store = { get: (k) => (k === 'githubToken' ? 'tok' : null) };
+  ctx.fetch = async () => ({ ok: false, status: 422, json: async () => ({}) }); // permission still missing
+  await assert.rejects(
+    publish(ctx, { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD }),
+    (e) => /fork to sync/.test(e.message));
+  assert.equal(repo.pulls.length, 0);
+});
