@@ -13,7 +13,9 @@ interface Props {
 }
 const { targetType, targetSlug, commentId, commentAuthor } = Astro.props;
 const isEdit = Boolean(commentId);
+const { aliases = [] } = Astro.props as { aliases?: string[] };
 const attrs: Record<string, string> = { 'data-gbti-target-type': targetType, 'data-gbti-target-slug': targetSlug };
+if (aliases.length) attrs['data-gbti-target-aliases'] = aliases.join(','); // SOW-112: pre-rename slugs
 if (commentId) attrs['data-gbti-comment-id'] = commentId;
 if (commentAuthor) attrs['data-gbti-comment-author'] = commentAuthor;
 ---

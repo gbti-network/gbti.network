@@ -160,13 +160,13 @@ export async function listShareComments(ctx, { targetSlug, limit } = {}) {
 // <gbti-discussion> in the expanded reader; listShareComments is the 'share' specialization. Same read surface
 // (the COMMENT_PATH enumeration + the published filter), just parameterized on targetType.
 const COMMENT_TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share', 'news']); // SOW-046 D: 'news' enables news discussion
-export async function listComments(ctx, { targetType, targetSlug, limit } = {}) {
+export async function listComments(ctx, { targetType, targetSlug, limit, aliases } = {}) {
   requireIdentity(ctx);
   if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError('bad-request', 'a valid targetType is required');
   if (!targetSlug || typeof targetSlug !== 'string') throw new OperationError('bad-request', 'targetSlug is required');
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listComments !== 'function') return { items: [] };
-  const items = (await ctx.reader.listComments(targetType, targetSlug, n)) ?? [];
+  const items = (await ctx.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : [])) ?? [];
   const gated = gateMemberComments(items, await ctx.membership?.()); // SOW-078: member comment stubs are tier-gated
   return { items: await mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed: gated }) }; // SOW-076
 }

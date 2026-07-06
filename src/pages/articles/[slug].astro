@@ -14,6 +14,7 @@ import EditHooks from '../../components/EditHooks.astro';
 import TouchSignal from '../../components/TouchSignal.astro';
 import { refCodeForAuthor } from '../../lib/referral';
 import { favoriteCount } from '../../lib/favorites';
+import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 import LockedBody from '../../components/LockedBody.astro';
 import { hasPublicPage, isStub } from '../../lib/content';
 import { buildAvatarIndex, avatarStack } from '../../lib/avatars';
@@ -49,7 +50,7 @@ const stack = avatarStack({
 
           <div class="mt-20 flex col items-center g12">
             <ContentMeta author={d.author} publishedAt={d.publishedAt} stack={stack} center />
-            <ContentActions type="post" slug={d.slug} title={d.title} url={postUrl} categories={d.categories} count={favoriteCount('post', d.slug)} />
+            <ContentActions type="post" slug={d.slug} title={d.title} url={postUrl} categories={d.categories} count={favoriteCount('post', d.slug, aliasSlugsOf(d))} />
           </div>
 
           {taxonomy.length > 0 && (
@@ -75,7 +76,7 @@ const stack = avatarStack({
         </div>
       </article>
 
-      <ContentFooter type="post" slug={d.slug} author={d.author} publishedAt={d.publishedAt} />
+      <ContentFooter type="post" slug={d.slug} author={d.author} publishedAt={d.publishedAt} aliases={aliasSlugsOf(d)} />
       <OpenHistory filePath={post.filePath} author={d.author} contributors={d.contributors} />
       <RelatedPosts post={post} />
       <ContributionCredits contributors={d.contributors} />

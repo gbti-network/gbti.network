@@ -22,7 +22,14 @@ export function buildItemIndex(perType = {}) {
   for (const [type, items] of Object.entries(perType || {})) {
     for (const it of items || []) {
       if (!it || !it.slug) continue;
-      map.set(`${type}:${it.slug}`, { type, slug: it.slug, title: it.title || it.slug, url: it.url || null, path: it.path || null, thumb: it.thumb || null });
+      const row = { type, slug: it.slug, title: it.title || it.slug, url: it.url || null, path: it.path || null, thumb: it.thumb || null };
+      map.set(`${type}:${it.slug}`, row);
+      // SOW-112: a saved row created before a rename still carries the OLD slug; the index item ships the old
+      // slugs as aliases, so the row resolves to the renamed item (never overwriting a real current-slug entry).
+      for (const a of Array.isArray(it.aliases) ? it.aliases : []) {
+        const k = `${type}:${a}`;
+        if (!map.has(k)) map.set(k, row);
+      }
     }
   }
   return map;

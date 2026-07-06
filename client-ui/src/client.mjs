@@ -72,7 +72,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     postShare: (b) => request('POST', '/api/share', b), // SOW-018: returns { id, path, visibility, encrypted }
     listShares: ({ limit } = {}) => request('GET', `/api/shares${qs({ limit })}`), // SOW-018: returns { items: [share summaries] }
     listShareComments: ({ targetSlug, limit } = {}) => request('GET', `/api/share-comments${qs({ targetSlug, limit })}`), // SOW-032: a Share's discussion -> { items: [comment summaries] }
-    listComments: ({ targetType, targetSlug, limit } = {}) => request('GET', `/api/comments${qs({ targetType, targetSlug, limit })}`), // SOW-041: the generic thread for any content type
+    listComments: ({ targetType, targetSlug, limit, aliases } = {}) => request('GET', `/api/comments${qs({ targetType, targetSlug, limit, aliases: Array.isArray(aliases) && aliases.length ? aliases.join(',') : undefined })}`), // SOW-041 thread (+ SOW-112 rename aliases)
     discordInvite: () => request('GET', '/api/discord-invite'), // on-demand Discord invite -> { url, source }
     discordLinkUrl: () => request('GET', '/api/discord-link'), // SOW Part C: a one-time token-bound Discord-LINK URL -> { url }
     discordLinkStatus: () => request('GET', '/api/discord-link/status'), // SOW: welcome auto-detect poll -> { linked }

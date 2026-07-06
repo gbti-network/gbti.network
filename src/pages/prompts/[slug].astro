@@ -15,6 +15,7 @@ import { hasPublicPage, isStub } from '../../lib/content';
 import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
 import { breadcrumb, categoryLabel } from '../../lib/taxonomy';
 import { favoriteCount } from '../../lib/favorites';
+import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 
 export async function getStaticPaths() {
   const prompts = (await getCollection('prompt')).filter(hasPublicPage);
@@ -66,7 +67,7 @@ const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.netw
         </div>
         {(d.shortDescription || d.exampleOutput) && <p class="lead mt20" style="max-width:70ch">{d.shortDescription || d.exampleOutput}</p>}
         <div class="mt20">
-          <ContentActions type="prompt" slug={d.slug} title={d.title} url={shareUrl} categories={d.categories} count={favoriteCount('prompt', d.slug)} />
+          <ContentActions type="prompt" slug={d.slug} title={d.title} url={shareUrl} categories={d.categories} count={favoriteCount('prompt', d.slug, aliasSlugsOf(d))} />
         </div>
       </header>
 
@@ -104,7 +105,7 @@ const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.netw
           </div>
           <!-- The author note + discussion live in the MAIN column, full-width to match the prompt block (the
                author already appears in the sidebar card, so the "Written by" box is hidden here). -->
-          <ContentFooter type="prompt" slug={d.slug} author={d.author} publishedAt={d.publishedAt} wide hideAuthor />
+          <ContentFooter type="prompt" slug={d.slug} author={d.author} publishedAt={d.publishedAt} wide hideAuthor aliases={aliasSlugsOf(d)} />
         </div>
 
         <!-- SIDEBAR: meta — summary, author + see-more, categories, tags, targets -->

@@ -30,7 +30,9 @@ function load(): Map<string, number> {
 }
 
 /** How many members have favorited this target. 0 when none (or pre-launch). Reads house/favorite-counts.yml,
- *  the member-identity-free aggregate synced from the deletable edge store by reconcile (SOW-024). */
-export function favoriteCount(targetType: string, targetSlug: string): number {
-  return load().get(`${targetType}:${targetSlug}`) ?? 0;
+ *  the member-identity-free aggregate synced from the deletable edge store by reconcile (SOW-024).
+ *  SOW-112: `aliases` are the item's pre-rename slugs; their counts sum in (members favorited the old slug). */
+export function favoriteCount(targetType: string, targetSlug: string, aliases: string[] = []): number {
+  const m = load();
+  return [targetSlug, ...aliases].reduce((n, s) => n + (m.get(`${targetType}:${s}`) ?? 0), 0);
 }

@@ -52,6 +52,18 @@ export function thumbOf(data, type) {
 }
 
 /** Map a content collection entry to a metadata index item (no body). The caller filters (isListed) + sorts. */
+/** SOW-112: the item's OLD slugs, derived from rename-generated redirectFrom entries (canonical URL shape;
+ *  legacy migration entries are WordPress-shaped and never match). Slug-keyed readers union these. */
+export function aliasSlugsOf(d) {
+  const list = Array.isArray(d?.redirectFrom) ? d.redirectFrom : [];
+  const out = [];
+  for (const e of list) {
+    const m = /^\/(articles|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || '').trim());
+    if (m && m[2] !== d?.slug && !out.includes(m[2])) out.push(m[2]);
+  }
+  return out;
+}
+
 export function toIndexItem(entry, type) {
   const d = (entry && entry.data) || {};
   const slug = d.slug;
@@ -69,6 +81,7 @@ export function toIndexItem(entry, type) {
     categories: Array.isArray(d.categories) ? d.categories.filter((s) => typeof s === 'string') : [], // SOW-054: full key path for the browse drill-down (paired with categoryLabels emitted by the index endpoints)
     publishedAt: d.publishedAt ? Number(d.publishedAt) : null,
     visibility: d.visibility || 'public',
+    aliases: aliasSlugsOf(d), // SOW-112: old slugs after a rename (saved rows + reader discussions resolve via these)
   };
 }
 

@@ -12,13 +12,15 @@ interface Props {
   author?: string; // content owner; their earliest comment renders as the pinned "From the author" block (SOW-014)
   wide?: boolean; // when true, span the full content width (prompt detail) instead of the 800px reading column
 }
-const { targetType, targetSlug, author, wide = false } = Astro.props;
+const { targetType, targetSlug, author, wide = false, aliases = [] } = Astro.props;
+// SOW-112: comments written before a rename carry the OLD slug; union it so the discussion follows the item.
+const slugSet = new Set([targetSlug, ...aliases]);
 
 // Comments are authored by members via the local client -> PR (auto-merged for paid members);
 // rendered here read-only. See .data/specs/comments.md.
 const published = (await getCollection('comment'))
   .filter((c) => c.data.status === 'published') // SOW-016: drop drafts only; member-only comments render locked
-  .filter((c) => c.data.targetType === targetType && c.data.targetSlug === targetSlug)
+  .filter((c) => c.data.targetType === targetType && slugSet.has(c.data.targetSlug))
   .sort((a, b) => a.data.createdAt.valueOf() - b.data.createdAt.valueOf());
 
 // SOW-014: the content author's deliberate note (flagged `authorNote`) is the required "from the author"

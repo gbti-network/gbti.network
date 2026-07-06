@@ -343,7 +343,7 @@ class GbtiReader extends GbtiElement {
     const resolved = this._html !== null;
     const slug = targetSlugFor(it);
     const discussion = (resolved && slug)
-      ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></section>`
+      ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"${Array.isArray(it.aliases) && it.aliases.length ? ` data-gbti-target-aliases="${esc(it.aliases.join(','))}"` : ''}></gbti-discussion></section>`
       : '';
     // A large "open the link" button in the sidebar for a Share, under the member card and above the discussion.
     const sideLink = (it.type === 'share' && it.url)

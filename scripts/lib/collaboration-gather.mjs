@@ -82,9 +82,13 @@ export function buildCollaborationEvents({ items = [], contributorsByItem = new 
       const member = resolve(c.login);
       if (member) events.push({ member, item, kind: 'contribution', at: toMs(c.at) });
     }
-    for (const cm of commentsIndex.get(typeSlugKey(item.type, item.slug)) || []) {
-      const member = resolve(cm.author);
-      if (member) events.push({ member, item, kind: 'comment', at: toMs(cm.at), authorIntro: cm.authorIntro });
+    // SOW-112: comments written before a rename sit under the item's OLD slug (aliases); union them.
+    const slugsOfItem = [item.slug, ...(Array.isArray(item.aliases) ? item.aliases : [])];
+    for (const s of slugsOfItem) {
+      for (const cm of commentsIndex.get(typeSlugKey(item.type, s)) || []) {
+        const member = resolve(cm.author);
+        if (member) events.push({ member, item, kind: 'comment', at: toMs(cm.at), authorIntro: cm.authorIntro });
+      }
     }
   }
   return events;

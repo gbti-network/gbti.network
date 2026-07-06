@@ -78,6 +78,7 @@ class GbtiDiscussion extends GbtiElement {
 
   _type() { return this.dataset.gbtiTargetType || ''; }
   _slug() { return this.dataset.gbtiTargetSlug || ''; }
+  _aliases() { return String(this.dataset.gbtiTargetAliases || '').split(',').filter(Boolean); } // SOW-112: pre-rename slugs
 
   async load() {
     const targetType = this._type();
@@ -88,7 +89,7 @@ class GbtiDiscussion extends GbtiElement {
     if (this._role == null) { try { this._role = (await this.client.status?.())?.role || 'member'; } catch { this._role = 'member'; } }
     if (!this._loaded) this.set(this.css(CSS) + `<p class="empty">Loading the discussion…</p>`);
     let items = [];
-    try { items = (await this.client.listComments({ targetType, targetSlug }))?.items ?? []; }
+    try { items = (await this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }))?.items ?? []; }
     catch { this.set(this.css(CSS) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug)); return; }
     const resolved = await Promise.all(items.map((c) => this._resolveBody(c).then((html) => ({ c, html }))));
     this._render(targetType, targetSlug, resolved);

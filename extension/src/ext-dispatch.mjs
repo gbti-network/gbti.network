@@ -139,7 +139,7 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
       case '/api/share-comments':
         return ok(await listShareComments(ctx, { targetSlug: query.targetSlug, limit: Number(query.limit) || undefined })); // SOW-032 discussion (Git Trees enumerate)
       case '/api/comments':
-        return ok(await listComments(ctx, { targetType: query.targetType, targetSlug: query.targetSlug, limit: Number(query.limit) || undefined })); // SOW-041 generic discussion
+        return ok(await listComments(ctx, { targetType: query.targetType, targetSlug: query.targetSlug, limit: Number(query.limit) || undefined, aliases: query.aliases ? String(query.aliases).split(',').filter(Boolean) : [] })); // SOW-041 discussion (+ SOW-112 rename aliases)
       case '/api/comment': // SOW-027: publish a comment (POST) or read one's own for an edit prefill (GET)
         return ok(method === 'POST' ? await publishComment(ctx, body) : await getComment(ctx, { id: query.id }));
       case '/api/comment/edit':

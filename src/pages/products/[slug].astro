@@ -14,6 +14,7 @@ import LockedBody from '../../components/LockedBody.astro';
 import { hasPublicPage, isStub } from '../../lib/content';
 import { breadcrumb, leafLabel } from '../../lib/taxonomy';
 import { favoriteCount } from '../../lib/favorites';
+import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 
 export async function getStaticPaths() {
   const products = (await getCollection('product')).filter(hasPublicPage);
@@ -62,7 +63,7 @@ const meta = [
             <ContentMeta author={d.author} publishedAt={d.publishedAt} dark center />
           </div>
           <div class="mt16" style="display:flex;justify-content:center">
-            <ContentActions type="product" slug={d.slug} title={d.title} url={productUrl} categories={d.categories} count={favoriteCount('product', d.slug)} />
+            <ContentActions type="product" slug={d.slug} title={d.title} url={productUrl} categories={d.categories} count={favoriteCount('product', d.slug, aliasSlugsOf(d))} />
           </div>
         </div>
       </div>
@@ -144,7 +145,7 @@ const meta = [
         </div>
       )}
 
-      <ContentFooter type="product" slug={d.slug} author={d.author} publishedAt={d.publishedAt} />
+      <ContentFooter type="product" slug={d.slug} author={d.author} publishedAt={d.publishedAt} aliases={aliasSlugsOf(d)} />
     </div>
   </section>
   <EditHooks type="product" owner={d.author} slug={d.slug} />
