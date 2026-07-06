@@ -174,9 +174,10 @@ test('rename recovers a stale draft branch: direct sync + branch rebuild, then t
   assert.ok(repo.deletes.includes(OLD)); // and the delete half shipped
 });
 
-// The half-rename hole: fork main is ALREADY fresh (say a manual Sync fork click) but the stale branch still
-// lacks the old file. The guard must check THE BRANCH (where commits land), not main, and rebuild.
-test('rename rebuilds a stale branch even when the fork main is already fresh', async () => {
+// The half-rename hole (PR #67): the staged draft ADDS the old-path file to the branch, so a branch check is
+// satisfied while the MERGE BASE still predates the file and the delete nets out of the PR diff. Renames must
+// therefore ALWAYS rebuild the branch from a verified-fresh main, even when main is already fresh.
+test('rename rebuilds an existing branch unconditionally (a branch check would be fooled by the staged file)', async () => {
   const repo = fakeRepo();
   const branchDeletes = [];
   let staleBranchGone = false;
@@ -188,7 +189,7 @@ test('rename rebuilds a stale branch even when the fork main is already fresh', 
   repo.getFileSha = async (r, p, ref) => {
     if (p !== OLD) return 'blob';
     if (ref === 'main') return 'old-sha'; // fresh main HAS the file
-    return staleBranchGone ? 'old-sha' : null; // the stale branch does not; the rebuilt one does
+    return 'staged-sha'; // the stale branch ALSO has it (the staged pending rename lives at the old path!)
   };
   repo.deleteBranch = async (r, b) => { branchDeletes.push(b); staleBranchGone = true; };
   const res = await publish(ctxFor({ repo }), { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD });
@@ -197,10 +198,10 @@ test('rename rebuilds a stale branch even when the fork main is already fresh', 
   assert.ok(repo.deletes.includes(OLD)); // the delete would have been silently skipped without the rebuild
 });
 
-test('rename still fails closed when the direct sync cannot provide the old file', async () => {
+test('rename still fails closed when the direct sync cannot provide the old file (even though the staged file sits on the branch)', async () => {
   const repo = fakeRepo({ baseHasOld: false });
   repo.getBranchSha = async (r, b) => (b === 'main' ? 'main-sha' : 'stale-branch-sha');
-  repo.getFileSha = async () => null; // nothing anywhere
+  repo.getFileSha = async (r, p, ref) => (ref === 'main' ? null : 'staged-sha'); // main never gains it; the branch has the staged copy
   const ctx = ctxFor({ repo });
   ctx.store = { get: (k) => (k === 'githubToken' ? 'tok' : null) };
   ctx.fetch = async () => ({ ok: false, status: 422, json: async () => ({}) }); // permission still missing
@@ -208,4 +209,29 @@ test('rename still fails closed when the direct sync cannot provide the old file
     publish(ctx, { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD }),
     (e) => /fork to sync/.test(e.message));
   assert.equal(repo.pulls.length, 0);
+});
+
+
+test('rename with an OPEN pull request on the item branch blocks with a clear message (never closes it)', async () => {
+  const repo = fakeRepo();
+  const branchDeletes = [];
+  repo.getBranchSha = async (r, b) => (b === 'main' ? 'main-sha' : 'branch-sha');
+  repo.findOpenPull = async () => ({ number: 12 });
+  repo.deleteBranch = async (r, b) => { branchDeletes.push(b); };
+  await assert.rejects(
+    publish(ctxFor({ repo }), { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD }),
+    (e) => /open pull request .*#12/.test(e.message));
+  assert.deepEqual(branchDeletes, []);
+});
+
+test('publishDraft rename routing forces status published (a staged draft may carry status draft)', async () => {
+  const { publishDraft } = await import('../client/src/operations.mjs');
+  const repo = fakeRepo();
+  const stagedText = OLD_FM.replace('slug: old-name', 'slug: new-name').replace('status: published', 'status: draft');
+  repo.getForkFileContent = async (r, p, branch) => (p === OLD && branch === 'gbti/prompt-old-name' ? stagedText : null);
+  repo.findOpenPull = async () => null;
+  const res = await publishDraft(ctxFor({ repo }), { type: 'prompt', slug: 'old-name' });
+  assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
+  const fm = parseContentFile(repo.puts.find((f) => f.path === 'members/alice/prompts/new-name/index.md').content).frontmatter;
+  assert.equal(fm.status, 'published'); // PR #67 landed status: draft without this
 });

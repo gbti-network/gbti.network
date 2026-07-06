@@ -481,31 +481,26 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   await syncForkIfCreatingBranch(ctx, repo, branch);
   let renameFiles = [];
   if (renaming) {
-    // The delete half needs the old file ON THE REF THE COMMITS LAND ON (publishFiles silently SKIPS a delete
-    // whose file is absent, which would leave the old page live — a half-rename). That ref is the existing
-    // draft branch when there is one, else the fork main a new branch will be cut from. So: always freshen the
-    // fork main first (fail-soft, idempotent fast-forward; the create-only gate above skips existing branches,
-    // and a rename depends on base freshness more than any other publish), then check ON THE RIGHT REF, and
-    // REBUILD a stale branch from the fresh main — safe precisely here: this publish rebuilds every file from
-    // the submitted content (the branch is superseded), and never while a PR is open (deleting would close it).
+    // The delete half must survive the PR DIFF, which is computed against the branch's MERGE BASE — not the
+    // branch tip and not today's fork main. A draft branch cut from a stale base ADDS the old-path file (the
+    // staged pending rename lives there), so deleting it on that branch nets to NOTHING in the diff and the
+    // merged PR leaves the old page live (exactly how PR #67 half-landed). The only safe shape: verify the
+    // old file on a FRESH fork main, then ALWAYS rebuild the branch from it — this publish rebuilds every
+    // file from the submitted content, so the branch carries nothing worth keeping. An open PR blocks (the
+    // rebuild would close it); the fail-closed message stays when the sync cannot provide the file.
     const fork = await repo.ensureFork();
     const base = await repo.getDefaultBranch(repo.upstream);
     const token = ctx.store?.get?.('githubToken');
     await workerSyncFork({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-    const branchSha = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
-    let oldPresent = await repo.getFileSha(fork.full_name, origin.oldPath, branchSha ? branch : base).catch(() => null);
-    if (!oldPresent && branchSha) {
-      const onMain = await repo.getFileSha(fork.full_name, origin.oldPath, base).catch(() => null);
-      if (onMain) {
-        const pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }).catch(() => null);
-        if (!pull) {
-          await repo.deleteBranch(fork.full_name, branch).catch(() => {});
-          oldPresent = onMain;
-        }
-      }
-    }
-    if (!oldPresent) {
+    const onMain = await repo.getFileSha(fork.full_name, origin.oldPath, base).catch(() => null);
+    if (!onMain) {
       throw new OperationError('bad-request', 'the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — your draft is saved; try publishing again later or contact the co-op');
+    }
+    const branchSha = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
+    if (branchSha) {
+      const pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }).catch(() => null);
+      if (pull) throw new OperationError('bad-request', `an open pull request exists for this item (#${pull.number}) — wait for it to merge or close it, then publish the rename`);
+      await repo.deleteBranch(fork.full_name, branch).catch(() => {});
     }
     renameFiles.push({ path: origin.oldPath, content: null });
     if (typeof oldFm.encryptedBody === 'string' && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
@@ -816,7 +811,8 @@ export async function publishDraft(ctx, { type, slug, title, prBody } = {}) {
       const parsed = parseContentFile(text);
       const fm = parsed.frontmatter ?? {};
       if (typeof fm.slug === 'string' && fm.slug !== slug) {
-        return publish(ctx, { type, input: fm, body: parsed.body, path: oldPath, title, prBody });
+        // Publishing IS the publish event: force status published (the staged file may carry status draft).
+        return publish(ctx, { type, input: { ...fm, status: 'published' }, body: parsed.body, path: oldPath, title, prBody });
       }
     }
   }
