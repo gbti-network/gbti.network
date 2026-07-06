@@ -15,7 +15,9 @@ function tmpRoot() {
   return root;
 }
 function writeRedirects(root, lines) {
-  fs.writeFileSync(path.join(root, 'public/_redirects'), lines.join('\n') + '\n');
+  // SOW-112: the guard now validates the SERVED dist/_redirects (the composed file), not the committed base.
+  fs.mkdirSync(path.join(root, 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist/_redirects'), lines.join('\n') + '\n');
 }
 function buildPage(root, relDir) {
   fs.mkdirSync(path.join(root, 'dist', relDir), { recursive: true });
@@ -87,12 +89,11 @@ test('candidatesFor maps the three destination shapes', () => {
   assert.deepEqual(candidatesFor(d, '/about'), [path.join(d, 'about', 'index.html'), path.join(d, 'about.html')]);
 });
 
-test('notes (does not error) when dist or _redirects is absent', () => {
+test('notes (does not error) when the composed dist/_redirects is absent', () => {
   const root = tmpRoot();
   fs.rmSync(path.join(root, 'dist'), { recursive: true, force: true });
-  writeRedirects(root, ['/a/ /b/ 301']);
   const { errors, notes } = checkRedirects({ root });
   assert.deepEqual(errors, []);
-  assert.ok(notes.some((n) => /dist\/ not found/.test(n)));
+  assert.ok(notes.some((n) => /dist\/_redirects not found/.test(n)));
   fs.rmSync(root, { recursive: true, force: true });
 });

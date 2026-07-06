@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Build guard (launch hardening): every destination in public/_redirects must resolve to a real page in dist,
+// Build guard (launch hardening): every destination in the SERVED dist/_redirects (the committed base plus
+// the SOW-112 frontmatter-composed lines) must resolve to a real page in dist,
 // so a 301 never lands on a 404. This is what catches a content visibility change (a post going Mode A, a slug
 // rename, a draft) that would otherwise turn a legacy URL into a broken redirect and lose the SEO equity.
 // `scripts/gen-redirects.mjs` already retargets such destinations to /membership/; this guard is the backstop
@@ -24,17 +25,17 @@ export function candidatesFor(distDir, dest) {
 }
 
 /**
- * Check that every destination in public/_redirects resolves to a file in dist. Pure over root/distDir, so it is
+ * Check that every destination in dist/_redirects (the composed, served file) resolves to a file in dist. Pure over root/distDir, so it is
  * unit-testable. External (http/https) and wildcard (`*`/`:`) destinations are skipped (with a note). Returns
  * { errors, notes, checked }.
  */
-export function checkRedirects({ root, distDir = path.join(root, 'dist'), redirectsFile = path.join(root, 'public/_redirects') } = {}) {
+export function checkRedirects({ root, distDir = path.join(root, 'dist'), redirectsFile = path.join(root, 'dist/_redirects') } = {}) {
   const errors = [];
   const notes = [];
   let checked = 0;
 
   if (!fs.existsSync(redirectsFile)) {
-    notes.push('public/_redirects not found, nothing to check (run scripts/gen-redirects.mjs).');
+    notes.push('dist/_redirects not found, nothing to check (run astro build + scripts/compose-redirects.mjs).');
     return { errors, notes, checked };
   }
   if (!fs.existsSync(distDir)) {
