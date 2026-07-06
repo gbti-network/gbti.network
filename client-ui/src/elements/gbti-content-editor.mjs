@@ -302,6 +302,7 @@ class GbtiContentEditor extends GbtiElement {
         .fld .btn2 { margin-top:7px; font:inherit; font-size:12.5px; font-weight:700; color:var(--s-fg); background:none; border:1.5px solid var(--s-line); border-radius:7px; padding:5px 12px; cursor:pointer; }
         .fld .btn2:hover { color:var(--s-green-fg); border-color:var(--s-green); }
         .fld .btn2[disabled] { opacity:.45; cursor:default; }
+        .fld .urlprev.danger { color:var(--s-danger, #e06c6c); }
         .doc-slug .slug-meta { display:inline-flex; align-items:center; gap:7px; }
         .doc-slug .pubdot { width:7px; height:7px; border-radius:50%; background:var(--s-fg-mute); }
         .doc-slug .slug-meta.pub .pubdot { background:var(--s-green); }
@@ -862,9 +863,13 @@ class GbtiContentEditor extends GbtiElement {
     }
     const armed = this._renameArmed === true;
     const val = this._renameVal ?? cur;
-    const note = existing && armed && val !== cur
-      ? `<div class="urlprev">/${esc(typePath)}/${esc(cur)}/ becomes /${esc(typePath)}/${esc(val)}/. The old link redirects, and the discussion, saves, and counts follow. This opens an auto-merging pull request.</div>`
-      : existing ? `<div class="urlprev">Changing the permalink renames this item; the old link will redirect.</div>` : '';
+    // SOW-112 QA: a rename failure surfaces HERE, at the field, not only in the far-away status line (a
+    // fail-closed guard message went unseen and a failed rename read as "nothing happened").
+    const note = this._renameError
+      ? `<div class="urlprev danger">${esc(this._renameError)}</div>`
+      : existing && armed && val !== cur
+        ? `<div class="urlprev">/${esc(typePath)}/${esc(cur)}/ becomes /${esc(typePath)}/${esc(val)}/. The old link redirects, and the discussion, saves, and counts follow. This opens an auto-merging pull request.</div>`
+        : existing ? `<div class="urlprev">Changing the permalink renames this item; the old link will redirect.</div>` : '';
     const btn = existing
       ? `<button class="btn2" id="renamebtn" type="button" ${val === cur ? 'disabled' : ''}>${armed ? 'Confirm rename' : 'Rename'}</button>`
       : '';
@@ -885,9 +890,10 @@ class GbtiContentEditor extends GbtiElement {
         if (inline) inline.textContent = v;
         return;
       }
-      // An existing item: track the candidate; any change disarms a pending confirmation.
+      // An existing item: track the candidate; any change disarms a pending confirmation + clears an error.
       this._renameVal = v;
       this._renameArmed = false;
+      this._renameError = null;
       const btn = this.$('#renamebtn');
       if (btn) { btn.disabled = v === (this.presetStr(this.preset?.input?.slug) || ''); btn.textContent = 'Rename'; }
       const note = input.closest('.fld')?.querySelector('.urlprev');
@@ -908,6 +914,7 @@ class GbtiContentEditor extends GbtiElement {
       return;
     }
     this._renameArmed = false;
+    this._renameError = null;
     this.out('Renaming…');
     try {
       const res = await this.client.renameContent({ path: this.itemPath, newSlug });
@@ -921,7 +928,10 @@ class GbtiContentEditor extends GbtiElement {
       this.emit('gbti-renamed', res); // the workspace drops caches + repoints the deep-link hash
     } catch (err) {
       const h = failHint(err);
-      this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
+      const msg = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
+      this._renameError = msg; // shown at the permalink field itself
+      this.render();
+      this.out(esc(msg), 'danger');
     }
   }
 

@@ -1810,6 +1810,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .fld .btn2 { margin-top:7px; font:inherit; font-size:12.5px; font-weight:700; color:var(--s-fg); background:none; border:1.5px solid var(--s-line); border-radius:7px; padding:5px 12px; cursor:pointer; }
         .fld .btn2:hover { color:var(--s-green-fg); border-color:var(--s-green); }
         .fld .btn2[disabled] { opacity:.45; cursor:default; }
+        .fld .urlprev.danger { color:var(--s-danger, #e06c6c); }
         .doc-slug .slug-meta { display:inline-flex; align-items:center; gap:7px; }
         .doc-slug .pubdot { width:7px; height:7px; border-radius:50%; background:var(--s-fg-mute); }
         .doc-slug .slug-meta.pub .pubdot { background:var(--s-green); }
@@ -2391,7 +2392,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const armed = this._renameArmed === true;
       const val = this._renameVal ?? cur;
-      const note = existing && armed && val !== cur ? `<div class="urlprev">/${esc(typePath)}/${esc(cur)}/ becomes /${esc(typePath)}/${esc(val)}/. The old link redirects, and the discussion, saves, and counts follow. This opens an auto-merging pull request.</div>` : existing ? `<div class="urlprev">Changing the permalink renames this item; the old link will redirect.</div>` : "";
+      const note = this._renameError ? `<div class="urlprev danger">${esc(this._renameError)}</div>` : existing && armed && val !== cur ? `<div class="urlprev">/${esc(typePath)}/${esc(cur)}/ becomes /${esc(typePath)}/${esc(val)}/. The old link redirects, and the discussion, saves, and counts follow. This opens an auto-merging pull request.</div>` : existing ? `<div class="urlprev">Changing the permalink renames this item; the old link will redirect.</div>` : "";
       const btn = existing ? `<button class="btn2" id="renamebtn" type="button" ${val === cur ? "disabled" : ""}>${armed ? "Confirm rename" : "Rename"}</button>` : "";
       return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" value="${esc(val)}" /></div>${note}${btn}</div>`;
     }
@@ -2410,6 +2411,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         this._renameVal = v;
         this._renameArmed = false;
+        this._renameError = null;
         const btn = this.$("#renamebtn");
         if (btn) {
           btn.disabled = v === (this.presetStr(this.preset?.input?.slug) || "");
@@ -2434,6 +2436,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       this._renameArmed = false;
+      this._renameError = null;
       this.out("Renaming…");
       try {
         const res = await this.client.renameContent({ path: this.itemPath, newSlug });
@@ -2445,7 +2448,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.emit("gbti-renamed", res);
       } catch (err) {
         const h = failHint(err);
-        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
+        const msg = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
+        this._renameError = msg;
+        this.render();
+        this.out(esc(msg), "danger");
       }
     }
     async copyContentId() {
