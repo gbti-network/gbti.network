@@ -68,7 +68,7 @@ async function main() {
           const response = await mcpDispatch(message ?? {}, buildContext(store));
           return send(res, 200, response ?? { ok: true }); // null = a notification (no response body)
         }
-        return send(res, 404, { error: 'not_found' });
+        return send(res, 404, { error: 'not_found', message: 'Unknown action. Restart the GBTI client (npm run gbti-network) to pick up the latest routes.' });
       } catch (err) {
         send(res, 500, { error: 'internal_error', message: err?.message });
       }

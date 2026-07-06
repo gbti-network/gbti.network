@@ -18417,6 +18417,27 @@ async function authorContent(ctx2, { type, input, body, status, message, title, 
   if (status === "draft") return saveDraft(ctx2, { type, input, body, message });
   return publish(ctx2, { type, input, body, message, title, prBody, authorNote });
 }
+var RENAME_URL_BASE = { post: "/articles", product: "/products", prompt: "/prompts" };
+function renameOriginOf({ path: path4, username, type }) {
+  const m = OWN_STATUS_PATH_RE.exec(String(path4 || ""));
+  if (!m) return null;
+  if (m[1] !== String(username).toLowerCase()) return null;
+  if (m[2].slice(0, -1) !== type) return null;
+  return { oldSlug: m[3], oldPath: String(path4) };
+}
+async function introMoveFiles(ctx2, { username, type, oldSlug, newSlug }) {
+  if (!["product", "prompt"].includes(type)) return [];
+  const oldIntro = `members/${username}/comments/intro-${oldSlug}.md`;
+  const introText = await ctx2.reader?.readFile?.(oldIntro);
+  if (introText == null) return [];
+  const intro = parseContentFile(introText);
+  const introFm = { ...intro.frontmatter ?? {}, id: `intro-${newSlug}`, targetSlug: newSlug };
+  return [
+    { path: `members/${username}/comments/intro-${newSlug}.md`, content: serializeContentFile(introFm, intro.body) },
+    { path: oldIntro, content: null }
+  ];
+}
+var OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
 async function syncForkIfCreatingBranch(ctx2, repo, branch, { sync = workerSyncFork } = {}) {
   try {
     const fork = await repo.ensureFork();
@@ -18428,7 +18449,7 @@ async function syncForkIfCreatingBranch(ctx2, repo, branch, { sync = workerSyncF
     return { synced: false, reason: "error" };
   }
 }
-async function publish(ctx2, { type, input, body, message, title, prBody, authorNote } = {}) {
+async function publish(ctx2, { type, input, body, message, title, prBody, authorNote, path: path4 } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
   const membership = await ctx2.membership?.() ?? "unknown";
@@ -18439,11 +18460,30 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
       { membership }
     );
   }
+  const origin = renameOriginOf({ path: path4, username: id.username, type });
+  let oldFm = null;
+  if (origin) {
+    const oldText = await ctx2.reader?.readFile?.(origin.oldPath);
+    if (oldText != null) oldFm = parseContentFile(oldText).frontmatter ?? {};
+  }
+  const effInput = { ...input ?? {} };
+  const renaming = Boolean(oldFm) && typeof effInput.slug === "string" && effInput.slug !== origin.oldSlug;
+  if (oldFm) {
+    const keep = Array.isArray(oldFm.redirectFrom) ? oldFm.redirectFrom : [];
+    const oldUrl = renaming ? `${RENAME_URL_BASE[type]}/${origin.oldSlug}/` : null;
+    const merged = [.../* @__PURE__ */ new Set([...keep, ...Array.isArray(effInput.redirectFrom) ? effInput.redirectFrom : [], ...oldUrl ? [oldUrl] : []])];
+    if (merged.length) effInput.redirectFrom = merged;
+    if (renaming && oldFm.publishedAt) effInput.publishedAt = oldFm.publishedAt;
+  }
   let built;
   try {
-    built = buildContentFile({ type, username: id.username, input: { ...input ?? {}, status: input && input.status || "published" }, body });
+    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || "published" }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
+  }
+  if (renaming) {
+    const collision = await repo.getFileContent(built.path).catch(() => null);
+    if (collision != null) throw new OperationError("bad-request", `the permalink "${built.slug}" is already taken`);
   }
   const token = ctx2.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
@@ -18461,13 +18501,27 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
   const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
   const bdy = prBody ?? desc.body;
-  await syncForkIfCreatingBranch(ctx2, repo, branchName(built.type, built.slug));
-  if (introFile) {
-    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message: msg, title: ttl, body: bdy });
+  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug);
+  await syncForkIfCreatingBranch(ctx2, repo, branch);
+  let renameFiles = [];
+  if (renaming) {
+    const fork = await repo.ensureFork();
+    const base2 = await repo.getDefaultBranch(repo.upstream);
+    const oldOnBase = await repo.getFileSha(fork.full_name, origin.oldPath, base2).catch(() => null);
+    if (!oldOnBase) {
+      throw new OperationError("bad-request", "the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — your draft is saved; try publishing again later or contact the co-op");
+    }
+    renameFiles.push({ path: origin.oldPath, content: null });
+    if (typeof oldFm.encryptedBody === "string" && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
+    if (!introFile) renameFiles.push(...await introMoveFiles(ctx2, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
+  }
+  const withRename = (r) => renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
+  if (introFile || renaming) {
+    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(renameFiles);
+    return withRename(await publishFiles({ repo, branch, files, message: msg, title: ttl, body: bdy }));
   }
   if (plan) {
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message: msg, title: ttl, body: bdy });
+    return withRename(await publishFiles({ repo, branch, files: plan.files, message: msg, title: ttl, body: bdy }));
   }
   return publishContent({ repo, change: built, message: msg, title: ttl, body: bdy });
 }
@@ -18538,7 +18592,7 @@ async function planMemberFiles({ built, body, encrypt }) {
     assetId
   };
 }
-async function saveDraft(ctx2, { type, input, body, message } = {}) {
+async function saveDraft(ctx2, { type, input, body, message, path: path4 } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
   const membership = await ctx2.membership?.() ?? "unknown";
@@ -18551,7 +18605,9 @@ async function saveDraft(ctx2, { type, input, body, message } = {}) {
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
-  const branch = branchName(built.type, built.slug);
+  const origin = renameOriginOf({ path: path4, username: id.username, type: built.type });
+  const staging = origin && built.slug !== origin.oldSlug ? origin : null;
+  const branch = branchName(built.type, staging ? staging.oldSlug : built.slug);
   const token = ctx2.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
   let plan;
@@ -18563,10 +18619,11 @@ async function saveDraft(ctx2, { type, input, body, message } = {}) {
     }
     throw err;
   }
-  const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  let files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  if (staging) files = files.map((f) => f.path === built.path ? { ...f, path: staging.oldPath } : f);
   await syncForkIfCreatingBranch(ctx2, repo, branch);
   await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
-  return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: built.path, state: "staged" };
+  return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: staging ? staging.oldPath : built.path, state: "staged", ...staging ? { renamed: { from: staging.oldSlug, to: built.slug } } : {} };
 }
 var commentSuffix = () => Math.random().toString(36).slice(2, 8);
 async function planAndPublishComment(ctx2, repo, built, body, { message, title, prBody }) {

@@ -5935,6 +5935,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.preset = { input: input || {}, body: body || "" };
       this.itemPath = path || null;
       this.staged = Boolean(staged);
+      this._slugVal = null;
       if (this.isConnected) this.render();
     }
     // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
@@ -6609,10 +6610,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const i = this.$(`[data-key="${el.dataset.header}"]`);
         if (i) i.value = el.textContent.trim();
       });
-      if (this.itemPath && this.preset?.input?.slug != null) {
-        const si = this.$('[data-key="slug"]');
-        if (si) si.value = String(this.preset.input.slug);
-      }
       const getVal = (k) => {
         const el = this.$(`[data-key="${k}"]`);
         return el ? el.type === "checkbox" ? el.checked : el.value : "";
@@ -6635,80 +6632,34 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-062 Phase 6: the "content ID" the MCP server (and every /api content route) addresses is the item's
     // repo-relative path. Copy it to the clipboard so an author can hand it to their agent. Only wired when editing an
     // existing item (a new item has no path yet, so the button is not rendered).
-    // SOW-112 QA (owner-directed): the permalink editor is a REAL field in the Details rail, above Short
-    // description — no native prompt()/confirm() dialogs. New item: the field IS the slug input. Existing item:
-    // editing arms a two-step inline confirmation (the note names both URLs and the redirect promise); the
-    // second click performs the rename.
+    // SOW-112 v2 (owner-directed): the permalink is a NORMAL editable field in the Details rail, above Short
+    // description. Changing it stages like any other edit (Save draft), and the actual rename (move + redirect)
+    // happens at the PUBLISH event — no separate rename action, no dialogs.
     permalinkFieldHtml() {
       const typePath = { post: "articles", product: "products", prompt: "prompts" }[this.type] || this.type;
-      const cur = this.presetStr(this.preset?.input?.slug) || "";
+      const loaded = this.presetStr(this.preset?.input?.slug) || "";
       const existing = Boolean(this.itemPath);
-      if (this.staged) {
-        return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc(typePath)}/</span><span class="slugro">${esc(cur)}</span></div><div class="urlprev">A staged draft's permalink is fixed; publish it, then rename from the published item.</div></div>`;
-      }
-      const armed = this._renameArmed === true;
-      const val = this._renameVal ?? cur;
-      const note = this._renameError ? `<div class="urlprev danger">${esc(this._renameError)}</div>` : existing && armed && val !== cur ? `<div class="urlprev">/${esc(typePath)}/${esc(cur)}/ becomes /${esc(typePath)}/${esc(val)}/. The old link redirects, and the discussion, saves, and counts follow. This opens an auto-merging pull request.</div>` : existing ? `<div class="urlprev">Changing the permalink renames this item; the old link will redirect.</div>` : "";
-      const btn = existing ? `<button class="btn2" id="renamebtn" type="button" ${val === cur ? "disabled" : ""}>${armed ? "Confirm rename" : "Rename"}</button>` : "";
-      return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" value="${esc(val)}" /></div>${note}${btn}</div>`;
+      const val = this._slugVal ?? loaded;
+      const note = existing && val && val !== loaded ? `<div class="urlprev">/${esc(typePath)}/${esc(loaded)}/ becomes /${esc(typePath)}/${esc(val)}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.</div>` : existing ? `<div class="urlprev">Changing the permalink renames this item when you publish; the old link will redirect.</div>` : "";
+      return `<div class="fld"><label>Permalink</label><div class="slugrow"><span class="slugpre">${esc(typePath)}/</span><input id="slugfield" type="text" spellcheck="false" value="${esc(val)}" /></div>${note}</div>`;
     }
     _wirePermalinkField() {
       const input = this.$("#slugfield");
       if (!input) return;
-      const existing = Boolean(this.itemPath);
+      const typePath = { post: "articles", product: "products", prompt: "prompts" }[this.type] || this.type;
+      const loaded = this.presetStr(this.preset?.input?.slug) || "";
       input.addEventListener("input", () => {
         const v = String(input.value || "").trim().toLowerCase();
-        if (!existing) {
-          const mirror = this.$('[data-key="slug"]');
-          if (mirror) mirror.value = v;
-          const inline = this.root?.querySelector(".doc-slug .slug-val");
-          if (inline) inline.textContent = v;
-          return;
-        }
-        this._renameVal = v;
-        this._renameArmed = false;
-        this._renameError = null;
-        const btn = this.$("#renamebtn");
-        if (btn) {
-          btn.disabled = v === (this.presetStr(this.preset?.input?.slug) || "");
-          btn.textContent = "Rename";
-        }
+        this._slugVal = v;
+        const mirror = this.$('[data-key="slug"]');
+        if (mirror) mirror.value = v;
+        const inline = this.root?.querySelector(".doc-slug .slug-val");
+        if (inline) inline.textContent = v;
         const note = input.closest(".fld")?.querySelector(".urlprev");
-        if (note) note.textContent = "Changing the permalink renames this item; the old link will redirect.";
+        if (note && this.itemPath) {
+          note.textContent = v && v !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
+        }
       });
-      this.on("#renamebtn", "click", () => this.doRename());
-    }
-    async doRename() {
-      const oldSlug = this.presetStr(this.preset?.input?.slug) || "";
-      const newSlug = String(this._renameVal ?? "").trim().toLowerCase();
-      if (!this.itemPath || !oldSlug || !newSlug || newSlug === oldSlug) return;
-      if (!/^[a-z0-9][a-z0-9-]*$/.test(newSlug)) {
-        this.out("A permalink is lowercase letters, digits, and hyphens.", "danger");
-        return;
-      }
-      if (!this._renameArmed) {
-        this._renameArmed = true;
-        this.render();
-        return;
-      }
-      this._renameArmed = false;
-      this._renameError = null;
-      this.out("Renaming…");
-      try {
-        const res = await this.client.renameContent({ path: this.itemPath, newSlug });
-        this.preset.input = { ...this.preset.input, slug: newSlug };
-        this.itemPath = res?.path || this.itemPath;
-        this._renameVal = null;
-        this.render();
-        this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res?.prNumber, autoMerge: true }))} The rename merges and the old link starts redirecting in about 2 to 3 minutes.`);
-        this.emit("gbti-renamed", res);
-      } catch (err) {
-        const h = failHint(err);
-        const msg = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
-        this._renameError = msg;
-        this.render();
-        this.out(esc(msg), "danger");
-      }
     }
     async copyContentId() {
       const id = this.itemPath;
@@ -6798,11 +6749,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           input.updatedAt = nowIso;
           input.publishedAt = nowIso;
         }
-        const res = await this.client.publish({ type, input, body, authorNote });
+        const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || void 0 });
         this._setChip(`${CHECK} Published`, "ok");
         this._dirty = false;
         this.$("#publish")?.setAttribute("hidden", "");
-        this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}`);
+        const renameNote = res?.renamed ? ` The permalink changed from ${esc(res.renamed.from)} to ${esc(res.renamed.to)}; the old link redirects after the next deploy.` : "";
+        this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}${renameNote}`);
+        if (res?.renamed && this.preset?.input) {
+          this.preset.input.slug = res.renamed.to;
+        }
         this.emit("gbti-published", res);
       } catch (err) {
         this._setChip("");
@@ -6822,9 +6777,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const { type, input, body } = this.gather();
         if (this.fields.some((f) => f.key === "status")) input.status = "draft";
         if (["post", "product", "prompt"].includes(type)) input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-        const res = await this.client.saveDraft({ type, input, body });
+        const res = await this.client.saveDraft({ type, input, body, path: this.itemPath || void 0 });
         this._setChip(`${CHECK} Draft saved`, "ok");
-        this.out('<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
+        this.out(res?.renamed ? `<span class="tag ok">saved</span> Draft staged on your fork with the pending permalink change (${esc(res.renamed.from)} to ${esc(res.renamed.to)}); the rename happens when you publish.` : '<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
         this.emit("gbti-draft-saved", res);
       } catch (err) {
         this._setChip("");

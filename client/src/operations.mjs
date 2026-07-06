@@ -233,6 +233,34 @@ export async function authorContent(ctx, { type, input, body, status, message, t
 const RENAME_URL_BASE = { post: '/articles', product: '/products', prompt: '/prompts' };
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
+// SOW-112 v2: resolve the ORIGIN of an edit — the canonical own-folder item the editor loaded (`path` in the
+// publish/saveDraft payload). Returns { oldSlug, oldPath } when the path is the member's own item of the same
+// type, else null. Identity threading: the slug in the FORM is the (possibly new) value; the path names what
+// it was.
+export function renameOriginOf({ path, username, type }) {
+  const m = OWN_STATUS_PATH_RE.exec(String(path || ''));
+  if (!m) return null;
+  if (m[1] !== String(username).toLowerCase()) return null;
+  if (m[2].slice(0, -1) !== type) return null;
+  return { oldSlug: m[3], oldPath: String(path) };
+}
+
+// SOW-112 v2: the intro-comment move files (product/prompt): read intro-<old>.md, rewrite id + targetSlug to
+// the new slug, emit the new file + the old delete. Empty when no intro exists. Shared by renameContent and
+// the publish-time rename.
+async function introMoveFiles(ctx, { username, type, oldSlug, newSlug }) {
+  if (!['product', 'prompt'].includes(type)) return [];
+  const oldIntro = `members/${username}/comments/intro-${oldSlug}.md`;
+  const introText = await ctx.reader?.readFile?.(oldIntro);
+  if (introText == null) return [];
+  const intro = parseContentFile(introText);
+  const introFm = { ...(intro.frontmatter ?? {}), id: `intro-${newSlug}`, targetSlug: newSlug };
+  return [
+    { path: `members/${username}/comments/intro-${newSlug}.md`, content: serializeContentFile(introFm, intro.body) },
+    { path: oldIntro, content: null },
+  ];
+}
+
 export async function renameContent(ctx, { path: rel, newSlug } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
@@ -286,13 +314,7 @@ export async function renameContent(ctx, { path: rel, newSlug } = {}) {
   }
   files.push({ path: newPath, content: serializeContentFile(fm, body) }, { path: rel, content: null });
   // The from-the-author intro comment (product/prompt) moves + retargets in the same PR.
-  const oldIntro = `members/${id.username}/comments/intro-${oldSlug}.md`;
-  const introText = ['product', 'prompt'].includes(type) ? await ctx.reader?.readFile?.(oldIntro) : null;
-  if (introText != null) {
-    const intro = parseContentFile(introText);
-    const introFm = { ...(intro.frontmatter ?? {}), id: `intro-${slug}`, targetSlug: slug };
-    files.push({ path: `members/${id.username}/comments/intro-${slug}.md`, content: serializeContentFile(introFm, intro.body) }, { path: oldIntro, content: null });
-  }
+  files.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug, newSlug: slug }));
 
   const branch = `gbti/rename-${type}-${oldSlug}`;
   await syncForkIfCreatingBranch(ctx, repo, branch);
@@ -373,7 +395,7 @@ export async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = worke
   }
 }
 
-export async function publish(ctx, { type, input, body, message, title, prBody, authorNote } = {}) {
+export async function publish(ctx, { type, input, body, message, title, prBody, authorNote, path } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   // SOW-011: publishing to the canonical repo is paid-only. Block a KNOWN non-paid (trial / lapsed) member
@@ -388,13 +410,39 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
       { membership },
     );
   }
+  // SOW-112 v2 (owner-directed): the rename happens AT THE PUBLISH EVENT. `path` names the canonical item this
+  // edit was loaded from; a submitted slug that differs from it makes this publish a RENAME (one PR: the new
+  // path, the old path deleted, the old URL in redirectFrom so the build 301s and readers alias). Even without
+  // a slug change, the old file's redirectFrom entries are merged in (a plain re-publish used to drop them).
+  const origin = renameOriginOf({ path, username: id.username, type });
+  let oldFm = null;
+  if (origin) {
+    const oldText = await ctx.reader?.readFile?.(origin.oldPath);
+    if (oldText != null) oldFm = parseContentFile(oldText).frontmatter ?? {};
+  }
+  const effInput = { ...(input ?? {}) };
+  const renaming = Boolean(oldFm) && typeof effInput.slug === 'string' && effInput.slug !== origin.oldSlug;
+  if (oldFm) {
+    const keep = Array.isArray(oldFm.redirectFrom) ? oldFm.redirectFrom : [];
+    const oldUrl = renaming ? `${RENAME_URL_BASE[type]}/${origin.oldSlug}/` : null;
+    const merged = [...new Set([...keep, ...(Array.isArray(effInput.redirectFrom) ? effInput.redirectFrom : []), ...(oldUrl ? [oldUrl] : [])])];
+    if (merged.length) effInput.redirectFrom = merged;
+    // A rename must not re-stamp publishedAt (feeds stay stable; the item is not new). The editor stamps it on
+    // every publish, so restore the original here for the rename case only.
+    if (renaming && oldFm.publishedAt) effInput.publishedAt = oldFm.publishedAt;
+  }
   let built;
   try {
     // SOW-106: publishing merges into the network repo, and merged content is PUBLIC. Force status: published (an
     // explicit caller status still wins), so a publish can never silently produce a hidden merged draft.
-    built = buildContentFile({ type, username: id.username, input: { ...(input ?? {}), status: (input && input.status) || 'published' }, body });
+    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || 'published' }, body });
   } catch (err) {
     throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
+  }
+  if (renaming) {
+    // Collision pre-check (CI's unique-slug guard is the backstop) — the new path must not exist upstream.
+    const collision = await repo.getFileContent(built.path).catch(() => null);
+    if (collision != null) throw new OperationError('bad-request', `the permalink "${built.slug}" is already taken`);
   }
 
   // SOW-016: if the content is whole-item members-only or has a `<!-- members-only -->` section, encrypt the
@@ -425,14 +473,33 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
   const bdy = prBody ?? desc.body;
+  // SOW-112 v2: a rename rides the item's OWN branch (the staged-draft identity), carries the deletes of the
+  // old path (+ its .enc; the new one was freshly encrypted above), and moves the intro comment — unless this
+  // publish writes a fresh authorNote intro at the new slug already.
+  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug);
   // SOW-106 Phase A: fresh-base a branch that is about to be created (best-effort; a miss changes nothing).
-  await syncForkIfCreatingBranch(ctx, repo, branchName(built.type, built.slug));
-  if (introFile) {
-    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message: msg, title: ttl, body: bdy });
+  await syncForkIfCreatingBranch(ctx, repo, branch);
+  let renameFiles = [];
+  if (renaming) {
+    // The delete half needs the old file ON the branch base (the fork sync provides it). Fail closed: never a
+    // half-move that publishes the new path while the old one stays live.
+    const fork = await repo.ensureFork();
+    const base = await repo.getDefaultBranch(repo.upstream);
+    const oldOnBase = await repo.getFileSha(fork.full_name, origin.oldPath, base).catch(() => null);
+    if (!oldOnBase) {
+      throw new OperationError('bad-request', 'the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — your draft is saved; try publishing again later or contact the co-op');
+    }
+    renameFiles.push({ path: origin.oldPath, content: null });
+    if (typeof oldFm.encryptedBody === 'string' && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
+    if (!introFile) renameFiles.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
+  }
+  const withRename = (r) => (renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r);
+  if (introFile || renaming) {
+    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(renameFiles);
+    return withRename(await publishFiles({ repo, branch, files, message: msg, title: ttl, body: bdy }));
   }
   if (plan) {
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message: msg, title: ttl, body: bdy });
+    return withRename(await publishFiles({ repo, branch, files: plan.files, message: msg, title: ttl, body: bdy }));
   }
   return publishContent({ repo, change: built, message: msg, title: ttl, body: bdy });
 }
@@ -541,7 +608,7 @@ function draftMetaFromBranch(branch) {
  *  Trial + paid may stage (canStageDrafts); 'unknown' fails open (the fork write is the member's own repo).
  *  Members-only content needs the Worker to encrypt (paid only), so a trial member's members-only draft is
  *  refused with a clean upgrade nudge and NO branch is created. */
-export async function saveDraft(ctx, { type, input, body, message } = {}) {
+export async function saveDraft(ctx, { type, input, body, message, path } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const membership = (await ctx.membership?.()) ?? 'unknown';
@@ -557,7 +624,12 @@ export async function saveDraft(ctx, { type, input, body, message } = {}) {
   } catch (err) {
     throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
   }
-  const branch = branchName(built.type, built.slug);
+  // SOW-112 v2: a permalink change stages ON THE ITEM'S OWN branch at its OLD path (the frontmatter slug is
+  // the pending new value; the folder names what the item still is). Identity stays with the item — no silent
+  // fork — and the publish event performs the actual move.
+  const origin = renameOriginOf({ path, username: id.username, type: built.type });
+  const staging = origin && built.slug !== origin.oldSlug ? origin : null;
+  const branch = branchName(built.type, staging ? staging.oldSlug : built.slug);
   const token = ctx.store?.get?.('githubToken');
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   let plan;
@@ -569,11 +641,12 @@ export async function saveDraft(ctx, { type, input, body, message } = {}) {
     }
     throw err;
   }
-  const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  let files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  if (staging) files = files.map((f) => (f.path === built.path ? { ...f, path: staging.oldPath } : f)); // the index stays at the old path
   // SOW-106 Phase A: fresh-base a branch that is about to be created (best-effort; a miss changes nothing).
   await syncForkIfCreatingBranch(ctx, repo, branch);
   await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
-  return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: built.path, state: 'staged' };
+  return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: staging ? staging.oldPath : built.path, state: 'staged', ...(staging ? { renamed: { from: staging.oldSlug, to: built.slug } } : {}) };
 }
 
 /** List the member's fork-staged drafts (the gbti/* branches on their fork). Each draft carries enough to render

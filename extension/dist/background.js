@@ -18861,6 +18861,27 @@ function validateContent(ctx, { type, input, body } = {}) {
     return { valid: false, error: err.message };
   }
 }
+var RENAME_URL_BASE = { post: "/articles", product: "/products", prompt: "/prompts" };
+function renameOriginOf({ path, username, type }) {
+  const m = OWN_STATUS_PATH_RE.exec(String(path || ""));
+  if (!m) return null;
+  if (m[1] !== String(username).toLowerCase()) return null;
+  if (m[2].slice(0, -1) !== type) return null;
+  return { oldSlug: m[3], oldPath: String(path) };
+}
+async function introMoveFiles(ctx, { username, type, oldSlug, newSlug }) {
+  if (!["product", "prompt"].includes(type)) return [];
+  const oldIntro = `members/${username}/comments/intro-${oldSlug}.md`;
+  const introText = await ctx.reader?.readFile?.(oldIntro);
+  if (introText == null) return [];
+  const intro = parseContentFile(introText);
+  const introFm = { ...intro.frontmatter ?? {}, id: `intro-${newSlug}`, targetSlug: newSlug };
+  return [
+    { path: `members/${username}/comments/intro-${newSlug}.md`, content: serializeContentFile(introFm, intro.body) },
+    { path: oldIntro, content: null }
+  ];
+}
+var OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
 async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = workerSyncFork } = {}) {
   try {
     const fork = await repo.ensureFork();
@@ -18872,7 +18893,7 @@ async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = workerSyncFo
     return { synced: false, reason: "error" };
   }
 }
-async function publish(ctx, { type, input, body, message, title, prBody: prBody2, authorNote } = {}) {
+async function publish(ctx, { type, input, body, message, title, prBody: prBody2, authorNote, path } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const membership = await ctx.membership?.() ?? "unknown";
@@ -18883,11 +18904,30 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
       { membership }
     );
   }
+  const origin = renameOriginOf({ path, username: id.username, type });
+  let oldFm = null;
+  if (origin) {
+    const oldText = await ctx.reader?.readFile?.(origin.oldPath);
+    if (oldText != null) oldFm = parseContentFile(oldText).frontmatter ?? {};
+  }
+  const effInput = { ...input ?? {} };
+  const renaming = Boolean(oldFm) && typeof effInput.slug === "string" && effInput.slug !== origin.oldSlug;
+  if (oldFm) {
+    const keep = Array.isArray(oldFm.redirectFrom) ? oldFm.redirectFrom : [];
+    const oldUrl = renaming ? `${RENAME_URL_BASE[type]}/${origin.oldSlug}/` : null;
+    const merged = [.../* @__PURE__ */ new Set([...keep, ...Array.isArray(effInput.redirectFrom) ? effInput.redirectFrom : [], ...oldUrl ? [oldUrl] : []])];
+    if (merged.length) effInput.redirectFrom = merged;
+    if (renaming && oldFm.publishedAt) effInput.publishedAt = oldFm.publishedAt;
+  }
   let built;
   try {
-    built = buildContentFile({ type, username: id.username, input: { ...input ?? {}, status: input && input.status || "published" }, body });
+    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || "published" }, body });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
+  }
+  if (renaming) {
+    const collision = await repo.getFileContent(built.path).catch(() => null);
+    if (collision != null) throw new OperationError("bad-request", `the permalink "${built.slug}" is already taken`);
   }
   const token = ctx.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
@@ -18905,13 +18945,27 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
   const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
   const bdy = prBody2 ?? desc.body;
-  await syncForkIfCreatingBranch(ctx, repo, branchName(built.type, built.slug));
-  if (introFile) {
-    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message: msg, title: ttl, body: bdy });
+  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug);
+  await syncForkIfCreatingBranch(ctx, repo, branch);
+  let renameFiles = [];
+  if (renaming) {
+    const fork = await repo.ensureFork();
+    const base3 = await repo.getDefaultBranch(repo.upstream);
+    const oldOnBase = await repo.getFileSha(fork.full_name, origin.oldPath, base3).catch(() => null);
+    if (!oldOnBase) {
+      throw new OperationError("bad-request", "the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — your draft is saved; try publishing again later or contact the co-op");
+    }
+    renameFiles.push({ path: origin.oldPath, content: null });
+    if (typeof oldFm.encryptedBody === "string" && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
+    if (!introFile) renameFiles.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
+  }
+  const withRename = (r) => renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
+  if (introFile || renaming) {
+    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(renameFiles);
+    return withRename(await publishFiles({ repo, branch, files, message: msg, title: ttl, body: bdy }));
   }
   if (plan) {
-    return publishFiles({ repo, branch: branchName(built.type, built.slug), files: plan.files, message: msg, title: ttl, body: bdy });
+    return withRename(await publishFiles({ repo, branch, files: plan.files, message: msg, title: ttl, body: bdy }));
   }
   return publishContent({ repo, change: built, message: msg, title: ttl, body: bdy });
 }
@@ -18987,7 +19041,7 @@ function draftMetaFromBranch(branch) {
   const m = String(branch || "").match(/^gbti\/(post|product|prompt)-(.+)$/);
   return m ? { type: m[1], slug: m[2] } : null;
 }
-async function saveDraft(ctx, { type, input, body, message } = {}) {
+async function saveDraft(ctx, { type, input, body, message, path } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   const membership = await ctx.membership?.() ?? "unknown";
@@ -19000,7 +19054,9 @@ async function saveDraft(ctx, { type, input, body, message } = {}) {
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
-  const branch = branchName(built.type, built.slug);
+  const origin = renameOriginOf({ path, username: id.username, type: built.type });
+  const staging = origin && built.slug !== origin.oldSlug ? origin : null;
+  const branch = branchName(built.type, staging ? staging.oldSlug : built.slug);
   const token = ctx.store?.get?.("githubToken");
   const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   let plan;
@@ -19012,10 +19068,11 @@ async function saveDraft(ctx, { type, input, body, message } = {}) {
     }
     throw err;
   }
-  const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  let files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  if (staging) files = files.map((f2) => f2.path === built.path ? { ...f2, path: staging.oldPath } : f2);
   await syncForkIfCreatingBranch(ctx, repo, branch);
   await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
-  return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: built.path, state: "staged" };
+  return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: staging ? staging.oldPath : built.path, state: "staged", ...staging ? { renamed: { from: staging.oldSlug, to: built.slug } } : {} };
 }
 async function forkContentMatchesLive(ctx, path, forkText) {
   try {
