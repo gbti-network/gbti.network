@@ -787,6 +787,21 @@ export async function publishDraft(ctx, { type, slug, title, prBody } = {}) {
   const head = `${fork.owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });
   if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, updated: true };
+  // SOW-112 v2: a PENDING-RENAME draft (frontmatter slug differs from the branch identity) must NOT ship the
+  // raw branch (its file sits at the old path with the new slug — a half-rename). Route it through the full
+  // publish, which performs the move (deletes + intro + redirectFrom) from this same branch. The draft's
+  // frontmatter is input-shaped (the same round-trip the schema-drift check uses).
+  if (type !== 'profile') {
+    const oldPath = contentPath(type, id.username, slug);
+    const text = await repo.getForkFileContent(fork.full_name, oldPath, branch).catch(() => null);
+    if (text != null) {
+      const parsed = parseContentFile(text);
+      const fm = parsed.frontmatter ?? {};
+      if (typeof fm.slug === 'string' && fm.slug !== slug) {
+        return publish(ctx, { type, input: fm, body: parsed.body, path: oldPath, title, prBody });
+      }
+    }
+  }
   const base = await repo.getDefaultBranch(repo.upstream);
   const titleText = title ?? (type === 'profile' ? `Update ${id.username}'s profile` : `${type}: ${slug}`);
   const pull = await repo.openPull({ title: titleText, head, base, body: prBody ?? '' });

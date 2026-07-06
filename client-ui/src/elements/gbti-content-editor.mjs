@@ -430,6 +430,8 @@ class GbtiContentEditor extends GbtiElement {
         .pubinfo svg { width:16px; height:16px; flex:none; margin-top:1px; color:var(--s-green-fg); } .pubinfo b { color:var(--s-fg); font-weight:700; }
         .pubinfo.warn { background:color-mix(in srgb, var(--s-amber, #d9a13c) 12%, transparent); border-color:var(--s-amber, #d9a13c); }
         .pubinfo.warn svg { color:var(--s-amber, #d9a13c); }
+        .pubinfo.danger { background:color-mix(in srgb, var(--s-danger, #e06c6c) 12%, transparent); border-color:var(--s-danger, #e06c6c); }
+        .pubinfo.danger svg { color:var(--s-danger, #e06c6c); }
         .doc-slug .meta-local { color:var(--s-fg-mute); }
         .doc-view button { display:inline-flex; align-items:center; gap:7px; padding:7px 15px; border:0; border-radius:7px; background:transparent; font:inherit; font-size:13px; font-weight:600; color:var(--s-fg-mute); cursor:pointer; white-space:nowrap; transition:color .14s ease; }
         .doc-view button svg { width:15px; height:15px; }
@@ -460,7 +462,7 @@ class GbtiContentEditor extends GbtiElement {
            ${this.itemPath ? `<button class="ebtn" id="copyid" type="button" title="Copy this content's ID (its repo path) for the MCP server">${COPY} <span class="lbl">Copy ID</span></button>` : ''}
            ${isPub ? `<button class="ebtn" id="viewpub" type="button" title="Open the live public page in a new tab">${GLOBE} <span class="lbl">View Public Entry</span></button>` : ''}
            ${canStage ? `<button class="ebtn" id="draft" type="button">${SAVE} Save draft</button>` : ''}
-           <button class="ebtn${blocked ? '' : ' ebtn-primary'}" id="publish" type="button"${isPub ? ' hidden' : ''}${blocked ? ' title="Publishing requires a paid membership"' : ''}>${blocked ? 'Membership required' : `${MERGE} Publish`}</button>
+           <button class="ebtn${blocked ? '' : ' ebtn-primary'}" id="publish" type="button"${isPub && !this.staged ? ' hidden' : ''}${blocked ? ' title="Publishing requires a paid membership"' : ''}>${blocked ? 'Membership required' : `${MERGE} Publish`}</button>
          </div>
          <div class="edgrid">
            <article class="doc">
@@ -961,12 +963,7 @@ class GbtiContentEditor extends GbtiElement {
       this._setChip(`${CHECK} Published`, 'ok');
       this._dirty = false; this.$('#publish')?.setAttribute('hidden', ''); // now live + matches -> nothing to publish
       // SOW-112 QA (owner-directed): the publish-expectation banner appears only AFTER Publish is pressed.
-      const pb = this.$('#pubbanner');
-      if (pb) {
-        pb.classList.remove('warn');
-        pb.innerHTML = `${INFO}<span>Publishing is not instant. It opens a pull request that auto-merges, then the site rebuilds, so your change reaches the live edge in about 2 to 3 minutes. Track it in your <b>WorkBench</b> under Pull requests.</span>`;
-        pb.hidden = false;
-      }
+      this._banner(`Publishing is not instant. It opens a pull request that auto-merges, then the site rebuilds, so your change reaches the live edge in about 2 to 3 minutes. Track it in your <b>WorkBench</b> under Pull requests.`);
       const renameNote = res?.renamed ? ` The permalink changed from ${esc(res.renamed.from)} to ${esc(res.renamed.to)}; the old link redirects after the next deploy.` : '';
       this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}${renameNote}`); // SOW-072 P2: consistent ack (esc: out() writes innerHTML)
       if (res?.renamed && this.preset?.input) { this.preset.input.slug = res.renamed.to; } // the view reflects the accepted rename
@@ -974,10 +971,24 @@ class GbtiContentEditor extends GbtiElement {
     } catch (err) {
       this._setChip('');
       const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
-      this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
+      const msg = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
+      // SOW-112 QA: the failure must be unmissable — the banner slot goes danger (the bottom status line was
+      // repeatedly below the fold, so a failed publish read as "nothing happened").
+      this._banner(esc(msg), 'danger');
+      this.out(esc(msg), 'danger');
     } finally {
       restore();
     }
+  }
+
+  // SOW-112 QA: put a message in the top banner slot. cls '' = info (green), 'warn' = amber, 'danger' = red.
+  _banner(html, cls = '') {
+    const pb = this.$('#pubbanner');
+    if (!pb) return;
+    pb.classList.remove('warn', 'danger');
+    if (cls) pb.classList.add(cls);
+    pb.innerHTML = `${INFO}<span>${html}</span>`;
+    pb.hidden = false;
   }
 
   // SOW-082: Save the current content as a draft on the member's own fork (no PR). Allowed for trial + paid; a

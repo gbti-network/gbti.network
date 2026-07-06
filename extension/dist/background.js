@@ -19214,6 +19214,17 @@ async function publishDraft(ctx, { type, slug, title, prBody: prBody2 } = {}) {
   const head = `${fork.owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });
   if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, updated: true };
+  if (type !== "profile") {
+    const oldPath = contentPath(type, id.username, slug);
+    const text = await repo.getForkFileContent(fork.full_name, oldPath, branch).catch(() => null);
+    if (text != null) {
+      const parsed = parseContentFile(text);
+      const fm = parsed.frontmatter ?? {};
+      if (typeof fm.slug === "string" && fm.slug !== slug) {
+        return publish(ctx, { type, input: fm, body: parsed.body, path: oldPath, title, prBody: prBody2 });
+      }
+    }
+  }
   const base3 = await repo.getDefaultBranch(repo.upstream);
   const titleText = title ?? (type === "profile" ? `Update ${id.username}'s profile` : `${type}: ${slug}`);
   const pull = await repo.openPull({ title: titleText, head, base: base3, body: prBody2 ?? "" });

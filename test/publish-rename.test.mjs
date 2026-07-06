@@ -123,3 +123,25 @@ test('saveDraft without a slug change stages normally under its own slug', async
   assert.equal(res.branch, 'gbti/prompt-old-name');
   assert.equal(res.renamed, undefined);
 });
+
+test('publishDraft routes a pending-rename draft through the full rename publish (never a half-rename PR)', async () => {
+  const { publishDraft } = await import('../client/src/operations.mjs');
+  const repo = fakeRepo();
+  const stagedText = OLD_FM.replace('slug: old-name', 'slug: new-name');
+  repo.getForkFileContent = async (r, p, branch) => (p === OLD && branch === 'gbti/prompt-old-name' ? stagedText : null);
+  const res = await publishDraft(ctxFor({ repo }), { type: 'prompt', slug: 'old-name' });
+  assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
+  assert.ok(repo.puts.some((f) => f.path === 'members/alice/prompts/new-name/index.md'));
+  assert.ok(repo.deletes.includes(OLD)); // the move shipped, not the raw mismatched branch file
+  assert.equal(repo.pulls[0].head, 'alice:gbti/prompt-old-name');
+});
+
+test('publishDraft without a pending rename opens the PR from the branch untouched', async () => {
+  const { publishDraft } = await import('../client/src/operations.mjs');
+  const repo = fakeRepo();
+  repo.getForkFileContent = async () => OLD_FM; // slug matches the branch
+  const res = await publishDraft(ctxFor({ repo }), { type: 'prompt', slug: 'old-name' });
+  assert.equal(res.renamed, undefined);
+  assert.equal(repo.puts.length, 0); // no rebuild: the branch ships as-is
+  assert.equal(repo.pulls[0].head, 'alice:gbti/prompt-old-name');
+});
