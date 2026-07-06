@@ -288,6 +288,8 @@ class GbtiContentEditor extends GbtiElement {
         .doc-slug .slug-val:focus { border-bottom-color:var(--s-green); }
         .doc-slug .slug-val.locked { border-bottom-color:transparent; cursor:default; }
         .doc-slug .slug-val.locked:hover { border-bottom-color:transparent; }
+        .doc-slug .slug-rename { font:inherit; font-size:11px; font-weight:700; color:var(--s-fg-mute); background:none; border:1px solid var(--s-line); border-radius:6px; padding:1px 8px; cursor:pointer; }
+        .doc-slug .slug-rename:hover { color:var(--s-green-fg); border-color:var(--s-green); }
         .doc-slug .slug-meta { display:inline-flex; align-items:center; gap:7px; }
         .doc-slug .pubdot { width:7px; height:7px; border-radius:50%; background:var(--s-fg-mute); }
         .doc-slug .slug-meta.pub .pubdot { background:var(--s-green); }
@@ -451,10 +453,15 @@ class GbtiContentEditor extends GbtiElement {
                // item it is set at creation, like the Type. Editing it here silently forked a NEW item.
                const slugLocked = Boolean(this.itemPath);
                const slugVal = slugLocked
-                 ? `<span class="slug-val locked" title="The permalink is set at creation. Renaming needs a redirect and is a follow-up.">${esc(this.presetStr(p.slug) || '')}</span>`
+                 ? `<span class="slug-val locked" title="The permalink identifies this item; use Rename to change it (the old link redirects).">${esc(this.presetStr(p.slug) || '')}</span>`
                  : `<span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || '')}</span>`;
+               // SOW-112: a TRUE rename (move + redirect + identity aliasing) on a canonical item. Staged drafts
+               // rename by discarding + re-saving; the server blocks a rename while staged work exists anyway.
+               const renameBtn = slugLocked && !this.staged
+                 ? `<button class="slug-rename" id="renamebtn" type="button" title="Rename this permalink (the old link redirects)">Rename</button>`
+                 : '';
                const metaCls = this.staged ? ' staged' : (isPub ? ' pub' : '');
-               return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ''}</span></div>`;
+               return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}${renameBtn}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ''}</span></div>`;
              })()}
              <div class="doc-view-row">
                <div class="doc-view" id="docview">
@@ -498,6 +505,7 @@ class GbtiContentEditor extends GbtiElement {
     this.$$('[data-mrclose]').forEach((el) => el.addEventListener('click', () => this.$('#mdrefmodal')?.classList.remove('show')));
     if (!this._escWired) { this._escWired = true; document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.$('#mdrefmodal')?.classList.remove('show'); }); }
     if (this.itemPath) this.on('#copyid', 'click', () => this.copyContentId());
+    this.on('#renamebtn', 'click', () => this.doRename()); // SOW-112
     this.on('#viewpub', 'click', () => { const u = this.publicUrl(); if (u) window.open(u, '_blank', 'noopener'); });
     this.$$('#docview [data-view]').forEach((b) => b.addEventListener('click', () => this.setDocView(b.dataset.view))); // SOW-062 P6: Visual/Markdown
     this.on('#draft', 'click', () => this.doDraft());
@@ -834,6 +842,30 @@ class GbtiContentEditor extends GbtiElement {
   // SOW-062 Phase 6: the "content ID" the MCP server (and every /api content route) addresses is the item's
   // repo-relative path. Copy it to the clipboard so an author can hand it to their agent. Only wired when editing an
   // existing item (a new item has no path yet, so the button is not rendered).
+  // SOW-112: the true permalink rename. One PR moves the item, the old URL 301s, and the discussion/saves/
+  // counts follow via redirectFrom aliasing. The server enforces every guard; this only collects + confirms.
+  async doRename() {
+    const oldSlug = this.presetStr(this.preset?.input?.slug) || '';
+    const typePath = ({ post: 'articles', product: 'products', prompt: 'prompts' })[this.type] || this.type;
+    if (!this.itemPath || !oldSlug || typeof prompt !== 'function') return;
+    const raw = prompt(`New permalink for ${typePath}/${oldSlug}/ (lowercase letters, digits, hyphens):`, oldSlug);
+    if (raw == null) return;
+    const newSlug = String(raw).trim().toLowerCase();
+    if (!newSlug || newSlug === oldSlug) return;
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(newSlug)) { this.out('A permalink is lowercase letters, digits, and hyphens.', 'danger'); return; }
+    const ask = `Rename /${typePath}/${oldSlug}/ to /${typePath}/${newSlug}/?\n\nThe old link will redirect, and the discussion, saves, and counts follow the item. This opens a pull request.`;
+    if (typeof confirm === 'function' && !confirm(ask)) return;
+    this.out('Renaming…');
+    try {
+      const res = await this.client.renameContent({ path: this.itemPath, newSlug });
+      this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res?.prNumber, autoMerge: true }))} The old link redirects after the next deploy.`);
+      this.emit('gbti-renamed', res); // the workspace refreshes caches + reopens at the new path
+    } catch (err) {
+      const h = failHint(err);
+      this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), 'danger');
+    }
+  }
+
   async copyContentId() {
     const id = this.itemPath;
     if (!id) return;

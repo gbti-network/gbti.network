@@ -17550,8 +17550,9 @@ function createReader(repoPath) {
     listShareComments(targetSlug, limit = 100) {
       return this.listComments("share", targetSlug, limit);
     },
-    listComments(targetType, targetSlug, limit = 100) {
+    listComments(targetType, targetSlug, limit = 100, aliases = []) {
       if (!repoPath || !targetType || !targetSlug) return [];
+      const slugs = /* @__PURE__ */ new Set([targetSlug, ...Array.isArray(aliases) ? aliases : []]);
       const roots = [path2.join(repoPath, "members"), path2.join(repoPath, "house")];
       const out = [];
       const readCommentsDir = (commentsDir, relPrefix) => {
@@ -17571,7 +17572,7 @@ function createReader(repoPath) {
           }
           const fm = parsed.frontmatter || {};
           if ((fm.status ?? "published") !== "published") continue;
-          if (fm.targetType !== targetType || fm.targetSlug !== targetSlug) continue;
+          if (fm.targetType !== targetType || !slugs.has(fm.targetSlug)) continue;
           out.push(commentSummary(`${relPrefix}/comments/${f}`, fm, parsed.body));
         }
       };
@@ -18382,13 +18383,13 @@ async function mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed })
   return comments;
 }
 var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
-async function listComments(ctx2, { targetType, targetSlug, limit } = {}) {
+async function listComments(ctx2, { targetType, targetSlug, limit, aliases } = {}) {
   requireIdentity(ctx2);
   if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError("bad-request", "a valid targetType is required");
   if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx2.reader?.listComments !== "function") return { items: [] };
-  const items = await ctx2.reader.listComments(targetType, targetSlug, n) ?? [];
+  const items = await ctx2.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : []) ?? [];
   const gated = gateMemberComments(items, await ctx2.membership?.());
   return { items: await mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed: gated }) };
 }

@@ -18833,13 +18833,13 @@ async function listShareComments(ctx, { targetSlug, limit } = {}) {
   return { items: await mergeCommentEchoesFor(ctx, { targetType: "share", targetSlug, deployed: gated }) };
 }
 var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
-async function listComments(ctx, { targetType, targetSlug, limit } = {}) {
+async function listComments(ctx, { targetType, targetSlug, limit, aliases } = {}) {
   requireIdentity(ctx);
   if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError("bad-request", "a valid targetType is required");
   if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
   if (typeof ctx.reader?.listComments !== "function") return { items: [] };
-  const items = await ctx.reader.listComments(targetType, targetSlug, n) ?? [];
+  const items = await ctx.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : []) ?? [];
   const gated = gateMemberComments(items, await ctx.membership?.());
   return { items: await mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed: gated }) };
 }
@@ -21090,8 +21090,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await listShareComments(ctx, { targetSlug: query.targetSlug, limit: Number(query.limit) || void 0 }));
       // SOW-032 discussion (Git Trees enumerate)
       case "/api/comments":
-        return ok(await listComments(ctx, { targetType: query.targetType, targetSlug: query.targetSlug, limit: Number(query.limit) || void 0 }));
-      // SOW-041 generic discussion
+        return ok(await listComments(ctx, { targetType: query.targetType, targetSlug: query.targetSlug, limit: Number(query.limit) || void 0, aliases: query.aliases ? String(query.aliases).split(",").filter(Boolean) : [] }));
+      // SOW-041 discussion (+ SOW-112 rename aliases)
       case "/api/comment":
         return ok(method === "POST" ? await publishComment(ctx, body) : await getComment(ctx, { id: query.id }));
       case "/api/comment/edit":

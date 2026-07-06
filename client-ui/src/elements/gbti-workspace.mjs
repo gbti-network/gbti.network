@@ -461,6 +461,17 @@ class GbtiWorkspace extends GbtiElement {
       const ed = this.$('gbti-content-editor');
       const e = this._editing;
       if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged }); // SOW-062 P6 + SOW-106 QA: path resolves the cover preview; staged drives the fork-draft meta
+      // SOW-112: after a rename PR opens, drop the stale caches and reopen the item at its NEW path (the
+      // auto-merge lands within moments; getContentItem reads the fork-agnostic canonical, so a brief 404
+      // window simply keeps the current view until the member navigates).
+      ed?.addEventListener?.('gbti-renamed', (ev) => {
+        const r = ev?.detail || {};
+        if (!r.path) return;
+        this._cache = {};
+        this._drafts = null;
+        this._overview = null;
+        this._openItem(r.path, r.type || e.type);
+      }, { once: true });
       // SOW-106: surface the fork-draft state and any schema drift together in the editor status line.
       const notes = [];
       if (e.staged) notes.push('You are editing your staged fork draft. It is not live until you Publish.');

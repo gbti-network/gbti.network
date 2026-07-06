@@ -1464,6 +1464,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _slug() {
       return this.dataset.gbtiTargetSlug || "";
     }
+    _aliases() {
+      return String(this.dataset.gbtiTargetAliases || "").split(",").filter(Boolean);
+    }
+    // SOW-112: pre-rename slugs
     async load() {
       const targetType = this._type();
       const targetSlug = this._slug();
@@ -1485,7 +1489,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!this._loaded) this.set(this.css(CSS3) + `<p class="empty">Loading the discussion…</p>`);
       let items = [];
       try {
-        items = (await this.client.listComments({ targetType, targetSlug }))?.items ?? [];
+        items = (await this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }))?.items ?? [];
       } catch {
         this.set(this.css(CSS3) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
         return;
@@ -1831,6 +1835,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .doc-slug .slug-val:focus { border-bottom-color:var(--s-green); }
         .doc-slug .slug-val.locked { border-bottom-color:transparent; cursor:default; }
         .doc-slug .slug-val.locked:hover { border-bottom-color:transparent; }
+        .doc-slug .slug-rename { font:inherit; font-size:11px; font-weight:700; color:var(--s-fg-mute); background:none; border:1px solid var(--s-line); border-radius:6px; padding:1px 8px; cursor:pointer; }
+        .doc-slug .slug-rename:hover { color:var(--s-green-fg); border-color:var(--s-green); }
         .doc-slug .slug-meta { display:inline-flex; align-items:center; gap:7px; }
         .doc-slug .pubdot { width:7px; height:7px; border-radius:50%; background:var(--s-fg-mute); }
         .doc-slug .slug-meta.pub .pubdot { background:var(--s-green); }
@@ -1990,9 +1996,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
              <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || "")}</div>
              ${(() => {
           const slugLocked = Boolean(this.itemPath);
-          const slugVal = slugLocked ? `<span class="slug-val locked" title="The permalink is set at creation. Renaming needs a redirect and is a follow-up.">${esc(this.presetStr(p.slug) || "")}</span>` : `<span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || "")}</span>`;
+          const slugVal = slugLocked ? `<span class="slug-val locked" title="The permalink identifies this item; use Rename to change it (the old link redirects).">${esc(this.presetStr(p.slug) || "")}</span>` : `<span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || "")}</span>`;
+          const renameBtn = slugLocked && !this.staged ? `<button class="slug-rename" id="renamebtn" type="button" title="Rename this permalink (the old link redirects)">Rename</button>` : "";
           const metaCls = this.staged ? " staged" : isPub ? " pub" : "";
-          return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ""}</span></div>`;
+          return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}${renameBtn}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ""}</span></div>`;
         })()}
              <div class="doc-view-row">
                <div class="doc-view" id="docview">
@@ -2039,6 +2046,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         });
       }
       if (this.itemPath) this.on("#copyid", "click", () => this.copyContentId());
+      this.on("#renamebtn", "click", () => this.doRename());
       this.on("#viewpub", "click", () => {
         const u = this.publicUrl();
         if (u) window.open(u, "_blank", "noopener");
@@ -2399,6 +2407,34 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-062 Phase 6: the "content ID" the MCP server (and every /api content route) addresses is the item's
     // repo-relative path. Copy it to the clipboard so an author can hand it to their agent. Only wired when editing an
     // existing item (a new item has no path yet, so the button is not rendered).
+    // SOW-112: the true permalink rename. One PR moves the item, the old URL 301s, and the discussion/saves/
+    // counts follow via redirectFrom aliasing. The server enforces every guard; this only collects + confirms.
+    async doRename() {
+      const oldSlug = this.presetStr(this.preset?.input?.slug) || "";
+      const typePath = { post: "articles", product: "products", prompt: "prompts" }[this.type] || this.type;
+      if (!this.itemPath || !oldSlug || typeof prompt !== "function") return;
+      const raw = prompt(`New permalink for ${typePath}/${oldSlug}/ (lowercase letters, digits, hyphens):`, oldSlug);
+      if (raw == null) return;
+      const newSlug = String(raw).trim().toLowerCase();
+      if (!newSlug || newSlug === oldSlug) return;
+      if (!/^[a-z0-9][a-z0-9-]*$/.test(newSlug)) {
+        this.out("A permalink is lowercase letters, digits, and hyphens.", "danger");
+        return;
+      }
+      const ask = `Rename /${typePath}/${oldSlug}/ to /${typePath}/${newSlug}/?
+
+The old link will redirect, and the discussion, saves, and counts follow the item. This opens a pull request.`;
+      if (typeof confirm === "function" && !confirm(ask)) return;
+      this.out("Renaming…");
+      try {
+        const res = await this.client.renameContent({ path: this.itemPath, newSlug });
+        this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res?.prNumber, autoMerge: true }))} The old link redirects after the next deploy.`);
+        this.emit("gbti-renamed", res);
+      } catch (err) {
+        const h = failHint(err);
+        this.out(esc(h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text), "danger");
+      }
+    }
     async copyContentId() {
       const id = this.itemPath;
       if (!id) return;
@@ -3660,7 +3696,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     for (const [type, items] of Object.entries(perType || {})) {
       for (const it of items || []) {
         if (!it || !it.slug) continue;
-        map.set(`${type}:${it.slug}`, { type, slug: it.slug, title: it.title || it.slug, url: it.url || null, path: it.path || null, thumb: it.thumb || null });
+        const row = { type, slug: it.slug, title: it.title || it.slug, url: it.url || null, path: it.path || null, thumb: it.thumb || null };
+        map.set(`${type}:${it.slug}`, row);
+        for (const a of Array.isArray(it.aliases) ? it.aliases : []) {
+          const k = `${type}:${a}`;
+          if (!map.has(k)) map.set(k, row);
+        }
       }
     }
     return map;
@@ -10097,6 +10138,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
         if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged });
+        ed?.addEventListener?.("gbti-renamed", (ev) => {
+          const r = ev?.detail || {};
+          if (!r.path) return;
+          this._cache = {};
+          this._drafts = null;
+          this._overview = null;
+          this._openItem(r.path, r.type || e.type);
+        }, { once: true });
         const notes = [];
         if (e.staged) notes.push("You are editing your staged fork draft. It is not live until you Publish.");
         if (e.invalidNote) notes.push(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`);
@@ -11498,7 +11547,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } else body = `<div class="body">${typeof this._html === "string" ? this._html : ""}</div>`;
       const resolved = this._html !== null;
       const slug = targetSlugFor(it);
-      const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></section>` : "";
+      const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"${Array.isArray(it.aliases) && it.aliases.length ? ` data-gbti-target-aliases="${esc(it.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
       const sideLink = it.type === "share" && it.url ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf2(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
@@ -11934,8 +11983,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-018: returns { items: [share summaries] }
       listShareComments: ({ targetSlug, limit } = {}) => request("GET", `/api/share-comments${qs({ targetSlug, limit })}`),
       // SOW-032: a Share's discussion -> { items: [comment summaries] }
-      listComments: ({ targetType, targetSlug, limit } = {}) => request("GET", `/api/comments${qs({ targetType, targetSlug, limit })}`),
-      // SOW-041: the generic thread for any content type
+      listComments: ({ targetType, targetSlug, limit, aliases } = {}) => request("GET", `/api/comments${qs({ targetType, targetSlug, limit, aliases: Array.isArray(aliases) && aliases.length ? aliases.join(",") : void 0 })}`),
+      // SOW-041 thread (+ SOW-112 rename aliases)
       discordInvite: () => request("GET", "/api/discord-invite"),
       // on-demand Discord invite -> { url, source }
       discordLinkUrl: () => request("GET", "/api/discord-link"),
@@ -11958,6 +12007,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-111: the detail-open engagement beacon -> { ok, counted, posted }
       setContentStatus: ({ path, status }) => request("POST", "/api/content/status", { path, status }),
       // SOW-106: member self-unpublish/republish -> { ok, prNumber?, noop? }
+      renameContent: ({ path, newSlug }) => request("POST", "/api/content/rename", { path, newSlug }),
+      // SOW-112: permalink rename -> { ok, prNumber?, path, slug }
       postComment: (b) => request("POST", "/api/comment", b),
       // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
       editComment: (b) => request("POST", "/api/comment/edit", b),

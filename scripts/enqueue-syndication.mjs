@@ -104,6 +104,10 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   const siteOrigin = env.SITE_ORIGIN || 'https://gbti.network';
 
   // Build a publishable item from each added path (SOW-087: shares now enqueue here too, at publish time).
+  // SOW-112: a permalink RENAME adds the file at its new path, which this diff-of-adds would announce as a
+  // brand-new publish. A rename-generated redirectFrom entry has the canonical URL shape (legacy migration
+  // entries are WordPress-shaped and never match), so it is a precise, deterministic skip marker.
+  const RENAME_MARK_RE = /^\/(articles|products|prompts)\/[a-z0-9][a-z0-9-]*\/$/;
   const built = [];
   for (const rel of added) {
     const txt = readFile(rel);
@@ -111,7 +115,12 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
     let fm;
     try { fm = parseContentFile(txt).frontmatter; } catch { continue; }
     const item = buildSyndicationItem(rel, fm);
-    if (item) built.push({ item, fm, rel });
+    if (!item) continue;
+    if (Array.isArray(fm.redirectFrom) && fm.redirectFrom.some((e) => RENAME_MARK_RE.test(String(e || '').trim()))) {
+      console.log(`  skip (a permalink rename, already announced at its original publish): ${rel}`);
+      continue;
+    }
+    built.push({ item, fm, rel });
   }
   console.log(`enqueue-syndication: ${added.length} changed path(s), ${built.length} publishable item(s)${apply ? '' : ' (dry-run)'}`);
   if (!built.length) {

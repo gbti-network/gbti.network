@@ -110,3 +110,20 @@ test('dry-run plans but writes nothing to KV', async () => {
   assert.equal(r.inputs.length, 1);
   assert.equal(store.size, 0);
 });
+
+// SOW-112: a permalink rename adds the new path, but it must never re-announce.
+test('a renamed item (canonical-shaped redirectFrom) is skipped; a legacy-migrated item still announces', async () => {
+  const renamed = `---\ntitle: Renamed\nstatus: published\nvisibility: public\nauthor: alice\nredirectFrom: ["/articles/old-slug/"]\n---\nx`;
+  const legacy = `---\ntitle: Legacy\nstatus: published\nvisibility: public\nauthor: alice\nredirectFrom: ["/devops/frameworks/old-wp-path/"]\n---\nx`;
+  const files = {
+    'members/alice/posts/renamed/index.md': renamed,
+    'members/alice/posts/legacy/index.md': legacy,
+  };
+  const store = new Map();
+  const r = await main({ argv: [], env: { ...ENV, SYNDICATE_ADDED: Object.keys(files).join(',') }, deps: {
+    readFile: (rel) => files[rel] ?? null,
+    resolveMention: async () => null,
+    enqueueFetch: fakeKvFetch(store),
+  } });
+  assert.deepEqual(r.inputs.map((i) => i.targetSlug), ['members/alice/posts/legacy']);
+});
