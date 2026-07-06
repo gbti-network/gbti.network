@@ -223,6 +223,96 @@ export async function authorContent(ctx, { type, input, body, status, message, t
 }
 
 /** Build + publish a content change as (or into) a PR through the gate. */
+// SOW-112: the TRUE permalink rename. One PR moves the item to the new slug (redirectFrom carries the old
+// public URL so the build emits a 301 and every slug-keyed reader aliases the old slug), deletes the old
+// path, byte-moves the .enc sibling (the envelope AAD is self-referential, never path-bound), and moves +
+// retargets the author's intro comment (the SOW-014 diff-scoped check demands it at the new slug). Blocked
+// while a staged draft or an open PR exists for either slug (v1 safety), and fail-CLOSED when the old file
+// cannot resolve on the branch base (the delete half needs it; the SOW-106 fork sync provides it) — never a
+// half-move. Paid-only, own-folder, post/product/prompt only. publishedAt is preserved (feeds stay stable).
+const RENAME_URL_BASE = { post: '/articles', product: '/products', prompt: '/prompts' };
+const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
+
+export async function renameContent(ctx, { path: rel, newSlug } = {}) {
+  const id = requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  const m = OWN_STATUS_PATH_RE.exec(String(rel || ''));
+  if (!m) throw new OperationError('bad-request', 'path must be members/<you>/(posts|products|prompts)/<slug>/index.md');
+  if (m[1] !== String(id.username).toLowerCase()) {
+    throw new OperationError('forbidden', 'you may only rename your own content');
+  }
+  const type = m[2].slice(0, -1);
+  const oldSlug = m[3];
+  const slug = String(newSlug || '').trim();
+  if (!SLUG_RE.test(slug)) throw new OperationError('bad-request', 'the new permalink must be lowercase letters, digits, and hyphens');
+  if (slug === oldSlug) return { ok: true, noop: true, slug };
+  const membership = (await ctx.membership?.()) ?? 'unknown';
+  if (isBlockedFromPublishing(membership)) {
+    throw new OperationError('membership-required', 'Renaming a published item requires a paid membership.', { membership });
+  }
+
+  const fork = await repo.ensureFork();
+  // v1 safety: no rename while staged work or an open PR exists for either slug (the rename would strand them).
+  for (const s of [oldSlug, slug]) {
+    const branch = branchName(type, s);
+    const staged = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
+    if (staged) throw new OperationError('bad-request', `a staged draft exists for "${s}" — publish or discard it first`);
+    const pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }).catch(() => null);
+    if (pull) throw new OperationError('bad-request', `an open pull request exists for "${s}" — wait for it to merge or close it first`);
+  }
+
+  const newPath = contentPath(type, id.username, slug);
+  const collision = await repo.getFileContent(newPath).catch(() => null);
+  if (collision != null) throw new OperationError('bad-request', `the permalink "${slug}" is already taken`);
+  const oldText = await ctx.reader?.readFile?.(rel);
+  if (oldText == null) throw new OperationError('not-found', `no such file: ${rel}`);
+
+  const { frontmatter, body } = parseContentFile(oldText);
+  const fm = { ...(frontmatter ?? {}) };
+  const oldUrl = `${RENAME_URL_BASE[type]}/${oldSlug}/`;
+  fm.slug = slug;
+  fm.redirectFrom = [...new Set([...(Array.isArray(fm.redirectFrom) ? fm.redirectFrom : []), oldUrl])];
+  fm.updatedAt = ctx.now?.() ?? new Date().toISOString(); // publishedAt is deliberately untouched
+
+  const files = [];
+  // The .enc sibling byte-moves (the envelope decrypts anywhere; nothing cross-checks its aad).
+  if (typeof fm.encryptedBody === 'string' && fm.encryptedBody) {
+    const oldEnc = fm.encryptedBody;
+    const encText = await ctx.reader?.readFile?.(oldEnc);
+    if (encText == null) throw new OperationError('not-found', `the encrypted body is missing: ${oldEnc}`);
+    const { path: newEnc } = encAssetFor(type, id.username, slug);
+    fm.encryptedBody = newEnc;
+    files.push({ path: newEnc, content: encText }, { path: oldEnc, content: null });
+  }
+  files.push({ path: newPath, content: serializeContentFile(fm, body) }, { path: rel, content: null });
+  // The from-the-author intro comment (product/prompt) moves + retargets in the same PR.
+  const oldIntro = `members/${id.username}/comments/intro-${oldSlug}.md`;
+  const introText = ['product', 'prompt'].includes(type) ? await ctx.reader?.readFile?.(oldIntro) : null;
+  if (introText != null) {
+    const intro = parseContentFile(introText);
+    const introFm = { ...(intro.frontmatter ?? {}), id: `intro-${slug}`, targetSlug: slug };
+    files.push({ path: `members/${id.username}/comments/intro-${slug}.md`, content: serializeContentFile(introFm, intro.body) }, { path: oldIntro, content: null });
+  }
+
+  const branch = `gbti/rename-${type}-${oldSlug}`;
+  await syncForkIfCreatingBranch(ctx, repo, branch);
+  // The delete half needs the old file ON the branch base; without it the move would half-apply. Fail closed.
+  const base = await repo.getDefaultBranch(repo.upstream);
+  const baseSha = await repo.getBranchSha(fork.full_name, base).catch(() => null);
+  const oldOnBase = baseSha ? await repo.getFileSha(fork.full_name, rel, base).catch(() => null) : null;
+  if (!oldOnBase) {
+    throw new OperationError('bad-request', 'the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — try again later or contact the co-op');
+  }
+
+  const pr = await publishFiles({
+    repo, branch, files,
+    message: `Rename ${type} ${oldSlug} -> ${slug}`,
+    title: `Rename: ${oldSlug} -> ${slug}`,
+    body: `Permalink rename (SOW-112). ${oldUrl} redirects to ${RENAME_URL_BASE[type]}/${slug}/ after the next deploy.`,
+  });
+  return { ...pr, ok: true, type, oldSlug, slug, path: newPath };
+}
+
 // SOW-106 Phase B: a member's reversible self-unpublish/republish. Only their OWN post/product/prompt, only a
 // status flip (visibility and every other field untouched), through the normal gated own-folder PR so the
 // SOW-005 gate stays the authority. Idempotent: already in the requested state = a clean no-op, no PR.
