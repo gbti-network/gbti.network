@@ -19,7 +19,7 @@ tags:
   - planning
   - documentation
 publishedAt: '2026-07-02T00:00:00.000Z'
-updatedAt: '2026-07-06T18:47:18.585Z'
+updatedAt: '2026-07-06T18:47:28.393Z'
 type: prompt
 author: atwellpub
 ---
