@@ -27,11 +27,15 @@ const published = (await getCollection('comment'))
 // introduction, lifted out and pinned REGARDLESS of when it was written, so an author may post it after a
 // discussion has begun and it still reads as the headline (a casual conversational comment is never pinned).
 // The intro is PUBLIC by convention (it is the teaser), so select the owner's public, authorNote comment.
-const introIdx = author ? published.findIndex((c) => c.data.author === author && c.data.visibility === 'public' && c.data.authorNote) : -1;
-const intro = introIdx >= 0 ? published[introIdx] : null;
+// SOW-112 QA: after a rename the alias union can surface MORE THAN ONE authorNote (an old-slug intro plus
+// the fresh one). Pin the NEWEST (the author's latest intent) and exclude EVERY authorNote from the thread,
+// so an intro can never render as a plain member comment. `published` sorts ascending, so last = newest.
+const notes = author ? published.filter((c) => c.data.author === author && c.data.visibility === 'public' && c.data.authorNote) : [];
+const intro = notes.length ? notes[notes.length - 1] : null;
 // Thread = the rest. A member-only comment (SOW-016) renders as a locked placeholder via its encryptedBody;
 // a legacy member-only comment with no encrypted body stays excluded (matches the prior soft-gate behavior).
-const thread = (intro ? published.filter((_, i) => i !== introIdx) : published)
+const thread = published
+  .filter((c) => !notes.includes(c))
   .filter((c) => c.data.visibility !== 'members' || c.data.encryptedBody);
 const introName = intro ? authorDisplay(intro.data.author) : '';
 
