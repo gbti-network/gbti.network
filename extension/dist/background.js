@@ -19133,7 +19133,13 @@ async function discardDraft(ctx, { type, slug } = {}) {
     pull = null;
   }
   if (pull) throw new OperationError("bad-request", "This draft has an open pull request; withdraw it from review before discarding.", { prNumber: pull.number });
-  await repo.deleteBranch(fork.full_name, branch);
+  try {
+    await repo.deleteBranch(fork.full_name, branch);
+  } catch (err) {
+    const still = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
+    if (still) throw err;
+    return { ok: true, branch, alreadyGone: true };
+  }
   return { ok: true, branch };
 }
 async function publishDraft(ctx, { type, slug, title, prBody: prBody2 } = {}) {

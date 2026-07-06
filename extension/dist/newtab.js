@@ -11397,7 +11397,8 @@ The old link will redirect, and the discussion, saves, and counts follow the ite
           btn.textContent = "Discard";
         }
         this._draftMsg = err?.message || "Could not discard this draft.";
-        this.render();
+        this._drafts = null;
+        this._ensureTab("drafts");
       }
     }
   };

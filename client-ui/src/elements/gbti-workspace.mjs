@@ -754,7 +754,8 @@ class GbtiWorkspace extends GbtiElement {
     } catch (err) {
       if (btn) { btn.disabled = false; btn.textContent = 'Discard'; }
       this._draftMsg = err?.message || 'Could not discard this draft.';
-      this.render();
+      this._drafts = null; // SOW-112 QA fix: re-list live so a stale row (branch already gone) clears itself
+      this._ensureTab('drafts');
     }
   }
 }

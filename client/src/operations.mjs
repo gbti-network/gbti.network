@@ -684,7 +684,16 @@ export async function discardDraft(ctx, { type, slug } = {}) {
   let pull = null;
   try { pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }); } catch { pull = null; }
   if (pull) throw new OperationError('bad-request', 'This draft has an open pull request; withdraw it from review before discarding.', { prNumber: pull.number });
-  await repo.deleteBranch(fork.full_name, branch);
+  try {
+    await repo.deleteBranch(fork.full_name, branch);
+  } catch (err) {
+    // SOW-112 QA fix: the branch may already be gone (the merged-branch cleanup runs during any drafts
+    // listing, so a stale row can outlive its branch). An already-deleted branch IS the discarded state —
+    // verify and succeed instead of surfacing GitHub's 422 "Reference does not exist" for a done deed.
+    const still = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
+    if (still) throw err; // the branch exists but the delete failed: a real error
+    return { ok: true, branch, alreadyGone: true };
+  }
   return { ok: true, branch };
 }
 

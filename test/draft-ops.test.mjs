@@ -133,3 +133,24 @@ test('listDrafts: a draft that fails the CURRENT schema carries valid:false + a 
   assert.equal(broken.valid, false);
   assert.match(String(broken.invalidReason), /title/i);
 });
+
+// SOW-112 QA fix: a stale drafts row can outlive its branch (the merged-branch cleanup races the list cache);
+// discarding an already-deleted branch is the discarded state, not an error.
+test('discardDraft succeeds (alreadyGone) when the branch no longer exists', async () => {
+  const ctx = draftCtx({});
+  const repo = ctx.getRepoClient();
+  repo.deleteBranch = async () => { throw new Error('github error 422: Reference does not exist'); };
+  repo.getBranchSha = async () => { throw new Error('404'); }; // gone
+  ctx.getRepoClient = () => repo; // share the mutated instance (draftCtx builds a fresh repo per call)
+  const r = await discardDraft(ctx, { type: 'prompt', slug: 'ghost' });
+  assert.deepEqual(r, { ok: true, branch: 'gbti/prompt-ghost', alreadyGone: true });
+});
+
+test('discardDraft still surfaces a REAL delete failure (the branch exists)', async () => {
+  const ctx = draftCtx({});
+  const repo = ctx.getRepoClient();
+  repo.deleteBranch = async () => { throw new Error('github error 403: forbidden'); };
+  repo.getBranchSha = async () => 'still-here';
+  ctx.getRepoClient = () => repo;
+  await assert.rejects(discardDraft(ctx, { type: 'prompt', slug: 'held' }), /403/);
+});
