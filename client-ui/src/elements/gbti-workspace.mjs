@@ -461,16 +461,17 @@ class GbtiWorkspace extends GbtiElement {
       const ed = this.$('gbti-content-editor');
       const e = this._editing;
       if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged }); // SOW-062 P6 + SOW-106 QA: path resolves the cover preview; staged drives the fork-draft meta
-      // SOW-112: after a rename PR opens, drop the stale caches and reopen the item at its NEW path (the
-      // auto-merge lands within moments; getContentItem reads the fork-agnostic canonical, so a brief 404
-      // window simply keeps the current view until the member navigates).
+      // SOW-112 QA fix: after a rename PR opens, drop the stale caches and repoint the deep-link hash at the
+      // NEW path — but do NOT refetch it yet (the auto-merge takes ~2-3 minutes; an immediate read 404s and
+      // looked like the rename did nothing). The editor already updated its own view optimistically.
       ed?.addEventListener?.('gbti-renamed', (ev) => {
         const r = ev?.detail || {};
         if (!r.path) return;
         this._cache = {};
         this._drafts = null;
         this._overview = null;
-        this._openItem(r.path, r.type || e.type);
+        if (this._editing) this._editing.path = r.path;
+        this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(r.path)}`);
       }, { once: true });
       // SOW-106: surface the fork-draft state and any schema drift together in the editor status line.
       const notes = [];
