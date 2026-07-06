@@ -70,6 +70,7 @@ import { membershipNewsDiscussed } from './membership-news-discussed.mjs'; // SO
 import { membershipNewsOpened } from './membership-news-opened.mjs'; // SOW-111: the detail-open engagement beacon
 import { handleDiscordInvite } from './discord-invite.mjs';
 import { openPullForMember, listMemberPulls, memberPrStatus, listOpenPullsForReview, reviewPrDetail, reviewPrFiles, reviewFileContent } from './github-app.mjs';
+import { membershipSyncFork } from './membership-sync-fork.mjs'; // SOW-106 Phase A: server-side fork main sync
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 // CORS for the membership endpoints (token-authenticated, no cookies). Covers BOTH the GET reads (status oracle,
@@ -704,6 +705,16 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'POST') {
           const r = await openPullForMember(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-106 Phase A: sync the member fork's main with upstream (fork-installation token; the member token
+      // only authorizes + identifies). Best-effort by contract: every miss is a 200 { synced:false, reason }.
+      if (pathname === '/membership/sync-fork') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'POST') {
+          const r = await membershipSyncFork(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

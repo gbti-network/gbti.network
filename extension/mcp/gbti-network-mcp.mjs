@@ -18267,6 +18267,24 @@ function mergeCommentEchoes({ deployed = [], echoes = [], prState = () => "unkno
   return { comments, reap, pending };
 }
 
+// client/src/fork-sync-client.mjs
+var trimBase2 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+async function workerSyncFork({ token, signupBase, fetch = globalThis.fetch, branch = "main" } = {}) {
+  if (!token || !signupBase) return { ok: false, synced: false, reason: "not-signed-in" };
+  try {
+    const res = await fetch(`${trimBase2(signupBase)}/membership/sync-fork`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ branch })
+    });
+    if (!res.ok) return { ok: false, synced: false, reason: `http-${res.status}` };
+    const data = await res.json().catch(() => null);
+    return data && typeof data === "object" ? data : { ok: false, synced: false, reason: "bad-response" };
+  } catch {
+    return { ok: false, synced: false, reason: "network" };
+  }
+}
+
 // membership/overrides-core.mjs
 var ROLE2 = Object.freeze({
   member: "member",
@@ -18398,6 +18416,17 @@ async function authorContent(ctx2, { type, input, body, status, message, title, 
   if (status === "draft") return saveDraft(ctx2, { type, input, body, message });
   return publish(ctx2, { type, input, body, message, title, prBody, authorNote });
 }
+async function syncForkIfCreatingBranch(ctx2, repo, branch, { sync = workerSyncFork } = {}) {
+  try {
+    const fork = await repo.ensureFork();
+    const exists = await repo.getBranchSha(fork.full_name, branch).then((sha) => Boolean(sha)).catch(() => false);
+    if (exists) return { synced: false, reason: "branch-exists" };
+    const token = ctx2.store?.get?.("githubToken");
+    return await sync({ token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
+  } catch {
+    return { synced: false, reason: "error" };
+  }
+}
 async function publish(ctx2, { type, input, body, message, title, prBody, authorNote } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
@@ -18431,6 +18460,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
   const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
   const bdy = prBody ?? desc.body;
+  await syncForkIfCreatingBranch(ctx2, repo, branchName(built.type, built.slug));
   if (introFile) {
     const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
     return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message: msg, title: ttl, body: bdy });
@@ -18533,6 +18563,7 @@ async function saveDraft(ctx2, { type, input, body, message } = {}) {
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  await syncForkIfCreatingBranch(ctx2, repo, branch);
   await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
   return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: built.path, state: "staged" };
 }

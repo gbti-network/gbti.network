@@ -27,14 +27,18 @@ export function alreadyLabeled(pull = {}, label = CONFLICT_LABEL) {
   return (pull.labels || []).some((l) => (typeof l === 'string' ? l : l && l.name) === label);
 }
 
-/** The one-time conflict comment body, @-mentioning the PR author so they get a GitHub notification. */
+/** The one-time conflict comment body, @-mentioning the PR author so they get a GitHub notification.
+ *  SOW-106: re-publishing clears an EDIT conflict (the reload re-bases the content), but an add/add conflict
+ *  (the branch predates the Worker fork-sync and its base lacks the file) needs a maintainer, so the copy
+ *  covers both instead of promising re-publish always works. */
 export function conflictComment(login) {
   const who = login ? `@${login} ` : '';
   return (
     `${who}heads up: this pull request has a merge conflict, so it cannot auto-publish yet. A change landed on the ` +
-    `same file after you started editing. To fix it, open this item in the GBTI client or extension and **publish ` +
-    `it again** — that reloads the latest version, re-applies your edit, and clears the conflict. You do not need ` +
-    `to touch git or rebase anything; re-publishing is the whole fix.`
+    `same file after you started editing. First, open this item in the GBTI client or extension and **publish it ` +
+    `again** — that reloads the latest version and usually clears the conflict (no git or rebase needed). If this ` +
+    `pull request still shows a conflict after re-publishing, a maintainer resolves it in the GitHub web editor ` +
+    `(choose the pull request's version of your file).`
   );
 }
 

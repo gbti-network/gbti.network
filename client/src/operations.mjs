@@ -21,6 +21,7 @@ import { mergeCommentEchoes } from '../../membership/comment-echo.mjs'; // SOW-0
 import { getFollows as workerGetFollows, setFollow as workerSetFollow, FollowsClientError } from './member-follows-client.mjs';
 import { upvote as workerUpvote, UpvoteClientError } from './member-upvote-client.mjs'; // SOW-057
 import { ogPreview as workerOgPreview, OgClientError } from './member-og-client.mjs'; // SOW-057
+import { workerSyncFork } from './fork-sync-client.mjs'; // SOW-106 Phase A: the Worker-side fork-main sync
 import { getDiscordInvite as workerGetDiscordInvite, InviteClientError } from './member-invite-client.mjs';
 import { workerGetNews, workerGetNewsSources, workerGetPrefs, workerSetPrefs, workerPublishNews, workerNewsDiscussed, workerNewsOpened, NewsClientError } from './news-client.mjs'; // SOW-043/046: members-only news proxy + prefs + curator publish + discussion reflect
 import { probeReadiness } from './github-app-probe.mjs';
@@ -222,6 +223,26 @@ export async function authorContent(ctx, { type, input, body, status, message, t
 }
 
 /** Build + publish a content change as (or into) a PR through the gate. */
+/**
+ * SOW-106 Phase A: when the publish path is about to CREATE the per-item branch, first sync the fork's main
+ * with upstream via the Worker (fork-installation token), so the new branch bases on a main that CONTAINS the
+ * member's already-merged files and the PR is a clean modify diff instead of an add/add conflict. An EXISTING
+ * branch is NEVER synced or moved (the SOW-053 stale-base protection for in-flight edits stays intact), and
+ * every failure is a silent miss: the publish proceeds exactly as before, with the needs-rebase surfacing as
+ * the backstop. Exported for unit tests.
+ */
+export async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = workerSyncFork } = {}) {
+  try {
+    const fork = await repo.ensureFork();
+    const exists = await repo.getBranchSha(fork.full_name, branch).then((sha) => Boolean(sha)).catch(() => false);
+    if (exists) return { synced: false, reason: 'branch-exists' };
+    const token = ctx.store?.get?.('githubToken');
+    return await sync({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch {
+    return { synced: false, reason: 'error' };
+  }
+}
+
 export async function publish(ctx, { type, input, body, message, title, prBody, authorNote } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
@@ -274,6 +295,8 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
   const bdy = prBody ?? desc.body;
+  // SOW-106 Phase A: fresh-base a branch that is about to be created (best-effort; a miss changes nothing).
+  await syncForkIfCreatingBranch(ctx, repo, branchName(built.type, built.slug));
   if (introFile) {
     const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
     return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message: msg, title: ttl, body: bdy });
@@ -417,6 +440,8 @@ export async function saveDraft(ctx, { type, input, body, message } = {}) {
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  // SOW-106 Phase A: fresh-base a branch that is about to be created (best-effort; a miss changes nothing).
+  await syncForkIfCreatingBranch(ctx, repo, branch);
   await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
   return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: built.path, state: 'staged' };
 }

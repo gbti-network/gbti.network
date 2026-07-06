@@ -18297,13 +18297,31 @@ async function ogPreview({ url: url2, token, signupBase, fetch: fetch2 = globalT
   return data;
 }
 
-// client/src/member-invite-client.mjs
+// client/src/fork-sync-client.mjs
 var trimBase7 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+async function workerSyncFork({ token, signupBase, fetch: fetch2 = globalThis.fetch, branch = "main" } = {}) {
+  if (!token || !signupBase) return { ok: false, synced: false, reason: "not-signed-in" };
+  try {
+    const res = await fetch2(`${trimBase7(signupBase)}/membership/sync-fork`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ branch })
+    });
+    if (!res.ok) return { ok: false, synced: false, reason: `http-${res.status}` };
+    const data = await res.json().catch(() => null);
+    return data && typeof data === "object" ? data : { ok: false, synced: false, reason: "bad-response" };
+  } catch {
+    return { ok: false, synced: false, reason: "network" };
+  }
+}
+
+// client/src/member-invite-client.mjs
+var trimBase8 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var InviteClientError = class extends Error {
 };
 async function getDiscordInvite({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new InviteClientError("not signed in");
-  const res = await fetch2(trimBase7(signupBase) + "/membership/discord-invite", {
+  const res = await fetch2(trimBase8(signupBase) + "/membership/discord-invite", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -18669,12 +18687,12 @@ function filterActivity(activity, types2) {
 }
 
 // client/src/member-admin-client.mjs
-var trimBase8 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase9 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var AdminClientError = class extends Error {
 };
 async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/statuses", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/statuses", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -18688,7 +18706,7 @@ async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis
 }
 async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, params }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/admin/ops", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/ops", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(params ? { action, params } : { action })
@@ -18704,7 +18722,7 @@ async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  const res = await fetch2(trimBase9(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
   let data = null;
   try {
     data = await res.json();
@@ -18715,7 +18733,7 @@ async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalTh
 }
 async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication/cancel", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/syndication/cancel", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ id })
@@ -18730,7 +18748,7 @@ async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = global
 }
 async function approveSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/syndication/approve", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/syndication/approve", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ id })
@@ -18830,6 +18848,17 @@ function validateContent(ctx, { type, input, body } = {}) {
     return { valid: false, error: err.message };
   }
 }
+async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = workerSyncFork } = {}) {
+  try {
+    const fork = await repo.ensureFork();
+    const exists = await repo.getBranchSha(fork.full_name, branch).then((sha) => Boolean(sha)).catch(() => false);
+    if (exists) return { synced: false, reason: "branch-exists" };
+    const token = ctx.store?.get?.("githubToken");
+    return await sync({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch {
+    return { synced: false, reason: "error" };
+  }
+}
 async function publish(ctx, { type, input, body, message, title, prBody: prBody2, authorNote } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
@@ -18863,6 +18892,7 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
   const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
   const bdy = prBody2 ?? desc.body;
+  await syncForkIfCreatingBranch(ctx, repo, branchName(built.type, built.slug));
   if (introFile) {
     const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat([introFile]);
     return publishFiles({ repo, branch: branchName(built.type, built.slug), files, message: msg, title: ttl, body: bdy });
@@ -18970,6 +19000,7 @@ async function saveDraft(ctx, { type, input, body, message } = {}) {
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
+  await syncForkIfCreatingBranch(ctx, repo, branch);
   await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
   return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: built.path, state: "staged" };
 }

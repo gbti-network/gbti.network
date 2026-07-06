@@ -28,6 +28,13 @@ function defaultTitle(change) {
 // a fresh base any field another actor added to that same file since the member loaded it (e.g. SOW-008 contributor
 // credits, a reconcile status flip) reads as a DELETION and gets clobbered by the merge. The stale base + the
 // fresh-read-for-edit + GitHub's 3-way merge is exactly what preserves those concurrent edits. See SOW-053.
+//
+// SOW-106 Phase A: the fork's main is now kept fresh SERVER-SIDE instead. Right before the publish path CREATES
+// a per-item branch, operations.syncForkIfCreatingBranch asks the Worker to merge-upstream the fork main (the
+// publisher App's fork-installation token; the member token cannot: merge-upstream needs the workflows
+// permission and create-ref off an unfetched upstream SHA 404s). An EXISTING branch is never synced or moved,
+// so the SOW-053 protection above still holds for in-flight edits; a sync miss just falls back to this stale
+// base + the needs-rebase surfacing. CLIENT-side syncing remains forbidden (the reverted 2026-07-03 attempt).
 
 /**
  * SOW-082: commit files to a branch on the member's FORK, WITHOUT opening a PR. This is the fork+branch+commit

@@ -22,11 +22,12 @@ test('alreadyLabeled reads object {name} or string labels', () => {
   assert.equal(alreadyLabeled({}), false);
 });
 
-test('conflictComment @-mentions the author and tells them to re-publish (no git/rebase ask)', () => {
+test('conflictComment @-mentions the author: re-publish first, maintainer web-editor fallback (SOW-106)', () => {
   const c = conflictComment('alice');
   assert.match(c, /^@alice /);
   assert.match(c, /publish it again/i);
-  assert.match(c, /do not need to touch git/i);
+  assert.match(c, /no git or rebase/i);
+  assert.match(c, /maintainer resolves it in the GitHub web editor/i); // the add/add class needs a maintainer
   assert.doesNotMatch(conflictComment(''), /^@/); // no login -> no stray mention
 });
 

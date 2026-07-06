@@ -77,6 +77,41 @@ export async function getInstallationToken(env, { fetchImpl = globalThis.fetch, 
   return data.token;
 }
 
+// SOW-106 Phase A: the publisher App is ALSO installed on each member's fork (the onboarding install step),
+// so the Worker can mint a FORK-scoped installation token and perform fork maintenance the member's own token
+// cannot (merge-upstream needs the workflows permission, which the App carries once the owner expands it).
+const FORK_TOKEN_KEY = (login) => `gh-app:fork-token:${login}`;
+
+/**
+ * Mint (or reuse from KV) an installation access token for the App installation on ONE member's fork.
+ * Fail-soft: returns null when the App is not configured, not installed on that fork, or GitHub errors —
+ * callers treat null as "sync unavailable", never a hard failure.
+ */
+export async function getForkInstallationToken(env, login, { fetchImpl = globalThis.fetch, now = Date.now, kv = env?.SIGNUP_KV, signJwt = signAppJwt, upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network' } = {}) {
+  const who = String(login || '').toLowerCase();
+  if (!who || !env?.GITHUB_APP_ID || !env?.GITHUB_APP_PRIVATE_KEY) return null;
+  const repoName = String(upstream).split('/')[1] || 'gbti.network';
+  if (kv) {
+    const cached = await kv.get(FORK_TOKEN_KEY(who), 'json').catch(() => null);
+    if (cached?.token && cached.expiresAt - now() > 5 * 60 * 1000) return cached.token;
+  }
+  try {
+    const jwt = await signJwt(env, { now });
+    const ins = await fetchImpl(`${GH}/repos/${who}/${repoName}/installation`, { headers: GH_HEADERS(jwt) });
+    if (!ins || !ins.ok) return null; // no fork, or the App is not installed on it
+    const inst = await ins.json();
+    if (!inst?.id) return null;
+    const res = await fetchImpl(`${GH}/app/installations/${inst.id}/access_tokens`, { method: 'POST', headers: GH_HEADERS(jwt) });
+    if (!res || !res.ok) return null;
+    const data = await res.json();
+    const expiresAt = Date.parse(data.expires_at) || now() + 55 * 60 * 1000;
+    if (kv) await kv.put(FORK_TOKEN_KEY(who), JSON.stringify({ token: data.token, expiresAt }), { expirationTtl: 3000 }).catch(() => {});
+    return data.token;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Open the publish PR for an EFFECTIVE-PAID member. The member's token authorizes (paid, fail-closed) and
  * identifies them; the PR is opened with the canonical-repo installation token. A member may only open a PR
