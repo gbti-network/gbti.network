@@ -19100,7 +19100,7 @@ async function listDrafts(ctx, { type } = {}) {
   const fork = await repo.ensureFork();
   const refs = await repo.listMatchingRefs(fork.full_name, "gbti/");
   const drafts = [];
-  for (const { branch } of refs) {
+  for (const { branch, sha } of refs) {
     const meta3 = draftMetaFromBranch(branch);
     if (!meta3) continue;
     if (type && meta3.type !== type) continue;
@@ -19112,7 +19112,7 @@ async function listDrafts(ctx, { type } = {}) {
     }
     let text = null;
     try {
-      text = await repo.getForkFileContent(fork.full_name, path, branch);
+      text = await repo.getForkFileContent(fork.full_name, path, sha || branch);
     } catch {
       text = null;
     }

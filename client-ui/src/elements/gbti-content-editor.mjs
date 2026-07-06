@@ -427,6 +427,7 @@ class GbtiContentEditor extends GbtiElement {
         .ebtn[hidden] { display:none; } /* [hidden] must beat .ebtn's display:inline-flex (cheatsheet + publish) */
         /* SOW-062 P6: the publish-expectation banner above the toolbar */
         .pubinfo { display:flex; align-items:flex-start; gap:9px; padding:11px 14px; margin:0 2px 12px; border-radius:10px; background:var(--s-tint); border:1.5px solid var(--s-tint-2); font-size:12.5px; line-height:1.5; color:var(--s-fg-soft); }
+        .pubinfo[hidden] { display:none; } /* the hidden attribute must win over display:flex (an empty strip showed otherwise) */
         .pubinfo svg { width:16px; height:16px; flex:none; margin-top:1px; color:var(--s-green-fg); } .pubinfo b { color:var(--s-fg); font-weight:700; }
         .pubinfo.warn { background:color-mix(in srgb, var(--s-amber, #d9a13c) 12%, transparent); border-color:var(--s-amber, #d9a13c); }
         .pubinfo.warn svg { color:var(--s-amber, #d9a13c); }
@@ -1003,6 +1004,8 @@ class GbtiContentEditor extends GbtiElement {
       if (['post', 'product', 'prompt'].includes(type)) input.updatedAt = new Date().toISOString(); // SOW-062 P6: last-updated-locally
       const res = await this.client.saveDraft({ type, input, body, path: this.itemPath || undefined }); // SOW-112 v2: a changed permalink stages on the item's own branch
       this._setChip(`${CHECK} Draft saved`, 'ok');
+      // A pending rename is a big deal — say so in the top banner too (the bottom status line hides below the fold).
+      if (res?.renamed) this._banner(`Draft saved with the pending permalink change: <b>${esc(res.renamed.from)}</b> becomes <b>${esc(res.renamed.to)}</b> when you publish. The old link will redirect.`);
       this.out(res?.renamed
         ? `<span class="tag ok">saved</span> Draft staged on your fork with the pending permalink change (${esc(res.renamed.from)} to ${esc(res.renamed.to)}); the rename happens when you publish.`
         : '<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');

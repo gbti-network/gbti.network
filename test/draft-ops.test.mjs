@@ -24,8 +24,10 @@ function draftCtx({ membership = 'paid', refs = [], files = {}, openPull = null 
       deleteFile: async () => {},
       findOpenPull: async () => openPull,
       openPull: async (o) => { calls.openPull.push(o); return { number: 99, html_url: 'pr-url' }; },
-      listMatchingRefs: async () => refs.map((branch) => ({ branch, sha: 's' })),
-      getForkFileContent: async (_r, _path, ref) => files[ref] ?? null,
+      // listDrafts reads by the ref's TIP SHA (never the branch name — a by-name read can serve a stale state);
+      // the fake mints a per-branch sha and resolves reads by either.
+      listMatchingRefs: async () => refs.map((branch) => ({ branch, sha: `sha:${branch}` })),
+      getForkFileContent: async (_r, _path, ref) => files[String(ref).replace(/^sha:/, '')] ?? files[ref] ?? null,
       deleteBranch: async (_r, b) => { calls.deleteBranch.push(b); },
     }),
   };

@@ -688,14 +688,18 @@ export async function listDrafts(ctx, { type } = {}) {
   const fork = await repo.ensureFork();
   const refs = await repo.listMatchingRefs(fork.full_name, 'gbti/');
   const drafts = [];
-  for (const { branch } of refs) {
+  for (const { branch, sha } of refs) {
     const meta = draftMetaFromBranch(branch);
     if (!meta) continue;
     if (type && meta.type !== type) continue;
     let path;
     try { path = contentPath(meta.type, id.username, meta.slug); } catch { continue; }
+    // Read by the ref's TIP SHA (immutable, never stale), NOT the branch name: a by-name contents read can lag
+    // a just-pushed commit and serve the branch's CREATION state. A branch cut from a freshly SYNCED main is
+    // live-identical at creation, so that stale read made the merged-branch cleanup below eat a brand-new
+    // draft seconds after it was saved (hit in the wild 2026-07-06).
     let text = null;
-    try { text = await repo.getForkFileContent(fork.full_name, path, branch); } catch { text = null; }
+    try { text = await repo.getForkFileContent(fork.full_name, path, sha || branch); } catch { text = null; }
     if (!text) continue;
     let fm = {};
     let draftBody = '';
