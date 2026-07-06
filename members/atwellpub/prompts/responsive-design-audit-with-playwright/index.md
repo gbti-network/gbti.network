@@ -1,6 +1,6 @@
 ---
 title: Responsive Design Audit with MCP Playwright
-slug: responsive-design-audit-with-playwright-1
+slug: responsive-design-audit-with-playwright
 shortDescription: >-
   Drive Claude Code with MCP Playwright to inspect every breakpoint and make the layout as polished
   on mobile as it is on desktop.
@@ -23,9 +23,10 @@ exampleOutput: >-
   identifies overflow, cramped spacing, and broken grids, then makes targeted responsive CSS changes
   and re-verifies, with before and after observations for a mobile, tablet, and desktop viewport.
 publishedAt: '2026-06-08'
-updatedAt: '2026-07-06T22:40:31.297Z'
+updatedAt: '2026-07-06T23:13:21.724Z'
 redirectFrom:
   - /prompts/responsive-design-audit-with-playwright/
+  - /prompts/responsive-design-audit-with-playwright-1/
 type: prompt
 author: atwellpub
 ---
