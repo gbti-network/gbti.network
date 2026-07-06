@@ -454,6 +454,14 @@ class GbtiWorkspace extends GbtiElement {
   render() {
     this._clearPolls(); // SOW-072 P3: a re-render replaces the rows (and fires on a client/sign-out change) -> stop the
     // poll; the PR tab re-arms it via _ensureTab -> _loadPrStatuses, and a sign-out leaves it stopped.
+    // SOW-112 QA fix: consume the #edit= / #draft= deep-link once the client is available (render fires on
+    // client arrival via the setClient subscriber). One-shot: cleared before the async open so it never loops.
+    if (this._restore && this.client) {
+      const r = this._restore;
+      this._restore = null;
+      if (r.edit) this._openItem(r.edit, typeForContentPath(r.edit) || 'post');
+      else if (r.draft) this._openDraft({ type: r.draft.type, slug: r.draft.slug });
+    }
     if (typeof document !== 'undefined') document.body?.classList.toggle('gbti-editing', !!this._editing); // SOW-062 P6: paint .nt-main solid while editing (kills glass bleed)
     if (this._editing) {
       this.set(this.css(CSS) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);

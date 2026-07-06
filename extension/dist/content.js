@@ -1073,6 +1073,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const m = /(?:^|[#&])draft=(post|product|prompt):([a-z0-9][a-z0-9-]*)/.exec(String(hash || ""));
     return m ? { type: m[1], slug: m[2] } : null;
   }
+  function typeForContentPath(path) {
+    const m = /^members\/[a-z0-9][a-z0-9-]*\/(posts|products|prompts)\//.exec(String(path || ""));
+    return m ? m[1].slice(0, -1) : null;
+  }
   function classifyPull(pr = {}, status = null) {
     if (pr.merged === true || pr.state === "merged") return { label: "Accepted", tone: "ok" };
     if (pr.state === "closed") return { label: "Declined", tone: "muted" };
@@ -10101,6 +10105,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // ----- rendering -----
     render() {
       this._clearPolls();
+      if (this._restore && this.client) {
+        const r = this._restore;
+        this._restore = null;
+        if (r.edit) this._openItem(r.edit, typeForContentPath(r.edit) || "post");
+        else if (r.draft) this._openDraft({ type: r.draft.type, slug: r.draft.slug });
+      }
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
         this.set(this.css(CSS29) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
