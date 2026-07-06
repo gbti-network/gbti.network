@@ -24,6 +24,32 @@ export function parseWorkspaceNew(hash) {
   return m && WORKSPACE_NEW_TYPES.has(m[1]) ? m[1] : null;
 }
 
+// SOW-106 QA fix: the editor deep-link vocabulary, so a refresh restores the open editor. `edit=` carries an
+// encoded canonical content path (validated hard: anything off-shape is null, so the hash can never point the
+// editor at an arbitrary file); `draft=` carries `<type>:<slug>` for a fork-staged draft.
+const EDIT_PATH_RE = /^members\/[a-z0-9][a-z0-9-]*\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$|^members\/[a-z0-9][a-z0-9-]*\/profile\.md$/;
+
+/** Parse `edit=<encoded members path>` from a hash into a validated canonical content path, or null. */
+export function parseWorkspaceEdit(hash) {
+  const m = /(?:^|[#&])edit=([^&]+)/.exec(String(hash || ''));
+  if (!m) return null;
+  let path;
+  try { path = decodeURIComponent(m[1]); } catch { return null; }
+  return EDIT_PATH_RE.test(path) ? path : null;
+}
+
+/** Parse `draft=<type>:<slug>` from a hash into { type, slug }, or null. */
+export function parseWorkspaceDraft(hash) {
+  const m = /(?:^|[#&])draft=(post|product|prompt):([a-z0-9][a-z0-9-]*)/.exec(String(hash || ''));
+  return m ? { type: m[1], slug: m[2] } : null;
+}
+
+/** The content type for a canonical content path (posts -> post), or null (a profile path has no list type). */
+export function typeForContentPath(path) {
+  const m = /^members\/[a-z0-9][a-z0-9-]*\/(posts|products|prompts)\//.exec(String(path || ''));
+  return m ? m[1].slice(0, -1) : null;
+}
+
 export function classifyPull(pr = {}, status = null) {
   if (pr.merged === true || pr.state === 'merged') return { label: 'Accepted', tone: 'ok' };
   if (pr.state === 'closed') return { label: 'Declined', tone: 'muted' };

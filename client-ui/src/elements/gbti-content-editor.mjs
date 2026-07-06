@@ -152,10 +152,11 @@ class GbtiContentEditor extends GbtiElement {
   }
 
   /** Seed the editor from an existing item (used by the inline editor + "edit" from My Content). */
-  load(type, input, body, path) {
+  load(type, input, body, path, { staged = false } = {}) {
     this.type = type || this.type;
     this.preset = { input: input || {}, body: body || '' };
     this.itemPath = path || null; // SOW-062 P6: the item's index.md path, to resolve a repo-relative cover for preview
+    this.staged = Boolean(staged); // SOW-106 QA: loaded from a fork draft branch (not live until published)
     if (this.isConnected) this.render();
   }
 
@@ -223,7 +224,9 @@ class GbtiContentEditor extends GbtiElement {
     // SOW-062 P6: the slug-meta shows when the item was last updated on LIVE (publishedAt) and LOCALLY (updatedAt,
     // stamped client-side on each save/publish). A published item edited locally shows Live older than Local.
     const fmtD = (d) => { if (!d) return ''; const t = new Date(d); return Number.isNaN(t.getTime()) ? '' : t.toISOString().slice(0, 10); };
-    const liveLabel = isPub ? (fmtD(p.publishedAt) ? `Live ${fmtD(p.publishedAt)}` : 'Live') : 'Draft';
+    // SOW-106 QA: a fork-staged draft carries status: published BY DESIGN (the "draft" is the fork location),
+    // so the meta must key off the staged flag, never the status field, or it would misread as Live.
+    const liveLabel = this.staged ? 'Staged draft · not published' : isPub ? (fmtD(p.publishedAt) ? `Live ${fmtD(p.publishedAt)}` : 'Live') : 'Draft';
     const localLabel = fmtD(p.updatedAt) ? `Local ${fmtD(p.updatedAt)}` : '';
     const cheat = this.cheatData(); // SOW-062 P6: per-type markdown cheatsheet content for the modal
     // SOW-062 P6: the document-canvas sections below the body (all `.docsec`, so the md-view rule hides them).
@@ -283,9 +286,13 @@ class GbtiContentEditor extends GbtiElement {
         .doc-slug .slug-val { color:var(--s-green-fg); font-weight:600; outline:none; border-bottom:1.5px dashed transparent; }
         .doc-slug .slug-val:hover { border-bottom-color:var(--s-line-2); }
         .doc-slug .slug-val:focus { border-bottom-color:var(--s-green); }
+        .doc-slug .slug-val.locked { border-bottom-color:transparent; cursor:default; }
+        .doc-slug .slug-val.locked:hover { border-bottom-color:transparent; }
         .doc-slug .slug-meta { display:inline-flex; align-items:center; gap:7px; }
         .doc-slug .pubdot { width:7px; height:7px; border-radius:50%; background:var(--s-fg-mute); }
         .doc-slug .slug-meta.pub .pubdot { background:var(--s-green); }
+        .doc-slug .slug-meta.staged .pubdot { background:var(--s-amber, #d9a13c); }
+        .doc-slug .slug-meta.staged { color:var(--s-amber, #d9a13c); font-weight:600; }
         .docsec { margin-top:38px; padding-top:30px; border-top:1.5px solid var(--s-line); }
         .docsec#secMain { margin-top:14px; padding-top:0; border-top:none; }
         .docsec-h { font-family:var(--font-mono,monospace); font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--s-fg-mute); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
@@ -439,7 +446,16 @@ class GbtiContentEditor extends GbtiElement {
            <article class="doc">
              ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ''}
              <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || '')}</div>
-             <div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span><span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || '')}</span><span class="slug-meta${isPub ? ' pub' : ''}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ''}</span></div>
+             ${(() => {
+               // SOW-106 QA fix: the slug IS the item identity (branch + path derive from it), so on an EXISTING
+               // item it is set at creation, like the Type. Editing it here silently forked a NEW item.
+               const slugLocked = Boolean(this.itemPath);
+               const slugVal = slugLocked
+                 ? `<span class="slug-val locked" title="The permalink is set at creation. Renaming needs a redirect and is a follow-up.">${esc(this.presetStr(p.slug) || '')}</span>`
+                 : `<span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || '')}</span>`;
+               const metaCls = this.staged ? ' staged' : (isPub ? ' pub' : '');
+               return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ''}</span></div>`;
+             })()}
              <div class="doc-view-row">
                <div class="doc-view" id="docview">
                  <button type="button" class="on" data-view="visual">${DOC} Visual</button>
@@ -785,6 +801,12 @@ class GbtiContentEditor extends GbtiElement {
   gather() {
     // SOW-062 P6: flush the inline header contenteditables into their [data-key] inputs before reading.
     this.$$('[data-header]').forEach((el) => { const i = this.$(`[data-key="${el.dataset.header}"]`); if (i) i.value = el.textContent.trim(); });
+    // SOW-106 QA fix: on an existing item the slug is identity, not content — always resubmit the loaded one
+    // (the DOM cannot mutate it; the same posture as the read-only Type).
+    if (this.itemPath && this.preset?.input?.slug != null) {
+      const si = this.$('[data-key="slug"]');
+      if (si) si.value = String(this.preset.input.slug);
+    }
     // Only gather fields that are currently visible, so a hidden conditional field (e.g. a stale image on
     // a prompt whose image-gen target was removed) is never submitted.
     const getVal = (k) => {

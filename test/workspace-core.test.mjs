@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, typeForContentPath } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -153,4 +153,28 @@ test('parseWorkspaceTab returns null for an absent / unknown / malformed tab (ca
   for (const h of ['', '#', undefined, null, '#tab=', '#tab=bogus', '#tab=POST', '#read=x', '#tabbed=post']) {
     assert.equal(parseWorkspaceTab(h), null, `${JSON.stringify(h)} -> null`);
   }
+});
+
+// SOW-106 QA fix: the editor deep-link vocabulary (refresh restores the open editor).
+test('parseWorkspaceEdit: accepts only canonical content paths (encoded); everything else is null', () => {
+  const p = 'members/alice/prompts/scope-of-work-claude-code-skill/index.md';
+  assert.equal(parseWorkspaceEdit(`#tab=prompt&edit=${encodeURIComponent(p)}`), p);
+  assert.equal(parseWorkspaceEdit(`#edit=${encodeURIComponent('members/alice/profile.md')}`), 'members/alice/profile.md');
+  assert.equal(parseWorkspaceEdit(`#edit=${encodeURIComponent('house/roles.yml')}`), null); // never an arbitrary file
+  assert.equal(parseWorkspaceEdit(`#edit=${encodeURIComponent('members/alice/../../secrets')}`), null);
+  assert.equal(parseWorkspaceEdit('#edit=%ZZ'), null); // malformed encoding never throws
+  assert.equal(parseWorkspaceEdit('#tab=prompt'), null);
+});
+
+test('parseWorkspaceDraft: `draft=<type>:<slug>` with a valid type + kebab slug', () => {
+  assert.deepEqual(parseWorkspaceDraft('#tab=drafts&draft=prompt:my-skill'), { type: 'prompt', slug: 'my-skill' });
+  assert.equal(parseWorkspaceDraft('#draft=share:x'), null); // shares are not draftable
+  assert.equal(parseWorkspaceDraft('#draft=prompt:Bad_Slug'), null);
+  assert.equal(parseWorkspaceDraft(''), null);
+});
+
+test('typeForContentPath derives the content type from the path subtree', () => {
+  assert.equal(typeForContentPath('members/alice/posts/x/index.md'), 'post');
+  assert.equal(typeForContentPath('members/alice/products/y/index.md'), 'product');
+  assert.equal(typeForContentPath('members/alice/profile.md'), null);
 });

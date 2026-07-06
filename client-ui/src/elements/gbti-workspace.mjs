@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, submitAck } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, typeForContentPath, submitAck } from '../workspace-core.mjs';
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
 const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'product']); // SOW-073: types whose publish invalidates a tab
@@ -105,6 +105,15 @@ class GbtiWorkspace extends GbtiElement {
     // so the member lands straight in a new article/prompt/product. Empty frontmatter + body = a blank form.
     const newType = (typeof location !== 'undefined' && parseWorkspaceNew(location.hash)) || null;
     this._editing = newType ? { type: newType, frontmatter: {}, body: '' } : null;
+    // SOW-106 QA fix: an #edit=<path> / #draft=<type>:<slug> deep-link restores the open editor after a refresh.
+    // Consumed by render() once the client exists (the SOW-070 client-arrival pattern).
+    const hash = typeof location !== 'undefined' ? location.hash : '';
+    this._restore = this._editing ? null : (() => {
+      const path = parseWorkspaceEdit(hash);
+      if (path) return { edit: path };
+      const d = parseWorkspaceDraft(hash);
+      return d ? { draft: d } : null;
+    })();
     this._page = 0; // SOW-062: the current content-list page (client-side paging; resets on tab switch)
     this._reviewing = null; // SOW-028: the PR number being reviewed in the drill-in, or null
     this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
@@ -249,7 +258,7 @@ class GbtiWorkspace extends GbtiElement {
     // so there is nothing to preload here; render() already mounted them. Returning avoids a redundant render.
     if (id === 'inbox' || id === 'saved' || id === 'subs') return;
     if (id === 'drafts') { await this._loadDrafts(id); return; } // SOW-082
-    if (tab.type) { await this._swrContent(id, tab.type); return; }
+    if (tab.type) { await this._swrContent(id, tab.type); this._loadDrafts(id); return; } // SOW-106 QA: drafts feed the staged-edits chips
     if (id === 'prs') { await this._swrPrs(id); }
   }
 
@@ -448,12 +457,15 @@ class GbtiWorkspace extends GbtiElement {
     if (typeof document !== 'undefined') document.body?.classList.toggle('gbti-editing', !!this._editing); // SOW-062 P6: paint .nt-main solid while editing (kills glass bleed)
     if (this._editing) {
       this.set(this.css(CSS) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
-      this.on('[data-back]', 'click', () => { this._editing = null; this.render(); });
+      this.on('[data-back]', 'click', () => { this._editing = null; this._writeHash(`#tab=${encodeURIComponent(this._tab)}`); this.render(); });
       const ed = this.$('gbti-content-editor');
       const e = this._editing;
-      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path); // SOW-062 P6: path resolves a repo-relative cover preview
-      // SOW-106 Phase C: the draft failed the current schema; prompt the member to fix the listed fields and Save.
-      if (e.invalidNote && ed?.out) ed.out(esc(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`), 'danger');
+      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged }); // SOW-062 P6 + SOW-106 QA: path resolves the cover preview; staged drives the fork-draft meta
+      // SOW-106: surface the fork-draft state and any schema drift together in the editor status line.
+      const notes = [];
+      if (e.staged) notes.push('You are editing your staged fork draft. It is not live until you Publish.');
+      if (e.invalidNote) notes.push(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`);
+      if (notes.length && ed?.out) ed.out(esc(notes.join(' ')), e.invalidNote ? 'danger' : 'muted');
       // SOW-073: publishing/editing from the embedded editor invalidates the affected type (+ Overview + PRs) so the
       // workbench reflects the change immediately on return, never a stale list.
       ed?.addEventListener('gbti-published', () => this._onPublished(e.type));
@@ -517,6 +529,8 @@ class GbtiWorkspace extends GbtiElement {
       const g = glyphFor(null, it.type);
       const status = it.status ? `<span class="tag ${it.status === 'published' ? 'ok' : ''}">${esc(it.status)}</span>` : '';
       const vis = it.visibility === 'members' ? `<span class="tag">members</span>` : '';
+      // SOW-106 QA fix: a staged fork draft exists for this item (same path); Manage opens the staged version.
+      const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : '';
       // SOW-106 Phase B: the reversible self-unpublish (status flip via the normal own-folder PR) + its inverse.
       const flip = it.status === 'published'
         ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>`
@@ -525,7 +539,7 @@ class GbtiWorkspace extends GbtiElement {
           : '';
       return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
         + `<span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span></span>`
-        + `<span class="right">${status} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
+        + `<span class="right">${status} ${stagedTag} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }).join('');
     const pager = pages > 1 ? `<div class="pager">`
       + `<button class="btn" data-page="${page - 1}" type="button"${page === 0 ? ' disabled' : ''}>&larr; Prev</button>`
@@ -662,10 +676,22 @@ class GbtiWorkspace extends GbtiElement {
   async _openItem(path, type) {
     if (!path) return;
     try {
+      // SOW-106 QA fix: prefer the member's latest WORK. When a staged fork draft exists for this same path,
+      // open THAT (with the staged meta + notice) instead of the canonical file, so an edit saved to the fork
+      // is never silently hidden behind the live version.
+      await this._loadDrafts(this._tab);
+      const staged = (this._drafts || []).find((d) => d.path === path);
+      if (staged) { this._openDraft(staged); return; }
       const full = await this.client.getContentItem({ path });
       this._editing = { type, frontmatter: full.frontmatter, body: full.body, path };
+      this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(path)}`);
       this.render();
     } catch { /* could not load: stay on the list */ }
+  }
+
+  // SOW-106 QA fix: keep the URL restorable without polluting history (replaceState only; fail-soft).
+  _writeHash(hash) {
+    try { if (typeof history !== 'undefined') history.replaceState(null, '', hash); } catch { /* no history in tests */ }
   }
 
   // SOW-082: open a fork-staged draft in the editor. readDraft (NOT getContentItem) reads from the staged branch on
@@ -675,7 +701,8 @@ class GbtiWorkspace extends GbtiElement {
     this._draftMsg = null;
     try {
       const full = await this.client.readDraft({ type: d.type, slug: d.slug });
-      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || '' };
+      this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || '', staged: true };
+      this._writeHash(`#tab=drafts&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
       // SOW-106 Phase C: re-validate against the CURRENT schema on open, so drift surfaces here (a clear prompt)
       // instead of as a publish-time failure. Best-effort: a validate error never blocks opening the draft.
       try {

@@ -1057,6 +1057,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)new=([a-z]+)(?:&|$)/);
     return m && WORKSPACE_NEW_TYPES.has(m[1]) ? m[1] : null;
   }
+  var EDIT_PATH_RE = /^members\/[a-z0-9][a-z0-9-]*\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$|^members\/[a-z0-9][a-z0-9-]*\/profile\.md$/;
+  function parseWorkspaceEdit(hash) {
+    const m = /(?:^|[#&])edit=([^&]+)/.exec(String(hash || ""));
+    if (!m) return null;
+    let path;
+    try {
+      path = decodeURIComponent(m[1]);
+    } catch {
+      return null;
+    }
+    return EDIT_PATH_RE.test(path) ? path : null;
+  }
+  function parseWorkspaceDraft(hash) {
+    const m = /(?:^|[#&])draft=(post|product|prompt):([a-z0-9][a-z0-9-]*)/.exec(String(hash || ""));
+    return m ? { type: m[1], slug: m[2] } : null;
+  }
   function classifyPull(pr = {}, status = null) {
     if (pr.merged === true || pr.state === "merged") return { label: "Accepted", tone: "ok" };
     if (pr.state === "closed") return { label: "Declined", tone: "muted" };
@@ -1654,10 +1670,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.preset = null;
     }
     /** Seed the editor from an existing item (used by the inline editor + "edit" from My Content). */
-    load(type, input, body, path) {
+    load(type, input, body, path, { staged = false } = {}) {
       this.type = type || this.type;
       this.preset = { input: input || {}, body: body || "" };
       this.itemPath = path || null;
+      this.staged = Boolean(staged);
       if (this.isConnected) this.render();
     }
     // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
@@ -1719,7 +1736,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const t = new Date(d);
         return Number.isNaN(t.getTime()) ? "" : t.toISOString().slice(0, 10);
       };
-      const liveLabel = isPub ? fmtD(p.publishedAt) ? `Live ${fmtD(p.publishedAt)}` : "Live" : "Draft";
+      const liveLabel = this.staged ? "Staged draft · not published" : isPub ? fmtD(p.publishedAt) ? `Live ${fmtD(p.publishedAt)}` : "Live" : "Draft";
       const localLabel = fmtD(p.updatedAt) ? `Local ${fmtD(p.updatedAt)}` : "";
       const cheat = this.cheatData();
       const slug = this.presetStr(p.slug) || "";
@@ -1777,9 +1794,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .doc-slug .slug-val { color:var(--s-green-fg); font-weight:600; outline:none; border-bottom:1.5px dashed transparent; }
         .doc-slug .slug-val:hover { border-bottom-color:var(--s-line-2); }
         .doc-slug .slug-val:focus { border-bottom-color:var(--s-green); }
+        .doc-slug .slug-val.locked { border-bottom-color:transparent; cursor:default; }
+        .doc-slug .slug-val.locked:hover { border-bottom-color:transparent; }
         .doc-slug .slug-meta { display:inline-flex; align-items:center; gap:7px; }
         .doc-slug .pubdot { width:7px; height:7px; border-radius:50%; background:var(--s-fg-mute); }
         .doc-slug .slug-meta.pub .pubdot { background:var(--s-green); }
+        .doc-slug .slug-meta.staged .pubdot { background:var(--s-amber, #d9a13c); }
+        .doc-slug .slug-meta.staged { color:var(--s-amber, #d9a13c); font-weight:600; }
         .docsec { margin-top:38px; padding-top:30px; border-top:1.5px solid var(--s-line); }
         .docsec#secMain { margin-top:14px; padding-top:0; border-top:none; }
         .docsec-h { font-family:var(--font-mono,monospace); font-size:11px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; color:var(--s-fg-mute); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
@@ -1932,7 +1953,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
            <article class="doc">
              ${blocked ? `<div class="notice">Publishing requires a paid membership. Use <b>Save draft</b> to keep your work on your own fork; publish it once you upgrade. <a href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a>.</div>` : ""}
              <div class="doc-title" contenteditable="true" data-header="title" data-ph="Untitled">${esc(this.presetStr(p.title) || "")}</div>
-             <div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span><span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || "")}</span><span class="slug-meta${isPub ? " pub" : ""}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ""}</span></div>
+             ${(() => {
+          const slugLocked = Boolean(this.itemPath);
+          const slugVal = slugLocked ? `<span class="slug-val locked" title="The permalink is set at creation. Renaming needs a redirect and is a follow-up.">${esc(this.presetStr(p.slug) || "")}</span>` : `<span class="slug-val" contenteditable="true" spellcheck="false" data-header="slug" data-ph="slug">${esc(this.presetStr(p.slug) || "")}</span>`;
+          const metaCls = this.staged ? " staged" : isPub ? " pub" : "";
+          return `<div class="doc-slug"><span class="slug-base">${esc(typePath)}/</span>${slugVal}<span class="slug-meta${metaCls}"><span class="pubdot"></span><span>${esc(liveLabel)}</span>${localLabel ? ` <span class="meta-local">· ${esc(localLabel)}</span>` : ""}</span></div>`;
+        })()}
              <div class="doc-view-row">
                <div class="doc-view" id="docview">
                  <button type="button" class="on" data-view="visual">${DOC} Visual</button>
@@ -2312,6 +2338,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const i = this.$(`[data-key="${el.dataset.header}"]`);
         if (i) i.value = el.textContent.trim();
       });
+      if (this.itemPath && this.preset?.input?.slug != null) {
+        const si = this.$('[data-key="slug"]');
+        if (si) si.value = String(this.preset.input.slug);
+      }
       const getVal = (k) => {
         const el = this.$(`[data-key="${k}"]`);
         return el ? el.type === "checkbox" ? el.checked : el.value : "";
@@ -9639,6 +9669,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._overview = null;
       const newType = typeof location !== "undefined" && parseWorkspaceNew(location.hash) || null;
       this._editing = newType ? { type: newType, frontmatter: {}, body: "" } : null;
+      const hash = typeof location !== "undefined" ? location.hash : "";
+      this._restore = this._editing ? null : (() => {
+        const path = parseWorkspaceEdit(hash);
+        if (path) return { edit: path };
+        const d = parseWorkspaceDraft(hash);
+        return d ? { draft: d } : null;
+      })();
       this._page = 0;
       this._reviewing = null;
       this._inboxCount = null;
@@ -9797,6 +9834,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (tab.type) {
         await this._swrContent(id, tab.type);
+        this._loadDrafts(id);
         return;
       }
       if (id === "prs") {
@@ -10018,12 +10056,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS29) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
+          this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
           this.render();
         });
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
-        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path);
-        if (e.invalidNote && ed?.out) ed.out(esc(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`), "danger");
+        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged });
+        const notes = [];
+        if (e.staged) notes.push("You are editing your staged fork draft. It is not live until you Publish.");
+        if (e.invalidNote) notes.push(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`);
+        if (notes.length && ed?.out) ed.out(esc(notes.join(" ")), e.invalidNote ? "danger" : "muted");
         ed?.addEventListener("gbti-published", () => this._onPublished(e.type));
         ed?.addEventListener("gbti-draft-saved", () => this._onDraftSaved());
         return;
@@ -10088,8 +10130,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const g = glyphFor(null, it.type);
         const status = it.status ? `<span class="tag ${it.status === "published" ? "ok" : ""}">${esc(it.status)}</span>` : "";
         const vis = it.visibility === "members" ? `<span class="tag">members</span>` : "";
+        const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : "";
         const flip = it.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
-        return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${status} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
+        return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${status} ${stagedTag} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
       }).join("");
       const pager = pages > 1 ? `<div class="pager"><button class="btn" data-page="${page - 1}" type="button"${page === 0 ? " disabled" : ""}>&larr; Prev</button><span class="pager-n">Page ${page + 1} of ${pages}</span><button class="btn" data-page="${page + 1}" type="button"${page >= pages - 1 ? " disabled" : ""}>Next &rarr;</button></div>` : "";
       const note = this._msg ? `<p class="empty">${esc(this._msg)}</p>` : "";
@@ -10207,9 +10250,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _openItem(path, type) {
       if (!path) return;
       try {
+        await this._loadDrafts(this._tab);
+        const staged = (this._drafts || []).find((d) => d.path === path);
+        if (staged) {
+          this._openDraft(staged);
+          return;
+        }
         const full = await this.client.getContentItem({ path });
         this._editing = { type, frontmatter: full.frontmatter, body: full.body, path };
+        this._writeHash(`#tab=${encodeURIComponent(this._tab)}&edit=${encodeURIComponent(path)}`);
         this.render();
+      } catch {
+      }
+    }
+    // SOW-106 QA fix: keep the URL restorable without polluting history (replaceState only; fail-soft).
+    _writeHash(hash) {
+      try {
+        if (typeof history !== "undefined") history.replaceState(null, "", hash);
       } catch {
       }
     }
@@ -10220,7 +10277,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._draftMsg = null;
       try {
         const full = await this.client.readDraft({ type: d.type, slug: d.slug });
-        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || "" };
+        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || "", staged: true };
+        this._writeHash(`#tab=drafts&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
         try {
           const v = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });
           this._editing.invalidNote = v && v.valid === false ? v.error || "This draft no longer matches the current schema." : null;
