@@ -1940,6 +1940,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         /* SOW-062 P6: the publish-expectation banner above the toolbar */
         .pubinfo { display:flex; align-items:flex-start; gap:9px; padding:11px 14px; margin:0 2px 12px; border-radius:10px; background:var(--s-tint); border:1.5px solid var(--s-tint-2); font-size:12.5px; line-height:1.5; color:var(--s-fg-soft); }
         .pubinfo svg { width:16px; height:16px; flex:none; margin-top:1px; color:var(--s-green-fg); } .pubinfo b { color:var(--s-fg); font-weight:700; }
+        .pubinfo.warn { background:color-mix(in srgb, var(--s-amber, #d9a13c) 12%, transparent); border-color:var(--s-amber, #d9a13c); }
+        .pubinfo.warn svg { color:var(--s-amber, #d9a13c); }
         .doc-slug .meta-local { color:var(--s-fg-mute); }
         .doc-view button { display:inline-flex; align-items:center; gap:7px; padding:7px 15px; border:0; border-radius:7px; background:transparent; font:inherit; font-size:13px; font-weight:600; color:var(--s-fg-mute); cursor:pointer; white-space:nowrap; transition:color .14s ease; }
         .doc-view button svg { width:15px; height:15px; }
@@ -1959,7 +1961,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .an-text { flex:1; min-width:0; font:inherit; font-size:14px; line-height:1.55; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:9px; padding:11px 13px; outline:none; resize:vertical; min-height:70px; box-sizing:border-box; }
         .an-text:focus { border-color:var(--s-green); background:var(--s-surface); }
         #secDiscussion gbti-discussion { display:block; margin-top:2px; }
-      `) + `<div class="pubinfo">${INFO}<span>Publishing is not instant. It opens a pull request that auto-merges, then the site rebuilds, so your change reaches the live edge in about 2 to 3 minutes. Track it in your <b>WorkBench</b> under Pull requests.</span></div>
+      `) + `${this.staged ? `<div class="pubinfo warn" id="pubbanner">${INFO}<span>This staged draft is ahead of the live edge — your changes are not published yet. <b>Publish</b> to make them live.</span></div>` : `<div class="pubinfo" id="pubbanner" hidden></div>`}
          <div class="edhead">
            <span class="etype">${esc(this.type)}</span>
            <span class="edhead-sp"></span>
@@ -2501,6 +2503,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._setChip(`${CHECK} Published`, "ok");
         this._dirty = false;
         this.$("#publish")?.setAttribute("hidden", "");
+        const pb = this.$("#pubbanner");
+        if (pb) {
+          pb.classList.remove("warn");
+          pb.innerHTML = `${INFO}<span>Publishing is not instant. It opens a pull request that auto-merges, then the site rebuilds, so your change reaches the live edge in about 2 to 3 minutes. Track it in your <b>WorkBench</b> under Pull requests.</span>`;
+          pb.hidden = false;
+        }
         const renameNote = res?.renamed ? ` The permalink changed from ${esc(res.renamed.from)} to ${esc(res.renamed.to)}; the old link redirects after the next deploy.` : "";
         this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}${renameNote}`);
         if (res?.renamed && this.preset?.input) {
@@ -10257,7 +10265,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const vis = d.visibility === "members" ? `<span class="tag">members</span>` : "";
       const bad = d.valid === false ? `<span class="tag bad" title="${esc(d.invalidReason || "no longer matches the current schema")}">Invalid</span>` : "";
       const pub = label === "Published" ? "" : paid ? `<button class="btn" data-draft-publish="${i}" type="button">Publish</button>` : `<a class="btn" href="https://gbti.network/membership/" target="_blank" rel="noopener" title="Publishing requires a paid membership">Upgrade to publish</a>`;
-      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)}</span></span><span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${bad}${vis}<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
+      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)} · ${esc(d.slug)}${d.pendingSlug ? ` (renames to ${esc(d.pendingSlug)} on publish)` : ""}</span></span><span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${d.pendingSlug ? `<span class="tag">rename pending</span>` : ""}${bad}${vis}<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
     }
     _wireBody() {
       this.on("[data-profile]", "click", () => this._openItem(this._profile?.path, "profile"));

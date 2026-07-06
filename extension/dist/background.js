@@ -19143,6 +19143,9 @@ async function listDrafts(ctx, { type } = {}) {
       slug: meta3.slug,
       branch,
       path,
+      // SOW-112 v2: a frontmatter slug that differs from the branch identity is a PENDING RENAME (it applies
+      // when the draft publishes). Surfaced so same-titled drafts are tellable apart in the Drafts tab.
+      pendingSlug: typeof fm.slug === "string" && fm.slug !== meta3.slug ? fm.slug : null,
       title: fm.title || fm.displayName || meta3.slug || meta3.type,
       visibility: fm.visibility || "public",
       status: fm.status || "draft",

@@ -632,8 +632,8 @@ class GbtiWorkspace extends GbtiElement {
         ? `<button class="btn" data-draft-publish="${i}" type="button">Publish</button>`
         : `<a class="btn" href="https://gbti.network/membership/" target="_blank" rel="noopener" title="Publishing requires a paid membership">Upgrade to publish</a>`;
     return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
-      + `<span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)}</span></span>`
-      + `<span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${bad}${vis}`
+      + `<span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)} · ${esc(d.slug)}${d.pendingSlug ? ` (renames to ${esc(d.pendingSlug)} on publish)` : ''}</span></span>`
+      + `<span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${d.pendingSlug ? `<span class="tag">rename pending</span>` : ''}${bad}${vis}`
       + `<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}`
       + `<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
   }

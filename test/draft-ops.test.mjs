@@ -154,3 +154,16 @@ test('discardDraft still surfaces a REAL delete failure (the branch exists)', as
   ctx.getRepoClient = () => repo;
   await assert.rejects(discardDraft(ctx, { type: 'prompt', slug: 'held' }), /403/);
 });
+
+// SOW-112 v2: a frontmatter slug differing from the branch identity is a PENDING RENAME; the row surfaces it.
+test('listDrafts: a pending-rename draft carries pendingSlug (frontmatter slug differs from the branch)', async () => {
+  const renamed = '---\ntitle: My Post\nslug: brand-new-name\nstatus: published\nvisibility: public\n---\nBody';
+  const plain = '---\ntitle: Other\nslug: other-post\nstatus: published\nvisibility: public\n---\nBody';
+  const ctx = draftCtx({
+    refs: ['gbti/post-my-post', 'gbti/post-other-post'],
+    files: { 'gbti/post-my-post': renamed, 'gbti/post-other-post': plain },
+  });
+  const { drafts } = await listDrafts(ctx, {});
+  assert.equal(drafts.find((d) => d.slug === 'my-post').pendingSlug, 'brand-new-name');
+  assert.equal(drafts.find((d) => d.slug === 'other-post').pendingSlug, null);
+});
