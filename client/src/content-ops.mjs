@@ -121,6 +121,21 @@ export function shareId(createdAt, title) {
  * @returns {{ path, frontmatter, markdown, type:'share', username, slug, id }}
  * @throws ContentValidationError on schema failure; Error on a missing username.
  */
+/**
+ * SOW-106 Phase B: flip a content file's `status` frontmatter (published <-> draft), leaving every other field
+ * (including visibility) untouched. Returns { changed, current, content } where `content` is the re-serialized
+ * file (null when already in the requested state). Shared by the moderator Hide/Unhide (admin-ops) and the
+ * member self-unpublish (operations.setOwnContentStatus).
+ */
+export function flipContentStatus(text, status) {
+  const { frontmatter, body } = parseContentFile(text);
+  const current = frontmatter?.status ?? null;
+  if (current === status) return { changed: false, current, content: null };
+  const updated = { ...(frontmatter ?? {}), status };
+  const content = `---\n${yaml.dump(updated, { lineWidth: 100, noRefs: true }).trimEnd()}\n---\n\n${String(body).trim()}\n`;
+  return { changed: true, current, content };
+}
+
 export function buildShareFile({ username, input, body = '' }) {
   if (!username) throw new Error('buildShareFile: username is required');
   // A published share must carry status:published in its frontmatter, or the readers (which filter on

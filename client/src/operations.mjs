@@ -6,7 +6,7 @@
 // Errors are typed OperationError(code, ...) so each transport can map a code to its own shape (HTTP status
 // or MCP isError). Codes: no-identity | not-authenticated | not-found | bad-request | invalid-content.
 
-import { buildContentFile, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, parseContentFile, contentPath, ContentValidationError } from './content-ops.mjs';
+import { buildContentFile, flipContentStatus, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, parseContentFile, contentPath, ContentValidationError } from './content-ops.mjs';
 import { publishContent, publishFiles, commitToBranchOnFork, branchName } from './publish.mjs';
 import { canPublish, canStageDrafts, isBlockedFromPublishing, canSeeNews, canFollow, canSave, canBrowse, canSeeShares } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, decryptViaWorker, MemberContentLockedError } from './member-content.mjs';
@@ -223,6 +223,46 @@ export async function authorContent(ctx, { type, input, body, status, message, t
 }
 
 /** Build + publish a content change as (or into) a PR through the gate. */
+// SOW-106 Phase B: a member's reversible self-unpublish/republish. Only their OWN post/product/prompt, only a
+// status flip (visibility and every other field untouched), through the normal gated own-folder PR so the
+// SOW-005 gate stays the authority. Idempotent: already in the requested state = a clean no-op, no PR.
+const OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
+
+export async function setOwnContentStatus(ctx, { path: rel, status } = {}) {
+  const id = requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  if (status !== 'published' && status !== 'draft') {
+    throw new OperationError('bad-request', 'status must be "published" or "draft"');
+  }
+  const m = OWN_STATUS_PATH_RE.exec(String(rel || ''));
+  if (!m) throw new OperationError('bad-request', 'path must be members/<you>/(posts|products|prompts)/<slug>/index.md');
+  if (m[1] !== String(id.username).toLowerCase()) {
+    throw new OperationError('forbidden', 'you may only change the status of your own content');
+  }
+  // The publishing lifecycle is paid-only (SOW-011); the gate is the real authority (unknown fails open to it).
+  const membership = (await ctx.membership?.()) ?? 'unknown';
+  if (isBlockedFromPublishing(membership)) {
+    throw new OperationError('membership-required', 'Changing a published item requires a paid membership.', { membership });
+  }
+  const text = await ctx.reader?.readFile?.(rel); // fresh canonical read (async-safe; preserves concurrent fields)
+  if (text == null) throw new OperationError('not-found', `no such file: ${rel}`);
+  const flip = flipContentStatus(text, status);
+  if (!flip.changed) return { ok: true, noop: true, status };
+  const type = m[2].slice(0, -1);
+  const slug = m[3];
+  const branch = `gbti/status-${type}-${slug}`;
+  const verb = status === 'draft' ? 'Unpublish' : 'Republish';
+  await syncForkIfCreatingBranch(ctx, repo, branch); // SOW-106 Phase A: fresh-base the flip branch
+  const pr = await publishFiles({
+    repo, branch, files: [{ path: rel, content: flip.content }],
+    message: `${verb} ${slug}`, title: `${verb}: ${slug}`,
+    body: status === 'draft'
+      ? 'Member unpublish: a reversible status flip to draft (SOW-106). The file stays in the repo; republishing reverses it.'
+      : 'Member republish: the status flips back to published (SOW-106).',
+  });
+  return { ...pr, ok: true, status };
+}
+
 /**
  * SOW-106 Phase A: when the publish path is about to CREATE the per-item branch, first sync the fork's main
  * with upstream via the Worker (fork-installation token), so the new branch bases on a main that CONTAINS the

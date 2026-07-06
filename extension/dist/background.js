@@ -17212,6 +17212,19 @@ function shareId(createdAt, title) {
   const stamp = ts || "00000000000000";
   return slug ? `${stamp}-${slug}` : `${stamp}-share`;
 }
+function flipContentStatus(text, status) {
+  const { frontmatter, body } = parseContentFile(text);
+  const current = frontmatter?.status ?? null;
+  if (current === status) return { changed: false, current, content: null };
+  const updated = { ...frontmatter ?? {}, status };
+  const content = `---
+${index_vite_proxy_tmp_default.dump(updated, { lineWidth: 100, noRefs: true }).trimEnd()}
+---
+
+${String(body).trim()}
+`;
+  return { changed: true, current, content };
+}
 function buildShareFile({ username, input, body = "" }) {
   if (!username) throw new Error("buildShareFile: username is required");
   const cleaned = stripUndefined({ status: "published", ...input ?? {}, type: "share", author: username });
@@ -20658,14 +20671,8 @@ async function deplatformContent(ctx, { path: rel } = {}) {
   requireMemberContentPath(rel);
   const text = await ctx.reader?.readFile?.(rel);
   if (text == null) throw new OperationError("not-found", `no such file: ${rel}`);
-  const { frontmatter, body } = parseContentFile(text);
-  const updated = { ...frontmatter ?? {}, status: "draft" };
-  const content = `---
-${dumpYaml(updated).trimEnd()}
----
-
-${String(body).trim()}
-`;
+  const flip = flipContentStatus(text, "draft");
+  const content = flip.changed ? flip.content : text;
   return publishFiles({ repo, branch: `gbti/deplatform-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Deplatform ${rel}`, title: `Deplatform ${rel}`, body: "Moderation: set status to draft." });
 }
 async function republishContent(ctx, { path: rel } = {}) {
@@ -20674,14 +20681,8 @@ async function republishContent(ctx, { path: rel } = {}) {
   requireMemberContentPath(rel);
   const text = await ctx.reader?.readFile?.(rel);
   if (text == null) throw new OperationError("not-found", `no such file: ${rel}`);
-  const { frontmatter, body } = parseContentFile(text);
-  const updated = { ...frontmatter ?? {}, status: "published" };
-  const content = `---
-${dumpYaml(updated).trimEnd()}
----
-
-${String(body).trim()}
-`;
+  const flip = flipContentStatus(text, "published");
+  const content = flip.changed ? flip.content : text;
   return publishFiles({ repo, branch: `gbti/republish-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Republish ${rel}`, title: `Republish ${rel}`, body: "Moderation: set status to published." });
 }
 async function removeContent(ctx, { path: rel } = {}) {

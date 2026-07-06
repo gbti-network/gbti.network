@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, submitAck } from '../workspace-core.mjs';
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
 const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'product']); // SOW-073: types whose publish invalidates a tab
@@ -472,7 +472,7 @@ class GbtiWorkspace extends GbtiElement {
       return `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
     }).join('');
     this.set(this.css(CSS) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
-    this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this.render(); this._ensureTab(this._tab); }));
+    this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this._msg = null; this.render(); this._ensureTab(this._tab); }));
     this._wireBody();
   }
 
@@ -515,15 +515,23 @@ class GbtiWorkspace extends GbtiElement {
       const g = glyphFor(null, it.type);
       const status = it.status ? `<span class="tag ${it.status === 'published' ? 'ok' : ''}">${esc(it.status)}</span>` : '';
       const vis = it.visibility === 'members' ? `<span class="tag">members</span>` : '';
+      // SOW-106 Phase B: the reversible self-unpublish (status flip via the normal own-folder PR) + its inverse.
+      const flip = it.status === 'published'
+        ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>`
+        : it.status === 'draft'
+          ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>`
+          : '';
       return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
         + `<span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span></span>`
-        + `<span class="right">${status} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button></span></li>`;
+        + `<span class="right">${status} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }).join('');
     const pager = pages > 1 ? `<div class="pager">`
       + `<button class="btn" data-page="${page - 1}" type="button"${page === 0 ? ' disabled' : ''}>&larr; Prev</button>`
       + `<span class="pager-n">Page ${page + 1} of ${pages}</span>`
       + `<button class="btn" data-page="${page + 1}" type="button"${page >= pages - 1 ? ' disabled' : ''}>Next &rarr;</button></div>` : '';
-    return `<ul class="rows">${rows}</ul>${pager}`;
+    // SOW-106 Phase B: the status-flip acknowledgement (or failure) for this tab's rows.
+    const note = this._msg ? `<p class="empty">${esc(this._msg)}</p>` : '';
+    return `${note}<ul class="rows">${rows}</ul>${pager}`;
   }
 
   // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
@@ -611,11 +619,39 @@ class GbtiWorkspace extends GbtiElement {
         const it = (this._cache[tab.type] || [])[Number(b.dataset.edit)];
         if (it) this._openItem(it.path, it.type);
       }));
+      // SOW-106 Phase B: flip an own item's status (unpublish/republish) through the gated own-folder PR.
+      this.$$('[data-status]').forEach((b) => b.addEventListener('click', () => {
+        const it = (this._cache[tab.type] || [])[Number(b.dataset.status)];
+        if (it) this._setItemStatus(it, b.dataset.to, b, tab.type);
+      }));
       this.$$('[data-page]').forEach((b) => b.addEventListener('click', () => { // SOW-062 Phase 1: client-side paging
         if (b.hasAttribute('disabled')) return;
         this._page = Number(b.dataset.page) || 0;
         this.render(); // re-renders the slice + re-wires via _wireBody
       }));
+    }
+  }
+
+  // SOW-106 Phase B: member self-unpublish/republish. A reversible status flip on the member's OWN canonical
+  // item, via the normal gated PR (auto-merges like any own-folder change; live at the next deploy).
+  async _setItemStatus(it, to, btn, cacheType) {
+    if (!it?.path || (to !== 'draft' && to !== 'published')) return;
+    const ask = to === 'draft'
+      ? `Unpublish "${it.title}"? It is set to draft and removed from public view (reversible; the file stays in the repo).`
+      : `Republish "${it.title}"? It returns to public view.`;
+    if (typeof confirm === 'function' && !confirm(ask)) return;
+    const orig = btn?.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = to === 'draft' ? 'Unpublishing...' : 'Republishing...'; }
+    try {
+      const r = await this.client.setContentStatus({ path: it.path, status: to });
+      this._msg = r?.noop ? 'Already in that state.' : submitAck({ prNumber: r?.prNumber, autoMerge: true });
+      if (this._cache) this._cache[cacheType] = null; // refetch so the row's status chip reflects the flip
+      this._overview = null;
+      this._ensureTab(this._tab);
+    } catch (err) {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+      this._msg = err?.message || 'Could not change the status.';
+      this.render();
     }
   }
 

@@ -21,7 +21,7 @@ import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, Conte
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
 import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111
-import { parseContentFile } from './content-ops.mjs';
+import { parseContentFile, flipContentStatus } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 
 function requireRole(ctx, check, need) {
@@ -174,11 +174,10 @@ export async function deplatformContent(ctx, { path: rel } = {}) {
   requireMemberContentPath(rel);
   const text = await ctx.reader?.readFile?.(rel);
   if (text == null) throw new OperationError('not-found', `no such file: ${rel}`);
-  const { frontmatter, body } = parseContentFile(text);
   // SOW-038: deplatform = status -> draft (excludes it from the build, indexes, and feeds). Visibility is left
   // intact (not forced to members) so a later restore keeps the content's original public/members audience.
-  const updated = { ...(frontmatter ?? {}), status: 'draft' };
-  const content = `---\n${dumpYaml(updated).trimEnd()}\n---\n\n${String(body).trim()}\n`;
+  const flip = flipContentStatus(text, 'draft'); // SOW-106: the shared status-flip core
+  const content = flip.changed ? flip.content : text;
   return publishFiles({ repo, branch: `gbti/deplatform-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Deplatform ${rel}`, title: `Deplatform ${rel}`, body: 'Moderation: set status to draft.' });
 }
 
@@ -191,9 +190,8 @@ export async function republishContent(ctx, { path: rel } = {}) {
   requireMemberContentPath(rel);
   const text = await ctx.reader?.readFile?.(rel);
   if (text == null) throw new OperationError('not-found', `no such file: ${rel}`);
-  const { frontmatter, body } = parseContentFile(text);
-  const updated = { ...(frontmatter ?? {}), status: 'published' };
-  const content = `---\n${dumpYaml(updated).trimEnd()}\n---\n\n${String(body).trim()}\n`;
+  const flip = flipContentStatus(text, 'published'); // SOW-106: the shared status-flip core
+  const content = flip.changed ? flip.content : text;
   return publishFiles({ repo, branch: `gbti/republish-${slugOf(rel)}`, files: [{ path: rel, content }], message: `Republish ${rel}`, title: `Republish ${rel}`, body: 'Moderation: set status to published.' });
 }
 
