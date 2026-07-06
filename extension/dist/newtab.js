@@ -11039,6 +11039,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
         if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path);
+        if (e.invalidNote && ed?.out) ed.out(esc(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`), "danger");
         ed?.addEventListener("gbti-published", () => this._onPublished(e.type));
         ed?.addEventListener("gbti-draft-saved", () => this._onDraftSaved());
         return;
@@ -11158,8 +11159,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const g = glyphFor(null, d.type);
       const { label, tone } = classifyDraft({ pull: d.pull });
       const vis = d.visibility === "members" ? `<span class="tag">members</span>` : "";
+      const bad = d.valid === false ? `<span class="tag bad" title="${esc(d.invalidReason || "no longer matches the current schema")}">Invalid</span>` : "";
       const pub = label === "Published" ? "" : paid ? `<button class="btn" data-draft-publish="${i}" type="button">Publish</button>` : `<a class="btn" href="https://gbti.network/membership/" target="_blank" rel="noopener" title="Publishing requires a paid membership">Upgrade to publish</a>`;
-      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)}</span></span><span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${vis}<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
+      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)}</span></span><span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${bad}${vis}<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
     }
     _wireBody() {
       this.on("[data-profile]", "click", () => this._openItem(this._profile?.path, "profile"));
@@ -11235,6 +11237,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const full = await this.client.readDraft({ type: d.type, slug: d.slug });
         this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || "" };
+        try {
+          const v = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });
+          this._editing.invalidNote = v && v.valid === false ? v.error || "This draft no longer matches the current schema." : null;
+        } catch {
+          this._editing.invalidNote = null;
+        }
         this.render();
       } catch {
         this._draftMsg = "Could not open that draft.";

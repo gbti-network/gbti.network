@@ -522,7 +522,19 @@ export async function listDrafts(ctx, { type } = {}) {
     try { text = await repo.getForkFileContent(fork.full_name, path, branch); } catch { text = null; }
     if (!text) continue;
     let fm = {};
-    try { fm = parseContentFile(text).frontmatter ?? {}; } catch { fm = {}; }
+    let draftBody = '';
+    try { const parsed = parseContentFile(text); fm = parsed.frontmatter ?? {}; draftBody = parsed.body ?? ''; } catch { fm = {}; }
+    // SOW-106 Phase C: schema-drift check. A draft saved under an older schema may no longer validate; surface
+    // that on the row (and the editor prompts on open) instead of failing at publish time. One extra safeParse
+    // on data already in hand; never throws the listing.
+    let valid = true;
+    let invalidReason = null;
+    try {
+      buildContentFile({ type: meta.type, username: id.username, input: fm, body: draftBody });
+    } catch (err) {
+      valid = false;
+      invalidReason = err?.message || 'this draft no longer matches the current schema';
+    }
     let pull = null;
     try { pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }); } catch { pull = null; }
     // SOW-106 Phase 2: a staged draft with NO open PR whose content EXACTLY matches the LIVE network version is
@@ -541,6 +553,8 @@ export async function listDrafts(ctx, { type } = {}) {
       title: fm.title || fm.displayName || meta.slug || meta.type,
       visibility: fm.visibility || 'public',
       status: fm.status || 'draft',
+      valid,
+      invalidReason,
       pull: pull ? { number: pull.number, html_url: pull.html_url } : null,
     });
   }

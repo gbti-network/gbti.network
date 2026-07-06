@@ -19052,10 +19052,21 @@ async function listDrafts(ctx, { type } = {}) {
     }
     if (!text) continue;
     let fm = {};
+    let draftBody = "";
     try {
-      fm = parseContentFile(text).frontmatter ?? {};
+      const parsed = parseContentFile(text);
+      fm = parsed.frontmatter ?? {};
+      draftBody = parsed.body ?? "";
     } catch {
       fm = {};
+    }
+    let valid = true;
+    let invalidReason = null;
+    try {
+      buildContentFile({ type: meta3.type, username: id.username, input: fm, body: draftBody });
+    } catch (err) {
+      valid = false;
+      invalidReason = err?.message || "this draft no longer matches the current schema";
     }
     let pull = null;
     try {
@@ -19078,6 +19089,8 @@ async function listDrafts(ctx, { type } = {}) {
       title: fm.title || fm.displayName || meta3.slug || meta3.type,
       visibility: fm.visibility || "public",
       status: fm.status || "draft",
+      valid,
+      invalidReason,
       pull: pull ? { number: pull.number, html_url: pull.html_url } : null
     });
   }

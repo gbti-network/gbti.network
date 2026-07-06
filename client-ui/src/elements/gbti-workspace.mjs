@@ -452,6 +452,8 @@ class GbtiWorkspace extends GbtiElement {
       const ed = this.$('gbti-content-editor');
       const e = this._editing;
       if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path); // SOW-062 P6: path resolves a repo-relative cover preview
+      // SOW-106 Phase C: the draft failed the current schema; prompt the member to fix the listed fields and Save.
+      if (e.invalidNote && ed?.out) ed.out(esc(`This draft no longer matches the current schema: ${e.invalidNote} Fix the listed fields and Save.`), 'danger');
       // SOW-073: publishing/editing from the embedded editor invalidates the affected type (+ Overview + PRs) so the
       // workbench reflects the change immediately on return, never a stale list.
       ed?.addEventListener('gbti-published', () => this._onPublished(e.type));
@@ -589,13 +591,15 @@ class GbtiWorkspace extends GbtiElement {
     const g = glyphFor(null, d.type);
     const { label, tone } = classifyDraft({ pull: d.pull });
     const vis = d.visibility === 'members' ? `<span class="tag">members</span>` : '';
+    // SOW-106 Phase C: the schema drifted since this draft was saved; it needs fixing before it can publish.
+    const bad = d.valid === false ? `<span class="tag bad" title="${esc(d.invalidReason || 'no longer matches the current schema')}">Invalid</span>` : '';
     const pub = label === 'Published' ? ''
       : paid
         ? `<button class="btn" data-draft-publish="${i}" type="button">Publish</button>`
         : `<a class="btn" href="https://gbti.network/membership/" target="_blank" rel="noopener" title="Publishing requires a paid membership">Upgrade to publish</a>`;
     return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
       + `<span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)}</span></span>`
-      + `<span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${vis}`
+      + `<span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${bad}${vis}`
       + `<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}`
       + `<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
   }
@@ -672,6 +676,12 @@ class GbtiWorkspace extends GbtiElement {
     try {
       const full = await this.client.readDraft({ type: d.type, slug: d.slug });
       this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || '' };
+      // SOW-106 Phase C: re-validate against the CURRENT schema on open, so drift surfaces here (a clear prompt)
+      // instead of as a publish-time failure. Best-effort: a validate error never blocks opening the draft.
+      try {
+        const v = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });
+        this._editing.invalidNote = v && v.valid === false ? (v.error || 'This draft no longer matches the current schema.') : null;
+      } catch { this._editing.invalidNote = null; }
       this.render();
     } catch { this._draftMsg = 'Could not open that draft.'; this.render(); }
   }

@@ -116,3 +116,20 @@ test('publishDraft: reuses an already-open PR instead of opening a duplicate', a
   assert.equal(out.prNumber, 7);
   assert.equal(paid.calls.openPull.length, 0, 'must not open a second PR');
 });
+
+// SOW-106 Phase C: schema-drift validity surfaced on each draft row.
+test('listDrafts: a draft that fails the CURRENT schema carries valid:false + a reason; a clean one valid:true', async () => {
+  const good = '---\ntype: post\ntitle: Fine\nslug: fine\nauthor: alice\nstatus: published\n---\n\nBody.\n';
+  const bad = '---\ntype: post\nslug: broken\nauthor: alice\nstatus: published\n---\n\nBody.\n'; // no title (required)
+  const ctx = draftCtx({
+    refs: ['gbti/post-fine', 'gbti/post-broken'],
+    files: { 'gbti/post-fine': good, 'gbti/post-broken': bad },
+  });
+  const { drafts } = await listDrafts(ctx, {});
+  const fine = drafts.find((d) => d.slug === 'fine');
+  const broken = drafts.find((d) => d.slug === 'broken');
+  assert.equal(fine.valid, true);
+  assert.equal(fine.invalidReason, null);
+  assert.equal(broken.valid, false);
+  assert.match(String(broken.invalidReason), /title/i);
+});
