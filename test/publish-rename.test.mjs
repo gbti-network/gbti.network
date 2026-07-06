@@ -235,3 +235,16 @@ test('publishDraft rename routing forces status published (a staged draft may ca
   const fm = parseContentFile(repo.puts.find((f) => f.path === 'members/alice/prompts/new-name/index.md').content).frontmatter;
   assert.equal(fm.status, 'published'); // PR #67 landed status: draft without this
 });
+
+// PR #68 residual: the editor prefills the author note from the existing intro, so a rename publish writes a
+// FRESH intro at the new slug — the OLD intro must still be deleted, or it orphans (a duplicate author note
+// via the alias union).
+test('rename with a fresh authorNote intro still deletes the old intro', async () => {
+  const repo = fakeRepo();
+  const intro = '---\ntype: comment\nid: intro-old-name\nauthor: alice\ntargetType: prompt\ntargetSlug: old-name\nstatus: published\nvisibility: public\nauthorNote: true\ncreatedAt: 2026-07-02\n---\n\nHi.\n';
+  const ctx = ctxFor({ repo, files: { 'members/alice/comments/intro-old-name.md': intro } });
+  const res = await publish(ctx, { type: 'prompt', input: { ...INPUT, slug: 'new-name' }, body: 'B.', path: OLD, authorNote: 'A fresh intro note.' });
+  assert.deepEqual(res.renamed, { from: 'old-name', to: 'new-name' });
+  assert.ok(repo.puts.some((f) => f.path === 'members/alice/comments/intro-new-name.md')); // the fresh intro
+  assert.ok(repo.deletes.includes('members/alice/comments/intro-old-name.md')); // the old one still deletes
+});

@@ -18522,7 +18522,12 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
     }
     renameFiles.push({ path: origin.oldPath, content: null });
     if (typeof oldFm.encryptedBody === "string" && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
-    if (!introFile) renameFiles.push(...await introMoveFiles(ctx2, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
+    if (!introFile) {
+      renameFiles.push(...await introMoveFiles(ctx2, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
+    } else {
+      const oldIntro = `members/${id.username}/comments/intro-${origin.oldSlug}.md`;
+      if (await ctx2.reader?.readFile?.(oldIntro) != null) renameFiles.push({ path: oldIntro, content: null });
+    }
   }
   const withRename = (r) => renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
   if (introFile || renaming) {
