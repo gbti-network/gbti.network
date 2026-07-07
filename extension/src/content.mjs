@@ -75,6 +75,9 @@ try {
     const detail = e?.detail || {};
     if (!resolveOpenPage(detail)) return;
     chrome.runtime.sendMessage({ type: 'open-page', page: detail.page, hash: detail.hash }).catch(() => {});
+    // SOW-112 QA: acknowledge the relay so the page can tell a handled click from a stale extension
+    // (an old content script silently ignored pages it did not know, which read as a dead button).
+    document.dispatchEvent(new CustomEvent('gbti:open-ack'));
   });
   // SOW-036: sign out from the site header's avatar menu. The worker clears the token + broadcasts auth-changed,
   // which re-stamps the page-safe signal so the header reverts to its logged-out state.

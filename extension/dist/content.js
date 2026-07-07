@@ -12933,6 +12933,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!resolveOpenPage(detail)) return;
       chrome.runtime.sendMessage({ type: "open-page", page: detail.page, hash: detail.hash }).catch(() => {
       });
+      document.dispatchEvent(new CustomEvent("gbti:open-ack"));
     });
     document.addEventListener("gbti:request-signout", () => {
       chrome.runtime.sendMessage({ type: "signout" }).catch(() => {
