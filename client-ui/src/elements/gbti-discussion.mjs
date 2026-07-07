@@ -131,7 +131,7 @@ class GbtiDiscussion extends GbtiElement {
         const t = this._tomb.get(tombKey);
         if (t.phase === 'error') return `<div class="ctomb err">The deletion failed: ${esc(t.msg || 'try again')}. The comment is still live.</div>`;
         if (t.phase === 'busy') return `<div class="ctomb">Deleting the comment…</div>`;
-        return `<div class="ctomb">Comment deleted. The removal opened a pull request and it leaves the site at the next deploy. <a href="workspace.html#tab=prs">Track it under Pull requests</a>.</div>`;
+        return `<div class="ctomb">Comment deleted here right away. The removal merges automatically and the public site updates in about 2 to 3 minutes. <a href="workspace.html#tab=prs">Track it under Pull requests</a>.</div>`;
       }
       const reply = c.parentId ? ' reply' : '';
       const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : '')
@@ -172,7 +172,7 @@ class GbtiDiscussion extends GbtiElement {
   }
 
   async _deleteOwnComment(id) {
-    if (typeof confirm === 'function' && !confirm('Delete your comment? It leaves the site at the next deploy (a few minutes).')) return;
+    if (typeof confirm === 'function' && !confirm('Delete your comment? It disappears here right away and leaves the public site in about 2 to 3 minutes.')) return;
     const row = (this._last?.rows || []).find((r) => r.c.id === id);
     const key = row?.c?.path || id;
     this._tombstone(key, 'busy');
