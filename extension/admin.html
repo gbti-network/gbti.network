@@ -16,7 +16,7 @@
     .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 4px 0 0; }
     .hub-h2 { font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-spacing: -.01em; margin: 28px 0 12px; }
     /* SOW-070: settings-style cards per admin section (cohesive with the member Settings page; frosts in Glass). */
-    .admin-col { max-width: 880px; margin: 0 auto; display: flex; flex-direction: column; }
+    .admin-col { max-width: 1720px; margin: 0 auto; display: flex; flex-direction: column; } /* SOW-100: the categories workspace uses the full width (was 880px for the single-column managers) */
     .admin-card { border: 1.5px solid var(--line); border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.05); background: var(--paper); margin: 0 0 22px; overflow: hidden; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
     .admin-card-h { padding: 20px 24px 16px; }
     .admin-card-h h2 { font-family: var(--f-display); font-weight: 700; font-size: 20px; letter-spacing: -.005em; margin: 0; }
@@ -27,7 +27,7 @@
     .admin-sub:first-child { border-top: 0; }
     .admin-sub-h { font-family: var(--f-display); font-weight: 700; font-size: 16px; letter-spacing: -.005em; margin: 0 0 12px; }
     /* SOW-070: SUB-SECTION NAVIGATION -- a row of sub-tabs switches between the parent groups (one shown at a time). */
-    .admin-tabs { display: flex; gap: 6px; max-width: 880px; margin: 0 auto 22px; padding: 6px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 1px 2px rgba(0,0,0,.05); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+    .admin-tabs { display: flex; gap: 6px; max-width: 1720px; margin: 0 auto 22px; padding: 6px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 1px 2px rgba(0,0,0,.05); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
     .admin-tabs { flex-wrap: wrap; }
     .admin-tab { flex: 1 1 auto; white-space: nowrap; font: inherit; font-weight: 600; font-size: 13.5px; padding: 9px 13px; border: 0; border-radius: 9px; background: transparent; color: var(--fg-mute); cursor: pointer; transition: color .14s ease, background .14s ease; }
     .admin-tab:hover { color: var(--fg); }
