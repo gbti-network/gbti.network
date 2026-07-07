@@ -6,7 +6,7 @@ shortDescription: "A writing persona that makes an AI write in a natural human v
 author: gbti
 status: published
 visibility: public
-categories: ["writing"]
+categories: ["ai", "prompts", "entertainment"]
 tags: ["writing", "editing", "style", "ai-tells"]
 targets: ["Claude", "ChatGPT", "Gemini"]
 exampleOutput: "Prose that reads as written by a person: declarative, signal-dense, free of the 'it is not X, it is Y' reframe, the self-posed rhetorical question, the rule-of-three pileup, the patronizing analogy, and the em-dash and unicode-arrow habits."

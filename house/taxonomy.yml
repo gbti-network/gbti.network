@@ -47,6 +47,7 @@ tree:
         children:
           skill: { label: Skill }
           imagegen: { label: ImageGen }
+          entertainment: { label: Entertainment }
   blockchain:
     label: Blockchain
     children:
@@ -67,8 +68,6 @@ tree:
     children:
       finance: { label: Finance }
       marketing: { label: Marketing }
-  writing:
-    label: Writing
   design:
     label: Design
     children:
