@@ -8733,6 +8733,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .dtitle { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
   .dtitle h3 { font-family:var(--font-display); font-size:clamp(19px, 2cqw + 12px, 24px); margin:0; }
   .lvltag { font-family:var(--font-mono, monospace); font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); background:var(--hover); border-radius:999px; padding:3px 9px; }
+  .dclose { margin-left:auto; font:inherit; font-size:12px; font-weight:600; color:var(--muted); background:none; border:1.5px solid var(--line); border-radius:var(--r7); padding:4px 10px; }
+  .dclose:hover { color:var(--fg); background:var(--hover); }
   .fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   @container (max-width: 620px) { .fields { grid-template-columns:1fr; } }
   .fld label { display:block; font-family:var(--font-mono, monospace); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:5px; }
@@ -8742,7 +8744,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .hint { font-size:11.5px; color:var(--muted); margin-top:5px; }
   .sech { display:flex; align-items:center; gap:7px; font-family:var(--font-mono, monospace); font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:16px 0 9px; }
 
-  .dcard { border:1.5px solid var(--blur-line); border-radius:var(--r7); background:var(--blur-tint); padding:14px 16px; }
+  .dcard { border:1.5px solid var(--blur-line); border-radius:0; background:var(--blur-tint); padding:14px 16px; } /* colored borders are square (owner) */
   .dcard .row1 { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
   .dcard .sav { width:38px; height:38px; border-radius:var(--r7); background:var(--blur); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; }
   .dcard .st { font-size:12px; color:var(--muted); }
@@ -8770,7 +8772,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .addsub { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
   .addsub input { flex:1; min-width:120px; font:inherit; font-size:13px; padding:8px 10px; border:1.5px solid var(--line); border-radius:var(--r7); background:var(--bg, transparent); color:var(--fg); }
 
-  .danger { border-color:color-mix(in srgb, var(--danger) 45%, transparent); }
+  .danger { border-color:color-mix(in srgb, var(--danger) 45%, transparent); border-radius:0; } /* colored borders are square (owner) */
   .danger .sech { color:var(--danger); }
   .drow { display:flex; gap:8px; flex-wrap:wrap; }
   .btn.warn { background:var(--panel); color:var(--danger); border:1.5px solid color-mix(in srgb, var(--danger) 55%, transparent); }
@@ -8902,10 +8904,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const plan = batchPlan(this._pending);
       const header = `
       <div class="chead">
-        <div class="grow"><h2>Categories</h2><span class="muted">The canonical taxonomy, its Discord channels, and the content filed under each. Edits batch into one house PR.</span></div>
-        <span class="pending" ${plan.count ? "" : "hidden"}><span class="cnt">${plan.count}</span> unmerged edit${plan.count === 1 ? "" : "s"}</span>
+        <div class="grow"><h2>Categories</h2><span class="muted">The canonical taxonomy, its Discord channels, and the content filed under each. Edits publish together as one house PR.</span></div>
+        <span class="pending" ${plan.count ? "" : "hidden"}><span class="cnt">${plan.count}</span> unpublished edit${plan.count === 1 ? "" : "s"}</span>
         <button class="btn soft" id="newtop" type="button">New category</button>
-        <button class="btn pr" id="review" type="button" ${plan.count ? "" : "disabled"}>${plan.count ? `Review ${plan.count} change${plan.count === 1 ? "" : "s"}` : "Up to date"}</button>
+        <button class="btn pr" id="review" type="button" ${plan.count ? "" : "disabled"}>${plan.count ? `Publish ${plan.count} change${plan.count === 1 ? "" : "s"}` : "Nothing to publish"}</button>
       </div>`;
       const body = `<div class="cpane">${this._treeHtml()}<div class="detail">${this._sel ? this._detailHtml() : this._emptyHtml()}</div></div>
       ${this._msg ? `<p class="msg">${this._msg}</p>` : ""}`;
@@ -8960,13 +8962,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const key = path[path.length - 1];
       const label = this.labelOf(path);
       const lvl = path.length === 1 ? "Top level" : node.children && Object.keys(node.children).length ? "Subcategory" : "Leaf";
-      const crumb = path.slice(0, -1).map((k, i) => `<b data-crumb="${esc(path.slice(0, i + 1).join("/"))}">${esc(this.labelOf(path.slice(0, i + 1)))}</b>`).join(" / ");
+      const crumb = [`<b data-desel>Taxonomy</b>`, ...path.slice(0, -1).map((k, i) => `<b data-crumb="${esc(path.slice(0, i + 1).join("/"))}">${esc(this.labelOf(path.slice(0, i + 1)))}</b>`)].join(" / ");
       const c = this._counts?.get(path.join("/")) || { post: 0, prompt: 0, product: 0, total: 0 };
       const kids = Object.entries(node.children || {});
       const editor = `
       <div class="card">
-        <div class="crumb">${crumb || "Taxonomy"}</div>
-        <div class="dtitle"><h3>${esc(label)}</h3><span class="lvltag">${lvl}</span></div>
+        <div class="crumb">${crumb}</div>
+        <div class="dtitle"><h3>${esc(label)}</h3><span class="lvltag">${lvl}</span><button class="dclose" type="button" data-desel title="Back to the category dashboard">✕ Close</button></div>
         <div class="fields">
           <div class="fld"><label>Display label</label><input id="labelin" value="${esc(label)}" /></div>
           <div class="fld"><label>Key</label><input class="mono" value="${esc(key)}" readonly /><div class="hint">Renaming a key opens a review-gated migration that rewrites every filed item.</div></div>
@@ -9087,6 +9089,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._cbPage = 1;
         this.render();
       }));
+      this.$$("[data-desel]").forEach((b) => b.addEventListener("click", () => {
+        this._sel = null;
+        this._pickerOpen = false;
+        this.render();
+      }));
       this.$(".tscroll")?.addEventListener("keydown", (e) => {
         const items = this.$$(".titem[data-sel]");
         const idx = items.findIndex((b) => b === this.root.activeElement);
@@ -9100,8 +9107,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       });
       this.addEventListener("keydown", (e) => {
-        if (e.key === "Escape" && this._pickerOpen) {
+        if (e.key !== "Escape") return;
+        if (this._pickerOpen) {
           this._pickerOpen = false;
+          this.render();
+        } else if (this._sel) {
+          this._sel = null;
           this.render();
         }
       });
@@ -9170,12 +9181,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _review() {
       const plan = batchPlan(this._pending);
       if (!plan.count) return;
-      this._msg = "Opening the house PR…";
+      this._msg = "Publishing the changes…";
       this.render();
       try {
         const res = await this.client.admin("category-batch", { ops: [...this._pending.values()], descriptions: plan.descriptions });
         this._pending.clear();
-        this._msg = res?.noop ? "Everything in the batch was already applied." : esc(submitAck({ prNumber: res?.prNumber, autoMerge: false }));
+        this._msg = res?.noop ? "Everything in the batch was already applied." : `Published as PR #${res?.prNumber ?? "?"} — the changes reach the site about 2 to 3 minutes after it merges.`;
         await this.load();
       } catch (err) {
         this._msg = esc(err?.message || "The batch could not be opened.");
