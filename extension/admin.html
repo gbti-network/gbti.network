@@ -27,7 +27,8 @@
     .admin-sub:first-child { border-top: 0; }
     .admin-sub-h { font-family: var(--f-display); font-weight: 700; font-size: 16px; letter-spacing: -.005em; margin: 0 0 12px; }
     /* SOW-070: SUB-SECTION NAVIGATION -- a row of sub-tabs switches between the parent groups (one shown at a time). */
-    .admin-tabs { display: flex; gap: 6px; max-width: 1720px; margin: 0 auto 22px; padding: 6px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 1px 2px rgba(0,0,0,.05); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+    @media (max-width: 760px) { .admin-tabs button { font-size: 12.5px; padding: 8px 10px; } }
+    .admin-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 1720px; margin: 0 auto 22px; padding: 6px; border: 1.5px solid var(--line); border-radius: 14px; background: var(--paper); box-shadow: 0 1px 2px rgba(0,0,0,.05); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
     .admin-tabs { flex-wrap: wrap; }
     .admin-tab { flex: 1 1 auto; white-space: nowrap; font: inherit; font-weight: 600; font-size: 13.5px; padding: 9px 13px; border: 0; border-radius: 9px; background: transparent; color: var(--fg-mute); cursor: pointer; transition: color .14s ease, background .14s ease; }
     .admin-tab:hover { color: var(--fg); }
@@ -65,7 +66,8 @@
           </div>
         </section>
         <section class="admin-card" data-panel="categories">
-          <div class="admin-card-h"><h2>Categories</h2><p>The taxonomy workspace (SOW-100): tree, labels, Discord channel per category, and the content filed under each. Label, add, and channel edits batch into ONE house PR; key, move, and remove stay review-gated migrations.</p></div>
+          <!-- SOW-100 responsive QA: the workspace carries its own header; the card header duplicated it and
+               cost a full screen of copy on mobile. -->
           <div class="admin-card-b"><div class="admin-sub"><gbti-categories-workspace></gbti-categories-workspace></div></div>
         </section>
         <section class="admin-card" data-panel="news">
