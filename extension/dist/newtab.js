@@ -5638,6 +5638,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .abtn svg { width:13px; height:13px; }
   .ctomb { font-size:12.5px; color:var(--muted); border:1.5px dashed var(--line); border-radius:9px; padding:9px 12px; }
   .ctomb a { color:var(--s-green-fg, #1f9e5f); font-weight:600; }
+  .ctomb.err { color:var(--s-danger, #e06c6c); border-color:var(--s-danger, #e06c6c); border-style:solid; }
   .cmeta .chide { margin-left:auto; font:inherit; font-size:11px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:2px 8px; cursor:pointer; }
   .cmeta .chide:hover { color:#c0392b; border-color:#c0392b; }
   .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
@@ -5745,7 +5746,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const canRemove = (RANK3[this._role] ?? 0) >= RANK3.admin;
       const ordered = [...rows.filter(({ c }) => c.authorNote), ...rows.filter(({ c }) => !c.authorNote)];
       const thread = ordered.map(({ c, html }) => {
-        if (this._gone && (this._gone.has(c.path) || this._gone.has(c.id) || this._gone.has(`members/${c.author}/comments/${c.id}.md`))) {
+        const tombKey = [c.path, c.id, `members/${c.author}/comments/${c.id}.md`].find((k) => k && this._tomb?.has(k));
+        if (tombKey) {
+          const t = this._tomb.get(tombKey);
+          if (t.phase === "error") return `<div class="ctomb err">The deletion failed: ${esc(t.msg || "try again")}. The comment is still live.</div>`;
+          if (t.phase === "busy") return `<div class="ctomb">Deleting the comment…</div>`;
           return `<div class="ctomb">Comment deleted. The removal opened a pull request and it leaves the site at the next deploy. <a href="workspace.html#tab=prs">Track it under Pull requests</a>.</div>`;
         }
         const reply = c.parentId ? " reply" : "";
@@ -5768,31 +5773,33 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.$$("[data-delc]").forEach((b) => b.addEventListener("click", () => this._deleteComment(b.dataset.delc)));
       this.$$("[data-delown]").forEach((b) => b.addEventListener("click", () => this._deleteOwnComment(b.dataset.delown)));
     }
-    // SOW-112 QA: admin+ hard-deletes any member comment (the existing admin 'remove' rail: a real file delete
-    // whose PR auto-merges for a superadmin and falls to the review lane for a plain admin).
+    // SOW-112 QA (owner-directed flow): popup confirm -> the card swaps to a tombstone IMMEDIATELY
+    // (optimistic) -> the server result upgrades it, or flips it to an error card on failure.
     async _deleteComment(path) {
       if (typeof confirm === "function" && !confirm("Delete this comment? The file is removed from the network (it remains in git history).")) return;
+      this._tombstone(path, "busy");
       try {
         await this.client.admin("remove", { path });
-        this._tombstone(path);
-      } catch {
+        this._tombstone(path, "done");
+      } catch (err) {
+        this._tombstone(path, "error", err?.message);
       }
     }
-    // SOW-112 QA: a member deletes their OWN comment (own-folder delete PR; auto-merges; off the site at the
-    // next deploy).
     async _deleteOwnComment(id) {
       if (typeof confirm === "function" && !confirm("Delete your comment? It leaves the site at the next deploy (a few minutes).")) return;
+      const row = (this._last?.rows || []).find((r) => r.c.id === id);
+      const key = row?.c?.path || id;
+      this._tombstone(key, "busy");
       try {
         await this.client.deleteComment?.({ id });
-        const row = (this._last?.rows || []).find((r) => r.c.id === id);
-        this._tombstone(row?.c?.path || id);
-      } catch {
+        this._tombstone(key, "done");
+      } catch (err) {
+        this._tombstone(key, "error", err?.message);
       }
     }
-    // Replace the row with a tombstone IMMEDIATELY (a reload would re-show the file until the PR merges).
-    _tombstone(key) {
+    _tombstone(key, phase, msg) {
       if (!key) return;
-      (this._gone ??= /* @__PURE__ */ new Set()).add(key);
+      (this._tomb ??= /* @__PURE__ */ new Map()).set(key, { phase, msg });
       if (this._last) this._render(this._last.targetType, this._last.targetSlug, this._last.rows);
     }
     // SOW-071: hide a comment (moderator+): deplatform its file -> draft, then reload the thread.
