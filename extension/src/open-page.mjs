@@ -11,6 +11,7 @@
 const PAGES = new Set([
   'newtab.html',
   'workspace.html',
+  'browse.html', // SOW-112 QA: the site's locked-content notices deep-link a paid member into the reader
   'shares.html',
   'admin.html',
   'account.html',

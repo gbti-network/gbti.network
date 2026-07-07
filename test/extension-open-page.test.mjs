@@ -38,3 +38,9 @@ test('an unsafe hash is rejected (no smuggling past chrome.runtime.getURL)', () 
     assert.equal(resolveOpenPage({ page: 'workspace.html', hash }), null, `hash ${JSON.stringify(hash)} must be rejected`);
   }
 });
+
+// SOW-112 QA: the site's locked-content notices deep-link a paid member into the reader.
+test('browse.html is openable via the relay (reader deep link)', () => {
+  const r = resolveOpenPage({ page: 'browse.html', hash: 'tab=prompt&read=members%2Falice%2Fprompts%2Fx%2Findex.md' });
+  assert.equal(r, 'browse.html#tab=prompt&read=members%2Falice%2Fprompts%2Fx%2Findex.md');
+});

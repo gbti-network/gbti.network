@@ -21,6 +21,16 @@ const CSS = `
   .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
   .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
   .cmeta .cbadge.cnote { color:var(--s-green-fg, #1f9e5f); border-color:var(--s-green, #1f9e5f); }
+  /* SOW-112 QA (owner-picked Option A): hover-reveal ghost actions — invisible until the row is hovered or
+     focused, icon + label, Delete tints red only on its own hover. */
+  .acts { display:inline-flex; gap:4px; margin-left:auto; opacity:0; transition:opacity .12s ease; }
+  .comment:hover .acts, .acts:focus-within { opacity:1; }
+  .abtn { display:inline-flex; align-items:center; gap:5px; font:inherit; font-size:11.5px; font-weight:600; color:var(--muted); background:none; border:none; border-radius:7px; padding:3px 9px; cursor:pointer; }
+  .abtn:hover { background:var(--s-surface-2, rgba(255,255,255,.06)); color:var(--fg); }
+  .abtn.danger:hover { background:color-mix(in srgb, var(--s-danger, #e06c6c) 14%, transparent); color:var(--s-danger, #e06c6c); }
+  .abtn svg { width:13px; height:13px; }
+  .ctomb { font-size:12.5px; color:var(--muted); border:1.5px dashed var(--line); border-radius:9px; padding:9px 12px; }
+  .ctomb a { color:var(--s-green-fg, #1f9e5f); font-weight:600; }
   .cmeta .chide { margin-left:auto; font:inherit; font-size:11px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:2px 8px; cursor:pointer; }
   .cmeta .chide:hover { color:#c0392b; border-color:#c0392b; }
   .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
@@ -104,12 +114,20 @@ class GbtiDiscussion extends GbtiElement {
   }
 
   _render(targetType, targetSlug, rows) {
+    this._last = { targetType, targetSlug, rows }; // re-render locally after a delete (no server round-trip)
+    const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+    const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
     const canMod = (RANK[this._role] ?? 0) >= RANK.moderator;
     const canRemove = (RANK[this._role] ?? 0) >= RANK.admin; // admin+ hard-deletes any member comment
     // SOW-112 QA: author notes pin FIRST with a badge (mirroring the public page), never mid-thread as
     // ordinary comments.
     const ordered = [...rows.filter(({ c }) => c.authorNote), ...rows.filter(({ c }) => !c.authorNote)];
     const thread = ordered.map(({ c, html }) => {
+      // SOW-112 QA: a just-deleted comment renders as a tombstone (the file exists on canonical until the
+      // delete PR merges, so a reload would resurrect it and read as a failed delete).
+      if (this._gone && (this._gone.has(c.path) || this._gone.has(c.id) || this._gone.has(`members/${c.author}/comments/${c.id}.md`))) {
+        return `<div class="ctomb">Comment deleted. The removal opened a pull request and it leaves the site at the next deploy. <a href="workspace.html#tab=prs">Track it under Pull requests</a>.</div>`;
+      }
       const reply = c.parentId ? ' reply' : '';
       const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : '')
         + (c.visibility === 'members' ? `<span class="cbadge">Members</span>` : '');
@@ -120,14 +138,15 @@ class GbtiDiscussion extends GbtiElement {
       // house-authored intro (house/comments/<id>.md is not a members/ path; the server would 403 anyway).
       const houseComment = c.author === 'gbti' || c.author === 'house';
       const modPath = (!houseComment && c.author && c.id) ? (c.path || `members/${c.author}/comments/${c.id}.md`) : '';
-      const hideBtn = canMod && modPath ? `<button class="chide" type="button" data-hidec="${esc(modPath)}">Hide</button>` : '';
+      const hideBtn = canMod && modPath ? `<button class="abtn" type="button" data-hidec="${esc(modPath)}">${EYE} Hide</button>` : '';
       // Admin+ hard-delete (the existing admin 'remove' rail); a member deletes their OWN comment (a real
       // canonical file only — an in-flight echo has no path and reaps on its own).
       const own = this._me && c.author === this._me && c.path && c.id && !c.authorNote;
-      const delBtn = canRemove && modPath ? `<button class="chide" type="button" data-delc="${esc(modPath)}">Delete</button>`
-        : own ? `<button class="chide" type="button" data-delown="${esc(c.id)}">Delete</button>` : '';
+      const delBtn = canRemove && modPath ? `<button class="abtn danger" type="button" data-delc="${esc(modPath)}" data-key="${esc(modPath)}">${TRASH} Delete</button>`
+        : own ? `<button class="abtn danger" type="button" data-delown="${esc(c.id)}" data-key="${esc(c.path)}">${TRASH} Delete</button>` : '';
+      const acts = hideBtn || delBtn ? `<span class="acts">${hideBtn}${delBtn}</span>` : '';
       return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
-        <div class="cmeta"><span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}${hideBtn}${delBtn}</div>
+        <div class="cmeta"><span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}${acts}</div>
         ${bodyHtml}
       </div></div>`;
     }).join('');
@@ -142,7 +161,7 @@ class GbtiDiscussion extends GbtiElement {
   // whose PR auto-merges for a superadmin and falls to the review lane for a plain admin).
   async _deleteComment(path) {
     if (typeof confirm === 'function' && !confirm('Delete this comment? The file is removed from the network (it remains in git history).')) return;
-    try { await this.client.admin('remove', { path }); this.load(); }
+    try { await this.client.admin('remove', { path }); this._tombstone(path); }
     catch { /* fail-soft: the server is the authority */ }
   }
 
@@ -150,8 +169,18 @@ class GbtiDiscussion extends GbtiElement {
   // next deploy).
   async _deleteOwnComment(id) {
     if (typeof confirm === 'function' && !confirm('Delete your comment? It leaves the site at the next deploy (a few minutes).')) return;
-    try { await this.client.deleteComment?.({ id }); this.load(); }
-    catch { /* fail-soft */ }
+    try {
+      await this.client.deleteComment?.({ id });
+      const row = (this._last?.rows || []).find((r) => r.c.id === id);
+      this._tombstone(row?.c?.path || id);
+    } catch { /* fail-soft */ }
+  }
+
+  // Replace the row with a tombstone IMMEDIATELY (a reload would re-show the file until the PR merges).
+  _tombstone(key) {
+    if (!key) return;
+    (this._gone ??= new Set()).add(key);
+    if (this._last) this._render(this._last.targetType, this._last.targetSlug, this._last.rows);
   }
 
   // SOW-071: hide a comment (moderator+): deplatform its file -> draft, then reload the thread.

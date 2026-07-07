@@ -13,6 +13,11 @@ interface Props {
   wide?: boolean; // when true, span the full content width (prompt detail) instead of the 800px reading column
 }
 const { targetType, targetSlug, author, wide = false, aliases = [] } = Astro.props;
+// SOW-112 QA: the parent item's index.md path, for the paid-member open-in-extension reader deep link.
+const SUB = { post: 'posts', product: 'products', prompt: 'prompts' } as Record<string, string>;
+const itemReaderPath = SUB[targetType]
+  ? (author === 'gbti' || author === 'house' ? `house/${SUB[targetType]}/${targetSlug}/index.md` : `members/${author}/${SUB[targetType]}/${targetSlug}/index.md`)
+  : undefined;
 // SOW-112: comments written before a rename carry the OLD slug; union it so the discussion follows the item.
 const slugSet = new Set([targetSlug, ...aliases]);
 
@@ -89,7 +94,7 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
               <time datetime={c.data.createdAt.toISOString()}>{formatDate(c.data.createdAt)}</time>
             </div>
             {c.data.visibility === 'members'
-              ? <div style="margin-top:8px"><LockedBody encPath={c.data.encryptedBody} kind="comment" /></div>
+              ? <div style="margin-top:8px"><LockedBody encPath={c.data.encryptedBody} kind="comment" readerType={targetType} readerPath={itemReaderPath} /></div>
               : <div class="cmt-rich" style="margin-top:8px;color:var(--fg-soft)" set:html={c.rendered?.html ?? ''} />}
             <div class="flex items-center g12" style="margin-top:10px">
               {c.data.updatedAt && commitHistoryHref(c.filePath) && (

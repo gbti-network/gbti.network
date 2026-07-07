@@ -22,7 +22,8 @@ if (commentAuthor) attrs['data-gbti-comment-author'] = commentAuthor;
 <gbti-comment-box {...attrs}>
   {!isEdit && (
     <div class="cbox-fallback">
-      <p class="body-sm muted" style="margin:0">Members write comments from the GBTI client or browser extension. <a href="/membership/" class="link">Become a member</a> to join the conversation.</p>
+      <p class="body-sm muted for-visitor" style="margin:0">Members write comments from the GBTI client or browser extension. <a href="/membership/" class="link">Become a member</a> to join the conversation.</p>
+      <p class="body-sm muted for-paid" style="margin:0">You are signed in as a member — reply to this discussion from the GBTI extension.</p>
     </div>
   )}
 </gbti-comment-box>
@@ -31,4 +32,7 @@ if (commentAuthor) attrs['data-gbti-comment-author'] = commentAuthor;
   /* The edit affordance is inline and EMPTY until the client upgrades it (and only for the author). */
   gbti-comment-box[data-gbti-comment-id] { display: inline-block; }
   .cbox-fallback { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: var(--r); background: var(--green-tint); }
+  .for-paid { display: none; }
+  :global(html.is-gbti-paid) .for-paid { display: block; }
+  :global(html.is-gbti-paid) .for-visitor { display: none; }
 </style>
