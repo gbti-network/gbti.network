@@ -21009,6 +21009,64 @@ async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopM
   const pr = await publishFiles({ repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
   return { ...pr, changed: true, audit: result.audit };
 }
+async function applyCategoryBatch(ctx, { ops, descriptions } = {}) {
+  const list = Array.isArray(ops) ? ops : [];
+  if (!list.length) throw new OperationError("bad-request", "the batch is empty");
+  const kinds = new Set(list.map((o) => o?.kind));
+  for (const k of kinds) {
+    if (!["label", "add", "channel-set", "channel-remove"].includes(k)) {
+      throw new OperationError("bad-request", `op kind "${k}" cannot batch (migrations are review-gated dispatches)`);
+    }
+  }
+  const hasChannel = list.some((o) => o.kind === "channel-set" || o.kind === "channel-remove");
+  if (hasChannel) requireRole(ctx, canManageRoles, "superadmin");
+  else requireRole(ctx, canBanGrandfather, "admin");
+  const { repo } = requireRepo2(ctx);
+  const files = [];
+  const applied = [];
+  const applyFile = async (relPath, opsForFile, applyOne, errType) => {
+    if (!opsForFile.length) return;
+    const raw = await ctx.reader?.readFile?.(relPath) || "";
+    let parsed;
+    try {
+      parsed = index_vite_proxy_tmp_default.load(raw) || {};
+    } catch {
+      parsed = {};
+    }
+    let changed = false;
+    for (const op of opsForFile) {
+      let result;
+      try {
+        result = applyOne(parsed, op);
+      } catch (err) {
+        if (err instanceof errType) throw new OperationError("bad-request", `${op.kind} ${JSON.stringify(op.args)}: ${err.message}`);
+        throw err;
+      }
+      if (result.changed) {
+        parsed = result.next;
+        changed = true;
+        applied.push(op);
+      }
+    }
+    if (changed) files.push({ path: relPath, content: leadingComment(raw) + dumpYaml(parsed) });
+  };
+  await applyFile(TAXONOMY_PATH, list.filter((o) => o.kind === "label" || o.kind === "add"), (parsed, op) => op.kind === "add" ? addCategory(parsed, { parentPath: op.args?.parentPath ?? [], key: op.args?.key, label: op.args?.label }, actionCtx(ctx)) : renameLabel(parsed, { path: op.args?.path, label: op.args?.label }, actionCtx(ctx)), TaxonomyEditError);
+  await applyFile(CONTENT_CHANNELS_PATH, list.filter((o) => o.kind === "channel-set" || o.kind === "channel-remove"), (parsed, op) => op.kind === "channel-set" ? setChannel(parsed, { category: op.args?.category, channelId: op.args?.channelId }, actionCtx(ctx)) : removeChannel(parsed, { category: op.args?.category }, actionCtx(ctx)), ContentChannelEditError);
+  if (!files.length) return noop("every batched edit was already applied", { ops: list.length });
+  const lines = Array.isArray(descriptions) && descriptions.length ? descriptions : list.map((o) => `${o.kind}: ${JSON.stringify(o.args)}`);
+  const stamp = (ctx.now?.() ?? (/* @__PURE__ */ new Date()).toISOString()).replace(/[^0-9]/g, "").slice(0, 14);
+  const pr = await publishFiles({
+    repo,
+    branch: `gbti/category-batch-${stamp}`,
+    files,
+    message: `Categories: ${applied.length} change${applied.length === 1 ? "" : "s"}`,
+    title: `Categories: ${applied.length} change${applied.length === 1 ? "" : "s"}`,
+    body: `Batched category-workspace edits (SOW-100):
+
+${lines.map((d) => `- ${d}`).join("\n")}`
+  });
+  return { ...pr, changed: true, applied: applied.length, skipped: list.length - applied.length };
+}
 async function setContentChannel(ctx, { category, channelId } = {}) {
   const slug = slugOf(String(category || ""));
   return editHouseYaml(ctx, CONTENT_CHANNELS_PATH, (parsed) => setChannel(parsed, { category, channelId }, actionCtx(ctx)), {
@@ -21074,7 +21132,7 @@ async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, co
 }
 
 // extension/src/ext-dispatch.mjs
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "news-engagement-set": setNewsEngagementSettings };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "news-engagement-set": setNewsEngagementSettings };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,

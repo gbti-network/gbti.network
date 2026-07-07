@@ -20,7 +20,8 @@ import './elements/gbti-account.mjs';
 import './elements/gbti-mod-actions.mjs'; // SOW-071: shared per-item moderation control (Hide/Unhide/Remove)
 import './elements/gbti-admin.mjs';
 import './elements/gbti-superadmin-dashboard.mjs';
-import './elements/gbti-category-manager.mjs'; // SOW-055: superadmin category manager
+import './elements/gbti-category-manager.mjs'; // SOW-055: superadmin category manager (superseded in admin.html by SOW-100)
+import './elements/gbti-categories-workspace.mjs'; // SOW-100: the Admin -> Categories two-pane workspace
 import './elements/gbti-news-source-manager.mjs'; // SOW-056 P2: superadmin news-source manager
 import './elements/gbti-quote-manager.mjs'; // SOW-063 P3: superadmin splash-quote manager
 import './elements/gbti-syndication-tracker.mjs'; // SOW-058: superadmin syndication tracker

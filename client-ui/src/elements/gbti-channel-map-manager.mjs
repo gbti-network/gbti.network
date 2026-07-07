@@ -91,13 +91,7 @@ class GbtiChannelMapManager extends GbtiElement {
 
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
-      <h4>Category channels <span class="hint">(${this._channels.length} mapped; an unmapped category only posts to its featured channel)</span></h4>
-      <ul class="list">${rows || '<li class="muted">No categories mapped yet. Seed with scripts/seed-content-channels.mjs or add one below.</li>'}</ul>
-      <div class="add">
-        <input data-map-cat type="text" placeholder="category key (topic or top-level taxonomy)" />
-        <input data-map-ch type="text" inputmode="numeric" placeholder="Discord channel id" />
-        <button class="btn" type="button" data-map-add>Map</button>
-      </div>
+      <p class="hint">The category to Discord-channel map lives in the Categories workspace (Admin -> Categories); this tab keeps the templates, news auto-share, and moderation word lists. ${this._channels.length} categories are mapped.</p>
       <h4>Discord post templates <span class="hint">(variables: {memberdiscord} {fullName} {author} {shareurl} {title} {category}; blank = default)</span></h4>
       ${tmplRows}
       ${this._engagementHtml()}
