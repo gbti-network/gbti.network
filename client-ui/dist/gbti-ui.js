@@ -4514,6 +4514,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .lvltag { font-family:var(--font-mono, monospace); font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); background:var(--hover); border-radius:999px; padding:3px 9px; }
   .dclose { margin-left:auto; font:inherit; font-size:12px; font-weight:600; color:var(--muted); background:none; border:1.5px solid var(--line); border-radius:var(--r7); padding:4px 10px; }
   .dclose:hover { color:var(--fg); background:var(--hover); }
+  .newcat { margin-bottom:14px; }
+  .ncrow { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  @container (max-width: 700px) { .ncrow { grid-template-columns:1fr; } }
+  .ncrow select { width:100%; box-sizing:border-box; font:inherit; font-size:14px; padding:10px 12px; border:1.5px solid var(--line); border-radius:var(--r7); background:var(--bg, transparent); color:var(--fg); }
+  .ncacts { display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap; }
   .fields { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   @container (max-width: 620px) { .fields { grid-template-columns:1fr; } }
   .fld label { display:block; font-family:var(--font-mono, monospace); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:5px; }
@@ -4688,10 +4693,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <button class="btn soft" id="newtop" type="button">New category</button>
         <button class="btn pr" id="review" type="button" ${plan.count ? "" : "disabled"}>${plan.count ? `Publish ${plan.count} change${plan.count === 1 ? "" : "s"}` : "Nothing to publish"}</button>
       </div>`;
-      const body = `<div class="cpane">${this._treeHtml()}<div class="detail">${this._sel ? this._detailHtml() : this._emptyHtml()}</div></div>
+      const body = `${this._newOpen ? this._newCatHtml() : ""}<div class="cpane">${this._treeHtml()}<div class="detail">${this._sel ? this._detailHtml() : this._emptyHtml()}</div></div>
       ${this._msg ? `<p class="msg">${this._msg}</p>` : ""}`;
       this.set(this.css(CSS11) + header + body);
       this._wire();
+    }
+    // SOW-100 QA (owner): a real add-category form — key, label, and a PARENT picker over the whole tree —
+    // instead of the bare prompt() pair. Adding lands in the pending set like any other edit.
+    _newCatHtml() {
+      const flat = flattenTree(this._tree);
+      const preselect = this._sel ? this._sel.join("/") : "";
+      return `<div class="card newcat">
+      <div class="sech" style="margin-top:0">New category</div>
+      <div class="ncrow">
+        <div class="fld"><label>Key</label><input id="nckey" placeholder="kebab-case-key" spellcheck="false" /></div>
+        <div class="fld"><label>Display label</label><input id="nclabel" placeholder="Display label" /></div>
+        <div class="fld"><label>Parent</label><select id="ncparent">
+          <option value="">Top level</option>
+          ${flat.map((n) => `<option value="${esc(n.path.join("/"))}"${n.path.join("/") === preselect ? " selected" : ""}>${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}
+        </select></div>
+      </div>
+      <div class="ncacts"><button class="btn" id="ncadd" type="button">Add to the pending edits</button><button class="btn soft" id="nccancel" type="button">Cancel</button><span class="hint" id="ncerr"></span></div>
+    </div>`;
     }
     _treeHtml() {
       const q = this._q.trim().toLowerCase();
@@ -4895,15 +4918,34 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this.render();
         }
       });
-      const newTop = () => {
-        const key = typeof prompt === "function" && prompt("New top-level category key (kebab-case):") || "";
-        if (!key.trim()) return;
-        const label = typeof prompt === "function" && prompt("Display label:", key) || key;
-        upsertOp(this._pending, { kind: "add", args: { parentPath: [], key: key.trim().toLowerCase(), label: label.trim() } });
+      const openNew = () => {
+        this._newOpen = true;
         this.render();
+        this.$("#nckey")?.focus();
       };
-      this.on("#newtop", "click", newTop);
-      this.on("#newtop2", "click", newTop);
+      this.on("#newtop", "click", openNew);
+      this.on("#newtop2", "click", openNew);
+      this.on("#nccancel", "click", () => {
+        this._newOpen = false;
+        this.render();
+      });
+      this.on("#ncadd", "click", () => {
+        const key = this.$("#nckey")?.value?.trim().toLowerCase() || "";
+        const label = this.$("#nclabel")?.value?.trim() || key;
+        const parent = this.$("#ncparent")?.value || "";
+        const err = this.$("#ncerr");
+        if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(key)) {
+          if (err) err.textContent = "The key is lowercase kebab-case (letters, digits, hyphens).";
+          return;
+        }
+        if (flattenTree(this._tree).some((n) => n.key === key)) {
+          if (err) err.textContent = `The key "${key}" already exists in the tree.`;
+          return;
+        }
+        upsertOp(this._pending, { kind: "add", args: { parentPath: parent ? parent.split("/") : [], key, label } });
+        this._newOpen = false;
+        this.render();
+      });
       this.on("#addsub", "click", () => {
         const key = this.$("#subkey")?.value?.trim().toLowerCase();
         const label = this.$("#sublabel")?.value?.trim();
