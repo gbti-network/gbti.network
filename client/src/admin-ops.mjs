@@ -390,6 +390,68 @@ async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopM
   return { ...pr, changed: true, audit: result.audit };
 }
 
+// SOW-100: apply a BATCH of pending category-workspace edits as ONE house PR. Ops are the pending-set
+// vocabulary from client-ui/src/categories-core.mjs: label / add (house/taxonomy.yml) and channel-set /
+// channel-remove (house/content-channels.yml). Each op applies its EXISTING pure edit core over fresh reads;
+// an op that no-ops is skipped (idempotent); the first invalid op aborts the whole batch (nothing published).
+// Key renames / moves / removes are review-gated CI migrations and are NEVER accepted here. Gate: admin for a
+// taxonomy-only batch, superadmin when any channel op is present (matching the per-action gates).
+export async function applyCategoryBatch(ctx, { ops, descriptions } = {}) {
+  const list = Array.isArray(ops) ? ops : [];
+  if (!list.length) throw new OperationError('bad-request', 'the batch is empty');
+  const kinds = new Set(list.map((o) => o?.kind));
+  for (const k of kinds) {
+    if (!['label', 'add', 'channel-set', 'channel-remove'].includes(k)) {
+      throw new OperationError('bad-request', `op kind "${k}" cannot batch (migrations are review-gated dispatches)`);
+    }
+  }
+  const hasChannel = list.some((o) => o.kind === 'channel-set' || o.kind === 'channel-remove');
+  if (hasChannel) requireRole(ctx, canManageRoles, 'superadmin');
+  else requireRole(ctx, canBanGrandfather, 'admin');
+  const { repo } = requireRepo(ctx);
+
+  const files = [];
+  const applied = [];
+  const applyFile = async (relPath, opsForFile, applyOne, errType) => {
+    if (!opsForFile.length) return;
+    const raw = (await ctx.reader?.readFile?.(relPath)) || '';
+    let parsed;
+    try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+    let changed = false;
+    for (const op of opsForFile) {
+      let result;
+      try { result = applyOne(parsed, op); }
+      catch (err) { if (err instanceof errType) throw new OperationError('bad-request', `${op.kind} ${JSON.stringify(op.args)}: ${err.message}`); throw err; }
+      if (result.changed) { parsed = result.next; changed = true; applied.push(op); }
+    }
+    if (changed) files.push({ path: relPath, content: leadingComment(raw) + dumpYaml(parsed) });
+  };
+
+  await applyFile(TAXONOMY_PATH, list.filter((o) => o.kind === 'label' || o.kind === 'add'), (parsed, op) => (
+    op.kind === 'add'
+      ? addCategoryEdit(parsed, { parentPath: op.args?.parentPath ?? [], key: op.args?.key, label: op.args?.label }, actionCtx(ctx))
+      : renameLabelEdit(parsed, { path: op.args?.path, label: op.args?.label }, actionCtx(ctx))
+  ), TaxonomyEditError);
+  await applyFile(CONTENT_CHANNELS_PATH, list.filter((o) => o.kind === 'channel-set' || o.kind === 'channel-remove'), (parsed, op) => (
+    op.kind === 'channel-set'
+      ? setChannelEdit(parsed, { category: op.args?.category, channelId: op.args?.channelId }, actionCtx(ctx))
+      : removeChannelEdit(parsed, { category: op.args?.category }, actionCtx(ctx))
+  ), ContentChannelEditError);
+
+  if (!files.length) return noop('every batched edit was already applied', { ops: list.length });
+  const lines = Array.isArray(descriptions) && descriptions.length ? descriptions : list.map((o) => `${o.kind}: ${JSON.stringify(o.args)}`);
+  const stamp = (ctx.now?.() ?? new Date().toISOString()).replace(/[^0-9]/g, '').slice(0, 14);
+  const pr = await publishFiles({
+    repo,
+    branch: `gbti/category-batch-${stamp}`,
+    files,
+    message: `Categories: ${applied.length} change${applied.length === 1 ? '' : 's'}`,
+    title: `Categories: ${applied.length} change${applied.length === 1 ? '' : 's'}`,
+    body: `Batched category-workspace edits (SOW-100):\n\n${lines.map((d) => `- ${d}`).join('\n')}`,
+  });
+  return { ...pr, changed: true, applied: applied.length, skipped: list.length - applied.length };
+}
+
 export async function setContentChannel(ctx, { category, channelId } = {}) {
   const slug = slugOf(String(category || ''));
   return editHouseYaml(ctx, CONTENT_CHANNELS_PATH, (parsed) => setChannelEdit(parsed, { category, channelId }, actionCtx(ctx)), {
