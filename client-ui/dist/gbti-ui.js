@@ -1523,7 +1523,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const TRASH2 = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
       const canMod = (RANK[this._role] ?? 0) >= RANK.moderator;
       const canRemove = (RANK[this._role] ?? 0) >= RANK.admin;
-      const ordered = [...rows.filter(({ c }) => c.authorNote), ...rows.filter(({ c }) => !c.authorNote)];
+      const hideNotes = this.hasAttribute("data-gbti-hide-author-notes");
+      const visible = hideNotes ? rows.filter(({ c }) => !c.authorNote) : rows;
+      const ordered = [...visible.filter(({ c }) => c.authorNote), ...visible.filter(({ c }) => !c.authorNote)];
       const thread = ordered.map(({ c, html }) => {
         const tombKey = [c.path, c.id, `members/${c.author}/comments/${c.id}.md`].find((k) => k && this._tomb?.has(k));
         if (tombKey) {
@@ -1546,7 +1548,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ${bodyHtml}
       </div></div>`;
       }).join("");
-      const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
+      const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
       this.set(this.css(CSS3) + threadHtml + this._composeHtml(targetType, targetSlug));
       this.$$("[data-hidec]").forEach((b) => b.addEventListener("click", () => this._hideComment(b.dataset.hidec)));
       this.$$("[data-delc]").forEach((b) => b.addEventListener("click", () => this._deleteComment(b.dataset.delc)));
@@ -1874,7 +1876,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const discussionSection = isPub && slug && ["post", "product", "prompt"].includes(this.type) ? `
              <section class="docsec" id="secDiscussion">
                <div class="docsec-h">${USERS} Discussion <span class="dsub">public and members-only comments</span></div>
-               <gbti-discussion data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"${this.aliasSlugs().length ? ` data-gbti-target-aliases="${esc(this.aliasSlugs().join(","))}"` : ""}></gbti-discussion>
+               <gbti-discussion data-gbti-hide-author-notes data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"${this.aliasSlugs().length ? ` data-gbti-target-aliases="${esc(this.aliasSlugs().join(","))}"` : ""}></gbti-discussion>
              </section>` : "";
       const docSections = videoSection + authorSection + discussionSection;
       const showStats = isPub && slug && ["post", "product", "prompt"].includes(this.type);

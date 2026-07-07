@@ -121,8 +121,11 @@ class GbtiDiscussion extends GbtiElement {
     const canMod = (RANK[this._role] ?? 0) >= RANK.moderator;
     const canRemove = (RANK[this._role] ?? 0) >= RANK.admin; // admin+ hard-deletes any member comment
     // SOW-112 QA: author notes pin FIRST with a badge (mirroring the public page), never mid-thread as
-    // ordinary comments.
-    const ordered = [...rows.filter(({ c }) => c.authorNote), ...rows.filter(({ c }) => !c.authorNote)];
+    // ordinary comments. The EDITOR mount sets data-gbti-hide-author-notes (the note has its own editing
+    // section there), which drops them from the thread entirely.
+    const hideNotes = this.hasAttribute('data-gbti-hide-author-notes');
+    const visible = hideNotes ? rows.filter(({ c }) => !c.authorNote) : rows;
+    const ordered = [...visible.filter(({ c }) => c.authorNote), ...visible.filter(({ c }) => !c.authorNote)];
     const thread = ordered.map(({ c, html }) => {
       // SOW-112 QA: a deleting/deleted comment renders as a tombstone IMMEDIATELY (optimistic — the popup
       // confirm is the commitment point; the server result upgrades the card or flips it to an error).
@@ -155,7 +158,7 @@ class GbtiDiscussion extends GbtiElement {
         ${bodyHtml}
       </div></div>`;
     }).join('');
-    const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
+    const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
     this.set(this.css(CSS) + threadHtml + this._composeHtml(targetType, targetSlug));
     this.$$('[data-hidec]').forEach((b) => b.addEventListener('click', () => this._hideComment(b.dataset.hidec)));
     this.$$('[data-delc]').forEach((b) => b.addEventListener('click', () => this._deleteComment(b.dataset.delc)));
