@@ -193,8 +193,9 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
      */
     // SOW-041: the generic comment-thread reader for ANY content type; listShareComments is a thin alias.
     async listShareComments(targetSlug, limit = 100) { return this.listComments('share', targetSlug, limit); },
-    async listComments(targetType, targetSlug, limit = 100) {
+    async listComments(targetType, targetSlug, limit = 100, aliases = []) {
       if (!owner || !repo || !targetType || !targetSlug) return [];
+      const slugs = new Set([targetSlug, ...(Array.isArray(aliases) ? aliases : [])]); // SOW-112 rename aliases (parity with repo-fs)
       const t = await tree();
       if (!t || !Array.isArray(t.tree)) return [];
       const paths = t.tree
@@ -209,7 +210,7 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
         if (text == null) continue;
         const { frontmatter, body } = parseContentFile(text);
         if ((frontmatter?.status ?? 'published') !== 'published') continue; // missing status = published (schema default); only an explicit draft is skipped
-        if (frontmatter?.targetType !== targetType || frontmatter?.targetSlug !== targetSlug) continue;
+        if (frontmatter?.targetType !== targetType || !slugs.has(frontmatter?.targetSlug)) continue;
         out.push(commentSummary(rel, frontmatter, body));
       }
       out.sort(byCommentOldest);

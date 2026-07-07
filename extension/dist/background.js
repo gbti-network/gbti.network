@@ -17489,8 +17489,9 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
     async listShareComments(targetSlug, limit = 100) {
       return this.listComments("share", targetSlug, limit);
     },
-    async listComments(targetType, targetSlug, limit = 100) {
+    async listComments(targetType, targetSlug, limit = 100, aliases = []) {
       if (!owner || !repo || !targetType || !targetSlug) return [];
+      const slugs = /* @__PURE__ */ new Set([targetSlug, ...Array.isArray(aliases) ? aliases : []]);
       const t = await tree();
       if (!t || !Array.isArray(t.tree)) return [];
       const paths = t.tree.filter((e) => e && e.type === "blob" && typeof e.path === "string" && COMMENT_PATH.test(e.path)).map((e) => e.path).sort((a, b) => basename(b).localeCompare(basename(a)));
@@ -17502,7 +17503,7 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
         if (text == null) continue;
         const { frontmatter, body } = parseContentFile(text);
         if ((frontmatter?.status ?? "published") !== "published") continue;
-        if (frontmatter?.targetType !== targetType || frontmatter?.targetSlug !== targetSlug) continue;
+        if (frontmatter?.targetType !== targetType || !slugs.has(frontmatter?.targetSlug)) continue;
         out.push(commentSummary(rel, frontmatter, body));
       }
       out.sort(byCommentOldest);
