@@ -61,6 +61,7 @@ tree:
     label: Business
     children:
       finance: { label: Finance }
+      marketing: { label: Marketing }
   writing:
     label: Writing
   design:
@@ -68,8 +69,6 @@ tree:
     children:
       responsive: { label: Responsive }
       ui-ux: { label: UI/UX }
-  generators:
-    label: Generators
   member-tutorials:
     label: Member Tutorials
   skill:
