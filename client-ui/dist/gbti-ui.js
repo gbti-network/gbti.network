@@ -4786,7 +4786,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <div class="card danger" style="padding:12px 14px">
           <div class="drow">
             <button class="btn warn" id="renamekey" type="button">Rename key…</button>
-            <button class="btn warn" id="movecat" type="button">Move…</button>
+            <button class="btn warn" id="movecat" type="button">Move (with subcategories)…</button>
             <button class="btn warn" id="removecat" type="button">Remove…</button>
           </div>
           <div id="dangerui"></div>
@@ -5040,10 +5040,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const selPk = this._sel.join("/");
         return pk !== selPk && !pk.startsWith(`${selPk}/`) && pk !== this._sel.slice(0, -1).join("/");
       });
-      ui.innerHTML = `<div class="moverow"><span class="hint">Move under:</span><select id="movesel"><option value="">Top level</option>${flat.map((n) => `<option value="${esc(n.path.join("/"))}">${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}</select><button class="btn warn" id="movego" type="button">Move</button></div>`;
+      ui.innerHTML = `<div class="moverow"><span class="hint">Move this category AND everything under it beneath:</span><select id="movesel"><option value="">Top level</option>${flat.map((n) => `<option value="${esc(n.path.join("/"))}">${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(" / "))}</option>`).join("")}</select><button class="btn warn" id="movego" type="button">Move</button></div>`;
       ui.querySelector("#movego")?.addEventListener("click", () => {
         const to = ui.querySelector("#movesel")?.value || "";
-        this._migrate("move", { toParent: to ? to.split("/") : [] }, `Move "${this.labelOf(this._sel)}"${to ? ` under ${to}` : " to the top level"}? A review-gated migration PR rewrites all filed content.`);
+        this._migrate("move", { toParent: to ? to.split("/") : [] }, `Move "${this.labelOf(this._sel)}" and ALL its subcategories${to ? ` under ${to}` : " to the top level"}? One migration PR re-parents the subtree and rewrites every filed item.`);
       });
     }
     _dangerRemove() {
