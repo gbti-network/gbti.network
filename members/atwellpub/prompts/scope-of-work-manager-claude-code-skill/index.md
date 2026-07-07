@@ -24,6 +24,7 @@ type: prompt
 author: atwellpub
 redirectFrom:
   - /prompts/author-a-gbti-sow/
+  - /prompts/manage-scopes-of-work-claude-code-agent/
 ---
 
 When you are asked to author or improve a SOW (Statement of Work), do these steps IN ORDER before writing anything. SOWs are local planning documents that live in a .data/sow/ folder (kept out of version control), organized into lanes that a work item moves through: 0_queue, 1_progressing, 2_waiting_review, 3_completed, with a _staging side-lane for items parked on an external blocker. Keep one canonical markdown file per SOW.
