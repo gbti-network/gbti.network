@@ -6,6 +6,8 @@ shortDescription: >-
   commands to ship a kanban style lane management system for markdown scope of work files, as well
   as commands for quickly creating and scaling scopes of work. See description for more details.
 categories:
+  - ai
+  - prompts
   - skill
 status: published
 visibility: public

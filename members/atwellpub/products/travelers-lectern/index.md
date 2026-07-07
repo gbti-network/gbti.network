@@ -6,7 +6,7 @@ author: atwellpub
 status: published
 visibility: public
 shortDescription: "A Minecraft mod that adds lecterns with regenerating books on a configurable cooldown."
-categories: ["minecraft", "mods"]
+categories: ["entertainment", "gaming", "minecraft", "mods"]
 icon: "./images/minecraft-mod-travelers-lectern-icon-128x128-1.webp"
 publishedAt: 2025-09-27
 banner: "./images/github-product-banner-minecraft-mod-travelers-lectern.webp"

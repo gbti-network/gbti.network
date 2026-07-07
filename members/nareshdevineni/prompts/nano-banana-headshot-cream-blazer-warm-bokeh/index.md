@@ -6,7 +6,7 @@ shortDescription: "A Nano Banana prompt for a realistic professional LinkedIn he
 author: nareshdevineni
 status: published
 visibility: public
-categories: ["imagegen"]
+categories: ["ai", "prompts", "imagegen"]
 tags: ["headshot", "linkedin", "portrait", "nano-banana"]
 targets: ["Nano Banana"]
 image: "./images/result.webp"

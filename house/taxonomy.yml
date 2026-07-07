@@ -42,8 +42,11 @@ tree:
       mcp: { label: MCP }
       agents: { label: Agents }
       image-generation: { label: Image Generation }
-  imagegen:
-    label: ImageGen
+      prompts:
+        label: Prompts
+        children:
+          skill: { label: Skill }
+          imagegen: { label: ImageGen }
   blockchain:
     label: Blockchain
     children:
@@ -52,11 +55,13 @@ tree:
   entertainment:
     label: Entertainment
     children:
-      gaming: { label: Gaming }
-  minecraft:
-    label: Minecraft
-    children:
-      mods: { label: Mods }
+      gaming:
+        label: Gaming
+        children:
+          minecraft:
+            label: Minecraft
+            children:
+              mods: { label: Mods }
   business:
     label: Business
     children:
@@ -71,8 +76,6 @@ tree:
       ui-ux: { label: UI/UX }
   member-tutorials:
     label: Member Tutorials
-  skill:
-    label: Skill
   gbti:
     label: GBTI Network
     children:

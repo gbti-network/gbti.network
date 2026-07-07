@@ -6,7 +6,7 @@ author: atwellpub
 status: published
 visibility: public
 shortDescription: "A Minecraft Fabric 1.21.1 server mod that adds dynamic, auto-refilling chests on a configurable cooldown."
-categories: ["minecraft", "mods"]
+categories: ["entertainment", "gaming", "minecraft", "mods"]
 icon: "./images/minecraft-mod-travelers-chest-icon-128x128-1.webp"
 publishedAt: 2025-09-27
 banner: "./images/github-product-banner-minecraft-mod-travelers-chest.webp"
