@@ -989,6 +989,37 @@ export async function publishComment(ctx, { targetType, targetSlug, body, author
  *  stores its body in the .enc (the stub .md body is EMPTY), so decrypt it for the prefill — otherwise editing
  *  would start from a blank textarea and a save would replace the gated text (silent data loss). The signed-in
  *  author IS the owner + effective-paid, so the Worker decrypt succeeds. */
+// SOW-112 QA: a member deletes their OWN comment — an own-folder file delete whose PR auto-merges through
+// the gate. Paid-gated like publishComment (the gate is the backstop); the comment leaves the site at the
+// next deploy. Hard delete by owner intent; git history retains it (the moderation-ops caveat applies).
+export async function deleteComment(ctx, { id } = {}) {
+  const identity = requireIdentity(ctx);
+  const repo = requireRepo(ctx);
+  const cid = String(id || '').trim();
+  if (!/^[a-z0-9][a-z0-9._-]*$/i.test(cid)) throw new OperationError('bad-request', 'a comment id is required');
+  const membership = (await ctx.membership?.()) ?? 'unknown';
+  if (isBlockedFromPublishing(membership)) {
+    throw new OperationError('membership-required', 'Managing comments on the network requires a paid membership.', { membership });
+  }
+  const rel = `members/${identity.username}/comments/${cid}.md`;
+  const text = await ctx.reader?.readFile?.(rel);
+  if (text == null) throw new OperationError('not-found', `no such comment: ${cid}`);
+  const fm = parseContentFile(text).frontmatter ?? {};
+  if (String(fm.author || '').toLowerCase() !== String(identity.username).toLowerCase()) {
+    throw new OperationError('forbidden', 'you may only delete your own comments');
+  }
+  const branch = `gbti/comment-delete-${cid}`;
+  await syncForkIfCreatingBranch(ctx, repo, branch);
+  const pr = await publishFiles({
+    repo, branch,
+    files: [{ path: rel, content: null }],
+    message: `Delete comment ${cid}`,
+    title: `Delete comment: ${cid}`,
+    body: 'The author removed their own comment.',
+  });
+  return { ...pr, ok: true, id: cid, path: rel };
+}
+
 export async function getComment(ctx, { id } = {}) {
   const idn = requireIdentity(ctx);
   if (!id || typeof id !== 'string') throw new OperationError('bad-request', 'a comment id is required');

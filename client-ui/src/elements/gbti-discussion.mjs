@@ -20,6 +20,7 @@ const CSS = `
   .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; }
   .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
   .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
+  .cmeta .cbadge.cnote { color:var(--s-green-fg, #1f9e5f); border-color:var(--s-green, #1f9e5f); }
   .cmeta .chide { margin-left:auto; font:inherit; font-size:11px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:2px 8px; cursor:pointer; }
   .cmeta .chide:hover { color:#c0392b; border-color:#c0392b; }
   .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
@@ -86,7 +87,13 @@ class GbtiDiscussion extends GbtiElement {
     if (!targetType || !targetSlug) { this.set(this.css(CSS)); return; }
     if (!this.client) { this.set(this.css(CSS) + `<p class="empty">Open in the GBTI client to read the discussion.</p>`); return; }
     // SOW-071: read the viewer role once, so a moderator+ sees a per-comment Hide.
-    if (this._role == null) { try { this._role = (await this.client.status?.())?.role || 'member'; } catch { this._role = 'member'; } }
+    if (this._role == null) {
+      try {
+        const st = await this.client.status?.();
+        this._role = st?.role || 'member';
+        this._me = st?.identity?.username || null; // own comments get a Delete
+      } catch { this._role = 'member'; this._me = null; }
+    }
     if (!this._loaded) this.set(this.css(CSS) + `<p class="empty">Loading the discussion…</p>`);
     let items = [];
     try { items = (await this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }))?.items ?? []; }
@@ -98,25 +105,53 @@ class GbtiDiscussion extends GbtiElement {
 
   _render(targetType, targetSlug, rows) {
     const canMod = (RANK[this._role] ?? 0) >= RANK.moderator;
-    const thread = rows.map(({ c, html }) => {
+    const canRemove = (RANK[this._role] ?? 0) >= RANK.admin; // admin+ hard-deletes any member comment
+    // SOW-112 QA: author notes pin FIRST with a badge (mirroring the public page), never mid-thread as
+    // ordinary comments.
+    const ordered = [...rows.filter(({ c }) => c.authorNote), ...rows.filter(({ c }) => !c.authorNote)];
+    const thread = ordered.map(({ c, html }) => {
       const reply = c.parentId ? ' reply' : '';
-      const badge = c.visibility === 'members' ? `<span class="cbadge">Members</span>` : '';
+      const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : '')
+        + (c.visibility === 'members' ? `<span class="cbadge">Members</span>` : '');
       const bodyHtml = (html && html.locked)
         ? `<div class="clocked">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>`
         : (typeof html === 'string' && html) ? `<div class="cbody">${html}</div>` : '';
       // SOW-071: a moderator+ can Hide a comment (deplatform its file -> draft, so it drops from the thread). Never a
       // house-authored intro (house/comments/<id>.md is not a members/ path; the server would 403 anyway).
       const houseComment = c.author === 'gbti' || c.author === 'house';
-      const hidePath = (canMod && !houseComment && c.author && c.id) ? (c.path || `members/${c.author}/comments/${c.id}.md`) : '';
-      const hideBtn = hidePath ? `<button class="chide" type="button" data-hidec="${esc(hidePath)}">Hide</button>` : '';
+      const modPath = (!houseComment && c.author && c.id) ? (c.path || `members/${c.author}/comments/${c.id}.md`) : '';
+      const hideBtn = canMod && modPath ? `<button class="chide" type="button" data-hidec="${esc(modPath)}">Hide</button>` : '';
+      // Admin+ hard-delete (the existing admin 'remove' rail); a member deletes their OWN comment (a real
+      // canonical file only — an in-flight echo has no path and reaps on its own).
+      const own = this._me && c.author === this._me && c.path && c.id && !c.authorNote;
+      const delBtn = canRemove && modPath ? `<button class="chide" type="button" data-delc="${esc(modPath)}">Delete</button>`
+        : own ? `<button class="chide" type="button" data-delown="${esc(c.id)}">Delete</button>` : '';
       return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
-        <div class="cmeta"><span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}${hideBtn}</div>
+        <div class="cmeta"><span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}${hideBtn}${delBtn}</div>
         ${bodyHtml}
       </div></div>`;
     }).join('');
     const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
     this.set(this.css(CSS) + threadHtml + this._composeHtml(targetType, targetSlug));
     this.$$('[data-hidec]').forEach((b) => b.addEventListener('click', () => this._hideComment(b.dataset.hidec)));
+    this.$$('[data-delc]').forEach((b) => b.addEventListener('click', () => this._deleteComment(b.dataset.delc)));
+    this.$$('[data-delown]').forEach((b) => b.addEventListener('click', () => this._deleteOwnComment(b.dataset.delown)));
+  }
+
+  // SOW-112 QA: admin+ hard-deletes any member comment (the existing admin 'remove' rail: a real file delete
+  // whose PR auto-merges for a superadmin and falls to the review lane for a plain admin).
+  async _deleteComment(path) {
+    if (typeof confirm === 'function' && !confirm('Delete this comment? The file is removed from the network (it remains in git history).')) return;
+    try { await this.client.admin('remove', { path }); this.load(); }
+    catch { /* fail-soft: the server is the authority */ }
+  }
+
+  // SOW-112 QA: a member deletes their OWN comment (own-folder delete PR; auto-merges; off the site at the
+  // next deploy).
+  async _deleteOwnComment(id) {
+    if (typeof confirm === 'function' && !confirm('Delete your comment? It leaves the site at the next deploy (a few minutes).')) return;
+    try { await this.client.deleteComment?.({ id }); this.load(); }
+    catch { /* fail-soft */ }
   }
 
   // SOW-071: hide a comment (moderator+): deplatform its file -> draft, then reload the thread.

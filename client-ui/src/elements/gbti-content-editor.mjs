@@ -152,6 +152,18 @@ class GbtiContentEditor extends GbtiElement {
   }
 
   /** Seed the editor from an existing item (used by the inline editor + "edit" from My Content). */
+  // SOW-112: the item's pre-rename slugs, derived from canonical-URL-shaped redirectFrom entries. An inline
+  // copy of aliasSlugsOf (canonical: src/lib/content-index.mjs); client-ui does not import src/lib.
+  aliasSlugs() {
+    const list = Array.isArray(this.preset?.input?.redirectFrom) ? this.preset.input.redirectFrom : [];
+    const out = [];
+    for (const e of list) {
+      const m = /^\/(articles|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || '').trim());
+      if (m && m[2] !== this.preset?.input?.slug && !out.includes(m[2])) out.push(m[2]);
+    }
+    return out;
+  }
+
   load(type, input, body, path, { staged = false } = {}) {
     this.type = type || this.type;
     this.preset = { input: input || {}, body: body || '' };
@@ -254,14 +266,20 @@ class GbtiContentEditor extends GbtiElement {
     const discussionSection = (isPub && slug && ['post', 'product', 'prompt'].includes(this.type)) ? `
              <section class="docsec" id="secDiscussion">
                <div class="docsec-h">${USERS} Discussion <span class="dsub">public and members-only comments</span></div>
-               <gbti-discussion data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion>
+               <gbti-discussion data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"${this.aliasSlugs().length ? ` data-gbti-target-aliases="${esc(this.aliasSlugs().join(','))}"` : ''}></gbti-discussion>
              </section>` : '';
     const docSections = videoSection + authorSection + discussionSection;
     // SOW-062 P6 rail-2: the stat tiles footer, shown for a published post/product/prompt (in the rail).
     const showStats = isPub && slug && ['post', 'product', 'prompt'].includes(this.type);
     const railFootHtml = showStats ? `
              <div class="rail-foot">
-               <div class="rail-stats">${STAT_DEFS.map((s) => `<div class="rstat"><span class="rs-n" data-statn="${s.key}">${s.key === 'discussions' ? '…' : '—'}</span><span class="rs-l">${esc(s.label)}</span></div>`).join('')}</div>
+               <div class="rail-stats">${STAT_DEFS.map((s) => {
+                 const inner = `<span class="rs-n" data-statn="${s.key}">${s.key === 'discussions' ? '…' : '—'}</span><span class="rs-l">${esc(s.label)}</span>`;
+                 // SOW-112 QA: the Discussions tile links to the discussion section below the content.
+                 return s.key === 'discussions' && discussionSection
+                   ? `<button class="rstat rstat-link" id="statdiscuss" type="button" title="Jump to the discussion">${inner}</button>`
+                   : `<div class="rstat">${inner}</div>`;
+               }).join('')}</div>
                <p class="rail-foot-note">Live once published. Revisions, contributions, and referrals arrive with the stats backend.</p>
              </div>` : '';
     this.set(
@@ -452,6 +470,8 @@ class GbtiContentEditor extends GbtiElement {
         .an-text { flex:1; min-width:0; font:inherit; font-size:14px; line-height:1.55; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:9px; padding:11px 13px; outline:none; resize:vertical; min-height:70px; box-sizing:border-box; }
         .an-text:focus { border-color:var(--s-green); background:var(--s-surface); }
         #secDiscussion gbti-discussion { display:block; margin-top:2px; }
+        button.rstat-link { font:inherit; background:none; border:none; padding:0; cursor:pointer; text-align:inherit; }
+        button.rstat-link:hover .rs-n, button.rstat-link:hover .rs-l { color:var(--s-green-fg); }
       `) +
         `${this.staged
           ? `<div class="pubinfo warn" id="pubbanner">${INFO}<span>This staged draft is ahead of the live edge — your changes are not published yet. <b>Publish</b> to make them live.</span></div>`
@@ -521,6 +541,7 @@ class GbtiContentEditor extends GbtiElement {
     if (!this._escWired) { this._escWired = true; document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.$('#mdrefmodal')?.classList.remove('show'); }); }
     if (this.itemPath) this.on('#copyid', 'click', () => this.copyContentId());
     this._wirePermalinkField(); // SOW-112: the Details-rail permalink editor
+    this.on('#statdiscuss', 'click', () => this.$('#secDiscussion')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     this.on('#viewpub', 'click', () => { const u = this.publicUrl(); if (u) window.open(u, '_blank', 'noopener'); });
     this.$$('#docview [data-view]').forEach((b) => b.addEventListener('click', () => this.setDocView(b.dataset.view))); // SOW-062 P6: Visual/Markdown
     this.on('#draft', 'click', () => this.doDraft());
@@ -554,8 +575,12 @@ class GbtiContentEditor extends GbtiElement {
     // client.itemStats() once a later backend phase provides it (until then they stay a pending dash).
     if (showStats) {
       const setStat = (key, n) => { const el = this.$(`[data-statn="${key}"]`); if (el && n != null) el.textContent = String(n); };
-      this.client?.listComments?.({ targetType: this.type, targetSlug: slug })
-        .then((res) => setStat('discussions', (res?.items || []).length)).catch(() => setStat('discussions', 0));
+      // Parity with the PUBLIC thread count: union the rename aliases, exclude author notes (pinned, not
+      // replies) and legacy members rows with no encrypted body (the page excludes them too). A just-posted
+      // comment still counts here before the deploy (the live echo) — deliberately ahead of the public page.
+      this.client?.listComments?.({ targetType: this.type, targetSlug: slug, aliases: this.aliasSlugs() })
+        .then((res) => setStat('discussions', (res?.items || []).filter((c) => !c.authorNote && (c.visibility !== 'members' || c.encryptedBody)).length))
+        .catch(() => setStat('discussions', 0));
       this.client?.itemStats?.({ type: this.type, slug, path: this.itemPath })
         .then((st) => { if (st) STAT_DEFS.forEach((s) => setStat(s.key, st[s.key])); }).catch(() => {});
     }

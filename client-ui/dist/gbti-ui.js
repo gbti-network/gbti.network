@@ -1406,6 +1406,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; }
   .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
   .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
+  .cmeta .cbadge.cnote { color:var(--s-green-fg, #1f9e5f); border-color:var(--s-green, #1f9e5f); }
   .cmeta .chide { margin-left:auto; font:inherit; font-size:11px; font-weight:700; color:var(--muted); background:transparent; border:1px solid var(--line); border-radius:6px; padding:2px 8px; cursor:pointer; }
   .cmeta .chide:hover { color:#c0392b; border-color:#c0392b; }
   .cbody { margin-top:3px; font-size:13.5px; line-height:1.5; }
@@ -1485,9 +1486,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (this._role == null) {
         try {
-          this._role = (await this.client.status?.())?.role || "member";
+          const st = await this.client.status?.();
+          this._role = st?.role || "member";
+          this._me = st?.identity?.username || null;
         } catch {
           this._role = "member";
+          this._me = null;
         }
       }
       if (!this._loaded) this.set(this.css(CSS3) + `<p class="empty">Loading the discussion…</p>`);
@@ -1504,21 +1508,47 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _render(targetType, targetSlug, rows) {
       const canMod = (RANK[this._role] ?? 0) >= RANK.moderator;
-      const thread = rows.map(({ c, html }) => {
+      const canRemove = (RANK[this._role] ?? 0) >= RANK.admin;
+      const ordered = [...rows.filter(({ c }) => c.authorNote), ...rows.filter(({ c }) => !c.authorNote)];
+      const thread = ordered.map(({ c, html }) => {
         const reply = c.parentId ? " reply" : "";
-        const badge = c.visibility === "members" ? `<span class="cbadge">Members</span>` : "";
+        const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : "") + (c.visibility === "members" ? `<span class="cbadge">Members</span>` : "");
         const bodyHtml = html && html.locked ? `<div class="clocked">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>` : typeof html === "string" && html ? `<div class="cbody">${html}</div>` : "";
         const houseComment = c.author === "gbti" || c.author === "house";
-        const hidePath = canMod && !houseComment && c.author && c.id ? c.path || `members/${c.author}/comments/${c.id}.md` : "";
-        const hideBtn = hidePath ? `<button class="chide" type="button" data-hidec="${esc(hidePath)}">Hide</button>` : "";
+        const modPath = !houseComment && c.author && c.id ? c.path || `members/${c.author}/comments/${c.id}.md` : "";
+        const hideBtn = canMod && modPath ? `<button class="chide" type="button" data-hidec="${esc(modPath)}">Hide</button>` : "";
+        const own = this._me && c.author === this._me && c.path && c.id && !c.authorNote;
+        const delBtn = canRemove && modPath ? `<button class="chide" type="button" data-delc="${esc(modPath)}">Delete</button>` : own ? `<button class="chide" type="button" data-delown="${esc(c.id)}">Delete</button>` : "";
         return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
-        <div class="cmeta"><span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}${hideBtn}</div>
+        <div class="cmeta"><span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}${hideBtn}${delBtn}</div>
         ${bodyHtml}
       </div></div>`;
       }).join("");
       const threadHtml = rows.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
       this.set(this.css(CSS3) + threadHtml + this._composeHtml(targetType, targetSlug));
       this.$$("[data-hidec]").forEach((b) => b.addEventListener("click", () => this._hideComment(b.dataset.hidec)));
+      this.$$("[data-delc]").forEach((b) => b.addEventListener("click", () => this._deleteComment(b.dataset.delc)));
+      this.$$("[data-delown]").forEach((b) => b.addEventListener("click", () => this._deleteOwnComment(b.dataset.delown)));
+    }
+    // SOW-112 QA: admin+ hard-deletes any member comment (the existing admin 'remove' rail: a real file delete
+    // whose PR auto-merges for a superadmin and falls to the review lane for a plain admin).
+    async _deleteComment(path) {
+      if (typeof confirm === "function" && !confirm("Delete this comment? The file is removed from the network (it remains in git history).")) return;
+      try {
+        await this.client.admin("remove", { path });
+        this.load();
+      } catch {
+      }
+    }
+    // SOW-112 QA: a member deletes their OWN comment (own-folder delete PR; auto-merges; off the site at the
+    // next deploy).
+    async _deleteOwnComment(id) {
+      if (typeof confirm === "function" && !confirm("Delete your comment? It leaves the site at the next deploy (a few minutes).")) return;
+      try {
+        await this.client.deleteComment?.({ id });
+        this.load();
+      } catch {
+      }
     }
     // SOW-071: hide a comment (moderator+): deplatform its file -> draft, then reload the thread.
     async _hideComment(path) {
@@ -1713,6 +1743,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.preset = null;
     }
     /** Seed the editor from an existing item (used by the inline editor + "edit" from My Content). */
+    // SOW-112: the item's pre-rename slugs, derived from canonical-URL-shaped redirectFrom entries. An inline
+    // copy of aliasSlugsOf (canonical: src/lib/content-index.mjs); client-ui does not import src/lib.
+    aliasSlugs() {
+      const list = Array.isArray(this.preset?.input?.redirectFrom) ? this.preset.input.redirectFrom : [];
+      const out = [];
+      for (const e of list) {
+        const m = /^\/(articles|products|prompts)\/([a-z0-9][a-z0-9-]*)\/$/.exec(String(e || "").trim());
+        if (m && m[2] !== this.preset?.input?.slug && !out.includes(m[2])) out.push(m[2]);
+      }
+      return out;
+    }
     load(type, input, body, path, { staged = false } = {}) {
       this.type = type || this.type;
       this.preset = { input: input || {}, body: body || "" };
@@ -1802,13 +1843,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const discussionSection = isPub && slug && ["post", "product", "prompt"].includes(this.type) ? `
              <section class="docsec" id="secDiscussion">
                <div class="docsec-h">${USERS} Discussion <span class="dsub">public and members-only comments</span></div>
-               <gbti-discussion data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"></gbti-discussion>
+               <gbti-discussion data-gbti-target-type="${esc(this.type)}" data-gbti-target-slug="${esc(slug)}"${this.aliasSlugs().length ? ` data-gbti-target-aliases="${esc(this.aliasSlugs().join(","))}"` : ""}></gbti-discussion>
              </section>` : "";
       const docSections = videoSection + authorSection + discussionSection;
       const showStats = isPub && slug && ["post", "product", "prompt"].includes(this.type);
       const railFootHtml = showStats ? `
              <div class="rail-foot">
-               <div class="rail-stats">${STAT_DEFS.map((s) => `<div class="rstat"><span class="rs-n" data-statn="${s.key}">${s.key === "discussions" ? "…" : "—"}</span><span class="rs-l">${esc(s.label)}</span></div>`).join("")}</div>
+               <div class="rail-stats">${STAT_DEFS.map((s) => {
+        const inner = `<span class="rs-n" data-statn="${s.key}">${s.key === "discussions" ? "…" : "—"}</span><span class="rs-l">${esc(s.label)}</span>`;
+        return s.key === "discussions" && discussionSection ? `<button class="rstat rstat-link" id="statdiscuss" type="button" title="Jump to the discussion">${inner}</button>` : `<div class="rstat">${inner}</div>`;
+      }).join("")}</div>
                <p class="rail-foot-note">Live once published. Revisions, contributions, and referrals arrive with the stats backend.</p>
              </div>` : "";
       this.set(
@@ -1999,6 +2043,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         .an-text { flex:1; min-width:0; font:inherit; font-size:14px; line-height:1.55; color:var(--s-fg); background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:9px; padding:11px 13px; outline:none; resize:vertical; min-height:70px; box-sizing:border-box; }
         .an-text:focus { border-color:var(--s-green); background:var(--s-surface); }
         #secDiscussion gbti-discussion { display:block; margin-top:2px; }
+        button.rstat-link { font:inherit; background:none; border:none; padding:0; cursor:pointer; text-align:inherit; }
+        button.rstat-link:hover .rs-n, button.rstat-link:hover .rs-l { color:var(--s-green-fg); }
       `) + `${this.staged ? `<div class="pubinfo warn" id="pubbanner">${INFO}<span>This staged draft is ahead of the live edge — your changes are not published yet. <b>Publish</b> to make them live.</span></div>` : `<div class="pubinfo" id="pubbanner" hidden></div>`}
          <div class="edhead">
            <span class="etype">${esc(this.type)}</span>
@@ -2064,6 +2110,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (this.itemPath) this.on("#copyid", "click", () => this.copyContentId());
       this._wirePermalinkField();
+      this.on("#statdiscuss", "click", () => this.$("#secDiscussion")?.scrollIntoView({ behavior: "smooth", block: "start" }));
       this.on("#viewpub", "click", () => {
         const u = this.publicUrl();
         if (u) window.open(u, "_blank", "noopener");
@@ -2097,7 +2144,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           const el = this.$(`[data-statn="${key}"]`);
           if (el && n != null) el.textContent = String(n);
         };
-        this.client?.listComments?.({ targetType: this.type, targetSlug: slug }).then((res) => setStat("discussions", (res?.items || []).length)).catch(() => setStat("discussions", 0));
+        this.client?.listComments?.({ targetType: this.type, targetSlug: slug, aliases: this.aliasSlugs() }).then((res) => setStat("discussions", (res?.items || []).filter((c) => !c.authorNote && (c.visibility !== "members" || c.encryptedBody)).length)).catch(() => setStat("discussions", 0));
         this.client?.itemStats?.({ type: this.type, slug, path: this.itemPath }).then((st) => {
           if (st) STAT_DEFS.forEach((s) => setStat(s.key, st[s.key]));
         }).catch(() => {
@@ -12048,6 +12095,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-106: member self-unpublish/republish -> { ok, prNumber?, noop? }
       renameContent: ({ path, newSlug }) => request("POST", "/api/content/rename", { path, newSlug }),
       // SOW-112: permalink rename -> { ok, prNumber?, path, slug }
+      deleteComment: ({ id }) => request("POST", "/api/comment/delete", { id }),
+      // SOW-112 QA: delete one's own comment -> { ok, prNumber? }
       postComment: (b) => request("POST", "/api/comment", b),
       // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
       editComment: (b) => request("POST", "/api/comment/edit", b),
