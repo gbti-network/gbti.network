@@ -20,6 +20,20 @@ export async function getRosterStatuses({ token, signupBase, fetch = globalThis.
   return data?.statuses ?? {};
 }
 
+/** SOW-100: the guild's Discord channels (id, name, type, parentId) for the categories workspace.
+ *  Admin-only (the Worker enforces it; KV-cached an hour server-side). */
+export async function getDiscordChannels({ token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/discord-channels', {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `discord channels request failed (${res.status})`);
+  return data?.channels ?? [];
+}
+
 /** SOW-038 P3: trigger an allow-listed superadmin operation (reconcile / e2e) via the Worker's
  *  POST /membership/admin/ops. Admin-only (the Worker re-checks + holds the dispatch token). Returns
  *  { ok, triggered } or throws AdminClientError. */

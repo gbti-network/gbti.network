@@ -52,7 +52,8 @@ import { verifyStripeSignature, isDuplicateEvent, markEventSeen, handleStripeEve
 import { membershipStatus } from './membership-status.mjs';
 import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { membershipAdminStatuses } from './membership-admin.mjs';
-import { membershipAdminOps } from './membership-admin-ops.mjs'; // SOW-038 P3: admin-gated reconcile/E2E dispatch
+import { membershipAdminOps } from './membership-admin-ops.mjs';
+import { membershipDiscordChannels } from './membership-discord-channels.mjs'; // SOW-100: channel names for the categories workspace
 import { handleActivity } from './membership-activity.mjs';
 import { handleTouch, SESSION_RE } from './membership-touches.mjs'; // SOW-059 P1b/P1c: touch capture + session binding
 import { freezeAndPersist } from './conversion-snapshot-store.mjs'; // SOW-059 P1c-B: freeze the attribution at conversion
@@ -596,6 +597,15 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'GET') {
           const r = await membershipAdminStatuses(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-100: the guild's channel names (admin-gated, KV-cached) for the categories workspace picker.
+      if (pathname === '/membership/discord-channels') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = await membershipDiscordChannels(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

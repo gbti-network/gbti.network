@@ -4502,6 +4502,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .pick { position:relative; flex:1; min-width:200px; }
   .pickbtn { width:100%; display:flex; align-items:center; gap:8px; font-family:var(--font-mono, monospace); font-size:13px; padding:11px 12px; border:1.5px solid var(--blur-line); border-radius:var(--r7); background:var(--panel); color:var(--fg); text-align:left; }
   .pickbtn .hash { color:var(--blur-fg); font-weight:800; }
+  .pickbtn .chid { font-size:10.5px; color:var(--muted); margin-left:6px; }
   .dmenu { position:absolute; left:0; right:0; top:calc(100% + 5px); z-index:8; background:var(--panel); border:1.5px solid var(--line); border-radius:var(--r7); box-shadow:0 12px 30px rgba(0,0,0,.25); padding:5px; max-height:260px; overflow:auto; }
   .dopt { display:flex; align-items:center; gap:8px; width:100%; text-align:left; font-family:var(--font-mono, monospace); font-size:12.5px; background:none; border:0; border-radius:var(--r7); padding:8px 9px; color:var(--fg); }
   .dopt:hover { background:var(--hover); }
@@ -4603,6 +4604,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._tree = {};
         this._pool = [];
       }
+      try {
+        const r = await this.client.discordChannels?.();
+        this._chNames = new Map((r?.channels || []).map((c) => [String(c.id), c]));
+      } catch {
+        this._chNames = /* @__PURE__ */ new Map();
+      }
       const items = {};
       await Promise.all(Object.entries(INDEXES).map(async ([type, file]) => {
         try {
@@ -4633,6 +4640,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     countOf(path) {
       return this._counts?.get(path.join("/"))?.total ?? 0;
+    }
+    chName(id) {
+      const c = this._chNames?.get(String(id));
+      if (!c) return null;
+      const parent = c.parentId ? this._chNames.get(String(c.parentId)) : null;
+      return { name: c.name, section: parent?.name || null };
     }
     statusOf(path) {
       return channelStatusFor(path[path.length - 1], this._pool || [], [...this._pending.values()]);
@@ -4778,7 +4791,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const pool = this._pool || [];
       const options = [...new Map(pool.map((r) => [String(r.channelId), r])).values()];
       const menu = this._pickerOpen ? `<div class="dmenu">
-        ${options.map((r) => `<button class="dopt" type="button" data-pickch="${esc(String(r.channelId))}"><span class="hash">#</span>${esc(String(r.channelId))}<span class="used">${esc(r.category)}${String(r.channelId) === String(effective ?? "") ? " · current" : ""}</span></button>`).join("")}
+        ${options.map((r) => {
+        const n = this.chName(r.channelId);
+        const label = n ? `${esc(n.name)}${n.section ? ` <span class="used">${esc(n.section)}</span>` : ""}` : esc(String(r.channelId));
+        return `<button class="dopt" type="button" data-pickch="${esc(String(r.channelId))}"><span class="hash">#</span>${label}<span class="used">${esc(r.category)}${String(r.channelId) === String(effective ?? "") ? " · current" : ""}</span></button>`;
+      }).join("")}
         ${effective ? `<button class="dopt unlink" type="button" data-unlink="1">Unlink channel</button>` : ""}
       </div>` : "";
       return `
@@ -4786,7 +4803,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="dcard">
         <div class="row1"><span class="sav">G</span><div><b>GBTI Network</b><div class="st">${esc(status)}</div></div></div>
         <div class="pickrow">
-          <div class="pick"><button class="pickbtn" id="pickbtn" type="button" aria-expanded="${this._pickerOpen}"><span class="hash">#</span>${effective ? esc(String(effective)) : '<span class="muted">choose a channel…</span>'}</button>${menu}</div>
+          <div class="pick"><button class="pickbtn" id="pickbtn" type="button" aria-expanded="${this._pickerOpen}"><span class="hash">#</span>${effective ? (() => {
+        const n = this.chName(effective);
+        return n ? `${esc(n.name)} <span class="chid">${esc(String(effective))}</span>` : esc(String(effective));
+      })() : '<span class="muted">choose a channel…</span>'}</button>${menu}</div>
         </div>
         <div class="manrow"><input id="manch" placeholder="or paste a channel id (numbers only)" inputmode="numeric" /><button class="btn soft" id="manset" type="button">Set</button></div>
         <div class="dnote">Routing is fixed dual-post: a published item announces in its type's featured channel AND this mapped category channel (SOW-087). Per-category routing toggles are a follow-up.</div>
@@ -12802,6 +12822,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-112: permalink rename -> { ok, prNumber?, path, slug }
       deleteComment: ({ id }) => request("POST", "/api/comment/delete", { id }),
       // SOW-112 QA: delete one's own comment -> { ok, prNumber? }
+      discordChannels: () => request("GET", "/api/discord-channels"),
+      // SOW-100: [{id, name, type, parentId}] (admin)
       postComment: (b) => request("POST", "/api/comment", b),
       // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
       editComment: (b) => request("POST", "/api/comment/edit", b),

@@ -35,7 +35,7 @@ import yaml from 'js-yaml';
 import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication } from './member-admin-client.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
 
@@ -1432,6 +1432,13 @@ export async function getOpenPulls(ctx) {
 // SOW-038 P3: trigger an allow-listed superadmin OPERATION (reconcile / e2e) via the Worker's dispatch endpoint.
 // Admin-gated locally (UX, fail-closed) AND by the Worker (the authority + the dispatch token). Returns
 // { ok, triggered } or throws OperationError.
+// SOW-100: the guild's Discord channel names, for the categories workspace (Worker admin-gated + cached).
+export async function listDiscordChannels(ctx) {
+  const token = ctx.store?.get?.('githubToken');
+  const channels = await workerGetDiscordChannels({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  return { channels };
+}
+
 export async function triggerAdminOp(ctx, { action, params } = {}) {
   await requireAdmin(ctx);
   const token = ctx.store?.get?.('githubToken');

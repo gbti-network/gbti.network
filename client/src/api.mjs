@@ -44,7 +44,7 @@ import {
   getPrefs,
   setPrefs,
   publishNews,
-  reflectNewsDiscussion, recordNewsOpen, setOwnContentStatus, renameContent, deleteComment,
+  reflectNewsDiscussion, recordNewsOpen, setOwnContentStatus, renameContent, deleteComment, listDiscordChannels,
   getOnboardingStatus,
   getOverridesRoster,
   getOpenPulls,
@@ -180,6 +180,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/taxonomy') return run(() => getTaxonomy(ctx)); // SOW-055: the canonical category tree for the manager UI
   if (method === 'GET' && pathname === '/api/news-source-pool') return run(() => getNewsSourcePool(ctx)); // SOW-056/079: news-source pool (npm parity with the extension)
   if (method === 'GET' && pathname === '/api/quote-pool') return run(() => getQuotePool(ctx)); // SOW-063/079: splash quote pool (npm parity with the extension)
+  if (method === 'GET' && pathname === '/api/discord-channels') return run(() => listDiscordChannels(ctx)); // SOW-100: channel names
   if (method === 'GET' && pathname === '/api/content-channel-pool') return run(() => getContentChannelPool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/moderation-flag-pool') return run(() => getModerationFlagPool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/syndication-template-pool') return run(() => getSyndicationTemplatePool(ctx)); // SOW-087

@@ -86,6 +86,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     setContentStatus: ({ path, status }) => request('POST', '/api/content/status', { path, status }), // SOW-106: member self-unpublish/republish -> { ok, prNumber?, noop? }
     renameContent: ({ path, newSlug }) => request('POST', '/api/content/rename', { path, newSlug }), // SOW-112: permalink rename -> { ok, prNumber?, path, slug }
     deleteComment: ({ id }) => request('POST', '/api/comment/delete', { id }), // SOW-112 QA: delete one's own comment -> { ok, prNumber? }
+    discordChannels: () => request('GET', '/api/discord-channels'), // SOW-100: [{id, name, type, parentId}] (admin)
     postComment: (b) => request('POST', '/api/comment', b), // SOW-027: { targetType, targetSlug, body, authorNote?, parentId?, visibility? } -> { id, path }
     editComment: (b) => request('POST', '/api/comment/edit', b), // SOW-027: { id, body, authorNote? } -> { id, edited }
     getComment: ({ id }) => request('GET', `/api/comment${qs({ id })}`), // SOW-027: edit prefill -> { path, frontmatter, body }
