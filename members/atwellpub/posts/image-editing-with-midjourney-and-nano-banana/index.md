@@ -1,16 +1,21 @@
 ---
 type: post
-title: "Tutorial: Image Editing with MidJourney and Nano-Banana"
+title: 'Tutorial: Image Editing with MidJourney and Nano-Banana'
 slug: image-editing-with-midjourney-and-nano-banana
 author: atwellpub
 status: published
 visibility: public
-publishedAt: 2025-10-19
-updatedAt: 2025-10-20
-excerpt: "In this article we explore how to use MidJourney and Nano-Banana in combination to produce production ready images."
-categories: ["member-tutorials"]
-coverImage: "./images/nice-weather-for-ducks.webp"
-redirectFrom: ["/member-tutorials/image-editing-with-midjourney-and-nano-banana/"]
+publishedAt: 2025-10-19T00:00:00.000Z
+updatedAt: 2025-10-20T00:00:00.000Z
+excerpt: >-
+  In this article we explore how to use MidJourney and Nano-Banana in combination to produce
+  production ready images.
+categories:
+  - gbti
+  - member-tutorials
+coverImage: ./images/nice-weather-for-ducks.webp
+redirectFrom:
+  - /member-tutorials/image-editing-with-midjourney-and-nano-banana/
 ---
 
 Since 2022, _[MidJourney](https://www.midjourney.com/)_ has remained one of the world’s greatest _AI image generators_, helping users to produce captivating images and compositions through text prompts.
