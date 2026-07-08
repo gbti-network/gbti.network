@@ -5,6 +5,7 @@
 // renders oldest-first, and mounts an inert <gbti-comment-box> for paid members to reply. Reloads only itself
 // when a comment for its target is posted/edited. The token never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { wbCacheGet, wbCacheSet } from '../workbench-cache.mjs'; // SOW-089: SWR for the thread
 import './gbti-comment-box.mjs';
 import { RANK } from '../mod-actions-core.mjs'; // SOW-071: the moderator+ gate for per-comment Hide
 
@@ -107,11 +108,29 @@ class GbtiDiscussion extends GbtiElement {
     }
     if (!this._loaded) this.set(this.css(CSS) + `<p class="empty">Loading the discussion…</p>`);
     let items = [];
-    try { items = (await this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }))?.items ?? []; }
-    catch { this.set(this.css(CSS) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug)); return; }
+    // SOW-089 SWR: paint the cached thread instantly, then revalidate live and re-render on change.
+    const cacheKey = `comments-${targetType}`;
+    if (!this._painted) {
+      const cached = await wbCacheGet(targetSlug, cacheKey).catch(() => null);
+      if (cached?.items?.length && !this._loaded) {
+        this._painted = true;
+        this._resolveAndRender(targetType, targetSlug, cached.items).catch(() => {});
+      }
+    }
+    try { items = (await this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }))?.items ?? []; wbCacheSet(targetSlug, cacheKey, items).catch(() => {}); }
+    catch {
+      if (!this._painted) this.set(this.css(CSS) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
+      return; // the cached paint (if any) stays up when live fails
+    }
+    await this._resolveAndRender(targetType, targetSlug, items);
+    this._loaded = true;
+  }
+
+  // SOW-089: resolve every body (decrypt members rows via the Worker) and render — shared by the SWR cached
+  // paint and the live pass.
+  async _resolveAndRender(targetType, targetSlug, items) {
     const resolved = await Promise.all(items.map((c) => this._resolveBody(c).then((html) => ({ c, html }))));
     this._render(targetType, targetSlug, resolved);
-    this._loaded = true;
   }
 
   _render(targetType, targetSlug, rows) {

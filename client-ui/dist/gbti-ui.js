@@ -1219,6 +1219,73 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
   }
 
+  // client-ui/src/workbench-cache.mjs
+  var WB_CACHE_PREFIX = "gbti:wb";
+  var WB_DEFAULT_TTL_MS = 10 * 60 * 1e3;
+  var mem = /* @__PURE__ */ new Map();
+  function store() {
+    try {
+      const s = globalThis.chrome?.storage?.local;
+      return s && typeof s.get === "function" && typeof s.set === "function" ? s : null;
+    } catch {
+      return null;
+    }
+  }
+  function wbKey(memberKey, type) {
+    return `${WB_CACHE_PREFIX}:${memberKey}:${type}`;
+  }
+  async function rawGet(key) {
+    const s = store();
+    if (s) {
+      try {
+        const r = await s.get(key);
+        return r?.[key] ?? null;
+      } catch {
+        return null;
+      }
+    }
+    return mem.has(key) ? mem.get(key) : null;
+  }
+  async function rawSet(key, value) {
+    const s = store();
+    if (s) {
+      try {
+        await s.set({ [key]: value });
+      } catch {
+      }
+      return;
+    }
+    mem.set(key, value);
+  }
+  async function rawDel(keys) {
+    const list = Array.isArray(keys) ? keys : [keys];
+    const s = store();
+    if (s) {
+      try {
+        await s.remove(list);
+      } catch {
+      }
+      return;
+    }
+    for (const k of list) mem.delete(k);
+  }
+  async function wbCacheGet(memberKey, type, { ttl = WB_DEFAULT_TTL_MS, now = Date.now } = {}) {
+    if (!memberKey || !type) return null;
+    const v = await rawGet(wbKey(memberKey, type));
+    if (!v || !Array.isArray(v.items)) return null;
+    const at = Number(v.at) || 0;
+    return { items: v.items, at, fresh: now() - at < ttl };
+  }
+  async function wbCacheSet(memberKey, type, items, { now = Date.now, allowEmpty = false } = {}) {
+    if (!memberKey || !type || !Array.isArray(items)) return;
+    if (!items.length && !allowEmpty) return;
+    await rawSet(wbKey(memberKey, type), { at: now(), items });
+  }
+  async function wbCacheInvalidateMany(memberKey, types2 = []) {
+    if (!memberKey || !Array.isArray(types2) || !types2.length) return;
+    await rawDel(types2.map((t) => wbKey(memberKey, t)));
+  }
+
   // client-ui/src/elements/gbti-comment-box.mjs
   var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var CSS2 = `
@@ -1507,15 +1574,31 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (!this._loaded) this.set(this.css(CSS3) + `<p class="empty">Loading the discussion…</p>`);
       let items = [];
+      const cacheKey = `comments-${targetType}`;
+      if (!this._painted) {
+        const cached = await wbCacheGet(targetSlug, cacheKey).catch(() => null);
+        if (cached?.items?.length && !this._loaded) {
+          this._painted = true;
+          this._resolveAndRender(targetType, targetSlug, cached.items).catch(() => {
+          });
+        }
+      }
       try {
         items = (await this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }))?.items ?? [];
+        wbCacheSet(targetSlug, cacheKey, items).catch(() => {
+        });
       } catch {
-        this.set(this.css(CSS3) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
+        if (!this._painted) this.set(this.css(CSS3) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
         return;
       }
+      await this._resolveAndRender(targetType, targetSlug, items);
+      this._loaded = true;
+    }
+    // SOW-089: resolve every body (decrypt members rows via the Worker) and render — shared by the SWR cached
+    // paint and the live pass.
+    async _resolveAndRender(targetType, targetSlug, items) {
       const resolved = await Promise.all(items.map((c) => this._resolveBody(c).then((html) => ({ c, html }))));
       this._render(targetType, targetSlug, resolved);
-      this._loaded = true;
     }
     _render(targetType, targetSlug, rows) {
       this._last = { targetType, targetSlug, rows };
@@ -10495,73 +10578,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   define("gbti-welcome", GbtiWelcome);
-
-  // client-ui/src/workbench-cache.mjs
-  var WB_CACHE_PREFIX = "gbti:wb";
-  var WB_DEFAULT_TTL_MS = 10 * 60 * 1e3;
-  var mem = /* @__PURE__ */ new Map();
-  function store() {
-    try {
-      const s = globalThis.chrome?.storage?.local;
-      return s && typeof s.get === "function" && typeof s.set === "function" ? s : null;
-    } catch {
-      return null;
-    }
-  }
-  function wbKey(memberKey, type) {
-    return `${WB_CACHE_PREFIX}:${memberKey}:${type}`;
-  }
-  async function rawGet(key) {
-    const s = store();
-    if (s) {
-      try {
-        const r = await s.get(key);
-        return r?.[key] ?? null;
-      } catch {
-        return null;
-      }
-    }
-    return mem.has(key) ? mem.get(key) : null;
-  }
-  async function rawSet(key, value) {
-    const s = store();
-    if (s) {
-      try {
-        await s.set({ [key]: value });
-      } catch {
-      }
-      return;
-    }
-    mem.set(key, value);
-  }
-  async function rawDel(keys) {
-    const list = Array.isArray(keys) ? keys : [keys];
-    const s = store();
-    if (s) {
-      try {
-        await s.remove(list);
-      } catch {
-      }
-      return;
-    }
-    for (const k of list) mem.delete(k);
-  }
-  async function wbCacheGet(memberKey, type, { ttl = WB_DEFAULT_TTL_MS, now = Date.now } = {}) {
-    if (!memberKey || !type) return null;
-    const v = await rawGet(wbKey(memberKey, type));
-    if (!v || !Array.isArray(v.items)) return null;
-    const at = Number(v.at) || 0;
-    return { items: v.items, at, fresh: now() - at < ttl };
-  }
-  async function wbCacheSet(memberKey, type, items, { now = Date.now, allowEmpty = false } = {}) {
-    if (!memberKey || !type || !Array.isArray(items)) return;
-    if (!items.length && !allowEmpty) return;
-    await rawSet(wbKey(memberKey, type), { at: now(), items });
-  }
-  async function wbCacheInvalidateMany(memberKey, types2 = []) {
-    if (!memberKey || !Array.isArray(types2) || !types2.length) return;
-    await rawDel(types2.map((t) => wbKey(memberKey, t)));
-  }
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE9 = "https://gbti.network";

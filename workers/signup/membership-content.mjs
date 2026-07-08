@@ -139,7 +139,10 @@ export async function authorizeMemberCheap(request, env, deps = {}) {
 // making it a safe authorization signal. Shares grant LIMITED TRIAL ACCESS: an active trial may READ (decrypt)
 // the community Shares stream, but posting (encrypt) stays paid-only. A lapsed/cancelled/expired/banned account
 // is NOT trialing, so it cannot read (the extension shows its lock splash). Everything else stays paid-only.
-const SHARE_AAD = /^share:/;
+// SOW-018 shares + SOW-089 comments: both asset families are readable by an active TRIAL or a paid member;
+// every other member-only asset (post/product/prompt bodies) stays paid-only. The AAD is GCM-authenticated
+// at encrypt time, so a content envelope cannot be relabeled into this carve-out (decrypt would 422).
+const READ_TRIAL_AAD = /^(share|comment):/;
 const READ_TRIAL_OK = new Set(['paid', 'trialing']);
 
 /**
@@ -178,15 +181,16 @@ export async function membershipDecrypt(request, env, deps = {}) {
     return { status: 400, body: { error: 'bad_request', message: 'a v1 .enc envelope JSON body is required' } };
   }
 
-  // SOW-018: a Share asset (AAD `share:...`) is readable by an active trial OR a paid member; every other
-  // member-only asset stays paid-only. The AAD is GCM-authenticated, so it cannot be forged onto a non-Share.
-  const isShare = SHARE_AAD.test(String(envelope.aad ?? ''));
-  const allowed = isShare ? READ_TRIAL_OK.has(r.status) : r.status === 'paid';
+  // SOW-018 + SOW-089: a Share or COMMENT asset (AAD `share:...` / `comment:...`) is readable by an active
+  // trial OR a paid member; content bodies stay paid-only. The AAD is GCM-authenticated, so it cannot be
+  // forged onto another asset family.
+  const trialReadable = READ_TRIAL_AAD.test(String(envelope.aad ?? ''));
+  const allowed = trialReadable ? READ_TRIAL_OK.has(r.status) : r.status === 'paid';
   if (!allowed) {
     const msg = r.status === 'banned'
       ? 'this account is not permitted'
-      : isShare
-        ? 'an active membership is required to read Shares'
+      : trialReadable
+        ? 'an active membership is required to read this'
         : 'an active paid membership is required';
     return { status: 403, body: { error: 'forbidden', message: msg } };
   }

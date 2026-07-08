@@ -109,8 +109,15 @@ test('decrypt: a TRIAL member CANNOT read a non-Share members-only asset (post s
 // SOW-044: a member comment encrypts under AAD `comment:<id>:body`, which is NOT a `share:` asset, so a comment
 // stays PAID-ONLY to read. This pins the owner decision that limited-access trial members cannot read member
 // comments (they read the Share body but not its members-only replies), and guards the carve-out from drift.
-test('decrypt: a TRIAL member CANNOT read a member COMMENT (aad comment:... stays paid-only)', async () => {
+test('decrypt: a TRIAL member CAN read a member COMMENT (SOW-089: comment aads join the share trial carve-out)', async () => {
   const envelope = await encryptAsset({ plaintext: 'a members reply', key: KEY, assetId: 'comment:20260610120000-x:body', kid: '1' });
+  const r = await membershipDecrypt(POST('decrypt', 'Bearer g', envelope), ENV(), deps('1', () => trialing));
+  assert.equal(r.status, 200);
+  assert.equal(r.body.text, 'a members reply');
+});
+
+test('decrypt: a TRIAL member still CANNOT read member CONTENT (the carve-out is comments + shares only)', async () => {
+  const envelope = await encryptAsset({ plaintext: 'a paid body', key: KEY, assetId: 'prompt:x:body', kid: '1' });
   const r = await membershipDecrypt(POST('decrypt', 'Bearer g', envelope), ENV(), deps('1', () => trialing));
   assert.equal(r.status, 403);
 });

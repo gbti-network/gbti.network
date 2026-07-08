@@ -5728,15 +5728,31 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       if (!this._loaded) this.set(this.css(CSS7) + `<p class="empty">Loading the discussion…</p>`);
       let items = [];
+      const cacheKey = `comments-${targetType}`;
+      if (!this._painted) {
+        const cached = await wbCacheGet(targetSlug, cacheKey).catch(() => null);
+        if (cached?.items?.length && !this._loaded) {
+          this._painted = true;
+          this._resolveAndRender(targetType, targetSlug, cached.items).catch(() => {
+          });
+        }
+      }
       try {
         items = (await this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }))?.items ?? [];
+        wbCacheSet(targetSlug, cacheKey, items).catch(() => {
+        });
       } catch {
-        this.set(this.css(CSS7) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
+        if (!this._painted) this.set(this.css(CSS7) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
         return;
       }
+      await this._resolveAndRender(targetType, targetSlug, items);
+      this._loaded = true;
+    }
+    // SOW-089: resolve every body (decrypt members rows via the Worker) and render — shared by the SWR cached
+    // paint and the live pass.
+    async _resolveAndRender(targetType, targetSlug, items) {
       const resolved = await Promise.all(items.map((c) => this._resolveBody(c).then((html) => ({ c, html }))));
       this._render(targetType, targetSlug, resolved);
-      this._loaded = true;
     }
     _render(targetType, targetSlug, rows) {
       this._last = { targetType, targetSlug, rows };

@@ -6,7 +6,7 @@
 // Errors are typed OperationError(code, ...) so each transport can map a code to its own shape (HTTP status
 // or MCP isError). Codes: no-identity | not-authenticated | not-found | bad-request | invalid-content.
 
-import { buildContentFile, flipContentStatus, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, parseContentFile, contentPath, ContentValidationError } from './content-ops.mjs';
+import { buildContentFile, flipContentStatus, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, parseContentFile, contentPath, ContentValidationError, byCommentOldest } from './content-ops.mjs';
 import { publishContent, publishFiles, commitToBranchOnFork, branchName } from './publish.mjs';
 import { canPublish, canStageDrafts, isBlockedFromPublishing, canSeeNews, canFollow, canSave, canBrowse, canSeeShares } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, decryptViaWorker, MemberContentLockedError } from './member-content.mjs';
@@ -160,13 +160,47 @@ export async function listShareComments(ctx, { targetSlug, limit } = {}) {
 // <gbti-discussion> in the expanded reader; listShareComments is the 'share' specialization. Same read surface
 // (the COMMENT_PATH enumeration + the published filter), just parameterized on targetType.
 const COMMENT_TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share', 'news']); // SOW-046 D: 'news' enables news discussion
+// SOW-089: the comments INDEX fast path. /comments-index.json is one CDN fetch carrying every published
+// comment (public bodies inline; members rows pointer-only) — replacing the reader walk that downloaded
+// every comment file sequentially (~12s on a real thread). A short-lived module cache avoids refetching per
+// discussion within a session; the SOW-076 echoes keep read-your-writes freshness (a new comment echoes
+// until deployed, so index + echoes is complete). The reader walk remains ONLY as the fetch-failure fallback.
+const COMMENTS_INDEX_URL = 'https://gbti.network/comments-index.json';
+const COMMENTS_INDEX_TTL_MS = 60_000;
+let commentsIndexCache = null; // { at, items }
+
+async function fetchCommentsIndex(ctx) {
+  const now = Date.now();
+  if (commentsIndexCache && now - commentsIndexCache.at < COMMENTS_INDEX_TTL_MS) return commentsIndexCache.items;
+  const f = ctx.fetch ?? globalThis.fetch;
+  const res = await f(COMMENTS_INDEX_URL, { cache: 'no-cache' });
+  if (!res.ok) throw new Error(`comments index ${res.status}`);
+  const data = await res.json();
+  const items = Array.isArray(data?.items) ? data.items : [];
+  commentsIndexCache = { at: now, items };
+  return items;
+}
+
+export function _resetCommentsIndexCache() { commentsIndexCache = null; } // tests
+
 export async function listComments(ctx, { targetType, targetSlug, limit, aliases } = {}) {
   requireIdentity(ctx);
   if (!COMMENT_TARGET_TYPES.has(targetType)) throw new OperationError('bad-request', 'a valid targetType is required');
   if (!targetSlug || typeof targetSlug !== 'string') throw new OperationError('bad-request', 'targetSlug is required');
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
-  if (typeof ctx.reader?.listComments !== 'function') return { items: [] };
-  const items = (await ctx.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : [])) ?? [];
+  let items = null;
+  try {
+    const all = await fetchCommentsIndex(ctx);
+    const slugs = new Set([targetSlug, ...(Array.isArray(aliases) ? aliases : [])]);
+    items = all
+      .filter((c) => c?.targetType === targetType && slugs.has(c?.targetSlug) && (c?.status ?? 'published') === 'published')
+      .sort(byCommentOldest)
+      .slice(0, n);
+  } catch {
+    // The index is unreachable (offline build, a brand-new deploy mid-flight): the reader walk still works.
+    if (typeof ctx.reader?.listComments !== 'function') return { items: [] };
+    items = (await ctx.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : [])) ?? [];
+  }
   const gated = gateMemberComments(items, await ctx.membership?.()); // SOW-078: member comment stubs are tier-gated
   return { items: await mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed: gated }) }; // SOW-076
 }
