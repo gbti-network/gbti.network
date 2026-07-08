@@ -161,7 +161,7 @@ class GbtiTagExplorer extends GbtiElement {
     this._note = { cls: '', text: 'Publishing the tag edit…' }; this.render();
     try {
       const paths = sel.items.map((i) => i.path).filter(Boolean);
-      const res = await this.client.admin('tag-edit', { action: act, tag: sel.tag, to, paths });
+      const res = await this.client.admin('tag-edit', { mode: act, tag: sel.tag, to, paths }); // `mode`, not `action`: the admin wrapper spreads args and an inner action would clobber the route
       // Optimistic local update: the indexes lag the deploy by a couple of minutes.
       this._rows = this._rows.filter((r) => r !== sel);
       if (to) {

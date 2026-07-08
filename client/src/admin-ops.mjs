@@ -401,11 +401,13 @@ async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopM
 // it actually carries the tag (retagContent no-ops otherwise). One PR for the whole edit; admin-gated (a
 // superadmin's PR auto-merges per SOW-108, a plain admin's falls to the review lane). rename == merge when
 // the destination already exists (the helper dedupes).
-export async function applyTagEdit(ctx, { action, tag, to, paths } = {}) {
+export async function applyTagEdit(ctx, { mode, action, tag, to, paths } = {}) {
   requireRole(ctx, canBanGrandfather, 'admin');
   const { repo } = requireRepo(ctx);
-  const act = String(action || '');
-  if (!['rename', 'merge', 'retire'].includes(act)) throw new OperationError('bad-request', 'action must be rename, merge, or retire');
+  // `mode` is the wire name (client.admin spreads args into { action: 'tag-edit', ...args }, so an inner
+  // `action` key would clobber the route); `action` stays accepted for direct API callers.
+  const act = String(mode || action || '');
+  if (!['rename', 'merge', 'retire'].includes(act)) throw new OperationError('bad-request', 'mode must be rename, merge, or retire');
   const src = String(tag || '').trim().toLowerCase();
   if (!src) throw new OperationError('bad-request', 'a tag is required');
   const dest = act === 'retire' ? null : String(to || '').trim().toLowerCase();

@@ -21037,11 +21037,11 @@ async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopM
   const pr = await publishFiles({ repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
   return { ...pr, changed: true, audit: result.audit };
 }
-async function applyTagEdit(ctx, { action, tag, to, paths } = {}) {
+async function applyTagEdit(ctx, { mode, action, tag, to, paths } = {}) {
   requireRole(ctx, canBanGrandfather, "admin");
   const { repo } = requireRepo2(ctx);
-  const act = String(action || "");
-  if (!["rename", "merge", "retire"].includes(act)) throw new OperationError("bad-request", "action must be rename, merge, or retire");
+  const act = String(mode || action || "");
+  if (!["rename", "merge", "retire"].includes(act)) throw new OperationError("bad-request", "mode must be rename, merge, or retire");
   const src = String(tag || "").trim().toLowerCase();
   if (!src) throw new OperationError("bad-request", "a tag is required");
   const dest = act === "retire" ? null : String(to || "").trim().toLowerCase();

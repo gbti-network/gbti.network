@@ -9467,7 +9467,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.render();
       try {
         const paths = sel.items.map((i) => i.path).filter(Boolean);
-        const res = await this.client.admin("tag-edit", { action: act, tag: sel.tag, to, paths });
+        const res = await this.client.admin("tag-edit", { mode: act, tag: sel.tag, to, paths });
         this._rows = this._rows.filter((r) => r !== sel);
         if (to) {
           let destRow = this._rows.find((r) => r.tag === to);

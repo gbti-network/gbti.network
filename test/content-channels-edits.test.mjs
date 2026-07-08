@@ -158,13 +158,16 @@ test('applyTagEdit: one PR rewrites only the files that carry the tag; guards ho
   };
   const ctx = batchCtx({ role: 'admin' });
   ctx.reader = { readFile: async (rel) => files[rel] ?? null };
-  const r = await applyTagEdit(ctx, { action: 'rename', tag: 'old-tag', to: 'new-tag', paths: [A, B, '../evil.md'] });
+  const r = await applyTagEdit(ctx, { mode: 'rename', tag: 'old-tag', to: 'new-tag', paths: [A, B, '../evil.md'] }); // `mode` is the wire name (the admin wrapper spreads args over the route action)
   assert.equal(r.rewritten, 1); // only A carried it; the evil path was filtered by shape
   assert.equal(ctx.pulls.length, 1);
   assert.match(ctx.puts[0].content, /new-tag/);
-  await assert.rejects(applyTagEdit(ctx, { action: 'retire', tag: '', paths: [A] }), /tag is required/);
-  await assert.rejects(applyTagEdit(ctx, { action: 'merge', tag: 'x', paths: [A] }), /destination/);
-  await assert.rejects(applyTagEdit(ctx, { action: 'explode', tag: 'x', paths: [A] }), /action/);
+  await assert.rejects(applyTagEdit(ctx, { mode: 'retire', tag: '', paths: [A] }), /tag is required/);
+  await assert.rejects(applyTagEdit(ctx, { mode: 'merge', tag: 'x', paths: [A] }), /destination/);
+  await assert.rejects(applyTagEdit(ctx, { mode: 'explode', tag: 'x', paths: [A] }), /mode/);
+  // the legacy `action` key still works for direct API callers
+  const legacy = await applyTagEdit(ctx, { action: 'retire', tag: 'ghost-tag', paths: [B] });
+  assert.equal(legacy.noop, true);
 });
 
 // SOW-100 tag policy: member input normalizes to dash-connected tags at build time.
