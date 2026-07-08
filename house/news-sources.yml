@@ -605,3 +605,8 @@ sources:
     url: https://alpinelinux.org/atom.xml
     description: alpinelinux.org
     enabled: true
+  - id: lead-dev
+    name: Lead Dev
+    url: https://leaddev.com/feed
+    description: leaddev.com
+    enabled: true
