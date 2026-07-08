@@ -17212,6 +17212,18 @@ function shareId(createdAt, title) {
   const stamp = ts || "00000000000000";
   return slug ? `${stamp}-${slug}` : `${stamp}-share`;
 }
+function retagContent(text, { tag, to = null } = {}) {
+  const { frontmatter, body } = parseContentFile(text);
+  const fm = { ...frontmatter ?? {} };
+  const tags = Array.isArray(fm.tags) ? fm.tags.map((t) => String(t)) : [];
+  const target = String(tag).toLowerCase();
+  if (!tags.some((t) => t.toLowerCase() === target)) return { changed: false, content: text };
+  let next = tags.filter((t) => t.toLowerCase() !== target);
+  if (to && !next.some((t) => t.toLowerCase() === String(to).toLowerCase())) next.push(String(to));
+  fm.tags = next;
+  if (!next.length) delete fm.tags;
+  return { changed: true, content: serializeContentFile(fm, body) };
+}
 function flipContentStatus(text, status) {
   const { frontmatter, body } = parseContentFile(text);
   const current = frontmatter?.status ?? null;
@@ -21010,6 +21022,30 @@ async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopM
   const pr = await publishFiles({ repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
   return { ...pr, changed: true, audit: result.audit };
 }
+async function applyTagEdit(ctx, { action, tag, to, paths } = {}) {
+  requireRole(ctx, canBanGrandfather, "admin");
+  const { repo } = requireRepo2(ctx);
+  const act = String(action || "");
+  if (!["rename", "merge", "retire"].includes(act)) throw new OperationError("bad-request", "action must be rename, merge, or retire");
+  const src = String(tag || "").trim().toLowerCase();
+  if (!src) throw new OperationError("bad-request", "a tag is required");
+  const dest = act === "retire" ? null : String(to || "").trim().toLowerCase();
+  if (act !== "retire" && !dest) throw new OperationError("bad-request", `${act} needs a destination tag`);
+  if (dest === src) throw new OperationError("bad-request", "the destination equals the source");
+  const list = (Array.isArray(paths) ? paths : []).filter((p) => /^(members\/[a-z0-9][a-z0-9-]*|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/.test(String(p)));
+  if (!list.length || list.length > 100) throw new OperationError("bad-request", "between 1 and 100 content paths are required");
+  const files = [];
+  for (const rel of list) {
+    const text = await ctx.reader?.readFile?.(rel);
+    if (text == null) continue;
+    const r = retagContent(text, { tag: src, to: dest });
+    if (r.changed) files.push({ path: rel, content: r.content });
+  }
+  if (!files.length) return noop(`no item carries the tag "${src}"`);
+  const verb = act === "retire" ? `Retire tag ${src}` : `${act === "merge" ? "Merge" : "Rename"} tag ${src} -> ${dest}`;
+  const pr = await publishFiles({ repo, branch: `gbti/tag-${act}-${slugOf(src)}`, files, message: verb, title: verb, body: `Tag curation (SOW-100): ${verb} across ${files.length} item${files.length === 1 ? "" : "s"}.` });
+  return { ...pr, changed: true, rewritten: files.length };
+}
 async function applyCategoryBatch(ctx, { ops, descriptions } = {}) {
   const list = Array.isArray(ops) ? ops : [];
   if (!list.length) throw new OperationError("bad-request", "the batch is empty");
@@ -21133,7 +21169,7 @@ async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, co
 }
 
 // extension/src/ext-dispatch.mjs
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "news-engagement-set": setNewsEngagementSettings };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "news-engagement-set": setNewsEngagementSettings };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,

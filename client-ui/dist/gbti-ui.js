@@ -5179,7 +5179,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .dhead .dmeta { color:var(--muted); font-size:12.5px; margin-top:3px; }
   .dhead .dmeta b { color:var(--greenfg); font-weight:600; }
   .dactions { display:flex; gap:8px; padding:12px 18px; border-bottom:1.5px solid var(--line); }
-  .dactions button { flex:1; font:inherit; font-size:12.5px; font-weight:500; color:var(--muted); background:var(--raise); border:1.5px solid var(--line); border-radius:5px; padding:8px 4px; display:flex; align-items:center; justify-content:center; gap:5px; opacity:.55; cursor:default; }
+  .dactions button { flex:1; font:inherit; font-size:12.5px; font-weight:500; color:var(--soft); background:var(--raise); border:1.5px solid var(--line); border-radius:5px; padding:8px 4px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px; transition:.12s; }
+  .dactions button:hover { color:var(--fg); border-color:var(--line2); background:var(--panel2); }
+  .dactions button.danger:hover { color:#f0a3a3; border-color:rgba(224,120,120,.4); }
+  .actrow { display:flex; gap:8px; padding:12px 18px; border-bottom:1.5px solid var(--line); align-items:center; flex-wrap:wrap; }
+  .actrow input, .actrow select { flex:1; min-width:120px; font:inherit; font-family:var(--font-mono, monospace); font-size:12.5px; padding:8px 10px; border:1.5px solid var(--line); border-radius:5px; background:var(--panel); color:var(--fg); }
+  .actrow .go { font:inherit; font-size:12.5px; font-weight:600; color:#fff; background:var(--brand); border:none; border-radius:5px; padding:8px 14px; cursor:pointer; }
+  .actrow .note { width:100%; font-size:12px; color:var(--muted); }
+  .actrow .note.ok { color:var(--greenfg); }
+  .actrow .note.err { color:#f0a3a3; }
   .ditems { overflow-y:auto; max-height:44vh; padding:6px 0; }
   .ditems::-webkit-scrollbar { width:10px; }
   .ditems::-webkit-scrollbar-thumb { background:var(--line); border-radius:6px; border:3px solid var(--panel); }
@@ -5196,6 +5204,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .muted { color:var(--muted); font-size:13.5px; }
 `;
   var norm = (t) => String(t).toLowerCase().replace(/[\s_-]+/g, "");
+  var TAG_RE = /^[a-z0-9][a-z0-9 ._-]*$/;
   var GbtiTagExplorer = class extends GbtiElement {
     connectedCallback() {
       this._rows = null;
@@ -5205,7 +5214,58 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._dir = -1;
       this._sel = null;
       this._dupeHidden = false;
+      this._action = null;
+      this._note = null;
       super.connectedCallback?.();
+    }
+    // The inline action row under the buttons: rename = a new-tag input, merge = a picker over the other
+    // tags, retire = a confirm sentence. One PR per action; the row updates optimistically on success.
+    _actionUi(sel) {
+      if (!this._action) return this._note ? `<div class="actrow"><span class="note ${esc(this._note.cls)}">${esc(this._note.text)}</span></div>` : "";
+      const others = (this._rows || []).filter((r) => r.tag !== sel.tag).map((r) => r.tag).sort();
+      const inner = this._action === "rename" ? `<input id="act-to" placeholder="new-tag-name" value="${esc(sel.tag)}" spellcheck="false" /><button class="go" id="act-go" type="button">Rename</button>` : this._action === "merge" ? `<select id="act-to">${others.map((t) => `<option${norm(t) === norm(sel.tag) ? " selected" : ""}>${esc(t)}</option>`).join("")}</select><button class="go" id="act-go" type="button">Merge</button>` : `<span class="note">Remove <code>${esc(sel.tag)}</code> from all ${sel.total} item${sel.total === 1 ? "" : "s"}?</span><button class="go" id="act-go" type="button">Retire</button>`;
+      return `<div class="actrow">${inner}${this._note ? `<span class="note ${esc(this._note.cls)}">${esc(this._note.text)}</span>` : ""}</div>`;
+    }
+    async _runAction(sel) {
+      const act = this._action;
+      let to = null;
+      if (act !== "retire") {
+        to = String(this.$("#act-to")?.value || "").trim().toLowerCase();
+        if (!TAG_RE.test(to)) {
+          this._note = { cls: "err", text: "A tag is lowercase letters, digits, spaces, dots, hyphens." };
+          this.render();
+          return;
+        }
+        if (to === sel.tag) {
+          this._note = { cls: "err", text: "That is the same tag." };
+          this.render();
+          return;
+        }
+      }
+      this._note = { cls: "", text: "Publishing the tag edit…" };
+      this.render();
+      try {
+        const paths = sel.items.map((i) => i.path).filter(Boolean);
+        const res = await this.client.admin("tag-edit", { action: act, tag: sel.tag, to, paths });
+        this._rows = this._rows.filter((r) => r !== sel);
+        if (to) {
+          let destRow = this._rows.find((r) => r.tag === to);
+          if (!destRow) {
+            destRow = { tag: to, post: 0, prompt: 0, product: 0, total: 0, items: [] };
+            this._rows.push(destRow);
+          }
+          for (const t of ["post", "prompt", "product"]) destRow[t] += sel[t];
+          destRow.total += sel.total;
+          destRow.items.push(...sel.items);
+          this._sel = to;
+        } else this._sel = null;
+        this._action = null;
+        this._note = { cls: "ok", text: res?.noop ? "Nothing carried that tag." : `Published as PR #${res?.prNumber ?? "?"} — live in about 2 to 3 minutes.` };
+        this.render();
+      } catch (err) {
+        this._note = { cls: "err", text: err?.message || "The tag edit failed." };
+        this.render();
+      }
     }
     async load() {
       const byTag = /* @__PURE__ */ new Map();
@@ -5224,7 +5284,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
               }
               row[type] += 1;
               row.total += 1;
-              row.items.push({ type, title: it.title || it.slug, url: it.url, author: it.author });
+              row.items.push({ type, title: it.title || it.slug, url: it.url, author: it.author, path: it.path });
             }
           }
         } catch {
@@ -5299,10 +5359,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <div class="dhead"><div class="dtag">${esc(sel.tag)}</div>
           <div class="dmeta"><b>${sel.total}</b> use${sel.total === 1 ? "" : "s"}${sel.prompt ? ` · ${sel.prompt} prompt${sel.prompt === 1 ? "" : "s"}` : ""}${sel.post ? ` · ${sel.post} article${sel.post === 1 ? "" : "s"}` : ""}${sel.product ? ` · ${sel.product} product${sel.product === 1 ? "" : "s"}` : ""}</div></div>
         <div class="dactions">
-          <button type="button" disabled title="Tag curation is a follow-up">${icon("pencil")} Rename</button>
-          <button type="button" disabled title="Tag curation is a follow-up">${icon("merge")} Merge</button>
-          <button type="button" disabled title="Tag curation is a follow-up">${icon("archive")} Retire</button>
+          <button type="button" id="act-rename" title="Rename this tag everywhere">${icon("pencil")} Rename</button>
+          <button type="button" id="act-merge" title="Merge this tag into another">${icon("merge")} Merge</button>
+          <button type="button" class="danger" id="act-retire" title="Remove this tag everywhere">${icon("archive")} Retire</button>
         </div>
+        ${this._actionUi(sel)}
         <div class="ditems">${sel.items.map((i) => `<a class="item" href="${SITE5}${esc(i.url || "")}" target="_blank" rel="noopener">
           <div class="ititle">${esc(i.title)}</div>
           <div class="isub"><span class="badge ${esc(i.type)}">${esc(i.type)}</span><span class="iauth">@${esc(i.author || "")}</span></div>
@@ -5342,8 +5403,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }));
       this.$$(".row[data-tag]").forEach((r) => r.addEventListener("click", () => {
         this._sel = this._sel === r.dataset.tag ? null : r.dataset.tag;
+        this._action = null;
+        this._note = null;
         this.render();
       }));
+      const sel2 = this._sel ? this._rows.find((r) => r.tag === this._sel) : null;
+      if (sel2) {
+        this.on("#act-rename", "click", () => {
+          this._action = this._action === "rename" ? null : "rename";
+          this._note = null;
+          this.render();
+        });
+        this.on("#act-merge", "click", () => {
+          this._action = this._action === "merge" ? null : "merge";
+          this._note = null;
+          this.render();
+        });
+        this.on("#act-retire", "click", () => {
+          this._action = this._action === "retire" ? null : "retire";
+          this._note = null;
+          this.render();
+        });
+        this.on("#act-go", "click", () => this._runAction(sel2));
+      }
       this.on("#reviewdupe", "click", () => {
         this._q = this._dupes?.[0]?.[0]?.tag?.split(/[\s-]/)[0] || "";
         this.render();

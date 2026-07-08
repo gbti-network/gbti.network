@@ -21,7 +21,7 @@ import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, Conte
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
 import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111
-import { parseContentFile, flipContentStatus } from './content-ops.mjs';
+import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 
 function requireRole(ctx, check, need) {
@@ -396,6 +396,36 @@ async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopM
 // an op that no-ops is skipped (idempotent); the first invalid op aborts the whole batch (nothing published).
 // Key renames / moves / removes are review-gated CI migrations and are NEVER accepted here. Gate: admin for a
 // taxonomy-only batch, superadmin when any channel op is present (matching the per-action gates).
+// SOW-100 tag curation: rename / merge / retire a free-form tag across the items carrying it. `paths` come
+// from the client's index aggregation but are NEVER trusted: each file is read fresh and only rewritten when
+// it actually carries the tag (retagContent no-ops otherwise). One PR for the whole edit; admin-gated (a
+// superadmin's PR auto-merges per SOW-108, a plain admin's falls to the review lane). rename == merge when
+// the destination already exists (the helper dedupes).
+export async function applyTagEdit(ctx, { action, tag, to, paths } = {}) {
+  requireRole(ctx, canBanGrandfather, 'admin');
+  const { repo } = requireRepo(ctx);
+  const act = String(action || '');
+  if (!['rename', 'merge', 'retire'].includes(act)) throw new OperationError('bad-request', 'action must be rename, merge, or retire');
+  const src = String(tag || '').trim().toLowerCase();
+  if (!src) throw new OperationError('bad-request', 'a tag is required');
+  const dest = act === 'retire' ? null : String(to || '').trim().toLowerCase();
+  if (act !== 'retire' && !dest) throw new OperationError('bad-request', `${act} needs a destination tag`);
+  if (dest === src) throw new OperationError('bad-request', 'the destination equals the source');
+  const list = (Array.isArray(paths) ? paths : []).filter((p) => /^(members\/[a-z0-9][a-z0-9-]*|house)\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/.test(String(p)));
+  if (!list.length || list.length > 100) throw new OperationError('bad-request', 'between 1 and 100 content paths are required');
+  const files = [];
+  for (const rel of list) {
+    const text = await ctx.reader?.readFile?.(rel);
+    if (text == null) continue;
+    const r = retagContent(text, { tag: src, to: dest });
+    if (r.changed) files.push({ path: rel, content: r.content });
+  }
+  if (!files.length) return noop(`no item carries the tag "${src}"`);
+  const verb = act === 'retire' ? `Retire tag ${src}` : `${act === 'merge' ? 'Merge' : 'Rename'} tag ${src} -> ${dest}`;
+  const pr = await publishFiles({ repo, branch: `gbti/tag-${act}-${slugOf(src)}`, files, message: verb, title: verb, body: `Tag curation (SOW-100): ${verb} across ${files.length} item${files.length === 1 ? '' : 's'}.` });
+  return { ...pr, changed: true, rewritten: files.length };
+}
+
 export async function applyCategoryBatch(ctx, { ops, descriptions } = {}) {
   const list = Array.isArray(ops) ? ops : [];
   if (!list.length) throw new OperationError('bad-request', 'the batch is empty');

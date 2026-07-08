@@ -57,7 +57,7 @@ import { getSettings, updateSettings, getBilling, getReferral } from './settings
 import { fieldsFor } from './form-fields.mjs';
 import { renderMarkdown } from './markdown.mjs';
 import {
-  banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch,
+  banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit,
   getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, getQuotePool,
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate,
@@ -75,6 +75,7 @@ const ADMIN_ACTIONS = {
   deplatform: deplatformContent,
   remove: removeContent,
   'category-batch': applyCategoryBatch, // SOW-100: N pending workspace edits -> ONE house PR
+  'tag-edit': applyTagEdit, // SOW-100: rename/merge/retire a tag across the items carrying it
   republish: republishContent, // SOW-071: the inverse of deplatform (un-hide)
   'category-add': addContentCategory, // SOW-055: category manager (add a category/subcategory)
   'category-rename': renameContentCategoryLabel, // SOW-055: rename a category's display label

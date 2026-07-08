@@ -131,3 +131,38 @@ test('applyCategoryBatch guards: migration kinds refused; channel ops need super
   const r = await applyCategoryBatch(batchCtx({ role: 'admin' }), { ops: [{ kind: 'label', args: { path: ['devops'], label: 'DevOps' } }] });
   assert.equal(r.noop, true); // label unchanged -> nothing published
 });
+
+// SOW-100 tag curation: the pure retag helper + the admin op's guard rails.
+import { retagContent } from '../client/src/content-ops.mjs';
+import { applyTagEdit } from '../client/src/admin-ops.mjs';
+
+test('retagContent renames, merges (dedupe), retires, and no-ops when absent', () => {
+  const doc = '---\ntitle: X\ntags:\n  - claude-code\n  - workflow\n---\n\nBody\n';
+  const renamed = retagContent(doc, { tag: 'claude-code', to: 'claude code' });
+  assert.equal(renamed.changed, true);
+  assert.match(renamed.content, /claude code/);
+  assert.ok(!/claude-code/.test(renamed.content));
+  const merged = retagContent(doc, { tag: 'claude-code', to: 'workflow' }); // dest already present -> dedupe
+  assert.equal((merged.content.match(/workflow/g) || []).length, 1);
+  const retired = retagContent(doc, { tag: 'workflow', to: null });
+  assert.ok(!/workflow/.test(retired.content));
+  assert.equal(retagContent(doc, { tag: 'ghost', to: 'x' }).changed, false);
+});
+
+test('applyTagEdit: one PR rewrites only the files that carry the tag; guards hold', async () => {
+  const A = 'members/alice/prompts/a/index.md';
+  const B = 'house/posts/b/index.md';
+  const files = {
+    [A]: '---\ntitle: A\ntags:\n  - old-tag\n---\nx',
+    [B]: '---\ntitle: B\ntags:\n  - unrelated\n---\nx',
+  };
+  const ctx = batchCtx({ role: 'admin' });
+  ctx.reader = { readFile: async (rel) => files[rel] ?? null };
+  const r = await applyTagEdit(ctx, { action: 'rename', tag: 'old-tag', to: 'new-tag', paths: [A, B, '../evil.md'] });
+  assert.equal(r.rewritten, 1); // only A carried it; the evil path was filtered by shape
+  assert.equal(ctx.pulls.length, 1);
+  assert.match(ctx.puts[0].content, /new-tag/);
+  await assert.rejects(applyTagEdit(ctx, { action: 'retire', tag: '', paths: [A] }), /tag is required/);
+  await assert.rejects(applyTagEdit(ctx, { action: 'merge', tag: 'x', paths: [A] }), /destination/);
+  await assert.rejects(applyTagEdit(ctx, { action: 'explode', tag: 'x', paths: [A] }), /action/);
+});

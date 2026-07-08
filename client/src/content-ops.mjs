@@ -127,6 +127,21 @@ export function shareId(createdAt, title) {
  * file (null when already in the requested state). Shared by the moderator Hide/Unhide (admin-ops) and the
  * member self-unpublish (operations.setOwnContentStatus).
  */
+/** SOW-100 tag curation: replace tag `tag` with `to` (or remove it when `to` is null) in a content file's
+ *  frontmatter. Dedupes (a rename onto an existing tag merges). Returns { changed, content }. Pure. */
+export function retagContent(text, { tag, to = null } = {}) {
+  const { frontmatter, body } = parseContentFile(text);
+  const fm = { ...(frontmatter ?? {}) };
+  const tags = Array.isArray(fm.tags) ? fm.tags.map((t) => String(t)) : [];
+  const target = String(tag).toLowerCase();
+  if (!tags.some((t) => t.toLowerCase() === target)) return { changed: false, content: text };
+  let next = tags.filter((t) => t.toLowerCase() !== target);
+  if (to && !next.some((t) => t.toLowerCase() === String(to).toLowerCase())) next.push(String(to));
+  fm.tags = next;
+  if (!next.length) delete fm.tags;
+  return { changed: true, content: serializeContentFile(fm, body) };
+}
+
 export function flipContentStatus(text, status) {
   const { frontmatter, body } = parseContentFile(text);
   const current = frontmatter?.status ?? null;
