@@ -1,16 +1,27 @@
 ---
 type: prompt
-title: "Install GBTI Network Access in Claude Code"
+title: Install GBTI Network Access in Claude Code
 slug: install-gbti-network-claude-code
-shortDescription: "Set up GBTI Network authoring access in Claude Code, from installing the client to publishing through the gated pull-request flow."
+shortDescription: >-
+  Set up GBTI Network authoring access in Claude Code, from installing the client to publishing
+  through the gated pull-request flow.
 author: gbti
 status: published
 visibility: public
-categories: ["devops", "tooling"]
-tags: ["GBTI Network", "MCP", "Claude Code", "Onboarding"]
-targets: ["Claude Code"]
-exampleOutput: "Set up GBTI Network authoring access inside Claude Code: install the client, register the MCP server, sign in with GitHub device flow, and start publishing through the gated pull-request flow."
-publishedAt: 2026-06-06
+categories:
+  - devops
+  - tooling
+tags:
+  - GBTI Network
+  - MCP
+  - Onboarding
+  - claude-code
+targets:
+  - Claude Code
+exampleOutput: >-
+  Set up GBTI Network authoring access inside Claude Code: install the client, register the MCP
+  server, sign in with GitHub device flow, and start publishing through the gated pull-request flow.
+publishedAt: 2026-06-06T00:00:00.000Z
 ---
 
 You are setting up GBTI Network authoring access inside Claude Code, so I can publish and manage my GBTI Network content (posts, products, prompts, and my member profile) through GBTI's pull-request flow without touching Git by hand.
