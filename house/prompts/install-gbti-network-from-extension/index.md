@@ -1,16 +1,29 @@
 ---
 type: prompt
-title: "Run the GBTI MCP server from the Chrome extension folder"
+title: Run the GBTI MCP server from the Chrome extension folder
 slug: install-gbti-network-from-extension
-shortDescription: "Point Claude Code at the GBTI MCP server that ships inside the Chrome extension folder, sign in, and publish content without a separate install."
+shortDescription: >-
+  Point Claude Code at the GBTI MCP server that ships inside the Chrome extension folder, sign in,
+  and publish content without a separate install.
 author: gbti
 status: published
 visibility: public
-categories: ["devops", "tooling"]
-tags: ["GBTI Network", "MCP", "Claude Code", "Chrome Extension", "Onboarding"]
-targets: ["Claude Code"]
-exampleOutput: "Register the GBTI MCP server straight from the unpacked Chrome extension folder, sign in with GitHub device flow, and publish posts, products, and prompts through the gated pull-request flow, with no npm install and no browser needed after sign-in."
-publishedAt: 2026-06-10
+categories:
+  - devops
+  - tooling
+tags:
+  - GBTI Network
+  - MCP
+  - Chrome Extension
+  - Onboarding
+  - claude-code
+targets:
+  - Claude Code
+exampleOutput: >-
+  Register the GBTI MCP server straight from the unpacked Chrome extension folder, sign in with
+  GitHub device flow, and publish posts, products, and prompts through the gated pull-request flow,
+  with no npm install and no browser needed after sign-in.
+publishedAt: 2026-06-10T00:00:00.000Z
 ---
 
 You are setting up GBTI Network authoring inside Claude Code by running the MCP server that ships INSIDE the GBTI Chrome extension folder. The extension does not run this server; Claude Code runs it from disk. After this, I can publish posts, products, and prompts through GBTI's pull-request flow, and it keeps working with the browser closed.
