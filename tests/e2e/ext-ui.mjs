@@ -57,12 +57,29 @@ async function main() {
 
     // --- the new tab page ---
     const nt = await context.newPage();
-    if (process.env.E2E_DEBUG) {
-      nt.on('pageerror', (e) => console.log('  [newtab pageerror]', e.message));
-      nt.on('console', (m) => { if (m.type() === 'error') console.log('  [newtab console.error]', m.text()); });
-    }
+    // Always surface newtab errors -- a failing greeting wait is otherwise opaque. Newtab errors are rare, so this
+    // is quiet on a healthy run and diagnostic on a broken one.
+    nt.on('pageerror', (e) => console.log('  [newtab pageerror]', e.message));
+    nt.on('console', (m) => { if (m.type() === 'error') console.log('  [newtab console.error]', m.text().slice(0, 200)); });
     await nt.goto(`chrome-extension://${extId}/newtab.html`, { waitUntil: 'domcontentloaded' });
-    await nt.waitForSelector('[data-greeting]', { timeout: 10000 });
+    // The greeting <span data-greeting> is STATIC markup the boot rewrites to a time-of-day greeting. Wait on the
+    // TEXT the boot sets, NOT CSS visibility: the SOW-070 splash (html[data-splash] hides .nt-greet-tx) and the
+    // SOW-048 sign-in gate (data-unauth hides .nt-main) legitimately hide the greeting on a bare load, but the boot
+    // still populates it -- so a text wait confirms the newtab booted without a false "element hidden" timeout. If
+    // the boot genuinely fails, the text stays "Welcome back" and this still fails (correctly), with the gate state
+    // logged for triage.
+    const greetOk = await nt
+      .waitForFunction(() => /morning|afternoon|evening/i.test(document.querySelector('[data-greeting]')?.textContent || ''), { timeout: 12000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!greetOk) {
+      const gate = await nt.evaluate(() => ({
+        splash: document.documentElement.dataset.splash ?? null,
+        unauth: document.documentElement.dataset.unauth ?? null,
+        greet: document.querySelector('[data-greeting]')?.textContent ?? null,
+      })).catch(() => null);
+      console.log('  [newtab gate state]', JSON.stringify(gate));
+    }
     const greeting = (await nt.textContent('[data-greeting]')) || '';
     check('new tab renders (greeting)', /morning|afternoon|evening/i.test(greeting), greeting.trim());
     // SOW-039/052: the feed renders through the shared <gbti-card-list> web component (open shadow); every item in
