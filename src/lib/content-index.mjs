@@ -82,6 +82,7 @@ export function toIndexItem(entry, type) {
     publishedAt: d.publishedAt ? Number(d.publishedAt) : null,
     visibility: d.visibility || 'public',
     aliases: aliasSlugsOf(d), // SOW-112: old slugs after a rename (saved rows + reader discussions resolve via these)
+    tags: Array.isArray(d.tags) ? d.tags.filter((t) => typeof t === 'string') : [], // SOW-100: the admin tag explorer
   };
 }
 

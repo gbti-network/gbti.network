@@ -10,7 +10,7 @@ import { authorizeAdmin } from './membership-admin.mjs';
 // action -> the repository_dispatch event_type the matching workflow listens for. The ONLY operations a caller can
 // trigger; anything else 400s. (reconcile.yml: types [regate, admin-reconcile]; e2e-smoke.yml: types [admin-e2e].)
 const OPS = Object.freeze({ reconcile: 'admin-reconcile', e2e: 'admin-e2e', 'category-migrate': 'category-migrate' }); // SOW-055
-const MIGRATE_ACTIONS = new Set(['move', 'rename', 'remove']);
+const MIGRATE_ACTIONS = new Set(['move', 'rename', 'remove', 'merge']);
 
 /** POST /membership/admin/ops { action } -> fires the mapped repository_dispatch (admin/superadmin only). */
 export async function membershipAdminOps(request, env, { authorize = authorizeAdmin, fetch = globalThis.fetch, ...deps } = {}) {
@@ -30,7 +30,7 @@ export async function membershipAdminOps(request, env, { authorize = authorizeAd
   if (action === 'category-migrate') {
     const p = (body && body.params) || {};
     if (!MIGRATE_ACTIONS.has(String(p.action)) || !String(p.from || '').trim()) {
-      return { status: 400, body: { error: 'bad_request', message: 'category-migrate requires params { action: move|rename|remove, from }' } };
+      return { status: 400, body: { error: 'bad_request', message: 'category-migrate requires params { action: move|rename|remove|merge, from }' } };
     }
     const bool = (v) => (v === true || v === 'true' ? 'true' : 'false');
     clientPayload = {
@@ -40,6 +40,7 @@ export async function membershipAdminOps(request, env, { authorize = authorizeAd
       to_parent: String(p.toParent ?? p.to_parent ?? '').trim(),
       new_key: String(p.newKey ?? p.new_key ?? '').trim(),
       reassign: bool(p.reassign),
+      into: String(p.into ?? '').trim(), // merge destination path (slash-joined)
       apply: bool(p.apply),
     };
   }

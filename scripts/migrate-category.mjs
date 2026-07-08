@@ -20,7 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 
-import { moveCategory, renameKey, removeCategory, rewriteCategories } from '../membership/taxonomy-edits.mjs';
+import { moveCategory, renameKey, removeCategory, mergeCategory, rewriteCategories } from '../membership/taxonomy-edits.mjs';
 import { parseContentFile, serializeContentFile } from '../client/src/content-ops.mjs';
 import { createGitHubClient } from '../clients/github.mjs';
 
@@ -64,6 +64,7 @@ export function planCategoryMigration(taxonomy, contentItems, op) {
   if (op.action === 'move') result = moveCategory(taxonomy, { fromPath: op.from, toParentPath: op.toParentPath ?? [] }, op.ctx);
   else if (op.action === 'rename') result = renameKey(taxonomy, { path: op.from, newKey: op.newKey }, op.ctx);
   else if (op.action === 'remove') result = removeCategory(taxonomy, { path: op.from, reassignToParent: !!op.reassignToParent }, op.ctx);
+  else if (op.action === 'merge') result = mergeCategory(taxonomy, { fromPath: op.from, intoPath: op.into ?? [] }, op.ctx);
   else throw new Error(`unknown migration action: ${op.action}`);
 
   const { next, changed, pathChange, audit } = result;
@@ -97,11 +98,13 @@ function parseOp(env) {
   const from = splitPath(env.MIGRATE_FROM);
   if (!action || !from.length) throw new Error('MIGRATE_ACTION and MIGRATE_FROM are required');
   const toParentPath = splitPath(env.MIGRATE_TO_PARENT); // "" -> [] (top level)
-  for (const seg of [...from, ...toParentPath]) if (!KEY_RE.test(seg)) throw new Error(`invalid category path segment "${seg}" (must be kebab-case)`);
+  const into = splitPath(env.MIGRATE_INTO); // merge destination
+  for (const seg of [...from, ...toParentPath, ...into]) if (!KEY_RE.test(seg)) throw new Error(`invalid category path segment "${seg}" (must be kebab-case)`);
   return {
     action,
     from,
     toParentPath,
+    into,
     newKey: (env.MIGRATE_NEW_KEY || '').trim(),
     reassignToParent: env.MIGRATE_REASSIGN === 'true',
     ctx: { actor: { login: env.MIGRATE_BY || 'migrate-category' }, now: env.MIGRATE_NOW ? new Date(env.MIGRATE_NOW) : undefined },

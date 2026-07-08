@@ -344,6 +344,7 @@ class GbtiCategoriesWorkspace extends GbtiElement {
           <div class="drow">
             <button class="btn warn" id="renamekey" type="button">Rename key…</button>
             <button class="btn warn" id="movecat" type="button">Move (with subcategories)…</button>
+            <button class="btn warn" id="mergecat" type="button">Merge into…</button>
             <button class="btn warn" id="removecat" type="button">Remove…</button>
           </div>
           <div id="dangerui"></div>
@@ -507,6 +508,7 @@ class GbtiCategoriesWorkspace extends GbtiElement {
     this.on('#review', 'click', () => this._review());
     this.on('#renamekey', 'click', () => this._dangerKey());
     this.on('#movecat', 'click', () => this._dangerMove());
+    this.on('#mergecat', 'click', () => this._dangerMerge());
     this.on('#removecat', 'click', () => this._dangerRemove());
   }
 
@@ -559,6 +561,24 @@ class GbtiCategoriesWorkspace extends GbtiElement {
       this._migrate('move', { toParent: to ? to.split('/') : [] }, `Move "${this.labelOf(this._sel)}" and ALL its subcategories${to ? ` under ${to}` : ' to the top level'}? One migration PR re-parents the subtree and rewrites every filed item.`);
     });
   }
+  // SOW-100: MERGE this category into another — filed content re-prefixes to the destination, subcategories
+  // move under it (a same-key child at the destination refuses server-side), and this category is removed.
+  _dangerMerge() {
+    const ui = this.$('#dangerui');
+    if (!ui) return;
+    const selPk = this._sel.join('/');
+    const flat = flattenTree(this._tree).filter((n) => {
+      const pk = n.path.join('/');
+      return pk !== selPk && !pk.startsWith(`${selPk}/`);
+    });
+    ui.innerHTML = `<div class="moverow"><span class="hint">Merge this category (content + subcategories) INTO:</span><select id="mergesel">${flat.map((n) => `<option value="${esc(n.path.join('/'))}">${esc(n.path.map((k, i) => this.labelOf(n.path.slice(0, i + 1))).join(' / '))}</option>`).join('')}</select><button class="btn warn" id="mergego" type="button">Merge</button></div>`;
+    ui.querySelector('#mergego')?.addEventListener('click', () => {
+      const into = ui.querySelector('#mergesel')?.value || '';
+      if (!into) return;
+      this._migrate('merge', { into }, `Merge "${this.labelOf(this._sel)}" into ${into}? Its filed content refiles there, its subcategories move under it, and "${this.labelOf(this._sel)}" is removed — one review-gated migration PR.`);
+    });
+  }
+
   _dangerRemove() {
     const hasItems = this.countOf(this._sel) > 0;
     this._migrate('remove', { reassign: hasItems }, hasItems

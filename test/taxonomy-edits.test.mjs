@@ -148,3 +148,24 @@ test('pathStartsWith', () => {
   assert.equal(pathStartsWith(['devops'], ['devops', 'frameworks']), false);
   assert.equal(pathStartsWith(['ai'], ['devops']), false);
 });
+
+// SOW-100: merge — subcategories move to the destination, content re-prefixes, collisions refuse.
+import { mergeCategory } from '../membership/taxonomy-edits.mjs';
+
+test('mergeCategory moves children into the destination and removes the source', () => {
+  const tree = { a: { label: 'A', children: { kid: { label: 'Kid' } } }, b: { label: 'B' } };
+  const r = mergeCategory({ tree }, { fromPath: ['a'], intoPath: ['b'] }, { by: 't' });
+  assert.equal(r.next.tree.a, undefined);
+  assert.deepEqual(Object.keys(r.next.tree.b.children), ['kid']);
+  assert.deepEqual(rewriteCategories(['a', 'kid'], r.pathChange), ['b', 'kid']);
+  assert.deepEqual(rewriteCategories(['a'], r.pathChange), ['b']);
+  assert.equal(rewriteCategories(['b'], r.pathChange), undefined); // untouched
+});
+
+test('mergeCategory refusals: self, descendant, missing, child-key collision', () => {
+  const tree = { a: { label: 'A', children: { kid: { label: 'Kid' } } }, b: { label: 'B', children: { kid: { label: 'Other Kid' } } } };
+  assert.throws(() => mergeCategory({ tree }, { fromPath: ['a'], intoPath: ['a'] }), /into itself/);
+  assert.throws(() => mergeCategory({ tree }, { fromPath: ['a'], intoPath: ['a', 'kid'] }), /descendant/);
+  assert.throws(() => mergeCategory({ tree }, { fromPath: ['ghost'], intoPath: ['b'] }), /not found/);
+  assert.throws(() => mergeCategory({ tree }, { fromPath: ['a'], intoPath: ['b'] }), /already has a subcategory "kid"/);
+});

@@ -43,6 +43,7 @@ jobs:
           MIGRATE_TO_PARENT: ${{ github.event.inputs.to_parent || github.event.client_payload.to_parent }}
           MIGRATE_NEW_KEY: ${{ github.event.inputs.new_key || github.event.client_payload.new_key }}
           MIGRATE_REASSIGN: ${{ github.event.inputs.reassign || github.event.client_payload.reassign }}
+          MIGRATE_INTO: ${{ github.event.inputs.into || github.event.client_payload.into }}
           MIGRATE_BY: ${{ github.event.client_payload.by || github.actor }}
           APPLY: ${{ github.event.inputs.apply || github.event.client_payload.apply }}
           GITHUB_BOT_TOKEN: ${{ secrets.GH_BOT_TOKEN }}

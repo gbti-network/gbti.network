@@ -47,6 +47,7 @@
         <button class="admin-tab on" type="button" data-tab="members">Members</button>
         <button class="admin-tab" type="button" data-tab="moderation">Moderation</button>
         <button class="admin-tab" type="button" data-tab="categories">Categories</button>
+        <button class="admin-tab" type="button" data-tab="tags">Tags</button>
         <button class="admin-tab" type="button" data-tab="news">News sources</button>
         <button class="admin-tab" type="button" data-tab="quotes">Quotes</button>
         <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
@@ -69,6 +70,10 @@
           <!-- SOW-100 responsive QA: the workspace carries its own header; the card header duplicated it and
                cost a full screen of copy on mobile. -->
           <div class="admin-card-b"><div class="admin-sub"><gbti-categories-workspace></gbti-categories-workspace></div></div>
+        </section>
+        <section class="admin-card" data-panel="tags">
+          <div class="admin-card-h"><h2>Tags</h2><p>The free-form cross-cutting tags on posts, prompts, and products, aggregated from the live content indexes. Read-only; tag curation is a follow-up.</p></div>
+          <div class="admin-card-b"><div class="admin-sub"><gbti-tag-explorer></gbti-tag-explorer></div></div>
         </section>
         <section class="admin-card" data-panel="news">
           <div class="admin-card-h"><h2>News sources</h2><p>The git-native news source pool. Edits open an auto-merged house PR.</p></div>

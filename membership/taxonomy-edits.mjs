@@ -169,6 +169,32 @@ export function moveCategory(taxonomy, { fromPath, toParentPath = [] } = {}, ctx
   return { next: tx, changed: true, audit: auditEntry(ctx, 'taxonomy.move', fromPath, { to }), pathChange: { kind: 'move', from: fromPath, to } };
 }
 
+/** MERGE a node INTO another: the source's subcategories move under the destination (a same-key child at the
+ *  destination REFUSES — resolve it first), the source is removed, and filed content re-prefixes from the
+ *  source path to the destination path (deeper segments preserved). SOW-100 merge. */
+export function mergeCategory(taxonomy, { fromPath, intoPath } = {}, ctx = {}) {
+  const tx = cleanTaxonomy(taxonomy);
+  if (!Array.isArray(fromPath) || fromPath.length === 0) throw new TaxonomyEditError('a source category path is required');
+  if (!Array.isArray(intoPath) || intoPath.length === 0) throw new TaxonomyEditError('a destination category path is required');
+  if (samePath(fromPath, intoPath)) throw new TaxonomyEditError('cannot merge a category into itself');
+  if (pathStartsWith(intoPath, fromPath)) throw new TaxonomyEditError('cannot merge a category into its own descendant');
+  const src = locate(tx, fromPath);
+  if (!src) throw new TaxonomyEditError(`category not found: ${fromPath.join(' > ')}`);
+  const dest = nodeAt(tx, intoPath);
+  if (!dest) throw new TaxonomyEditError(`destination category not found: ${intoPath.join(' > ')}`);
+  const srcNode = src.childrenMap[src.key];
+  const kids = srcNode?.children && typeof srcNode.children === 'object' ? srcNode.children : {};
+  if (Object.keys(kids).length) {
+    if (!dest.children || typeof dest.children !== 'object') dest.children = {};
+    for (const k of Object.keys(kids)) {
+      if (dest.children[k]) throw new TaxonomyEditError(`the destination already has a subcategory "${k}" — merge or rename it first`);
+    }
+    for (const [k, v] of Object.entries(kids)) dest.children[k] = v;
+  }
+  delete src.childrenMap[src.key];
+  return { next: tx, changed: true, audit: auditEntry(ctx, 'taxonomy.merge', fromPath, { into: intoPath }), pathChange: { kind: 'merge', from: fromPath, to: intoPath } };
+}
+
 /** REMOVE a node (and its subtree). With reassignToParent, affected content reattaches to the parent; otherwise
  *  affected content would be ORPHANED, so the caller must refuse unless there are no references. */
 export function removeCategory(taxonomy, { path, reassignToParent = false } = {}, ctx = {}) {
