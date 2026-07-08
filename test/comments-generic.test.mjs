@@ -4,7 +4,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { listComments } from '../client/src/operations.mjs';
 
-const ctxWith = (reader) => ({ identity: () => ({ username: 'a', githubId: '1', login: 'a' }), store: { get: () => null }, reader });
+// SOW-089: the injected failing fetch forces the reader-FALLBACK path these tests assert (the index fast
+// path is covered in comments-index.test.mjs; without the injection the op would reach the real network).
+const ctxWith = (reader) => ({ identity: () => ({ username: 'a', githubId: '1', login: 'a' }), store: { get: () => null }, fetch: async () => ({ ok: false, status: 503 }), reader });
 
 test('listComments delegates to reader.listComments(targetType, targetSlug, limit)', async () => {
   const calls = [];

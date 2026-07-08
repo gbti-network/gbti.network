@@ -15,6 +15,7 @@ import { createGithubReader } from '../extension/src/github-reader.mjs';
 // SOW-078: the list ops now tier-filter member-visibility stubs, so the ctx carries the caller's membership
 // (defaults to 'paid' = sees everything, matching the prior behavior the existing tests assert).
 const ctxWith = (reader, identity = { username: 'alice', login: 'alice', githubId: '1' }, membership = 'paid') => ({
+  fetch: async () => ({ ok: false, status: 503 }), // SOW-089: force the reader-fallback path (no network in tests)
   identity: () => identity,
   reader,
   membership: () => membership,
@@ -172,9 +173,10 @@ test('listShareComments: requires identity and a targetSlug', async () => {
   await assert.rejects(() => listShareComments(ctxWith({ listShareComments: async () => [] }), {}), (e) => e instanceof OperationError && e.code === 'bad-request');
 });
 
-test('listShareComments: delegates to the reader, awaits async, caps the limit', async () => {
+test('listShareComments: unified onto listComments (SOW-089) — reader fallback, async, capped', async () => {
   const made = Array.from({ length: 5 }, (_, i) => ({ id: `c${i}` }));
-  const asyncReader = { listShareComments: async (_slug, n) => made.slice(0, n) };
+  // the fallback path uses the GENERIC reader method (both real readers alias listShareComments to it)
+  const asyncReader = { listComments: async (_type, _slug, n) => made.slice(0, n) };
   const r = await listShareComments(ctxWith(asyncReader), { targetSlug: 'a/20260101000000-x', limit: 3 });
   assert.equal(r.items.length, 3);
   // a reader without the method -> empty, no throw
