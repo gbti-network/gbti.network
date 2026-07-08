@@ -336,6 +336,30 @@ function validateAuthorIntro() {
 }
 validateAuthorIntro();
 
+// SOW-100 tag policy (2026-07-08): tags are DASH-CONNECTED going forward. Diff-scoped like the intro check,
+// so existing content is grandfathered; the client normalizes member input at build time, making this the
+// backstop for hand-authored PRs.
+function validateTagShape() {
+  const raw = (process.env.CHANGED_FILES || '').trim();
+  if (!raw) return;
+  const TAG_RE = /^[a-z0-9][a-z0-9.-]*$/;
+  const errors = [];
+  for (const rel of raw.split(/[\s,]+/).filter(Boolean)) {
+    if (!/^(members\/[^/]+|house)\/(posts|products|prompts)\/[^/]+\/index\.md$/.test(rel)) continue;
+    let fm;
+    try { fm = yaml.load((/^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(path.join(ROOT, rel), 'utf8')) || [])[1] || '') || {}; } catch { continue; }
+    for (const t of Array.isArray(fm.tags) ? fm.tags : []) {
+      if (!TAG_RE.test(String(t))) errors.push(`${rel}: tag "${t}" must be dash-connected (lowercase letters, digits, dots, hyphens)`);
+    }
+  }
+  if (errors.length) {
+    console.error(`\n✗ tag shape check failed (${errors.length}):`);
+    for (const e of errors) console.error('  - ' + e);
+    process.exitCode = 1;
+  }
+}
+validateTagShape();
+
 // Override grants (bans / grandfathered / roles) must reference github_ids consistent with members-index.yml.
 // A typo'd or swapped github_id<->login otherwise FAILS CLOSED silently (the wrong id never matches the member,
 // so a comp/ban grant just does nothing). Skips ids/logins not in the index (folderless grants + the bot).

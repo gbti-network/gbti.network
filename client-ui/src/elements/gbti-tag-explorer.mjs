@@ -121,7 +121,7 @@ const CSS = `
 `;
 
 const norm = (t) => String(t).toLowerCase().replace(/[\s_-]+/g, '');
-const TAG_RE = /^[a-z0-9][a-z0-9 ._-]*$/;
+const TAG_RE = /^[a-z0-9][a-z0-9.-]*$/; // dash-connected policy (owner, 2026-07-08)
 
 class GbtiTagExplorer extends GbtiElement {
   connectedCallback() {
@@ -154,8 +154,8 @@ class GbtiTagExplorer extends GbtiElement {
     const act = this._action;
     let to = null;
     if (act !== 'retire') {
-      to = String(this.$('#act-to')?.value || '').trim().toLowerCase();
-      if (!TAG_RE.test(to)) { this._note = { cls: 'err', text: 'A tag is lowercase letters, digits, spaces, dots, hyphens.' }; this.render(); return; }
+      to = String(this.$('#act-to')?.value || '').trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
+      if (!TAG_RE.test(to)) { this._note = { cls: 'err', text: 'A tag is dash-connected: lowercase letters, digits, dots, hyphens.' }; this.render(); return; }
       if (to === sel.tag) { this._note = { cls: 'err', text: 'That is the same tag.' }; this.render(); return; }
     }
     this._note = { cls: '', text: 'Publishing the tag edit…' }; this.render();

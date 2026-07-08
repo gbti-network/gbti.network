@@ -166,3 +166,13 @@ test('applyTagEdit: one PR rewrites only the files that carry the tag; guards ho
   await assert.rejects(applyTagEdit(ctx, { action: 'merge', tag: 'x', paths: [A] }), /destination/);
   await assert.rejects(applyTagEdit(ctx, { action: 'explode', tag: 'x', paths: [A] }), /action/);
 });
+
+// SOW-100 tag policy: member input normalizes to dash-connected tags at build time.
+import { buildContentFile } from '../client/src/content-ops.mjs';
+import { normalizeTag } from '../client/src/schemas.mjs';
+
+test('tags normalize to dash-connected form and dedupe at build', () => {
+  const b = buildContentFile({ type: 'post', username: 'alice', input: { title: 'X', slug: 'x', excerpt: 'e', categories: ['devops'], tags: ['Claude Code', 'claude-code', 'GBTI  Network', ' node.js '] }, body: 'B' });
+  assert.deepEqual(b.frontmatter.tags, ['claude-code', 'gbti-network', 'node.js']);
+  assert.equal(normalizeTag('  Multi   Word_Tag  '), 'multi-word-tag');
+});

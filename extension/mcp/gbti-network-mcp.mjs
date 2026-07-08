@@ -17001,6 +17001,19 @@ function isImageGenTarget(targets) {
 // client/src/schemas.mjs
 var STATUS = external_exports.enum(["draft", "published"]);
 var VISIBILITY = external_exports.enum(["public", "members"]);
+function normalizeTag(t) {
+  return String(t ?? "").trim().toLowerCase().replace(/[\s_]+/g, "-").replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "");
+}
+var TAG_KEBAB_RE = /^[a-z0-9][a-z0-9.-]*$/;
+var tagsSchema = external_exports.array(external_exports.string()).default([]).transform((arr) => {
+  const out = [];
+  for (const raw of arr) {
+    const t = normalizeTag(raw);
+    if (!t) continue;
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}).refine((arr) => arr.every((t) => TAG_KEBAB_RE.test(t)), { message: "tags must be dash-connected (lowercase letters, digits, dots, hyphens)" });
 var contributors = external_exports.array(
   external_exports.object({
     login: external_exports.string(),
@@ -17050,7 +17063,7 @@ var postSchema = external_exports.object({
   updatedAt: external_exports.coerce.date().optional(),
   excerpt: external_exports.string().max(200).optional(),
   categories: external_exports.array(external_exports.string()).default([]),
-  tags: external_exports.array(external_exports.string()).default([]),
+  tags: tagsSchema,
   coverImage: external_exports.string().optional(),
   coverAlt: external_exports.string().max(250).optional(),
   // SOW-062 P3: cover-image alt text (accessibility)
@@ -17075,7 +17088,7 @@ var productSchema = external_exports.object({
   // Hierarchical category path into the canonical taxonomy (house/taxonomy.yml). Same shape as posts
   // so all content types share one taxonomy (SOW-012). Mirrors src/content.config.ts.
   categories: external_exports.array(external_exports.string()).default([]),
-  tags: external_exports.array(external_exports.string()).default([]),
+  tags: tagsSchema,
   platforms: external_exports.array(external_exports.string()).default([]),
   pricing: external_exports.enum(["free", "freemium", "paid"]).optional(),
   version: external_exports.string().optional(),
@@ -17129,7 +17142,7 @@ var promptSchema = external_exports.object({
   // Hierarchical category path into the canonical taxonomy (house/taxonomy.yml). Same shape as posts
   // so all content types share one taxonomy (SOW-012). Mirrors src/content.config.ts.
   categories: external_exports.array(external_exports.string()).default([]),
-  tags: external_exports.array(external_exports.string()).default([]),
+  tags: tagsSchema,
   variables: external_exports.array(external_exports.string()).default([]),
   exampleOutput: external_exports.string().optional(),
   sourceUrl: external_exports.string().url().optional(),
@@ -17170,7 +17183,7 @@ var shareSchema = external_exports.object({
   // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
   category: external_exports.string().optional(),
   // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post
-  tags: external_exports.array(external_exports.string()).default([]),
+  tags: tagsSchema,
   createdAt: external_exports.coerce.date(),
   updatedAt: external_exports.coerce.date().optional()
 });
@@ -17258,6 +17271,8 @@ function buildContentFile({ type, username, input, body = "" }) {
   const slug = type === "profile" ? null : cleaned.slug;
   const path4 = contentPath(type, username, slug);
   const frontmatter = stripUndefined(cleaned);
+  if (result.data && Array.isArray(result.data.tags) && "tags" in frontmatter) frontmatter.tags = result.data.tags;
+  if (Array.isArray(frontmatter.tags) && !frontmatter.tags.length) delete frontmatter.tags;
   const markdown = serializeContentFile(frontmatter, body);
   return { path: path4, frontmatter, markdown, type, username, slug };
 }

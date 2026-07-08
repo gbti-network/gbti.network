@@ -5169,7 +5169,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .muted { color:var(--muted); font-size:13.5px; }
 `;
   var norm = (t) => String(t).toLowerCase().replace(/[\s_-]+/g, "");
-  var TAG_RE = /^[a-z0-9][a-z0-9 ._-]*$/;
+  var TAG_RE = /^[a-z0-9][a-z0-9.-]*$/;
   var GbtiTagExplorer = class extends GbtiElement {
     connectedCallback() {
       this._rows = null;
@@ -5195,9 +5195,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const act = this._action;
       let to = null;
       if (act !== "retire") {
-        to = String(this.$("#act-to")?.value || "").trim().toLowerCase();
+        to = String(this.$("#act-to")?.value || "").trim().toLowerCase().replace(/[\s_]+/g, "-").replace(/-{2,}/g, "-").replace(/^-+|-+$/g, "");
         if (!TAG_RE.test(to)) {
-          this._note = { cls: "err", text: "A tag is lowercase letters, digits, spaces, dots, hyphens." };
+          this._note = { cls: "err", text: "A tag is dash-connected: lowercase letters, digits, dots, hyphens." };
           this.render();
           return;
         }

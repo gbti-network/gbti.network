@@ -18,6 +18,24 @@ export const STATUS = z.enum(['draft', 'published']);
 export const VISIBILITY = z.enum(['public', 'members']);
 
 // SYSTEM-MANAGED, never authored from the client (the merge automation owns it). Mirrors content.config.ts.
+// SOW-100 tag policy (owner, 2026-07-08): tags are DASH-CONNECTED going forward. Member input normalizes
+// (lowercase; spaces/underscores collapse to hyphens; duplicate hyphens collapse; dedupe), so "Claude Code"
+// becomes "claude-code" at build time; anything left non-kebab rejects. Existing content is grandfathered
+// (the CI check is diff-scoped).
+export function normalizeTag(t) {
+  return String(t ?? '').trim().toLowerCase().replace(/[\s_]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
+}
+const TAG_KEBAB_RE = /^[a-z0-9][a-z0-9.-]*$/;
+const tagsSchema = z.array(z.string()).default([]).transform((arr) => {
+  const out = [];
+  for (const raw of arr) {
+    const t = normalizeTag(raw);
+    if (!t) continue;
+    if (!out.includes(t)) out.push(t);
+  }
+  return out;
+}).refine((arr) => arr.every((t) => TAG_KEBAB_RE.test(t)), { message: 'tags must be dash-connected (lowercase letters, digits, dots, hyphens)' });
+
 const contributors = z
   .array(
     z.object({
@@ -73,7 +91,7 @@ export const postSchema = z.object({
   updatedAt: z.coerce.date().optional(),
   excerpt: z.string().max(200).optional(),
   categories: z.array(z.string()).default([]),
-  tags: z.array(z.string()).default([]),
+  tags: tagsSchema,
   coverImage: z.string().optional(),
   coverAlt: z.string().max(250).optional(), // SOW-062 P3: cover-image alt text (accessibility)
   video: z.string().optional(),
@@ -96,7 +114,7 @@ export const productSchema = z.object({
   // Hierarchical category path into the canonical taxonomy (house/taxonomy.yml). Same shape as posts
   // so all content types share one taxonomy (SOW-012). Mirrors src/content.config.ts.
   categories: z.array(z.string()).default([]),
-  tags: z.array(z.string()).default([]),
+  tags: tagsSchema,
   platforms: z.array(z.string()).default([]),
   pricing: z.enum(['free', 'freemium', 'paid']).optional(),
   version: z.string().optional(),
@@ -146,7 +164,7 @@ export const promptSchema = z.object({
   // Hierarchical category path into the canonical taxonomy (house/taxonomy.yml). Same shape as posts
   // so all content types share one taxonomy (SOW-012). Mirrors src/content.config.ts.
   categories: z.array(z.string()).default([]),
-  tags: z.array(z.string()).default([]),
+  tags: tagsSchema,
   variables: z.array(z.string()).default([]),
   exampleOutput: z.string().optional(),
   sourceUrl: z.string().url().optional(),
@@ -191,7 +209,7 @@ export const shareSchema = z.object({
   url: z.string().url().optional(),
   image: z.string().optional(), // SOW-057: the featured image (an absolute OG URL or a repo-relative path)
   category: z.string().optional(), // SOW-087: one flat topic key (house/topics.yml); routes the share's category Discord post
-  tags: z.array(z.string()).default([]),
+  tags: tagsSchema,
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date().optional(),
 });

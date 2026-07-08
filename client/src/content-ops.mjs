@@ -98,7 +98,11 @@ export function buildContentFile({ type, username, input, body = '' }) {
 
   // Serialize the cleaned input (validity already proven) so we preserve the author's original date
   // strings and omit defaulted noise; the gate / CI apply schema defaults at build time.
+  // SOW-100 tag policy: tags are the one field whose PARSED (normalized) form ships — member input like
+  // "Claude Code" serializes as the dash-connected "claude-code" the schema transformed it into.
   const frontmatter = stripUndefined(cleaned);
+  if (result.data && Array.isArray(result.data.tags) && 'tags' in frontmatter) frontmatter.tags = result.data.tags;
+  if (Array.isArray(frontmatter.tags) && !frontmatter.tags.length) delete frontmatter.tags;
   const markdown = serializeContentFile(frontmatter, body);
 
   return { path, frontmatter, markdown, type, username, slug };
