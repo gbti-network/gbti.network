@@ -51,6 +51,15 @@ test('listComments consumes the index: type + alias union, oldest-first, member 
   assert.deepEqual(free.items.map((c) => c.id), ['c0', 'c1']); // members stub gated for non-members
 });
 
+test('listShareComments rides the same index fast path (SOW-089 parity for share threads)', async () => {
+  _resetCommentsIndexCache();
+  const { listShareComments } = await import('../client/src/operations.mjs');
+  const idx = { items: [{ id: 's1', author: 'alice', targetType: 'share', targetSlug: 'alice/20260701-x', visibility: 'public', createdAt: '2026-07-01T00:00:00Z', body: 'share reply', path: 'members/alice/comments/s1.md' }] };
+  const r = await listShareComments(ctxFor({ fetchImpl: async () => ({ ok: true, json: async () => idx }) }), { targetSlug: 'alice/20260701-x' });
+  assert.deepEqual(r.items.map((c) => c.id), ['s1']);
+  _resetCommentsIndexCache();
+});
+
 test('listComments falls back to the reader walk when the index fetch fails', async () => {
   _resetCommentsIndexCache();
   const walk = async () => [{ id: 'w1', author: 'alice', targetType: 'prompt', targetSlug: 'x', visibility: 'public', createdAt: '2026-07-01T00:00:00Z', body: 'walked' }];

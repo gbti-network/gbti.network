@@ -18852,13 +18852,7 @@ async function mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed }) 
   return comments;
 }
 async function listShareComments(ctx, { targetSlug, limit } = {}) {
-  requireIdentity(ctx);
-  if (!targetSlug || typeof targetSlug !== "string") throw new OperationError("bad-request", "targetSlug is required");
-  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
-  if (typeof ctx.reader?.listShareComments !== "function") return { items: [] };
-  const items = await ctx.reader.listShareComments(targetSlug, n) ?? [];
-  const gated = gateMemberComments(items, await ctx.membership?.());
-  return { items: await mergeCommentEchoesFor(ctx, { targetType: "share", targetSlug, deployed: gated }) };
+  return listComments(ctx, { targetType: "share", targetSlug, limit });
 }
 var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
 var COMMENTS_INDEX_URL = "https://gbti.network/comments-index.json";

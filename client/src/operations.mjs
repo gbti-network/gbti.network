@@ -147,13 +147,9 @@ async function mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed }) 
  * the SAME op serves the sync npm reader and the async extension (GitHub) reader. requireIdentity only.
  */
 export async function listShareComments(ctx, { targetSlug, limit } = {}) {
-  requireIdentity(ctx);
-  if (!targetSlug || typeof targetSlug !== 'string') throw new OperationError('bad-request', 'targetSlug is required');
-  const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 200) : 100;
-  if (typeof ctx.reader?.listShareComments !== 'function') return { items: [] };
-  const items = (await ctx.reader.listShareComments(targetSlug, n)) ?? [];
-  const gated = gateMemberComments(items, await ctx.membership?.()); // SOW-078: member comment stubs are tier-gated
-  return { items: await mergeCommentEchoesFor(ctx, { targetType: 'share', targetSlug, deployed: gated }) }; // SOW-076
+  // SOW-089: delegate to listComments so share discussions ride the SAME comments-index fast path (one CDN
+  // fetch) instead of the per-file reader walk; gating, echoes, and the fallback come along for free.
+  return listComments(ctx, { targetType: 'share', targetSlug, limit });
 }
 
 // SOW-041: the generic comment thread for ANY content type (post/product/prompt/share). Powers the shared
