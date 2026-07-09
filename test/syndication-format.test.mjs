@@ -84,6 +84,10 @@ test('renderTemplate: hyphenated tokens, {content-type}, and the {member-discord
   // GitHub username last.
   const ghOnly = renderTemplate(T2, { ...base, author: 'atwellpub' });
   assert.match(ghOnly, /published by atwellpub:/);
+  // A profile discord INVITE URL is not a username: it falls through to the GitHub fallback (hit live).
+  const urlHandle = renderTemplate(T2, { ...base, authorDiscord: 'https://discord.gg/EwmcKcJZC6', author: 'atwellpub' });
+  assert.match(urlHandle, /published by atwellpub:/);
+  assert.ok(!urlHandle.includes('discord.gg'), 'an invite URL never renders as the username');
   // {content-type} labels per source.
   assert.match(renderTemplate('{content-type}', { source: 'post' }), /^article$/);
   assert.match(renderTemplate('{content-type}', { source: 'share' }), /^link$/);

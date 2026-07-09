@@ -50,7 +50,11 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
   // {member-discord-username}: the member's Discord identity, best-first: a resolved <@id> mention, then
   // their public profile Discord handle (item.authorDiscord), then the GitHub username (owner-decided
   // fallback chain). Plain-text handles are sanitized and Discord's allowed_mentions caps pings anyway.
-  const discordHandle = String(item.authorDiscord || '').trim().replace(/^@/, '');
+  // A profile's discord link is often an INVITE URL (discord.gg/...), which is not a username: only a
+  // handle-shaped value (Discord usernames: 2-32 chars of letters/digits/underscore/period) is used;
+  // anything else falls through to the GitHub username.
+  const rawHandle = String(item.authorDiscord || '').trim().replace(/^@/, '');
+  const discordHandle = /^[A-Za-z0-9._]{2,32}$/.test(rawHandle) && !/[\/:]/.test(rawHandle) ? rawHandle : '';
   const discordUsername = mention
     || (discordHandle ? sanitizeMentions(`@${discordHandle}`) : sanitizeMentions(item.author || 'a member'));
   const vars = {
