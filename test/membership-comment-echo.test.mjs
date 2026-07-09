@@ -56,3 +56,15 @@ test('a denied caller (banned / unauthorized) is passed through', async () => {
   const r = await handleCommentEcho(req('GET', { query: '?targetType=post&targetSlug=a' }), {}, { kv: fakeKv(), authorize: async () => ({ ok: false, status: 403, body: { error: 'forbidden' } }) });
   assert.equal(r.status, 403);
 });
+
+// SOW-046 D regression (fixed 2026-07-09): the client allowed 'news' discussion but this whitelist never
+// learned it, so a fresh news comment stored no echo and stayed invisible until the next deploy.
+test('a news-target echo stores and reads back (the news discussion is read-your-writes too)', async () => {
+  const kv = fakeKv();
+  const add = await handleCommentEcho(req('POST', { body: { action: 'add', echo: echo('n1', { targetType: 'news', targetSlug: 'news-abc12' }) } }), {}, { kv, authorize: asMember('alice'), now });
+  assert.equal(add.status, 200);
+  const r = await handleCommentEcho(req('GET', { query: '?targetType=news&targetSlug=news-abc12' }), {}, { kv, authorize: asMember('alice'), now });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.echoes.length, 1);
+  assert.equal(r.body.echoes[0].id, 'n1');
+});

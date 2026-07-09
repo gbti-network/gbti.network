@@ -11,7 +11,10 @@ import { normalizeEchoRecord, addEcho, reapEchoes, CommentEchoError } from '../.
 
 export const ECHO_KEY = (targetType, targetSlug) => `commentecho:${targetType}:${targetSlug}`;
 export const ECHO_TTL_SECONDS = 6 * 60 * 60; // a backstop: an un-reaped echo ages out in 6h (covers the gate + deploy)
-const TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share']);
+// SOW-046 D allowed 'news' discussion at the client, but this whitelist never learned it, so a news
+// comment stored NO echo (the write 400d fail-soft) and the fresh comment stayed invisible until the next
+// deploy. Keep this set in lockstep with COMMENT_TARGET_TYPES (client/src/operations.mjs).
+const TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share', 'news']);
 const validTarget = (t, s) => TARGET_TYPES.has(t) && typeof s === 'string' && !!s && s.length <= 200;
 
 export async function handleCommentEcho(request, env, { fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, kv = env?.SIGNUP_KV, now = Date.now, authorize = authorizeMemberCheap } = {}) {
