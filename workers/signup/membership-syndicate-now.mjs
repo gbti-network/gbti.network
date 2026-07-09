@@ -68,6 +68,26 @@ export async function handleSyndicateNowInfo(request, env, deps = {}) {
  * customer's discord_user_id (the registry, SOW-002). Fail-soft: any miss returns null and the template
  * falls back to the profile handle / GitHub username.
  */
+/** SOW-088: the guild leg alone (no caller bearer needed) — shared with the auto drain. */
+export async function resolveGuildMention(env, item, { fetchImpl = globalThis.fetch, makeDiscord = createDiscordClient } = {}) {
+  try {
+    if (!env?.DISCORD_BOT_TOKEN || !env?.DISCORD_GUILD_ID) return null;
+    const discord = makeDiscord({ botToken: env.DISCORD_BOT_TOKEN, fetch: fetchImpl });
+    const handle = String(item.authorDiscord || '').trim().replace(/^@/, '');
+    const login = String(item.author || '').trim();
+    for (const q of [...new Set([handle, login].filter(Boolean))]) {
+      const found = await discord.searchGuildMembers(env.DISCORD_GUILD_ID, q, { limit: 5 });
+      const lc = q.toLowerCase();
+      const hit = (Array.isArray(found) ? found : []).find((m) =>
+        String(m?.user?.username || '').toLowerCase() === lc
+        || String(m?.user?.global_name || '').toLowerCase() === lc
+        || String(m?.nick || '').toLowerCase() === lc);
+      if (hit?.user?.id) return `<@${hit.user.id}>`;
+    }
+  } catch { /* fail-soft */ }
+  return null;
+}
+
 async function resolveAuthorMention(request, env, item, { fetchImpl, makeStripe, makeDiscord }) {
   const login = String(item.author || '').trim();
   if (!login) return null;
@@ -91,22 +111,7 @@ async function resolveAuthorMention(request, env, item, { fetchImpl, makeStripe,
   } catch { /* fall through to the guild search */ }
   // 2. The guild itself: an exact username / display-name match via the member search (the registry has no
   // customer until the member completes signup, but the bot can see who is in the guild right now).
-  try {
-    if (env?.DISCORD_BOT_TOKEN && env?.DISCORD_GUILD_ID) {
-      const discord = makeDiscord({ botToken: env.DISCORD_BOT_TOKEN, fetch: fetchImpl });
-      const handle = String(item.authorDiscord || '').trim().replace(/^@/, '');
-      for (const q of [...new Set([handle, login].filter(Boolean))]) {
-        const found = await discord.searchGuildMembers(env.DISCORD_GUILD_ID, q, { limit: 5 });
-        const lc = q.toLowerCase();
-        const hit = (Array.isArray(found) ? found : []).find((m) =>
-          String(m?.user?.username || '').toLowerCase() === lc
-          || String(m?.user?.global_name || '').toLowerCase() === lc
-          || String(m?.nick || '').toLowerCase() === lc);
-        if (hit?.user?.id) return `<@${hit.user.id}>`;
-      }
-    }
-  } catch { /* fail-soft to the text fallback */ }
-  return null;
+  return resolveGuildMention(env, item, { fetchImpl, makeDiscord });
 }
 
 export async function handleSyndicateNow(request, env, deps = {}) {

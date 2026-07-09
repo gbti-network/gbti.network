@@ -13421,6 +13421,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function channelForCategory(parsed, category) {
     return newsChannelMap(parsed).get(lc7(category)) ?? null;
   }
+  function channelForCategoryPath(parsed, path) {
+    const arr = Array.isArray(path) ? path : path ? [path] : [];
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const hit = channelForCategory(parsed, arr[i]);
+      if (hit) return hit;
+    }
+    return null;
+  }
 
   // client-ui/src/elements/gbti-syndicate-now.mjs
   var DEST_LABEL = { discord: "Discord", reddit: "Reddit", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
@@ -13498,6 +13506,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         url: d.gbtiUrl || "",
         image: d.gbtiImage || void 0,
         category: d.gbtiCategory || void 0,
+        categoryPath: d.gbtiCategoryPath ? d.gbtiCategoryPath.split(",").filter(Boolean) : void 0,
+        // SOW-088: leaf-first routing
         authorDiscord: d.gbtiDiscord || void 0,
         // SOW-088: the public profile Discord handle
         visibility: "public"
@@ -13555,7 +13565,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const preNote = this._preselectedNote === "featured" ? ` <span style="font-weight:400">(pre-selected: the featured ${esc(item.source)} channel)</span>` : this._preselectedNote === "category" ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || "")} category)</span>` : "";
         channelRow = opts ? `<label>Channel${preNote}</label>
           <select data-channel>${opts}</select>
-          <label>Forward to <span style="font-weight:400">(a secondary channel gets the Discord FORWARD of the original post${this._forwardNote ? `; pre-selected from the ${esc(item.category || "")} category` : ""})</span></label>
+          <label>Forward to <span style="font-weight:400">(a secondary channel gets the Discord FORWARD of the original post${this._forwardNote ? `; pre-selected from the deepest mapped category` : ""})</span></label>
           <select data-forward>${fwdOpts}</select>` : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ""}; paste the Discord channel id)</span></label>
           <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || "")}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
       }
@@ -13623,7 +13633,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._channels = [];
           this._chErr = err?.message || "request failed";
         }
-        const mapped = channelForCategory({ channels: this._info?.channelMap ?? [] }, this._item().category);
+        const it0 = this._item();
+        const mapped = channelForCategoryPath({ channels: this._info?.channelMap ?? [] }, it0.categoryPath?.length ? it0.categoryPath : [it0.category]);
         const featured = this._info?.featured?.[this._item().source] || null;
         this._channelId = featured || mapped || this._channels[0]?.id || "";
         this._preselectedNote = featured ? "featured" : mapped ? "category" : "";
@@ -14009,9 +14020,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"${Array.isArray(it.aliases) && it.aliases.length ? ` data-gbti-target-aliases="${esc(it.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
       const sideLink = it.type === "share" && it.url ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>` : "";
       const syndCategory = it.type === "share" ? it.category || "" : this._fmCategories?.[0] || "";
+      const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
       const syndUrl = it.url ? it.type === "share" ? it.url : SITE14 + it.url : "";
       const authorDiscord = this._author?.entry?.links?.discord || "";
-      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}" data-gbti-title="${esc(it.title || "")}" data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}" data-gbti-title="${esc(it.title || "")}" data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS36) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);

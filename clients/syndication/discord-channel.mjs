@@ -10,7 +10,7 @@
 import { createDiscordClient } from '../discord.mjs';
 import { buildChannelText, renderTemplate } from '../../membership/syndication-format.mjs';
 import { channelLimit } from '../../membership/syndication-channels.mjs';
-import { channelForCategory } from '../../membership/news-channels.mjs';
+import { channelForCategory, channelForCategoryPath } from '../../membership/news-channels.mjs';
 import { templateFor } from '../../membership/syndication-config-core.mjs';
 
 const CHANNEL_ENV = {
@@ -70,7 +70,9 @@ export function createDiscordCategoryAdapter({ env = {}, fetchImpl = globalThis.
     name: 'discord-category',
     enabled() { return Boolean(env.DISCORD_BOT_TOKEN); },
     async post(item) {
-      const mapped = channelForCategory(channelMap, item.category);
+      // SOW-088: the FULL taxonomy path resolves DEEPEST-mapped first (skill -> #devops beats ai -> #general);
+      // items without a path (shares, older queue records) keep the flat single-key behavior.
+      const mapped = channelForCategoryPath(channelMap, item.categoryPath?.length ? item.categoryPath : [item.category]);
       // No category / unmapped category: only the featured post happens. A clean terminal no-op, never a retry.
       if (!mapped) return { ok: true, skipped: true, reason: item.category ? `no channel mapped for category "${item.category}"` : 'no category on the item' };
       // Misconfiguration guard: the category channel equals the per-type channel; never double-post one channel.

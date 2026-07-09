@@ -166,3 +166,26 @@ test('discord: a mention-resolution miss falls back to the text username; a forw
   assert.equal(rec.status, 'sent');
   assert.equal(rec.channels['discord-forward:999888777666555444'].status, 'failed');
 });
+
+// SOW-088: leaf-first category routing. One leaf mapping (skill -> a channel) wins over the broad
+// top-level row, for the manual forward default AND the auto discord-category post alike.
+test('channelForCategoryPath resolves the DEEPEST mapped key first', async () => {
+  const { channelForCategoryPath } = await import('../membership/news-channels.mjs');
+  const map = { channels: [{ category: 'ai', channelId: '100' }, { category: 'skill', channelId: '200' }] };
+  assert.equal(channelForCategoryPath(map, ['ai', 'prompts', 'skill']), '200'); // the leaf wins
+  assert.equal(channelForCategoryPath(map, ['ai', 'prompts']), '100'); // unmapped leaf walks up
+  assert.equal(channelForCategoryPath(map, ['business']), null);
+  assert.equal(channelForCategoryPath(map, 'ai'), '100'); // a bare key degrades to the flat lookup
+});
+
+test('the queue item carries categoryPath and the drain resolves the guild mention (auto path parity)', async () => {
+  const { buildQueueItem } = await import('../membership/syndication-queue.mjs');
+  const it = buildQueueItem({ ...ITEM, categoryPath: ['ai', 'prompts', 'skill'], authorDiscord: 'hudshandle' }, { now: () => 1, holdMs: 0 });
+  assert.deepEqual(it.categoryPath, ['ai', 'prompts', 'skill']);
+  assert.equal(it.authorDiscord, 'hudshandle');
+  const { resolveGuildMention } = await import('../workers/signup/membership-syndicate-now.mjs');
+  const makeDiscord = () => ({ searchGuildMembers: async (g, q) => (q === 'hudshandle' ? [{ user: { id: '55555555', username: 'hudshandle' } }] : []) });
+  const m = await resolveGuildMention({ DISCORD_BOT_TOKEN: 'b', DISCORD_GUILD_ID: 'g' }, it, { makeDiscord });
+  assert.equal(m, '<@55555555>');
+  assert.equal(await resolveGuildMention({}, it, { makeDiscord }), null); // no bot/guild -> fail-soft
+});

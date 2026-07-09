@@ -11,7 +11,7 @@
 // key or a share's flat topic), data-gbti-image (optional).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { renderTemplate } from '../../../membership/syndication-format.mjs';
-import { channelForCategory } from '../../../membership/news-channels.mjs';
+import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
 
 const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', mastodon: 'Mastodon' };
 
@@ -73,6 +73,7 @@ class GbtiSyndicateNow extends GbtiElement {
       url: d.gbtiUrl || '',
       image: d.gbtiImage || undefined,
       category: d.gbtiCategory || undefined,
+      categoryPath: d.gbtiCategoryPath ? d.gbtiCategoryPath.split(',').filter(Boolean) : undefined, // SOW-088: leaf-first routing
       authorDiscord: d.gbtiDiscord || undefined, // SOW-088: the public profile Discord handle
       visibility: 'public',
     };
@@ -147,7 +148,7 @@ class GbtiSyndicateNow extends GbtiElement {
       channelRow = opts
         ? `<label>Channel${preNote}</label>
           <select data-channel>${opts}</select>
-          <label>Forward to <span style="font-weight:400">(a secondary channel gets the Discord FORWARD of the original post${this._forwardNote ? `; pre-selected from the ${esc(item.category || '')} category` : ''})</span></label>
+          <label>Forward to <span style="font-weight:400">(a secondary channel gets the Discord FORWARD of the original post${this._forwardNote ? `; pre-selected from the deepest mapped category` : ''})</span></label>
           <select data-forward>${fwdOpts}</select>`
         : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ''}; paste the Discord channel id)</span></label>
           <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || '')}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
@@ -207,7 +208,10 @@ class GbtiSyndicateNow extends GbtiElement {
       } catch (err) { this._channels = []; this._chErr = err?.message || 'request failed'; }
       // Owner-decided default: the per-type FEATURED channel (#prompts for a prompt, etc.); the
       // category-mapped channel stays one click away in the same picker.
-      const mapped = channelForCategory({ channels: this._info?.channelMap ?? [] }, this._item().category);
+      // Leaf-first: the deepest mapped key on the item's full taxonomy path wins (skill -> #devops beats
+      // the broad ai row), so per-leaf mappings set in the categories workspace drive the forward default.
+      const it0 = this._item();
+      const mapped = channelForCategoryPath({ channels: this._info?.channelMap ?? [] }, it0.categoryPath?.length ? it0.categoryPath : [it0.category]);
       const featured = this._info?.featured?.[this._item().source] || null;
       this._channelId = featured || mapped || this._channels[0]?.id || '';
       this._preselectedNote = featured ? 'featured' : (mapped ? 'category' : '');

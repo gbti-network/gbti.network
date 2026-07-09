@@ -8,6 +8,7 @@ import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue } 
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
 import { isSyndicationEnabled, requiresApproval } from '../../membership/syndication-config-core.mjs';
 import { readSyndicationConfig, readContentChannels, getItem, putItem, listDue, removeFromPending } from './syndication-store.mjs';
+import { resolveGuildMention } from './membership-syndicate-now.mjs'; // SOW-088: a real author mention for the auto path
 
 export async function drainSyndication(env, {
   kv = env?.SIGNUP_KV,
@@ -44,6 +45,13 @@ export async function drainSyndication(env, {
     // Record config-enabled-but-unconfigured channels as skipped (not failed).
     for (const name of skipped) {
       if (!channelDone(item, name)) item = recordChannel(item, name, { status: 'skipped', reason: 'not configured', at: Number(now()) });
+    }
+
+    // SOW-088: a REAL author mention for the auto path too. The CI enqueue's DISCORD_MENTION_OVERRIDES map
+    // wins when present; otherwise the guild member search resolves it (fail-soft to the text fallback).
+    if (!item.mention) {
+      const mention = await resolveGuildMention(env, item, { fetchImpl });
+      if (mention) item = { ...item, mention };
     }
 
     let anyFail = false;

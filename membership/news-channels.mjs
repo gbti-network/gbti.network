@@ -24,6 +24,18 @@ export function channelForCategory(parsed, category) {
   return newsChannelMap(parsed).get(lc(category)) ?? null;
 }
 
+/** SOW-088: resolve a channel for a taxonomy PATH, DEEPEST-mapped key first (['ai','prompts','skill'] tries
+ *  skill, then prompts, then ai). Lets one leaf mapping (skill -> #devops) win over the broad top-level row.
+ *  Falls back to null like channelForCategory; a non-array input degrades to the single-key resolution. */
+export function channelForCategoryPath(parsed, path) {
+  const arr = Array.isArray(path) ? path : (path ? [path] : []);
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const hit = channelForCategory(parsed, arr[i]);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 /** Structural validation for CI: `channels` must be a list of { category, numeric channelId }, no dup category.
  *  An absent map (null) is valid (no channels configured). Returns a (possibly empty) array of error strings.
  *  SOW-087: `file` labels the errors, so house/content-channels.yml (same shape) reuses this validator. */

@@ -70,7 +70,7 @@ export function categoryOf(item, fm) {
 }
 
 /** Map a buildSyndicationItem result + its frontmatter to a buildQueueItem INPUT (metadata only, never the body). */
-export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = null, moderation = null }) {
+export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = null, authorDiscord = null, moderation = null }) {
   const title = item.title;
   const blurb = (fm.shortDescription || fm.excerpt || fm.description || '').toString().trim() || null;
   return {
@@ -79,12 +79,14 @@ export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = 
     targetSlug: pathKey(rel),
     author: item.author,
     authorName: authorName || null, // SOW-087: profile displayName, feeds the no-ping template
+    authorDiscord: authorDiscord || null, // SOW-088: the public profile Discord handle
     title,
     blurb,
     // A share posts its off-network link; content posts its public page (null for Mode A members-only).
     url: (item.type === 'share' ? item.shareUrl : publicUrlFor(item, siteOrigin)) || null,
     image: fm.coverImage || fm.image || null,
     category: categoryOf(item, fm), // SOW-087: routes the category-channel Discord post
+    categoryPath: item.type === 'share' ? null : (Array.isArray(fm.categories) ? fm.categories.filter((c) => typeof c === 'string') : null), // SOW-088: leaf-first channel routing
     visibility: item.visibility,
     mention: mention || null,
     flags: flagText(moderation, `${title || ''} ${blurb || ''}`), // SOW-087: the posted surface only
@@ -136,20 +138,25 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   // SOW-087: the moderation word lists (working copy) + the author's profile displayName (for the no-ping template).
   let moderation = null;
   try { moderation = yaml.load(readFile('house/moderation-flags.yml') ?? '') ?? null; } catch { moderation = null; }
-  const nameCache = new Map();
-  const resolveAuthorName = deps.resolveAuthorName ?? ((author) => {
+  const profileCache = new Map();
+  const readProfileFm = (author) => {
     const a = String(author || '');
-    if (!a) return null;
-    if (a === 'gbti' || a === 'house') return 'GBTI Network';
-    if (nameCache.has(a)) return nameCache.get(a);
-    let name = null;
+    if (!a || a === 'gbti' || a === 'house') return null;
+    if (profileCache.has(a)) return profileCache.get(a);
+    let fm = null;
     try {
       const profile = readFile(`members/${a}/profile.md`);
-      if (profile != null) name = parseContentFile(profile).frontmatter?.displayName || null;
-    } catch { name = null; }
-    nameCache.set(a, name);
-    return name;
+      if (profile != null) fm = parseContentFile(profile).frontmatter ?? null;
+    } catch { fm = null; }
+    profileCache.set(a, fm);
+    return fm;
+  };
+  const resolveAuthorName = deps.resolveAuthorName ?? ((author) => {
+    if (String(author) === 'gbti' || String(author) === 'house') return 'GBTI Network';
+    return readProfileFm(author)?.displayName || null;
   });
+  // SOW-088: the profile's PUBLIC Discord handle feeds {member-discord-username} + the drain's guild lookup.
+  const resolveAuthorDiscord = deps.resolveAuthorDiscord ?? ((author) => readProfileFm(author)?.links?.discord || null);
 
   const inputs = [];
   for (const b of built) {
@@ -158,6 +165,7 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
       mention: await resolveMention(b.item.author),
       siteOrigin,
       authorName: resolveAuthorName(b.item.author),
+      authorDiscord: resolveAuthorDiscord(b.item.author),
       moderation,
     }));
   }

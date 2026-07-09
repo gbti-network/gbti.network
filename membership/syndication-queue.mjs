@@ -79,7 +79,8 @@ export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HO
     blurb: trimOrNull(input.blurb),
     url: trimOrNull(input.url),
     image: trimOrNull(input.image),
-    category: trimOrNull(input.category), // SOW-087: routes the category-channel Discord post
+    category: trimOrNull(input.category),
+    categoryPath: Array.isArray(input.categoryPath) ? input.categoryPath.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 6) : null, // SOW-088: the FULL taxonomy path (leaf-first channel routing) // SOW-087: routes the category-channel Discord post
     visibility,
     membersOnly: visibility === 'members',
     mention: trimOrNull(input.mention),
@@ -128,6 +129,7 @@ export function normalizeItem(raw) {
     url: trimOrNull(raw.url),
     image: trimOrNull(raw.image),
     category: trimOrNull(raw.category),
+    categoryPath: Array.isArray(raw.categoryPath) ? raw.categoryPath.map((c) => String(c ?? '').trim()).filter(Boolean).slice(0, 6) : null,
     visibility,
     membersOnly: visibility === 'members',
     mention: trimOrNull(raw.mention),
