@@ -178,6 +178,7 @@ function renderFeed(filter = '') {
  *  publisher detail + Follow-publisher + discussion). Both are defined by mountPageClient (client-ui), called in init(). */
 function openReader(item) {
   if (!item) return;
+  writeReadHash(item); // SOW-092: the address bar carries a copyable deep link while reading
   const fv = $('[data-feedview]');
   const rv = $('[data-readerview]');
   const host = $('[data-reader]');
@@ -189,7 +190,27 @@ function openReader(item) {
   rv.hidden = false;
   window.scrollTo(0, 0);
 }
+// SOW-092: reflect the open item in the hash so every reader view is a copyable deep link. A share keys on
+// <author>/<id>; content types key on the repo path. replaceState adds no history entry + no hashchange.
+function writeReadHash(item) {
+  if (typeof history === 'undefined' || typeof location === 'undefined') return;
+  let key = null;
+  let tab = item.type;
+  if (item.type === 'share') key = item.author && item.id ? `${item.author}/${item.id}` : null;
+  else if (item.type !== 'news' && item.path) key = item.path;
+  if (!key || !tab) return;
+  try { history.replaceState(null, '', location.pathname + location.search + `#tab=${tab}&read=${encodeURIComponent(key)}`); } catch { /* fail-soft */ }
+}
+function stripReadHash() {
+  if (typeof history === 'undefined' || typeof location === 'undefined') return;
+  try {
+    const { tab } = parseBrowseHash(location.hash);
+    history.replaceState(null, '', location.pathname + location.search + (tab ? `#tab=${tab}` : ''));
+  } catch { /* fail-soft */ }
+}
+
 function closeReader() {
+  stripReadHash();
   const fv = $('[data-feedview]');
   const rv = $('[data-readerview]');
   const host = $('[data-reader]');
@@ -675,7 +696,8 @@ function init() {
     if (rd) {
       const act = doFromHash();
       if (act) consumeDo();
-      openReader({ type: t, path: rd, doAction: act });
+      if (t === 'share') window.gbtiOpenShareBySlug(rd);
+      else openReader({ type: t, path: rd, doAction: act });
     }
   });
 
@@ -685,7 +707,8 @@ function init() {
   if (deepRead) {
     const act = doFromHash();
     if (act) consumeDo();
-    openReader({ type: TYPE, path: deepRead, doAction: act });
+    if (TYPE === 'share') window.gbtiOpenShareBySlug(deepRead);
+    else openReader({ type: TYPE, path: deepRead, doAction: act });
   }
 
   // SOW-052: the feed search is now a persistent input in the left rail (shell-rendered). Filter the feed in place
@@ -725,6 +748,13 @@ function init() {
 
   // Re-check the setup banner when the member returns to this tab (e.g. after forking in another tab).
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadSetupBanner(); });
+  // SOW-092: a SHARE deep link (#tab=share&read=<author>/<id>) resolves against the Shares stream, which
+  // loads async; retry briefly until it lands (fail-soft to the filtered feed when the share is gone).
+  window.gbtiOpenShareBySlug = (slug, tries = 20) => {
+    const found = Array.isArray(SHARES) ? SHARES.find((x) => `${x.author}/${x.id}` === slug) : null;
+    if (found) { openReader({ ...found, type: 'share' }); return; }
+    if (tries > 0) setTimeout(() => window.gbtiOpenShareBySlug(slug, tries - 1), 300);
+  };
   // SOW-092: a share posted from the shell "+" modal opens IMMEDIATELY in the page reader (the composer
   // emits a reader-ready optimistic item; SOW-076 instant-feel). Claiming the event stops the shell's
   // no-reader fallback from also navigating to shares.html.

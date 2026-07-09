@@ -20046,6 +20046,7 @@ function renderFence(lang, buf) {
 function renderMarkdown(md) {
   const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
   const out = [];
+  let codeFence = 3;
   let inCode = false;
   let codeBuf = [];
   let codeLang = "";
@@ -20061,17 +20062,25 @@ function renderMarkdown(md) {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    if (/^```/.test(line)) {
+    const fence = /^(`{3,})(.*)$/.exec(line);
+    if (fence) {
       if (!inCode) {
         inCode = true;
         codeBuf = [];
-        codeLang = line.slice(3);
-      } else {
+        codeFence = fence[1].length;
+        codeLang = fence[2];
+        i++;
+        continue;
+      }
+      if (fence[1].length >= codeFence && !fence[2].trim()) {
         inCode = false;
         flushList();
         out.push(renderFence(codeLang, codeBuf));
         codeLang = "";
+        i++;
+        continue;
       }
+      codeBuf.push(line);
       i++;
       continue;
     }

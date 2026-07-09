@@ -140,6 +140,9 @@ const CSS = `
   .locked a { color:var(--accent); }
   .muted { color:var(--muted); }
   .view { display:inline-block; margin-top:22px; font-size:13px; font-weight:700; color:var(--accent); text-decoration:underline; }
+  /* SOW-090: the whole-prompt Copy (a prompt is a copyable artifact). */
+  .copyall { display:inline-block; margin:22px 0 0 12px; font:inherit; font-size:13px; font-weight:700; color:var(--fg); background:var(--panel); border:1.5px solid var(--line); border-radius:999px; padding:6px 16px; cursor:pointer; }
+  .copyall:hover { border-color:var(--accent); color:var(--accent); }
 
   /* The right drawer */
   .side { display:flex; flex-direction:column; gap:22px; }
@@ -192,7 +195,7 @@ class GbtiReader extends GbtiElement {
   /** open(item): { type, path, title, author, publishedAt, url, visibility, thumb?, thumbCard?, thumbWide?,
    *  categoryLabels?, body?, encryptedBody? }. For share, body/encryptedBody come from the summary; for
    *  post/product/prompt they come from readItem(path). */
-  open(item) { this._item = item; this._html = null; this._author = undefined; this._doDone = false; this.render(); this._resolve(); }
+  open(item) { this._item = item; this._html = null; this._author = undefined; this._doDone = false; this._rawBody = null; this.render(); this._resolve(); }
 
   async _resolve() {
     const it = this._item || {};
@@ -232,6 +235,9 @@ class GbtiReader extends GbtiElement {
     try {
       if (it.type === 'share') return await this._body(it.visibility, it.body, it.encryptedBody);
       const { frontmatter, body } = await this.client.readItem({ path: it.path });
+      // SOW-090: keep the RAW markdown so "Copy prompt" copies the canonical source (matching the public
+      // site's prompt Copy, which always yields the raw markdown regardless of the active view).
+      this._rawBody = typeof body === 'string' ? body : null;
       return await this._body(it.visibility, body, frontmatter?.encryptedBody);
     } catch {
       return { error: true };
@@ -347,10 +353,14 @@ class GbtiReader extends GbtiElement {
     if (!it) { this.set(this.css(CSS)); return; }
     // A Share's `url` is the external link it points at; every other type's `url` is a gbti.network path.
     const view = it.type === 'share'
-      ? (it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf(it.url))}</a>` : '')
+      ? (it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? 'Watch video' : 'Read article'} on ${esc(hostOf(it.url))}</a>` : '')
       : (it.url ? `<a class="view" href="${esc(SITE + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : '');
     const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
     const meta = this._metaHtml(it, when);
+    // SOW-090: a whole-prompt Copy for PROMPT items (a prompt is a copyable artifact; the public site has
+    // this and the extension reader did not). Copies the raw markdown body.
+    const copyAll = (it.type === 'prompt' && this._rawBody)
+      ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : '';
     // SOW-050: the hero uses the full-res thumbWide derivative (falls back to the card/list thumb if absent).
     // SOW-092: a share whose link is a recognized video (YouTube/Vimeo/TikTok/Rumble embed) plays INLINE —
     // the embed replaces the static share image (the image was usually just that video's thumbnail).
@@ -393,11 +403,22 @@ class GbtiReader extends GbtiElement {
       ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>`
       : '';
 
-    this.set(this.css(CSS) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}${shareUpvote}</article>${side}</div></div>`);
-    if (resolved) { this._enhanceCode(); this._wireFollow(it); }
+    this.set(this.css(CSS) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
+    if (resolved) { this._enhanceCode(); this._wireFollow(it); this._wireCopyAll(); }
   }
 
   // SOW-050: upgrade each <pre> code block into a code card (language label + Copy button). Idempotent per render.
+  // SOW-090: copy the canonical raw markdown of the whole prompt.
+  _wireCopyAll() {
+    const btn = this.$('[data-copyall]');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(this._rawBody || ''); btn.textContent = 'Copied'; }
+      catch { btn.textContent = 'Copy failed'; }
+      setTimeout(() => { btn.textContent = 'Copy prompt'; }, 1400);
+    });
+  }
+
   _enhanceCode() {
     this.$$('.body pre').forEach((pre) => {
       const code = pre.querySelector('code');

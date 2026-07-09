@@ -7642,7 +7642,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const badge = share.visibility === "members" ? `<span class="badge">Members</span>` : "";
       const title = share.title ? `<div class="title">${esc(share.title)}</div>` : "";
       const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : "";
-      const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf2(share.url))}</a>` : "";
+      const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">${embedUrl(share.url) ? "Watch video" : "Read article"} on ${esc(hostOf2(share.url))}</a>` : "";
       const shareEmbed = share.url ? embedUrl(share.url) : null;
       const heroUrl = share.image ? resolveAsset(share.image) : "";
       const hero = shareEmbed ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`https://gbti.network/embed/?u=${encodeURIComponent(share.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : "";
@@ -12826,6 +12826,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .locked a { color:var(--accent); }
   .muted { color:var(--muted); }
   .view { display:inline-block; margin-top:22px; font-size:13px; font-weight:700; color:var(--accent); text-decoration:underline; }
+  /* SOW-090: the whole-prompt Copy (a prompt is a copyable artifact). */
+  .copyall { display:inline-block; margin:22px 0 0 12px; font:inherit; font-size:13px; font-weight:700; color:var(--fg); background:var(--panel); border:1.5px solid var(--line); border-radius:999px; padding:6px 16px; cursor:pointer; }
+  .copyall:hover { border-color:var(--accent); color:var(--accent); }
 
   /* The right drawer */
   .side { display:flex; flex-direction:column; gap:22px; }
@@ -12882,6 +12885,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._html = null;
       this._author = void 0;
       this._doDone = false;
+      this._rawBody = null;
       this.render();
       this._resolve();
     }
@@ -12923,6 +12927,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         if (it.type === "share") return await this._body(it.visibility, it.body, it.encryptedBody);
         const { frontmatter, body } = await this.client.readItem({ path: it.path });
+        this._rawBody = typeof body === "string" ? body : null;
         return await this._body(it.visibility, body, frontmatter?.encryptedBody);
       } catch {
         return { error: true };
@@ -13013,9 +13018,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS35));
         return;
       }
-      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE13 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
+      const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? "Watch video" : "Read article"} on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE13 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = this._metaHtml(it, when);
+      const copyAll = it.type === "prompt" && this._rawBody ? `<button class="copyall" type="button" data-copyall>Copy prompt</button>` : "";
       const shareEmbed = it.type === "share" && it.url ? embedUrl(it.url) : null;
       const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
       const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(`${SITE13}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
@@ -13034,13 +13040,30 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const sideLink = it.type === "share" && it.url ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf2(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
-      this.set(this.css(CSS35) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${shareUpvote}</article>${side}</div></div>`);
+      this.set(this.css(CSS35) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
+        this._wireCopyAll();
       }
     }
     // SOW-050: upgrade each <pre> code block into a code card (language label + Copy button). Idempotent per render.
+    // SOW-090: copy the canonical raw markdown of the whole prompt.
+    _wireCopyAll() {
+      const btn = this.$("[data-copyall]");
+      if (!btn) return;
+      btn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(this._rawBody || "");
+          btn.textContent = "Copied";
+        } catch {
+          btn.textContent = "Copy failed";
+        }
+        setTimeout(() => {
+          btn.textContent = "Copy prompt";
+        }, 1400);
+      });
+    }
     _enhanceCode() {
       this.$$(".body pre").forEach((pre) => {
         const code = pre.querySelector("code");

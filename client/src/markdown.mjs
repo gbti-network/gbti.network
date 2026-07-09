@@ -52,6 +52,7 @@ function renderFence(lang, buf) {
 export function renderMarkdown(md) {
   const lines = String(md ?? '').replace(/\r\n/g, '\n').split('\n');
   const out = [];
+  let codeFence = 3;
   let inCode = false;
   let codeBuf = [];
   let codeLang = '';
@@ -68,10 +69,13 @@ export function renderMarkdown(md) {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    if (/^```/.test(line)) {
-      if (!inCode) { inCode = true; codeBuf = []; codeLang = line.slice(3); }
-      else { inCode = false; flushList(); out.push(renderFence(codeLang, codeBuf)); codeLang = ''; }
-      i++; continue;
+    const fence = /^(`{3,})(.*)$/.exec(line);
+    if (fence) {
+      if (!inCode) { inCode = true; codeBuf = []; codeFence = fence[1].length; codeLang = fence[2]; i++; continue; }
+      // CommonMark: a fence closes only on a fence of >= the OPENING length with no info string, so a
+      // ````markdown block can carry ``` fences as CONTENT (the /ci skill prompt broke on this).
+      if (fence[1].length >= codeFence && !fence[2].trim()) { inCode = false; flushList(); out.push(renderFence(codeLang, codeBuf)); codeLang = ''; i++; continue; }
+      codeBuf.push(line); i++; continue;
     }
     if (inCode) { codeBuf.push(line); i++; continue; }
 

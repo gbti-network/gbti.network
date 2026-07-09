@@ -70,3 +70,14 @@ test('build: remarkContentBlocks turns callout/embed code nodes into html nodes,
   assert.match(tree.children[1].value, /youtube\.com\/embed\/dQw4w9WgXcQ/);
   assert.equal(tree.children[2].type, 'code'); // a real code block is left untouched
 });
+
+test('a 4-backtick fence carries ``` fences as CONTENT (the /ci skill prompt regression)', () => {
+  const md = 'Intro\n\n````markdown\n# Title\n```bash\necho hi\n```\nAfter the inner fence.\n````\n\nOutro';
+  const html = renderMarkdown(md);
+  // ONE code block whose content includes the inner fence lines verbatim (escaped), not a paragraph split.
+  assert.equal((html.match(/<pre/g) || []).length, 1);
+  assert.match(html, /```bash/);
+  assert.match(html, /After the inner fence\./);
+  assert.match(html, /<p>Outro<\/p>/);
+  assert.ok(!/<p>[^<]*echo hi/.test(html), 'inner code never leaks into a paragraph');
+});
