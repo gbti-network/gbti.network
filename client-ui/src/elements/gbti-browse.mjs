@@ -3,7 +3,7 @@
 // existing authenticated <gbti-shares-feed>). A row opens <gbti-reader> in a detail pane IN the extension,
 // never navigating to gbti.network. Host-agnostic. Fail-soft: an unreachable index renders an empty state.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { parseBrowseHash } from '../browse-hash.mjs';
+import { parseBrowseHash, stripDoParam } from '../browse-hash.mjs';
 import { mergeAll, canSeeShares } from '../all-merge.mjs'; // SOW-042: the shared All directory merge + Shares policy
 import './gbti-reader.mjs';
 import './gbti-shares-feed.mjs';
@@ -22,6 +22,14 @@ const TABS = [
   { id: 'news', label: 'News' }, // SOW-043: a self-loading members-only feed (not a per-type index)
 ];
 const CONTENT_TYPES = ['post', 'product', 'prompt'];
+
+// SOW-114: one-shot semantics for a do= force-action — replace the hash WITHOUT it so a refresh or the
+// hashchange listener never re-runs the action. replaceState adds no history entry and fires no hashchange.
+function consumeDo() {
+  if (typeof location === 'undefined' || typeof history === 'undefined') return;
+  const rest = stripDoParam(location.hash);
+  try { history.replaceState(null, '', location.pathname + location.search + (rest ? '#' + rest : '')); } catch { /* fail-soft */ }
+}
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
@@ -61,10 +69,12 @@ class GbtiBrowse extends GbtiElement {
     // (including _init below) and the page renders nothing.
     // SOW-031: the hash carries tab + an optional read=<repo path> deep-link (set by the new-tab feed rows), so a
     // click on a Latest/Following row lands here and auto-opens that item in the reader instead of gbti.network.
-    const { tab, read } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
+    const { tab, read, action } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
     // SOW-042: a bare browse.html (e.g. the site header's "Browse the co-op") lands on the All directory.
     this._tab = tab && TABS.some((t) => t.id === tab) ? tab : 'all';
     this._openPath = (this._tab !== 'share' && this._tab !== 'all' && this._tab !== 'news') ? read : null; // shares/all/news have no path-addressed reader item
+    this._openDo = this._openPath ? action : null; // SOW-114: the deep-link force-action (do=favorite|collect)
+    if (this._openDo) consumeDo(); // one-shot: strip do= from the hash so refresh/hashchange never re-runs it
     this._cache = {};
     this._cat = []; // SOW-054: the selected category drill-down path ([] = All; [primary]; [primary, sub])
     this._shares = null; // SOW-042: raw Shares for the All tab, fetched once (member-gated)
@@ -81,9 +91,16 @@ class GbtiBrowse extends GbtiElement {
     // SOW-036: react to hashchange so the shared left rail's Articles/Products/Prompts/Shares links switch the
     // active tab (and open a read=<path> deep-link) while already on the Browse page, not just on first load.
     this._onHash = () => {
-      const { tab, read } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
+      const { tab, read, action } = parseBrowseHash(typeof location !== 'undefined' ? location.hash : '');
       const t = tab && TABS.some((x) => x.id === tab) ? tab : this._tab;
-      if (read && t !== 'share' && t !== 'all' && t !== 'news') { this._tab = t; this._reading = (this._cache[t] || []).find((x) => x.path === read) || { type: t, path: read }; this.render(); this._ensure(t); return; }
+      if (read && t !== 'share' && t !== 'all' && t !== 'news') {
+        this._tab = t;
+        const found = (this._cache[t] || []).find((x) => x.path === read);
+        // SOW-114: spread so a do= force-action never mutates the shared cache row; strip it once consumed.
+        this._reading = { ...(found || { type: t, path: read }), doAction: action || null };
+        if (action) consumeDo();
+        this.render(); this._ensure(t); return;
+      }
       if (t !== this._tab || this._reading) { this._tab = t; this._cat = []; this._reading = null; this.render(); this._ensureTab(t); }
     };
     if (typeof window !== 'undefined') window.addEventListener('hashchange', this._onHash);
@@ -101,8 +118,10 @@ class GbtiBrowse extends GbtiElement {
     if (this._openPath) {
       const found = (this._cache[this._tab] || []).find((x) => x.path === this._openPath);
       // Found -> open the rich index item; not found (race / pruned) -> a minimal item the reader fetches by path.
-      this._reading = found || { type: this._tab, path: this._openPath };
+      // SOW-114: spread so a do= force-action rides the reading copy, never the shared cache row.
+      this._reading = { ...(found || { type: this._tab, path: this._openPath }), doAction: this._openDo };
       this._openPath = null;
+      this._openDo = null;
       this.render();
     }
   }

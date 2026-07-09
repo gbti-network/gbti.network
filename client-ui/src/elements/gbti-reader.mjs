@@ -187,7 +187,7 @@ class GbtiReader extends GbtiElement {
   /** open(item): { type, path, title, author, publishedAt, url, visibility, thumb?, thumbCard?, thumbWide?,
    *  categoryLabels?, body?, encryptedBody? }. For share, body/encryptedBody come from the summary; for
    *  post/product/prompt they come from readItem(path). */
-  open(item) { this._item = item; this._html = null; this._author = undefined; this.render(); this._resolve(); }
+  open(item) { this._item = item; this._html = null; this._author = undefined; this._doDone = false; this.render(); this._resolve(); }
 
   async _resolve() {
     const it = this._item || {};
@@ -197,6 +197,30 @@ class GbtiReader extends GbtiElement {
     this._html = html;
     this._author = author;
     this.render();
+    this._applyDo(it);
+  }
+
+  // SOW-114: honor a deep-link force-action (item.doAction = 'favorite' | 'collect') ONCE per open. The
+  // public content pages send it via the SOW-036 relay so the site's inert Favorite/Save land here and act.
+  // favorite = ensure-ON (applyFavorite treats `on` as the desired state, so this is idempotent and never
+  // removes an existing favorite); collect = open the collection picker. Fail closed: with no signed-in
+  // client the call fails and the reader's normal state stands (the one-shot guard is set first, no retry).
+  async _applyDo(it) {
+    const act = it?.doAction;
+    if (!act || this._doDone) return;
+    this._doDone = true;
+    if (!this.client || it.type === 'share') return;
+    const slug = targetSlugFor(it);
+    if (!slug) return;
+    if (act === 'favorite') {
+      try {
+        const res = await this.client.toggleFavorite({ targetType: it.type, targetSlug: slug, on: true });
+        const fav = this.$('gbti-favorite');
+        if (fav) { fav._faved = res?.favorited !== false; fav.render?.(); }
+      } catch { /* signed-out or refused: leave the meta controls as they are */ }
+    } else if (act === 'collect') {
+      this.$('gbti-collection')?._toggleOpen?.();
+    }
   }
 
   async _resolveBody(it) {

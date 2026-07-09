@@ -2565,14 +2565,18 @@
 
   // client-ui/src/browse-hash.mjs
   var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
-  function buildReadHash(type, path) {
+  var DO_ACTIONS = /* @__PURE__ */ new Set(["favorite", "collect"]);
+  function buildReadHash(type, path, doAction) {
     const t = TAB_IDS.has(type) ? type : "post";
-    return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
+    if (!path) return `tab=${t}`;
+    const act = DO_ACTIONS.has(doAction) ? `&do=${doAction}` : "";
+    return `tab=${t}&read=${encodeURIComponent(path)}${act}`;
   }
   function parseBrowseHash(hash) {
     const s = String(hash || "").replace(/^#/, "");
     const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     const readM = s.match(/(?:^|&)read=([^&]+)/);
+    const doM = s.match(/(?:^|&)do=([a-z]+)(?:&|$)/);
     const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
     let read = null;
     if (readM) {
@@ -2582,7 +2586,12 @@
         read = readM[1];
       }
     }
-    return { tab, read };
+    const action = doM && DO_ACTIONS.has(doM[1]) ? doM[1] : null;
+    return { tab, read, action };
+  }
+  function stripDoParam(hash) {
+    const s = String(hash || "").replace(/^#/, "");
+    return s.split("&").filter((p) => !/^do=/.test(p)).join("&");
   }
 
   // client-ui/src/tokens.mjs
@@ -13332,6 +13341,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._item = item;
       this._html = null;
       this._author = void 0;
+      this._doDone = false;
       this.render();
       this._resolve();
     }
@@ -13341,6 +13351,33 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._html = html;
       this._author = author;
       this.render();
+      this._applyDo(it);
+    }
+    // SOW-114: honor a deep-link force-action (item.doAction = 'favorite' | 'collect') ONCE per open. The
+    // public content pages send it via the SOW-036 relay so the site's inert Favorite/Save land here and act.
+    // favorite = ensure-ON (applyFavorite treats `on` as the desired state, so this is idempotent and never
+    // removes an existing favorite); collect = open the collection picker. Fail closed: with no signed-in
+    // client the call fails and the reader's normal state stands (the one-shot guard is set first, no retry).
+    async _applyDo(it) {
+      const act = it?.doAction;
+      if (!act || this._doDone) return;
+      this._doDone = true;
+      if (!this.client || it.type === "share") return;
+      const slug = targetSlugFor(it);
+      if (!slug) return;
+      if (act === "favorite") {
+        try {
+          const res = await this.client.toggleFavorite({ targetType: it.type, targetSlug: slug, on: true });
+          const fav = this.$("gbti-favorite");
+          if (fav) {
+            fav._faved = res?.favorited !== false;
+            fav.render?.();
+          }
+        } catch {
+        }
+      } else if (act === "collect") {
+        this.$("gbti-collection")?._toggleOpen?.();
+      }
     }
     async _resolveBody(it) {
       try {
@@ -13532,6 +13569,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-043: a self-loading members-only feed (not a per-type index)
   ];
   var CONTENT_TYPES = ["post", "product", "prompt"];
+  function consumeDo() {
+    if (typeof location === "undefined" || typeof history === "undefined") return;
+    const rest = stripDoParam(location.hash);
+    try {
+      history.replaceState(null, "", location.pathname + location.search + (rest ? "#" + rest : ""));
+    } catch {
+    }
+  }
   var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
@@ -13565,9 +13610,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 `;
   var GbtiBrowse = class extends GbtiElement {
     connectedCallback() {
-      const { tab, read } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
+      const { tab, read, action } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
       this._tab = tab && TABS2.some((t) => t.id === tab) ? tab : "all";
       this._openPath = this._tab !== "share" && this._tab !== "all" && this._tab !== "news" ? read : null;
+      this._openDo = this._openPath ? action : null;
+      if (this._openDo) consumeDo();
       this._cache = {};
       this._cat = [];
       this._shares = null;
@@ -13579,11 +13626,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (t && t.tagName === "IMG" && t.classList?.contains("thumb")) t.style.display = "none";
       }, true);
       this._onHash = () => {
-        const { tab: tab2, read: read2 } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
+        const { tab: tab2, read: read2, action: action2 } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
         const t = tab2 && TABS2.some((x) => x.id === tab2) ? tab2 : this._tab;
         if (read2 && t !== "share" && t !== "all" && t !== "news") {
           this._tab = t;
-          this._reading = (this._cache[t] || []).find((x) => x.path === read2) || { type: t, path: read2 };
+          const found = (this._cache[t] || []).find((x) => x.path === read2);
+          this._reading = { ...found || { type: t, path: read2 }, doAction: action2 || null };
+          if (action2) consumeDo();
           this.render();
           this._ensure(t);
           return;
@@ -13608,8 +13657,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       await this._ensureTab(this._tab);
       if (this._openPath) {
         const found = (this._cache[this._tab] || []).find((x) => x.path === this._openPath);
-        this._reading = found || { type: this._tab, path: this._openPath };
+        this._reading = { ...found || { type: this._tab, path: this._openPath }, doAction: this._openDo };
         this._openPath = null;
+        this._openDo = null;
         this.render();
       }
     }

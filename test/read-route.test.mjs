@@ -9,7 +9,7 @@ import path from 'node:path';
 import { createReader } from '../client/src/repo-fs.mjs';
 import { readContent, OperationError } from '../client/src/operations.mjs';
 import { handleApi } from '../client/src/api.mjs';
-import { buildReadHash, parseBrowseHash } from '../client-ui/src/browse-hash.mjs';
+import { buildReadHash, parseBrowseHash, stripDoParam } from '../client-ui/src/browse-hash.mjs';
 import { resolveAsset } from '../client-ui/src/assets.mjs';
 
 const POST = '---\ntype: post\ntitle: Hello\nslug: hello\nauthor: alice\nstatus: published\nvisibility: public\n---\n\nBody here\n';
@@ -94,15 +94,34 @@ test('buildReadHash / parseBrowseHash round-trip (SOW-031 feed-row deep link)', 
   const p = 'members/alice/posts/hello/index.md';
   const hash = buildReadHash('post', p);
   assert.equal(hash, `tab=post&read=${encodeURIComponent(p)}`);
-  assert.deepEqual(parseBrowseHash('#' + hash), { tab: 'post', read: p });
+  assert.deepEqual(parseBrowseHash('#' + hash), { tab: 'post', read: p, action: null });
   // tab-only when no path
   assert.equal(buildReadHash('product', null), 'tab=product');
-  assert.deepEqual(parseBrowseHash('tab=product'), { tab: 'product', read: null });
+  assert.deepEqual(parseBrowseHash('tab=product'), { tab: 'product', read: null, action: null });
   // unknown tab -> null tab (caller defaults to post); a bad type in build falls back to post
-  assert.deepEqual(parseBrowseHash('tab=bogus&read=x'), { tab: null, read: 'x' });
+  assert.deepEqual(parseBrowseHash('tab=bogus&read=x'), { tab: null, read: 'x', action: null });
   assert.equal(buildReadHash('bogus', p).startsWith('tab=post&read='), true);
   // malformed encoding does not throw
-  assert.deepEqual(parseBrowseHash('tab=post&read=%E0%A4%A'), { tab: 'post', read: '%E0%A4%A' });
+  assert.deepEqual(parseBrowseHash('tab=post&read=%E0%A4%A'), { tab: 'post', read: '%E0%A4%A', action: null });
+});
+
+test('do= force-action: bounded build/parse + one-shot strip (SOW-114 content-page deep link)', () => {
+  const p = 'members/alice/prompts/hello/index.md';
+  // Build with a valid action, round-trip through parse.
+  const hash = buildReadHash('prompt', p, 'favorite');
+  assert.equal(hash, `tab=prompt&read=${encodeURIComponent(p)}&do=favorite`);
+  assert.deepEqual(parseBrowseHash('#' + hash), { tab: 'prompt', read: p, action: 'favorite' });
+  assert.equal(parseBrowseHash(buildReadHash('post', p, 'collect')).action, 'collect');
+  // An unknown action never builds and never parses (bounded set).
+  assert.equal(buildReadHash('prompt', p, 'delete'), `tab=prompt&read=${encodeURIComponent(p)}`);
+  assert.equal(parseBrowseHash('tab=prompt&read=x&do=delete').action, null);
+  // No path -> no action (a tab-only hash cannot force anything).
+  assert.equal(buildReadHash('prompt', null, 'favorite'), 'tab=prompt');
+  // stripDoParam removes only the do= segment, in any position, and tolerates its absence.
+  assert.equal(stripDoParam('#' + hash), `tab=prompt&read=${encodeURIComponent(p)}`);
+  assert.equal(stripDoParam('do=favorite&tab=post'), 'tab=post');
+  assert.equal(stripDoParam('tab=post&read=x'), 'tab=post&read=x');
+  assert.equal(stripDoParam(''), '');
 });
 
 test('resolveAsset: SITE-relative -> absolute, already-absolute passes through, null fallback', () => {
