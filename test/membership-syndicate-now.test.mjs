@@ -128,11 +128,30 @@ test('discord: the author mention resolves from the registry and the forward hit
   assert.equal(rec.channels['discord-forward:999888777666555444'].status, 'sent');
 });
 
+test('discord: the GUILD member search resolves the mention when the registry has no customer', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
+  const posts = [];
+  const postDiscord = async (channelId, item, { textOverride }) => { posts.push({ textOverride }); return { ok: true, id: 'm', url: 'u' }; };
+  const makeDiscord = () => ({
+    searchGuildMembers: async (guild, q) => (q === 'atwellpub' ? [{ user: { id: '424242424242', username: 'atwellpub' } }] : []),
+    forwardChannelMessage: async () => ({ id: 'f' }),
+  });
+  const fetchImpl = async (url) => (String(url).startsWith('https://api.github.com/') ? { ok: true, async json() { return { id: 2002207 }; } } : (() => { throw new Error('no'); })());
+  const makeStripe = () => ({ findCustomerByGithubId: async () => null }); // the registry misses (status: none)
+  const env = { ...ENV_DISCORD, STRIPE_SECRET_KEY: 'rk', DISCORD_GUILD_ID: 'g1', SIGNUP_KV: kv };
+  const r = await handleSyndicateNow(
+    req({ destination: 'discord', item: ITEM, template: 'By {member-discord-username}', channelId: '111222333444555666' }),
+    env, { kv, authorize: superadmin, now: () => 1000, postDiscord, makeDiscord, makeStripe, fetchImpl },
+  );
+  assert.equal(r.status, 200);
+  assert.equal(posts[0].textOverride, 'By <@424242424242>'); // the guild search produced a REAL mention
+});
+
 test('discord: a mention-resolution miss falls back to the text username; a forward failure never un-sends', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
   const posts = [];
   const postDiscord = async (channelId, item, { textOverride }) => { posts.push({ textOverride }); return { ok: true, id: 'msg1', url: 'u' }; };
-  const makeDiscord = () => ({ forwardChannelMessage: async () => { throw new Error('missing access'); } });
+  const makeDiscord = () => ({ searchGuildMembers: async () => [], forwardChannelMessage: async () => { throw new Error('missing access'); } });
   const fetchImpl = async () => ({ ok: false, status: 404 }); // the GitHub lookup misses
   const makeStripe = () => ({ findCustomerByGithubId: async () => null });
   const env = { ...ENV_DISCORD, STRIPE_SECRET_KEY: 'rk', SIGNUP_KV: kv };

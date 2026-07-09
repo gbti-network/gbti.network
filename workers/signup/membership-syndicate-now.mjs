@@ -68,22 +68,45 @@ export async function handleSyndicateNowInfo(request, env, deps = {}) {
  * customer's discord_user_id (the registry, SOW-002). Fail-soft: any miss returns null and the template
  * falls back to the profile handle / GitHub username.
  */
-async function resolveAuthorMention(request, env, item, { fetchImpl, makeStripe }) {
+async function resolveAuthorMention(request, env, item, { fetchImpl, makeStripe, makeDiscord }) {
+  const login = String(item.author || '').trim();
+  if (!login) return null;
+  // 1. The registry: github login -> github_id -> the Stripe customer's discord_user_id (SOW-002).
   try {
-    const login = String(item.author || '').trim();
-    if (!login || !env?.STRIPE_SECRET_KEY) return null;
-    const auth = request.headers.get('Authorization') || '';
-    const ghRes = await fetchImpl(`https://api.github.com/users/${encodeURIComponent(login)}`, {
-      headers: { 'User-Agent': 'gbti-syndicate/0.1', Accept: 'application/vnd.github+json', ...(auth ? { Authorization: auth } : {}) },
-    });
-    if (!ghRes?.ok) return null;
-    const githubId = String((await ghRes.json())?.id ?? '');
-    if (!githubId) return null;
-    const stripe = makeStripe({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
-    const customer = await stripe.findCustomerByGithubId(githubId);
-    const discordId = String(customer?.metadata?.discord_user_id ?? '').trim();
-    return /^\d{5,}$/.test(discordId) ? `<@${discordId}>` : null;
-  } catch { return null; }
+    if (env?.STRIPE_SECRET_KEY) {
+      const auth = request.headers.get('Authorization') || '';
+      const ghRes = await fetchImpl(`https://api.github.com/users/${encodeURIComponent(login)}`, {
+        headers: { 'User-Agent': 'gbti-syndicate/0.1', Accept: 'application/vnd.github+json', ...(auth ? { Authorization: auth } : {}) },
+      });
+      if (ghRes?.ok) {
+        const githubId = String((await ghRes.json())?.id ?? '');
+        if (githubId) {
+          const stripe = makeStripe({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
+          const customer = await stripe.findCustomerByGithubId(githubId);
+          const discordId = String(customer?.metadata?.discord_user_id ?? '').trim();
+          if (/^\d{5,}$/.test(discordId)) return `<@${discordId}>`;
+        }
+      }
+    }
+  } catch { /* fall through to the guild search */ }
+  // 2. The guild itself: an exact username / display-name match via the member search (the registry has no
+  // customer until the member completes signup, but the bot can see who is in the guild right now).
+  try {
+    if (env?.DISCORD_BOT_TOKEN && env?.DISCORD_GUILD_ID) {
+      const discord = makeDiscord({ botToken: env.DISCORD_BOT_TOKEN, fetch: fetchImpl });
+      const handle = String(item.authorDiscord || '').trim().replace(/^@/, '');
+      for (const q of [...new Set([handle, login].filter(Boolean))]) {
+        const found = await discord.searchGuildMembers(env.DISCORD_GUILD_ID, q, { limit: 5 });
+        const lc = q.toLowerCase();
+        const hit = (Array.isArray(found) ? found : []).find((m) =>
+          String(m?.user?.username || '').toLowerCase() === lc
+          || String(m?.user?.global_name || '').toLowerCase() === lc
+          || String(m?.nick || '').toLowerCase() === lc);
+        if (hit?.user?.id) return `<@${hit.user.id}>`;
+      }
+    }
+  } catch { /* fail-soft to the text fallback */ }
+  return null;
 }
 
 export async function handleSyndicateNow(request, env, deps = {}) {
@@ -109,7 +132,7 @@ export async function handleSyndicateNow(request, env, deps = {}) {
 
   // A REAL Discord mention for the author when the registry knows them (fail-soft to the text fallback).
   if (destination === 'discord' && !item.mention) {
-    const mention = await resolveAuthorMention(request, env, item, { fetchImpl, makeStripe });
+    const mention = await resolveAuthorMention(request, env, item, { fetchImpl, makeStripe, makeDiscord });
     if (mention) item = { ...item, mention };
   }
 

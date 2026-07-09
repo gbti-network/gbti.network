@@ -62,6 +62,12 @@ export function createDiscordClient({ botToken, fetch = globalThis.fetch, baseUr
       return req('POST', `/channels/${channelId}/messages`, { content, allowed_mentions: allowedMentions });
     },
 
+    /** SOW-088: search guild members by username prefix (REST; no privileged intent). Returns the raw
+     *  member array ({ user: { id, username, global_name }, nick }). */
+    async searchGuildMembers(guildId, query, { limit = 5 } = {}) {
+      return req('GET', `/guilds/${guildId}/members/search?query=${encodeURIComponent(query)}&limit=${limit}`);
+    },
+
     /** SOW-088: FORWARD a message to another channel (the Discord forward, message_reference type 1).
      *  Mirrors the client UI's Forward action; the bot needs access to both channels. */
     async forwardChannelMessage(toChannelId, { messageId, fromChannelId, guildId = null } = {}) {
