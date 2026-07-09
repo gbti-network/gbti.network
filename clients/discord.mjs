@@ -62,6 +62,14 @@ export function createDiscordClient({ botToken, fetch = globalThis.fetch, baseUr
       return req('POST', `/channels/${channelId}/messages`, { content, allowed_mentions: allowedMentions });
     },
 
+    /** SOW-088: FORWARD a message to another channel (the Discord forward, message_reference type 1).
+     *  Mirrors the client UI's Forward action; the bot needs access to both channels. */
+    async forwardChannelMessage(toChannelId, { messageId, fromChannelId, guildId = null } = {}) {
+      return req('POST', `/channels/${toChannelId}/messages`, {
+        message_reference: { type: 1, message_id: messageId, channel_id: fromChannelId, ...(guildId ? { guild_id: guildId } : {}) },
+      });
+    },
+
     /** Edit a message the bot posted (SOW-046 D: append a "discussion started" notice to a news post). Same
      *  ping-safe default as postChannelMessage. Needs the message to be the bot's own. */
     async editChannelMessage(channelId, messageId, content, { allowedMentions = { parse: [] } } = {}) {

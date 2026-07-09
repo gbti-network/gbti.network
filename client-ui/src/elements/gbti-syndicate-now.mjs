@@ -138,18 +138,26 @@ class GbtiSyndicateNow extends GbtiElement {
       const opts = [...groups.entries()].map(([sec, list]) =>
         `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === selected ? ' selected' : ''}>#${esc(c.name)}</option>`).join('')}</optgroup>`).join('');
       // When the name list is unavailable the picker degrades to a manual channel-id input, never a dead end.
+      const fwdSelected = this._forwardId ?? '';
+      const fwdOpts = `<option value=""${fwdSelected ? '' : ' selected'}>Do not forward</option>` + [...groups.entries()].map(([sec, list]) =>
+        `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === fwdSelected ? ' selected' : ''}>#${esc(c.name)}</option>`).join('')}</optgroup>`).join('');
       const preNote = this._preselectedNote === 'featured'
         ? ` <span style="font-weight:400">(pre-selected: the featured ${esc(item.source)} channel)</span>`
         : this._preselectedNote === 'category' ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || '')} category)</span>` : '';
       channelRow = opts
         ? `<label>Channel${preNote}</label>
-          <select data-channel>${opts}</select>`
+          <select data-channel>${opts}</select>
+          <label>Forward to <span style="font-weight:400">(a secondary channel gets the Discord FORWARD of the original post${this._forwardNote ? `; pre-selected from the ${esc(item.category || '')} category` : ''})</span></label>
+          <select data-forward>${fwdOpts}</select>`
         : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ''}; paste the Discord channel id)</span></label>
           <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || '')}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
     }
     const prior = this._prior?.length ? `<p class="warn">This item already went out (${this._prior.length === 1 ? 'once' : `${this._prior.length} times`}). Publishing again posts a duplicate.</p>` : '';
+    const fwdState = this._result?.forwarded
+      ? (this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : ' Forwarded to the secondary channel.')
+      : '';
     const result = this._result
-      ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}</p>`
+      ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}${fwdState}</p>`
       : '';
     return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category})</span></label>
@@ -177,6 +185,8 @@ class GbtiSyndicateNow extends GbtiElement {
     if (sel) sel.addEventListener('change', () => { this._channelId = sel.value; });
     const manual = this.$('[data-channel-manual]');
     if (manual) manual.addEventListener('input', () => { this._channelId = manual.value.trim(); });
+    const fwd = this.$('[data-forward]');
+    if (fwd) fwd.addEventListener('change', () => { this._forwardId = fwd.value; });
     this.on('[data-publish]', 'click', () => this._publish());
   }
 
@@ -201,6 +211,9 @@ class GbtiSyndicateNow extends GbtiElement {
       const featured = this._info?.featured?.[this._item().source] || null;
       this._channelId = featured || mapped || this._channels[0]?.id || '';
       this._preselectedNote = featured ? 'featured' : (mapped ? 'category' : '');
+      // The secondary FORWARD defaults to the category-mapped channel when it differs from the primary.
+      this._forwardId = mapped && mapped !== this._channelId ? mapped : '';
+      this._forwardNote = Boolean(this._forwardId);
     }
     this.render();
   }
@@ -212,7 +225,10 @@ class GbtiSyndicateNow extends GbtiElement {
     this._busy = true; this._err = null; this.render();
     try {
       const payload = { destination: this._dest, item, template };
-      if (this._dest === 'discord') payload.channelId = this._channelId;
+      if (this._dest === 'discord') {
+        payload.channelId = this._channelId;
+        if (this._forwardId && this._forwardId !== this._channelId) payload.forwardChannelId = this._forwardId;
+      }
       this._result = await this.client.syndicateNow(payload);
       this._prior = [...(this._prior || []), { status: 'sent', sentAt: Date.now() }];
     } catch (err) {

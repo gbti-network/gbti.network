@@ -99,3 +99,51 @@ test('POST text adapter: receives the pre-rendered override; a failed post recor
   const failedRec = [...kv.store.keys()].filter((k) => k.startsWith('synd:item:')).map((k) => JSON.parse(kv.store.get(k))).find((r) => r.status === 'failed');
   assert.equal(failedRec.channels.x.status, 'failed');
 });
+
+// SOW-088 follow-ups: the author's REAL Discord mention resolves via github login -> github_id -> the
+// Stripe registry's discord_user_id (fail-soft), and a secondary channel receives the Discord FORWARD of
+// the original post (never un-sending the primary on a forward failure).
+test('discord: the author mention resolves from the registry and the forward hits the secondary channel', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
+  const posts = [];
+  const postDiscord = async (channelId, item, { textOverride }) => { posts.push({ channelId, textOverride, mention: item.mention }); return { ok: true, id: 'msg9', url: 'https://discord.com/m9' }; };
+  const forwards = [];
+  const makeDiscord = () => ({ forwardChannelMessage: async (to, ref) => { forwards.push({ to, ref }); return { id: 'fwd1' }; } });
+  const fetchImpl = async (url) => {
+    if (String(url).startsWith('https://api.github.com/users/')) return { ok: true, async json() { return { id: 2002207 }; } };
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  const makeStripe = () => ({ findCustomerByGithubId: async (id) => (id === '2002207' ? { metadata: { discord_user_id: '777888999000' } } : null) });
+  const env = { ...ENV_DISCORD, STRIPE_SECRET_KEY: 'rk', DISCORD_GUILD_ID: 'g1', SIGNUP_KV: kv };
+  const r = await handleSyndicateNow(
+    req({ destination: 'discord', item: ITEM, template: 'By {member-discord-username}: {title}', channelId: '111222333444555666', forwardChannelId: '999888777666555444' }),
+    env, { kv, authorize: superadmin, now: () => 1000, postDiscord, makeDiscord, makeStripe, fetchImpl },
+  );
+  assert.equal(r.status, 200);
+  assert.equal(posts[0].mention, '<@777888999000>'); // the registry mention reached the renderer
+  assert.match(posts[0].textOverride, /^By <@777888999000>: CI Skill$/);
+  assert.deepEqual(forwards[0], { to: '999888777666555444', ref: { messageId: 'msg9', fromChannelId: '111222333444555666', guildId: 'g1' } });
+  assert.deepEqual(r.body.forwarded, { channelId: '999888777666555444', id: 'fwd1' });
+  const rec = JSON.parse(kv.store.get([...kv.store.keys()].find((k) => k.startsWith('synd:item:'))));
+  assert.equal(rec.channels['discord-forward:999888777666555444'].status, 'sent');
+});
+
+test('discord: a mention-resolution miss falls back to the text username; a forward failure never un-sends', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
+  const posts = [];
+  const postDiscord = async (channelId, item, { textOverride }) => { posts.push({ textOverride }); return { ok: true, id: 'msg1', url: 'u' }; };
+  const makeDiscord = () => ({ forwardChannelMessage: async () => { throw new Error('missing access'); } });
+  const fetchImpl = async () => ({ ok: false, status: 404 }); // the GitHub lookup misses
+  const makeStripe = () => ({ findCustomerByGithubId: async () => null });
+  const env = { ...ENV_DISCORD, STRIPE_SECRET_KEY: 'rk', SIGNUP_KV: kv };
+  const r = await handleSyndicateNow(
+    req({ destination: 'discord', item: ITEM, template: 'By {member-discord-username}', channelId: '111222333444555666', forwardChannelId: '999888777666555444' }),
+    env, { kv, authorize: superadmin, now: () => 1000, postDiscord, makeDiscord, makeStripe, fetchImpl },
+  );
+  assert.equal(r.status, 200); // the primary send survives the forward failure
+  assert.match(posts[0].textOverride, /^By @.?atwellpub$/);
+  assert.match(r.body.forwarded.error, /missing access/);
+  const rec = JSON.parse(kv.store.get([...kv.store.keys()].find((k) => k.startsWith('synd:item:'))));
+  assert.equal(rec.status, 'sent');
+  assert.equal(rec.channels['discord-forward:999888777666555444'].status, 'failed');
+});

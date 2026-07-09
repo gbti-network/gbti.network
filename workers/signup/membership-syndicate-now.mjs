@@ -22,6 +22,8 @@ import { templateFor, TEMPLATE_TYPES, DEFAULT_TEMPLATES } from '../../membership
 import { buildAdapters } from '../../membership/syndication-adapters.mjs';
 import { postToChannel } from '../../clients/syndication/discord-channel.mjs';
 import { readSyndicationConfig, readContentChannels, putItem, getItem, SYND_DEDUPE_KEY } from './syndication-store.mjs';
+import { createStripeClient } from '../../clients/stripe.mjs';
+import { createDiscordClient } from '../../clients/discord.mjs';
 
 // The destinations the manual flow offers. Reddit is listed but not postable until its adapter lands
 // (the SOW-088 core phase, ported from the owner's Radle plugin).
@@ -60,8 +62,32 @@ export async function handleSyndicateNowInfo(request, env, deps = {}) {
 }
 
 /** POST: render the edited template server-side and post one item to one destination now. */
+/**
+ * Resolve the author's REAL Discord mention (<@id>) so {member-discord-username} links instead of reading
+ * as plain text: github login -> github_id (the GitHub users API, on the caller's own bearer) -> the Stripe
+ * customer's discord_user_id (the registry, SOW-002). Fail-soft: any miss returns null and the template
+ * falls back to the profile handle / GitHub username.
+ */
+async function resolveAuthorMention(request, env, item, { fetchImpl, makeStripe }) {
+  try {
+    const login = String(item.author || '').trim();
+    if (!login || !env?.STRIPE_SECRET_KEY) return null;
+    const auth = request.headers.get('Authorization') || '';
+    const ghRes = await fetchImpl(`https://api.github.com/users/${encodeURIComponent(login)}`, {
+      headers: { 'User-Agent': 'gbti-syndicate/0.1', Accept: 'application/vnd.github+json', ...(auth ? { Authorization: auth } : {}) },
+    });
+    if (!ghRes?.ok) return null;
+    const githubId = String((await ghRes.json())?.id ?? '');
+    if (!githubId) return null;
+    const stripe = makeStripe({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
+    const customer = await stripe.findCustomerByGithubId(githubId);
+    const discordId = String(customer?.metadata?.discord_user_id ?? '').trim();
+    return /^\d{5,}$/.test(discordId) ? `<@${discordId}>` : null;
+  } catch { return null; }
+}
+
 export async function handleSyndicateNow(request, env, deps = {}) {
-  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, adapters = null, postDiscord = postToChannel } = deps;
+  const { kv = env?.SIGNUP_KV, now = Date.now, fetchImpl = globalThis.fetch, authorize = authorizeAdmin, adapters = null, postDiscord = postToChannel, makeStripe = createStripeClient, makeDiscord = createDiscordClient } = deps;
   if (!kv) return { status: 500, body: { error: 'misconfigured', message: 'the syndication store is not configured' } };
   if (request.method !== 'POST') return { status: 405, body: { error: 'method_not_allowed' } };
   const g = await gate(request, env, { fetchImpl, authorize });
@@ -81,6 +107,12 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   try { item = buildQueueItem({ ...(payload?.item ?? {}), trigger: 'manual' }, { now, holdMs: 0 }); }
   catch (err) { return { status: 400, body: { error: 'invalid', message: `invalid item: ${err.message}` } }; }
 
+  // A REAL Discord mention for the author when the registry knows them (fail-soft to the text fallback).
+  if (destination === 'discord' && !item.mention) {
+    const mention = await resolveAuthorMention(request, env, item, { fetchImpl, makeStripe });
+    if (mention) item = { ...item, mention };
+  }
+
   const cfg = await readSyndicationConfig(kv);
   const text = renderTemplate(template, item, { limit: channelLimit(destination) });
 
@@ -93,6 +125,19 @@ export async function handleSyndicateNow(request, env, deps = {}) {
     channelRecordKey = `discord:${channelId}`;
     try { result = await postDiscord(channelId, item, { env, fetchImpl, cfg, textOverride: text }); }
     catch (err) { result = { ok: false, error: err?.message || 'discord post failed' }; }
+    // SOW-088: the optional SECONDARY destination — FORWARD the original post (the Discord forward, same as
+    // the client UI's Forward action) to the category-mapped channel. Fail-soft: a forward miss never
+    // un-sends the primary post; it is recorded separately.
+    const forwardChannelId = String(payload?.forwardChannelId || '').trim();
+    if (result?.ok && result.id && /^\d{5,}$/.test(forwardChannelId) && forwardChannelId !== channelId) {
+      try {
+        const discord = makeDiscord({ botToken: env.DISCORD_BOT_TOKEN, fetch: fetchImpl });
+        const fwd = await discord.forwardChannelMessage(forwardChannelId, { messageId: result.id, fromChannelId: channelId, guildId: env.DISCORD_GUILD_ID || null });
+        result.forwarded = { channelId: forwardChannelId, id: fwd?.id ?? null };
+      } catch (err) {
+        result.forwarded = { channelId: forwardChannelId, error: err?.message || 'forward failed' };
+      }
+    }
   } else {
     if (!secretsPresent(env, destination)) return { status: 409, body: { error: 'not_configured', message: `${destination} is not configured (missing secrets)` } };
     const set = adapters ?? buildAdapters({ env, fetchImpl, cfg });
@@ -106,10 +151,16 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   // the popup's prior-send warning both see it. The dedupe pointer is set only when absent so the CI
   // enqueue path still treats the item as already syndicated.
   const at = Number(now());
+  const channelRecords = { [channelRecordKey]: result?.ok ? { status: 'sent', id: result.id ?? null, url: result.url ?? null, at } : { status: 'failed', error: result?.error || 'post failed', at } };
+  if (result?.forwarded) {
+    channelRecords[`discord-forward:${result.forwarded.channelId}`] = result.forwarded.error
+      ? { status: 'failed', error: result.forwarded.error, at }
+      : { status: 'sent', id: result.forwarded.id, url: null, at };
+  }
   const recorded = {
     ...item,
     status: result?.ok && !result?.skipped ? 'sent' : 'failed',
-    channels: { [channelRecordKey]: result?.ok ? { status: 'sent', id: result.id ?? null, url: result.url ?? null, at } : { status: 'failed', error: result?.error || 'post failed', at } },
+    channels: channelRecords,
     sentAt: result?.ok ? at : null,
     manualBy: g.auth.githubId ?? null,
   };
@@ -120,5 +171,5 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   } catch { /* dedupe is best-effort; the post already happened */ }
 
   if (!result?.ok) return { status: 502, body: { error: 'post_failed', message: result?.error || 'the destination refused the post', itemId: recorded.id } };
-  return { status: 200, body: { ok: true, sent: true, destination, id: result.id ?? null, url: result.url ?? null, itemId: recorded.id, text } };
+  return { status: 200, body: { ok: true, sent: true, destination, id: result.id ?? null, url: result.url ?? null, forwarded: result.forwarded ?? null, itemId: recorded.id, text } };
 }
