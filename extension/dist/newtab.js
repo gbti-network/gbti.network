@@ -13426,7 +13426,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var DEST_LABEL = { discord: "Discord", reddit: "Reddit", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
   var CSS35 = `
   :host { display:block; }
-  .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
+  .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
   .snbtn:hover { border-color:var(--accent); color:var(--accent); }
   .overlay { position:fixed; inset:0; background:rgba(10,12,11,.62); z-index:60; display:flex; align-items:center; justify-content:center; }
   .panel { width:min(560px, calc(100% - 32px)); max-height:calc(100vh - 48px); overflow-y:auto; background:var(--bg, #16181a); color:var(--fg); border:1.5px solid var(--line); border-radius:12px; padding:18px 20px; }
