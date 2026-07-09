@@ -20814,6 +20814,54 @@ function setTemplate(doc, { type, template } = {}, ctx = {}) {
   d.syndication.templates = nextTemplates;
   return { next: d, changed: true, audit: auditEntry6(ctx, t, { template: value || null }) };
 }
+var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky"]);
+function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels } = {}, ctx = {}) {
+  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
+  if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
+  const cur = syndicationConfigFromParsed(doc);
+  let changed = false;
+  const detail = {};
+  if (enabled !== void 0) {
+    if (typeof enabled !== "boolean") throw new TemplateEditError("enabled must be a boolean");
+    if (enabled !== cur.enabled) {
+      d.syndication.enabled = enabled;
+      changed = true;
+      detail.enabled = enabled;
+    }
+  }
+  if (requireApproval !== void 0) {
+    if (typeof requireApproval !== "boolean") throw new TemplateEditError("requireApproval must be a boolean");
+    if (requireApproval !== cur.require_approval) {
+      d.syndication.require_approval = requireApproval;
+      changed = true;
+      detail.require_approval = requireApproval;
+    }
+  }
+  if (holdMinutes !== void 0) {
+    const h = Number(holdMinutes);
+    if (!Number.isInteger(h) || h < 0 || h > 1440) throw new TemplateEditError("holdMinutes must be an integer between 0 and 1440");
+    if (h !== cur.hold_minutes) {
+      d.syndication.hold_minutes = h;
+      changed = true;
+      detail.hold_minutes = h;
+    }
+  }
+  if (channels !== void 0) {
+    if (!channels || typeof channels !== "object" || Array.isArray(channels)) throw new TemplateEditError("channels must be an object of { name: boolean }");
+    for (const [name, on] of Object.entries(channels)) {
+      if (!SYNDICATION_CHANNEL_NAMES.includes(name)) throw new TemplateEditError(`unknown channel "${name}"`);
+      if (typeof on !== "boolean") throw new TemplateEditError(`channel "${name}" must be a boolean`);
+      if (Boolean(cur.channels?.[name]) !== on) {
+        if (!d.syndication.channels || typeof d.syndication.channels !== "object") d.syndication.channels = {};
+        d.syndication.channels[name] = on;
+        changed = true;
+        (detail.channels ??= {})[name] = on;
+      }
+    }
+  }
+  if (!changed) return { next: doc, changed: false, audit: null };
+  return { next: d, changed: true, audit: { ...auditEntry6(ctx, "settings", detail), action: "syndication-settings.set" } };
+}
 
 // client/src/admin-ops.mjs
 function requireRole(ctx, check2, need) {
@@ -21303,6 +21351,22 @@ async function setSyndicationTemplate(ctx, { type, template } = {}) {
     errType: TemplateEditError
   });
 }
+async function getSyndicationSettings(ctx) {
+  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
+  const cfg = syndicationConfigFromParsed(parsed);
+  const channels = {};
+  for (const name of SYNDICATION_CHANNEL_NAMES) channels[name] = Boolean(cfg.channels?.[name]);
+  return { settings: { enabled: cfg.enabled, requireApproval: cfg.require_approval, holdMinutes: cfg.hold_minutes, channels }, channelNames: [...SYNDICATION_CHANNEL_NAMES] };
+}
+async function setSyndicationSettings2(ctx, { enabled, requireApproval, holdMinutes, channels } = {}) {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setSyndicationSettings(parsed, { enabled, requireApproval, holdMinutes, channels }, actionCtx(ctx)), {
+    branch: "gbti/syndication-settings",
+    message: "Set the syndication pipeline settings",
+    title: "Set syndication settings",
+    noopMsg: "syndication settings unchanged",
+    errType: TemplateEditError
+  });
+}
 async function getNewsEngagementSettings(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
   return { settings: { ...newsEngagement(syndicationConfigFromParsed(parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS] };
@@ -21318,7 +21382,7 @@ async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, co
 }
 
 // extension/src/ext-dispatch.mjs
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "news-engagement-set": setNewsEngagementSettings };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "news-engagement-set": setNewsEngagementSettings, "syndication-settings-set": setSyndicationSettings2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -21381,6 +21445,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/moderation-flag-pool") return ok(await getModerationFlagPool(ctx));
     if (pathname === "/api/syndication-template-pool") return ok(await getSyndicationTemplatePool(ctx));
     if (pathname === "/api/news-engagement") return ok(await getNewsEngagementSettings(ctx));
+    if (pathname === "/api/syndication-settings") return ok(await getSyndicationSettings(ctx));
     const username = id?.username;
     if (!username) throw new OperationError("no-identity", "no signed-in identity; sign in first");
     switch (pathname) {

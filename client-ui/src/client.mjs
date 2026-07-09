@@ -153,6 +153,8 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     setSyndicationTemplate: ({ type, template }) => request('POST', '/api/admin', { action: 'syndication-template-set', type, template }), // SOW-087
     newsEngagementSettings: () => request('GET', '/api/news-engagement'), // SOW-111: { settings, tiers }
     setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request('POST', '/api/admin', { action: 'news-engagement-set', enabled, openThreshold, tier, commentAutopost }), // SOW-111
+    syndicationSettings: () => request('GET', '/api/syndication-settings'), // SOW-088: { settings, channelNames }
+    setSyndicationSettings: (p) => request('POST', '/api/admin', { action: 'syndication-settings-set', ...p }), // SOW-088
     addQuote: ({ text, author }) => request('POST', '/api/admin', { action: 'quote-add', text, author }), // SOW-063 P3
     removeQuote: ({ text }) => request('POST', '/api/admin', { action: 'quote-remove', text }), // SOW-063 P3
     setQuoteEnabled: ({ text, enabled }) => request('POST', '/api/admin', { action: 'quote-toggle', text, enabled }), // SOW-063 P3

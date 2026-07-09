@@ -11,13 +11,13 @@ import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // S
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from '../../client/src/roles.mjs';
-import { banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, addNewsSource, removeNewsSource, setNewsSourceEnabled, getQuotePool, addQuote, removeQuote, setQuoteEnabled, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, getNewsEngagementSettings, setNewsEngagementSettings } from '../../client/src/admin-ops.mjs';
+import { banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, addNewsSource, removeNewsSource, setNewsSourceEnabled, getQuotePool, addQuote, removeQuote, setQuoteEnabled, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, getNewsEngagementSettings, setNewsEngagementSettings, getSyndicationSettings, setSyndicationSettings } from '../../client/src/admin-ops.mjs';
 import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../../client/src/membership.mjs'; // SOW-060: free-tier capability predicates; SOW-082: draft staging
 
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
 // host-portable / async-safe) and commits via the repo client; capability is UX-gated here while the SOW-005
 // gate + CODEOWNERS stay the real boundary (an extension can no more merge a forbidden PR than the npm host can).
-const ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, 'category-batch': applyCategoryBatch, 'tag-edit': applyTagEdit, 'category-add': addContentCategory, 'category-rename': renameContentCategoryLabel, 'news-source-add': addNewsSource, 'news-source-remove': removeNewsSource, 'news-source-toggle': setNewsSourceEnabled, 'quote-add': addQuote, 'quote-remove': removeQuote, 'quote-toggle': setQuoteEnabled, 'content-channel-set': setContentChannel, 'content-channel-remove': removeContentChannel, 'flag-term-add': addModerationFlagTerm, 'flag-term-remove': removeModerationFlagTerm, 'syndication-template-set': setSyndicationTemplate, 'news-engagement-set': setNewsEngagementSettings };
+const ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, 'category-batch': applyCategoryBatch, 'tag-edit': applyTagEdit, 'category-add': addContentCategory, 'category-rename': renameContentCategoryLabel, 'news-source-add': addNewsSource, 'news-source-remove': removeNewsSource, 'news-source-toggle': setNewsSourceEnabled, 'quote-add': addQuote, 'quote-remove': removeQuote, 'quote-toggle': setQuoteEnabled, 'content-channel-set': setContentChannel, 'content-channel-remove': removeContentChannel, 'flag-term-add': addModerationFlagTerm, 'flag-term-remove': removeModerationFlagTerm, 'syndication-template-set': setSyndicationTemplate, 'news-engagement-set': setNewsEngagementSettings, 'syndication-settings-set': setSyndicationSettings };
 
 const CODE_STATUS = Object.freeze({
   'no-identity': 409,
@@ -99,6 +99,7 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
     if (pathname === '/api/moderation-flag-pool') return ok(await getModerationFlagPool(ctx));
     if (pathname === '/api/syndication-template-pool') return ok(await getSyndicationTemplatePool(ctx));
     if (pathname === '/api/news-engagement') return ok(await getNewsEngagementSettings(ctx));
+    if (pathname === '/api/syndication-settings') return ok(await getSyndicationSettings(ctx)); // SOW-088
 
     const username = id?.username;
     if (!username) throw new OperationError('no-identity', 'no signed-in identity; sign in first');

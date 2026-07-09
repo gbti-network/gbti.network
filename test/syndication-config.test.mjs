@@ -93,3 +93,23 @@ test('newsEngagement: fail-closed defaults, normalization, and a bad tier falls 
   assert.equal(bad.open_threshold, 2); // below-1 falls back
   assert.deepEqual(newsEngagement(undefined), d);
 });
+
+// SOW-088: the admin pipeline-settings edit (master / approval / hold / per-channel switches).
+test('setSyndicationSettings patches only the supplied fields, validates hard, and is idempotent', async () => {
+  const { setSyndicationSettings } = await import('../membership/syndication-template-edits.mjs');
+  const doc = { syndication: { enabled: true, require_approval: true, hold_minutes: 60, channels: { discord: true, x: true } } };
+  const ctx = { now: '2026-07-09T00:00:00.000Z', actor: { githubId: '1', login: 'atwellpub' } };
+  const r = setSyndicationSettings(doc, { requireApproval: false, channels: { x: false, bluesky: false } }, ctx);
+  assert.equal(r.changed, true);
+  assert.equal(r.next.syndication.require_approval, false);
+  assert.equal(r.next.syndication.channels.x, false);
+  assert.equal(r.next.syndication.enabled, true); // untouched field survives
+  assert.equal(r.audit.action, 'syndication-settings.set');
+  // Idempotent against the new state.
+  assert.equal(setSyndicationSettings(r.next, { requireApproval: false, channels: { x: false } }, ctx).changed, false);
+  // Hard validation.
+  const { TemplateEditError } = await import('../membership/syndication-template-edits.mjs');
+  assert.throws(() => setSyndicationSettings(doc, { holdMinutes: 9999 }, ctx), TemplateEditError);
+  assert.throws(() => setSyndicationSettings(doc, { channels: { myspace: true } }, ctx), TemplateEditError);
+  assert.throws(() => setSyndicationSettings(doc, { enabled: 'yes' }, ctx), TemplateEditError);
+});

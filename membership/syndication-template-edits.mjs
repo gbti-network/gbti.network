@@ -5,7 +5,7 @@
 //
 // SECURITY: this only COMPUTES the file edit. CODEOWNERS + the gate are the real boundary.
 
-import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement } from './syndication-config-core.mjs';
+import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement, syndicationConfigFromParsed } from './syndication-config-core.mjs';
 
 export class TemplateEditError extends Error {}
 
@@ -95,4 +95,45 @@ export function setTemplate(doc, { type, template } = {}, ctx = {}) {
   else delete nextTemplates[t]; // fall back to the type default / the built-in message
   d.syndication.templates = nextTemplates;
   return { next: d, changed: true, audit: auditEntry(ctx, t, { template: value || null }) };
+}
+
+// SOW-088: the syndication PIPELINE settings (master switch, approval mode, hold window, per-channel
+// switches), so the admin UI can run these without hand-editing the yml. Partial patch; hard validation;
+// idempotent against the normalized current values.
+export const SYNDICATION_CHANNEL_NAMES = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky']);
+
+export function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels } = {}, ctx = {}) {
+  const d = structuredClone(doc && typeof doc === 'object' ? doc : {});
+  if (!d.syndication || typeof d.syndication !== 'object' || Array.isArray(d.syndication)) d.syndication = {};
+  const cur = syndicationConfigFromParsed(doc);
+  let changed = false;
+  const detail = {};
+  if (enabled !== undefined) {
+    if (typeof enabled !== 'boolean') throw new TemplateEditError('enabled must be a boolean');
+    if (enabled !== cur.enabled) { d.syndication.enabled = enabled; changed = true; detail.enabled = enabled; }
+  }
+  if (requireApproval !== undefined) {
+    if (typeof requireApproval !== 'boolean') throw new TemplateEditError('requireApproval must be a boolean');
+    if (requireApproval !== cur.require_approval) { d.syndication.require_approval = requireApproval; changed = true; detail.require_approval = requireApproval; }
+  }
+  if (holdMinutes !== undefined) {
+    const h = Number(holdMinutes);
+    if (!Number.isInteger(h) || h < 0 || h > 1440) throw new TemplateEditError('holdMinutes must be an integer between 0 and 1440');
+    if (h !== cur.hold_minutes) { d.syndication.hold_minutes = h; changed = true; detail.hold_minutes = h; }
+  }
+  if (channels !== undefined) {
+    if (!channels || typeof channels !== 'object' || Array.isArray(channels)) throw new TemplateEditError('channels must be an object of { name: boolean }');
+    for (const [name, on] of Object.entries(channels)) {
+      if (!SYNDICATION_CHANNEL_NAMES.includes(name)) throw new TemplateEditError(`unknown channel "${name}"`);
+      if (typeof on !== 'boolean') throw new TemplateEditError(`channel "${name}" must be a boolean`);
+      if (Boolean(cur.channels?.[name]) !== on) {
+        if (!d.syndication.channels || typeof d.syndication.channels !== 'object') d.syndication.channels = {};
+        d.syndication.channels[name] = on;
+        changed = true;
+        (detail.channels ??= {})[name] = on;
+      }
+    }
+  }
+  if (!changed) return { next: doc, changed: false, audit: null };
+  return { next: d, changed: true, audit: { ...auditEntry(ctx, 'settings', detail), action: 'syndication-settings.set' } };
 }

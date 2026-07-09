@@ -29,6 +29,7 @@ const CSS = `
   .tmpl .t { flex:none; width:70px; font-family:var(--font-mono, monospace); font-size:12.5px; color:var(--muted); }
   .tmpl input { flex:1 1 260px; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:7px 9px; }
   .chips { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }
+  .chk { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--fg); margin-right:10px; }
   .chip { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:999px; padding:3px 10px; }
   .chip button { border:0; background:none; color:var(--muted); cursor:pointer; font:inherit; padding:0; }
   .chip button:hover { color:var(--danger, #e06c6c); }
@@ -41,11 +42,12 @@ class GbtiChannelMapManager extends GbtiElement {
   async load() {
     if (!this.client) { this.render(); return; }
     try {
-      const [channels, flags, templates, engagement] = await Promise.all([
+      const [channels, flags, templates, engagement, pipeline] = await Promise.all([
         this.client.contentChannelPool(),
         this.client.moderationFlagPool(),
         this.client.syndicationTemplatePool(),
         this.client.newsEngagementSettings ? this.client.newsEngagementSettings() : null,
+        this.client.syndicationSettings ? this.client.syndicationSettings().catch(() => null) : null, // SOW-088
       ]);
       this._channels = channels?.channels || [];
       this._lists = flags?.lists || {};
@@ -53,6 +55,7 @@ class GbtiChannelMapManager extends GbtiElement {
       this._types = templates?.types || ['share', 'post', 'product', 'prompt'];
       this._engagement = engagement?.settings || null; // SOW-111
       this._tiers = engagement?.tiers || ['paid', 'paid-trial', 'signed-in'];
+      this._pipeline = pipeline?.settings || null; // SOW-088: master/approval/hold/channel switches
     } catch {
       this._channels = [];
       this._lists = {};
@@ -92,12 +95,67 @@ class GbtiChannelMapManager extends GbtiElement {
     this.set(this.css(CSS) + `<div class="${this._busy ? 'busy' : ''}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
       <p class="hint">The category to Discord-channel map lives in the Categories workspace (Admin -> Categories); this tab keeps the templates, news auto-share, and moderation word lists. ${this._channels.length} categories are mapped.</p>
+      ${this._pipelineHtml()}
       <h4>Discord post templates <span class="hint">(variables: {memberdiscord} {fullName} {author} {shareurl} {title} {category}; blank = default)</span></h4>
       ${tmplRows}
       ${this._engagementHtml()}
       ${listBlocks}
     </div>`);
     this._wire();
+  }
+
+  // SOW-088: the pipeline settings — master switch, approval mode, hold window, per-channel switches. Writes
+  // land in house/syndication-config.yml via the auto-merged PR; the drain reads the KV mirror, which
+  // refreshes on the next reconcile / mirror sync (or run a reconcile to apply immediately).
+  _pipelineHtml() {
+    const p = this._pipeline;
+    if (!p) return '';
+    const BUILDING = new Set(['x', 'linkedin', 'mastodon', 'bluesky']);
+    const chan = (name, label) => `<label class="chk"><input type="checkbox" data-pipe-chan="${esc(name)}" ${p.channels?.[name] ? 'checked' : ''} /> ${esc(label)}${BUILDING.has(name) ? ' <span class="hint">(building)</span>' : ''}</label>`;
+    return `<h4>Syndication pipeline <span class="hint">(changes go live on the next mirror sync or a reconcile run; flagged items always need approval)</span></h4>
+      <div class="add">
+        <select data-pipe-enabled aria-label="Syndication on or off">
+          <option value="true" ${p.enabled ? 'selected' : ''}>Syndication on</option>
+          <option value="false" ${p.enabled ? '' : 'selected'}>Syndication off</option>
+        </select>
+        <select data-pipe-approval aria-label="Approval mode">
+          <option value="false" ${p.requireApproval ? '' : 'selected'}>Auto-post after the hold</option>
+          <option value="true" ${p.requireApproval ? 'selected' : ''}>Require approval</option>
+        </select>
+        <input data-pipe-hold type="number" min="0" max="1440" value="${esc(String(p.holdMinutes))}" aria-label="Hold window in minutes" title="Minutes an item waits (the cancel window) before auto-posting" />
+        <button class="btn" type="button" data-pipe-save>Save</button>
+      </div>
+      <div class="chips" style="gap:12px">
+        ${chan('discord', 'Discord featured')}
+        ${chan('discord-category', 'Discord category')}
+        ${chan('x', 'X')}
+        ${chan('linkedin', 'LinkedIn')}
+        ${chan('mastodon', 'Mastodon')}
+        ${chan('bluesky', 'Bluesky')}
+      </div>`;
+  }
+
+  async _savePipeline() {
+    const p = this._pipeline;
+    if (!p) return;
+    const channels = {};
+    this.$$('[data-pipe-chan]').forEach((c) => { channels[c.dataset.pipeChan] = c.checked; });
+    this._busy = true; this._msg = null; this.render();
+    try {
+      const r = await this.client.setSyndicationSettings({
+        enabled: this.$('[data-pipe-enabled]')?.value === 'true',
+        requireApproval: this.$('[data-pipe-approval]')?.value === 'true',
+        holdMinutes: Number(this.$('[data-pipe-hold]')?.value ?? p.holdMinutes),
+        channels,
+      });
+      this._msg = r?.prNumber ? `Saved as PR #${r.prNumber}; live after the next mirror sync or a reconcile run.` : (r?.noop ? 'No changes.' : 'Saved.');
+      this._pipeline = null; // reload picks up the committed values
+      this._channels = null;
+    } catch (err) {
+      this._msg = err?.message || 'Could not save the pipeline settings.';
+    }
+    this._busy = false;
+    this.render();
   }
 
   // SOW-111: the news auto-share settings (an item posts to its mapped category channel on member engagement).
@@ -123,6 +181,7 @@ class GbtiChannelMapManager extends GbtiElement {
   }
 
   _wire() {
+    this.on('[data-pipe-save]', 'click', () => this._savePipeline()); // SOW-088
     this.on('[data-eng-save]', 'click', () => {
       const enabled = this.$('[data-eng-enabled]')?.value === 'true';
       const openThreshold = Number(this.$('[data-eng-threshold]')?.value || 0);

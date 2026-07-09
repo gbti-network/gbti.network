@@ -19,7 +19,7 @@ import { addSource as addSourceEdit, removeSource as removeSourceEdit, setSource
 import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabled as setQuoteEnabledEdit, QuoteEditError } from '../../membership/quote-edits.mjs'; // SOW-063 P3
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // SOW-087
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
-import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111
+import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111 + SOW-088
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111
 import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
@@ -535,6 +535,27 @@ export async function setSyndicationTemplate(ctx, { type, template } = {}) {
     message: `Set the ${type} Discord template`,
     title: `Set Discord template: ${type}`,
     noopMsg: `template unchanged: ${type}`,
+    errType: TemplateEditError,
+  });
+}
+
+// SOW-088: the syndication pipeline settings (master switch, approval mode, hold window, channel switches).
+
+/** Read the normalized pipeline settings for the manager UI. Public house data; read-only. */
+export async function getSyndicationSettings(ctx) {
+  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
+  const cfg = syndicationConfigFromParsed(parsed);
+  const channels = {};
+  for (const name of SYNDICATION_CHANNEL_NAMES) channels[name] = Boolean(cfg.channels?.[name]);
+  return { settings: { enabled: cfg.enabled, requireApproval: cfg.require_approval, holdMinutes: cfg.hold_minutes, channels }, channelNames: [...SYNDICATION_CHANNEL_NAMES] };
+}
+
+export async function setSyndicationSettings(ctx, { enabled, requireApproval, holdMinutes, channels } = {}) {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setSyndicationSettingsEdit(parsed, { enabled, requireApproval, holdMinutes, channels }, actionCtx(ctx)), {
+    branch: 'gbti/syndication-settings',
+    message: 'Set the syndication pipeline settings',
+    title: 'Set syndication settings',
+    noopMsg: 'syndication settings unchanged',
     errType: TemplateEditError,
   });
 }
