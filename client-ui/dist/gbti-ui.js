@@ -3466,16 +3466,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         })
       ]);
       try {
-        const [status, billing, referral, invite] = await Promise.all([
+        const [status, billing, referral, invite, prefs] = await Promise.all([
           guard(this.client.status?.()),
           guard(this.client.getBilling?.()),
           guard(this.client.getReferral?.()),
-          guard(this.client.discordInvite?.())
+          guard(this.client.discordInvite?.()),
+          guard(this.client.getPrefs?.())
+          // SOW-114: the Privacy section (publicFavorites opt-in)
         ]);
         this._status = status;
         this._billing = billing;
         this._referral = referral;
         this._invite = invite;
+        this._prefs = prefs;
       } catch {
       }
       this._loaded = true;
@@ -3514,7 +3517,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       let sections;
       try {
-        sections = this._billingSec() + appearance + this._account() + this._referrals() + "<slot></slot>" + this._dangerZone();
+        sections = this._billingSec() + appearance + this._account() + this._privacy() + this._referrals() + "<slot></slot>" + this._dangerZone();
       } catch {
         sections = appearance + `<section class="sec"><div class="sec-h"><h3>Account</h3><p>Some account details could not load. Reopen this page to retry.</p></div></section>`;
       }
@@ -3530,6 +3533,39 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>
       <div class="msg" data-account-msg aria-live="polite"></div>
     </section>`;
+    }
+    // SOW-114: Privacy — the publicFavorites opt-in (server-side prefs, default OFF). When on, the member's name
+    // appears in the public "Favorited by" list on items they favorite (a reconcile-written aggregate); when off,
+    // only the anonymous count counts them. Renders a nudge instead of a control when the prefs load failed.
+    _privacy() {
+      const p = this._prefs;
+      const on = p?.publicFavorites === true;
+      const control = p ? `<div class="seg"><button type="button" class="segbtn${on ? "" : " on"}" data-set-pubfav="off">Off</button><button type="button" class="segbtn${on ? " on" : ""}" data-set-pubfav="on">On</button></div>` : `<span class="d">Could not load this setting right now.</span>`;
+      return `<section class="sec">
+      <div class="sec-h"><h3>Privacy</h3><p>What other people can see about your activity.</p></div>
+      <div class="rows">
+        <div class="row"><div class="rl"><div class="t">Public favorites</div><div class="d">Show your name and avatar in the "Favorited by" list on items you favorite on gbti.network. Off by default; the public count always stays anonymous. Changes reach the site on the next sync.</div></div><div class="rc">${control}</div></div>
+      </div>
+      <div class="msg" data-privacy-msg aria-live="polite"></div>
+    </section>`;
+    }
+    async _setPubFav(v) {
+      const want = v === "on";
+      const prev = this._prefs?.publicFavorites === true;
+      if (!this._prefs || want === prev) return;
+      this._prefs.publicFavorites = want;
+      this.render();
+      try {
+        const prefs = await this.client.setPrefs({ publicFavorites: want });
+        if (prefs && typeof prefs.publicFavorites === "boolean") this._prefs = prefs;
+        const msg = this.$("[data-privacy-msg]");
+        if (msg) msg.textContent = want ? "Public favorites are on. Your name appears after the next site sync." : "Public favorites are off. Your name drops off the list on the next site sync.";
+      } catch {
+        this._prefs.publicFavorites = prev;
+        this.render();
+        const msg = this.$("[data-privacy-msg]");
+        if (msg) msg.textContent = "Could not save that just now. Try again in a moment.";
+      }
     }
     // SOW-070: Appearance — Layout (Flat/Glass) + Theme (Light/Dark/System), device-local display prefs applied as
     // data-layout / data-theme on the document (tokens.mjs + shell.css react live). Theme shares the gbti-theme key with
@@ -3603,6 +3639,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         applyTheme(b.dataset.setTheme);
         this.render();
       }));
+      this.$$("[data-set-pubfav]").forEach((b) => b.addEventListener("click", () => this._setPubFav(b.dataset.setPubfav)));
       const liveRange = (sel, apply, outSel) => {
         const el = this.$(sel);
         if (el) el.addEventListener("input", () => {
@@ -11711,14 +11748,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/browse-hash.mjs
   var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
-  function buildReadHash(type, path) {
+  var DO_ACTIONS = /* @__PURE__ */ new Set(["favorite", "collect"]);
+  function buildReadHash(type, path, doAction) {
     const t = TAB_IDS.has(type) ? type : "post";
-    return path ? `tab=${t}&read=${encodeURIComponent(path)}` : `tab=${t}`;
+    if (!path) return `tab=${t}`;
+    const act = DO_ACTIONS.has(doAction) ? `&do=${doAction}` : "";
+    return `tab=${t}&read=${encodeURIComponent(path)}${act}`;
   }
   function parseBrowseHash(hash) {
     const s = String(hash || "").replace(/^#/, "");
     const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     const readM = s.match(/(?:^|&)read=([^&]+)/);
+    const doM = s.match(/(?:^|&)do=([a-z]+)(?:&|$)/);
     const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
     let read = null;
     if (readM) {
@@ -11728,7 +11769,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         read = readM[1];
       }
     }
-    return { tab, read };
+    const action = doM && DO_ACTIONS.has(doM[1]) ? doM[1] : null;
+    return { tab, read, action };
+  }
+  function stripDoParam(hash) {
+    const s = String(hash || "").replace(/^#/, "");
+    return s.split("&").filter((p) => !/^do=/.test(p)).join("&");
   }
 
   // client-ui/src/elements/gbti-activity-bell.mjs
@@ -12686,6 +12732,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._item = item;
       this._html = null;
       this._author = void 0;
+      this._doDone = false;
       this.render();
       this._resolve();
     }
@@ -12695,6 +12742,33 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._html = html;
       this._author = author;
       this.render();
+      this._applyDo(it);
+    }
+    // SOW-114: honor a deep-link force-action (item.doAction = 'favorite' | 'collect') ONCE per open. The
+    // public content pages send it via the SOW-036 relay so the site's inert Favorite/Save land here and act.
+    // favorite = ensure-ON (applyFavorite treats `on` as the desired state, so this is idempotent and never
+    // removes an existing favorite); collect = open the collection picker. Fail closed: with no signed-in
+    // client the call fails and the reader's normal state stands (the one-shot guard is set first, no retry).
+    async _applyDo(it) {
+      const act = it?.doAction;
+      if (!act || this._doDone) return;
+      this._doDone = true;
+      if (!this.client || it.type === "share") return;
+      const slug = targetSlugFor(it);
+      if (!slug) return;
+      if (act === "favorite") {
+        try {
+          const res = await this.client.toggleFavorite({ targetType: it.type, targetSlug: slug, on: true });
+          const fav = this.$("gbti-favorite");
+          if (fav) {
+            fav._faved = res?.favorited !== false;
+            fav.render?.();
+          }
+        } catch {
+        }
+      } else if (act === "collect") {
+        this.$("gbti-collection")?._toggleOpen?.();
+      }
     }
     async _resolveBody(it) {
       try {
@@ -12886,6 +12960,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-043: a self-loading members-only feed (not a per-type index)
   ];
   var CONTENT_TYPES = ["post", "product", "prompt"];
+  function consumeDo() {
+    if (typeof location === "undefined" || typeof history === "undefined") return;
+    const rest = stripDoParam(location.hash);
+    try {
+      history.replaceState(null, "", location.pathname + location.search + (rest ? "#" + rest : ""));
+    } catch {
+    }
+  }
   var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
@@ -12919,9 +13001,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 `;
   var GbtiBrowse = class extends GbtiElement {
     connectedCallback() {
-      const { tab, read } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
+      const { tab, read, action } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
       this._tab = tab && TABS2.some((t) => t.id === tab) ? tab : "all";
       this._openPath = this._tab !== "share" && this._tab !== "all" && this._tab !== "news" ? read : null;
+      this._openDo = this._openPath ? action : null;
+      if (this._openDo) consumeDo();
       this._cache = {};
       this._cat = [];
       this._shares = null;
@@ -12933,11 +13017,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (t && t.tagName === "IMG" && t.classList?.contains("thumb")) t.style.display = "none";
       }, true);
       this._onHash = () => {
-        const { tab: tab2, read: read2 } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
+        const { tab: tab2, read: read2, action: action2 } = parseBrowseHash(typeof location !== "undefined" ? location.hash : "");
         const t = tab2 && TABS2.some((x) => x.id === tab2) ? tab2 : this._tab;
         if (read2 && t !== "share" && t !== "all" && t !== "news") {
           this._tab = t;
-          this._reading = (this._cache[t] || []).find((x) => x.path === read2) || { type: t, path: read2 };
+          const found = (this._cache[t] || []).find((x) => x.path === read2);
+          this._reading = { ...found || { type: t, path: read2 }, doAction: action2 || null };
+          if (action2) consumeDo();
           this.render();
           this._ensure(t);
           return;
@@ -12962,8 +13048,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       await this._ensureTab(this._tab);
       if (this._openPath) {
         const found = (this._cache[this._tab] || []).find((x) => x.path === this._openPath);
-        this._reading = found || { type: this._tab, path: this._openPath };
+        this._reading = { ...found || { type: this._tab, path: this._openPath }, doAction: this._openDo };
         this._openPath = null;
+        this._openDo = null;
         this.render();
       }
     }

@@ -29,8 +29,11 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     env:
-      CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
-      CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+      # CF_ACCOUNT_ID + CF_KV_NAMESPACE_ID are non-secret identifiers, inlined exactly like reconcile.yml
+      # (the CF_ACCOUNT_ID/CF_KV_NAMESPACE_ID secrets were never created, which failed every scheduled run).
+      # Only CF_API_TOKEN (Workers KV Storage Edit on this namespace) and KV_BACKUP_KEY are real secrets.
+      CF_ACCOUNT_ID: "d42b12e969229c5187ad0f7289536487"
+      CF_KV_NAMESPACE_ID: "49432379e11844ac81b6fdaf22d3937a"
       CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
       KV_BACKUP_KEY: ${{ secrets.KV_BACKUP_KEY }}
     steps:
