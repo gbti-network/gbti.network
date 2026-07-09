@@ -67,7 +67,7 @@ const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.netw
         </div>
         {(d.shortDescription || d.exampleOutput) && <p class="lead mt20" style="max-width:70ch">{d.shortDescription || d.exampleOutput}</p>}
         <div class="mt20">
-          <ContentActions type="prompt" slug={d.slug} title={d.title} url={shareUrl} categories={d.categories} count={favoriteCount('prompt', d.slug, aliasSlugsOf(d))} />
+          <ContentActions type="prompt" slug={d.slug} title={d.title} url={shareUrl} author={d.author} categories={d.categories} count={favoriteCount('prompt', d.slug, aliasSlugsOf(d))} />
         </div>
       </header>
 

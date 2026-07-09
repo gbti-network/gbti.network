@@ -50,7 +50,7 @@ const stack = avatarStack({
 
           <div class="mt-20 flex col items-center g12">
             <ContentMeta author={d.author} publishedAt={d.publishedAt} stack={stack} center />
-            <ContentActions type="post" slug={d.slug} title={d.title} url={postUrl} categories={d.categories} count={favoriteCount('post', d.slug, aliasSlugsOf(d))} />
+            <ContentActions type="post" slug={d.slug} title={d.title} url={postUrl} author={d.author} categories={d.categories} count={favoriteCount('post', d.slug, aliasSlugsOf(d))} />
           </div>
 
           {taxonomy.length > 0 && (

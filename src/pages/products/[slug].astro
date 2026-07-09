@@ -63,7 +63,7 @@ const meta = [
             <ContentMeta author={d.author} publishedAt={d.publishedAt} dark center />
           </div>
           <div class="mt16" style="display:flex;justify-content:center">
-            <ContentActions type="product" slug={d.slug} title={d.title} url={productUrl} categories={d.categories} count={favoriteCount('product', d.slug, aliasSlugsOf(d))} />
+            <ContentActions type="product" slug={d.slug} title={d.title} url={productUrl} author={d.author} categories={d.categories} count={favoriteCount('product', d.slug, aliasSlugsOf(d))} />
           </div>
         </div>
       </div>

@@ -2,9 +2,13 @@
 // SOW-050: the unified content action cluster, identical across articles / products / prompts. Favorite +
 // Collection (the existing inert <gbti-favorite>/<gbti-collection> the client upgrades) + a Share reveal (a
 // native <details> popover holding the shared ShareRow, so it needs no extra JS). One row, one look everywhere.
+// SOW-114: with the GBTI extension installed, Favorite/Save deep-link into the in-extension reader (via the
+// SOW-036 gbti:open relay) instead of the sign-in modal, and an "Open in extension" control appears beside
+// Share. Without the extension nothing changes (the inert [data-signin] modal path stands).
 import FavoriteButton from './FavoriteButton.astro';
 import CollectionButton from './CollectionButton.astro';
 import ShareRow from './ShareRow.astro';
+import { contentItemPath } from '../lib/content-index.mjs';
 import type { ShareType } from '../lib/share';
 
 interface Props {
@@ -12,12 +16,14 @@ interface Props {
   slug: string;
   title: string;
   url: string; // absolute canonical URL for sharing
+  author?: string; // content owner; composes the repo item path for the extension deep-link (SOW-114)
   categories?: string[];
   count?: number; // build-time favorite count
 }
-const { type, slug, title, url, categories = [], count } = Astro.props;
+const { type, slug, title, url, author, categories = [], count } = Astro.props;
+const itemPath = author ? contentItemPath(type, author, slug) : null;
 ---
-<div class="content-actions" data-gbti-region="actions">
+<div class="content-actions" data-gbti-region="actions" data-gbti-type={type} data-gbti-item-path={itemPath}>
   <FavoriteButton targetType={type} targetSlug={slug} count={count} />
   <CollectionButton targetType={type} targetSlug={slug} />
   <details class="share-pop">
@@ -29,7 +35,49 @@ const { type, slug, title, url, categories = [], count } = Astro.props;
       <ShareRow type={type} title={title} url={url} categories={categories} />
     </div>
   </details>
+  {itemPath && (
+    <button type="button" class="ext-open" data-ext-open hidden title="Open this item in the GBTI extension">
+      <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-puzzle"/></svg>
+      Open in extension
+    </button>
+  )}
 </div>
+
+<script>
+  // SOW-114: progressive enhancement, active ONLY when the extension content script has stamped
+  // dataset.gbtiExtension. A CAPTURE-phase listener wins over SigninModal's bubble-phase [data-signin]
+  // handler, so with the extension present a Favorite/Save click deep-links into the in-extension reader
+  // (browse.html#tab=<type>&read=<path>&do=favorite|collect) instead of opening the modal.
+  (() => {
+    const region = document.querySelector('[data-gbti-region="actions"]') as HTMLElement | null;
+    if (!region) return;
+    const path = region.dataset.gbtiItemPath || '';
+    const type = region.dataset.gbtiType || '';
+    if (!path || !type) return;
+    const openBtn = region.querySelector('[data-ext-open]') as HTMLElement | null;
+
+    const installed = () => !!document.documentElement.dataset.gbtiExtension;
+    const sync = () => { if (openBtn) openBtn.hidden = !installed(); };
+    sync();
+    document.addEventListener('gbti:extension-ready', sync);
+
+    const openInExtension = (doAction?: string) => {
+      const hash = `tab=${type}&read=${encodeURIComponent(path)}` + (doAction ? `&do=${doAction}` : '');
+      document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'browse.html', hash } }));
+    };
+
+    document.addEventListener('click', (e) => {
+      if (!installed()) return; // no extension: leave every click to the sign-in modal path
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('[data-ext-open]')) { e.preventDefault(); e.stopPropagation(); openInExtension(); return; }
+      const signin = t?.closest('gbti-favorite [data-signin], gbti-collection [data-signin]');
+      if (!signin || !region.contains(signin)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openInExtension(signin.closest('gbti-collection') ? 'collect' : 'favorite');
+    }, true);
+  })();
+</script>
 
 <style>
   .content-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -45,4 +93,12 @@ const { type, slug, title, url, categories = [], count } = Astro.props;
   .share-pop-body { position: absolute; top: calc(100% + 8px); left: 0; z-index: 20; padding: 10px;
     background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-md); }
   @media (max-width: 560px) { .share-pop-body { left: auto; right: 0; } }
+  /* SOW-114: shown only when the extension stamp is present (the script clears [hidden]). The explicit
+     [hidden] rule keeps the display value from beating the attribute. */
+  .ext-open { display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+    font-family: var(--f-sans); font-weight: 600; font-size: 13px; color: var(--fg-soft); background: var(--paper);
+    border: 1.5px solid var(--line); border-radius: var(--r-pill); padding: 6px 14px;
+    transition: border-color .15s, color .15s; }
+  .ext-open:hover { border-color: var(--green); color: var(--green-700); }
+  .ext-open[hidden] { display: none; }
 </style>
