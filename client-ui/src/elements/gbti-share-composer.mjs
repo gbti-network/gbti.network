@@ -44,7 +44,14 @@ const CSS = `
   .busy { opacity:.55; pointer-events:none; }
   .og { margin-top:10px; }
   .og .ogmsg { font-size:12.5px; color:var(--muted); }
-  .og .ogimg { display:block; max-width:100%; max-height:200px; object-fit:cover; border-radius:10px; border:1px solid var(--line); }
+  /* SOW-102: the rich link-preview card (image + title + description + domain), replacing the bare image. */
+  .og .ogcard { display:flex; gap:12px; align-items:stretch; border:1px solid var(--line); border-radius:7px; overflow:hidden; background:var(--panel); }
+  .og .ogimg { flex:none; width:120px; min-height:76px; object-fit:cover; border:0; border-radius:0; }
+  .og .ogtxt { min-width:0; padding:8px 10px 8px 0; display:flex; flex-direction:column; gap:2px; justify-content:center; }
+  .og .ogtxt:first-child { padding-left:10px; }
+  .og .ogtitle { font-size:13.5px; font-weight:700; color:var(--fg); overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .og .ogdesc { font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .og .ogdomain { font-size:11px; color:var(--muted); opacity:.8; text-transform:lowercase; }
   .og .ogclear { margin-top:6px; font:inherit; font-size:12px; background:none; border:0; color:var(--muted); cursor:pointer; padding:0; }
   .og .ogclear:hover { color:var(--brand); text-decoration:underline; }
 `;
@@ -122,8 +129,15 @@ class GbtiShareComposer extends GbtiElement {
     this._image = null;
     this._suggested = null; // SOW-087: the Worker's category suggestion, applied once topics are loaded
     this.on('.post', 'click', () => this._post());
-    // SOW-057: fetch the link's OpenGraph preview on blur/enter so we can attach a featured image + soft-prefill.
+    // SOW-057 + SOW-102: fetch the link preview EAGERLY — on paste and on a debounced input, not only on
+    // blur/enter (change) — so a pasted URL imports without the member ever leaving the field. The same-URL
+    // guard in _fetchPreview keeps the overlapping triggers from double-fetching.
     this.on('input[type=url]', 'change', () => this._fetchPreview());
+    this.on('input[type=url]', 'paste', () => setTimeout(() => this._fetchPreview(), 0));
+    this.on('input[type=url]', 'input', () => {
+      clearTimeout(this._ogTimer);
+      this._ogTimer = setTimeout(() => this._fetchPreview(), 400);
+    });
     this._loadTopics();
   }
 
@@ -155,27 +169,43 @@ class GbtiShareComposer extends GbtiElement {
 
   // Fetch the link preview server-side (the Worker is SSRF-guarded). Updates ONLY the preview area + soft-prefills
   // EMPTY title/desc fields (never clobbering author text), so it does not re-render the composer.
+  // SOW-102: same-URL guarded (the eager paste/input/change triggers overlap), with a rich preview card
+  // (image + title + description + domain) and a quiet empty state instead of a silent nothing.
   async _fetchPreview() {
     const url = (this.$('input[type=url]')?.value || '').trim();
     const box = this.$('[data-og]');
     if (!box) return;
-    if (!/^https?:\/\//i.test(url) || !this.client?.ogPreview) { this._image = null; box.hidden = true; box.innerHTML = ''; return; }
+    if (!/^https?:\/\//i.test(url) || !this.client?.ogPreview) { this._lastOgUrl = null; this._image = null; box.hidden = true; box.innerHTML = ''; return; }
+    if (url === this._lastOgUrl) return; // already fetched (or in flight) for this exact URL
+    this._lastOgUrl = url;
     box.hidden = false;
     box.innerHTML = `<span class="ogmsg">Fetching preview…</span>`;
     try {
       const og = await this.client.ogPreview({ url });
+      if ((this.$('input[type=url]')?.value || '').trim() !== url) return; // the field moved on; a newer fetch owns the box
       const t = this.$('input.title'); if (t && !t.value.trim() && og?.title) t.value = String(og.title).slice(0, 80);
       const d = this.$('input.desc'); if (d && !d.value.trim() && og?.description) d.value = String(og.description).slice(0, 200);
       // SOW-087: soft-prefill the category from the Worker's suggestion (the author can always override).
       this._suggested = og?.suggestedCategory || null;
       this._applySuggested();
       this._image = og?.image || null;
-      if (this._image) {
-        box.innerHTML = `<img class="ogimg" src="${esc(this._image)}" alt="" /><button class="ogclear" type="button" data-ogclear>Remove image</button>`;
+      if (og?.title || og?.description || this._image) {
+        let domain = '';
+        try { domain = new URL(url).hostname.replace(/^www\./, ''); } catch { /* leave empty */ }
+        box.innerHTML = `<div class="ogcard">`
+          + (this._image ? `<img class="ogimg" src="${esc(this._image)}" alt="" />` : '')
+          + `<div class="ogtxt">`
+          + (og?.title ? `<span class="ogtitle">${esc(og.title)}</span>` : '')
+          + (og?.description ? `<span class="ogdesc">${esc(og.description)}</span>` : '')
+          + (domain ? `<span class="ogdomain">${esc(domain)}</span>` : '')
+          + `</div></div>`
+          + `<button class="ogclear" type="button" data-ogclear>Remove preview</button>`;
         const clr = box.querySelector('[data-ogclear]');
-        if (clr) clr.addEventListener('click', () => { this._image = null; box.hidden = true; box.innerHTML = ''; });
-      } else { box.hidden = true; box.innerHTML = ''; }
-    } catch { this._image = null; box.hidden = true; box.innerHTML = ''; }
+        if (clr) clr.addEventListener('click', () => { this._image = null; this._lastOgUrl = null; box.hidden = true; box.innerHTML = ''; });
+      } else {
+        box.innerHTML = `<span class="ogmsg">No preview available for this link.</span>`;
+      }
+    } catch { this._lastOgUrl = null; this._image = null; box.hidden = true; box.innerHTML = ''; }
   }
 
   async _post() {
