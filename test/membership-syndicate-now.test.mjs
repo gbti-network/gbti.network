@@ -189,3 +189,23 @@ test('the queue item carries categoryPath and the drain resolves the guild menti
   assert.equal(m, '<@55555555>');
   assert.equal(await resolveGuildMention({}, it, { makeDiscord }), null); // no bot/guild -> fail-soft
 });
+
+// SOW-088: a manual send SUPERSEDES its auto-queue twin (enqueued on merge, still pending) so flipping
+// require_approval off can never double-post an already-manually-published item.
+test('a manual send cancels the pending queue twin and repoints the dedupe at the manual record', async () => {
+  const { enqueue } = await import('../workers/signup/syndication-store.mjs');
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
+  const twin = await enqueue({ SIGNUP_KV: kv }, { ...ITEM, trigger: 'publish' }, { kv, now: () => 500 });
+  const postDiscord = async () => ({ ok: true, id: 'm', url: 'u' });
+  const r = await handleSyndicateNow(
+    req({ destination: 'discord', item: ITEM, template: '{title}', channelId: '111222333444555666' }),
+    { ...ENV_DISCORD, SIGNUP_KV: kv }, { kv, authorize: superadmin, now: () => 1000, postDiscord, makeDiscord: () => ({}), makeStripe: () => ({ findCustomerByGithubId: async () => null }), fetchImpl: async () => ({ ok: false }) },
+  );
+  assert.equal(r.status, 200);
+  assert.equal(r.body.superseded, twin.id);
+  const cancelled = JSON.parse(kv.store.get(`synd:item:${twin.id}`));
+  assert.equal(cancelled.status, 'cancelled');
+  assert.match(cancelled.cancelReason, /superseded/);
+  assert.ok(!JSON.parse(kv.store.get('synd:pending')).ids.includes(twin.id), 'the twin left the pending index');
+  assert.equal(kv.store.get('synd:dedupe:prompt:ci-skill'), r.body.itemId); // the dedupe points at the manual record
+});

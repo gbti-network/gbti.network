@@ -15,13 +15,13 @@
 
 import { authorizeAdmin } from './membership-admin.mjs';
 import { ROLE } from '../../membership/overrides-core.mjs';
-import { buildQueueItem, dedupeKey } from '../../membership/syndication-queue.mjs';
+import { buildQueueItem, dedupeKey, canCancel, markCancelled } from '../../membership/syndication-queue.mjs';
 import { renderTemplate } from '../../membership/syndication-format.mjs';
 import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
 import { templateFor, TEMPLATE_TYPES, DEFAULT_TEMPLATES } from '../../membership/syndication-config-core.mjs';
 import { buildAdapters } from '../../membership/syndication-adapters.mjs';
 import { postToChannel } from '../../clients/syndication/discord-channel.mjs';
-import { readSyndicationConfig, readContentChannels, putItem, getItem, SYND_DEDUPE_KEY } from './syndication-store.mjs';
+import { readSyndicationConfig, readContentChannels, putItem, getItem, removeFromPending, SYND_DEDUPE_KEY } from './syndication-store.mjs';
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { createDiscordClient } from '../../clients/discord.mjs';
 
@@ -193,11 +193,26 @@ export async function handleSyndicateNow(request, env, deps = {}) {
     manualBy: g.auth.githubId ?? null,
   };
   await putItem(kv, recorded);
+  let superseded = null;
   try {
     const dk = SYND_DEDUPE_KEY(dedupeKey(item));
-    if (!(await kv.get(dk))) await kv.put(dk, item.id);
+    const pointer = await kv.get(dk);
+    if (!pointer) {
+      await kv.put(dk, item.id);
+    } else if (result?.ok && pointer !== item.id) {
+      // The item was ALREADY in the auto queue (enqueued on merge, waiting on approval/hold). The manual
+      // send supersedes it: cancel the twin so it can never double-post once auto-posting is on, and
+      // repoint the dedupe at the manual record.
+      const twin = await getItem(kv, pointer);
+      if (twin && canCancel(twin)) {
+        await putItem(kv, { ...markCancelled(twin, { now, actor: g.auth.githubId }), cancelReason: 'superseded by a manual post' });
+        await removeFromPending(kv, twin.id);
+        superseded = twin.id;
+      }
+      await kv.put(dk, item.id);
+    }
   } catch { /* dedupe is best-effort; the post already happened */ }
 
   if (!result?.ok) return { status: 502, body: { error: 'post_failed', message: result?.error || 'the destination refused the post', itemId: recorded.id } };
-  return { status: 200, body: { ok: true, sent: true, destination, id: result.id ?? null, url: result.url ?? null, forwarded: result.forwarded ?? null, itemId: recorded.id, text } };
+  return { status: 200, body: { ok: true, sent: true, destination, id: result.id ?? null, url: result.url ?? null, forwarded: result.forwarded ?? null, superseded, itemId: recorded.id, text } };
 }

@@ -15,6 +15,7 @@ const CSS = `
   .muted { color:var(--muted); font-size:13.5px; }
   .bucket { margin:0 0 18px; }
   .bucket h4 { margin:0 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .manual { display:inline-block; margin-left:8px; font-size:10px; font-weight:800; letter-spacing:.05em; color:#d8a13d; border:1px solid #d8a13d; border-radius:2px; padding:1px 6px; vertical-align:1px; }
   ul.rows { list-style:none; margin:0; padding:0; }
   .row { display:flex; align-items:center; gap:10px; padding:9px 2px; border-top:1px solid var(--line); }
   .row:first-child { border-top:0; }
@@ -95,7 +96,11 @@ class GbtiSyndicationTracker extends GbtiElement {
         ? `<span class="flags">${it.flags.map((f) => `<span class="flag">⚠ ${esc(f)}</span>`).join('')}</span>`
         : '';
       const cat = it.category ? `<span class="cat">#${esc(it.category)}</span>` : '';
-      return `<li class="row"><span class="src">${esc(src)}</span><span class="it"><b>${esc(title)}</b>${flags}${cat}${it.url ? `<span class="d">${esc(it.url)}</span>` : ''}</span>${right}</li>`;
+      // SOW-088: a manual send is visibly distinct from the auto pipeline, and a superseded twin says why
+      // it was cancelled (the manual post replaced it).
+      const manual = it.trigger === 'manual' ? `<span class="manual">MANUAL${it.manualBy ? ` · by ${esc(String(it.manualBy))}` : ''}</span>` : '';
+      const reason = it.cancelReason ? `<span class="d">${esc(it.cancelReason)}</span>` : '';
+      return `<li class="row"><span class="src">${esc(src)}</span><span class="it"><b>${esc(title)}</b>${manual}${flags}${cat}${reason}${it.url ? `<span class="d">${esc(it.url)}</span>` : ''}</span>${right}</li>`;
     }).join('');
     return `<div class="bucket"><h4>${esc(label)} (${list.length})</h4><ul class="rows">${rows}</ul></div>`;
   }

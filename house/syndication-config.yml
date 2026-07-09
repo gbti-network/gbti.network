@@ -10,7 +10,9 @@
 # recorded "skipped", never "failed").
 syndication:
   enabled: true            # ACTIVE 2026-06-24. Approval-gated: nothing posts until a superadmin approves it.
-  require_approval: true    # SOW-058: opt-IN. NOTHING posts until a superadmin approves it in the tracker.
+  require_approval: false   # AUTO-POST since 2026-07-09 (owner-directed): a new item posts after the hold window
+                            # with NO approval step. FLAGGED items still always require approval (built-in), and
+                            # hold_minutes below is the cancel window before a post goes out.
   hold_minutes: 60          # legacy auto-hold; IGNORED while require_approval is true (approval is the gate)
   upvote_threshold: 2       # retired as a syndication trigger (SOW-087: shares enqueue on publish); kept for the news follow-up
   classify: ai              # SOW-087: the share category suggestion (ai = Workers AI + keyword fallback | keyword | off)
