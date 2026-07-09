@@ -30,7 +30,7 @@ import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
 import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv } from './lib/kv-mirror.mjs';
-import { syncFavoriteCounts, readCountsFromDisk } from './lib/favorite-counts.mjs';
+import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
 import { syncUpvoteCounts, readCountsFromDisk as readUpvoteCountsFromDisk } from './lib/upvote-counts.mjs';
 import { mergeState, alreadyLabeled, conflictComment, CONFLICT_LABEL } from './lib/pr-conflict.mjs';
 
@@ -566,13 +566,18 @@ async function main() {
   // who-favorited-what data. A dry run only reports intent; an apply lists KV + opens an auto-merged PR when
   // the counts changed (no-op when unchanged, or skipped when CF creds / a GitHub client are absent).
   if (dryRun) {
-    console.log('reconcile: DRY RUN would sync favorite counts from KV -> house/favorite-counts.yml (requires CF creds + a GitHub PR).');
+    console.log('reconcile: DRY RUN would sync favorite counts + opt-in favorited-by from KV -> house/favorite-counts.yml + house/favorited-by.yml (requires CF creds + a GitHub PR).');
   } else {
     try {
-      const r = await syncFavoriteCounts({ env, github, now, readCurrentCounts: () => readCountsFromDisk(ROOT) });
+      const r = await syncFavoriteCounts({
+        env, github, now,
+        readCurrentCounts: () => readCountsFromDisk(ROOT),
+        readCurrentFavoritedBy: () => readFavoritedByFromDisk(ROOT), // SOW-114
+        readMembersIndex: () => readMembersIndexFromDisk(ROOT), // SOW-114: github_id -> username for the opt-in lists
+      });
       console.log(
         r.synced
-          ? `reconcile: synced favorite counts (PR #${r.prNumber}, ${r.total} target(s)).`
+          ? `reconcile: synced favorite counts (PR #${r.prNumber}, ${r.total} target(s), ${r.publicTargets ?? 0} public favorited-by target(s)).`
           : `reconcile: favorite-counts sync SKIPPED (${r.reason}).`,
       );
     } catch (e) {

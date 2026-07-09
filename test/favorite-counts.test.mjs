@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   aggregateFavoriteCounts, countsEqual, listAllActivityFromKv, syncFavoriteCounts, renderCountsFile,
+  aggregateFavoritedBy, favoritedByEqual, renderFavoritedByFile, readPublicFavoritesOptIns,
 } from '../scripts/lib/favorite-counts.mjs';
 
 test('aggregateFavoriteCounts folds members into member-identity-free per-target totals', () => {
@@ -130,4 +131,92 @@ test('renderCountsFile produces a stable header + sorted YAML', () => {
   assert.match(out, /^# SOW-024: aggregate favorite counts/);
   assert.match(out, /counts:/);
   assert.match(out, /post:a: 1/);
+});
+
+// ---- SOW-114: the OPT-IN public favorited-by lists ----
+
+const ENTRIES = [
+  { githubId: '1', activity: { favorites: [{ type: 'post', slug: 'a' }, { type: 'prompt', slug: 'p' }] } },
+  { githubId: '2', activity: { favorites: [{ type: 'post', slug: 'a' }] } },
+  { githubId: '3', activity: { favorites: [{ type: 'post', slug: 'a' }, { type: 'bad type', slug: 'x!' }] } },
+];
+const INDEX = { 1: 'alice', 2: 'bob', 3: 'cara' };
+
+test('aggregateFavoritedBy publishes ONLY opted-in members that resolve to a username', () => {
+  const out = aggregateFavoritedBy(ENTRIES, { optedIn: new Set(['1', '3']), membersIndex: INDEX });
+  // bob (id 2) never opted in; cara's malformed favorite is skipped but her valid one lands.
+  assert.deepEqual(out, { 'post:a': ['alice', 'cara'], 'prompt:p': ['alice'] });
+  // Nobody opted in -> nothing published, whatever the activity says.
+  assert.deepEqual(aggregateFavoritedBy(ENTRIES, { optedIn: new Set(), membersIndex: INDEX }), {});
+  // An opted-in id with NO members-index entry publishes nothing (no raw github_id ever leaks).
+  const noIndex = aggregateFavoritedBy(ENTRIES, { optedIn: new Set(['1']), membersIndex: {} });
+  assert.deepEqual(noIndex, {});
+});
+
+test('favoritedByEqual + renderFavoritedByFile: stable compare, consent header, no github_id in the file', () => {
+  assert.equal(favoritedByEqual({ 'post:a': ['b', 'a'] }, { 'post:a': ['a', 'b'] }), true);
+  assert.equal(favoritedByEqual({ 'post:a': ['a'] }, {}), false);
+  const out = renderFavoritedByFile({ 'post:a': ['alice'] }, new Date('2026-07-08T00:00:00.000Z'));
+  assert.match(out, /OPT-IN ONLY/);
+  assert.match(out, /post:a:/);
+  assert.match(out, /- alice/);
+});
+
+test('readPublicFavoritesOptIns fails CLOSED per key (missing creds, bad status, junk JSON)', async () => {
+  // No creds -> empty set, no fetch.
+  const none = await readPublicFavoritesOptIns({ env: {}, ids: ['1'], fetchImpl: () => { throw new Error('no fetch'); } });
+  assert.equal(none.size, 0);
+  const env = { CF_ACCOUNT_ID: 'acc', CF_KV_NAMESPACE_ID: 'ns', CF_API_TOKEN: 't' };
+  const fetchImpl = async (url) => {
+    if (url.includes(encodeURIComponent('prefs:1'))) return { ok: true, json: async () => ({ publicFavorites: true }) };
+    if (url.includes(encodeURIComponent('prefs:2'))) return { ok: true, json: async () => ({ publicFavorites: 'yes' }) }; // junk never opts in
+    if (url.includes(encodeURIComponent('prefs:3'))) return { ok: false, status: 404 };
+    throw new Error('network down');
+  };
+  const opted = await readPublicFavoritesOptIns({ env, ids: ['1', '2', '3', '4'], fetchImpl });
+  assert.deepEqual([...opted], ['1']);
+});
+
+test('syncFavoriteCounts writes favorited-by.yml alongside the counts in ONE PR, and opt-out removal syncs', async () => {
+  const puts = [];
+  const github = {
+    getRef: async () => ({ object: { sha: 'base' } }),
+    createRef: async () => {},
+    getContent: async () => null,
+    putContent: async (p, opts) => puts.push({ path: p, content: Buffer.from(opts.content, 'base64').toString('utf8') }),
+    createPull: async () => ({ number: 7 }),
+    mergePull: async () => {},
+  };
+  const r = await syncFavoriteCounts({
+    github,
+    now: new Date('2026-07-08T00:00:00.000Z'),
+    listActivities: async () => ({ available: true, activities: ENTRIES.map((e) => e.activity), entries: ENTRIES }),
+    readCurrentCounts: () => ({}),
+    readCurrentFavoritedBy: () => ({}),
+    readMembersIndex: () => INDEX,
+    readOptIns: async () => new Set(['1']),
+  });
+  assert.equal(r.synced, true);
+  assert.equal(r.publicTargets, 2);
+  assert.deepEqual(puts.map((x) => x.path).sort(), ['house/favorite-counts.yml', 'house/favorited-by.yml']);
+  const favBy = puts.find((x) => x.path === 'house/favorited-by.yml').content;
+  assert.match(favBy, /- alice/);
+  assert.ok(!/bob|cara/.test(favBy), 'non-opted-in members never appear');
+  assert.ok(!/^\s*- '?[0-9]+'?\s*$/m.test(favBy), 'no raw numeric github_id ever appears as a list entry');
+
+  // Opt-out removal: same activity, the member no longer opted in, disk still lists them -> favorited-by
+  // changes (them dropped) even though counts are identical.
+  const puts2 = [];
+  const github2 = { ...github, putContent: async (p, opts) => puts2.push({ path: p, content: Buffer.from(opts.content, 'base64').toString('utf8') }) };
+  const r2 = await syncFavoriteCounts({
+    github: github2,
+    listActivities: async () => ({ available: true, activities: ENTRIES.map((e) => e.activity), entries: ENTRIES }),
+    readCurrentCounts: () => ({ 'post:a': 3, 'prompt:p': 1 }), // counts unchanged
+    readCurrentFavoritedBy: () => ({ 'post:a': ['alice'], 'prompt:p': ['alice'] }),
+    readMembersIndex: () => INDEX,
+    readOptIns: async () => new Set(), // alice opted out (or was erased)
+  });
+  assert.equal(r2.synced, true);
+  assert.deepEqual(puts2.map((x) => x.path), ['house/favorited-by.yml']); // only the changed file rides the PR
+  assert.ok(!/alice/.test(puts2[0].content), 'the opted-out member drops off on the next sync');
 });

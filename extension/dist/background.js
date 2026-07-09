@@ -19607,11 +19607,11 @@ async function getPrefs(ctx) {
     mapNewsErr(err, "read your preferences");
   }
 }
-async function setPrefs(ctx, { categories, followChannel } = {}) {
+async function setPrefs(ctx, { categories, followChannel, publicFavorites } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   try {
-    return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel } });
+    return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel, publicFavorites } });
   } catch (err) {
     mapNewsErr(err, "save your preferences");
   }

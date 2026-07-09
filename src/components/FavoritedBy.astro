@@ -1,0 +1,28 @@
+---
+// SOW-114: the "Favorited by" aside card. Lists ONLY members who opted in via the publicFavorites
+// preference (default off); the data is the reconcile-synced house/favorited-by.yml aggregate, so opting
+// out or a KV erasure (SOW-024) drops a member on the next sync. Renders nothing when nobody opted in
+// (the common case). The anonymous total on the Favorite pill counts everyone regardless.
+import { getCollection } from 'astro:content';
+import StackedAvatars from './StackedAvatars.astro';
+import { buildAvatarIndex, authorItem } from '../lib/avatars';
+import { favoritedBy } from '../lib/favorites';
+
+interface Props {
+  type: string; // 'post' | 'product' | 'prompt'
+  slug: string;
+  aliases?: string[]; // SOW-112: pre-rename slugs union in
+}
+const { type, slug, aliases = [] } = Astro.props;
+const usernames = favoritedBy(type, slug, aliases);
+const index = usernames.length ? buildAvatarIndex(await getCollection('profile')) : null;
+const items = index ? usernames.map((u) => authorItem(u, index)) : [];
+---
+{items.length > 0 && (
+  <div class="card" style="padding:22px">
+    <p class="eyebrow">Favorited by</p>
+    <div class="mt16">
+      <StackedAvatars items={items} size="sm" max={8} />
+    </div>
+  </div>
+)}

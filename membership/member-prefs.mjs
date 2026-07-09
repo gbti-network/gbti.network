@@ -27,12 +27,15 @@ function cleanList(v, max) {
   return out;
 }
 
-/** Normalize a stored prefs record to { categories, followedChannels } (always arrays, deduped, capped). */
+/** Normalize a stored prefs record to { categories, followedChannels, publicFavorites } (arrays deduped +
+ *  capped; publicFavorites strictly boolean, default false = SOW-114 opt-in consent to appear in the public
+ *  "Favorited by" aggregate). */
 export function normalizePrefs(stored) {
   const p = stored && typeof stored === 'object' ? stored : {};
   return {
     categories: cleanList(p.categories, MAX_CATEGORIES),
     followedChannels: cleanList(p.followedChannels, MAX_CHANNELS),
+    publicFavorites: p.publicFavorites === true,
   };
 }
 
@@ -40,6 +43,7 @@ export function normalizePrefs(stored) {
  * Apply a prefs patch and return the new normalized prefs. Patch shapes:
  *  - { categories: string[] }                 replace the category interests
  *  - { followChannel: { id, on } }            follow (on!==false) / unfollow a news source id
+ *  - { publicFavorites: boolean }             SOW-114: opt in/out of the public "Favorited by" list
  * Throws PrefsError on an invalid patch. Idempotent (re-following a channel is a no-op).
  */
 export function applyPrefs(stored, patch = {}) {
@@ -47,6 +51,10 @@ export function applyPrefs(stored, patch = {}) {
   if (patch.categories !== undefined) {
     if (!Array.isArray(patch.categories)) throw new PrefsError('categories must be an array');
     next.categories = cleanList(patch.categories, MAX_CATEGORIES);
+  }
+  if (patch.publicFavorites !== undefined) {
+    if (typeof patch.publicFavorites !== 'boolean') throw new PrefsError('publicFavorites must be a boolean');
+    next.publicFavorites = patch.publicFavorites;
   }
   if (patch.followChannel) {
     const id = String(patch.followChannel.id ?? '').trim();

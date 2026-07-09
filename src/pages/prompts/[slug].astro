@@ -15,6 +15,7 @@ import { hasPublicPage, isStub } from '../../lib/content';
 import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
 import { breadcrumb, categoryLabel } from '../../lib/taxonomy';
 import { favoriteCount } from '../../lib/favorites';
+import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the opt-in favoriter list
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 
 export async function getStaticPaths() {
@@ -172,6 +173,8 @@ const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.netw
               </div>
             </div>
           )}
+
+          <FavoritedBy type="prompt" slug={d.slug} aliases={aliasSlugsOf(d)} />
         </aside>
       </div>
     </div>

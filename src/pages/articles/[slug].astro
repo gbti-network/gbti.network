@@ -14,6 +14,7 @@ import EditHooks from '../../components/EditHooks.astro';
 import TouchSignal from '../../components/TouchSignal.astro';
 import { refCodeForAuthor } from '../../lib/referral';
 import { favoriteCount } from '../../lib/favorites';
+import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the opt-in favoriter list
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
 import LockedBody from '../../components/LockedBody.astro';
 import { hasPublicPage, isStub } from '../../lib/content';
@@ -80,6 +81,7 @@ const stack = avatarStack({
       <OpenHistory filePath={post.filePath} author={d.author} contributors={d.contributors} />
       <RelatedPosts post={post} />
       <ContributionCredits contributors={d.contributors} />
+      <FavoritedBy type="post" slug={d.slug} aliases={aliasSlugsOf(d)} />
     </div>
   </section>
   <EditHooks type="post" owner={d.author} slug={d.slug} />

@@ -3431,16 +3431,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         })
       ]);
       try {
-        const [status2, billing, referral, invite] = await Promise.all([
+        const [status2, billing, referral, invite, prefs] = await Promise.all([
           guard(this.client.status?.()),
           guard(this.client.getBilling?.()),
           guard(this.client.getReferral?.()),
-          guard(this.client.discordInvite?.())
+          guard(this.client.discordInvite?.()),
+          guard(this.client.getPrefs?.())
+          // SOW-114: the Privacy section (publicFavorites opt-in)
         ]);
         this._status = status2;
         this._billing = billing;
         this._referral = referral;
         this._invite = invite;
+        this._prefs = prefs;
       } catch {
       }
       this._loaded = true;
@@ -3479,7 +3482,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       let sections;
       try {
-        sections = this._billingSec() + appearance + this._account() + this._referrals() + "<slot></slot>" + this._dangerZone();
+        sections = this._billingSec() + appearance + this._account() + this._privacy() + this._referrals() + "<slot></slot>" + this._dangerZone();
       } catch {
         sections = appearance + `<section class="sec"><div class="sec-h"><h3>Account</h3><p>Some account details could not load. Reopen this page to retry.</p></div></section>`;
       }
@@ -3495,6 +3498,39 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>
       <div class="msg" data-account-msg aria-live="polite"></div>
     </section>`;
+    }
+    // SOW-114: Privacy — the publicFavorites opt-in (server-side prefs, default OFF). When on, the member's name
+    // appears in the public "Favorited by" list on items they favorite (a reconcile-written aggregate); when off,
+    // only the anonymous count counts them. Renders a nudge instead of a control when the prefs load failed.
+    _privacy() {
+      const p = this._prefs;
+      const on = p?.publicFavorites === true;
+      const control = p ? `<div class="seg"><button type="button" class="segbtn${on ? "" : " on"}" data-set-pubfav="off">Off</button><button type="button" class="segbtn${on ? " on" : ""}" data-set-pubfav="on">On</button></div>` : `<span class="d">Could not load this setting right now.</span>`;
+      return `<section class="sec">
+      <div class="sec-h"><h3>Privacy</h3><p>What other people can see about your activity.</p></div>
+      <div class="rows">
+        <div class="row"><div class="rl"><div class="t">Public favorites</div><div class="d">Show your name and avatar in the "Favorited by" list on items you favorite on gbti.network. Off by default; the public count always stays anonymous. Changes reach the site on the next sync.</div></div><div class="rc">${control}</div></div>
+      </div>
+      <div class="msg" data-privacy-msg aria-live="polite"></div>
+    </section>`;
+    }
+    async _setPubFav(v) {
+      const want = v === "on";
+      const prev = this._prefs?.publicFavorites === true;
+      if (!this._prefs || want === prev) return;
+      this._prefs.publicFavorites = want;
+      this.render();
+      try {
+        const prefs = await this.client.setPrefs({ publicFavorites: want });
+        if (prefs && typeof prefs.publicFavorites === "boolean") this._prefs = prefs;
+        const msg = this.$("[data-privacy-msg]");
+        if (msg) msg.textContent = want ? "Public favorites are on. Your name appears after the next site sync." : "Public favorites are off. Your name drops off the list on the next site sync.";
+      } catch {
+        this._prefs.publicFavorites = prev;
+        this.render();
+        const msg = this.$("[data-privacy-msg]");
+        if (msg) msg.textContent = "Could not save that just now. Try again in a moment.";
+      }
     }
     // SOW-070: Appearance — Layout (Flat/Glass) + Theme (Light/Dark/System), device-local display prefs applied as
     // data-layout / data-theme on the document (tokens.mjs + shell.css react live). Theme shares the gbti-theme key with
@@ -3568,6 +3604,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         applyTheme(b.dataset.setTheme);
         this.render();
       }));
+      this.$$("[data-set-pubfav]").forEach((b) => b.addEventListener("click", () => this._setPubFav(b.dataset.setPubfav)));
       const liveRange = (sel, apply, outSel) => {
         const el = this.$(sel);
         if (el) el.addEventListener("input", () => {

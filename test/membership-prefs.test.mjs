@@ -22,7 +22,7 @@ test('prefs: GET returns normalized prefs for a paid member', async () => {
   const kv = fakeKV({ 'prefs:1': JSON.stringify({ categories: ['ai'], followedChannels: ['sdtimes'] }) });
   const r = await handlePrefs(REQ('GET'), {}, { kv, authorize: paid });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body.prefs, { categories: ['ai'], followedChannels: ['sdtimes'] });
+  assert.deepEqual(r.body.prefs, { categories: ['ai'], followedChannels: ['sdtimes'], publicFavorites: false });
 });
 
 test('prefs: a non-paid caller is denied (no KV touched)', async () => {

@@ -1285,10 +1285,12 @@ export async function getPrefs(ctx) {
   try { return await workerGetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch }); }
   catch (err) { mapNewsErr(err, 'read your preferences'); }
 }
-export async function setPrefs(ctx, { categories, followChannel } = {}) {
+export async function setPrefs(ctx, { categories, followChannel, publicFavorites } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
-  try { return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel } }); }
+  // SOW-114: publicFavorites = the member's opt-in to the public "Favorited by" list. JSON.stringify drops
+  // undefined keys, so an absent field never touches the stored value.
+  try { return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel, publicFavorites } }); }
   catch (err) { mapNewsErr(err, 'save your preferences'); }
 }
 
