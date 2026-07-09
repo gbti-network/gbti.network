@@ -60,6 +60,7 @@ import { freezeAndPersist } from './conversion-snapshot-store.mjs'; // SOW-059 P
 import { handleUpvote } from './membership-upvote.mjs';
 import { handleOgPreview } from './membership-og.mjs';
 import { handleSyndicationTracker, handleSyndicationCancel, handleSyndicationApprove } from './syndication-admin.mjs';
+import { handleSyndicateNowInfo, handleSyndicateNow } from './membership-syndicate-now.mjs'; // SOW-088: manual syndicate
 import { drainSyndication } from './syndication-drain.mjs';
 import { handleFollows } from './membership-follows.mjs';
 import { handleEarnings } from './membership-earnings.mjs'; // SOW-083 P2: the member's own earnings ledger
@@ -801,6 +802,18 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'POST') {
           const r = await handleSyndicationCancel(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+      // SOW-088: the superadmin "Manually Syndicate" rail (GET readiness/templates, POST direct post now).
+      if (pathname === '/membership/syndicate-now') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = await handleSyndicateNowInfo(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+        if (method === 'POST') {
+          const r = await handleSyndicateNow(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

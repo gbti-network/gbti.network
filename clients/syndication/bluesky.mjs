@@ -20,7 +20,8 @@ export function createBlueskyAdapter({ env = {}, fetchImpl = globalThis.fetch } 
       const session = await auth.json().catch(() => ({}));
       if (!session?.accessJwt || !session?.did) return { ok: false, error: 'bluesky session missing tokens' };
 
-      const text = buildChannelText(item, { limit: channelLimit('bluesky') });
+      // SOW-088 manual syndicate: an already-rendered (sanitized) message wins over the built text.
+      const text = (typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : buildChannelText(item, { limit: channelLimit('bluesky') });
       const record = { $type: 'app.bsky.feed.post', text, createdAt: new Date(item.enqueuedAt || Date.now()).toISOString() };
       const res = await fetchImpl(`${base}/xrpc/com.atproto.repo.createRecord`, {
         method: 'POST',

@@ -10,7 +10,8 @@ export function createMastodonAdapter({ env = {}, fetchImpl = globalThis.fetch }
     enabled() { return secretsPresent(env, 'mastodon'); },
     async post(item) {
       const base = String(env.MASTODON_BASE_URL || '').replace(/\/$/, '');
-      const status = buildChannelText(item, { limit: channelLimit('mastodon') });
+      // SOW-088 manual syndicate: an already-rendered (sanitized) message wins over the built text.
+      const status = (typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : buildChannelText(item, { limit: channelLimit('mastodon') });
       const res = await fetchImpl(`${base}/api/v1/statuses`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${env.MASTODON_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },

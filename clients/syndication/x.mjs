@@ -14,7 +14,8 @@ export function createXAdapter({ env = {}, fetchImpl = globalThis.fetch } = {}) 
     name: 'x',
     enabled() { return secretsPresent(env, 'x'); },
     async post(item) {
-      const text = buildChannelText(item, { limit: channelLimit('x') });
+      // SOW-088 manual syndicate: an already-rendered (sanitized) message wins over the built text.
+      const text = (typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : buildChannelText(item, { limit: channelLimit('x') });
       const res = await fetchImpl('https://api.twitter.com/2/tweets', {
         method: 'POST',
         headers: { Authorization: `Bearer ${env.X_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },

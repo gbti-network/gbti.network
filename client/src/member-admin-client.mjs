@@ -60,6 +60,30 @@ export async function getSyndicationQueue({ token, signupBase, fetch = globalThi
   return data;
 }
 
+/** SOW-088: the Manually Syndicate readiness read (destinations + templates + channel map; SUPERADMIN only). */
+export async function getSyndicateNow({ token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/syndicate-now', { method: 'GET', headers: { Authorization: 'Bearer ' + token } });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now info failed (${res.status})`);
+  return data;
+}
+
+/** SOW-088: post one item to one destination NOW (SUPERADMIN only; the Worker renders + sanitizes the template). */
+export async function syndicateNow({ destination, item, template, channelId, token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/syndicate-now', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ destination, item, template, channelId }),
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now failed (${res.status})`);
+  return data;
+}
+
 /** SOW-058: cancel/reject a pending or approved syndication item (SUPERADMIN only; the Worker enforces it). */
 export async function cancelSyndication({ id, token, signupBase, fetch = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError('not signed in');

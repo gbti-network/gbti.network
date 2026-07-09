@@ -30,11 +30,15 @@ function allowedMentionsFor(mention) {
  *  SOW-087: a configured per-type template (house/syndication-config.yml `templates:`) replaces the built-in
  *  message; the default share template is "Shared by {memberdiscord} {shareurl}" (no-ping full name when the
  *  mention does not resolve). allowed_mentions still caps pings to the author id either way. */
-async function postToChannel(channelId, item, { env, fetchImpl, client, cfg }) {
+export async function postToChannel(channelId, item, { env, fetchImpl, client, cfg, textOverride = null }) {
   const discord = client ?? createDiscordClient({ botToken: env.DISCORD_BOT_TOKEN, fetch: fetchImpl });
   const template = templateFor(cfg, item.source);
   let content;
-  if (template) {
+  if (typeof textOverride === 'string' && textOverride.trim()) {
+    // SOW-088 manual syndicate: the caller already rendered (and mention-sanitized) the message via the
+    // shared renderTemplate; allowed_mentions below still caps pings to the author either way.
+    content = textOverride;
+  } else if (template) {
     content = renderTemplate(template, item, { limit: channelLimit('discord') });
   } else {
     // Discord protects mass mentions via allowed_mentions, so the author mention may be a real <@id> here.

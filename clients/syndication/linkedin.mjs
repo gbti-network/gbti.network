@@ -13,7 +13,8 @@ export function createLinkedinAdapter({ env = {}, fetchImpl = globalThis.fetch }
     name: 'linkedin',
     enabled() { return secretsPresent(env, 'linkedin'); },
     async post(item) {
-      const text = buildChannelText(item, { limit: channelLimit('linkedin') });
+      // SOW-088 manual syndicate: an already-rendered (sanitized) message wins over the built text.
+      const text = (typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : buildChannelText(item, { limit: channelLimit('linkedin') });
       const author = String(env.LINKEDIN_ORG_URN || ''); // e.g. "urn:li:organization:12345"
       const body = {
         author,
