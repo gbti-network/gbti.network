@@ -18537,6 +18537,28 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
     if (merged.length) effInput.redirectFrom = merged;
     if (renaming && oldFm.publishedAt) effInput.publishedAt = oldFm.publishedAt;
   }
+  if (["post", "product", "prompt"].includes(type) && !effInput.publishedAt) {
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    let priorFm = oldFm;
+    if (!priorFm && typeof effInput.slug === "string" && effInput.slug) {
+      const sub = { post: "posts", product: "products", prompt: "prompts" }[type];
+      let text = null;
+      try {
+        text = await ctx2.reader?.readFile?.(`members/${id.username}/${sub}/${effInput.slug}/index.md`) ?? null;
+      } catch {
+        text = null;
+      }
+      if (text != null) {
+        try {
+          priorFm = parseContentFile(text).frontmatter ?? {};
+        } catch {
+          priorFm = null;
+        }
+      }
+    }
+    effInput.publishedAt = priorFm?.publishedAt ?? nowIso;
+    if (priorFm) effInput.updatedAt = nowIso;
+  }
   let built;
   try {
     built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || "published" }, body });

@@ -312,3 +312,32 @@ test('saveDraft rename staging parity for post + product (old path, old-slug bra
     assert.deepEqual(res.renamed, { from: 'old-name', to: 'renamed-x' });
   }
 });
+
+// 2026-07-09: date parity with the WorkBench editor. The MCP/API publish path never stamped
+// publishedAt, so an add_* item landed dateless (bottom of every feed, no date chip: the /ci prompt).
+test('publish stamps publishedAt for a NEW item; preserves it (+ bumps updatedAt) on a re-publish', async () => {
+  // New item (no prior file anywhere): publishedAt stamped.
+  const repoA = fakeRepo();
+  await publish(ctxFor({ repo: repoA }), { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd' }, body: 'B' });
+  const created = repoA.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md');
+  const fmNew = parseContentFile(created.content).frontmatter;
+  assert.ok(fmNew.publishedAt, 'a new publish carries publishedAt');
+  assert.ok(!fmNew.updatedAt, 'a first publish has no updatedAt');
+
+  // Re-publish of an existing item WITHOUT a path param (the MCP add_* shape): the canonical file's
+  // publishedAt is preserved and updatedAt bumps.
+  const existing = '---\ntype: prompt\ntitle: Fresh\nslug: fresh\nauthor: alice\nstatus: published\nvisibility: public\nshortDescription: d\npublishedAt: 2026-07-01T00:00:00.000Z\n---\n\nOld body.\n';
+  const repoB = fakeRepo();
+  await publish(ctxFor({ repo: repoB, files: { 'members/alice/prompts/fresh/index.md': existing } }),
+    { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd' }, body: 'B2' });
+  const updated = repoB.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md');
+  const fmUp = parseContentFile(updated.content).frontmatter;
+  assert.match(String(fmUp.publishedAt instanceof Date ? fmUp.publishedAt.toISOString() : fmUp.publishedAt), /^2026-07-01/);
+  assert.ok(fmUp.updatedAt, 'a re-publish bumps updatedAt');
+
+  // An explicit caller publishedAt always wins (never overwritten).
+  const repoC = fakeRepo();
+  await publish(ctxFor({ repo: repoC }), { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd', publishedAt: '2026-06-01T00:00:00.000Z' }, body: 'B' });
+  const explicit = parseContentFile(repoC.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md').content).frontmatter;
+  assert.match(String(explicit.publishedAt instanceof Date ? explicit.publishedAt.toISOString() : explicit.publishedAt), /^2026-06-01/);
+});

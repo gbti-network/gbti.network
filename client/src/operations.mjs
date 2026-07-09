@@ -469,6 +469,23 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
     // every publish, so restore the original here for the rename case only.
     if (renaming && oldFm.publishedAt) effInput.publishedAt = oldFm.publishedAt;
   }
+  // Date parity with the WorkBench editor (SOW-062 P6), which stamps publishedAt/updatedAt at publish. The
+  // MCP/API path never did, so an add_* item landed DATELESS: bottom of every feed, no date chip (hit live
+  // 2026-07-09 with the /ci prompt). Preserve an existing item's publishedAt on a re-publish (read the
+  // canonical file when the caller sent no `path`); stamp now for a genuinely new item; updatedAt bumps
+  // whenever the item already existed.
+  if (['post', 'product', 'prompt'].includes(type) && !effInput.publishedAt) {
+    const nowIso = new Date().toISOString();
+    let priorFm = oldFm;
+    if (!priorFm && typeof effInput.slug === 'string' && effInput.slug) {
+      const sub = { post: 'posts', product: 'products', prompt: 'prompts' }[type];
+      let text = null;
+      try { text = (await ctx.reader?.readFile?.(`members/${id.username}/${sub}/${effInput.slug}/index.md`)) ?? null; } catch { text = null; }
+      if (text != null) { try { priorFm = parseContentFile(text).frontmatter ?? {}; } catch { priorFm = null; } }
+    }
+    effInput.publishedAt = priorFm?.publishedAt ?? nowIso;
+    if (priorFm) effInput.updatedAt = nowIso;
+  }
   let built;
   try {
     // SOW-106: publishing merges into the network repo, and merged content is PUBLIC. Force status: published (an
