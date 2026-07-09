@@ -17660,6 +17660,10 @@ function createRepoClient({ token, upstream, fetch: fetch2 = globalThis.fetch, b
       const r = await req("GET", `/repos/${repoFullName}/git/ref/heads/${encodeURIComponent(branch)}`);
       return r.object?.sha;
     },
+    /** Force-move a branch ref to sha (used ONLY to reset a leftover publish branch with no open PR). */
+    async forceBranch(repoFullName, branch, sha) {
+      await req("PATCH", `/repos/${repoFullName}/git/refs/heads/${encodeURIComponent(branch)}`, { sha, force: true });
+    },
     /** Create the branch if absent (from fromSha). A 422 (already exists) is treated as success. */
     async ensureBranch(repoFullName, branch, fromSha) {
       try {
@@ -17917,12 +17921,24 @@ function defaultMessage(change) {
 function defaultTitle(change) {
   return change.type === "profile" ? `Update ${change.username}'s profile` : `${change.type}: ${change.slug}`;
 }
-async function commitToBranchOnFork({ repo, branch, files, message }) {
+async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false }) {
   if (!branch) throw new Error("commitToBranchOnFork: a branch name is required");
   if (!Array.isArray(files) || files.length === 0) throw new Error("commitToBranchOnFork: at least one file change is required");
   const fork = await repo.ensureFork();
   const base3 = await repo.getDefaultBranch(repo.upstream);
   const baseSha = await repo.getBranchSha(fork.full_name, base3);
+  if (resetStale && repo.findOpenPull && repo.forceBranch) {
+    let tip = null;
+    try {
+      tip = await repo.getBranchSha(fork.full_name, branch);
+    } catch {
+      tip = null;
+    }
+    if (tip && tip !== baseSha) {
+      const open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
+      if (!open) await repo.forceBranch(fork.full_name, branch, baseSha);
+    }
+  }
   await repo.ensureBranch(fork.full_name, branch, baseSha);
   for (const f2 of files) {
     const existingSha = await repo.getFileSha(fork.full_name, f2.path, branch);
@@ -17946,7 +17962,9 @@ async function publishContent({ repo, change, message, title, body }) {
     repo,
     branch,
     files: [{ path: change.path, content: change.markdown }],
-    message: message ?? defaultMessage(change)
+    message: message ?? defaultMessage(change),
+    resetStale: true
+    // a leftover branch from a merged PR must not seed a conflicting new PR
   });
   const head = `${owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });
@@ -17959,7 +17977,7 @@ async function publishContent({ repo, change, message, title, body }) {
 async function publishFiles({ repo, branch, files, message, title, body }) {
   if (!branch) throw new Error("publishFiles: a branch name is required");
   if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
-  const { fork, owner, base: base3 } = await commitToBranchOnFork({ repo, branch, files, message });
+  const { fork, owner, base: base3 } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true });
   const head = `${owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });
   if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };

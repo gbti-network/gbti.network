@@ -225,3 +225,29 @@ test('repo.gateStatus: reads the membership-gate context and maps it', async () 
   assert.equal(gs.state, 'failure');
   assert.equal(gs.meaning, 'held');
 });
+
+// 2026-07-09 (live PRs #95/#96): a publish branch LEFT OVER from a merged/closed PR reused its stale base
+// and the new PR conflicted with upstream. publish paths now force-reset such a branch to the fork main
+// when NO PR is open for it; an open PR (in-flight edits, SOW-053) and draft commits never reset.
+function fakeRepoWithStaleBranch({ openPull = null } = {}) {
+  const repo = fakeRepo({ existingPull: openPull });
+  repo.getBranchSha = async (r, b) => { repo.calls.push(['getBranchSha', r, b]); return b === 'main' ? 'basesha' : 'stale-tip'; };
+  repo.forceBranch = async (r, b, sha) => { repo.calls.push(['forceBranch', r, b, sha]); };
+  return repo;
+}
+
+test('publishFiles resets a leftover branch (stale tip, no open PR) to the fork main before committing', async () => {
+  const repo = fakeRepoWithStaleBranch();
+  await publishFiles({ repo, branch: 'gbti/prompt-x', files: [{ path: 'members/alice/prompts/x/index.md', content: 'y' }] });
+  const forced = repo.calls.find((c) => c[0] === 'forceBranch');
+  assert.deepEqual(forced, ['forceBranch', 'alice/gbti.network', 'gbti/prompt-x', 'basesha']);
+});
+
+test('an OPEN PR blocks the reset (SOW-053 in-flight protection); drafts never reset', async () => {
+  const repo = fakeRepoWithStaleBranch({ openPull: { number: 9, html_url: 'u' } });
+  await publishFiles({ repo, branch: 'gbti/prompt-x', files: [{ path: 'p', content: 'y' }] });
+  assert.equal(repo.calls.some((c) => c[0] === 'forceBranch'), false);
+  const draftRepo = fakeRepoWithStaleBranch();
+  await commitToBranchOnFork({ repo: draftRepo, branch: 'gbti/draft-x', files: [{ path: 'p', content: 'y' }] });
+  assert.equal(draftRepo.calls.some((c) => c[0] === 'forceBranch'), false);
+});

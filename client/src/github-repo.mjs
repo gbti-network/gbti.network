@@ -139,6 +139,11 @@ export function createRepoClient({ token, upstream, fetch = globalThis.fetch, ba
       return r.object?.sha;
     },
 
+    /** Force-move a branch ref to sha (used ONLY to reset a leftover publish branch with no open PR). */
+    async forceBranch(repoFullName, branch, sha) {
+      await req('PATCH', `/repos/${repoFullName}/git/refs/heads/${encodeURIComponent(branch)}`, { sha, force: true });
+    },
+
     /** Create the branch if absent (from fromSha). A 422 (already exists) is treated as success. */
     async ensureBranch(repoFullName, branch, fromSha) {
       try {

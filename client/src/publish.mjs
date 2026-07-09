@@ -45,13 +45,25 @@ function defaultTitle(change) {
  *
  * @returns {Promise<{ fork: string, owner: string, branch: string, base: string }>}
  */
-export async function commitToBranchOnFork({ repo, branch, files, message }) {
+export async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false }) {
   if (!branch) throw new Error('commitToBranchOnFork: a branch name is required');
   if (!Array.isArray(files) || files.length === 0) throw new Error('commitToBranchOnFork: at least one file change is required');
 
   const fork = await repo.ensureFork();                 // { full_name, owner }
   const base = await repo.getDefaultBranch(repo.upstream);
   const baseSha = await repo.getBranchSha(fork.full_name, base);
+  // A publish branch LEFT OVER from a merged/closed PR still points at the old base; reusing it opens a
+  // new PR that conflicts with upstream (hit live 2026-07-09, PRs #95/#96). When NO PR is open for the
+  // branch, force-reset it to the (server-synced, SOW-106) fork main before committing. An OPEN PR blocks
+  // the reset, so the SOW-053 in-flight-edit protection is untouched; drafts never pass resetStale.
+  if (resetStale && repo.findOpenPull && repo.forceBranch) {
+    let tip = null;
+    try { tip = await repo.getBranchSha(fork.full_name, branch); } catch { tip = null; }
+    if (tip && tip !== baseSha) {
+      const open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
+      if (!open) await repo.forceBranch(fork.full_name, branch, baseSha);
+    }
+  }
   await repo.ensureBranch(fork.full_name, branch, baseSha);
 
   for (const f of files) {
@@ -92,6 +104,7 @@ export async function publishContent({ repo, change, message, title, body }) {
     branch,
     files: [{ path: change.path, content: change.markdown }],
     message: message ?? defaultMessage(change),
+    resetStale: true, // a leftover branch from a merged PR must not seed a conflicting new PR
   });
 
   const head = `${owner}:${branch}`;
@@ -115,7 +128,7 @@ export async function publishFiles({ repo, branch, files, message, title, body }
   if (!branch) throw new Error('publishFiles: a branch name is required');
   if (!Array.isArray(files) || files.length === 0) throw new Error('publishFiles: at least one file change is required');
 
-  const { fork, owner, base } = await commitToBranchOnFork({ repo, branch, files, message });
+  const { fork, owner, base } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true });
 
   const head = `${owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });
