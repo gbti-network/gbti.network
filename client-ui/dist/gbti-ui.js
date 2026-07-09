@@ -8543,8 +8543,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     function fromHexCode(c) {
       if (c >= 48 && c <= 57) return c - 48;
-      const lc8 = c | 32;
-      if (lc8 >= 97 && lc8 <= 102) return lc8 - 97 + 10;
+      const lc9 = c | 32;
+      if (lc9 >= 97 && lc9 <= 102) return lc9 - 97 + 10;
       return -1;
     }
     function escapedHexLen(c) {
@@ -12053,14 +12053,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _prs() {
       const { prs = [] } = await this.client.listPRs() || {};
       return prs.filter((p) => p.merged === true || p.state === "merged" || p.state === "closed").map((p) => {
-        const lc8 = prLifecycle(p, null);
+        const lc9 = prLifecycle(p, null);
         return {
           id: p.number,
           ts: p.number,
           // no reliable timestamp in both host modes; the number is a recency proxy for display sort
           title: p.title || `PR #${p.number}`,
-          sub: lc8.needsAttention ? "Declined — open to see why" : "Accepted",
-          href: lc8.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE11
+          sub: lc9.needsAttention ? "Declined — open to see why" : "Accepted",
+          href: lc9.needsAttention ? "workspace.html#tab=prs" : p.html_url || SITE11
         };
       });
     }
@@ -12082,14 +12082,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // v1: replies on the caller's OWN Shares (the conversational surface the owner asked about). Content-item replies
     // (post/product/prompt) need a per-item comment walk and defer to P4's server aggregator. Hard-bounded fan-out.
     async _replies(login) {
-      const lc8 = String(login).toLowerCase();
+      const lc9 = String(login).toLowerCase();
       const { items = [] } = await this.client.listShares() || {};
-      const mine = items.filter((s) => String(s.author).toLowerCase() === lc8).slice(0, MAX_OWN_SHARES);
+      const mine = items.filter((s) => String(s.author).toLowerCase() === lc9).slice(0, MAX_OWN_SHARES);
       const lists = await Promise.all(mine.map((s) => this._safe(async () => {
         const slug = s.author && s.id ? `${s.author}/${s.id}` : "";
         if (!slug) return [];
         const r = await this.client.listShareComments({ targetSlug: slug }) || {};
-        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc8).map((c) => ({
+        return (r.items || []).filter((c) => String(c.author).toLowerCase() !== lc9).map((c) => ({
           id: `cmt:${c.path || `${slug}:${c.id || c.createdAt}`}`,
           ts: toMs(c.createdAt),
           title: `Reply on ${s.title || s.shortDescription || "your Share"}`,
@@ -12717,15 +12717,271 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="currentColor"><path d="${d}"/></svg>`;
   }
 
+  // membership/syndication-format.mjs
+  function sanitizeMentions(text) {
+    return String(text || "").replace(/@(?=[A-Za-z0-9_])/g, "@​").replace(/<@[!&]?\d+>/g, "").replace(/@here\b/gi, "here").replace(/@everyone\b/gi, "everyone");
+  }
+  function truncate(text, limit) {
+    const s = String(text || "");
+    if (!Number.isFinite(limit) || s.length <= limit) return s;
+    return s.slice(0, Math.max(0, limit - 1)).trimEnd() + "…";
+  }
+  function renderTemplate(template, item = {}, { limit = 2e3 } = {}) {
+    const mention = /^<@!?\d+>$/.test(String(item.mention || "")) ? item.mention : null;
+    const fullName = sanitizeMentions(item.authorName || (item.author ? `@${item.author}` : "a member"));
+    const vars = {
+      memberdiscord: mention || fullName,
+      // the owner-decided fallback: full name, no ping
+      fullname: fullName,
+      author: sanitizeMentions(item.author ? `@${item.author}` : "a member"),
+      shareurl: String(item.url || ""),
+      url: String(item.url || ""),
+      title: sanitizeMentions(item.title || ""),
+      category: sanitizeMentions(item.category || "")
+    };
+    const text = String(template || "").replace(/\{([a-zA-Z]+)\}/g, (_, name) => vars[name.toLowerCase()] ?? "").replace(/[ \t]{2,}/g, " ").trim();
+    return truncate(text, limit);
+  }
+
+  // membership/news-channels.mjs
+  var lc7 = (s) => String(s ?? "").trim().toLowerCase();
+  function newsChannelMap(parsed) {
+    const out = /* @__PURE__ */ new Map();
+    const list = Array.isArray(parsed?.channels) ? parsed.channels : [];
+    for (const e of list) {
+      const cat = lc7(e?.category);
+      const ch = String(e?.channelId ?? "").trim();
+      if (cat && ch) out.set(cat, ch);
+    }
+    return out;
+  }
+  function channelForCategory(parsed, category) {
+    return newsChannelMap(parsed).get(lc7(category)) ?? null;
+  }
+
+  // client-ui/src/elements/gbti-syndicate-now.mjs
+  var DEST_LABEL = { discord: "Discord", reddit: "Reddit", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
+  var CSS35 = `
+  :host { display:block; }
+  .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
+  .snbtn:hover { border-color:var(--accent); color:var(--accent); }
+  .overlay { position:fixed; inset:0; background:rgba(10,12,11,.62); z-index:60; display:flex; align-items:center; justify-content:center; }
+  .panel { width:min(560px, calc(100% - 32px)); max-height:calc(100vh - 48px); overflow-y:auto; background:var(--bg, #16181a); color:var(--fg); border:1.5px solid var(--line); border-radius:12px; padding:18px 20px; }
+  .panel h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:17px; }
+  .sub { color:var(--muted); font-size:12.5px; margin:0 0 14px; }
+  .tiles { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .tile { font:inherit; font-weight:700; font-size:13px; padding:14px 10px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); cursor:pointer; text-align:center; }
+  .tile:hover:not([disabled]) { border-color:var(--accent); color:var(--accent); }
+  .tile[disabled] { opacity:.45; cursor:default; }
+  .tile .why { display:block; font-weight:400; font-size:10.5px; color:var(--muted); margin-top:4px; }
+  label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin:12px 0 4px; }
+  textarea, select { width:100%; box-sizing:border-box; font:inherit; font-size:13px; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
+  textarea { min-height:74px; font-family:var(--font-mono, monospace); font-size:12.5px; }
+  .preview { border:1.5px dashed var(--line); border-radius:8px; padding:10px 12px; font-size:13px; white-space:pre-wrap; word-break:break-word; background:var(--hover, rgba(0,0,0,.15)); }
+  .warn { color:#d8a13d; font-size:12.5px; margin-top:10px; }
+  .err { color:#e06c6c; font-size:12.5px; margin-top:10px; }
+  .okmsg { color:var(--accent); font-size:13px; margin-top:10px; }
+  .okmsg a { color:var(--accent); }
+  .actions { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:16px; }
+  .go { font:inherit; font-weight:700; font-size:13.5px; padding:9px 18px; border:0; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer; }
+  .go[disabled] { opacity:.55; cursor:default; }
+  .ghost { font:inherit; font-size:13px; padding:8px 14px; border:1.5px solid var(--line); border-radius:10px; background:transparent; color:var(--muted); cursor:pointer; }
+  .ghost:hover { color:var(--fg); }
+  .spin { display:inline-block; width:12px; height:12px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:sn-spin .7s linear infinite; vertical-align:-1px; margin-right:7px; }
+  @keyframes sn-spin { to { transform:rotate(360deg); } }
+`;
+  var GbtiSyndicateNow = class extends GbtiElement {
+    render() {
+      if (!this.client) {
+        this.set("");
+        return;
+      }
+      if (this._role === void 0 && !this._loading) {
+        this._loading = true;
+        this._gate();
+      }
+      if (this._role !== "superadmin") {
+        this.set("");
+        return;
+      }
+      this.set(this.css(CSS35) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
+      this.on(".snbtn", "click", () => {
+        this._open = true;
+        this._step = "dest";
+        this._result = null;
+        this._err = null;
+        this.render();
+        this._loadInfo();
+      });
+      if (this._open) this._wireModal();
+    }
+    async _gate() {
+      try {
+        this._role = (await this.client.status())?.role || "member";
+      } catch {
+        this._role = "member";
+      }
+      this._loading = false;
+      this.render();
+    }
+    _item() {
+      const d = this.dataset || {};
+      return {
+        source: d.gbtiType || "",
+        targetSlug: d.gbtiSlug || "",
+        targetType: d.gbtiType || "",
+        author: d.gbtiAuthor || "",
+        title: d.gbtiTitle || "",
+        url: d.gbtiUrl || "",
+        image: d.gbtiImage || void 0,
+        category: d.gbtiCategory || void 0,
+        visibility: "public"
+      };
+    }
+    async _loadInfo() {
+      try {
+        const [info, queue] = await Promise.all([
+          this.client.getSyndicateNow(),
+          this.client.syndicationQueue().catch(() => null)
+        ]);
+        this._info = info;
+        const key = `${this._item().source}:${this._item().targetSlug}`;
+        const prior = [...queue?.sent ?? [], ...queue?.failed ?? []].filter((it) => (it.id || "").startsWith(key + "#"));
+        this._prior = prior.filter((it) => it.status === "sent");
+      } catch (err) {
+        this._err = err?.message || "Could not load the syndication destinations.";
+      }
+      this.render();
+    }
+    _modalHtml() {
+      const body = !this._info && !this._err ? `<p class="sub"><span class="spin"></span>Loading destinations…</p>` : this._err && !this._info ? `<p class="err">${esc(this._err)}</p>` : this._step === "dest" ? this._destHtml() : this._composeHtml();
+      return `<div class="overlay" data-overlay><div class="panel">
+      <h3>Manually Syndicate</h3>
+      <p class="sub">${esc(this._item().title || this._item().targetSlug)}</p>
+      ${body}
+    </div></div>`;
+    }
+    _destHtml() {
+      const tiles = (this._info?.destinations ?? []).map((d) => {
+        const label = DEST_LABEL[d.id] || d.id;
+        return d.ready ? `<button class="tile" type="button" data-dest="${esc(d.id)}">${esc(label)}</button>` : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(d.reason || "not available")}</span></button>`;
+      }).join("");
+      const prior = this._prior?.length ? `<p class="warn">Already syndicated ${this._prior.length === 1 ? "once" : `${this._prior.length} times`} (last: ${esc(new Date(Math.max(...this._prior.map((p) => p.sentAt || p.enqueuedAt || 0))).toLocaleString())}). Publishing again posts a duplicate.</p>` : "";
+      return `<label>Destination</label><div class="tiles">${tiles}</div>${prior}
+      <div class="actions"><button class="ghost" type="button" data-close>Cancel</button><span></span></div>`;
+    }
+    _composeHtml() {
+      const dest = this._dest;
+      const item = this._item();
+      const template = this._template ?? (this._info?.templates?.[item.source] || "{title} {url}");
+      const preview = renderTemplate(template, item, { limit: 2e3 });
+      let channelRow = "";
+      if (dest === "discord") {
+        const groups = /* @__PURE__ */ new Map();
+        for (const c of this._channels || []) {
+          const sec = c.section || "Channels";
+          if (!groups.has(sec)) groups.set(sec, []);
+          groups.get(sec).push(c);
+        }
+        const selected = this._channelId || "";
+        const opts = [...groups.entries()].map(([sec, list]) => `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === selected ? " selected" : ""}>#${esc(c.name)}</option>`).join("")}</optgroup>`).join("");
+        channelRow = `<label>Channel${this._preselectedNote ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || "")} category)</span>` : ""}</label>
+        <select data-channel>${opts || '<option value="">No channels loaded</option>'}</select>`;
+      }
+      const prior = this._prior?.length ? `<p class="warn">This item already went out (${this._prior.length === 1 ? "once" : `${this._prior.length} times`}). Publishing again posts a duplicate.</p>` : "";
+      const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}</p>` : "";
+      return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
+      <label>Message template <span style="font-weight:400">({title} {url} {author} {fullName} {category}${item.source === "share" ? " {shareurl} {memberdiscord}" : ""})</span></label>
+      <textarea data-template>${esc(template)}</textarea>
+      <label>Preview</label>
+      <div class="preview" data-preview>${esc(preview)}</div>
+      ${channelRow}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}${result}
+      <div class="actions">
+        <button class="ghost" type="button" data-close>${this._result ? "Done" : "Cancel"}</button>
+        <button class="go" type="button" data-publish ${this._busy || this._result ? "disabled" : ""}>${this._busy ? '<span class="spin"></span>Publishing...' : "Publish"}</button>
+      </div>`;
+    }
+    _wireModal() {
+      this.on("[data-close]", "click", () => {
+        this._open = false;
+        this._template = null;
+        this._err = null;
+        this.render();
+      });
+      this.on("[data-back]", "click", () => {
+        this._step = "dest";
+        this._err = null;
+        this._result = null;
+        this.render();
+      });
+      this.$$("[data-dest]").forEach((b) => b.addEventListener("click", () => this._pickDest(b.dataset.dest)));
+      const ta = this.$("[data-template]");
+      if (ta) ta.addEventListener("input", () => {
+        this._template = ta.value;
+        const pv = this.$("[data-preview]");
+        if (pv) pv.textContent = renderTemplate(ta.value, this._item(), { limit: 2e3 });
+      });
+      const sel = this.$("[data-channel]");
+      if (sel) sel.addEventListener("change", () => {
+        this._channelId = sel.value;
+      });
+      this.on("[data-publish]", "click", () => this._publish());
+    }
+    async _pickDest(dest) {
+      this._dest = dest;
+      this._step = "compose";
+      this._err = null;
+      this._result = null;
+      if (dest === "discord" && !this._channels) {
+        try {
+          const r = await this.client.discordChannels();
+          const all = r?.channels ?? [];
+          const sections = new Map(all.filter((c) => c.type === 4).map((c) => [c.id, c.name]));
+          this._channels = all.filter((c) => c.type === 0 || c.type === 5).map((c) => ({ ...c, section: sections.get(c.parentId) || "Channels" }));
+        } catch {
+          this._channels = [];
+        }
+        const mapped = channelForCategory({ channels: this._info?.channelMap ?? [] }, this._item().category);
+        const featured = this._info?.featured?.[this._item().source] || null;
+        this._channelId = mapped || featured || this._channels[0]?.id || "";
+        this._preselectedNote = Boolean(mapped);
+      }
+      this.render();
+    }
+    async _publish() {
+      const item = this._item();
+      const template = (this._template ?? (this._info?.templates?.[item.source] || "{title} {url}")).trim();
+      if (!template) {
+        this._err = "A message template is required.";
+        this.render();
+        return;
+      }
+      this._busy = true;
+      this._err = null;
+      this.render();
+      try {
+        const payload = { destination: this._dest, item, template };
+        if (this._dest === "discord") payload.channelId = this._channelId;
+        this._result = await this.client.syndicateNow(payload);
+        this._prior = [...this._prior || [], { status: "sent", sentAt: Date.now() }];
+      } catch (err) {
+        this._err = err?.message || "The post failed.";
+      }
+      this._busy = false;
+      this.render();
+    }
+  };
+  define("gbti-syndicate-now", GbtiSyndicateNow);
+
   // client-ui/src/elements/gbti-reader.mjs
   var SITE13 = "https://gbti.network";
-  var lc7 = (s) => String(s || "").toLowerCase();
+  var lc8 = (s) => String(s || "").toLowerCase();
   var isHouse = (a) => {
-    const x = lc7(a);
+    const x = lc8(a);
     return !x || x === "gbti" || x === "house";
   };
   var authorName4 = (a) => isHouse(a) ? "GBTI Network" : a;
-  var githubLogin = (a) => lc7(a) === "gbti" || lc7(a) === "house" ? "gbti-network" : a;
+  var githubLogin = (a) => lc8(a) === "gbti" || lc8(a) === "house" ? "gbti-network" : a;
   var githubAvatar = (a) => a ? `https://github.com/${encodeURIComponent(githubLogin(a))}.png?size=96` : "";
   function targetSlugFor(it) {
     if (it.type === "share") return it.author && it.id ? `${it.author}/${it.id}` : "";
@@ -12745,7 +13001,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var _directory = null;
   function loadDirectory() {
     if (_directory) return _directory;
-    _directory = fetch(`${SITE13}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => new Map((j.members || []).map((m) => [lc7(m.username), m]))).catch(() => /* @__PURE__ */ new Map());
+    _directory = fetch(`${SITE13}/members-index.json`).then((r) => r.ok ? r.json() : { members: [] }).then((j) => new Map((j.members || []).map((m) => [lc8(m.username), m]))).catch(() => /* @__PURE__ */ new Map());
     return _directory;
   }
   var SOCIALS = [
@@ -12766,7 +13022,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS35 = `
+  var CSS36 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -12932,6 +13188,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (it.type === "share") return await this._body(it.visibility, it.body, it.encryptedBody);
         const { frontmatter, body } = await this.client.readItem({ path: it.path });
         this._rawBody = typeof body === "string" ? body : null;
+        this._fmCategories = Array.isArray(frontmatter?.categories) ? frontmatter.categories : null;
         return await this._body(it.visibility, body, frontmatter?.encryptedBody);
       } catch {
         return { error: true };
@@ -12940,21 +13197,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // Resolve the author drawer model: directory entry (avatar/name/headline/links), whether the viewer follows
     // them, and whether the viewer CAN follow (SOW-060: any signed-in member). House content yields a branded, non-followable card.
     async _resolveAuthor(it) {
-      const username = lc7(it.author);
+      const username = lc8(it.author);
       if (isHouse(username)) return { house: true };
       const [dir, status] = await Promise.all([
         loadDirectory(),
         this.client.status ? this.client.status().catch(() => null) : Promise.resolve(null)
       ]);
       const entry = dir.get(username) || null;
-      const me = lc7(status?.identity?.username || status?.identity?.login);
+      const me = lc8(status?.identity?.username || status?.identity?.login);
       const canFollow = !!status?.canFollow;
       let following = false;
       if (canFollow && this.client.getFollows) {
         try {
           const f = await this.client.getFollows();
           const list = Array.isArray(f) ? f : f?.following ?? [];
-          following = list.some((x) => lc7(x.username) === username);
+          following = list.some((x) => lc8(x.username) === username);
         } catch {
         }
       }
@@ -13019,7 +13276,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS35));
+        this.set(this.css(CSS36));
         return;
       }
       const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? "Watch video" : "Read article"} on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE13 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
@@ -13042,9 +13299,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const slug = targetSlugFor(it);
       const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"${Array.isArray(it.aliases) && it.aliases.length ? ` data-gbti-target-aliases="${esc(it.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
       const sideLink = it.type === "share" && it.url ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf2(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>` : "";
-      const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
+      const syndCategory = it.type === "share" ? it.category || "" : this._fmCategories?.[0] || "";
+      const syndUrl = it.url ? it.type === "share" ? it.url : SITE13 + it.url : "";
+      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}" data-gbti-title="${esc(it.title || "")}" data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
-      this.set(this.css(CSS35) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
+      this.set(this.css(CSS36) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -13145,7 +13405,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     } catch {
     }
   }
-  var CSS36 = `
+  var CSS37 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -13279,7 +13539,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS36) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS37) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -13292,7 +13552,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS36) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS37) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -13617,7 +13877,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       cancelSyndication: ({ id }) => request("POST", "/api/syndication/cancel", { id }),
       // SOW-058: superadmin reject/cancel
       approveSyndication: ({ id }) => request("POST", "/api/syndication/approve", { id }),
-      // SOW-058: superadmin approve -> posts next drain tick
+      getSyndicateNow: () => request("GET", "/api/syndicate-now"),
+      // SOW-088: destinations + templates + channel map (superadmin)
+      syndicateNow: (p) => request("POST", "/api/syndicate-now", p),
+      // SOW-088: { destination, item, template, channelId? } // SOW-058: superadmin approve -> posts next drain tick
       adminOp: (action, params) => request("POST", "/api/admin-ops", params ? { action, params } : { action })
       // SOW-038 P3 (reconcile/e2e); SOW-055 category-migrate carries params
     };

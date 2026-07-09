@@ -21,6 +21,7 @@ import './gbti-collection.mjs';
 import './gbti-mod-actions.mjs'; // SOW-071: per-item moderation (Hide/Unhide/Remove) for moderator+
 import { hostOf } from '../all-merge.mjs'; // SOW-057: the link domain for the "Read article on <domain>" CTA
 import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
+import './gbti-syndicate-now.mjs'; // SOW-088: the superadmin Manually Syndicate control (self-gates)
 import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: the ONE shared video extractor (a share's video link plays inline)
 
 const SITE = 'https://gbti.network';
@@ -238,6 +239,8 @@ class GbtiReader extends GbtiElement {
       // SOW-090: keep the RAW markdown so "Copy prompt" copies the canonical source (matching the public
       // site's prompt Copy, which always yields the raw markdown regardless of the active view).
       this._rawBody = typeof body === 'string' ? body : null;
+      // SOW-088: the RAW taxonomy path (categoryLabels alone cannot drive channel routing).
+      this._fmCategories = Array.isArray(frontmatter?.categories) ? frontmatter.categories : null;
       return await this._body(it.visibility, body, frontmatter?.encryptedBody);
     } catch {
       return { error: true };
@@ -395,8 +398,16 @@ class GbtiReader extends GbtiElement {
     const sideLink = (it.type === 'share' && it.url)
       ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>`
       : '';
+    // SOW-088: the superadmin Manually Syndicate control (self-gates to superadmin; the Worker enforces).
+    // The category attribute carries the RAW top-level taxonomy key (a share's flat topic, or the first
+    // segment of the frontmatter path) so the popup can pre-select the mapped Discord channel.
+    const syndCategory = it.type === 'share' ? (it.category || '') : (this._fmCategories?.[0] || '');
+    const syndUrl = it.url ? (it.type === 'share' ? it.url : SITE + it.url) : '';
+    const synd = (resolved && slug && ['post', 'product', 'prompt', 'share'].includes(it.type))
+      ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || '')}" data-gbti-title="${esc(it.title || '')}" data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ''}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ''}></gbti-syndicate-now>`
+      : '';
     // The author drawer only renders once resolved (so its data is present); while loading the side column is empty.
-    const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${discussion}</aside>` : '<aside class="side"></aside>';
+    const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
 
     // SOW-057: an upvote control on a Share (extension-only), hidden for the share's own author (whose vote never counts).
     const shareUpvote = (it.type === 'share' && slug && this._author && !this._author.isSelf)

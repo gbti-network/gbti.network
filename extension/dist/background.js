@@ -18790,6 +18790,32 @@ async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalTh
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndication queue request failed (${res.status})`);
   return data;
 }
+async function getSyndicateNow({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase9(signupBase) + "/membership/syndicate-now", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now info failed (${res.status})`);
+  return data;
+}
+async function syndicateNow({ destination, item, template, channelId, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase9(signupBase) + "/membership/syndicate-now", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ destination, item, template, channelId })
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now failed (${res.status})`);
+  return data;
+}
 async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase9(signupBase) + "/membership/syndication/cancel", {
@@ -19620,6 +19646,16 @@ async function approveSyndication2(ctx, { id } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   return approveSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+async function getSyndicateNowInfo(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  return getSyndicateNow({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+async function syndicateNow2(ctx, { destination, item, template, channelId } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  return syndicateNow({ destination, item, template, channelId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -21426,6 +21462,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await approveSyndication2(ctx, body ?? {}));
       case "/api/syndication/cancel":
         return ok(await cancelSyndication2(ctx, body ?? {}));
+      case "/api/syndicate-now":
+        return ok(method === "POST" ? await syndicateNow2(ctx, body ?? {}) : await getSyndicateNowInfo(ctx));
       case "/api/admin-ops":
         return ok(await triggerAdminOp2(ctx, body ?? {}));
       case "/api/pr-status": {
