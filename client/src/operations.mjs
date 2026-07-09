@@ -935,7 +935,7 @@ export async function publishShare(ctx, { input = {}, body = '', message, title,
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
-  await publishFiles({
+  const pr = await publishFiles({
     repo,
     branch: `gbti/share-${id_}`, // idempotent by branch: re-publishing the same id updates the same PR
     files,
@@ -943,7 +943,9 @@ export async function publishShare(ctx, { input = {}, body = '', message, title,
     title: title ?? `New Share${built.frontmatter.title ? `: ${built.frontmatter.title}` : ''}`,
     body: prBody,
   });
-  return { id: id_, path: built.path, visibility: built.frontmatter.visibility ?? 'members', encrypted: Boolean(plan?.encPath) };
+  // SOW-092: spread the PR handle (prNumber/prUrl/updated) like the comment op does, so the composer ack
+  // can cite the real PR (it used to read an undefined prNumber). The explicit fields win on collision.
+  return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? 'members', encrypted: Boolean(plan?.encPath) };
 }
 
 // SOW-027: member comment authoring. Comments are one flat file per comment in the member's own comments/

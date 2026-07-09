@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { renderMarkdown } from '../client/src/markdown.mjs';
-import { embedUrl } from '../client/src/video-embed.mjs';
+import { embedUrl, isPortraitEmbed } from '../client/src/video-embed.mjs';
 import { remarkContentBlocks } from '../src/lib/remark-content-blocks.mjs';
 
 test('reader: a callout fence renders a variant box with an escaped, inline-formatted body', () => {
@@ -43,6 +43,17 @@ test('embedUrl normalizes YouTube + Vimeo forms and rejects everything else', ()
   assert.equal(embedUrl('https://vimeo.com/123456'), 'https://player.vimeo.com/video/123456');
   assert.equal(embedUrl('dQw4w9WgXcQ'), 'https://www.youtube.com/embed/dQw4w9WgXcQ');
   assert.equal(embedUrl('https://example.com'), null);
+});
+
+test('embedUrl: TikTok + Rumble (SOW-092 share embeds); a Rumble WATCH page stays null', () => {
+  assert.equal(embedUrl('https://www.tiktok.com/@somebody/video/7301234567890123456'), 'https://www.tiktok.com/embed/v2/7301234567890123456');
+  assert.equal(embedUrl('https://rumble.com/embed/v4abcd9/'), 'https://rumble.com/embed/v4abcd9/');
+  // The watch page's v-code is a DIFFERENT id than the embed code, so it cannot embed client-side.
+  assert.equal(embedUrl('https://rumble.com/v6abcd1-some-title.html'), null);
+  // The watch?v param with a playlist still resolves (real share URLs carry extra params).
+  assert.equal(embedUrl('https://www.youtube.com/watch?v=N_GfH09iP9c&list=RDN_GfH09iP9c&start_radio=1'), 'https://www.youtube.com/embed/N_GfH09iP9c');
+  assert.equal(isPortraitEmbed('https://www.tiktok.com/embed/v2/1'), true);
+  assert.equal(isPortraitEmbed('https://www.youtube.com/embed/x'), false);
 });
 
 test('build: remarkContentBlocks turns callout/embed code nodes into html nodes, matching the reader', () => {

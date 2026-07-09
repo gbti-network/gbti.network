@@ -6,6 +6,8 @@
 // the Worker, SOW-016; threads via SOW-032's listShareComments + the inert <gbti-comment-box>) is unchanged.
 // A Locked account gets a splash; the key never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { parseBrowseHash } from '../browse-hash.mjs'; // SOW-092: the share deep link (#tab=share&read=<author>/<id>)
+import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: a video share plays inline
 import { shareToItem, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + link-host helper
 import { resolveAsset } from '../assets.mjs'; // SOW-057: resolve the share featured image URL
 import './gbti-card-list.mjs';
@@ -25,6 +27,10 @@ const CSS = `
   .refresh { background:transparent; border:0; color:var(--muted); cursor:pointer; font:inherit; font-size:13px; }
   .refresh:hover { color:var(--brand); }
   .muted { color:var(--muted); font-size:13.5px; }
+  /* SOW-092: a share whose link is a recognized video plays inline in place of the static image. */
+  .share-embed { position:relative; aspect-ratio:16/9; overflow:hidden; background:#000; border-radius:10px; margin-top:10px; }
+  .share-embed iframe { width:100%; height:100%; border:0; }
+  .share-embed.tall { aspect-ratio:9/16; max-width:380px; }
   .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
 
   /* reading view (a focused Share + its discussion) */
@@ -78,10 +84,26 @@ class GbtiSharesFeed extends GbtiElement {
     this._items = null; // raw shares
     this._reading = null; // the share being read, or null (the list)
     this._locked = false;
-    // Refresh the feed when a Share is posted from the composer (event bubbles + composed to document). The
-    // discussion's own reload-on-comment lives in <gbti-discussion> now.
-    this._onPosted = () => { this._reading = null; this.reload(); };
+    // SOW-092: on post, open the member's new share IMMEDIATELY (the optimistic reader-ready item the
+    // composer emits; SOW-076 instant-feel) and refetch the stream quietly behind it. Marks the event
+    // handled so the shell's no-reader compose fallback never double-fires. A payload without the item
+    // (an older composer) keeps the old refetch behavior.
+    this._onPosted = (e) => {
+      const item = e?.detail?.item;
+      if (item) { if (e.detail) e.detail.handled = true; this._reading = item; this.render(); this.reload(true); return; }
+      this._reading = null;
+      this.reload();
+    };
     document.addEventListener('gbti-share-posted', this._onPosted);
+    // SOW-092: a share handed off by another page (the shell compose fallback stashes the optimistic item
+    // in sessionStorage and navigates here).
+    const stashed = this._takeStash();
+    if (stashed) { this._reading = stashed; this.render(); this.reload(true); return; }
+    // SOW-092: the share deep link — #read=<author>/<shareId> (shares.html or the Browse Shares tab). The
+    // target opens once the stream loads (reload resolves it).
+    this._openSlug = (() => {
+      try { return parseBrowseHash(typeof location !== 'undefined' ? location.hash : '').read || null; } catch { return null; }
+    })();
     this.reload();
   }
   disconnectedCallback() {
@@ -89,16 +111,47 @@ class GbtiSharesFeed extends GbtiElement {
     if (this._onPosted) document.removeEventListener('gbti-share-posted', this._onPosted);
   }
 
-  async reload() {
-    if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client to read Shares.</p>`); return; }
-    this.set(this.css(CSS) + `<p class="muted">Loading the co-op stream…</p>`);
+  _takeStash() {
+    try {
+      const raw = sessionStorage.getItem('gbti-open-share');
+      if (!raw) return null;
+      sessionStorage.removeItem('gbti-open-share');
+      const item = JSON.parse(raw);
+      return item && item.type === 'share' && item.id ? item : null;
+    } catch { return null; }
+  }
+
+  /** SOW-092: reflect the open share in the hash (keeps any tab= token, e.g. on the Browse Shares tab) so
+   *  the address bar is a copyable deep link; slug=null strips it. replaceState fires no hashchange. */
+  _setHash(slug) {
+    if (typeof location === 'undefined' || typeof history === 'undefined') return;
+    try {
+      const { tab } = parseBrowseHash(location.hash);
+      const parts = [];
+      if (tab) parts.push(`tab=${tab}`);
+      if (slug) parts.push(`read=${encodeURIComponent(slug)}`);
+      history.replaceState(null, '', location.pathname + location.search + (parts.length ? '#' + parts.join('&') : ''));
+    } catch { /* fail-soft */ }
+  }
+
+  /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
+  async reload(quiet = false) {
+    if (!this.client) { if (!quiet) this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client to read Shares.</p>`); return; }
+    if (!quiet) this.set(this.css(CSS) + `<p class="muted">Loading the co-op stream…</p>`);
     let membership = 'unknown';
     try { const st = await this.client.status(); membership = st?.membership ?? 'unknown'; this._role = st?.role ?? 'member'; this._me = String(st?.identity?.username || st?.identity?.login || '').toLowerCase(); } catch { membership = 'unknown'; this._role = 'member'; this._me = ''; }
     this._locked = LOCKED.has(membership);
-    if (this._locked) return this._splash();
+    if (this._locked) return quiet ? undefined : this._splash();
     try { this._items = (await this.client.listShares())?.items ?? []; }
-    catch { this.set(this.css(CSS) + `<p class="muted">Could not load Shares right now.</p>`); return; }
-    this.render();
+    catch { if (!quiet) this.set(this.css(CSS) + `<p class="muted">Could not load Shares right now.</p>`); return; }
+    // SOW-092: resolve a pending deep link against the freshly loaded stream (silently falls back to the
+    // list when the target is not there, e.g. an old link to a removed share).
+    if (this._openSlug && !this._reading) {
+      const target = this._items.find((s) => `${s.author}/${s.id}` === this._openSlug);
+      this._openSlug = null;
+      if (target) this._reading = target;
+    }
+    if (!quiet) this.render();
   }
 
   render() {
@@ -135,8 +188,13 @@ class GbtiSharesFeed extends GbtiElement {
     const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : '';
     // SOW-057: "Read article on <domain>" + the featured image beneath it (single-column feed).
     const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf(share.url))}</a>` : '';
+    // SOW-092: a video link (YouTube/Vimeo/TikTok/Rumble embed) plays inline; the static image (usually
+    // that video's thumbnail) shows only for non-video links.
+    const shareEmbed = share.url ? embedUrl(share.url) : null;
     const heroUrl = share.image ? resolveAsset(share.image) : '';
-    const hero = heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : '';
+    const hero = shareEmbed
+      ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? ' tall' : ''}"><iframe src="${esc(shareEmbed)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+      : (heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : '');
     const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
     // SOW-050 P3 + SOW-057: the Favorite + Collection cluster, plus an Upvote (hidden for the share's own author,
     // whose vote never counts). A Share keys on its composite "<author>/<id>" slug.
@@ -159,7 +217,8 @@ class GbtiSharesFeed extends GbtiElement {
         <div class="body" data-body><p class="empty">Loading…</p></div>
         ${link}${hero}${tags}${discussion}
       </article>`);
-    this.on('[data-back]', 'click', () => { this._reading = null; this.render(); });
+    this.on('[data-back]', 'click', () => { this._reading = null; this._setHash(null); this.render(); });
+    this._setHash(slug); // SOW-092: the address bar carries the share deep link while reading
     this.on('gbti-mod-actions', 'mod-action', (e) => { if (e.detail?.action !== 'unhide') { this._reading = null; this.reload(); } });
     // Resolve the Share's note body (decrypt for a members Share); the discussion loads itself.
     this._fillBody(share);
@@ -175,12 +234,15 @@ class GbtiSharesFeed extends GbtiElement {
 
   async _resolveBody(it) {
     try {
+      // SOW-092: the author's own just-posted share carries its LOCAL plaintext body (the optimistic item)
+      // even at members visibility, so it renders with zero decrypt round-trip.
+      if (it.body) return (await this.client.preview({ body: it.body }))?.html ?? '';
       if (it.visibility === 'members') {
         if (!it.encryptedBody) return ''; // a members Share with no body
         const { text } = await this.client.decrypt({ encPath: it.encryptedBody });
         return (await this.client.preview({ body: text }))?.html ?? '';
       }
-      return it.body ? (await this.client.preview({ body: it.body }))?.html ?? '' : '';
+      return '';
     } catch (err) {
       const locked = err?.code === 'membership-required' || err?.code === 'not-authenticated';
       return { locked };

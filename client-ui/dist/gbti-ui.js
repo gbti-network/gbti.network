@@ -6695,6 +6695,32 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return [...new Set((Array.isArray(categories) ? categories : []).filter((k) => typeof k === "string" && k))];
   }
 
+  // client-ui/src/share-post-core.mjs
+  function authorFromPath(path) {
+    const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(String(path || ""));
+    return m ? m[1] : null;
+  }
+  function optimisticShareItem({ res, input = {}, body = "", now = null } = {}) {
+    const id = res?.id ?? null;
+    const author = authorFromPath(res?.path);
+    if (!id || !author) return null;
+    const createdAt = now ?? (/* @__PURE__ */ new Date()).toISOString();
+    return {
+      type: "share",
+      author,
+      id,
+      title: input.title || "",
+      shortDescription: input.shortDescription || "",
+      url: input.url || "",
+      image: input.image || null,
+      thumb: input.image || null,
+      visibility: res?.visibility ?? input.visibility ?? "members",
+      body: String(body || ""),
+      createdAt,
+      publishedAt: createdAt
+    };
+  }
+
   // client-ui/src/elements/gbti-share-composer.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var SITE6 = "https://gbti.network";
@@ -6716,8 +6742,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
   select { font:inherit; font-size:13px; padding:8px 10px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
   .actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:12px; }
-  button.post { font:inherit; font-weight:700; font-size:14px; padding:9px 18px; border:0; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer; }
-  button.post[disabled] { opacity:.5; cursor:default; }
+  button.post { display:inline-flex; align-items:center; gap:8px; font:inherit; font-weight:700; font-size:14px; padding:9px 18px; border:0; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer; }
+  button.post[disabled] { opacity:.6; cursor:default; }
+  /* SOW-092: the progressing ring shown inside the Post button while postShare runs. */
+  .post .spin { display:inline-block; width:13px; height:13px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:sc-spin .7s linear infinite; }
+  @keyframes sc-spin { to { transform:rotate(360deg); } }
   .msg { font-size:13px; }
   .msg.err { color:#c0392b; }
   .msg.ok { color:var(--brand); }
@@ -6907,6 +6936,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._say(msg, "Add a title, a note, or a link first.", "err");
         return;
       }
+      const btn = this.$("button.post");
+      const btnLabel = btn ? btn.textContent : "";
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spin" aria-hidden="true"></span>Posting...`;
+      }
       card?.classList.add("busy");
       try {
         const input = { visibility };
@@ -6923,19 +6958,26 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         const cat = this.$("select.cat");
         if (cat) cat.value = "";
+        const postedImage = this._image;
         this._image = null;
         this._suggested = null;
+        this._lastOgUrl = null;
         const ogBox = this.$("[data-og]");
         if (ogBox) {
           ogBox.hidden = true;
           ogBox.innerHTML = "";
         }
-        this.emit("gbti-share-posted", res);
+        const item = optimisticShareItem({ res, input: { ...input, image: postedImage }, body });
+        this.emit("gbti-share-posted", { ...res, item });
       } catch (err) {
         const h = failHint(err);
         this._say(msg, h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text, "err");
       } finally {
         card?.classList.remove("busy");
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = btnLabel;
+        }
       }
     }
     _say(el, text, kind) {
@@ -6945,6 +6987,56 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   define("gbti-share-composer", GbtiShareComposer);
+
+  // client-ui/src/browse-hash.mjs
+  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
+  var DO_ACTIONS = /* @__PURE__ */ new Set(["favorite", "collect"]);
+  function buildReadHash(type, path, doAction) {
+    const t = TAB_IDS.has(type) ? type : "post";
+    if (!path) return `tab=${t}`;
+    const act = DO_ACTIONS.has(doAction) ? `&do=${doAction}` : "";
+    return `tab=${t}&read=${encodeURIComponent(path)}${act}`;
+  }
+  function parseBrowseHash(hash) {
+    const s = String(hash || "").replace(/^#/, "");
+    const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
+    const readM = s.match(/(?:^|&)read=([^&]+)/);
+    const doM = s.match(/(?:^|&)do=([a-z]+)(?:&|$)/);
+    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
+    let read = null;
+    if (readM) {
+      try {
+        read = decodeURIComponent(readM[1]);
+      } catch {
+        read = readM[1];
+      }
+    }
+    const action = doM && DO_ACTIONS.has(doM[1]) ? doM[1] : null;
+    return { tab, read, action };
+  }
+  function stripDoParam(hash) {
+    const s = String(hash || "").replace(/^#/, "");
+    return s.split("&").filter((p) => !/^do=/.test(p)).join("&");
+  }
+
+  // client/src/video-embed.mjs
+  function embedUrl(v) {
+    const s = String(v || "").trim();
+    let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
+    if (m) return `https://www.youtube.com/embed/${m[1]}`;
+    m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (m) return `https://player.vimeo.com/video/${m[1]}`;
+    m = s.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
+    if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
+    m = s.match(/rumble\.com\/embed\/([a-z0-9]+)/i);
+    if (m) return `https://rumble.com/embed/${m[1]}/`;
+    if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
+    if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
+    return null;
+  }
+  function isPortraitEmbed(src) {
+    return /tiktok\.com\/embed\//.test(String(src || ""));
+  }
 
   // client-ui/src/all-merge.mjs
   var SHARE_OK = /* @__PURE__ */ new Set(["paid", "trialing"]);
@@ -7367,6 +7459,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .refresh { background:transparent; border:0; color:var(--muted); cursor:pointer; font:inherit; font-size:13px; }
   .refresh:hover { color:var(--brand); }
   .muted { color:var(--muted); font-size:13.5px; }
+  /* SOW-092: a share whose link is a recognized video plays inline in place of the static image. */
+  .share-embed { position:relative; aspect-ratio:16/9; overflow:hidden; background:#000; border-radius:10px; margin-top:10px; }
+  .share-embed iframe { width:100%; height:100%; border:0; }
+  .share-embed.tall { aspect-ratio:9/16; max-width:380px; }
   .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
 
   /* reading view (a focused Share + its discussion) */
@@ -7418,23 +7514,70 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._items = null;
       this._reading = null;
       this._locked = false;
-      this._onPosted = () => {
+      this._onPosted = (e) => {
+        const item = e?.detail?.item;
+        if (item) {
+          if (e.detail) e.detail.handled = true;
+          this._reading = item;
+          this.render();
+          this.reload(true);
+          return;
+        }
         this._reading = null;
         this.reload();
       };
       document.addEventListener("gbti-share-posted", this._onPosted);
+      const stashed = this._takeStash();
+      if (stashed) {
+        this._reading = stashed;
+        this.render();
+        this.reload(true);
+        return;
+      }
+      this._openSlug = (() => {
+        try {
+          return parseBrowseHash(typeof location !== "undefined" ? location.hash : "").read || null;
+        } catch {
+          return null;
+        }
+      })();
       this.reload();
     }
     disconnectedCallback() {
       super.disconnectedCallback();
       if (this._onPosted) document.removeEventListener("gbti-share-posted", this._onPosted);
     }
-    async reload() {
+    _takeStash() {
+      try {
+        const raw = sessionStorage.getItem("gbti-open-share");
+        if (!raw) return null;
+        sessionStorage.removeItem("gbti-open-share");
+        const item = JSON.parse(raw);
+        return item && item.type === "share" && item.id ? item : null;
+      } catch {
+        return null;
+      }
+    }
+    /** SOW-092: reflect the open share in the hash (keeps any tab= token, e.g. on the Browse Shares tab) so
+     *  the address bar is a copyable deep link; slug=null strips it. replaceState fires no hashchange. */
+    _setHash(slug) {
+      if (typeof location === "undefined" || typeof history === "undefined") return;
+      try {
+        const { tab } = parseBrowseHash(location.hash);
+        const parts = [];
+        if (tab) parts.push(`tab=${tab}`);
+        if (slug) parts.push(`read=${encodeURIComponent(slug)}`);
+        history.replaceState(null, "", location.pathname + location.search + (parts.length ? "#" + parts.join("&") : ""));
+      } catch {
+      }
+    }
+    /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
+    async reload(quiet = false) {
       if (!this.client) {
-        this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      this.set(this.css(CSS23) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS23) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st = await this.client.status();
@@ -7447,14 +7590,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._me = "";
       }
       this._locked = LOCKED4.has(membership);
-      if (this._locked) return this._splash();
+      if (this._locked) return quiet ? void 0 : this._splash();
       try {
         this._items = (await this.client.listShares())?.items ?? [];
       } catch {
-        this.set(this.css(CSS23) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS23) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
-      this.render();
+      if (this._openSlug && !this._reading) {
+        const target = this._items.find((s) => `${s.author}/${s.id}` === this._openSlug);
+        this._openSlug = null;
+        if (target) this._reading = target;
+      }
+      if (!quiet) this.render();
     }
     render() {
       if (this._locked) return this._splash();
@@ -7495,8 +7643,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const title = share.title ? `<div class="title">${esc(share.title)}</div>` : "";
       const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : "";
       const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf2(share.url))}</a>` : "";
+      const shareEmbed = share.url ? embedUrl(share.url) : null;
       const heroUrl = share.image ? resolveAsset(share.image) : "";
-      const hero = heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : "";
+      const hero = shareEmbed ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(shareEmbed)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : "";
       const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}</div>` : "";
       const isAuthor = !!this._me && this._me === String(share.author || "").toLowerCase();
       const upvote = slug && !isAuthor ? `<gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote>` : "";
@@ -7516,8 +7665,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </article>`);
       this.on("[data-back]", "click", () => {
         this._reading = null;
+        this._setHash(null);
         this.render();
       });
+      this._setHash(slug);
       this.on("gbti-mod-actions", "mod-action", (e) => {
         if (e.detail?.action !== "unhide") {
           this._reading = null;
@@ -7535,12 +7686,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     async _resolveBody(it) {
       try {
+        if (it.body) return (await this.client.preview({ body: it.body }))?.html ?? "";
         if (it.visibility === "members") {
           if (!it.encryptedBody) return "";
           const { text } = await this.client.decrypt({ encPath: it.encryptedBody });
           return (await this.client.preview({ body: text }))?.html ?? "";
         }
-        return it.body ? (await this.client.preview({ body: it.body }))?.html ?? "" : "";
+        return "";
       } catch (err) {
         const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
         return { locked };
@@ -11770,37 +11922,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return { replies: now, following: now, review: now, prsSeen };
   }
 
-  // client-ui/src/browse-hash.mjs
-  var TAB_IDS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
-  var DO_ACTIONS = /* @__PURE__ */ new Set(["favorite", "collect"]);
-  function buildReadHash(type, path, doAction) {
-    const t = TAB_IDS.has(type) ? type : "post";
-    if (!path) return `tab=${t}`;
-    const act = DO_ACTIONS.has(doAction) ? `&do=${doAction}` : "";
-    return `tab=${t}&read=${encodeURIComponent(path)}${act}`;
-  }
-  function parseBrowseHash(hash) {
-    const s = String(hash || "").replace(/^#/, "");
-    const tabM = s.match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
-    const readM = s.match(/(?:^|&)read=([^&]+)/);
-    const doM = s.match(/(?:^|&)do=([a-z]+)(?:&|$)/);
-    const tab = tabM && TAB_IDS.has(tabM[1]) ? tabM[1] : null;
-    let read = null;
-    if (readM) {
-      try {
-        read = decodeURIComponent(readM[1]);
-      } catch {
-        read = readM[1];
-      }
-    }
-    const action = doM && DO_ACTIONS.has(doM[1]) ? doM[1] : null;
-    return { tab, read, action };
-  }
-  function stripDoParam(hash) {
-    const s = String(hash || "").replace(/^#/, "");
-    return s.split("&").filter((p) => !/^do=/.test(p)).join("&");
-  }
-
   // client-ui/src/elements/gbti-activity-bell.mjs
   var SITE11 = "https://gbti.network";
   var POLL_MS = 12e4;
@@ -12667,6 +12788,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   /* SOW-050: the hero cover is contained by WIDTH only (height auto, no object-fit crop), so the whole image
      shows at full resolution with no clipping. */
   .cover { display:block; width:100%; height:auto; border-radius:12px; border:1px solid var(--line); margin:0 0 22px; }
+  /* SOW-092: a share's video link plays inline where the static image sat. TikTok is portrait (tall). */
+  .cover-embed { position:relative; aspect-ratio:16/9; overflow:hidden; background:#000; margin:0 0 22px; border-radius:12px; border:1px solid var(--line); }
+  .cover-embed iframe { width:100%; height:100%; border:0; }
+  .cover-embed.tall { aspect-ratio:9/16; max-width:400px; }
 
   .body { font-size:15.5px; line-height:1.7; }
   .body h1,.body h2,.body h3 { font-family:var(--font-display); margin:1.4em 0 .5em; }
@@ -12891,8 +13016,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">Read article on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE13 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
       const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
       const meta = this._metaHtml(it, when);
+      const shareEmbed = it.type === "share" && it.url ? embedUrl(it.url) : null;
       const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
-      const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
+      const cover = shareEmbed ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? " tall" : ""}"><iframe src="${esc(shareEmbed)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>` : coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : "";
       let body;
       if (this._html === null) body = `<p class="muted">Loading...</p>`;
       else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;

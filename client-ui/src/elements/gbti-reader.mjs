@@ -21,6 +21,7 @@ import './gbti-collection.mjs';
 import './gbti-mod-actions.mjs'; // SOW-071: per-item moderation (Hide/Unhide/Remove) for moderator+
 import { hostOf } from '../all-merge.mjs'; // SOW-057: the link domain for the "Read article on <domain>" CTA
 import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
+import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: the ONE shared video extractor (a share's video link plays inline)
 
 const SITE = 'https://gbti.network';
 const lc = (s) => String(s || '').toLowerCase();
@@ -101,6 +102,10 @@ const CSS = `
   /* SOW-050: the hero cover is contained by WIDTH only (height auto, no object-fit crop), so the whole image
      shows at full resolution with no clipping. */
   .cover { display:block; width:100%; height:auto; border-radius:12px; border:1px solid var(--line); margin:0 0 22px; }
+  /* SOW-092: a share's video link plays inline where the static image sat. TikTok is portrait (tall). */
+  .cover-embed { position:relative; aspect-ratio:16/9; overflow:hidden; background:#000; margin:0 0 22px; border-radius:12px; border:1px solid var(--line); }
+  .cover-embed iframe { width:100%; height:100%; border:0; }
+  .cover-embed.tall { aspect-ratio:9/16; max-width:400px; }
 
   .body { font-size:15.5px; line-height:1.7; }
   .body h1,.body h2,.body h3 { font-family:var(--font-display); margin:1.4em 0 .5em; }
@@ -347,8 +352,13 @@ class GbtiReader extends GbtiElement {
     const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
     const meta = this._metaHtml(it, when);
     // SOW-050: the hero uses the full-res thumbWide derivative (falls back to the card/list thumb if absent).
+    // SOW-092: a share whose link is a recognized video (YouTube/Vimeo/TikTok/Rumble embed) plays INLINE —
+    // the embed replaces the static share image (the image was usually just that video's thumbnail).
+    const shareEmbed = it.type === 'share' && it.url ? embedUrl(it.url) : null;
     const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
-    const cover = coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : '';
+    const cover = shareEmbed
+      ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? ' tall' : ''}"><iframe src="${esc(shareEmbed)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+      : (coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : '');
     let body;
     if (this._html === null) body = `<p class="muted">Loading...</p>`;
     else if (this._html && this._html.error) body = `<p class="muted">Could not load this content. Try opening it on gbti.network.</p>`;

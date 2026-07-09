@@ -10,6 +10,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { topicsFromJson } from '../topic-picker-core.mjs'; // SOW-087: the flat topic vocabulary for the category select
+import { optimisticShareItem } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect
 
 const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
 const SITE = 'https://gbti.network';
@@ -32,8 +33,11 @@ const CSS = `
     border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
   select { font:inherit; font-size:13px; padding:8px 10px; border:1.5px solid var(--line); border-radius:10px; background:var(--panel); color:var(--fg); }
   .actions { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-top:12px; }
-  button.post { font:inherit; font-weight:700; font-size:14px; padding:9px 18px; border:0; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer; }
-  button.post[disabled] { opacity:.5; cursor:default; }
+  button.post { display:inline-flex; align-items:center; gap:8px; font:inherit; font-weight:700; font-size:14px; padding:9px 18px; border:0; border-radius:10px; background:var(--brand); color:#fff; cursor:pointer; }
+  button.post[disabled] { opacity:.6; cursor:default; }
+  /* SOW-092: the progressing ring shown inside the Post button while postShare runs. */
+  .post .spin { display:inline-block; width:13px; height:13px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:sc-spin .7s linear infinite; }
+  @keyframes sc-spin { to { transform:rotate(360deg); } }
   .msg { font-size:13px; }
   .msg.err { color:#c0392b; }
   .msg.ok { color:var(--brand); }
@@ -218,6 +222,11 @@ class GbtiShareComposer extends GbtiElement {
     const category = this.$('select.cat')?.value || ''; // SOW-087: the optional topic category
     const msg = this.$('.msg');
     if (!body && !url && !title) { this._say(msg, 'Add a title, a note, or a link first.', 'err'); return; }
+    // SOW-092: a real progressing state — disable the button and show a ring spinner for the several
+    // seconds postShare spends on the fork commit + PR round-trip (the card dim alone read as stuck).
+    const btn = this.$('button.post');
+    const btnLabel = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span class="spin" aria-hidden="true"></span>Posting...`; }
     card?.classList.add('busy');
     try {
       const input = { visibility };
@@ -230,15 +239,21 @@ class GbtiShareComposer extends GbtiElement {
       this._say(msg, submitAck({ prNumber: res?.prNumber, autoMerge: true }), 'ok'); // SOW-072 P2: consistent ack
       for (const sel of ['input.title', 'input.desc', 'textarea', 'input[type=url]']) { const el = this.$(sel); if (el) el.value = ''; }
       const cat = this.$('select.cat'); if (cat) cat.value = '';
+      const postedImage = this._image;
       this._image = null;
       this._suggested = null;
+      this._lastOgUrl = null;
       const ogBox = this.$('[data-og]'); if (ogBox) { ogBox.hidden = true; ogBox.innerHTML = ''; }
-      this.emit('gbti-share-posted', res);
+      // SOW-092: emit a READER-READY optimistic item alongside the publish result so the host redirects
+      // the member to their share IMMEDIATELY (SOW-076 instant-feel; the emit only fires on success).
+      const item = optimisticShareItem({ res, input: { ...input, image: postedImage }, body });
+      this.emit('gbti-share-posted', { ...res, item });
     } catch (err) {
       const h = failHint(err); // SOW-072 P3: consistent failure copy + upgrade pointer across every composer
       this._say(msg, h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text, 'err');
     } finally {
       card?.classList.remove('busy');
+      if (btn) { btn.disabled = false; btn.textContent = btnLabel; }
     }
   }
 

@@ -19342,7 +19342,7 @@ async function publishShare(ctx, { input = {}, body = "", message, title, prBody
     throw err;
   }
   const files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
-  await publishFiles({
+  const pr = await publishFiles({
     repo,
     branch: `gbti/share-${id_}`,
     // idempotent by branch: re-publishing the same id updates the same PR
@@ -19351,7 +19351,7 @@ async function publishShare(ctx, { input = {}, body = "", message, title, prBody
     title: title ?? `New Share${built.frontmatter.title ? `: ${built.frontmatter.title}` : ""}`,
     body: prBody2
   });
-  return { id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", encrypted: Boolean(plan?.encPath) };
+  return { ...pr, id: id_, path: built.path, visibility: built.frontmatter.visibility ?? "members", encrypted: Boolean(plan?.encPath) };
 }
 var commentSuffix = () => Math.random().toString(36).slice(2, 8);
 async function planAndPublishComment(ctx, repo, built, body, { message, title, prBody: prBody2 }) {
@@ -19971,10 +19971,14 @@ function fieldsFor(type) {
 // client/src/video-embed.mjs
 function embedUrl(v) {
   const s = String(v || "").trim();
-  let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  let m = s.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
   if (m) return `https://www.youtube.com/embed/${m[1]}`;
   m = s.match(/vimeo\.com\/(?:video\/)?(\d+)/);
   if (m) return `https://player.vimeo.com/video/${m[1]}`;
+  m = s.match(/tiktok\.com\/@[\w.-]+\/video\/(\d+)/);
+  if (m) return `https://www.tiktok.com/embed/v2/${m[1]}`;
+  m = s.match(/rumble\.com\/embed\/([a-z0-9]+)/i);
+  if (m) return `https://rumble.com/embed/${m[1]}/`;
   if (/^[\w-]{11}$/.test(s)) return `https://www.youtube.com/embed/${s}`;
   if (/^\d+$/.test(s)) return `https://player.vimeo.com/video/${s}`;
   return null;

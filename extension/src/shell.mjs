@@ -322,7 +322,18 @@ function openComposeModal() {
   // SOW-041 follow-up: deliberately NO backdrop-click-to-close on the Share composer — an accidental click on the
   // overlay must never discard an in-progress draft. The member closes intentionally (the X, Esc, or a successful post).
   overlay.querySelector('.compose-x')?.addEventListener('click', close);
-  overlay.addEventListener('gbti-share-posted', close); // posted -> close (the feed refreshes via its own listener)
+  // SOW-092: posted -> close, then redirect the member to their new share. A page with a share reader
+  // (the new-tab feed, the shares feed) claims the event during dispatch (detail.handled) and opens it in
+  // place; on a page with no reader (workspace/admin/account) we stash the optimistic item and land on
+  // shares.html, whose feed opens it on connect. Deferred a tick so the document listeners run first.
+  overlay.addEventListener('gbti-share-posted', (e) => {
+    close();
+    setTimeout(() => {
+      if (e.detail?.handled || !e.detail?.item) return;
+      try { sessionStorage.setItem('gbti-open-share', JSON.stringify(e.detail.item)); } catch { /* fail-soft */ }
+      location.href = 'shares.html';
+    }, 0);
+  });
   document.addEventListener('keydown', onEsc);
   document.body.appendChild(overlay);
   overlay.querySelector('gbti-share-composer')?.querySelector?.('input, textarea')?.focus?.();

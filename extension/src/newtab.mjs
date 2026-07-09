@@ -709,6 +709,15 @@ function init() {
 
   // Re-check the setup banner when the member returns to this tab (e.g. after forking in another tab).
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadSetupBanner(); });
+  // SOW-092: a share posted from the shell "+" modal opens IMMEDIATELY in the page reader (the composer
+  // emits a reader-ready optimistic item; SOW-076 instant-feel). Claiming the event stops the shell's
+  // no-reader fallback from also navigating to shares.html.
+  document.addEventListener('gbti-share-posted', (e) => {
+    const item = e?.detail?.item;
+    if (!item) return;
+    if (e.detail) e.detail.handled = true;
+    openReader(item);
+  });
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
