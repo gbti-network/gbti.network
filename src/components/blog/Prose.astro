@@ -46,6 +46,17 @@
   .prose-gbti :not(pre) > code { background: var(--tint); color: var(--fg); padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.9em; }
   .prose-gbti pre { background: var(--ink-2); color: var(--on-dark); padding: 1em; border-radius: 8px; overflow-x: auto; margin: 1.5em 0; }
   .prose-gbti pre code { background: none; padding: 0; }
+  /* Code cards: the enhancer script wraps each pre in a .code-card with a header bar (language + a working
+     Copy button), mirroring the extension reader's codecard so the two surfaces match. 7px house radius. */
+  .prose-gbti .code-card { margin: 1.5em 0; border-radius: 7px; overflow: hidden; border: 1px solid var(--line); }
+  .prose-gbti .code-card pre { margin: 0; border-radius: 0; }
+  .prose-gbti .code-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: var(--ink); color: var(--on-dark); padding: 6px 12px; }
+  .prose-gbti .code-lang { font-family: var(--f-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; opacity: .7; }
+  .prose-gbti .code-copy { font-family: var(--f-sans); font-size: 11.5px; font-weight: 600; color: var(--on-dark);
+    background: transparent; border: 1px solid rgba(255,255,255,.25); border-radius: 6px; padding: 2px 10px; cursor: pointer;
+    transition: border-color .15s, color .15s; }
+  .prose-gbti .code-copy:hover { border-color: var(--green); color: var(--green); }
   .prose-gbti hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
   .prose-gbti iframe { width: 100%; max-width: 100%; aspect-ratio: 16 / 9; margin: 1.5em 0; border-radius: 10px; }
   /* SOW-062 5d: body callout + embed blocks (rendered by remark-content-blocks.mjs) */
@@ -61,3 +72,38 @@
   .prose-gbti .embed-wrap { position: relative; margin: 1.5em 0; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--ink, #000); }
   .prose-gbti .embed-wrap iframe { width: 100%; height: 100%; margin: 0; border: 0; }
 </style>
+
+<script>
+  // Code cards: upgrade every fenced code block in rendered prose into a card with a language tag + a
+  // working Copy button (the same enhancement the extension reader applies, so the two surfaces match).
+  // Runs once per page; shiki emits data-language on the <pre>.
+  (() => {
+    document.querySelectorAll('.prose-gbti pre').forEach((pre) => {
+      if (pre.closest('.code-card')) return; // already enhanced (defensive against double-run)
+      const code = pre.querySelector('code');
+      const card = document.createElement('div');
+      card.className = 'code-card';
+      const bar = document.createElement('div');
+      bar.className = 'code-bar';
+      const tag = document.createElement('span');
+      tag.className = 'code-lang';
+      tag.textContent = pre.getAttribute('data-language') || 'code';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'code-copy';
+      btn.textContent = 'Copy';
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(code ? code.innerText : pre.innerText);
+          btn.textContent = 'Copied';
+        } catch {
+          btn.textContent = 'Copy failed';
+        }
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+      });
+      bar.append(tag, btn);
+      pre.replaceWith(card);
+      card.append(bar, pre);
+    });
+  })();
+</script>
