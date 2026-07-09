@@ -64,8 +64,9 @@ class GbtiActivityBell extends GbtiElement {
     this._timer = setInterval(() => { if (!this._open && !this._hidden()) this._load(); }, POLL_MS);
     this._onVis = () => { if (!this._hidden() && !this._open) this._load(); };
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this._onVis);
-    // Close the panel on an outside click. A click inside the shadow retargets to the host, so this.contains is true.
-    this._onDoc = (e) => { if (this._open && !this.contains(e.target)) this._close(); };
+    // Close the panel on an outside click. composedPath (not this.contains) so it stays correct when this element
+    // is nested inside another shadow root, where a document click retargets ev.target to the outer host.
+    this._onDoc = (e) => { if (this._open && !e.composedPath().includes(this)) this._close(); };
     document.addEventListener('click', this._onDoc);
   }
 

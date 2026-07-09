@@ -3268,7 +3268,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       };
       if (typeof document !== "undefined") document.addEventListener("visibilitychange", this._onVis);
       this._onDoc = (e) => {
-        if (this._open && !this.contains(e.target)) this._close();
+        if (this._open && !e.composedPath().includes(this)) this._close();
       };
       document.addEventListener("click", this._onDoc);
     }
@@ -10719,7 +10719,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.render();
         await this._load();
         this._away = (ev) => {
-          if (!this.contains(ev.target)) this._close();
+          if (!ev.composedPath().includes(this)) this._close();
         };
         this._esc = (ev) => {
           if (ev.key === "Escape") this._close();

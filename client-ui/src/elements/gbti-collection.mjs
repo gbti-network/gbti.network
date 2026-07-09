@@ -56,7 +56,10 @@ class GbtiCollection extends GbtiElement {
       this.render();
       await this._load();
       // close on outside click / Escape
-      this._away = (ev) => { if (!this.contains(ev.target)) this._close(); };
+      // composedPath (not this.contains): when this element is nested inside ANOTHER shadow root (e.g. the
+      // extension reader), a document click retargets ev.target to the OUTER host, so this.contains would wrongly
+      // read every in-popover click (including focusing the new-collection input) as "outside" and close it.
+      this._away = (ev) => { if (!ev.composedPath().includes(this)) this._close(); };
       this._esc = (ev) => { if (ev.key === 'Escape') this._close(); };
       document.addEventListener('click', this._away);
       document.addEventListener('keydown', this._esc);
