@@ -3,8 +3,8 @@ title: 'CI Health Check: a /ci Skill for Claude Code'
 slug: ci-health-check-skill-for-claude-code
 shortDescription: >-
   A drop-in /ci skill for Claude Code that audits your GitHub Actions: a red/green health board,
-  failure triage into broken-by-commit vs provisioning gap vs flaky, a post-push watcher,
-  scheduled-job staleness alarms, and a living workflow inventory.
+  root-cause failure triage with an extensible bucket taxonomy, a post-push watcher, scheduled-job
+  staleness alarms, and a living workflow inventory.
 targets:
   - Claude Code
 categories:
@@ -18,9 +18,8 @@ tags:
   - devops-automation
   - agent-skills
 variables:
-  - <owner>/<repo>
-  - <artifact build commands + dirs>
-  - <workflow inventory table>
+  - artifact build commands + dirs
+  - workflow inventory table
 status: published
 type: prompt
 author: atwellpub
@@ -34,10 +33,10 @@ It exists because agents (and humans) keep re-deriving the same motions every ti
 
 1. Create `.claude/skills/ci/` in your repo.
 2. Save the file below as `.claude/skills/ci/SKILL.md`.
-3. Replace the placeholders (marked `<like-this>`) with your repo specifics, and fill in the workflow inventory table.
+3. If your repo commits build artifacts, fill in the drift action; either way, seed the workflow inventory table.
 4. Type `/ci` (or `/ci health check`) in Claude Code.
 
-Requires the `gh` CLI authenticated against your repo.
+Requires the `gh` CLI authenticated against your repo. The skill runs from the project folder, so the repo is already known: `gh` resolves it from the working directory, and the `{owner}/{repo}` tokens in API paths are native `gh api` placeholders it fills in for you. Nothing to configure.
 
 ## The skill file
 
@@ -48,24 +47,24 @@ description: >
   Inspect and diagnose this repo's GitHub Actions CI. Invoke for "/ci", "/ci health", "/ci health check",
   "/ci watch", "/ci schedule", "/ci diagnose <run-id>", "/ci list", or when the user asks whether CI is
   green, why a workflow failed, or what a workflow does. Pulls recent runs with gh, downloads failed job
-  logs the reliable way, and classifies failures into broken-by-commit vs provisioning gap vs flaky/external.
+  logs the reliable way, and triages failures to their real root cause.
 ---
 
 # CI operations
 
-All commands run from the repo root against `<owner>/<repo>` with the `gh` CLI. Default action when none is
-named: `health`.
+All commands run from the repo root with the `gh` CLI (it resolves the repo from the working directory;
+`{owner}/{repo}` in API paths is a native gh placeholder). Default action when none is named: `health`.
 
 ## Tooling lore (read first)
 
 - **Fetching logs:** `gh run view <id> --log-failed` often returns NOTHING. The reliable recipe:
   ```bash
   JOB=$(gh run view <run-id> --json jobs -q '.jobs[0].databaseId')
-  gh api repos/<owner>/<repo>/actions/jobs/$JOB/logs > /tmp/job.log
+  gh api repos/{owner}/{repo}/actions/jobs/$JOB/logs > /tmp/job.log
   ```
   Then grep the file; strip the timestamp column with `cut -c30-` when quoting. Multi-job runs: iterate
   `.jobs[]` and pick by `.conclusion == "failure"`. Step-level status without logs:
-  `gh api .../actions/runs/<id>/jobs -q '.jobs[0].steps[] | .name + " " + .conclusion'`.
+  `gh api repos/{owner}/{repo}/actions/runs/<id>/jobs -q '.jobs[0].steps[] | .name + " " + .conclusion'`.
 - **Scheduled-failure attribution:** the failure email for a SCHEDULED workflow cites the LATEST main sha,
   which is often NOT the commit that broke it. Always check
   `gh run list --workflow <file> --limit 5 --json conclusion,createdAt,event` first; if the failures predate
@@ -76,14 +75,29 @@ named: `health`.
 - **Setting secrets may be gated:** an agent session may be blocked from `gh secret set` by permission
   policy. Prepare the value in a local untracked file and hand the human the one command.
 
-## Failure classification (use these three buckets in every report)
+## Failure triage (a starting taxonomy — extend it to fit the project)
+
+Classify every red into a named bucket, because the bucket decides the response. These three cover most
+repos; add project-specific buckets as you meet them (examples: environment/toolchain drift, a dependency
+or upstream API regression, resource exhaustion such as OOM or disk or rate limits, data- or state-dependent
+failures, expired credentials). When a failure fits no bucket, name a new one in the report rather than
+forcing it into a wrong response.
 
 1. **Broken by commit:** the failure starts at a specific sha and the log implicates changed files. Fix the
-   code or rebuild the artifact; verify with a rerun on the fix commit.
+   root cause (see Fix discipline below); verify with a rerun on the fix commit.
 2. **Provisioning gap:** missing or empty secret, unset variable, an external account not configured. Route
    to the human with the exact command; do not retry.
 3. **Flaky / external:** network hiccup, provider outage, rate limit; the same job passed before and after
    without a related change. `gh run rerun <id> --failed` once, then re-check.
+
+## Fix discipline (failing tests especially)
+
+When a test fails, evaluate the REAL defect the test is exposing and propose a fix for that root cause.
+Never patch the symptom, and never modify a test so it passes while the underlying failure remains — if you
+find yourself weakening an assertion, deleting a case, or special-casing the test input, stop and re-derive
+what the test was protecting. Changing a test is only correct when the test itself is wrong about the
+intended behavior, and the report must say that explicitly and justify it. The same rule generalizes beyond
+tests: a fix that makes the red go away without explaining WHY it was red is a symptom patch, not a fix.
 
 ## Actions
 
@@ -93,10 +107,10 @@ named: `health`.
    group by workflow. Report a red/green board: latest conclusion per workflow, streak (consecutive fails),
    and the event (push vs schedule).
 2. For each currently-red workflow: pull its recent history (`--workflow <file> --limit 5`) to date the
-   breakage, download the failed job log (recipe above), and classify into the three buckets with a
+   breakage, download the failed job log (recipe above), and triage it (the taxonomy above) with a
    one-line root cause and the proposed fix.
-3. End with the board, the diagnoses, and what to do next. Offer to make low-risk code-side fixes;
-   provisioning gaps go to the human.
+3. End with the board, the diagnoses, and what to do next. Offer to make low-risk code-side fixes (root
+   cause, per Fix discipline); provisioning gaps go to the human.
 
 ### /ci watch
 
@@ -131,12 +145,12 @@ escalated, not just listed.
 ### /ci diagnose <run-id | workflow-name>
 
 Deep-dive one run (or the latest run of a named workflow): step table, failed job log to disk,
-classification, root cause, fix proposal.
+triage bucket, root cause, fix proposal.
 
 ### /ci rerun <run-id>
 
 `gh run rerun <run-id> --failed` then watch it. Only for the flaky/external bucket; never rerun a
-provisioning gap (it cannot pass) or a broken-by-commit red (fix first).
+provisioning gap (it cannot pass) or a broken-by-commit red (fix the root cause first).
 
 ### /ci list
 
@@ -154,14 +168,15 @@ header comment usually says), and which secrets it reads.
 - Lead with the board (workflow, latest state, streak), then diagnoses, then actions taken or proposed.
 ````
 
-## Customizing it
+## Making it yours
 
-Three placeholders matter:
+There is nothing to configure for the repo itself: `gh` infers it from the working directory, so the skill works the moment you drop it in. Only two parts are inherently repo-specific:
 
-1. **The repo slug** (`<owner>/<repo>`) in the log-fetch recipe.
-2. **The drift action**: keep it only if your repo commits build artifacts (bundled JS, generated schemas, packaged extensions). List every build command and every artifact directory. If you do not commit artifacts, delete the action.
-3. **The inventory table**: have your agent seed it once from `.github/workflows/` and then treat it as living documentation. This is the part future sessions (and new contributors) thank you for.
+1. **The drift action**: keep it only if your repo commits build artifacts (bundled JS, generated schemas, packaged extensions). List every build command and every artifact directory. If you do not commit artifacts, delete the action.
+2. **The inventory table**: have your agent seed it once from `.github/workflows/` and then treat it as living documentation. This is the part future sessions (and new contributors) thank you for.
+
+And treat the failure taxonomy as a starting point, not a fixed set: projects fail in project-shaped ways, so add the buckets yours actually produces.
 
 ## Why the odd details are in there
 
-Each lore item is a real failure mode: `--log-failed` silently returning nothing while the jobs API works; a scheduled backup that failed for four days while its failure emails blamed whatever commit happened to be newest on main; a workflow reading a secret nobody ever created and reporting it as a vague downstream error instead of failing fast; a drift check that stayed red because the rebuild command regenerated only one of two committed bundles. The classification buckets keep the agent from the two classic wastes: rerunning a job that can never pass, and "fixing" code that was never broken.
+Each lore item is a real failure mode: `--log-failed` silently returning nothing while the jobs API works; a scheduled backup that failed for four days while its failure emails blamed whatever commit happened to be newest on main; a workflow reading a secret nobody ever created and reporting it as a vague downstream error instead of failing fast; a drift check that stayed red because the rebuild command regenerated only one of two committed bundles. The Fix discipline section is there because agents notoriously "fix" a failing test by editing the test — the classification buckets plus that rule keep the agent from the three classic wastes: rerunning a job that can never pass, "fixing" code that was never broken, and silencing a test that was telling the truth.
