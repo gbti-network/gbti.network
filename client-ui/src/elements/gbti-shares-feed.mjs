@@ -193,7 +193,7 @@ class GbtiSharesFeed extends GbtiElement {
     const shareEmbed = share.url ? embedUrl(share.url) : null;
     const heroUrl = share.image ? resolveAsset(share.image) : '';
     const hero = shareEmbed
-      ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? ' tall' : ''}"><iframe src="${esc(shareEmbed)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+      ? `<div class="share-embed${isPortraitEmbed(shareEmbed) ? ' tall' : ''}"><iframe src="${esc(`https://gbti.network/embed/?u=${encodeURIComponent(share.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
       : (heroUrl ? `<img class="share-hero" src="${esc(heroUrl)}" alt="" loading="lazy" style="display:block;max-width:100%;border-radius:10px;margin-top:10px" />` : '');
     const tags = (share.tags || []).length ? `<div class="tags">${share.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
     // SOW-050 P3 + SOW-057: the Favorite + Collection cluster, plus an Upvote (hidden for the share's own author,

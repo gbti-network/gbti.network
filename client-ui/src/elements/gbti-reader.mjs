@@ -356,8 +356,10 @@ class GbtiReader extends GbtiElement {
     // the embed replaces the static share image (the image was usually just that video's thumbnail).
     const shareEmbed = it.type === 'share' && it.url ? embedUrl(it.url) : null;
     const coverUrl = resolveAsset(it.thumbWide || it.thumbCard || it.thumb);
+    // The player loads through the site's /embed/ relay: YouTube rejects a referrer-less request (its
+    // error 153) and a chrome-extension:// page can never send one, so the relay's https origin vouches.
     const cover = shareEmbed
-      ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? ' tall' : ''}"><iframe src="${esc(shareEmbed)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
+      ? `<div class="cover-embed${isPortraitEmbed(shareEmbed) ? ' tall' : ''}"><iframe src="${esc(`${SITE}/embed/?u=${encodeURIComponent(it.url)}`)}" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>`
       : (coverUrl ? `<img class="cover" src="${esc(coverUrl)}" alt="" loading="lazy">` : '');
     let body;
     if (this._html === null) body = `<p class="muted">Loading...</p>`;

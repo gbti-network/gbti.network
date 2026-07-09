@@ -1,0 +1,40 @@
+---
+// SOW-092 follow-up: the video-embed RELAY. YouTube's embedded player now rejects requests with no HTTP
+// Referer (its error 153), and a chrome-extension:// page can never send one, so the in-extension share
+// views frame THIS https page instead and it frames the provider. The inner player then sees a valid
+// https referrer and plays. NOT an open iframe proxy: the ?u= value is validated through the ONE shared
+// embedUrl extractor, so only a normalized YouTube/Vimeo/TikTok/Rumble embed URL ever renders; anything
+// else shows a plain "cannot play here" note. No site chrome on purpose (this page exists to be framed).
+---
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Video</title>
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+      iframe { display: block; width: 100%; height: 100%; border: 0; }
+      .note { color: #9aa; font: 13px system-ui, sans-serif; padding: 16px; }
+    </style>
+  </head>
+  <body>
+    <script>
+      import { embedUrl } from '../../client/src/video-embed.mjs';
+      const u = new URLSearchParams(location.search).get('u') || '';
+      const src = embedUrl(u);
+      if (src) {
+        const f = document.createElement('iframe');
+        f.src = src;
+        f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+        f.allowFullscreen = true;
+        document.body.appendChild(f);
+      } else {
+        const p = document.createElement('p');
+        p.className = 'note';
+        p.textContent = 'This video cannot play here.';
+        document.body.appendChild(p);
+      }
+    </script>
+  </body>
+</html>
