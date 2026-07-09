@@ -417,7 +417,15 @@ export async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = worke
   try {
     const fork = await repo.ensureFork();
     const exists = await repo.getBranchSha(fork.full_name, branch).then((sha) => Boolean(sha)).catch(() => false);
-    if (exists) return { synced: false, reason: 'branch-exists' };
+    // A branch WITH an open PR carries in-flight edits: never sync under it (SOW-053; the stale base is
+    // what protects concurrent edits). A LEFTOVER branch (exists, but its PR already merged/closed) gets
+    // the sync anyway: publish is about to force-reset it to the fork main (2026-07-09, PRs 95-97), and
+    // resetting onto an UNSYNCED main would re-create the very conflict the reset exists to prevent.
+    if (exists) {
+      let open = null;
+      try { open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }); } catch { open = { number: -1 }; }
+      if (open) return { synced: false, reason: 'branch-exists' };
+    }
     const token = ctx.store?.get?.('githubToken');
     return await sync({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   } catch {

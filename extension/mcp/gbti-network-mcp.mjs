@@ -18496,7 +18496,15 @@ async function syncForkIfCreatingBranch(ctx2, repo, branch, { sync = workerSyncF
   try {
     const fork = await repo.ensureFork();
     const exists = await repo.getBranchSha(fork.full_name, branch).then((sha) => Boolean(sha)).catch(() => false);
-    if (exists) return { synced: false, reason: "branch-exists" };
+    if (exists) {
+      let open = null;
+      try {
+        open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
+      } catch {
+        open = { number: -1 };
+      }
+      if (open) return { synced: false, reason: "branch-exists" };
+    }
     const token = ctx2.store?.get?.("githubToken");
     return await sync({ token, signupBase: SIGNUP_BASE, fetch: ctx2.fetch ?? globalThis.fetch });
   } catch {
