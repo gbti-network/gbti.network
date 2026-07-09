@@ -20,6 +20,7 @@ tags:
 variables:
   - artifact build commands + dirs
   - workflow inventory table
+publishedAt: '2026-07-09T19:09:11.755Z'
 status: published
 type: prompt
 author: atwellpub
