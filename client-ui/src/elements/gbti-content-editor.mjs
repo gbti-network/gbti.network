@@ -337,12 +337,16 @@ class GbtiContentEditor extends GbtiElement {
         #out { margin-top:14px; }
         .preview { background:var(--s-surface-2); border:1px solid var(--s-line); border-radius:10px; padding:12px 14px; color:var(--s-fg); margin-top:12px; }
         .rail { display:flex; flex-direction:column; gap:14px; position:sticky; top:8px; max-height:calc(100vh - 16px); overflow-y:auto; }
+        /* The rail is a height-capped flex column and .rsec has overflow:hidden (zero min size), so without
+           this the flex algorithm SHRINKS the section cards to fit instead of scrolling: every card clipped
+           its content mid-line (the Type card cut its own one-liner). Cards keep their natural height; the
+           rail scrolls. */
+        .rail > * { flex-shrink:0; }
         @container (max-width:1140px) { .rail { position:static; max-height:none; } }
         .rsec { background:var(--s-surface); border:1.5px solid var(--s-line); border-radius:10px; box-shadow:var(--s-shadow); overflow:hidden; }
         .rsec > summary { list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; padding:13px 15px; font-weight:700; font-size:14px; color:var(--s-fg); }
         .rsec > summary::-webkit-details-marker { display:none; }
-        .rsec > summary::after { content:'⌄'; color:var(--s-fg-mute); font-size:12px; }
-        .rsec[open] > summary::after { content:'⌃'; }
+
         .rbody { padding:2px 15px 14px; display:grid; gap:8px; }
         .rbody label { font-size:12px; color:var(--s-fg-mute); font-weight:600; }
         .type-ro { font-weight:600; font-size:13px; padding:7px 11px; border:1px solid var(--s-line); border-radius:8px; background:var(--s-surface-2); color:var(--s-fg); text-transform:capitalize; }
