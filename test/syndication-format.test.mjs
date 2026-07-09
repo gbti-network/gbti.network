@@ -81,12 +81,12 @@ test('renderTemplate: hyphenated tokens, {content-type}, and the {member-discord
   // Profile Discord handle next (sanitized: the @ gets the zero-width guard on social channels).
   const withHandle = renderTemplate(T2, { ...base, authorDiscord: 'hudsdiscord', author: 'atwellpub' });
   assert.match(withHandle, /published by @.?hudsdiscord:/);
-  // GitHub username last.
+  // GitHub username last, @-prefixed like the handle path (the sanitizer's zero-width guard may follow the @).
   const ghOnly = renderTemplate(T2, { ...base, author: 'atwellpub' });
-  assert.match(ghOnly, /published by atwellpub:/);
+  assert.match(ghOnly, /published by @.?atwellpub:/);
   // A profile discord INVITE URL is not a username: it falls through to the GitHub fallback (hit live).
   const urlHandle = renderTemplate(T2, { ...base, authorDiscord: 'https://discord.gg/EwmcKcJZC6', author: 'atwellpub' });
-  assert.match(urlHandle, /published by atwellpub:/);
+  assert.match(urlHandle, /published by @.?atwellpub:/);
   assert.ok(!urlHandle.includes('discord.gg'), 'an invite URL never renders as the username');
   // {content-type} labels per source.
   assert.match(renderTemplate('{content-type}', { source: 'post' }), /^article$/);

@@ -56,7 +56,7 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
   const rawHandle = String(item.authorDiscord || '').trim().replace(/^@/, '');
   const discordHandle = /^[A-Za-z0-9._]{2,32}$/.test(rawHandle) && !/[\/:]/.test(rawHandle) ? rawHandle : '';
   const discordUsername = mention
-    || (discordHandle ? sanitizeMentions(`@${discordHandle}`) : sanitizeMentions(item.author || 'a member'));
+    || sanitizeMentions(`@${discordHandle || item.author || 'a member'}`);
   const vars = {
     memberdiscord: mention || fullName, // the owner-decided fallback: full name, no ping
     memberdiscordusername: discordUsername,

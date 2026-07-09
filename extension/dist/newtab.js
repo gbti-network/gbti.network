@@ -13388,7 +13388,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const fullName = sanitizeMentions(item.authorName || (item.author ? `@${item.author}` : "a member"));
     const rawHandle = String(item.authorDiscord || "").trim().replace(/^@/, "");
     const discordHandle = /^[A-Za-z0-9._]{2,32}$/.test(rawHandle) && !/[\/:]/.test(rawHandle) ? rawHandle : "";
-    const discordUsername = mention || (discordHandle ? sanitizeMentions(`@${discordHandle}`) : sanitizeMentions(item.author || "a member"));
+    const discordUsername = mention || sanitizeMentions(`@${discordHandle || item.author || "a member"}`);
     const vars = {
       memberdiscord: mention || fullName,
       // the owner-decided fallback: full name, no ping
