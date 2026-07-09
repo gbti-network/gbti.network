@@ -126,7 +126,7 @@ function gateMemberComments(items, membership) {
 
 // SOW-076: merge the caller's OWN optimistic comment echoes (read-your-writes) onto the deployed comments, reaping
 // any that have landed (now deployed) or been declined. Best-effort + signed-in only: any failure (or a target the
-// echo store does not handle, e.g. news) falls back cleanly to the deployed comments.
+// echo store does not handle) falls back cleanly to the deployed comments. News echoes work (2026-07-09).
 async function mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed }) {
   const token = ctx.store?.get?.('githubToken');
   if (!token || !targetType || !targetSlug) return deployed;
