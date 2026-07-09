@@ -13550,7 +13550,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         const selected = this._channelId || "";
         const opts = [...groups.entries()].map(([sec, list]) => `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === selected ? " selected" : ""}>#${esc(c.name)}</option>`).join("")}</optgroup>`).join("");
-        channelRow = opts ? `<label>Channel${this._preselectedNote ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || "")} category)</span>` : ""}</label>
+        const preNote = this._preselectedNote === "featured" ? ` <span style="font-weight:400">(pre-selected: the featured ${esc(item.source)} channel)</span>` : this._preselectedNote === "category" ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || "")} category)</span>` : "";
+        channelRow = opts ? `<label>Channel${preNote}</label>
           <select data-channel>${opts}</select>` : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ""}; paste the Discord channel id)</span></label>
           <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || "")}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
       }
@@ -13615,8 +13616,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         const mapped = channelForCategory({ channels: this._info?.channelMap ?? [] }, this._item().category);
         const featured = this._info?.featured?.[this._item().source] || null;
-        this._channelId = mapped || featured || this._channels[0]?.id || "";
-        this._preselectedNote = Boolean(mapped);
+        this._channelId = featured || mapped || this._channels[0]?.id || "";
+        this._preselectedNote = featured ? "featured" : mapped ? "category" : "";
       }
       this.render();
     }
@@ -13818,16 +13819,37 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._author = void 0;
       this._doDone = false;
       this._rawBody = null;
+      this._fm = null;
       this.render();
       this._resolve();
     }
     async _resolve() {
       const it = this._item || {};
-      const [html, author] = await Promise.all([this._resolveBody(it), this._resolveAuthor(it)]);
-      this._html = html;
-      this._author = author;
+      const minimal = it.type !== "share" && (!it.author || !it.title);
+      if (minimal) {
+        this._html = await this._resolveBody(it);
+        this._backfillFromFrontmatter(it);
+        this._author = await this._resolveAuthor(this._item || it);
+      } else {
+        const [html, author] = await Promise.all([this._resolveBody(it), this._resolveAuthor(it)]);
+        this._html = html;
+        this._author = author;
+      }
       this.render();
-      this._applyDo(it);
+      this._applyDo(this._item || it);
+    }
+    // Fill the missing metadata on a minimal deep-link item from the frontmatter _resolveBody stashed.
+    _backfillFromFrontmatter(it) {
+      const fm = this._fm;
+      if (!fm) return;
+      const URL_BASE = { post: "/articles", product: "/products", prompt: "/prompts" };
+      this._item = {
+        ...it,
+        title: it.title || fm.title || "",
+        author: it.author || fm.author || "",
+        url: it.url || (fm.slug && URL_BASE[it.type] ? `${URL_BASE[it.type]}/${fm.slug}/` : ""),
+        publishedAt: it.publishedAt ?? (fm.publishedAt ? Date.parse(fm.publishedAt) : null)
+      };
     }
     // SOW-114: honor a deep-link force-action (item.doAction = 'favorite' | 'collect') ONCE per open. The
     // public content pages send it via the SOW-036 relay so the site's inert Favorite/Save land here and act.
@@ -13861,6 +13883,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const { frontmatter, body } = await this.client.readItem({ path: it.path });
         this._rawBody = typeof body === "string" ? body : null;
         this._fmCategories = Array.isArray(frontmatter?.categories) ? frontmatter.categories : null;
+        this._fm = frontmatter ?? null;
         return await this._body(it.visibility, body, frontmatter?.encryptedBody);
       } catch {
         return { error: true };

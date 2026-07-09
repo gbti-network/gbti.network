@@ -196,17 +196,41 @@ class GbtiReader extends GbtiElement {
   /** open(item): { type, path, title, author, publishedAt, url, visibility, thumb?, thumbCard?, thumbWide?,
    *  categoryLabels?, body?, encryptedBody? }. For share, body/encryptedBody come from the summary; for
    *  post/product/prompt they come from readItem(path). */
-  open(item) { this._item = item; this._html = null; this._author = undefined; this._doDone = false; this._rawBody = null; this.render(); this._resolve(); }
+  open(item) { this._item = item; this._html = null; this._author = undefined; this._doDone = false; this._rawBody = null; this._fm = null; this.render(); this._resolve(); }
 
   async _resolve() {
     const it = this._item || {};
-    // Body + author drawer data load in parallel; both feed ONE resolved render (no re-render churn on the
-    // discussion mount). The author lookup is fail-soft: any error degrades to the minimal github-avatar card.
-    const [html, author] = await Promise.all([this._resolveBody(it), this._resolveAuthor(it)]);
-    this._html = html;
-    this._author = author;
+    // A DEEP-LINK item is minimal ({ type, path }): no title/author/url, which broke the author card (it
+    // showed the house card) and anything reading item metadata (the syndicate popup posted an empty
+    // title/author). The body read already returns the frontmatter, so resolve the body FIRST for a
+    // minimal item, backfill, then resolve the author from the real username. A rich feed item keeps the
+    // parallel fast path.
+    const minimal = it.type !== 'share' && (!it.author || !it.title);
+    if (minimal) {
+      this._html = await this._resolveBody(it);
+      this._backfillFromFrontmatter(it);
+      this._author = await this._resolveAuthor(this._item || it);
+    } else {
+      const [html, author] = await Promise.all([this._resolveBody(it), this._resolveAuthor(it)]);
+      this._html = html;
+      this._author = author;
+    }
     this.render();
-    this._applyDo(it);
+    this._applyDo(this._item || it);
+  }
+
+  // Fill the missing metadata on a minimal deep-link item from the frontmatter _resolveBody stashed.
+  _backfillFromFrontmatter(it) {
+    const fm = this._fm;
+    if (!fm) return;
+    const URL_BASE = { post: '/articles', product: '/products', prompt: '/prompts' };
+    this._item = {
+      ...it,
+      title: it.title || fm.title || '',
+      author: it.author || fm.author || '',
+      url: it.url || (fm.slug && URL_BASE[it.type] ? `${URL_BASE[it.type]}/${fm.slug}/` : ''),
+      publishedAt: it.publishedAt ?? (fm.publishedAt ? Date.parse(fm.publishedAt) : null),
+    };
   }
 
   // SOW-114: honor a deep-link force-action (item.doAction = 'favorite' | 'collect') ONCE per open. The
@@ -239,8 +263,10 @@ class GbtiReader extends GbtiElement {
       // SOW-090: keep the RAW markdown so "Copy prompt" copies the canonical source (matching the public
       // site's prompt Copy, which always yields the raw markdown regardless of the active view).
       this._rawBody = typeof body === 'string' ? body : null;
-      // SOW-088: the RAW taxonomy path (categoryLabels alone cannot drive channel routing).
+      // SOW-088: the RAW taxonomy path (categoryLabels alone cannot drive channel routing) + the whole
+      // frontmatter for the deep-link metadata backfill.
       this._fmCategories = Array.isArray(frontmatter?.categories) ? frontmatter.categories : null;
+      this._fm = frontmatter ?? null;
       return await this._body(it.visibility, body, frontmatter?.encryptedBody);
     } catch {
       return { error: true };

@@ -138,8 +138,11 @@ class GbtiSyndicateNow extends GbtiElement {
       const opts = [...groups.entries()].map(([sec, list]) =>
         `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === selected ? ' selected' : ''}>#${esc(c.name)}</option>`).join('')}</optgroup>`).join('');
       // When the name list is unavailable the picker degrades to a manual channel-id input, never a dead end.
+      const preNote = this._preselectedNote === 'featured'
+        ? ` <span style="font-weight:400">(pre-selected: the featured ${esc(item.source)} channel)</span>`
+        : this._preselectedNote === 'category' ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || '')} category)</span>` : '';
       channelRow = opts
-        ? `<label>Channel${this._preselectedNote ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || '')} category)</span>` : ''}</label>
+        ? `<label>Channel${preNote}</label>
           <select data-channel>${opts}</select>`
         : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ''}; paste the Discord channel id)</span></label>
           <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || '')}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
@@ -192,10 +195,12 @@ class GbtiSyndicateNow extends GbtiElement {
           .map((c) => ({ ...c, section: sections.get(c.parentId) || 'Channels' }));
         this._chErr = null;
       } catch (err) { this._channels = []; this._chErr = err?.message || 'request failed'; }
+      // Owner-decided default: the per-type FEATURED channel (#prompts for a prompt, etc.); the
+      // category-mapped channel stays one click away in the same picker.
       const mapped = channelForCategory({ channels: this._info?.channelMap ?? [] }, this._item().category);
       const featured = this._info?.featured?.[this._item().source] || null;
-      this._channelId = mapped || featured || this._channels[0]?.id || '';
-      this._preselectedNote = Boolean(mapped);
+      this._channelId = featured || mapped || this._channels[0]?.id || '';
+      this._preselectedNote = featured ? 'featured' : (mapped ? 'category' : '');
     }
     this.render();
   }
