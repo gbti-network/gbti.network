@@ -13374,6 +13374,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // membership/syndication-format.mjs
+  var TYPE_LABEL5 = { post: "article", product: "product", prompt: "prompt", share: "link" };
   function sanitizeMentions(text) {
     return String(text || "").replace(/@(?=[A-Za-z0-9_])/g, "@​").replace(/<@[!&]?\d+>/g, "").replace(/@here\b/gi, "here").replace(/@everyone\b/gi, "everyone");
   }
@@ -13385,9 +13386,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function renderTemplate(template, item = {}, { limit = 2e3 } = {}) {
     const mention = /^<@!?\d+>$/.test(String(item.mention || "")) ? item.mention : null;
     const fullName = sanitizeMentions(item.authorName || (item.author ? `@${item.author}` : "a member"));
+    const discordHandle = String(item.authorDiscord || "").trim().replace(/^@/, "");
+    const discordUsername = mention || (discordHandle ? sanitizeMentions(`@${discordHandle}`) : sanitizeMentions(item.author || "a member"));
     const vars = {
       memberdiscord: mention || fullName,
       // the owner-decided fallback: full name, no ping
+      memberdiscordusername: discordUsername,
+      contenttype: TYPE_LABEL5[item.source] || "item",
+      // {content-type}: article / product / prompt / link
       fullname: fullName,
       author: sanitizeMentions(item.author ? `@${item.author}` : "a member"),
       shareurl: String(item.url || ""),
@@ -13395,7 +13401,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       title: sanitizeMentions(item.title || ""),
       category: sanitizeMentions(item.category || "")
     };
-    const text = String(template || "").replace(/\{([a-zA-Z]+)\}/g, (_, name) => vars[name.toLowerCase()] ?? "").replace(/[ \t]{2,}/g, " ").trim();
+    const text = String(template || "").replace(/\{([a-zA-Z-]+)\}/g, (_, name) => vars[name.toLowerCase().replace(/-/g, "")] ?? "").replace(/[ \t]{2,}/g, " ").trim();
     return truncate(text, limit);
   }
 
@@ -13491,6 +13497,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         url: d.gbtiUrl || "",
         image: d.gbtiImage || void 0,
         category: d.gbtiCategory || void 0,
+        authorDiscord: d.gbtiDiscord || void 0,
+        // SOW-088: the public profile Discord handle
         visibility: "public"
       };
     }
@@ -13541,13 +13549,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         const selected = this._channelId || "";
         const opts = [...groups.entries()].map(([sec, list]) => `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === selected ? " selected" : ""}>#${esc(c.name)}</option>`).join("")}</optgroup>`).join("");
-        channelRow = `<label>Channel${this._preselectedNote ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || "")} category)</span>` : ""}</label>
-        <select data-channel>${opts || '<option value="">No channels loaded</option>'}</select>`;
+        channelRow = opts ? `<label>Channel${this._preselectedNote ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || "")} category)</span>` : ""}</label>
+          <select data-channel>${opts}</select>` : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ""}; paste the Discord channel id)</span></label>
+          <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || "")}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
       }
       const prior = this._prior?.length ? `<p class="warn">This item already went out (${this._prior.length === 1 ? "once" : `${this._prior.length} times`}). Publishing again posts a duplicate.</p>` : "";
       const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}</p>` : "";
       return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
-      <label>Message template <span style="font-weight:400">({title} {url} {author} {fullName} {category}${item.source === "share" ? " {shareurl} {memberdiscord}" : ""})</span></label>
+      <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category})</span></label>
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
       <div class="preview" data-preview>${esc(preview)}</div>
@@ -13581,6 +13590,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (sel) sel.addEventListener("change", () => {
         this._channelId = sel.value;
       });
+      const manual = this.$("[data-channel-manual]");
+      if (manual) manual.addEventListener("input", () => {
+        this._channelId = manual.value.trim();
+      });
       this.on("[data-publish]", "click", () => this._publish());
     }
     async _pickDest(dest) {
@@ -13594,8 +13607,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           const all = r?.channels ?? [];
           const sections = new Map(all.filter((c) => c.type === 4).map((c) => [c.id, c.name]));
           this._channels = all.filter((c) => c.type === 0 || c.type === 5).map((c) => ({ ...c, section: sections.get(c.parentId) || "Channels" }));
-        } catch {
+          this._chErr = null;
+        } catch (err) {
           this._channels = [];
+          this._chErr = err?.message || "request failed";
         }
         const mapped = channelForCategory({ channels: this._info?.channelMap ?? [] }, this._item().category);
         const featured = this._info?.featured?.[this._item().source] || null;
@@ -13645,7 +13660,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const m = String(it.path || "").match(/\/(?:posts|products|prompts)\/([^/]+)\/index\.md$/);
     return m ? m[1] : "";
   }
-  var TYPE_LABEL5 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
+  var TYPE_LABEL6 = { post: "Article", product: "Product", prompt: "Prompt", share: "Share" };
   var dateStr = (ms) => {
     try {
       return ms ? new Date(ms).toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" }) : "";
@@ -13889,7 +13904,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return html;
     }
     _metaHtml(it, when) {
-      const t = TYPE_LABEL5[it.type] || it.type || "";
+      const t = TYPE_LABEL6[it.type] || it.type || "";
       const name = authorName4(it.author);
       const avUrl = this._author?.entry?.avatar || githubAvatar(it.author);
       const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
@@ -13957,7 +13972,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const sideLink = it.type === "share" && it.url ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>` : "";
       const syndCategory = it.type === "share" ? it.category || "" : this._fmCategories?.[0] || "";
       const syndUrl = it.url ? it.type === "share" ? it.url : SITE14 + it.url : "";
-      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}" data-gbti-title="${esc(it.title || "")}" data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const authorDiscord = this._author?.entry?.links?.discord || "";
+      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}" data-gbti-title="${esc(it.title || "")}" data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS36) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);

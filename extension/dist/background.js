@@ -18763,6 +18763,20 @@ async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin statuses request failed (${res.status})`);
   return data?.statuses ?? {};
 }
+async function getDiscordChannels({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase9(signupBase) + "/membership/discord-channels", {
+    method: "GET",
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `discord channels request failed (${res.status})`);
+  return data?.channels ?? [];
+}
 async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, params }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase9(signupBase) + "/membership/admin/ops", {
@@ -19822,6 +19836,11 @@ async function getOpenPulls(ctx) {
   const repo = requireRepo(ctx);
   return { pulls: await repo.listOpenPulls() };
 }
+async function listDiscordChannels(ctx) {
+  const token = ctx.store?.get?.("githubToken");
+  const channels = await getDiscordChannels({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  return { channels };
+}
 async function triggerAdminOp2(ctx, { action, params } = {}) {
   await requireAdmin(ctx);
   const token = ctx.store?.get?.("githubToken");
@@ -20625,9 +20644,12 @@ var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   // one comment posts immediately (deliberate engagement)
 });
 var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
+var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 var DEFAULT_TEMPLATES = Object.freeze({
-  share: "Shared by {memberdiscord} {shareurl}"
-  // the owner-decided default share repost
+  share: DEFAULT_FORMAT,
+  post: DEFAULT_FORMAT,
+  product: DEFAULT_FORMAT,
+  prompt: DEFAULT_FORMAT
 });
 var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,
@@ -21464,6 +21486,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await cancelSyndication2(ctx, body ?? {}));
       case "/api/syndicate-now":
         return ok(method === "POST" ? await syndicateNow2(ctx, body ?? {}) : await getSyndicateNowInfo(ctx));
+      case "/api/discord-channels":
+        return ok(await listDiscordChannels(ctx));
       case "/api/admin-ops":
         return ok(await triggerAdminOp2(ctx, body ?? {}));
       case "/api/pr-status": {

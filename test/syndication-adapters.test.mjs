@@ -21,14 +21,13 @@ test('discord adapter posts to the per-source channel with a ping-safe author me
   assert.equal(r.id, 'm1');
   assert.equal(calls[0].channelId, 'chan-share');
   assert.deepEqual(calls[0].opts.allowedMentions, { parse: [], users: ['123'] }); // only the author may be pinged
-  // SOW-087: the default share template renders "Shared by <mention> <url>".
-  assert.equal(calls[0].content, 'Shared by <@123> https://ex.com/a');
-  // a POST (no template configured by default) keeps the built-in mention-prefixed message
+  // SOW-088: EVERY type now has the one owner-directed default template, mention-first.
+  assert.equal(calls[0].content, 'New link published by <@123>: "Read this" https://ex.com/a');
   const postCalls = [];
   const clientB = { postChannelMessage: async (channelId, content, opts) => { postCalls.push({ content }); return { id: 'm2' }; } };
   const b = createDiscordAdapter({ env: { DISCORD_BOT_TOKEN: 't', DISCORD_CHANNEL_POSTS: 'chan-posts' }, client: clientB });
   await b.post({ ...item, source: 'post' });
-  assert.match(postCalls[0].content, /^<@123> /);
+  assert.equal(postCalls[0].content, 'New article published by <@123>: "Read this" https://ex.com/a');
 });
 
 test('discord adapter fails cleanly when no channel is configured for the source', async () => {

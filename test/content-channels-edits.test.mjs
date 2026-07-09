@@ -54,7 +54,7 @@ test('setTemplate writes/clears syndication.templates and round-trips through te
   // clearing falls back to the share default
   const clear = setTemplate(set.next, { type: 'share', template: '' }, ctx);
   assert.equal(clear.changed, true);
-  assert.equal(templateFor(syndicationConfigFromParsed(clear.next), 'share'), 'Shared by {memberdiscord} {shareurl}');
+  assert.equal(templateFor(syndicationConfigFromParsed(clear.next), 'share'), 'New {content-type} published by {member-discord-username}: "{title}" {url}'); // the SOW-088 default
   // the rest of the config survives the edit
   assert.equal(clear.next.syndication.enabled, true);
   assert.throws(() => setTemplate(doc, { type: 'news', template: 'x' }, ctx), TemplateEditError);

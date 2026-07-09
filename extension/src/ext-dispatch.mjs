@@ -197,6 +197,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await cancelSyndication(ctx, body ?? {}));
       case '/api/syndicate-now': // SOW-088: manual syndicate (GET readiness/templates, POST direct post; superadmin only)
         return ok(method === 'POST' ? await syndicateNow(ctx, body ?? {}) : await getSyndicateNowInfo(ctx));
+      case '/api/discord-channels': // SOW-100: the guild channel names (admin-gated by the Worker). Was npm-host-only, so the extension pickers showed "No channels loaded".
+        return ok(await listDiscordChannels(ctx));
       case '/api/admin-ops': // SOW-038 P3: trigger reconcile / E2E-smoke (admin-gated; the Worker holds the dispatch token)
         return ok(await triggerAdminOp(ctx, body ?? {}));
       case '/api/pr-status': {

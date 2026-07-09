@@ -43,11 +43,17 @@ export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
 });
 
 // SOW-087: per-type Discord post templates. Variables: {memberdiscord} (the resolved <@id> mention, falling
-// back to the no-ping full name when none resolves), {fullName}, {author}, {shareurl}/{url}, {title},
-// {category}. A type with no template keeps the built-in buildChannelText message. Discord adapters only.
+// back to the no-ping full name when none resolves), {member-discord-username} (the mention, else the public
+// profile Discord handle, else the GitHub username; SOW-088), {content-type} (article/product/prompt/link),
+// {fullName}, {author}, {shareurl}/{url}, {title}, {category}. A type with no template gets its default.
 export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt']);
+// SOW-088 (owner-directed): ONE default Discord format for every type.
+const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 export const DEFAULT_TEMPLATES = Object.freeze({
-  share: 'Shared by {memberdiscord} {shareurl}', // the owner-decided default share repost
+  share: DEFAULT_FORMAT,
+  post: DEFAULT_FORMAT,
+  product: DEFAULT_FORMAT,
+  prompt: DEFAULT_FORMAT,
 });
 
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({

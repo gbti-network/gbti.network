@@ -47,8 +47,16 @@ function truncate(text, limit) {
 export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
   const mention = /^<@!?\d+>$/.test(String(item.mention || '')) ? item.mention : null;
   const fullName = sanitizeMentions(item.authorName || (item.author ? `@${item.author}` : 'a member'));
+  // {member-discord-username}: the member's Discord identity, best-first: a resolved <@id> mention, then
+  // their public profile Discord handle (item.authorDiscord), then the GitHub username (owner-decided
+  // fallback chain). Plain-text handles are sanitized and Discord's allowed_mentions caps pings anyway.
+  const discordHandle = String(item.authorDiscord || '').trim().replace(/^@/, '');
+  const discordUsername = mention
+    || (discordHandle ? sanitizeMentions(`@${discordHandle}`) : sanitizeMentions(item.author || 'a member'));
   const vars = {
     memberdiscord: mention || fullName, // the owner-decided fallback: full name, no ping
+    memberdiscordusername: discordUsername,
+    contenttype: TYPE_LABEL[item.source] || 'item', // {content-type}: article / product / prompt / link
     fullname: fullName,
     author: sanitizeMentions(item.author ? `@${item.author}` : 'a member'),
     shareurl: String(item.url || ''),
@@ -56,8 +64,9 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
     title: sanitizeMentions(item.title || ''),
     category: sanitizeMentions(item.category || ''),
   };
+  // Hyphenated token names ({member-discord-username}, {content-type}) normalize to the same key.
   const text = String(template || '')
-    .replace(/\{([a-zA-Z]+)\}/g, (_, name) => vars[name.toLowerCase()] ?? '')
+    .replace(/\{([a-zA-Z-]+)\}/g, (_, name) => vars[name.toLowerCase().replace(/-/g, '')] ?? '')
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
   return truncate(text, limit);

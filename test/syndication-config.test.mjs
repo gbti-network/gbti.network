@@ -47,7 +47,7 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
   const m = toSyndicationMirror({ enabled: true, hold_minutes: 60, upvote_threshold: 2, channels: { discord: true } });
   assert.deepEqual(m, {
     enabled: true, require_approval: true, hold_minutes: 60, upvote_threshold: 2, classify: 'ai',
-    templates: { share: 'Shared by {memberdiscord} {shareurl}' },
+    templates: { share: 'New {content-type} published by {member-discord-username}: "{title}" {url}', post: 'New {content-type} published by {member-discord-username}: "{title}" {url}', product: 'New {content-type} published by {member-discord-username}: "{title}" {url}', prompt: 'New {content-type} published by {member-discord-username}: "{title}" {url}' },
     news_engagement: { enabled: false, open_threshold: 2, tier: 'paid', comment_autopost: true },
     channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false },
   });
@@ -73,10 +73,11 @@ test('classifyMode normalizes ai|keyword|off and falls back to ai', () => {
 test('templateFor: configured template wins, blank/missing falls back to the type default or null', () => {
   const cfg = syndicationConfigFromParsed({ syndication: { templates: { share: '{title} by {author}', post: '  ' } } });
   assert.equal(templateFor(cfg, 'share'), '{title} by {author}');
-  assert.equal(templateFor(cfg, 'post'), null); // blank + no default = built-in message
-  assert.equal(templateFor(syndicationConfigFromParsed({}), 'share'), 'Shared by {memberdiscord} {shareurl}');
-  assert.equal(templateFor(undefined, 'share'), 'Shared by {memberdiscord} {shareurl}');
-  assert.equal(templateFor(undefined, 'product'), null);
+  // SOW-088: every type now has the one owner-directed default, so a blank config falls back to it.
+  assert.equal(templateFor(cfg, 'post'), 'New {content-type} published by {member-discord-username}: "{title}" {url}');
+  assert.equal(templateFor(syndicationConfigFromParsed({}), 'share'), 'New {content-type} published by {member-discord-username}: "{title}" {url}');
+  assert.equal(templateFor(undefined, 'share'), 'New {content-type} published by {member-discord-username}: "{title}" {url}');
+  assert.equal(templateFor(undefined, 'product'), 'New {content-type} published by {member-discord-username}: "{title}" {url}');
 });
 
 // SOW-111: the news engagement auto-share block.

@@ -41,7 +41,7 @@ test('GET: readiness (secrets decide), templates with defaults, the channel map,
   assert.equal(byId.x.ready, false); // no X secrets in env
   assert.match(byId.reddit.reason, /SOW-088/);
   assert.equal(r.body.templates.prompt, 'New prompt: {title} {url}');
-  assert.equal(r.body.templates.share, 'Shared by {memberdiscord} {shareurl}'); // the default fills gaps
+  assert.equal(r.body.templates.share, 'New {content-type} published by {member-discord-username}: "{title}" {url}'); // the SOW-088 default fills gaps
   assert.deepEqual(r.body.channelMap, [{ category: 'ai', channelId: '111222333444555666' }]);
   assert.equal(r.body.featured.prompt, '999');
 });

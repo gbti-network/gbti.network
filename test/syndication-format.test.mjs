@@ -69,3 +69,22 @@ test('renderTemplate: unknown tokens render empty, case-insensitive names, trunc
   const long = renderTemplate('{title}', { title: 'x'.repeat(50) }, { limit: 10 });
   assert.equal(long.length, 10);
 });
+
+// SOW-088: the new default-format tokens. {content-type} renders the type label; {member-discord-username}
+// prefers the resolved mention, then the public profile Discord handle, then the GitHub username.
+test('renderTemplate: hyphenated tokens, {content-type}, and the {member-discord-username} fallback chain', () => {
+  const T2 = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
+  const base = { source: 'prompt', title: 'CI Skill', url: 'https://x.dev/p' };
+  // Mention wins.
+  assert.equal(renderTemplate(T2, { ...base, mention: '<@42>', authorDiscord: 'huds', author: 'atwellpub' }),
+    'New prompt published by <@42>: "CI Skill" https://x.dev/p');
+  // Profile Discord handle next (sanitized: the @ gets the zero-width guard on social channels).
+  const withHandle = renderTemplate(T2, { ...base, authorDiscord: 'hudsdiscord', author: 'atwellpub' });
+  assert.match(withHandle, /published by @.?hudsdiscord:/);
+  // GitHub username last.
+  const ghOnly = renderTemplate(T2, { ...base, author: 'atwellpub' });
+  assert.match(ghOnly, /published by atwellpub:/);
+  // {content-type} labels per source.
+  assert.match(renderTemplate('{content-type}', { source: 'post' }), /^article$/);
+  assert.match(renderTemplate('{content-type}', { source: 'share' }), /^link$/);
+});

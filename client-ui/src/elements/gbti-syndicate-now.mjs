@@ -73,6 +73,7 @@ class GbtiSyndicateNow extends GbtiElement {
       url: d.gbtiUrl || '',
       image: d.gbtiImage || undefined,
       category: d.gbtiCategory || undefined,
+      authorDiscord: d.gbtiDiscord || undefined, // SOW-088: the public profile Discord handle
       visibility: 'public',
     };
   }
@@ -136,15 +137,19 @@ class GbtiSyndicateNow extends GbtiElement {
       const selected = this._channelId || '';
       const opts = [...groups.entries()].map(([sec, list]) =>
         `<optgroup label="${esc(sec)}">${list.map((c) => `<option value="${esc(c.id)}"${c.id === selected ? ' selected' : ''}>#${esc(c.name)}</option>`).join('')}</optgroup>`).join('');
-      channelRow = `<label>Channel${this._preselectedNote ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || '')} category)</span>` : ''}</label>
-        <select data-channel>${opts || '<option value="">No channels loaded</option>'}</select>`;
+      // When the name list is unavailable the picker degrades to a manual channel-id input, never a dead end.
+      channelRow = opts
+        ? `<label>Channel${this._preselectedNote ? ` <span style="font-weight:400">(pre-selected from the ${esc(item.category || '')} category)</span>` : ''}</label>
+          <select data-channel>${opts}</select>`
+        : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ''}; paste the Discord channel id)</span></label>
+          <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || '')}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
     }
     const prior = this._prior?.length ? `<p class="warn">This item already went out (${this._prior.length === 1 ? 'once' : `${this._prior.length} times`}). Publishing again posts a duplicate.</p>` : '';
     const result = this._result
       ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}</p>`
       : '';
     return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
-      <label>Message template <span style="font-weight:400">({title} {url} {author} {fullName} {category}${item.source === 'share' ? ' {shareurl} {memberdiscord}' : ''})</span></label>
+      <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category})</span></label>
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
       <div class="preview" data-preview>${esc(preview)}</div>
@@ -167,6 +172,8 @@ class GbtiSyndicateNow extends GbtiElement {
     });
     const sel = this.$('[data-channel]');
     if (sel) sel.addEventListener('change', () => { this._channelId = sel.value; });
+    const manual = this.$('[data-channel-manual]');
+    if (manual) manual.addEventListener('input', () => { this._channelId = manual.value.trim(); });
     this.on('[data-publish]', 'click', () => this._publish());
   }
 
@@ -183,7 +190,8 @@ class GbtiSyndicateNow extends GbtiElement {
         this._channels = all
           .filter((c) => c.type === 0 || c.type === 5)
           .map((c) => ({ ...c, section: sections.get(c.parentId) || 'Channels' }));
-      } catch { this._channels = []; }
+        this._chErr = null;
+      } catch (err) { this._channels = []; this._chErr = err?.message || 'request failed'; }
       const mapped = channelForCategory({ channels: this._info?.channelMap ?? [] }, this._item().category);
       const featured = this._info?.featured?.[this._item().source] || null;
       this._channelId = mapped || featured || this._channels[0]?.id || '';

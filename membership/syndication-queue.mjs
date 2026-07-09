@@ -74,6 +74,7 @@ export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HO
     targetSlug,
     author: trimOrNull(input.author),
     authorName: trimOrNull(input.authorName), // SOW-087: the profile displayName for the no-ping template
+    authorDiscord: trimOrNull(input.authorDiscord), // SOW-088: the public profile Discord handle ({member-discord-username})
     title: trimOrNull(input.title),
     blurb: trimOrNull(input.blurb),
     url: trimOrNull(input.url),
@@ -121,6 +122,7 @@ export function normalizeItem(raw) {
     targetSlug,
     author: trimOrNull(raw.author),
     authorName: trimOrNull(raw.authorName),
+    authorDiscord: trimOrNull(raw.authorDiscord),
     title: trimOrNull(raw.title),
     blurb: trimOrNull(raw.blurb),
     url: trimOrNull(raw.url),
