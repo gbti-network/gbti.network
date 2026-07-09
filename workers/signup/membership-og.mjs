@@ -12,6 +12,7 @@
 
 import { githubFetchUser } from './oauth.mjs';
 import { scrapeOgPreview } from '../lib/og-scrape.mjs';
+import { oembedEndpointFor, previewFromOembed } from '../lib/oembed-providers.mjs'; // SOW-102: provider fallback
 import { suggestTopic } from './topic-suggest.mjs';
 
 const FETCH_TIMEOUT_MS = 8000;
@@ -87,28 +88,53 @@ export async function handleOgPreview(request, env, {
   const target = safeFetchTarget(payload?.url);
   if (!target.ok) return { status: 400, body: { error: 'invalid_url', message: target.reason } };
 
+  // SOW-102: provider oEmbed FIRST for matched links (YouTube, Vimeo). These providers serve no OG markup
+  // to a datacenter fetch (the generic scrape comes back empty), but their public oEmbed APIs answer with
+  // the title + author + thumbnail. Any oEmbed failure just falls through to the generic scrape.
+  let preview = null;
+  const oembedUrl = oembedEndpointFor(target.url);
+  if (oembedUrl) {
+    const oc = new AbortController();
+    const ot = setTimeout(() => oc.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetchImpl(oembedUrl, {
+        signal: oc.signal,
+        headers: { 'User-Agent': 'gbti-link-preview/0.1 (+https://gbti.network)', Accept: 'application/json' },
+        cf: { cacheTtl: 1800, cacheEverything: true },
+      });
+      if (res && res.ok) preview = previewFromOembed(await res.json());
+    } catch { /* fall through to the generic scrape */ }
+    finally { clearTimeout(ot); }
+  }
+
   // Bounded, timed-out fetch. Any failure returns a clean empty preview (never a 500), since an OG miss is normal.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetchImpl(target.url, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: { 'User-Agent': 'gbti-link-preview/0.1 (+https://gbti.network)', Accept: 'text/html,application/xhtml+xml' },
-      cf: { cacheTtl: 1800, cacheEverything: true },
-    });
-    if (!res || !res.ok) return { status: 200, body: { ...EMPTY_PREVIEW } };
-    const ct = res.headers?.get?.('content-type') || '';
-    if (ct && !/html|xml/i.test(ct)) return { status: 200, body: { ...EMPTY_PREVIEW } };
-    let html = await res.text();
-    if (typeof html === 'string' && html.length > MAX_BYTES) html = html.slice(0, MAX_BYTES);
-    const preview = scrapeOgPreview(html, target.url);
+    if (!preview) {
+      const res = await fetchImpl(target.url, {
+        signal: controller.signal,
+        redirect: 'follow',
+        headers: { 'User-Agent': 'gbti-link-preview/0.1 (+https://gbti.network)', Accept: 'text/html,application/xhtml+xml' },
+        cf: { cacheTtl: 1800, cacheEverything: true },
+      });
+      if (!res || !res.ok) return { status: 200, body: { ...EMPTY_PREVIEW } };
+      const ct = res.headers?.get?.('content-type') || '';
+      if (ct && !/html|xml/i.test(ct)) return { status: 200, body: { ...EMPTY_PREVIEW } };
+      let html = await res.text();
+      if (typeof html === 'string' && html.length > MAX_BYTES) html = html.slice(0, MAX_BYTES);
+      preview = scrapeOgPreview(html, target.url);
+    }
     // SOW-087: a topic-category suggestion for the composer (fail-open: any error just means no suggestion).
+    // SOW-102: with ZERO scraped signal the suggester is SKIPPED (it hallucinated a category from nothing).
     let suggestedCategory = null;
-    try {
-      suggestedCategory = await suggest(env, { title: preview.title, description: preview.description, tags: preview.tags });
-    } catch {
-      suggestedCategory = null;
+    const hasSignal = Boolean(preview.title || preview.description || (preview.tags && preview.tags.length));
+    if (hasSignal) {
+      try {
+        suggestedCategory = await suggest(env, { title: preview.title, description: preview.description, tags: preview.tags });
+      } catch {
+        suggestedCategory = null;
+      }
     }
     return {
       status: 200,
