@@ -11,7 +11,7 @@
 const PAGES = new Set([
   'newtab.html',
   'workspace.html',
-  'browse.html', // SOW-112 QA: the site's locked-content notices deep-link a paid member into the reader
+  'browse.html', // RETIRED page, aliased to newtab.html below (old locked-content CTAs still send it)
   'shares.html',
   'admin.html',
   'account.html',
@@ -26,13 +26,18 @@ const HASH_RE = /^[A-Za-z0-9=&_%.,-]{1,300}$/;
  * Validate { page, hash } into a relative path ("page.html" or "page.html#hash") safe to pass to
  * chrome.runtime.getURL, or null when rejected. The leading '#' on hash is optional.
  */
+// browse.html was retired when the new-tab feed became the unified browser, but the site's locked-content
+// CTAs (and any cached copy of them) still name it; resolving the alias here keeps every old link working.
+const PAGE_ALIAS = { 'browse.html': 'newtab.html' };
+
 export function resolveOpenPage({ page, hash } = {}) {
   if (typeof page !== 'string' || !PAGES.has(page)) return null;
-  if (hash == null || hash === '') return page;
+  const target = PAGE_ALIAS[page] || page;
+  if (hash == null || hash === '') return target;
   const h = String(hash).replace(/^#/, '');
-  if (h === '') return page;
+  if (h === '') return target;
   if (!HASH_RE.test(h)) return null;
-  return `${page}#${h}`;
+  return `${target}#${h}`;
 }
 
 export const OPENABLE_PAGES = PAGES;

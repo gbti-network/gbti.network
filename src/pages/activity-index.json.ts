@@ -13,7 +13,7 @@ import { breadcrumb } from '../lib/taxonomy';
 // SOW-023: `visibility` lets the extension "Following" feed know which entries are member-only (a Mode B stub)
 // so it renders them locked until decrypted via the SOW-016 Worker. Mode A items are already excluded (isListed).
 // SOW-031: `path` is the repo-relative index.md path so a feed-row click can deep-link into the in-extension
-// reader (browse.html#tab=<type>&read=<path>) instead of navigating out to gbti.network.
+// reader (newtab.html#tab=<type>&read=<path>) instead of navigating out to gbti.network.
 // SOW-039: `thumb` is the per-item content image (the same getImage-optimized URL the per-type indexes ship, so
 // it resolves in /dist), or null -> the extension feed falls back to a type glyph. Still metadata only.
 // SOW-050: `thumbCard` is the larger card-grid derivative (the small `thumb` upscaled blurry in card view);

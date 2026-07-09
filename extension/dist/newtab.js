@@ -14316,6 +14316,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const { read } = parseBrowseHash(hashStr());
     return read || null;
   };
+  var doFromHash = () => parseBrowseHash(hashStr()).action || null;
+  function consumeDo2() {
+    if (typeof location === "undefined" || typeof history === "undefined") return;
+    const rest = stripDoParam(location.hash);
+    try {
+      history.replaceState(null, "", location.pathname + location.search + (rest ? "#" + rest : ""));
+    } catch {
+    }
+  }
   var TYPE = typeForHash(hashStr());
   var MEMBERSHIP = "unknown";
   var SHARES = null;
@@ -14887,10 +14896,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const t = typeForHash(h);
       selectType(t);
       const rd = readFromHash();
-      if (rd) openReader({ type: t, path: rd });
+      if (rd) {
+        const act = doFromHash();
+        if (act) consumeDo2();
+        openReader({ type: t, path: rd, doAction: act });
+      }
     });
     const deepRead = readFromHash();
-    if (deepRead) openReader({ type: TYPE, path: deepRead });
+    if (deepRead) {
+      const act = doFromHash();
+      if (act) consumeDo2();
+      openReader({ type: TYPE, path: deepRead, doAction: act });
+    }
     const srchIn = $("[data-filter]");
     srchIn?.addEventListener("input", (e) => renderFeed(e.target.value));
     srchIn?.addEventListener("keydown", (e) => {

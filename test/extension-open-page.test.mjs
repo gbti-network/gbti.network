@@ -40,7 +40,7 @@ test('an unsafe hash is rejected (no smuggling past chrome.runtime.getURL)', () 
 });
 
 // SOW-112 QA: the site's locked-content notices deep-link a paid member into the reader.
-test('browse.html is openable via the relay (reader deep link)', () => {
+test('browse.html (retired) aliases to newtab.html via the relay (reader deep link keeps working)', () => {
   const r = resolveOpenPage({ page: 'browse.html', hash: 'tab=prompt&read=members%2Falice%2Fprompts%2Fx%2Findex.md' });
-  assert.equal(r, 'browse.html#tab=prompt&read=members%2Falice%2Fprompts%2Fx%2Findex.md');
+  assert.equal(r, 'newtab.html#tab=prompt&read=members%2Falice%2Fprompts%2Fx%2Findex.md');
 });

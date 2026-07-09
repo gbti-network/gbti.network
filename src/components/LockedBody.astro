@@ -11,7 +11,7 @@ interface Props {
   kind?: 'body' | 'section' | 'comment' | 'share';
   label?: string;
   readerPath?: string; // SOW-112 QA: the parent item's index.md path; a signed-in PAID member gets an
-  // open-in-the-extension CTA deep-linking the reader (browse.html#tab=<type>&read=<path>) via the
+  // open-in-the-extension CTA deep-linking the reader (newtab.html#tab=<type>&read=<path>) via the
   // gbti:open relay instead of the become-a-member nudge. Presentation only (html.is-gbti-paid, untrusted).
   readerType?: string;
 }
@@ -59,16 +59,16 @@ const noun = kind === 'comment' ? 'comment' : kind === 'share' ? 'Share' : 'cont
 
 <script>
   // SOW-112 QA: relay the reader deep link to the extension (SOW-036 gbti:open; the content script forwards
-  // it to the background, which opens browse.html with the hash). Delegated once (Astro dedupes this script).
+  // it to the background, which opens the new-tab reader with the hash). Delegated once (Astro dedupes this script).
   // The content script ACKS a handled relay; without an ack (an older loaded extension that does not know
-  // browse.html, or none at all) the button says what to do instead of silently doing nothing.
+  // the reader page, or none at all) the button says what to do instead of silently doing nothing.
   let acked = false;
   document.addEventListener('gbti:open-ack', () => { acked = true; });
   document.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement | null)?.closest?.('[data-gbti-open-reader]') as HTMLElement | null;
     if (!b) return;
     acked = false;
-    document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'browse.html', hash: b.dataset.hash || '' } }));
+    document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'newtab.html', hash: b.dataset.hash || '' } }));
     setTimeout(() => {
       if (!acked) b.textContent = 'Update or reload the GBTI extension, then try again';
     }, 600);

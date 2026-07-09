@@ -13587,20 +13587,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     "newtab.html",
     "workspace.html",
     "browse.html",
-    // SOW-112 QA: the site's locked-content notices deep-link a paid member into the reader
+    // RETIRED page, aliased to newtab.html below (old locked-content CTAs still send it)
     "shares.html",
     "admin.html",
     "account.html",
     "onboarding.html"
   ]);
   var HASH_RE = /^[A-Za-z0-9=&_%.,-]{1,300}$/;
+  var PAGE_ALIAS = { "browse.html": "newtab.html" };
   function resolveOpenPage({ page, hash } = {}) {
     if (typeof page !== "string" || !PAGES.has(page)) return null;
-    if (hash == null || hash === "") return page;
+    const target = PAGE_ALIAS[page] || page;
+    if (hash == null || hash === "") return target;
     const h = String(hash).replace(/^#/, "");
-    if (h === "") return page;
+    if (h === "") return target;
     if (!HASH_RE.test(h)) return null;
-    return `${page}#${h}`;
+    return `${target}#${h}`;
   }
 
   // extension/src/content.mjs

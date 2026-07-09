@@ -8,7 +8,7 @@ import { canSeeNews, canBrowse, upgradePromptKind } from '../../client/src/membe
 import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, splashKeepsDarkCards, normalizePatternGap, normalizeCardBlur, asciiAnchor, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
 import { mergeAll, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
-import { parseBrowseHash } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
+import { parseBrowseHash, stripDoParam } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
 import { initShell, setRailActive } from './shell.mjs';
 import { TYPE_FILTERS, typeForHash, railKeyForType, feedSources } from '../../client-ui/src/feed-route.mjs';
 import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here (also defines <gbti-card-list>)
@@ -55,6 +55,14 @@ let MODE = (() => { try { return localStorage.getItem('gbti-nt-mode') || 'compac
 // path that auto-opens the in-place reader.
 const hashStr = () => (typeof location !== 'undefined' && location.hash) || '';
 const readFromHash = () => { const { read } = parseBrowseHash(hashStr()); return read || null; };
+// SOW-114: the deep-link force-action (do=favorite|collect, sent by the public content pages through the
+// relay). Consumed ONE-SHOT: the hash is replaced without do= so a refresh or hashchange never re-runs it.
+const doFromHash = () => parseBrowseHash(hashStr()).action || null;
+function consumeDo() {
+  if (typeof location === 'undefined' || typeof history === 'undefined') return;
+  const rest = stripDoParam(location.hash);
+  try { history.replaceState(null, '', location.pathname + location.search + (rest ? '#' + rest : '')); } catch { /* fail-soft */ }
+}
 let TYPE = typeForHash(hashStr()); // bare newtab.html -> 'all' (the river); #type=<X> -> that type
 let MEMBERSHIP = 'unknown';
 let SHARES = null;
@@ -664,13 +672,21 @@ function init() {
     const t = typeForHash(h);
     selectType(t);
     const rd = readFromHash();
-    if (rd) openReader({ type: t, path: rd });
+    if (rd) {
+      const act = doFromHash();
+      if (act) consumeDo();
+      openReader({ type: t, path: rd, doAction: act });
+    }
   });
 
   // A bell deep-link present on first load opens that item straight into the in-place reader (the feed still
   // renders underneath, so Back reveals it). The reader resolves the title/body from the path via the client.
   const deepRead = readFromHash();
-  if (deepRead) openReader({ type: TYPE, path: deepRead });
+  if (deepRead) {
+    const act = doFromHash();
+    if (act) consumeDo();
+    openReader({ type: TYPE, path: deepRead, doAction: act });
+  }
 
   // SOW-052: the feed search is now a persistent input in the left rail (shell-rendered). Filter the feed in place
   // on input; Escape clears it. No collapse toggle anymore.

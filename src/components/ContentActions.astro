@@ -47,7 +47,7 @@ const itemPath = author ? contentItemPath(type, author, slug) : null;
   // SOW-114: progressive enhancement, active ONLY when the extension content script has stamped
   // dataset.gbtiExtension. A CAPTURE-phase listener wins over SigninModal's bubble-phase [data-signin]
   // handler, so with the extension present a Favorite/Save click deep-links into the in-extension reader
-  // (browse.html#tab=<type>&read=<path>&do=favorite|collect) instead of opening the modal.
+  // (newtab.html#tab=<type>&read=<path>&do=favorite|collect) instead of opening the modal.
   (() => {
     const region = document.querySelector('[data-gbti-region="actions"]') as HTMLElement | null;
     if (!region) return;
@@ -63,7 +63,7 @@ const itemPath = author ? contentItemPath(type, author, slug) : null;
 
     const openInExtension = (doAction?: string) => {
       const hash = `tab=${type}&read=${encodeURIComponent(path)}` + (doAction ? `&do=${doAction}` : '');
-      document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'browse.html', hash } }));
+      document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'newtab.html', hash } }));
     };
 
     document.addEventListener('click', (e) => {
