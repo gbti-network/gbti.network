@@ -18,8 +18,8 @@ tags:
   - devops-automation
   - agent-skills
 variables:
-  - <artifact build commands + dirs>
-  - <workflow inventory table>
+  - artifact build commands + dirs
+  - workflow inventory table
 status: published
 type: prompt
 author: atwellpub
@@ -168,9 +168,9 @@ header comment usually says), and which secrets it reads.
 - Lead with the board (workflow, latest state, streak), then diagnoses, then actions taken or proposed.
 ````
 
-## Customizing it
+## Making it yours
 
-Two placeholders matter (the repo itself needs none: `gh` infers it from the working directory):
+There is nothing to configure for the repo itself: `gh` infers it from the working directory, so the skill works the moment you drop it in. Only two parts are inherently repo-specific:
 
 1. **The drift action**: keep it only if your repo commits build artifacts (bundled JS, generated schemas, packaged extensions). List every build command and every artifact directory. If you do not commit artifacts, delete the action.
 2. **The inventory table**: have your agent seed it once from `.github/workflows/` and then treat it as living documentation. This is the part future sessions (and new contributors) thank you for.
