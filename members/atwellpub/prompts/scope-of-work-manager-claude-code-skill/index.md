@@ -18,7 +18,7 @@ tags:
   - documentation
   - claude-code
   - agent-skills
-publishedAt: '2026-07-10T15:43:57.582Z'
+publishedAt: '2026-07-02T00:00:00.000Z'
 status: published
 type: prompt
 author: atwellpub
