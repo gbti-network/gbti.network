@@ -20,6 +20,11 @@ const platforms = [
   { name: 'LinkedIn', dim: '1584 x 396' },
   { name: 'YouTube', dim: '2560 x 1440' },
 ];
+// The per-type default feature images (the fallback share/cover image when no custom image is set).
+const features: [string, string][] = [
+  ['article', 'Article'], ['product', 'Product'], ['prompt', 'Prompt'], ['share', 'Member share'],
+  ['profile', 'Member profile'], ['tag', 'Tag archive'], ['category', 'Category archive'], ['search', 'Search result'],
+];
 ---
 
 <BaseLayout
@@ -119,6 +124,20 @@ const platforms = [
               ))}
             </div>
           </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- DEFAULT FEATURED IMAGES -->
+    <section class="b-sec">
+      <div class="b-sect-t"><h2>Default featured images</h2><span class="n">1200 x 630 · per content type</span></div>
+      <p class="b-note" style="margin:0 0 20px">The automatic share and cover image for each content type, used when a member sets no custom image. Each pairs the GBTI lockup with a type glyph and label on the ink plus green-glow ground, so unbranded work still reads as GBTI in feeds, cards, and link previews.</p>
+      <div class="feat-grid">
+        {features.map(([key, label]) => (
+          <figure class="featcard">
+            <img src={`/brand/feature/feature-${key}.png`} alt={`Default ${label} feature image`} loading="lazy" width={1200} height={630} />
+            <figcaption>{label}</figcaption>
+          </figure>
         ))}
       </div>
     </section>
@@ -226,6 +245,12 @@ const platforms = [
   .ground-green { background: radial-gradient(120% 140% at 50% -30%, #2bb576 0%, #1f9e5f 65%); }
   .ground-ink-green { background: radial-gradient(130% 150% at 88% -20%, rgba(31,158,95,.55) 0%, rgba(31,158,95,0) 55%), #25232b; }
   .socbanner .socglow { position: absolute; inset: 0; z-index: 1; background: radial-gradient(60% 120% at 82% 0%, rgba(255,255,255,.14), transparent 60%); }
+
+  .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+  @media (max-width: 620px) { .feat-grid { grid-template-columns: 1fr; } }
+  .featcard { margin: 0; display: flex; flex-direction: column; gap: 9px; }
+  .featcard img { width: 100%; aspect-ratio: 1200 / 630; object-fit: cover; border-radius: 14px; border: 1px solid var(--line); box-shadow: var(--sh-lg, 0 12px 30px rgba(0,0,0,.16)); display: block; }
+  .featcard figcaption { font-family: var(--f-mono); font-size: 11px; letter-spacing: .04em; color: var(--fg-mute); text-align: center; }
 
   .dl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
   .dl { display: flex; flex-direction: column; align-items: center; gap: 10px; text-decoration: none; padding: 20px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); transition: border-color .14s, transform .14s; }

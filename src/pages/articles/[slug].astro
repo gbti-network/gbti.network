@@ -13,6 +13,7 @@ import VideoEmbed from '../../components/VideoEmbed.astro';
 import EditHooks from '../../components/EditHooks.astro';
 import TouchSignal from '../../components/TouchSignal.astro';
 import { refCodeForAuthor } from '../../lib/referral';
+import { defaultFeatureImage } from '../../lib/feature-image';
 import { favoriteCount } from '../../lib/favorites';
 import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the opt-in favoriter list
 import { aliasSlugsOf } from '../../lib/content-index.mjs'; // SOW-112: pre-rename slugs for count/discussion aliasing
@@ -41,7 +42,7 @@ const stack = avatarStack({
   index: avatarIndex,
 });
 ---
-<BaseLayout title={d.title} description={d.excerpt} ogImage={d.coverImage?.src} ogType="article">
+<BaseLayout title={d.title} description={d.excerpt} ogImage={d.coverImage?.src ?? defaultFeatureImage('post')} ogType="article">
   <section class="band" style="background:var(--paper-2)">
     <div class="wrap">
       <!-- Reading column, surfaced as a V3 paper card -->

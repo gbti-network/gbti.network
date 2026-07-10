@@ -6,6 +6,7 @@ import Prose from '../../components/blog/Prose.astro';
 import EditHooks from '../../components/EditHooks.astro';
 import TouchSignal from '../../components/TouchSignal.astro';
 import { refCodeForAuthor } from '../../lib/referral';
+import { defaultFeatureImage } from '../../lib/feature-image';
 import LockedBody from '../../components/LockedBody.astro';
 import Avatar from '../../components/Avatar.astro';
 import ContentMeta from '../../components/ContentMeta.astro';
@@ -47,7 +48,7 @@ const linkLabel = (l: { type: string; label?: string }) => l.label ?? LINK_LABEL
 // Canonical URL for the unified share control (ContentActions -> ShareRow builds the per-platform links).
 const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.network').href;
 ---
-<BaseLayout title={d.title} description={d.exampleOutput}>
+<BaseLayout title={d.title} description={d.exampleOutput} ogImage={d.image?.src ?? defaultFeatureImage('prompt')}>
   <section class="band tint">
     <div class="wrap">
       <!-- HEADER (full width): breadcrumb, title, author, then the description above the prompt -->

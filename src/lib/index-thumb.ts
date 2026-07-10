@@ -6,6 +6,7 @@
 // passes through unchanged for the client's resolveAsset to prefix. Used by the per-type index endpoints.
 import { getImage } from 'astro:assets';
 import { imageFieldOf } from './content-index.mjs';
+import { defaultFeatureImage } from './feature-image';
 
 // SOW-050: three derivatives per item. `thumb` feeds the dense list rows (compact/detailed, <=62px boxes);
 // `thumbCard` feeds the card-grid box (~220-360px wide at 4:3), which previously upscaled the 96px list thumb
@@ -20,7 +21,10 @@ export type ThumbSet = { thumb: string | null; thumbCard: string | null; thumbWi
 
 export async function resolveThumb(data: any, type: string): Promise<ThumbSet> {
   const v = imageFieldOf(data, type);
-  if (!v) return { thumb: null, thumbCard: null, thumbWide: null };
+  // No custom image -> the per-type default feature banner (a stable /brand/feature URL), so feeds + previews still
+  // read as GBTI instead of an empty thumbnail.
+  const fb = defaultFeatureImage(type);
+  if (!v) return { thumb: fb, thumbCard: fb, thumbWide: fb };
   if (typeof v === 'string') return { thumb: v || null, thumbCard: v || null, thumbWide: v || null }; // raw path: client resolves it
   try {
     const orig = Number(v.width) || CARD_WIDTH;
@@ -31,6 +35,6 @@ export async function resolveThumb(data: any, type: string): Promise<ThumbSet> {
     ]);
     return { thumb: small.src, thumbCard: card.src, thumbWide: wide.src }; // emitted /_astro/... URLs that exist in dist
   } catch {
-    return { thumb: null, thumbCard: null, thumbWide: null }; // never ship a thumb we could not optimize (renders with no image)
+    return { thumb: fb, thumbCard: fb, thumbWide: fb }; // an unoptimizable image -> the branded default banner
   }
 }

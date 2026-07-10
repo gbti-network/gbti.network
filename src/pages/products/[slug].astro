@@ -10,6 +10,7 @@ import ContentFooter from '../../components/ContentFooter.astro';
 import EditHooks from '../../components/EditHooks.astro';
 import TouchSignal from '../../components/TouchSignal.astro';
 import { refCodeForAuthor } from '../../lib/referral';
+import { defaultFeatureImage } from '../../lib/feature-image';
 import LockedBody from '../../components/LockedBody.astro';
 import { hasPublicPage, isStub } from '../../lib/content';
 import { breadcrumb, leafLabel } from '../../lib/taxonomy';
@@ -47,7 +48,7 @@ const meta = [
   ...(d.pricing ? [['Pricing', cap(d.pricing)]] : []),
 ] as [string, string][];
 ---
-<BaseLayout title={d.title} description={d.shortDescription} ogImage={(d.featuredImage ?? d.banner ?? d.icon)?.src}>
+<BaseLayout title={d.title} description={d.shortDescription} ogImage={(d.featuredImage ?? d.banner ?? d.icon)?.src ?? defaultFeatureImage('product')}>
   <!-- Banner band (dark) -->
   <section class="band-sm dark">
     <div class="wrap">

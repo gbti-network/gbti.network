@@ -6,6 +6,7 @@ import { authorDisplay, authorHref, formatDate } from '../../lib/authors';
 import { buildAvatarIndex, avatarStack } from '../../lib/avatars';
 import { isStub } from '../../lib/content';
 import StackedAvatars from '../StackedAvatars.astro';
+import { defaultFeatureImage } from '../../lib/feature-image';
 
 interface Props {
   post: CollectionEntry<'post'>;
@@ -29,9 +30,7 @@ const stack = avatarStack({ author: d.author, contributors: d.contributors, comm
     {d.coverImage ? (
       <Image src={d.coverImage} alt="" width={600} height={338} class="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
     ) : (
-      <div class="absolute inset-0 ac-fallback" aria-hidden="true">
-        <span class="ac-mark">G</span>
-      </div>
+      <img src={defaultFeatureImage('post')} alt="" loading="lazy" class="absolute inset-0 h-full w-full object-cover" />
     )}
   </a>
   <div class="flex flex-1 flex-col gap-2 p-6">
