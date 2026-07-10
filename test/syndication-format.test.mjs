@@ -104,3 +104,9 @@ test('{author-note} renders the sanitized intro and is stripped for members-only
   assert.equal(mem.authorNote, null);
   assert.equal(renderTemplate('{author-note}', mem, { limit: 500 }), '');
 });
+
+// SOW-088 {member-url}: the member's public profile URL, derived from the queue item's author login.
+test('{member-url} renders the public profile URL and is empty without an author', () => {
+  assert.equal(renderTemplate('{member-url}', { source: 'prompt', author: 'atwellpub' }, { limit: 200 }), 'https://gbti.network/members/atwellpub/');
+  assert.equal(renderTemplate('x {member-url}', { source: 'prompt' }, { limit: 200 }), 'x');
+});

@@ -20677,7 +20677,15 @@ var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
 });
 var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
-var DEFAULT_REDDIT_BODY = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information can be found in the note provided by the content author:\n\n"{author-note}"';
+var DEFAULT_REDDIT_BODY = `The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:
+
+"{author-note}"
+
+---
+
+Are you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network
+
+To follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}`;
 var DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
   post: DEFAULT_FORMAT,

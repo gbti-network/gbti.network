@@ -51,7 +51,7 @@ export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt
 const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 // SOW-088: the Reddit BODY template (a link post's first comment / a text post's content). Owner-authored
 // default; editable in the admin templates card like the per-type title templates.
-const DEFAULT_REDDIT_BODY = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information can be found in the note provided by the content author:\n\n"{author-note}"';
+const DEFAULT_REDDIT_BODY = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
   post: DEFAULT_FORMAT,
