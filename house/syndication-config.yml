@@ -1,0 +1,50 @@
+# SOW-058 (+ SOW-057): syndication configuration. Admin/superadmin-CODEOWNED (house/**), so a PR changing it
+# without the required role is auto-rejected by the SOW-005 gate.
+#
+# Read by membership/syndication-config.mjs and mirrored to the KV key `synd:config` by `npm run reconcile
+# --apply`, so the signup Worker drain reads the live values WITHOUT a redeploy. This file carries NO secrets;
+# the per-channel API tokens live only in the Worker secret store.
+#
+# Fail-closed: ships disabled. Flip `enabled: true` and the per-channel switches when ready to syndicate. A
+# channel switched on here still also requires its secret to be configured at drain time (otherwise it is
+# recorded "skipped", never "failed").
+syndication:
+  enabled: true
+  require_approval: false
+  hold_minutes: 60
+  upvote_threshold: 2
+  classify: ai
+  templates:
+    share: Shared by {memberdiscord} {shareurl}
+  news_engagement:
+    enabled: true
+    open_threshold: 2
+    tier: paid
+    comment_autopost: true
+  channels:
+    discord: true
+    discord-category: true
+    x: false
+    linkedin: false
+    mastodon: false
+    bluesky: false
+    reddit: false
+  channel_templates:
+    reddit:
+      reddit-comment: >-
+        The resource shared in this post is a new {content-type} published by GBTI Network member
+        {fullName}. More information provided in the following author note:
+
+
+        "{author-note}"
+
+
+        ---
+
+
+        Are you a writer, creative type, or product developer? We would love to support your work.
+        For more information about how to join the GBTI network visit https://gbti.network
+
+
+        To follow {fullName}'s work more closely, consider joining our network and subscribing to
+        them directly: {member-url}
