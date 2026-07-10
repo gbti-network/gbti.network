@@ -46,14 +46,18 @@ export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
 // back to the no-ping full name when none resolves), {member-discord-username} (the mention, else the public
 // profile Discord handle, else the GitHub username; SOW-088), {content-type} (article/product/prompt/link),
 // {fullName}, {author}, {shareurl}/{url}, {title}, {category}. A type with no template gets its default.
-export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt']);
+export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body']);
 // SOW-088 (owner-directed): ONE default Discord format for every type.
 const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
+// SOW-088: the Reddit BODY template (a link post's first comment / a text post's content). Owner-authored
+// default; editable in the admin templates card like the per-type title templates.
+const DEFAULT_REDDIT_BODY = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information can be found in the note provided by the content author:\n\n"{author-note}"';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
   post: DEFAULT_FORMAT,
   product: DEFAULT_FORMAT,
   prompt: DEFAULT_FORMAT,
+  'reddit-body': DEFAULT_REDDIT_BODY,
 });
 
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({

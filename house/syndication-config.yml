@@ -20,6 +20,11 @@ syndication:
                             # mention, falling back to the no-ping full name), {fullName}, {author}, {shareurl},
                             # {url}, {title}, {category}. A missing/blank type keeps its default or the built-in text.
     share: "Shared by {memberdiscord} {shareurl}"
+    # reddit-body: the Reddit BODY template (a link post's first comment / a text post's content); extra
+    # variables {content-type} and {author-note} (the from-the-author intro). Blank = the built-in default.
+    #   The built-in: The resource shared in this post is a new {content-type} published by GBTI Network
+    #   member {fullName}. More information can be found in the note provided by the content author:
+    #   "{author-note}"
   news_engagement:          # SOW-111: engagement-triggered news auto-share (to the item's mapped category channel
                             # in the Worker var NEWS_CHANNELS; never the member #shares channel; unmapped = no post).
     enabled: true           # master switch for both engagement signals

@@ -10423,7 +10423,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <p class="hint">The category to Discord-channel map lives in the Categories workspace (Admin -> Categories); this tab keeps the templates, news auto-share, and moderation word lists. ${this._channels.length} categories are mapped.</p>
       ${this._pipelineHtml()}
-      <h4>Discord post templates <span class="hint">(variables: {memberdiscord} {fullName} {author} {shareurl} {title} {category}; blank = default)</span></h4>
+      <h4>Syndication templates <span class="hint">(variables: {memberdiscord} {fullName} {author} {shareurl} {title} {category} {content-type} {author-note}; blank = default; reddit-body = the Reddit post body / first comment)</span></h4>
       ${tmplRows}
       ${this._engagementHtml()}
       ${listBlocks}
@@ -13779,14 +13779,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const destDefault = this._dest === "reddit" ? "{title}" : this._info?.templates?.[this._item().source] || "{title} {url}";
       return this._template ?? destDefault;
     }
-    /** The Reddit BODY template that will be sent: an explicit edit wins; the default is the owner's
-     *  author-note framing when the item HAS an intro (a text post appends the link, since the body is the
-     *  whole post there), else {url} for a text post and nothing for a link. */
+    /** The Reddit BODY template that will be sent: an explicit edit wins; the default is the ADMIN-stored
+     *  reddit-body template (the templates card), used when the item has an intro or the stored template does
+     *  not reference {author-note} (so a no-intro item never renders empty quotes). A text post appends the
+     *  link when the template lacks {url}, since the body is the whole post there. */
     _effectiveBody() {
       if (this._bodyTemplate != null) return this._bodyTemplate;
-      if (this._authorNote) return `From GBTI Network member {fullName}:
-
-"{author-note}"${this._redditKind === "self" ? "\n\n{url}" : ""}`;
+      const tpl = this._info?.templates?.["reddit-body"] || "";
+      if (tpl && (this._authorNote || !/\{author-note\}/.test(tpl))) {
+        return tpl + (this._redditKind === "self" && !/\{url\}/.test(tpl) ? "\n\n{url}" : "");
+      }
       return this._redditKind === "self" ? "{url}" : "";
     }
     _composeHtml() {

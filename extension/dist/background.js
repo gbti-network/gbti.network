@@ -20675,13 +20675,15 @@ var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   comment_autopost: true
   // one comment posts immediately (deliberate engagement)
 });
-var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
+var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
+var DEFAULT_REDDIT_BODY = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information can be found in the note provided by the content author:\n\n"{author-note}"';
 var DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
   post: DEFAULT_FORMAT,
   product: DEFAULT_FORMAT,
-  prompt: DEFAULT_FORMAT
+  prompt: DEFAULT_FORMAT,
+  "reddit-body": DEFAULT_REDDIT_BODY
 });
 var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,

@@ -96,7 +96,7 @@ class GbtiChannelMapManager extends GbtiElement {
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
       <p class="hint">The category to Discord-channel map lives in the Categories workspace (Admin -> Categories); this tab keeps the templates, news auto-share, and moderation word lists. ${this._channels.length} categories are mapped.</p>
       ${this._pipelineHtml()}
-      <h4>Discord post templates <span class="hint">(variables: {memberdiscord} {fullName} {author} {shareurl} {title} {category}; blank = default)</span></h4>
+      <h4>Syndication templates <span class="hint">(variables: {memberdiscord} {fullName} {author} {shareurl} {title} {category} {content-type} {author-note}; blank = default; reddit-body = the Reddit post body / first comment)</span></h4>
       ${tmplRows}
       ${this._engagementHtml()}
       ${listBlocks}

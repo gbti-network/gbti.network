@@ -47,7 +47,8 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
   const m = toSyndicationMirror({ enabled: true, hold_minutes: 60, upvote_threshold: 2, channels: { discord: true } });
   assert.deepEqual(m, {
     enabled: true, require_approval: true, hold_minutes: 60, upvote_threshold: 2, classify: 'ai',
-    templates: { share: 'New {content-type} published by {member-discord-username}: "{title}" {url}', post: 'New {content-type} published by {member-discord-username}: "{title}" {url}', product: 'New {content-type} published by {member-discord-username}: "{title}" {url}', prompt: 'New {content-type} published by {member-discord-username}: "{title}" {url}' },
+    // SOW-088: reddit-body rides in the mirror like every template type (the drain/manual rail read the admin-edited value from KV).
+    templates: { share: 'New {content-type} published by {member-discord-username}: "{title}" {url}', post: 'New {content-type} published by {member-discord-username}: "{title}" {url}', product: 'New {content-type} published by {member-discord-username}: "{title}" {url}', prompt: 'New {content-type} published by {member-discord-username}: "{title}" {url}', 'reddit-body': 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information can be found in the note provided by the content author:\n\n"{author-note}"' },
     news_engagement: { enabled: false, open_threshold: 2, tier: 'paid', comment_autopost: true },
     channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false },
   });
@@ -112,4 +113,19 @@ test('setSyndicationSettings patches only the supplied fields, validates hard, a
   assert.throws(() => setSyndicationSettings(doc, { holdMinutes: 9999 }, ctx), TemplateEditError);
   assert.throws(() => setSyndicationSettings(doc, { channels: { myspace: true } }, ctx), TemplateEditError);
   assert.throws(() => setSyndicationSettings(doc, { enabled: 'yes' }, ctx), TemplateEditError);
+});
+
+// SOW-088: reddit-body is a first-class template type (the Reddit post body / link-post first comment),
+// so it flows through the same defaults, admin edit validation, and the syndicate-now GET as the others.
+test('reddit-body: default template, config override, and the admin edit path', async () => {
+  const { TEMPLATE_TYPES, DEFAULT_TEMPLATES, templateFor, syndicationConfigFromParsed } = await import('../membership/syndication-config-core.mjs');
+  assert.ok(TEMPLATE_TYPES.includes('reddit-body'));
+  assert.match(DEFAULT_TEMPLATES['reddit-body'], /\{author-note\}/);
+  assert.equal(templateFor(syndicationConfigFromParsed({}), 'reddit-body'), DEFAULT_TEMPLATES['reddit-body']);
+  const cfg = syndicationConfigFromParsed({ syndication: { templates: { 'reddit-body': 'Custom {author-note}' } } });
+  assert.equal(templateFor(cfg, 'reddit-body'), 'Custom {author-note}');
+  const { setTemplate } = await import('../membership/syndication-template-edits.mjs');
+  const { next, changed } = setTemplate({}, { type: 'reddit-body', template: 'Edited body {url}' }, { now: 0, actor: { githubId: '1' } });
+  assert.equal(changed, true);
+  assert.equal(next.syndication.templates['reddit-body'], 'Edited body {url}');
 });
