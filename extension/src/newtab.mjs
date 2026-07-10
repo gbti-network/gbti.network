@@ -178,6 +178,9 @@ function renderFeed(filter = '') {
  *  publisher detail + Follow-publisher + discussion). Both are defined by mountPageClient (client-ui), called in init(). */
 function openReader(item) {
   if (!item) return;
+  hideSplash(); // opening a reader IN PLACE (post-share redirect, card-open, first-load deep link) dismisses the
+                // splash: those callers bypass the hashchange handler that would otherwise clear it (replaceState
+                // writes the deep-link hash without firing hashchange). Idempotent when the splash is already gone.
   writeReadHash(item); // SOW-092: the address bar carries a copyable deep link while reading
   const fv = $('[data-feedview]');
   const rv = $('[data-readerview]');

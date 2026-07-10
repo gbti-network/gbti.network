@@ -14832,6 +14832,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function openReader(item) {
     if (!item) return;
+    hideSplash();
     writeReadHash(item);
     const fv = $("[data-feedview]");
     const rv = $("[data-readerview]");
