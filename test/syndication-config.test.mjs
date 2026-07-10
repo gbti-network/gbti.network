@@ -47,8 +47,8 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
   const m = toSyndicationMirror({ enabled: true, hold_minutes: 60, upvote_threshold: 2, channels: { discord: true } });
   assert.deepEqual(m, {
     enabled: true, require_approval: true, hold_minutes: 60, upvote_threshold: 2, classify: 'ai',
-    // SOW-088: reddit-body rides in the mirror like every template type (the drain/manual rail read the admin-edited value from KV).
-    templates: { share: 'New {content-type} published by {member-discord-username}: "{title}" {url}', post: 'New {content-type} published by {member-discord-username}: "{title}" {url}', product: 'New {content-type} published by {member-discord-username}: "{title}" {url}', prompt: 'New {content-type} published by {member-discord-username}: "{title}" {url}', 'reddit-body': '{short-description}', 'reddit-comment': 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}' },
+    // SOW-088: the mirror carries ONLY configured templates (readers re-normalize, so code defaults track deploys).
+    templates: {},
     news_engagement: { enabled: false, open_threshold: 2, tier: 'paid', comment_autopost: true },
     // SOW-088: reddit joined CHANNELS (default false) so the admin pipeline switch survives normalization.
     channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false },
@@ -170,4 +170,10 @@ test('setTemplate with a channel targets the override and empties clean up', asy
   assert.equal(c.next.syndication.channel_templates, undefined, 'the last override removes the whole block');
   const { TemplateEditError } = await import('../membership/syndication-template-edits.mjs');
   assert.throws(() => setTemplate({}, { type: 'prompt', template: 'x', channel: 'myspace' }, ctx), TemplateEditError);
+});
+
+// SOW-088: a CONFIGURED template still rides the mirror; only the folded-in defaults are excluded.
+test('toSyndicationMirror keeps configured templates and drops folded defaults', () => {
+  const m = toSyndicationMirror({ syndication: { templates: { share: 'Custom {shareurl}', post: '   ' } } });
+  assert.deepEqual(m.templates, { share: 'Custom {shareurl}' });
 });

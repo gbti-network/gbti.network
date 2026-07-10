@@ -232,5 +232,16 @@ export function enabledChannelNames(cfg) {
 /** The small, secret-free object reconcile writes to the KV mirror (synd:config) and the Worker reads back. */
 export function toSyndicationMirror(cfg) {
   const c = syndicationConfigFromParsed(cfg);
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: { ...c.templates }, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels } };
+  // Templates carry ONLY the CONFIGURED values (never the folded-in defaults): every mirror reader
+  // re-normalizes via syndicationConfigFromParsed, so code-default changes apply on deploy instead of
+  // being frozen into KV as if an admin had configured them (hit live 2026-07-10: the old reddit-body
+  // default kept pre-filling after the default changed).
+  const raw = (cfg?.syndication ?? cfg ?? {});
+  const rawTemplates = raw.templates && typeof raw.templates === 'object' && !Array.isArray(raw.templates) ? raw.templates : {};
+  const configured = {};
+  for (const t of TEMPLATE_TYPES) {
+    const v = typeof rawTemplates[t] === 'string' ? rawTemplates[t].trim() : '';
+    if (v) configured[t] = v;
+  }
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels } };
 }
