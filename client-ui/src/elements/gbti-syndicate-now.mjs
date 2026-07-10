@@ -125,7 +125,9 @@ class GbtiSyndicateNow extends GbtiElement {
   _composeHtml() {
     const dest = this._dest;
     const item = this._item();
-    const template = this._template ?? (this._info?.templates?.[item.source] || '{title} {url}');
+    // Reddit renders the template as the POST TITLE of a link post; a plain {title} reads natural there.
+    const destDefault = dest === 'reddit' ? '{title}' : (this._info?.templates?.[item.source] || '{title} {url}');
+    const template = this._template ?? destDefault;
     const preview = renderTemplate(template, item, { limit: 2000 });
     let channelRow = '';
     if (dest === 'discord') {
@@ -154,7 +156,9 @@ class GbtiSyndicateNow extends GbtiElement {
           <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || '')}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
     }
     const liNote = dest === 'linkedin'
-      ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : '';
+      ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>`
+      : dest === 'reddit'
+        ? `<p class="sub" style="margin:8px 0 0">Posts a LINK to the community subreddit; the text above becomes the Reddit post title (300 characters max).</p>` : '';
     const prior = this._prior?.length ? `<p class="warn">This item already went out (${this._prior.length === 1 ? 'once' : `${this._prior.length} times`}). Publishing again posts a duplicate.</p>` : '';
     const fwdState = this._result?.forwarded
       ? (this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : ' Forwarded to the secondary channel.')
@@ -194,6 +198,7 @@ class GbtiSyndicateNow extends GbtiElement {
   }
 
   async _pickDest(dest) {
+    if (dest !== this._dest) this._template = null; // per-destination defaults; an edit never leaks across
     this._dest = dest;
     this._step = 'compose';
     this._err = null;

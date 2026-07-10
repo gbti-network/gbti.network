@@ -157,3 +157,49 @@ test('linkedin: versioned /rest/posts, org author, article card with url, none w
   assert.equal(err.ok, false);
   assert.match(err.error, /linkedin 422 .*ACCESS_DENIED/);
 });
+
+// SOW-088: the Reddit adapter (the Radle port) — refresh-then-submit, clean api_type=json parsing.
+test('reddit: refreshes with Basic auth then submits a link post with the required UA', async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts) => {
+    calls.push({ url, opts });
+    if (url.includes('/api/v1/access_token')) return { ok: true, status: 200, json: async () => ({ access_token: 'at1' }) };
+    return { ok: true, status: 200, json: async () => ({ json: { errors: [], data: { id: 'abc123', url: 'https://www.reddit.com/r/GBTI_network/comments/abc123/x/' } } }) };
+  };
+  const env = { REDDIT_CLIENT_ID: 'id', REDDIT_CLIENT_SECRET: 'sec', REDDIT_REFRESH_TOKEN: 'rt', REDDIT_SUBREDDIT: 'GBTI_network' };
+  const { createRedditAdapter } = await import('../clients/syndication/reddit.mjs');
+  const rd = createRedditAdapter({ env, fetchImpl });
+  assert.equal(rd.enabled(), true);
+  const r = await rd.post({ ...item, textOverride: 'A natural Reddit title' });
+  // Refresh call shape.
+  assert.match(calls[0].url, /www\.reddit\.com\/api\/v1\/access_token/);
+  assert.match(calls[0].opts.headers.Authorization, /^Basic /);
+  assert.match(calls[0].opts.body, /grant_type=refresh_token/);
+  // Submit call shape.
+  assert.match(calls[1].url, /oauth\.reddit\.com\/api\/submit/);
+  assert.equal(calls[1].opts.headers.Authorization, 'Bearer at1');
+  assert.ok(calls[1].opts.headers['User-Agent'], 'Reddit requires a User-Agent');
+  const p = new URLSearchParams(calls[1].opts.body);
+  assert.equal(p.get('sr'), 'GBTI_network');
+  assert.equal(p.get('kind'), 'link');
+  assert.equal(p.get('title'), 'A natural Reddit title');
+  assert.equal(p.get('url'), 'https://ex.com/a');
+  assert.equal(p.get('api_type'), 'json');
+  assert.equal(r.ok, true);
+  assert.equal(r.url, 'https://www.reddit.com/r/GBTI_network/comments/abc123/x/');
+});
+
+test('reddit: a dead refresh token and json.errors both surface readable failures', async () => {
+  const { createRedditAdapter } = await import('../clients/syndication/reddit.mjs');
+  const env = { REDDIT_CLIENT_ID: 'id', REDDIT_CLIENT_SECRET: 'sec', REDDIT_REFRESH_TOKEN: 'rt', REDDIT_SUBREDDIT: 'GBTI_network' };
+  const dead = createRedditAdapter({ env, fetchImpl: async () => ({ ok: false, status: 400, json: async () => ({}) }) });
+  const r1 = await dead.post(item);
+  assert.equal(r1.ok, false);
+  assert.match(r1.error, /refresh token may be revoked/);
+  const errs = createRedditAdapter({ env, fetchImpl: async (url) => (url.includes('access_token')
+    ? { ok: true, status: 200, json: async () => ({ access_token: 'at' }) }
+    : { ok: true, status: 200, json: async () => ({ json: { errors: [['SUBREDDIT_NOTALLOWED', 'not allowed to post there', 'sr']] } }) }) });
+  const r2 = await errs.post(item);
+  assert.equal(r2.ok, false);
+  assert.match(r2.error, /SUBREDDIT_NOTALLOWED/);
+});

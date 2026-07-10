@@ -32,14 +32,15 @@ test('both verbs are superadmin-only (an admin is 403)', async () => {
   assert.equal(p.status, 403);
 });
 
-test('GET: readiness (secrets decide), templates with defaults, the channel map, reddit pending', async () => {
+test('GET: readiness (secrets decide), templates with defaults, the channel map', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG, [SYND_CHANNELS_KEY]: CHANNELS });
   const r = await handleSyndicateNowInfo(req(null, 'GET'), { ...ENV_DISCORD, SIGNUP_KV: kv }, { kv, authorize: superadmin });
   assert.equal(r.status, 200);
   const byId = Object.fromEntries(r.body.destinations.map((d) => [d.id, d]));
   assert.equal(byId.discord.ready, true);
   assert.equal(byId.x.ready, false); // no X secrets in env
-  assert.match(byId.reddit.reason, /SOW-088/);
+  assert.equal(byId.reddit.ready, false); // a real destination now; just missing its secrets in this env
+  assert.match(byId.reddit.reason, /missing secrets/);
   assert.equal(r.body.templates.prompt, 'New prompt: {title} {url}');
   assert.equal(r.body.templates.share, 'New {content-type} published by {member-discord-username}: "{title}" {url}'); // the SOW-088 default fills gaps
   assert.deepEqual(r.body.channelMap, [{ category: 'ai', channelId: '111222333444555666' }]);
@@ -73,10 +74,10 @@ test('POST discord: renders the edited template server-side (sanitized) and post
   assert.ok(kv.store.get('synd:dedupe:prompt:ci-skill'));
 });
 
-test('POST validations: reddit pending, unknown destination, missing template/channel, missing secrets', async () => {
+test('POST validations: unknown destination, missing template/channel, missing secrets (reddit included)', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
   const deps = { kv, authorize: superadmin };
-  assert.equal((await handleSyndicateNow(req({ destination: 'reddit', item: ITEM, template: 'x' }), { SIGNUP_KV: kv }, deps)).status, 400);
+  assert.equal((await handleSyndicateNow(req({ destination: 'reddit', item: ITEM, template: 'x' }), { SIGNUP_KV: kv }, deps)).status, 409); // a real destination now; no secrets in this env
   assert.equal((await handleSyndicateNow(req({ destination: 'myspace', item: ITEM, template: 'x' }), { SIGNUP_KV: kv }, deps)).status, 400);
   assert.equal((await handleSyndicateNow(req({ destination: 'discord', item: ITEM, template: '' }), { SIGNUP_KV: kv }, deps)).status, 400);
   assert.equal((await handleSyndicateNow(req({ destination: 'discord', item: ITEM, template: 'x' }), { ...ENV_DISCORD, SIGNUP_KV: kv }, deps)).status, 400); // no channelId

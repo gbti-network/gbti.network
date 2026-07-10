@@ -12,6 +12,7 @@ export const CHANNEL_LIMITS = Object.freeze({
   linkedin: 3000,
   mastodon: 500,
   bluesky: 300,
+  reddit: 300, // the Reddit post-title cap (SOW-088: the template renders the title)
 });
 
 // The env var(s) each channel requires to be considered configured. Discord needs the bot token (the per-type
@@ -23,6 +24,7 @@ export const CHANNEL_SECRET_KEYS = Object.freeze({
   linkedin: ['LINKEDIN_ACCESS_TOKEN', 'LINKEDIN_ORG_URN'],
   mastodon: ['MASTODON_BASE_URL', 'MASTODON_ACCESS_TOKEN'],
   bluesky: ['BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD'],
+  reddit: ['REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET', 'REDDIT_REFRESH_TOKEN', 'REDDIT_SUBREDDIT'], // SOW-088
 });
 
 /** The character cap for a channel (a small safe default for an unknown name). */

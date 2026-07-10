@@ -7,6 +7,7 @@ import { createXAdapter } from '../clients/syndication/x.mjs';
 import { createLinkedinAdapter } from '../clients/syndication/linkedin.mjs';
 import { createMastodonAdapter } from '../clients/syndication/mastodon.mjs';
 import { createBlueskyAdapter } from '../clients/syndication/bluesky.mjs';
+import { createRedditAdapter } from '../clients/syndication/reddit.mjs'; // SOW-088: the Radle port
 import { enabledChannelNames } from './syndication-config-core.mjs';
 import { secretsPresent } from './syndication-channels.mjs';
 
@@ -17,6 +18,7 @@ const FACTORIES = {
   linkedin: createLinkedinAdapter,
   mastodon: createMastodonAdapter,
   bluesky: createBlueskyAdapter,
+  reddit: createRedditAdapter, // SOW-088
 };
 
 /** Build every adapter (keyed by name). Pure construction; no network until post() is called.

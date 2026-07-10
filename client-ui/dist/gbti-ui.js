@@ -10551,11 +10551,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var SITE8 = "https://gbti.network";
   var PAGE_SIZE = 10;
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
-  var STEPS = ["discord", "follow", "topics"];
+  var STEPS = ["discord", "subreddit", "follow", "topics"];
+  var SUBREDDIT_URL = "https://www.reddit.com/r/GBTI_network";
+  var SUBREDDIT_OPENED_KEY = "gbti-welcome-subreddit-opened";
   var lc3 = (s) => String(s || "").toLowerCase();
   var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
+  var redditIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M14.5 15.4c.1.1.1.3 0 .4-.7.7-1.8.8-2.5.8s-1.8-.1-2.5-.8c-.1-.1-.1-.3 0-.4s.3-.1.4 0c.5.5 1.4.6 2.1.6s1.6-.1 2.1-.6c.1-.1.3-.1.4 0zM10.2 12.6c0-.6-.5-1.1-1.1-1.1S8 12 8 12.6s.5 1.1 1.1 1.1 1.1-.5 1.1-1.1zm4.7-1.1c-.6 0-1.1.5-1.1 1.1s.5 1.1 1.1 1.1 1.1-.5 1.1-1.1-.5-1.1-1.1-1.1zM22 12c0 5.5-4.5 10-10 10S2 17.5 2 12 6.5 2 12 2s10 4.5 10 10zm-4.6-1.6c-.4 0-.8.2-1.1.4-1-.7-2.4-1.2-3.9-1.2l.8-3.5 2.5.6c0 .6.5 1.1 1.1 1.1s1.1-.5 1.1-1.1-.5-1.2-1.1-1.2c-.4 0-.8.3-1 .6l-2.7-.6c-.2 0-.3.1-.4.2l-.8 3.9c-1.5.1-2.9.5-3.9 1.2-.3-.3-.7-.4-1.1-.4-1.6 0-2.1 2.1-.7 2.9v.4c0 2.2 2.6 4 5.8 4s5.8-1.8 5.8-4v-.4c1.4-.8.9-2.9-.4-2.9z"/></svg>`;
   var megaIco = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4z" fill="currentColor"/></svg>`;
   var CSS28 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); padding:32px 28px; max-width:680px; margin:0 auto; }
@@ -10758,7 +10761,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (this._step < 0) this._step = 0;
       if (this._step > STEPS.length - 1) this._step = STEPS.length - 1;
       const step = STEPS[this._step];
-      const card = step === "discord" ? this._discordCard() : step === "topics" ? this._topicsCard() : this._followCard();
+      const card = step === "discord" ? this._discordCard() : step === "subreddit" ? this._subredditCard() : step === "topics" ? this._topicsCard() : this._followCard();
       const isLast = this._step >= STEPS.length - 1;
       const nav = `<div class="stepnav">
       ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
@@ -10796,6 +10799,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           }
           window.open(url, "_blank", "noopener");
           this._startDiscordPoll();
+        });
+      } else if (step === "subreddit") {
+        this.on("[data-subreddit-open]", "click", () => {
+          window.open(SUBREDDIT_URL, "_blank", "noopener");
+          try {
+            localStorage.setItem(SUBREDDIT_OPENED_KEY, "1");
+          } catch {
+          }
+          this.render();
         });
       } else {
         this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.getAttribute("data-follow"))));
@@ -10835,6 +10847,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <h3>${megaIco} Follow topics</h3>
       <p class="sub">Pick the topics you care about. Your activity feed and news default to them, and you can change this any time in Settings. Skip to see everything.</p>
       <gbti-topic-picker></gbti-topic-picker>
+    </div>`;
+    }
+    // SOW-088: the subreddit step — member content syndicates to r/GBTI_network; following keeps a member in
+    // the loop off-network. Fully skippable (the stepper's Continue advances without action).
+    _subredditCard() {
+      let opened = false;
+      try {
+        opened = localStorage.getItem(SUBREDDIT_OPENED_KEY) === "1";
+      } catch {
+        opened = false;
+      }
+      return `<div class="card">
+      <h3>${redditIco} Follow us on Reddit</h3>
+      <p class="sub">Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network, so joining it is an easy way to keep up with the co-op from your Reddit feed. Open it and hit Join, or skip; you can find the link in the site footer any time.</p>
+      <button class="btn" data-subreddit-open type="button">${opened ? "Open r/GBTI_network again" : "Open r/GBTI_network"}</button>
+      ${opened ? `<p class="note">Opened. Hit Join over there, then Continue here.</p>` : ""}
     </div>`;
     }
     _followCard() {
@@ -13022,7 +13050,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _composeHtml() {
       const dest = this._dest;
       const item = this._item();
-      const template = this._template ?? (this._info?.templates?.[item.source] || "{title} {url}");
+      const destDefault = dest === "reddit" ? "{title}" : this._info?.templates?.[item.source] || "{title} {url}";
+      const template = this._template ?? destDefault;
       const preview = renderTemplate(template, item, { limit: 2e3 });
       let channelRow = "";
       if (dest === "discord") {
@@ -13043,7 +13072,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           <select data-forward>${fwdOpts}</select>` : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ""}; paste the Discord channel id)</span></label>
           <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || "")}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
       }
-      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : "";
+      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts a LINK to the community subreddit; the text above becomes the Reddit post title (300 characters max).</p>` : "";
       const prior = this._prior?.length ? `<p class="warn">This item already went out (${this._prior.length === 1 ? "once" : `${this._prior.length} times`}). Publishing again posts a duplicate.</p>` : "";
       const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
       const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}${fwdState}</p>` : "";
@@ -13093,6 +13122,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.on("[data-publish]", "click", () => this._publish());
     }
     async _pickDest(dest) {
+      if (dest !== this._dest) this._template = null;
       this._dest = dest;
       this._step = "compose";
       this._err = null;

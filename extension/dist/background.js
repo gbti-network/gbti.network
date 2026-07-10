@@ -20838,7 +20838,7 @@ function setTemplate(doc, { type, template } = {}, ctx = {}) {
   d.syndication.templates = nextTemplates;
   return { next: d, changed: true, audit: auditEntry6(ctx, t, { template: value || null }) };
 }
-var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky"]);
+var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit"]);
 function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === "object" ? doc : {});
   if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};

@@ -25,9 +25,8 @@ import { readSyndicationConfig, readContentChannels, putItem, getItem, removeFro
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { createDiscordClient } from '../../clients/discord.mjs';
 
-// The destinations the manual flow offers. Reddit is listed but not postable until its adapter lands
-// (the SOW-088 core phase, ported from the owner's Radle plugin).
-const MANUAL_DESTS = ['discord', 'x', 'linkedin', 'mastodon', 'bluesky'];
+// The destinations the manual flow offers (SOW-088: the Reddit adapter landed, the Radle port).
+const MANUAL_DESTS = ['discord', 'reddit', 'x', 'linkedin', 'mastodon', 'bluesky'];
 
 const FEATURED_ENV = { post: 'DISCORD_CHANNEL_POSTS', product: 'DISCORD_CHANNEL_PRODUCTS', prompt: 'DISCORD_CHANNEL_PROMPTS', share: 'DISCORD_CHANNEL_SHARES' };
 
@@ -53,7 +52,6 @@ export async function handleSyndicateNowInfo(request, env, deps = {}) {
     const ready = secretsPresent(env, id);
     return ready ? { id, ready: true } : { id, ready: false, reason: 'missing secrets' };
   });
-  destinations.splice(1, 0, { id: 'reddit', ready: false, reason: 'adapter pending (SOW-088)' });
   const templates = {};
   for (const t of TEMPLATE_TYPES) templates[t] = templateFor(cfg, t) ?? DEFAULT_TEMPLATES[t] ?? '';
   const featured = {};
@@ -124,7 +122,6 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   let payload;
   try { payload = await request.json(); } catch { return { status: 400, body: { error: 'bad_request', message: 'a JSON body is required' } }; }
   const destination = String(payload?.destination || '');
-  if (destination === 'reddit') return { status: 400, body: { error: 'unavailable', message: 'the Reddit adapter is not built yet (SOW-088)' } };
   if (!MANUAL_DESTS.includes(destination)) return { status: 400, body: { error: 'invalid', message: 'unknown destination' } };
   const template = String(payload?.template || '').trim();
   if (!template) return { status: 400, body: { error: 'invalid', message: 'a message template is required' } };
