@@ -335,6 +335,14 @@ test('publish stamps publishedAt for a NEW item; preserves it (+ bumps updatedAt
   assert.match(String(fmUp.publishedAt instanceof Date ? fmUp.publishedAt.toISOString() : fmUp.publishedAt), /^2026-07-01/);
   assert.ok(fmUp.updatedAt, 'a re-publish bumps updatedAt');
 
+  // The MCP host has no working reader: the repo client's canonical read preserves the date instead.
+  const repoD = fakeRepo();
+  repoD.getFileContent = async (p2) => (p2 === 'members/alice/prompts/fresh/index.md' ? existing : null);
+  const ctxNoReader = { ...ctxFor({ repo: repoD }), reader: {} };
+  await publish(ctxNoReader, { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd' }, body: 'B3' });
+  const viaRepo = parseContentFile(repoD.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md').content).frontmatter;
+  assert.match(String(viaRepo.publishedAt instanceof Date ? viaRepo.publishedAt.toISOString() : viaRepo.publishedAt), /^2026-07-01/);
+
   // An explicit caller publishedAt always wins (never overwritten).
   const repoC = fakeRepo();
   await publish(ctxFor({ repo: repoC }), { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd', publishedAt: '2026-06-01T00:00:00.000Z' }, body: 'B' });

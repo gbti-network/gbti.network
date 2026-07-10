@@ -18542,11 +18542,19 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
     let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === "string" && effInput.slug) {
       const sub = { post: "posts", product: "products", prompt: "prompts" }[type];
+      const canonical = `members/${id.username}/${sub}/${effInput.slug}/index.md`;
       let text = null;
       try {
-        text = await ctx2.reader?.readFile?.(`members/${id.username}/${sub}/${effInput.slug}/index.md`) ?? null;
+        text = await ctx2.reader?.readFile?.(canonical) ?? null;
       } catch {
         text = null;
+      }
+      if (text == null) {
+        try {
+          text = await repo.getFileContent(canonical) ?? null;
+        } catch {
+          text = null;
+        }
       }
       if (text != null) {
         try {

@@ -479,8 +479,12 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
     let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === 'string' && effInput.slug) {
       const sub = { post: 'posts', product: 'products', prompt: 'prompts' }[type];
+      const canonical = `members/${id.username}/${sub}/${effInput.slug}/index.md`;
       let text = null;
-      try { text = (await ctx.reader?.readFile?.(`members/${id.username}/${sub}/${effInput.slug}/index.md`)) ?? null; } catch { text = null; }
+      try { text = (await ctx.reader?.readFile?.(canonical)) ?? null; } catch { text = null; }
+      // The MCP host without a local repoPath has no working reader (hit live 2026-07-10: a re-publish
+      // stamped publishedAt to now); the repo client reads the canonical upstream file instead.
+      if (text == null) { try { text = (await repo.getFileContent(canonical)) ?? null; } catch { text = null; } }
       if (text != null) { try { priorFm = parseContentFile(text).frontmatter ?? {}; } catch { priorFm = null; } }
     }
     effInput.publishedAt = priorFm?.publishedAt ?? nowIso;
