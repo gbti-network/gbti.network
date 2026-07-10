@@ -5785,9 +5785,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .comment .cav { flex:none; width:22px; height:22px; border-radius:50%; overflow:hidden; background:var(--hover); display:grid; place-items:center; color:var(--muted); font-size:10px; font-weight:700; margin-top:1px; }
   .comment .cav img { width:100%; height:100%; object-fit:cover; }
   .comment .cmain { min-width:0; flex:1; }
-  .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; }
+  .cmeta { display:flex; align-items:center; gap:8px; font-size:12px; flex-wrap:wrap; }
+  .cmeta .cwhen { white-space:nowrap; flex-shrink:0; }
   .cmeta .cname { font-weight:700; } .cmeta .cwhen { color:var(--muted); }
-  .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; }
+  .cmeta .cbadge { font-size:9.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; white-space:nowrap; flex-shrink:0; }
+  /* SOW-088 QA: the mod tools live in a footer row under the body, off the crowded header line. */
+  .cfoot { display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
   .cmeta .cbadge.cnote { color:var(--s-green-fg, #1f9e5f); border-color:var(--s-green, #1f9e5f); }
   /* SOW-112 QA (owner-picked Option A): hover-reveal ghost actions — invisible until the row is hovered or
      focused, icon + label, Delete tints red only on its own hover. */
@@ -5958,20 +5961,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const foldBtn = `<button class="cfold${collapsed ? " collapsed" : ""}" type="button" data-fold="${esc(foldKey)}" aria-label="${collapsed ? "Expand" : "Collapse"} comment" aria-expanded="${collapsed ? "false" : "true"}">${CHEV2}</button>`;
         const houseComment = c.author === "gbti" || c.author === "house";
         const modPath = !houseComment && c.author && c.id ? c.path || `members/${c.author}/comments/${c.id}.md` : "";
-        const hideBtn = canMod && modPath ? `<button class="abtn" type="button" data-hidec="${esc(modPath)}">${EYE2} Hide</button>` : "";
+        const noteFlag = c.authorNote ? ' data-authornote="1"' : "";
+        const hideBtn = canMod && modPath ? `<button class="abtn" type="button" data-hidec="${esc(modPath)}"${noteFlag}>${EYE2} Hide</button>` : "";
         const own = this._me && c.author === this._me && c.path && c.id && !c.authorNote;
-        const delBtn = canRemove && modPath ? `<button class="abtn danger" type="button" data-delc="${esc(modPath)}" data-key="${esc(modPath)}">${TRASH2} Delete</button>` : own ? `<button class="abtn danger" type="button" data-delown="${esc(c.id)}" data-key="${esc(c.path)}">${TRASH2} Delete</button>` : "";
-        const acts = hideBtn || delBtn ? `<span class="acts">${hideBtn}${delBtn}</span>` : "";
+        const delBtn = canRemove && modPath ? `<button class="abtn danger" type="button" data-delc="${esc(modPath)}" data-key="${esc(modPath)}"${noteFlag}>${TRASH2} Delete</button>` : own ? `<button class="abtn danger" type="button" data-delown="${esc(c.id)}" data-key="${esc(c.path)}">${TRASH2} Delete</button>` : "";
+        const acts = hideBtn || delBtn ? `<div class="cfoot">${hideBtn}${delBtn}</div>` : "";
         return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
-        <div class="cmeta">${foldBtn}<span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}${acts}</div>
-        ${bodyHtml}
+        <div class="cmeta">${foldBtn}<span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}</div>
+        ${bodyHtml}${acts}
       </div></div>`;
       }).join("");
       const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
       this.set(this.css(CSS7) + threadHtml + this._composeHtml(targetType, targetSlug));
       this.$$("[data-fold]").forEach((b) => b.addEventListener("click", () => this._toggleFold(b.dataset.fold)));
-      this.$$("[data-hidec]").forEach((b) => b.addEventListener("click", () => this._hideComment(b.dataset.hidec)));
-      this.$$("[data-delc]").forEach((b) => b.addEventListener("click", () => this._deleteComment(b.dataset.delc)));
+      this.$$("[data-hidec]").forEach((b) => b.addEventListener("click", () => this._hideComment(b.dataset.hidec, b.dataset.authornote === "1")));
+      this.$$("[data-delc]").forEach((b) => b.addEventListener("click", () => this._deleteComment(b.dataset.delc, b.dataset.authornote === "1")));
       this.$$("[data-delown]").forEach((b) => b.addEventListener("click", () => this._deleteOwnComment(b.dataset.delown)));
     }
     // SOW-096: toggle a comment's per-viewer collapse fold + re-render the thread locally (no server round-trip).
@@ -5983,8 +5987,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     // SOW-112 QA (owner-directed flow): popup confirm -> the card swaps to a tombstone IMMEDIATELY
     // (optimistic) -> the server result upgrades it, or flips it to an error card on failure.
-    async _deleteComment(path) {
-      if (typeof confirm === "function" && !confirm("Delete this comment? The file is removed from the network (it remains in git history).")) return;
+    async _deleteComment(path, isAuthorNote = false) {
+      const msg = isAuthorNote ? "Delete this AUTHOR INTRO? Products and prompts require one: the pinned From-the-author block disappears, and the next edit of this item will fail checks until the author publishes a new intro. Continue?" : "Delete this comment? The file is removed from the network (it remains in git history).";
+      if (typeof confirm === "function" && !confirm(msg)) return;
       this._tombstone(path, "busy");
       try {
         await this.client.admin("remove", { path });
@@ -6011,8 +6016,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (this._last) this._render(this._last.targetType, this._last.targetSlug, this._last.rows);
     }
     // SOW-071: hide a comment (moderator+): deplatform its file -> draft, then reload the thread.
-    async _hideComment(path) {
-      if (typeof confirm === "function" && !confirm("Hide this comment? It is set to draft and removed from the thread.")) return;
+    async _hideComment(path, isAuthorNote = false) {
+      const msg = isAuthorNote ? "Hide this AUTHOR INTRO? Products and prompts require one: the pinned From-the-author block disappears, and the next edit of this item will fail checks until the author publishes a new intro. Continue?" : "Hide this comment? It is set to draft and removed from the thread.";
+      if (typeof confirm === "function" && !confirm(msg)) return;
       try {
         await this.client.admin("deplatform", { path });
         this.load();
