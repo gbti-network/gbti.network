@@ -5867,40 +5867,57 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-syndication-tracker.mjs
   var CSS15 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .head { display:flex; align-items:baseline; gap:10px; margin:0 0 8px; }
-  .head h3 { margin:0; font-size:15px; }
-  .hint { color:var(--muted); font-size:12px; }
-  .msg { font-size:13px; color:var(--accent); margin:6px 0; }
-  .msg.err { color:var(--danger); }
+  .hint { color:var(--muted); font-size:12px; margin:0 0 12px; }
+  .msg { font-size:13px; color:var(--accent); margin:6px 0 12px; }
+  .msg.err { color:var(--danger, #e06c6c); }
   .muted { color:var(--muted); font-size:13.5px; }
-  .bucket { margin:0 0 18px; }
-  .bucket h4 { margin:0 0 8px; font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
-  .manual { display:inline-block; margin-left:8px; font-size:10px; font-weight:800; letter-spacing:.05em; color:#d8a13d; border:1px solid #d8a13d; border-radius:2px; padding:1px 6px; vertical-align:1px; }
-  ul.rows { list-style:none; margin:0; padding:0; }
-  .row { display:flex; align-items:center; gap:10px; padding:9px 2px; border-top:1px solid var(--line); }
-  .row:first-child { border-top:0; }
-  .it { flex:1; min-width:0; }
-  .it b { font-size:14px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .it .d { font-size:12px; color:var(--muted); }
-  .flags { display:inline-flex; gap:4px; margin-left:6px; }
-  .flag { font-size:11px; font-weight:700; color:#8a5a00; background:rgba(240,170,20,.18); border:1px solid rgba(240,170,20,.5); border-radius:6px; padding:1px 6px; }
-  .cat { font-size:11px; color:var(--muted); margin-left:6px; }
-  .src { flex:none; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 8px; }
-  .when { flex:none; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
-  .chs { display:flex; gap:5px; flex-wrap:wrap; }
-  .ch { font-size:11px; border-radius:999px; padding:1px 7px; border:1px solid var(--line); color:var(--muted); }
-  .ch.sent { color:var(--accent); border-color:var(--accent); } .ch.failed { color:var(--danger); border-color:var(--danger); }
-  .ch.skipped { opacity:.7; }
-  .cancel { flex:none; font:inherit; font-size:12.5px; font-weight:600; color:var(--danger); background:none; border:1px solid var(--line); border-radius:6px; padding:5px 10px; cursor:pointer; }
-  .cancel:hover { border-color:var(--danger); }
-  .approve { flex:none; font:inherit; font-size:12.5px; font-weight:700; color:#fff; background:var(--accent); border:1px solid var(--accent); border-radius:6px; padding:5px 12px; cursor:pointer; }
-  .approve:hover { filter:brightness(1.05); }
   .busy { opacity:.55; pointer-events:none; }
+
+  /* kanban board */
+  .kb { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(230px, 1fr); gap:12px; overflow-x:auto; padding-bottom:6px; align-items:start; }
+  .kcol { background:var(--bg); border:1.5px solid var(--line); border-radius:10px; min-width:0; }
+  .kcol-h { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1.5px solid var(--line); }
+  .kcol-h .kdot { width:8px; height:8px; border-radius:50%; flex:none; }
+  .kcol-h .kn { font-family:var(--font-mono, monospace); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:700; }
+  .kcol-h .kc { margin-left:auto; font-family:var(--font-mono, monospace); font-size:11px; background:var(--hover); border-radius:999px; padding:1px 8px; color:var(--muted); }
+  .kcol[data-k="pending"] .kdot { background:#d8901a; }
+  .kcol[data-k="approved"] .kdot { background:#3f74d6; }
+  .kcol[data-k="sent"] .kdot { background:var(--brand); }
+  .kcol[data-k="failed"] .kdot { background:var(--danger, #e06c6c); }
+  .kcol[data-k="cancelled"] .kdot { background:var(--muted); }
+  .kcards { padding:10px; display:flex; flex-direction:column; gap:10px; max-height:520px; overflow-y:auto; }
+  .kempty { font-family:var(--font-mono, monospace); font-size:11.5px; color:var(--muted); padding:6px 2px 10px; text-align:center; }
+
+  .kcard { background:var(--panel); border:1.5px solid var(--line); border-radius:10px; padding:11px 12px; }
+  .kcard .top { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
+  .src { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 7px; }
+  .manual { font-size:9.5px; font-weight:800; letter-spacing:.05em; color:#d8901a; border:1px solid #d8901a; border-radius:3px; padding:1px 5px; }
+  .flag { font-size:10px; font-weight:700; color:#8a5a00; background:rgba(240,170,20,.18); border:1px solid rgba(240,170,20,.5); border-radius:6px; padding:1px 6px; }
+  .cat { font-size:10.5px; color:var(--muted); }
+  .kcard b.ti { display:block; font-size:13px; line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+  .kcard .d { font-size:11px; color:var(--muted); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chs { display:flex; gap:4px; flex-wrap:wrap; margin-top:7px; }
+  .ch { font-size:10.5px; border-radius:999px; padding:1px 7px; border:1px solid var(--line); color:var(--muted); text-decoration:none; }
+  .ch.sent { color:var(--accent); border-color:var(--accent); } .ch.failed { color:var(--danger, #e06c6c); border-color:var(--danger, #e06c6c); }
+  .ch.skipped { opacity:.7; }
+  .acts { display:flex; gap:8px; margin-top:9px; }
+  .approve { flex:1; font:inherit; font-size:12px; font-weight:700; color:#fff; background:var(--brand); border:1px solid var(--brand); border-radius:7px; padding:6px 10px; cursor:pointer; }
+  .approve:hover { filter:brightness(1.06); }
+  .cancel { flex:1; font:inherit; font-size:12px; font-weight:600; color:var(--danger, #e06c6c); background:none; border:1px solid var(--line); border-radius:7px; padding:6px 10px; cursor:pointer; }
+  .cancel:hover { border-color:var(--danger, #e06c6c); }
+  .when { font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; margin-top:7px; }
 `;
   var SRC_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
+  var COLUMNS = [
+    { key: "pending", label: "Pending approval", mode: "pending" },
+    { key: "approved", label: "Approved", mode: "approved" },
+    { key: "sent", label: "Sent", mode: "done" },
+    { key: "failed", label: "Failed", mode: "done" },
+    { key: "cancelled", label: "Cancelled", mode: "done" }
+  ];
   var GbtiSyndicationTracker = class extends GbtiElement {
-    // SOW-070 fix: in admin.html's static markup, so it upgrades BEFORE admin.mjs injects the client. render() retries
-    // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load() that early-returns.
+    // SOW-070 fix: in static admin markup this upgrades BEFORE the host injects the client. render() retries
+    // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load().
     connectedCallback() {
       super.connectedCallback();
       this._data = null;
@@ -5926,11 +5943,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS15) + `<p class="muted">Open in the GBTI client (admin) to view syndication.</p>`);
+        this.set(this.css(CSS15) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS15) + `<div class="head"><h3>Syndication</h3></div><p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS15) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent);flex:none">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -5939,50 +5956,54 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS15) + `<p class="muted">Loading syndication queue...</p>`);
+        this.set(this.css(CSS15) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       const d = this._data;
       this.set(this.css(CSS15) + `<div class="${this._busy ? "busy" : ""}">
-      <div class="head"><span class="hint">Nothing posts until a superadmin approves it. Approved items post to every enabled channel on the next tick.</span></div>
+      <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
-      ${this._bucket("Pending approval", d.pending, "pending")}
-      ${this._bucket("Approved", d.approved, "approved")}
-      ${this._bucket("Sent", d.sent, "done")}
-      ${this._bucket("Failed", d.failed, "done")}
-      ${this._bucket("Cancelled", d.cancelled, "done")}
+      <div class="kb">${COLUMNS.map((c) => this._column(c, d[c.key])).join("")}</div>
     </div>`);
       this.$$("[data-approve]").forEach((b) => b.addEventListener("click", () => this._approve(b.dataset.approve)));
       this.$$("[data-cancel]").forEach((b) => b.addEventListener("click", () => this._cancel(b.dataset.cancel)));
     }
-    _bucket(label, items, mode) {
+    _column({ key, label, mode }, items) {
       const list = Array.isArray(items) ? items : [];
-      if (!list.length) return `<div class="bucket"><h4>${esc(label)} (0)</h4><p class="muted">None.</p></div>`;
-      const rows = list.map((it) => {
-        const src = SRC_LABEL[it.source] || it.source || "";
-        const title = it.title || it.targetSlug || it.id || "(untitled)";
-        let right;
-        if (mode === "pending") {
-          right = `<button class="approve" data-approve="${esc(it.id)}" type="button">Approve</button><button class="cancel" data-cancel="${esc(it.id)}" type="button">Reject</button>`;
-        } else if (mode === "approved") {
-          right = `<span class="when">posting soon</span><button class="cancel" data-cancel="${esc(it.id)}" type="button">Cancel</button>`;
-        } else {
-          right = `<span class="chs">${this._channels(it.perChannel)}</span>`;
-        }
-        const flags = Array.isArray(it.flags) && it.flags.length ? `<span class="flags">${it.flags.map((f) => `<span class="flag">⚠ ${esc(f)}</span>`).join("")}</span>` : "";
-        const cat = it.category ? `<span class="cat">#${esc(it.category)}</span>` : "";
-        const manual = it.trigger === "manual" ? `<span class="manual">MANUAL${it.manualBy ? ` · by ${esc(String(it.manualBy))}` : ""}</span>` : "";
-        const reason = it.cancelReason ? `<span class="d">${esc(it.cancelReason)}</span>` : "";
-        return `<li class="row"><span class="src">${esc(src)}</span><span class="it"><b>${esc(title)}</b>${manual}${flags}${cat}${reason}${it.url ? `<span class="d">${esc(it.url)}</span>` : ""}</span>${right}</li>`;
-      }).join("");
-      return `<div class="bucket"><h4>${esc(label)} (${list.length})</h4><ul class="rows">${rows}</ul></div>`;
+      const cards = list.map((it) => this._card(it, mode)).join("");
+      return `<div class="kcol" data-k="${esc(key)}">
+      <div class="kcol-h"><span class="kdot"></span><span class="kn">${esc(label)}</span><span class="kc">${list.length}</span></div>
+      <div class="kcards">${cards || `<div class="kempty">— empty —</div>`}</div>
+    </div>`;
+    }
+    _card(it, mode) {
+      const src = SRC_LABEL[it.source] || it.source || "";
+      const title = it.title || it.targetSlug || it.id || "(untitled)";
+      const manual = it.trigger === "manual" ? `<span class="manual">MANUAL${it.manualBy ? ` · ${esc(String(it.manualBy))}` : ""}</span>` : "";
+      const flags = Array.isArray(it.flags) && it.flags.length ? it.flags.map((f) => `<span class="flag">⚠ ${esc(f)}</span>`).join("") : "";
+      const cat = it.category ? `<span class="cat">#${esc(it.category)}</span>` : "";
+      const when = it.sentAt || it.cancelledAt || it.enqueuedAt;
+      const whenLine = when ? `<div class="when">${esc(new Date(when).toLocaleString())}</div>` : "";
+      const reason = it.cancelReason ? `<div class="d">${esc(it.cancelReason)}</div>` : "";
+      let tail = "";
+      if (mode === "pending") {
+        tail = `<div class="acts"><button class="approve" data-approve="${esc(it.id)}" type="button">Approve</button><button class="cancel" data-cancel="${esc(it.id)}" type="button">Reject</button></div>`;
+      } else if (mode === "approved") {
+        tail = `<div class="acts"><button class="cancel" data-cancel="${esc(it.id)}" type="button">Cancel</button></div>`;
+      } else {
+        tail = `<div class="chs">${this._channels(it.perChannel)}</div>`;
+      }
+      return `<div class="kcard">
+      <div class="top"><span class="src">${esc(src)}</span>${manual}${flags}${cat}</div>
+      <b class="ti">${esc(title)}</b>
+      ${it.url ? `<div class="d">${esc(it.url)}</div>` : ""}${reason}${tail}${whenLine}
+    </div>`;
     }
     _channels(perChannel) {
       if (!perChannel || typeof perChannel !== "object") return "";
       return Object.entries(perChannel).map(([name, r]) => {
         const status = r?.status || "pending";
-        const link = r?.url ? `<a class="ch ${esc(status)}" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(name)}</a>` : `<span class="ch ${esc(status)}">${esc(name)}: ${esc(status)}</span>`;
-        return link;
+        return r?.url ? `<a class="ch ${esc(status)}" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(name)}</a>` : `<span class="ch ${esc(status)}">${esc(name)}: ${esc(status)}</span>`;
       }).join("");
     }
     async _approve(id) {
@@ -6159,6 +6180,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   @media (max-width:760px){ .fgrid, .fgrid.c2 { grid-template-columns:1fr; } .tmpl { grid-template-columns:1fr; } }
 `;
   var ICONS2 = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="c-kanban"><rect x="4" y="4" width="4.6" height="16" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.7" y="4" width="4.6" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="15.4" y="4" width="4.6" height="7.5" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/></g>
   <g id="c-pipe"><path d="M4 7h16M4 12h10M4 17h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
   <g id="c-tmpl"><rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 9h8M8 13h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
   <g id="c-share"><circle cx="6" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="6" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="18" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 11l8-4M8 13l8 4" stroke="currentColor" stroke-width="1.7"/></g>
@@ -6224,8 +6246,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._tiers = engagement?.tiers || ["paid", "paid-trial", "signed-in"];
         this._pipeline = pipeline?.settings || null;
         this._work = {};
+        this._base = {};
+        const KEYS = ["share", "post", "product", "prompt", "reddit-body"];
         for (const ch of TILE_CHANNELS.filter((c) => c.active).map((c) => c.id)) {
-          this._work[ch] = { ...this._channelTemplates[ch] || {} };
+          this._work[ch] = {};
+          this._base[ch] = {};
+          for (const k of KEYS) {
+            const eff = this._channelTemplates[ch]?.[k] ?? this._templates?.[k] ?? "";
+            this._work[ch][k] = eff;
+            this._base[ch][k] = eff;
+          }
         }
         this._tmplDirty = /* @__PURE__ */ new Set();
         this._pipeDirty = false;
@@ -6243,6 +6273,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // ---- section builders ----
     _pill(dirty) {
       return `<span class="pill${dirty ? " dirty" : ""}" data-pillbox><span class="dot"></span>${dirty ? "Unsaved changes" : "Saved"}</span>`;
+    }
+    // SOW-088: the Publishing Activity kanban (the former standalone Syndication tab). The nested tracker
+    // reads the shared client registry, so composition needs no wiring here.
+    _activityCard() {
+      return `<section class="card" id="sec-activity" data-sec>
+      <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-kanban"/></svg></span>
+        <div><h2>Publishing Activity</h2><p>The cross-posting queue and its delivery status, one column per state.</p></div></div>
+      <div class="card-b"><gbti-syndication-tracker></gbti-syndication-tracker></div>
+    </section>`;
     }
     _pipelineCard() {
       const p = this._pipeline;
@@ -6287,10 +6326,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <span class="ct-n">${esc(c.name)}</span><span class="ct-s">${esc(c.sub)}</span></button>`).join("");
       const chips = VARS.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join("");
       const work = this._work?.[cur] || {};
+      const custom = (k) => this._channelTemplates?.[cur]?.[k] ? " · custom" : "";
       const rows = TMPL_TYPES.map((t) => `<div class="tmpl">
-        <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df)}</div></div>
-        <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || "")}" placeholder="${esc(this._templates?.[t.key] || "built-in message")}" /></div>`).join("") + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">post body / first comment</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body" placeholder="${esc(this._templates?.["reddit-body"] || "built-in body")}">${esc(work["reddit-body"] || "")}</textarea></div>` : "");
+        <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
+        <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || "")}" /></div>`).join("") + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc("post body / first comment" + custom("reddit-body"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-body">${esc(work["reddit-body"] || "")}</textarea></div>` : "");
       return `<section class="card" id="sec-templates" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg></span>
         <div><h2>Syndication templates</h2><p>Configured per destination channel. Blank falls back to the shared template, then the built-in.</p></div>
@@ -6379,12 +6419,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.set(this.css(CSS16) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav>
-        <a data-go="sec-pipeline" class="on"><svg viewBox="0 0 24 24"><use href="#c-pipe"/></svg>Pipeline</a>
+        <a data-go="sec-activity" class="on"><svg viewBox="0 0 24 24"><use href="#c-kanban"/></svg>Publishing Activity</a>
+        <a data-go="sec-pipeline"><svg viewBox="0 0 24 24"><use href="#c-pipe"/></svg>Pipeline</a>
         <a data-go="sec-templates"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg>Templates</a>
         <a data-go="sec-autoshare"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg>Auto-share</a>
         <a data-go="sec-words"><svg viewBox="0 0 24 24"><use href="#c-shield"/></svg>Word lists</a>
       </nav>
-      <p class="intro">Syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
+      <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
+      ${this._activityCard()}
       ${this._pipelineCard()}
       ${this._templatesCard()}
       ${this._autoshareCard()}
@@ -6465,8 +6507,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         });
         f.addEventListener("input", () => {
           this._work[this._curCh][f.dataset.tk] = f.value;
-          this._tmplDirty.add(`${this._curCh}:${f.dataset.tk}`);
-          this._markDirty("sec-templates");
+          const key = `${this._curCh}:${f.dataset.tk}`;
+          if (f.value === (this._base[this._curCh]?.[f.dataset.tk] ?? "")) this._tmplDirty.delete(key);
+          else this._tmplDirty.add(key);
+          this._markDirty("sec-templates", this._tmplDirty.size > 0);
         });
       });
       this.$$("[data-var]").forEach((v) => v.addEventListener("click", () => {

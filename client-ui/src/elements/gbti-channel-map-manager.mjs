@@ -9,6 +9,7 @@
 // client (the SOW-070 upgrade race).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck } from '../workspace-core.mjs';
+import './gbti-syndication-tracker.mjs'; // SOW-088: the Publishing Activity kanban nests inside this workspace
 
 const AMBER = '#d8901a';
 
@@ -151,6 +152,7 @@ const CSS = `
 `;
 
 const ICONS = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <g id="c-kanban"><rect x="4" y="4" width="4.6" height="16" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="9.7" y="4" width="4.6" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="15.4" y="4" width="4.6" height="7.5" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.6"/></g>
   <g id="c-pipe"><path d="M4 7h16M4 12h10M4 17h13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
   <g id="c-tmpl"><rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 9h8M8 13h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
   <g id="c-share"><circle cx="6" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="6" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="18" r="2.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 11l8-4M8 13l8 4" stroke="currentColor" stroke-width="1.7"/></g>
@@ -216,9 +218,19 @@ class GbtiChannelMapManager extends GbtiElement {
       this._tiers = engagement?.tiers || ['paid', 'paid-trial', 'signed-in'];
       this._pipeline = pipeline?.settings || null;
       // Working copies (dirty state survives re-renders; a save/reload resets them).
+      // Fields show the EFFECTIVE template (channel override -> shared map, which already folds in the
+      // built-in defaults) as their VALUE (owner-directed: real values, not placeholders). The baseline
+      // map makes dirty = differs-from-loaded, so an untouched inherited value is never saved as an
+      // override; clearing a field saves '' (deletes the override, falls back).
       this._work = {};
+      this._base = {};
+      const KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body'];
       for (const ch of TILE_CHANNELS.filter((c) => c.active).map((c) => c.id)) {
-        this._work[ch] = { ...(this._channelTemplates[ch] || {}) };
+        this._work[ch] = {}; this._base[ch] = {};
+        for (const k of KEYS) {
+          const eff = this._channelTemplates[ch]?.[k] ?? this._templates?.[k] ?? '';
+          this._work[ch][k] = eff; this._base[ch][k] = eff;
+        }
       }
       this._tmplDirty = new Set();
       this._pipeDirty = false;
@@ -238,6 +250,16 @@ class GbtiChannelMapManager extends GbtiElement {
 
   _pill(dirty) {
     return `<span class="pill${dirty ? ' dirty' : ''}" data-pillbox><span class="dot"></span>${dirty ? 'Unsaved changes' : 'Saved'}</span>`;
+  }
+
+  // SOW-088: the Publishing Activity kanban (the former standalone Syndication tab). The nested tracker
+  // reads the shared client registry, so composition needs no wiring here.
+  _activityCard() {
+    return `<section class="card" id="sec-activity" data-sec>
+      <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-kanban"/></svg></span>
+        <div><h2>Publishing Activity</h2><p>The cross-posting queue and its delivery status, one column per state.</p></div></div>
+      <div class="card-b"><gbti-syndication-tracker></gbti-syndication-tracker></div>
+    </section>`;
   }
 
   _pipelineCard() {
@@ -287,12 +309,13 @@ class GbtiChannelMapManager extends GbtiElement {
     const chips = VARS.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join('');
     const work = this._work?.[cur] || {};
     // Placeholders show the EFFECTIVE fallback (the shared map value, then the built-in default text).
+    const custom = (k) => (this._channelTemplates?.[cur]?.[k] ? ' · custom' : '');
     const rows = TMPL_TYPES.map((t) => `<div class="tmpl">
-        <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df)}</div></div>
-        <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || '')}" placeholder="${esc(this._templates?.[t.key] || 'built-in message')}" /></div>`).join('')
+        <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
+        <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || '')}" /></div>`).join('')
       + (cur === 'reddit'
-        ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">post body / first comment</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body" placeholder="${esc(this._templates?.['reddit-body'] || 'built-in body')}">${esc(work['reddit-body'] || '')}</textarea></div>`
+        ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc('post body / first comment' + custom('reddit-body'))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-body">${esc(work['reddit-body'] || '')}</textarea></div>`
         : '');
     return `<section class="card" id="sec-templates" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg></span>
@@ -379,12 +402,14 @@ class GbtiChannelMapManager extends GbtiElement {
     this.set(this.css(CSS) + ICONS + `<div class="${this._busy ? 'busy' : ''}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
       <nav class="subnav" data-subnav>
-        <a data-go="sec-pipeline" class="on"><svg viewBox="0 0 24 24"><use href="#c-pipe"/></svg>Pipeline</a>
+        <a data-go="sec-activity" class="on"><svg viewBox="0 0 24 24"><use href="#c-kanban"/></svg>Publishing Activity</a>
+        <a data-go="sec-pipeline"><svg viewBox="0 0 24 24"><use href="#c-pipe"/></svg>Pipeline</a>
         <a data-go="sec-templates"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg>Templates</a>
         <a data-go="sec-autoshare"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg>Auto-share</a>
         <a data-go="sec-words"><svg viewBox="0 0 24 24"><use href="#c-shield"/></svg>Word lists</a>
       </nav>
-      <p class="intro">Syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
+      <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
+      ${this._activityCard()}
       ${this._pipelineCard()}
       ${this._templatesCard()}
       ${this._autoshareCard()}
@@ -447,8 +472,10 @@ class GbtiChannelMapManager extends GbtiElement {
       f.addEventListener('focusin', () => { this._lastField = f; });
       f.addEventListener('input', () => {
         this._work[this._curCh][f.dataset.tk] = f.value;
-        this._tmplDirty.add(`${this._curCh}:${f.dataset.tk}`);
-        this._markDirty('sec-templates');
+        const key = `${this._curCh}:${f.dataset.tk}`;
+        if (f.value === (this._base[this._curCh]?.[f.dataset.tk] ?? '')) this._tmplDirty.delete(key);
+        else this._tmplDirty.add(key);
+        this._markDirty('sec-templates', this._tmplDirty.size > 0);
       });
     });
     this.$$('[data-var]').forEach((v) => v.addEventListener('click', () => {

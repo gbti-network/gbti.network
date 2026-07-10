@@ -51,7 +51,6 @@
         <button class="admin-tab" type="button" data-tab="news">News sources</button>
         <button class="admin-tab" type="button" data-tab="quotes">Quotes</button>
         <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
-        <button class="admin-tab" type="button" data-tab="channels">Channels</button>
       </div>
       <div class="admin-col">
         <section class="admin-card on" data-panel="members">
@@ -84,13 +83,9 @@
           <div class="admin-card-b"><div class="admin-sub"><gbti-quote-manager></gbti-quote-manager></div></div>
         </section>
         <section class="admin-card" data-panel="syndication">
-          <div class="admin-card-h"><h2>Syndication</h2><p>The cross-posting queue and its delivery status.</p></div>
-          <div class="admin-card-b">
-            <div class="admin-sub"><gbti-syndication-tracker></gbti-syndication-tracker></div>
-          </div>
-        </section>
-        <section class="admin-card" data-panel="channels">
-          <div class="admin-card-h"><h2>Channels</h2><p>The Discord post templates, news auto-share settings, and the moderation word lists. The category to channel map moved into the Categories workspace.</p></div>
+          <!-- SOW-088: the former Syndication (queue) + Channels tabs combined; the workspace nests the
+               Publishing Activity kanban plus pipeline, per-channel templates, auto-share, and word lists. -->
+          <div class="admin-card-h"><h2>Syndication</h2><p>Publishing activity, the pipeline, per-channel templates, news auto-share, and the moderation word lists.</p></div>
           <div class="admin-card-b"><div class="admin-sub"><gbti-channel-map-manager></gbti-channel-map-manager></div></div>
         </section>
       </div>
