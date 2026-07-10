@@ -28,6 +28,8 @@ const CSS = `
   .tile:hover:not([disabled]) { border-color:var(--accent); color:var(--accent); }
   .tile[disabled] { opacity:.45; cursor:default; }
   .tile .why { display:block; font-weight:400; font-size:10.5px; color:var(--muted); margin-top:4px; }
+  .tile .sentb { display:block; font-weight:600; font-size:10.5px; color:#d8a13d; margin-top:4px; }
+  .info { color:var(--muted); font-size:12.5px; margin-top:10px; }
   label { display:block; font-size:12px; font-weight:600; color:var(--muted); margin:12px 0 4px; }
   textarea, select { width:100%; box-sizing:border-box; font:inherit; font-size:13px; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:var(--panel); color:var(--fg); }
   textarea { min-height:74px; font-family:var(--font-mono, monospace); font-size:12.5px; }
@@ -108,15 +110,42 @@ class GbtiSyndicateNow extends GbtiElement {
     </div></div>`;
   }
 
+  /** Per-DESTINATION send history from the tracker records: destination -> { count, last, manual }.
+   *  Derived from each record's channels map keys (`discord:<id>` / `discord-forward:<id>` / `reddit` ...),
+   *  so "already syndicated" can say WHERE it went and by WHAT (a manual post vs the auto pipeline). */
+  _destSends() {
+    const map = {};
+    for (const rec of this._prior || []) {
+      const at = rec.sentAt || rec.enqueuedAt || 0;
+      const manual = rec.trigger === 'manual' || !!rec.manualBy;
+      const dests = new Set(Object.keys(rec.channels || {}).map((k) => k.split(':')[0].replace(/^discord-forward$/, 'discord')));
+      if (!dests.size && rec.destination) dests.add(rec.destination);
+      if (!dests.size) dests.add('discord'); // legacy records predate the channels map; the pipeline was Discord-only
+      for (const d of dests) {
+        const cur = map[d] || { count: 0, last: 0, manual: false };
+        map[d] = { count: cur.count + 1, last: Math.max(cur.last, at), manual: cur.manual || manual };
+      }
+    }
+    return map;
+  }
+
+  _sendPhrase(d, s) {
+    return `${DEST_LABEL[d] || d} ${s.count === 1 ? 'once' : `${s.count} times`} (${s.manual ? 'manually' : 'by the auto pipeline'}, last ${esc(new Date(s.last).toLocaleString())})`;
+  }
+
   _destHtml() {
+    const sends = this._destSends();
     const tiles = (this._info?.destinations ?? []).map((d) => {
       const label = DEST_LABEL[d.id] || d.id;
+      const s = sends[d.id];
+      const badge = s ? `<span class="sentb">sent ${esc(new Date(s.last).toLocaleDateString())}${s.manual ? ' (manual)' : ''}</span>` : '';
       return d.ready
-        ? `<button class="tile" type="button" data-dest="${esc(d.id)}">${esc(label)}</button>`
-        : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(d.reason || 'not available')}</span></button>`;
+        ? `<button class="tile" type="button" data-dest="${esc(d.id)}">${esc(label)}${badge}</button>`
+        : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(d.reason || 'not available')}</span>${badge}</button>`;
     }).join('');
-    const prior = this._prior?.length
-      ? `<p class="warn">Already syndicated ${this._prior.length === 1 ? 'once' : `${this._prior.length} times`} (last: ${esc(new Date(Math.max(...this._prior.map((p) => p.sentAt || p.enqueuedAt || 0))).toLocaleString())}). Publishing again posts a duplicate.</p>`
+    const sent = Object.keys(sends);
+    const prior = sent.length
+      ? `<p class="warn">Already posted to ${sent.map((d) => this._sendPhrase(d, sends[d])).join('; ')}.</p><p class="info">Destinations without a badge have not received this item yet.</p>`
       : '';
     return `<label>Destination</label><div class="tiles">${tiles}</div>${prior}
       <div class="actions"><button class="ghost" type="button" data-close>Cancel</button><span></span></div>`;
@@ -159,7 +188,16 @@ class GbtiSyndicateNow extends GbtiElement {
       ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>`
       : dest === 'reddit'
         ? `<p class="sub" style="margin:8px 0 0">Posts a LINK to the community subreddit; the text above becomes the Reddit post title (300 characters max).</p>` : '';
-    const prior = this._prior?.length ? `<p class="warn">This item already went out (${this._prior.length === 1 ? 'once' : `${this._prior.length} times`}). Publishing again posts a duplicate.</p>` : '';
+    // Destination-SPECIFIC prior-send messaging: a duplicate warning only when THIS destination already
+    // got the item; otherwise an informational note so a Discord-only history never scares a Reddit send.
+    const sends = this._destSends();
+    const here = sends[dest];
+    const elsewhere = Object.keys(sends).filter((d) => d !== dest);
+    const prior = here
+      ? `<p class="warn">Already posted to ${this._sendPhrase(dest, here)}. Publishing again posts a duplicate there.</p>`
+      : elsewhere.length
+        ? `<p class="info">Not posted to ${esc(DEST_LABEL[dest] || dest)} yet. Previously posted to ${elsewhere.map((d) => this._sendPhrase(d, sends[d])).join('; ')}.</p>`
+        : '';
     const fwdState = this._result?.forwarded
       ? (this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : ' Forwarded to the secondary channel.')
       : '';
@@ -241,7 +279,7 @@ class GbtiSyndicateNow extends GbtiElement {
         if (this._forwardId && this._forwardId !== this._channelId) payload.forwardChannelId = this._forwardId;
       }
       this._result = await this.client.syndicateNow(payload);
-      this._prior = [...(this._prior || []), { status: 'sent', sentAt: Date.now() }];
+      this._prior = [...(this._prior || []), { status: 'sent', sentAt: Date.now(), trigger: 'manual', channels: { [this._dest]: { status: 'sent' } } }];
     } catch (err) {
       this._err = err?.message || 'The post failed.';
     }
