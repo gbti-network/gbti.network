@@ -20,6 +20,19 @@
 
 import http from 'node:http';
 import readline from 'node:readline';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// The owner's credential store is the gitignored repo-root .env: load it so the flow needs no prompts.
+// Only fills variables that are not already set; simple KEY=VALUE lines, # comments ignored.
+try {
+  const envPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.env');
+  for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
+    if (m && !line.trim().startsWith('#') && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+} catch { /* no .env: the prompts below cover it */ }
 
 const PORT = 8976;
 const REDIRECT = `http://localhost:${PORT}/callback`;
