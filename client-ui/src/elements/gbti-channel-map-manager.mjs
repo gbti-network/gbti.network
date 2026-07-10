@@ -9,7 +9,7 @@
 // client (the SOW-070 upgrade race).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck } from '../workspace-core.mjs';
-import './gbti-syndication-tracker.mjs'; // SOW-088: the Publishing Activity kanban nests inside this workspace
+import './gbti-syndication-tracker.mjs'; // SOW-088: the Publishing Activity datatable nests inside this workspace
 
 const AMBER = '#d8901a';
 
@@ -21,7 +21,7 @@ const CSS = `
 
   /* sticky subnav + scrollspy */
   .subnav { position:sticky; top:0; z-index:5; display:flex; gap:4px; overflow-x:auto; margin:0 0 16px;
-    background:var(--panel); border:1.5px solid var(--line); border-radius:10px; padding:2px 6px; }
+    background:var(--panel); border:1.5px solid var(--line); border-radius:7px; padding:2px 6px; }
   .subnav a { padding:11px 13px; font-size:13px; font-weight:600; color:var(--muted); border-bottom:2px solid transparent;
     white-space:nowrap; text-decoration:none; display:inline-flex; align-items:center; gap:7px; cursor:pointer; }
   .subnav a:hover { color:var(--fg); }
@@ -32,10 +32,10 @@ const CSS = `
   .intro b { color:var(--fg); }
 
   /* section cards */
-  section.card { background:var(--panel); border:1.5px solid var(--line); border-radius:12px; overflow:hidden;
+  section.card { background:var(--panel); border:1.5px solid var(--line); border-radius:7px; overflow:hidden;
     margin:0 0 20px; scroll-margin-top:64px; }
   .card-h { display:flex; align-items:center; gap:14px; padding:18px 22px; border-bottom:1.5px solid var(--line); }
-  .card-h .hi { width:38px; height:38px; border-radius:8px; background:rgba(31,158,95,.12); border:1px solid rgba(31,158,95,.3);
+  .card-h .hi { width:38px; height:38px; border-radius:7px; background:rgba(31,158,95,.12); border:1px solid rgba(31,158,95,.3);
     display:flex; align-items:center; justify-content:center; color:var(--accent); flex:none; }
   .card-h .hi svg { width:19px; height:19px; }
   .card-h h2 { font-family:var(--font-display, inherit); font-weight:700; font-size:17px; margin:0; }
@@ -59,7 +59,7 @@ const CSS = `
   .field { display:flex; flex-direction:column; gap:6px; min-width:0; }
   .field > label { font-family:var(--font-mono, monospace); font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
   .field .hint { font-size:12px; color:var(--muted); line-height:1.4; }
-  .ctrl { width:100%; box-sizing:border-box; background:var(--bg); border:1.5px solid var(--line); border-radius:8px; color:var(--fg);
+  .ctrl { width:100%; box-sizing:border-box; background:var(--bg); border:1.5px solid var(--line); border-radius:7px; color:var(--fg);
     font:inherit; font-size:13.5px; padding:10px 12px; outline:none; }
   .ctrl:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(31,158,95,.18); }
   textarea.ctrl { resize:vertical; min-height:46px; font-family:var(--font-mono, monospace); font-size:12.5px; line-height:1.5; }
@@ -68,7 +68,7 @@ const CSS = `
   .sfxwrap input.ctrl { padding-right:74px; }
 
   .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; font:inherit; font-weight:600; font-size:13px;
-    padding:8px 14px; border-radius:8px; border:1.5px solid transparent; cursor:pointer; white-space:nowrap; }
+    padding:8px 14px; border-radius:7px; border:1.5px solid transparent; cursor:pointer; white-space:nowrap; }
   .btn svg { width:14px; height:14px; }
   .btn-primary { background:var(--brand); color:#fff; }
   .btn-primary[disabled] { background:var(--hover); color:var(--muted); cursor:default; }
@@ -77,7 +77,7 @@ const CSS = `
 
   /* destination chips */
   .chgroup { display:flex; flex-wrap:wrap; gap:10px; }
-  .chan { display:inline-flex; align-items:center; gap:9px; padding:8px 13px; border-radius:8px; border:1.5px solid var(--line);
+  .chan { display:inline-flex; align-items:center; gap:9px; padding:8px 13px; border-radius:7px; border:1.5px solid var(--line);
     background:var(--bg); cursor:pointer; user-select:none; font-size:13px; font-weight:600; color:var(--muted); }
   .chan .cbx { width:15px; height:15px; border-radius:4px; border:1.5px solid var(--muted); display:flex; align-items:center; justify-content:center; flex:none; }
   .chan .cbx svg { width:10px; height:10px; color:#fff; opacity:0; }
@@ -90,9 +90,9 @@ const CSS = `
   /* branded channel tiles */
   .chtiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(106px, 1fr)); gap:10px; }
   .chtile { position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; padding:15px 8px 12px;
-    border-radius:12px; border:1.5px solid var(--line); background:var(--bg); cursor:pointer; text-align:center; font:inherit; }
+    border-radius:7px; border:1.5px solid var(--line); background:var(--bg); cursor:pointer; text-align:center; font:inherit; }
   .chtile:hover:not(.soon) { border-color:var(--muted); }
-  .chtile .ct-i { width:42px; height:42px; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; }
+  .chtile .ct-i { width:42px; height:42px; border-radius:7px; display:flex; align-items:center; justify-content:center; color:#fff; }
   .chtile .ct-i svg { width:24px; height:24px; }
   .chtile .ct-n { font-weight:700; font-size:13px; color:var(--fg); }
   .chtile .ct-s { font-family:var(--font-mono, monospace); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
@@ -127,7 +127,7 @@ const CSS = `
 
   /* word lists */
   .termtabs { display:flex; gap:8px; margin-bottom:14px; }
-  .termtab { padding:7px 13px; border-radius:8px; border:1.5px solid var(--line); background:var(--bg); color:var(--muted);
+  .termtab { padding:7px 13px; border-radius:7px; border:1.5px solid var(--line); background:var(--bg); color:var(--muted);
     font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; }
   .termtab .ct { font-family:var(--font-mono, monospace); font-size:11px; background:var(--hover); padding:1px 7px; border-radius:999px; }
   .termtab.on { border-color:var(--brand); color:var(--fg); background:rgba(31,158,95,.08); }
@@ -136,7 +136,7 @@ const CSS = `
   .searchwrap svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); width:14px; height:14px; color:var(--muted); }
   .searchwrap input { padding-left:32px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; min-height:20px; }
-  .term { display:inline-flex; align-items:center; gap:7px; padding:5px 7px 5px 11px; border-radius:8px; background:var(--bg);
+  .term { display:inline-flex; align-items:center; gap:7px; padding:5px 7px 5px 11px; border-radius:7px; background:var(--bg);
     border:1.5px solid var(--line); font-size:12.5px; color:var(--fg); }
   .term.hidden { display:none; }
   .term .x { width:18px; height:18px; border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer;
@@ -252,12 +252,12 @@ class GbtiChannelMapManager extends GbtiElement {
     return `<span class="pill${dirty ? ' dirty' : ''}" data-pillbox><span class="dot"></span>${dirty ? 'Unsaved changes' : 'Saved'}</span>`;
   }
 
-  // SOW-088: the Publishing Activity kanban (the former standalone Syndication tab). The nested tracker
+  // SOW-088: the Publishing Activity datatable (the former standalone Syndication tab). The nested tracker
   // reads the shared client registry, so composition needs no wiring here.
   _activityCard() {
     return `<section class="card" id="sec-activity" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-kanban"/></svg></span>
-        <div><h2>Publishing Activity</h2><p>The cross-posting queue and its delivery status, one column per state.</p></div></div>
+        <div><h2>Publishing Activity</h2><p>The cross-posting queue and its delivery status, filterable by state, type, and trigger.</p></div></div>
       <div class="card-b"><gbti-syndication-tracker></gbti-syndication-tracker></div>
     </section>`;
   }

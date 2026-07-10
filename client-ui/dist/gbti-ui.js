@@ -5867,54 +5867,59 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/elements/gbti-syndication-tracker.mjs
   var CSS15 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
-  .hint { color:var(--muted); font-size:12px; margin:0 0 12px; }
-  .msg { font-size:13px; color:var(--accent); margin:6px 0 12px; }
+  .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
+  .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
   .msg.err { color:var(--danger, #e06c6c); }
   .muted { color:var(--muted); font-size:13.5px; }
   .busy { opacity:.55; pointer-events:none; }
 
-  /* kanban board */
-  .kb { display:grid; grid-auto-flow:column; grid-auto-columns:minmax(230px, 1fr); gap:12px; overflow-x:auto; padding-bottom:6px; align-items:start; }
-  .kcol { background:var(--bg); border:1.5px solid var(--line); border-radius:10px; min-width:0; }
-  .kcol-h { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1.5px solid var(--line); }
-  .kcol-h .kdot { width:8px; height:8px; border-radius:50%; flex:none; }
-  .kcol-h .kn { font-family:var(--font-mono, monospace); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:700; }
-  .kcol-h .kc { margin-left:auto; font-family:var(--font-mono, monospace); font-size:11px; background:var(--hover); border-radius:999px; padding:1px 8px; color:var(--muted); }
-  .kcol[data-k="pending"] .kdot { background:#d8901a; }
-  .kcol[data-k="approved"] .kdot { background:#3f74d6; }
-  .kcol[data-k="sent"] .kdot { background:var(--brand); }
-  .kcol[data-k="failed"] .kdot { background:var(--danger, #e06c6c); }
-  .kcol[data-k="cancelled"] .kdot { background:var(--muted); }
-  .kcards { padding:10px; display:flex; flex-direction:column; gap:10px; max-height:520px; overflow-y:auto; }
-  .kempty { font-family:var(--font-mono, monospace); font-size:11.5px; color:var(--muted); padding:6px 2px 10px; text-align:center; }
+  /* filter bar */
+  .fbar { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 10px; }
+  /* the shared BASE_CSS widens every select/input to 100%; the filter bar wants natural inline widths */
+  .fbar select, .fbar input { width:auto; font:inherit; font-size:12.5px; color:var(--fg); background:var(--bg);
+    border:1.5px solid var(--line); border-radius:7px; padding:6px 9px; outline:none; }
+  .fbar select:focus, .fbar input:focus { border-color:var(--brand); }
+  .fbar input { flex:1; min-width:140px; }
+  .fbar .count { align-self:center; font-family:var(--font-mono, monospace); font-size:11px; color:var(--muted); margin-left:auto; }
 
-  .kcard { background:var(--panel); border:1.5px solid var(--line); border-radius:10px; padding:11px 12px; }
-  .kcard .top { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px; }
-  .src { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:1px 7px; }
-  .manual { font-size:9.5px; font-weight:800; letter-spacing:.05em; color:#d8901a; border:1px solid #d8901a; border-radius:3px; padding:1px 5px; }
-  .flag { font-size:10px; font-weight:700; color:#8a5a00; background:rgba(240,170,20,.18); border:1px solid rgba(240,170,20,.5); border-radius:6px; padding:1px 6px; }
-  .cat { font-size:10.5px; color:var(--muted); }
-  .kcard b.ti { display:block; font-size:13px; line-height:1.35; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
-  .kcard .d { font-size:11px; color:var(--muted); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .chs { display:flex; gap:4px; flex-wrap:wrap; margin-top:7px; }
-  .ch { font-size:10.5px; border-radius:999px; padding:1px 7px; border:1px solid var(--line); color:var(--muted); text-decoration:none; }
+  /* the datatable: low padding, dense rows */
+  .twrap { border:1.5px solid var(--line); border-radius:7px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  thead th { font-family:var(--font-mono, monospace); font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--muted); text-align:left; font-weight:700; padding:7px 10px; border-bottom:1.5px solid var(--line);
+    background:var(--hover); white-space:nowrap; }
+  tbody td { padding:6px 10px; border-top:1px solid var(--line); vertical-align:middle; }
+  tbody tr:first-child td { border-top:0; }
+  tbody tr:hover td { background:var(--hover); }
+  td.ti { max-width:340px; }
+  td.ti .t { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; max-width:340px; }
+  td.ti a.t { color:var(--fg); text-decoration:none; }
+  td.ti a.t:hover { color:var(--accent); }
+  td.ti .r { font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; max-width:340px; }
+  .st { display:inline-flex; align-items:center; gap:6px; font-family:var(--font-mono, monospace); font-size:10.5px;
+    letter-spacing:.04em; text-transform:uppercase; color:var(--muted); white-space:nowrap; }
+  .st .dot { width:7px; height:7px; border-radius:50%; flex:none; }
+  .st-pending .dot { background:#d8901a; } .st-approved .dot { background:#3f74d6; }
+  .st-sent .dot { background:var(--brand); } .st-failed .dot { background:var(--danger, #e06c6c); }
+  .st-cancelled .dot { background:var(--muted); }
+  .src { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);
+    border:1px solid var(--line); border-radius:999px; padding:1px 7px; white-space:nowrap; }
+  .manual { font-size:9.5px; font-weight:800; letter-spacing:.05em; color:#d8901a; border:1px solid #d8901a; border-radius:3px; padding:0 4px; margin-left:5px; }
+  .flag { font-size:10px; font-weight:700; color:#8a5a00; background:rgba(240,170,20,.18); border:1px solid rgba(240,170,20,.5); border-radius:5px; padding:0 5px; margin-left:5px; }
+  .chs { display:flex; gap:4px; flex-wrap:wrap; }
+  .ch { font-size:10px; border-radius:999px; padding:0 6px; border:1px solid var(--line); color:var(--muted); text-decoration:none; white-space:nowrap; }
   .ch.sent { color:var(--accent); border-color:var(--accent); } .ch.failed { color:var(--danger, #e06c6c); border-color:var(--danger, #e06c6c); }
   .ch.skipped { opacity:.7; }
-  .acts { display:flex; gap:8px; margin-top:9px; }
-  .approve { flex:1; font:inherit; font-size:12px; font-weight:700; color:#fff; background:var(--brand); border:1px solid var(--brand); border-radius:7px; padding:6px 10px; cursor:pointer; }
+  td.wh { font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.ac { white-space:nowrap; text-align:right; }
+  .approve { font:inherit; font-size:11.5px; font-weight:700; color:#fff; background:var(--brand); border:1px solid var(--brand); border-radius:7px; padding:4px 10px; cursor:pointer; }
   .approve:hover { filter:brightness(1.06); }
-  .cancel { flex:1; font:inherit; font-size:12px; font-weight:600; color:var(--danger, #e06c6c); background:none; border:1px solid var(--line); border-radius:7px; padding:6px 10px; cursor:pointer; }
+  .cancel { font:inherit; font-size:11.5px; font-weight:600; color:var(--danger, #e06c6c); background:none; border:1px solid var(--line); border-radius:7px; padding:4px 10px; cursor:pointer; margin-left:6px; }
   .cancel:hover { border-color:var(--danger, #e06c6c); }
-  .when { font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums; margin-top:7px; }
+  .empty { padding:14px 10px; font-family:var(--font-mono, monospace); font-size:11.5px; color:var(--muted); text-align:center; }
 `;
   var SRC_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
-  var COLUMNS = [
-    { key: "pending", label: "Pending approval", mode: "pending" },
-    { key: "approved", label: "Approved", mode: "approved" },
-    { key: "sent", label: "Sent", mode: "done" },
-    { key: "failed", label: "Failed", mode: "done" },
-    { key: "cancelled", label: "Cancelled", mode: "done" }
-  ];
+  var STATUSES = ["pending", "approved", "sent", "failed", "cancelled"];
   var GbtiSyndicationTracker = class extends GbtiElement {
     // SOW-070 fix: in static admin markup this upgrades BEFORE the host injects the client. render() retries
     // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load().
@@ -5924,6 +5929,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._msg = "";
       this._err = false;
       this._busy = false;
+      this._fStatus = this._fStatus || "all";
+      this._fType = this._fType || "all";
+      this._fTrigger = this._fTrigger || "all";
+      this._fQ = this._fQ || "";
     }
     async load() {
       if (!this.client) {
@@ -5941,13 +5950,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._loading = false;
       this.render();
     }
+    /** Merge the buckets into one list with a status field, newest activity first. */
+    _rows() {
+      const d = this._data || {};
+      const all = [];
+      for (const st of STATUSES) for (const it of Array.isArray(d[st]) ? d[st] : []) all.push({ ...it, _st: st });
+      all.sort((a, b) => (b.sentAt || b.cancelledAt || b.enqueuedAt || 0) - (a.sentAt || a.cancelledAt || a.enqueuedAt || 0));
+      const q = this._fQ.trim().toLowerCase();
+      return all.filter((it) => (this._fStatus === "all" || it._st === this._fStatus) && (this._fType === "all" || it.source === this._fType) && (this._fTrigger === "all" || (this._fTrigger === "manual" ? it.trigger === "manual" : it.trigger !== "manual")) && (!q || String(it.title || it.targetSlug || "").toLowerCase().includes(q)));
+    }
     render() {
       if (!this.client) {
         this.set(this.css(CSS15) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS15) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent);flex:none">Retry</button>`);
+        this.set(this.css(CSS15) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -5959,45 +5977,61 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS15) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
-      const d = this._data;
+      const rows = this._rows();
+      const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(label)}</option>`;
+      const body = rows.map((it) => this._row(it)).join("");
       this.set(this.css(CSS15) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
-      <div class="kb">${COLUMNS.map((c) => this._column(c, d[c.key])).join("")}</div>
+      <div class="fbar">
+        <select data-f="status" aria-label="Filter by status">${opt("all", "All statuses", this._fStatus)}${STATUSES.map((s) => opt(s, s[0].toUpperCase() + s.slice(1), this._fStatus)).join("")}</select>
+        <select data-f="type" aria-label="Filter by type">${opt("all", "All types", this._fType)}${Object.entries(SRC_LABEL).map(([v, l]) => opt(v, l, this._fType)).join("")}</select>
+        <select data-f="trigger" aria-label="Filter by trigger">${opt("all", "Manual + auto", this._fTrigger)}${opt("manual", "Manual only", this._fTrigger)}${opt("auto", "Auto only", this._fTrigger)}</select>
+        <input data-f="q" type="search" placeholder="Search titles" value="${esc(this._fQ)}" aria-label="Search titles" />
+        <span class="count">${rows.length} item${rows.length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="twrap"><table>
+        <thead><tr><th>Status</th><th>Type</th><th>Item</th><th>Channels</th><th>When</th><th></th></tr></thead>
+        <tbody>${body || `<tr><td colspan="6"><div class="empty">Nothing matches the filters.</div></td></tr>`}</tbody>
+      </table></div>
     </div>`);
+      this.$$("[data-f]").forEach((el) => el.addEventListener(el.dataset.f === "q" ? "input" : "change", () => {
+        if (el.dataset.f === "status") this._fStatus = el.value;
+        else if (el.dataset.f === "type") this._fType = el.value;
+        else if (el.dataset.f === "trigger") this._fTrigger = el.value;
+        else this._fQ = el.value;
+        const focusQ = el.dataset.f === "q";
+        this.render();
+        if (focusQ) {
+          const q = this.$('[data-f="q"]');
+          if (q) {
+            q.focus();
+            q.setSelectionRange(q.value.length, q.value.length);
+          }
+        }
+      }));
       this.$$("[data-approve]").forEach((b) => b.addEventListener("click", () => this._approve(b.dataset.approve)));
       this.$$("[data-cancel]").forEach((b) => b.addEventListener("click", () => this._cancel(b.dataset.cancel)));
     }
-    _column({ key, label, mode }, items) {
-      const list = Array.isArray(items) ? items : [];
-      const cards = list.map((it) => this._card(it, mode)).join("");
-      return `<div class="kcol" data-k="${esc(key)}">
-      <div class="kcol-h"><span class="kdot"></span><span class="kn">${esc(label)}</span><span class="kc">${list.length}</span></div>
-      <div class="kcards">${cards || `<div class="kempty">— empty —</div>`}</div>
-    </div>`;
-    }
-    _card(it, mode) {
-      const src = SRC_LABEL[it.source] || it.source || "";
+    _row(it) {
+      const st = it._st;
       const title = it.title || it.targetSlug || it.id || "(untitled)";
       const manual = it.trigger === "manual" ? `<span class="manual">MANUAL${it.manualBy ? ` · ${esc(String(it.manualBy))}` : ""}</span>` : "";
       const flags = Array.isArray(it.flags) && it.flags.length ? it.flags.map((f) => `<span class="flag">⚠ ${esc(f)}</span>`).join("") : "";
-      const cat = it.category ? `<span class="cat">#${esc(it.category)}</span>` : "";
       const when = it.sentAt || it.cancelledAt || it.enqueuedAt;
-      const whenLine = when ? `<div class="when">${esc(new Date(when).toLocaleString())}</div>` : "";
-      const reason = it.cancelReason ? `<div class="d">${esc(it.cancelReason)}</div>` : "";
-      let tail = "";
-      if (mode === "pending") {
-        tail = `<div class="acts"><button class="approve" data-approve="${esc(it.id)}" type="button">Approve</button><button class="cancel" data-cancel="${esc(it.id)}" type="button">Reject</button></div>`;
-      } else if (mode === "approved") {
-        tail = `<div class="acts"><button class="cancel" data-cancel="${esc(it.id)}" type="button">Cancel</button></div>`;
-      } else {
-        tail = `<div class="chs">${this._channels(it.perChannel)}</div>`;
-      }
-      return `<div class="kcard">
-      <div class="top"><span class="src">${esc(src)}</span>${manual}${flags}${cat}</div>
-      <b class="ti">${esc(title)}</b>
-      ${it.url ? `<div class="d">${esc(it.url)}</div>` : ""}${reason}${tail}${whenLine}
-    </div>`;
+      const sub = it.cancelReason || it.url || "";
+      let actions = "";
+      if (st === "pending") actions = `<button class="approve" data-approve="${esc(it.id)}" type="button">Approve</button><button class="cancel" data-cancel="${esc(it.id)}" type="button">Reject</button>`;
+      else if (st === "approved") actions = `<button class="cancel" data-cancel="${esc(it.id)}" type="button" style="margin-left:0">Cancel</button>`;
+      const t = it.url ? `<a class="t" href="${esc(it.url)}" target="_blank" rel="noopener">${esc(title)}</a>` : `<span class="t">${esc(title)}</span>`;
+      return `<tr>
+      <td><span class="st st-${esc(st)}"><span class="dot"></span>${esc(st)}</span></td>
+      <td><span class="src">${esc(SRC_LABEL[it.source] || it.source || "")}</span></td>
+      <td class="ti">${t}${manual}${flags}${sub ? `<span class="r">${esc(sub)}</span>` : ""}</td>
+      <td><span class="chs">${this._channels(it.perChannel)}</span></td>
+      <td class="wh">${when ? esc(new Date(when).toLocaleString()) : ""}</td>
+      <td class="ac">${actions}</td>
+    </tr>`;
     }
     _channels(perChannel) {
       if (!perChannel || typeof perChannel !== "object") return "";
@@ -6050,7 +6084,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   /* sticky subnav + scrollspy */
   .subnav { position:sticky; top:0; z-index:5; display:flex; gap:4px; overflow-x:auto; margin:0 0 16px;
-    background:var(--panel); border:1.5px solid var(--line); border-radius:10px; padding:2px 6px; }
+    background:var(--panel); border:1.5px solid var(--line); border-radius:7px; padding:2px 6px; }
   .subnav a { padding:11px 13px; font-size:13px; font-weight:600; color:var(--muted); border-bottom:2px solid transparent;
     white-space:nowrap; text-decoration:none; display:inline-flex; align-items:center; gap:7px; cursor:pointer; }
   .subnav a:hover { color:var(--fg); }
@@ -6061,10 +6095,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .intro b { color:var(--fg); }
 
   /* section cards */
-  section.card { background:var(--panel); border:1.5px solid var(--line); border-radius:12px; overflow:hidden;
+  section.card { background:var(--panel); border:1.5px solid var(--line); border-radius:7px; overflow:hidden;
     margin:0 0 20px; scroll-margin-top:64px; }
   .card-h { display:flex; align-items:center; gap:14px; padding:18px 22px; border-bottom:1.5px solid var(--line); }
-  .card-h .hi { width:38px; height:38px; border-radius:8px; background:rgba(31,158,95,.12); border:1px solid rgba(31,158,95,.3);
+  .card-h .hi { width:38px; height:38px; border-radius:7px; background:rgba(31,158,95,.12); border:1px solid rgba(31,158,95,.3);
     display:flex; align-items:center; justify-content:center; color:var(--accent); flex:none; }
   .card-h .hi svg { width:19px; height:19px; }
   .card-h h2 { font-family:var(--font-display, inherit); font-weight:700; font-size:17px; margin:0; }
@@ -6088,7 +6122,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .field { display:flex; flex-direction:column; gap:6px; min-width:0; }
   .field > label { font-family:var(--font-mono, monospace); font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
   .field .hint { font-size:12px; color:var(--muted); line-height:1.4; }
-  .ctrl { width:100%; box-sizing:border-box; background:var(--bg); border:1.5px solid var(--line); border-radius:8px; color:var(--fg);
+  .ctrl { width:100%; box-sizing:border-box; background:var(--bg); border:1.5px solid var(--line); border-radius:7px; color:var(--fg);
     font:inherit; font-size:13.5px; padding:10px 12px; outline:none; }
   .ctrl:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(31,158,95,.18); }
   textarea.ctrl { resize:vertical; min-height:46px; font-family:var(--font-mono, monospace); font-size:12.5px; line-height:1.5; }
@@ -6097,7 +6131,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .sfxwrap input.ctrl { padding-right:74px; }
 
   .btn { display:inline-flex; align-items:center; justify-content:center; gap:7px; font:inherit; font-weight:600; font-size:13px;
-    padding:8px 14px; border-radius:8px; border:1.5px solid transparent; cursor:pointer; white-space:nowrap; }
+    padding:8px 14px; border-radius:7px; border:1.5px solid transparent; cursor:pointer; white-space:nowrap; }
   .btn svg { width:14px; height:14px; }
   .btn-primary { background:var(--brand); color:#fff; }
   .btn-primary[disabled] { background:var(--hover); color:var(--muted); cursor:default; }
@@ -6106,7 +6140,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   /* destination chips */
   .chgroup { display:flex; flex-wrap:wrap; gap:10px; }
-  .chan { display:inline-flex; align-items:center; gap:9px; padding:8px 13px; border-radius:8px; border:1.5px solid var(--line);
+  .chan { display:inline-flex; align-items:center; gap:9px; padding:8px 13px; border-radius:7px; border:1.5px solid var(--line);
     background:var(--bg); cursor:pointer; user-select:none; font-size:13px; font-weight:600; color:var(--muted); }
   .chan .cbx { width:15px; height:15px; border-radius:4px; border:1.5px solid var(--muted); display:flex; align-items:center; justify-content:center; flex:none; }
   .chan .cbx svg { width:10px; height:10px; color:#fff; opacity:0; }
@@ -6119,9 +6153,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   /* branded channel tiles */
   .chtiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(106px, 1fr)); gap:10px; }
   .chtile { position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; padding:15px 8px 12px;
-    border-radius:12px; border:1.5px solid var(--line); background:var(--bg); cursor:pointer; text-align:center; font:inherit; }
+    border-radius:7px; border:1.5px solid var(--line); background:var(--bg); cursor:pointer; text-align:center; font:inherit; }
   .chtile:hover:not(.soon) { border-color:var(--muted); }
-  .chtile .ct-i { width:42px; height:42px; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; }
+  .chtile .ct-i { width:42px; height:42px; border-radius:7px; display:flex; align-items:center; justify-content:center; color:#fff; }
   .chtile .ct-i svg { width:24px; height:24px; }
   .chtile .ct-n { font-weight:700; font-size:13px; color:var(--fg); }
   .chtile .ct-s { font-family:var(--font-mono, monospace); font-size:9.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
@@ -6156,7 +6190,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   /* word lists */
   .termtabs { display:flex; gap:8px; margin-bottom:14px; }
-  .termtab { padding:7px 13px; border-radius:8px; border:1.5px solid var(--line); background:var(--bg); color:var(--muted);
+  .termtab { padding:7px 13px; border-radius:7px; border:1.5px solid var(--line); background:var(--bg); color:var(--muted);
     font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:8px; }
   .termtab .ct { font-family:var(--font-mono, monospace); font-size:11px; background:var(--hover); padding:1px 7px; border-radius:999px; }
   .termtab.on { border-color:var(--brand); color:var(--fg); background:rgba(31,158,95,.08); }
@@ -6165,7 +6199,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .searchwrap svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); width:14px; height:14px; color:var(--muted); }
   .searchwrap input { padding-left:32px; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; min-height:20px; }
-  .term { display:inline-flex; align-items:center; gap:7px; padding:5px 7px 5px 11px; border-radius:8px; background:var(--bg);
+  .term { display:inline-flex; align-items:center; gap:7px; padding:5px 7px 5px 11px; border-radius:7px; background:var(--bg);
     border:1.5px solid var(--line); font-size:12.5px; color:var(--fg); }
   .term.hidden { display:none; }
   .term .x { width:18px; height:18px; border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer;
@@ -6274,12 +6308,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _pill(dirty) {
       return `<span class="pill${dirty ? " dirty" : ""}" data-pillbox><span class="dot"></span>${dirty ? "Unsaved changes" : "Saved"}</span>`;
     }
-    // SOW-088: the Publishing Activity kanban (the former standalone Syndication tab). The nested tracker
+    // SOW-088: the Publishing Activity datatable (the former standalone Syndication tab). The nested tracker
     // reads the shared client registry, so composition needs no wiring here.
     _activityCard() {
       return `<section class="card" id="sec-activity" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-kanban"/></svg></span>
-        <div><h2>Publishing Activity</h2><p>The cross-posting queue and its delivery status, one column per state.</p></div></div>
+        <div><h2>Publishing Activity</h2><p>The cross-posting queue and its delivery status, filterable by state, type, and trigger.</p></div></div>
       <div class="card-b"><gbti-syndication-tracker></gbti-syndication-tracker></div>
     </section>`;
     }
