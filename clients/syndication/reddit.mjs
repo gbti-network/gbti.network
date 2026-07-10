@@ -6,8 +6,8 @@
 //   2. POST https://oauth.reddit.com/api/submit with Bearer + Reddit's REQUIRED User-Agent, kind=link
 //      (sr, title, url). Improvement over Radle: `api_type: 'json'` makes the response clean JSON
 //      (json.data.id/url) instead of the legacy jquery-array walk.
-// A url-less item posts kind=self with the text as the body. A LINK post's bodyText posts as the FIRST
-// COMMENT (/api/submit drops `text` on kind=link), the original Radle pattern. Thin injectable-fetch client; no SDK.
+// A url-less item posts kind=self with the text as the body; a LINK post carries its bodyText natively
+// (field-proven: /api/submit stores `text` as selftext on kind=link). Thin injectable-fetch client; no SDK.
 //
 // Secrets: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_REFRESH_TOKEN, REDDIT_SUBREDDIT. Mint/renew the
 // refresh token with scripts/reddit-auth.mjs (the app's redirect URI must be localhost:8976/callback).
@@ -42,11 +42,13 @@ export function createRedditAdapter({ env = {}, fetchImpl = globalThis.fetch } =
       catch (err) { return { ok: false, error: err.message }; }
       const params = { sr: String(env.REDDIT_SUBREDDIT || ''), title, api_type: 'json', resubmit: 'true' };
       // Radle-style post kinds: an explicit item.redditKind wins ('self' = a text post whose body is the
-      // Worker-rendered item.bodyText); the default stays a LINK post (its bodyText becomes the first
-      // comment below, never a submit param).
+      // Worker-rendered item.bodyText); the default stays a LINK post. Reddit's /api/submit DOES accept
+      // body text on kind=link (field-proven 2026-07-10 by post 1u35tf7, selftext stored on the link post;
+      // the earlier body-less test was a stale-extension-background miss, not an API limit), so the body
+      // rides natively on the post instead of a first comment.
       const self = item.redditKind === 'self' || !item.url; // no url can never be a link post
       if (self) { params.kind = 'self'; params.text = String(item.bodyText || item.url || ''); }
-      else { params.kind = 'link'; params.url = String(item.url); }
+      else { params.kind = 'link'; params.url = String(item.url); if (item.bodyText) params.text = String(item.bodyText); }
       const res = await fetchImpl('https://oauth.reddit.com/api/submit', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
@@ -62,26 +64,6 @@ export function createRedditAdapter({ env = {}, fetchImpl = globalThis.fetch } =
       const id = body?.json?.data?.id || body?.json?.data?.name || null;
       const url = body?.json?.data?.url || null;
       const out = { ok: true, id, url };
-      // A LINK post's body: /api/submit silently DROPS `text` on kind=link (field-proven; body-on-link is
-      // not exposed there), so the body posts as the FIRST COMMENT on the new post — the original Radle
-      // pattern. Fail-soft: a comment miss never un-sends the post; it is surfaced on the result.
-      if (!self && item.bodyText && id) {
-        const thing = String(body?.json?.data?.name || (String(id).startsWith('t3_') ? id : `t3_${id}`));
-        try {
-          const cRes = await fetchImpl('https://oauth.reddit.com/api/comment', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
-            body: new URLSearchParams({ api_type: 'json', thing_id: thing, text: String(item.bodyText) }).toString(),
-          });
-          const cBody = await cRes.json().catch(() => ({}));
-          const cErrors = cBody?.json?.errors;
-          out.comment = (cRes.ok && !(Array.isArray(cErrors) && cErrors.length))
-            ? { id: cBody?.json?.data?.things?.[0]?.data?.id ?? null }
-            : { error: `reddit comment ${Array.isArray(cErrors) && cErrors.length ? cErrors[0].join(' ') : `status ${cRes.status}`}`.slice(0, 160) };
-        } catch (err) {
-          out.comment = { error: (err?.message || 'reddit comment failed').slice(0, 160) };
-        }
-      }
       return out;
     },
   };

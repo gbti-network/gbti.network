@@ -13604,14 +13604,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <label>Body preview</label>
         <div class="preview" data-reddit-body-preview>${esc(bodyPreview)}</div>`;
       }
-      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the FIRST COMMENT (Reddit link posts cannot carry a body via the API)"}.</p>` : "";
+      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body"}.</p>` : "";
       const sends = this._destSends();
       const here = sends[dest];
       const elsewhere = Object.keys(sends).filter((d) => d !== dest);
       const prior = here ? `<p class="warn">Already posted to ${this._sendPhrase(dest, here)}. Publishing again posts a duplicate there.</p>` : elsewhere.length ? `<p class="info">Not posted to ${esc(DEST_LABEL[dest] || dest)} yet. Previously posted to ${elsewhere.map((d) => this._sendPhrase(d, sends[d])).join("; ")}.</p>` : "";
-      const cmtState = this._result?.comment ? this._result.comment.error ? ` The body comment failed: ${esc(this._result.comment.error)}.` : " The body posted as the first comment." : "";
       const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
-      const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}${fwdState}${cmtState}</p>` : "";
+      const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}${fwdState}</p>` : "";
       return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
       <textarea data-template>${esc(template)}</textarea>
