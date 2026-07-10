@@ -65,7 +65,10 @@ test('renderTemplate sanitizes every author-controlled variable (never a mass me
 
 test('renderTemplate: unknown tokens render empty, case-insensitive names, truncation applies', () => {
   assert.equal(renderTemplate('A {nope} B', {}), 'A B');
-  assert.equal(renderTemplate('{TITLE}!', { title: 'Hi' }), 'Hi!');
+  // Intended change (SOW-088, owner-directed): an ALL-CAPS token now UPPERCASES its value; mixed case
+  // still resolves case-insensitively without shifting.
+  assert.equal(renderTemplate('{TITLE}!', { title: 'Hi' }), 'HI!');
+  assert.equal(renderTemplate('{Title}!', { title: 'Hi' }), 'Hi!');
   const long = renderTemplate('{title}', { title: 'x'.repeat(50) }, { limit: 10 });
   assert.equal(long.length, 10);
 });
@@ -117,4 +120,13 @@ test('{short-description} renders the blurb and sanitizes mentions', () => {
   assert.equal(renderTemplate('{short-description}', { source: 'prompt', blurb: 'A drop-in /sow skill.' }, { limit: 300 }), 'A drop-in /sow skill.');
   assert.equal(renderTemplate('x {short-description}', { source: 'prompt' }, { limit: 300 }), 'x');
   assert.match(renderTemplate('{short-description}', { source: 'prompt', blurb: 'hey @everyone' }, { limit: 300 }), /@.everyone/);
+});
+
+// SOW-088: a token written in ALL CAPS uppercases its value; a resolved <@id> mention never case-shifts
+// (Discord mention syntax is case-sensitive), and lowercase/hyphenated forms stay as-is.
+test('ALL-CAPS tokens uppercase their value, mentions excluded', () => {
+  const item = { source: 'prompt', title: 'My Skill', author: 'atwellpub', mention: '<@123>' };
+  assert.equal(renderTemplate('{TITLE} [{CONTENT-TYPE}]', item, { limit: 300 }), 'MY SKILL [PROMPT]');
+  assert.equal(renderTemplate('{title} [{content-type}]', item, { limit: 300 }), 'My Skill [prompt]');
+  assert.equal(renderTemplate('{MEMBER-DISCORD-USERNAME}', item, { limit: 300 }), '<@123>', 'a mention is never uppercased');
 });

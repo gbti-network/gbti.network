@@ -40,6 +40,7 @@ function truncate(text, limit) {
  *   {author}         the @login text (sanitized, never pings)
  *   {member-url}     the member's public profile URL (gbti.network/members/<login>/)
  *   {short-description}  the item's shortDescription (carried as the queue item blurb)
+ *   A token written in ALL CAPS uppercases its value: {CONTENT-TYPE} -> "PROMPT" (mentions excluded).
  *   {shareurl} {url} the item's link
  *   {title} {category}  the item metadata
  * Every substitution EXCEPT the validated `<@id>` mention passes through sanitizeMentions, so an
@@ -73,9 +74,14 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
     memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : '', // {member-url}: the public profile
     shortdescription: sanitizeMentions(item.blurb || ''), // {short-description}: the item's shortDescription (the queue item's blurb)
   };
-  // Hyphenated token names ({member-discord-username}, {content-type}) normalize to the same key.
+  // Hyphenated token names ({member-discord-username}, {content-type}) normalize to the same key, and a
+  // token written in ALL CAPS uppercases its value ({CONTENT-TYPE} -> "PROMPT"); a `<@id>` mention is
+  // case-sensitive Discord syntax and is never case-shifted.
   const text = String(template || '')
-    .replace(/\{([a-zA-Z-]+)\}/g, (_, name) => vars[name.toLowerCase().replace(/-/g, '')] ?? '')
+    .replace(/\{([a-zA-Z-]+)\}/g, (_, name) => {
+      const val = vars[name.toLowerCase().replace(/-/g, '')] ?? '';
+      return name === name.toUpperCase() && /[A-Z]/.test(name) && !/^<@!?\d+>$/.test(val) ? val.toUpperCase() : val;
+    })
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
   return truncate(text, limit);
