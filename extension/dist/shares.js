@@ -13941,6 +13941,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
               if (hit) {
                 body2 = hit.body;
                 enc = hit.encryptedBody;
+                if (!body2 && !enc) return "";
               }
             } catch {
             }

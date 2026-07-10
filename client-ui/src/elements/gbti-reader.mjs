@@ -272,7 +272,12 @@ class GbtiReader extends GbtiElement {
             const { items } = (await this.client.listShares({ limit: 100 })) ?? {};
             const hit = (items ?? []).find((s) => (it.id && s.id === it.id)
               || (s.author === it.author && (s.createdAt === it.createdAt || (it.url && s.url === it.url))));
-            if (hit) { body = hit.body; enc = hit.encryptedBody; }
+            // The full record in hand and still no body = the share simply HAS no note (a note is
+            // optional): render nothing instead of a phantom locked-comment block no tier can unlock.
+            if (hit) {
+              body = hit.body; enc = hit.encryptedBody;
+              if (!body && !enc) return '';
+            }
           } catch { /* fail-closed to the locked notice */ }
         }
         return await this._body(it.visibility, body, enc);
