@@ -77,17 +77,23 @@ class GbtiSyndicateNow extends GbtiElement {
       category: d.gbtiCategory || undefined,
       categoryPath: d.gbtiCategoryPath ? d.gbtiCategoryPath.split(',').filter(Boolean) : undefined, // SOW-088: leaf-first routing
       authorDiscord: d.gbtiDiscord || undefined, // SOW-088: the public profile Discord handle
+      authorNote: this._authorNote || undefined, // SOW-088 {author-note}: the from-the-author intro comment
       visibility: 'public',
     };
   }
 
   async _loadInfo() {
     try {
-      const [info, queue] = await Promise.all([
+      const it0 = this._item();
+      const [info, queue, thread] = await Promise.all([
         this.client.getSyndicateNow(),
         this.client.syndicationQueue().catch(() => null),
+        // The {author-note} token: the from-the-author intro comment (public, flagged authorNote).
+        this.client.listComments({ targetType: it0.targetType, targetSlug: it0.targetSlug }).catch(() => null),
       ]);
       this._info = info;
+      const note = (thread?.items ?? thread?.comments ?? []).find((c) => c?.authorNote && typeof c.body === 'string' && c.body.trim());
+      this._authorNote = note ? note.body.trim() : null;
       const key = `${this._item().source}:${this._item().targetSlug}`;
       const prior = [...(queue?.sent ?? []), ...(queue?.failed ?? [])].filter((it) => (it.id || '').startsWith(key + '#'));
       this._prior = prior.filter((it) => it.status === 'sent');
@@ -234,7 +240,7 @@ class GbtiSyndicateNow extends GbtiElement {
       ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}${fwdState}</p>`
       : '';
     return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
-      <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category})</span></label>
+      <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note})</span></label>
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
       <div class="preview" data-preview>${esc(preview)}</div>

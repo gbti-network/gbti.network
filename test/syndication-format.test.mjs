@@ -92,3 +92,15 @@ test('renderTemplate: hyphenated tokens, {content-type}, and the {member-discord
   assert.match(renderTemplate('{content-type}', { source: 'post' }), /^article$/);
   assert.match(renderTemplate('{content-type}', { source: 'share' }), /^link$/);
 });
+
+// SOW-088 {author-note}: the from-the-author intro comment as a template token — sanitized like every
+// var, and structurally absent on a members-only item (buildQueueItem nulls it, so a possibly-encrypted
+// intro can never ride into a channel).
+test('{author-note} renders the sanitized intro and is stripped for members-only items', async () => {
+  const { buildQueueItem } = await import('../membership/syndication-queue.mjs');
+  const pub = buildQueueItem({ source: 'prompt', targetSlug: 's', visibility: 'public', authorNote: 'My intro @here folks' }, { now: () => 1 });
+  assert.match(renderTemplate('{title} — {author-note}', { ...pub, title: 'T' }, { limit: 500 }), /T — My intro @.here folks/);
+  const mem = buildQueueItem({ source: 'prompt', targetSlug: 's', visibility: 'members', authorNote: 'secret intro' }, { now: () => 1 });
+  assert.equal(mem.authorNote, null);
+  assert.equal(renderTemplate('{author-note}', mem, { limit: 500 }), '');
+});

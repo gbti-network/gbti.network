@@ -75,6 +75,9 @@ export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HO
     author: trimOrNull(input.author),
     authorName: trimOrNull(input.authorName), // SOW-087: the profile displayName for the no-ping template
     authorDiscord: trimOrNull(input.authorDiscord), // SOW-088: the public profile Discord handle ({member-discord-username})
+    // SOW-088 {author-note}: the from-the-author intro COMMENT text. PUBLIC items only, so a members-only
+    // item's (possibly encrypted) intro can never ride into a channel; capped, never a content body.
+    authorNote: visibility === 'public' ? (trimOrNull(input.authorNote)?.slice(0, 4000) ?? null) : null,
     title: trimOrNull(input.title),
     blurb: trimOrNull(input.blurb),
     url: trimOrNull(input.url),
@@ -124,6 +127,7 @@ export function normalizeItem(raw) {
     author: trimOrNull(raw.author),
     authorName: trimOrNull(raw.authorName),
     authorDiscord: trimOrNull(raw.authorDiscord),
+    authorNote: visibility === 'public' ? (trimOrNull(raw.authorNote)?.slice(0, 4000) ?? null) : null,
     title: trimOrNull(raw.title),
     blurb: trimOrNull(raw.blurb),
     url: trimOrNull(raw.url),

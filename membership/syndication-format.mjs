@@ -67,6 +67,7 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
     url: String(item.url || ''),
     title: sanitizeMentions(item.title || ''),
     category: sanitizeMentions(item.category || ''),
+    authornote: sanitizeMentions(item.authorNote || ''), // {author-note}: the from-the-author intro (public items only)
   };
   // Hyphenated token names ({member-discord-username}, {content-type}) normalize to the same key.
   const text = String(template || '')
