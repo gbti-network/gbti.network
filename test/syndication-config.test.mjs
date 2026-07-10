@@ -50,10 +50,12 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
     // SOW-088: reddit-body rides in the mirror like every template type (the drain/manual rail read the admin-edited value from KV).
     templates: { share: 'New {content-type} published by {member-discord-username}: "{title}" {url}', post: 'New {content-type} published by {member-discord-username}: "{title}" {url}', product: 'New {content-type} published by {member-discord-username}: "{title}" {url}', prompt: 'New {content-type} published by {member-discord-username}: "{title}" {url}', 'reddit-body': 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}' },
     news_engagement: { enabled: false, open_threshold: 2, tier: 'paid', comment_autopost: true },
-    channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false },
+    // SOW-088: reddit joined CHANNELS (default false) so the admin pipeline switch survives normalization.
+    channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false },
+    channel_templates: {},
   });
   // No surprise keys (no token/secret fields).
-  assert.deepEqual(Object.keys(m).sort(), ['channels', 'classify', 'enabled', 'hold_minutes', 'news_engagement', 'require_approval', 'templates', 'upvote_threshold']);
+  assert.deepEqual(Object.keys(m).sort(), ['channel_templates', 'channels', 'classify', 'enabled', 'hold_minutes', 'news_engagement', 'require_approval', 'templates', 'upvote_threshold']);
 });
 
 test('DEFAULT_SYNDICATION_CONFIG is frozen and disabled', () => {
@@ -128,4 +130,43 @@ test('reddit-body: default template, config override, and the admin edit path', 
   const { next, changed } = setTemplate({}, { type: 'reddit-body', template: 'Edited body {url}' }, { now: 0, actor: { githubId: '1' } });
   assert.equal(changed, true);
   assert.equal(next.syndication.templates['reddit-body'], 'Edited body {url}');
+});
+
+// SOW-088: per-channel template overrides — the fallback chain is channel override -> the shared map ->
+// the built-in default; unknown channels/types and blanks are dropped by normalization; the mirror
+// carries the overrides so the Worker reads admin edits from KV.
+test('channel_templates: normalization, the templateFor fallback chain, and the mirror', async () => {
+  const { DEFAULT_TEMPLATES } = await import('../membership/syndication-config-core.mjs');
+  const cfg = syndicationConfigFromParsed({ syndication: {
+    templates: { prompt: 'Shared prompt {title}' },
+    channel_templates: {
+      reddit: { prompt: 'Reddit prompt "{title}"', 'reddit-body': 'Body {author-note}', nope: 'x', share: '  ' },
+      bogus: { prompt: 'never' },
+    },
+  } });
+  assert.deepEqual(Object.keys(cfg.channel_templates), ['reddit']);
+  assert.equal(cfg.channel_templates.reddit.nope, undefined);
+  assert.equal(cfg.channel_templates.reddit.share, undefined, 'a blank override is dropped (= fall back)');
+  assert.equal(templateFor(cfg, 'prompt', 'reddit'), 'Reddit prompt "{title}"');
+  assert.equal(templateFor(cfg, 'prompt', 'discord'), 'Shared prompt {title}', 'no override -> the shared map');
+  assert.equal(templateFor(cfg, 'prompt'), 'Shared prompt {title}', 'channel-less callers are unchanged');
+  assert.equal(templateFor(cfg, 'share', 'reddit'), DEFAULT_TEMPLATES.share, 'no override + no shared -> built-in');
+  const m = toSyndicationMirror({ syndication: { channel_templates: { reddit: { prompt: 'R {title}' } } } });
+  assert.deepEqual(m.channel_templates, { reddit: { prompt: 'R {title}' } });
+});
+
+// SOW-088: the channel-targeted edit writes/deletes syndication.channel_templates[channel][type].
+test('setTemplate with a channel targets the override and empties clean up', async () => {
+  const { setTemplate } = await import('../membership/syndication-template-edits.mjs');
+  const ctx = { now: 0, actor: { githubId: '1' } };
+  const a = setTemplate({}, { type: 'prompt', template: 'R {title}', channel: 'reddit' }, ctx);
+  assert.equal(a.changed, true);
+  assert.deepEqual(a.next.syndication.channel_templates, { reddit: { prompt: 'R {title}' } });
+  assert.equal(a.audit.detail.channel, 'reddit');
+  const b = setTemplate(a.next, { type: 'prompt', template: 'R {title}', channel: 'reddit' }, ctx);
+  assert.equal(b.changed, false, 'idempotent');
+  const c = setTemplate(a.next, { type: 'prompt', template: '', channel: 'reddit' }, ctx);
+  assert.equal(c.next.syndication.channel_templates, undefined, 'the last override removes the whole block');
+  const { TemplateEditError } = await import('../membership/syndication-template-edits.mjs');
+  assert.throws(() => setTemplate({}, { type: 'prompt', template: 'x', channel: 'myspace' }, ctx), TemplateEditError);
 });

@@ -150,7 +150,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     addModerationFlagTerm: ({ list, term }) => request('POST', '/api/admin', { action: 'flag-term-add', list, term }), // SOW-087
     removeModerationFlagTerm: ({ list, term }) => request('POST', '/api/admin', { action: 'flag-term-remove', list, term }), // SOW-087
     syndicationTemplatePool: () => request('GET', '/api/syndication-template-pool'), // SOW-087: { templates, types }
-    setSyndicationTemplate: ({ type, template }) => request('POST', '/api/admin', { action: 'syndication-template-set', type, template }), // SOW-087
+    setSyndicationTemplate: ({ type, template, channel }) => request('POST', '/api/admin', { action: 'syndication-template-set', type, template, channel }), // SOW-087 (+ SOW-088 per-channel)
     newsEngagementSettings: () => request('GET', '/api/news-engagement'), // SOW-111: { settings, tiers }
     setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request('POST', '/api/admin', { action: 'news-engagement-set', enabled, openThreshold, tier, commentAutopost }), // SOW-111
     syndicationSettings: () => request('GET', '/api/syndication-settings'), // SOW-088: { settings, channelNames }

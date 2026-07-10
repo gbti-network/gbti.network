@@ -20662,7 +20662,8 @@ function removeFlagTerm(doc, { list, term } = {}, ctx = {}) {
 }
 
 // membership/syndication-config-core.mjs
-var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky"]);
+var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit"]);
+var TEMPLATE_CHANNELS = CHANNELS;
 var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
 var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
 var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
@@ -20703,9 +20704,11 @@ var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   // SOW-087: the share category suggestion mode
   templates: DEFAULT_TEMPLATES,
   // SOW-087: per-type Discord templates (missing/empty type = its default)
+  channel_templates: Object.freeze({}),
+  // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
   news_engagement: DEFAULT_NEWS_ENGAGEMENT,
   // SOW-111: engagement-triggered news auto-share
-  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false })
+  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false })
 });
 function asBool(v, fallback) {
   if (v === true || v === false) return v;
@@ -20754,6 +20757,21 @@ function normalizeTemplates(raw) {
   }
   return Object.freeze(out);
 }
+function normalizeChannelTemplates(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const ch of TEMPLATE_CHANNELS) {
+    const block = src[ch];
+    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    const kept = {};
+    for (const t of TEMPLATE_TYPES) {
+      const v = typeof block[t] === "string" ? block[t].trim() : "";
+      if (v) kept[t] = v;
+    }
+    if (Object.keys(kept).length) out[ch] = Object.freeze(kept);
+  }
+  return Object.freeze(out);
+}
 function normalizeChannels(raw) {
   const out = {};
   const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
@@ -20770,6 +20788,7 @@ function syndicationConfigFromParsed(parsed) {
     upvote_threshold: asThreshold(raw.upvote_threshold, d.upvote_threshold),
     classify: asClassifyMode(raw.classify, d.classify),
     templates: normalizeTemplates(raw.templates),
+    channel_templates: normalizeChannelTemplates(raw.channel_templates),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
     channels: normalizeChannels(raw.channels)
   });
@@ -20840,13 +20859,30 @@ function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost 
   };
   return { next: d, changed: true, audit: audit2({ ...next }) };
 }
-function setTemplate(doc, { type, template } = {}, ctx = {}) {
+function setTemplate(doc, { type, template, channel } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === "object" ? doc : {});
   if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
   const t = String(type || "").trim();
   if (!TEMPLATE_TYPES.includes(t)) throw new TemplateEditError(`the type must be one of: ${TEMPLATE_TYPES.join(", ")}`);
   const value = String(template ?? "").trim();
   if (value.length > MAX_TEMPLATE) throw new TemplateEditError(`a template is capped at ${MAX_TEMPLATE} characters`);
+  const ch = String(channel || "").trim();
+  if (ch) {
+    if (!SYNDICATION_CHANNEL_NAMES.includes(ch)) throw new TemplateEditError(`unknown channel "${ch}"`);
+    const all = d.syndication.channel_templates && typeof d.syndication.channel_templates === "object" && !Array.isArray(d.syndication.channel_templates) ? d.syndication.channel_templates : {};
+    const curCh = all[ch] && typeof all[ch] === "object" && !Array.isArray(all[ch]) ? all[ch] : {};
+    const existing2 = typeof curCh[t] === "string" ? curCh[t].trim() : "";
+    if (existing2 === value) return { next: d, changed: false, audit: auditEntry6(ctx, t, { channel: ch, template: value || null, noop: true }) };
+    const nextCh = { ...curCh };
+    if (value) nextCh[t] = value;
+    else delete nextCh[t];
+    const nextAll = { ...all };
+    if (Object.keys(nextCh).length) nextAll[ch] = nextCh;
+    else delete nextAll[ch];
+    if (Object.keys(nextAll).length) d.syndication.channel_templates = nextAll;
+    else delete d.syndication.channel_templates;
+    return { next: d, changed: true, audit: auditEntry6(ctx, t, { channel: ch, template: value || null }) };
+  }
   const cur = d.syndication.templates && typeof d.syndication.templates === "object" && !Array.isArray(d.syndication.templates) ? d.syndication.templates : {};
   const existing = typeof cur[t] === "string" ? cur[t].trim() : "";
   if (existing === value) return { next: d, changed: false, audit: auditEntry6(ctx, t, { template: value || null, noop: true }) };
@@ -21238,7 +21274,8 @@ async function getModerationFlagPool(ctx) {
 }
 async function getSyndicationTemplatePool(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
-  return { templates: syndicationConfigFromParsed(parsed).templates, types: [...TEMPLATE_TYPES] };
+  const cfg = syndicationConfigFromParsed(parsed);
+  return { templates: cfg.templates, channelTemplates: cfg.channel_templates, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
 }
 async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType }) {
   requireRole(ctx, canManageRoles, "superadmin");
@@ -21383,13 +21420,14 @@ async function removeModerationFlagTerm(ctx, { list, term } = {}) {
     errType: ModerationFlagEditError
   });
 }
-async function setSyndicationTemplate(ctx, { type, template } = {}) {
-  const slug = slugOf(String(type || ""));
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplate(parsed, { type, template }, actionCtx(ctx)), {
+async function setSyndicationTemplate(ctx, { type, template, channel } = {}) {
+  const slug = slugOf(`${channel ? `${channel}-` : ""}${String(type || "")}`);
+  const label = channel ? `${channel} ${type}` : type;
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplate(parsed, { type, template, channel }, actionCtx(ctx)), {
     branch: `gbti/syndication-template-${slug}`,
-    message: `Set the ${type} Discord template`,
-    title: `Set Discord template: ${type}`,
-    noopMsg: `template unchanged: ${type}`,
+    message: `Set the ${label} syndication template`,
+    title: `Set syndication template: ${label}`,
+    noopMsg: `template unchanged: ${label}`,
     errType: TemplateEditError
   });
 }

@@ -54,9 +54,12 @@ export async function handleSyndicateNowInfo(request, env, deps = {}) {
   });
   const templates = {};
   for (const t of TEMPLATE_TYPES) templates[t] = templateFor(cfg, t) ?? DEFAULT_TEMPLATES[t] ?? '';
+  // SOW-088: the per-channel overrides ride along so the popup resolves channel-aware defaults
+  // (the reddit tile's own set when destination = reddit) with the same fallback chain.
+  const channelTemplates = cfg.channel_templates ?? {};
   const featured = {};
   for (const [type, key] of Object.entries(FEATURED_ENV)) featured[type] = env?.[key] || null;
-  return { status: 200, body: { ok: true, destinations, templates, channelMap: channelMap?.channels ?? [], featured } };
+  return { status: 200, body: { ok: true, destinations, templates, channelTemplates, channelMap: channelMap?.channels ?? [], featured } };
 }
 
 /** POST: render the edited template server-side and post one item to one destination now. */

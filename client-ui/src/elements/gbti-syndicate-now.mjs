@@ -163,7 +163,11 @@ class GbtiSyndicateNow extends GbtiElement {
    *  shared by the compose view and _publish (they diverged once: the preview said {title} while publish
    *  fell back to the stored per-type template, so a Reddit send ignored what the preview showed). */
   _effectiveTemplate() {
-    const destDefault = this._dest === 'reddit' ? '{title}' : (this._info?.templates?.[this._item().source] || '{title} {url}');
+    // SOW-088: the destination's own channel-template override wins, then the shared per-type map, then
+    // the per-destination built-in ({title} reads natural as a Reddit post title).
+    const src = this._item().source;
+    const override = this._info?.channelTemplates?.[this._dest]?.[src];
+    const destDefault = override || (this._dest === 'reddit' ? '{title}' : (this._info?.templates?.[src] || '{title} {url}'));
     return this._template ?? destDefault;
   }
 
@@ -173,7 +177,7 @@ class GbtiSyndicateNow extends GbtiElement {
    *  link when the template lacks {url}, since the body is the whole post there. */
   _effectiveBody() {
     if (this._bodyTemplate != null) return this._bodyTemplate;
-    const tpl = this._info?.templates?.['reddit-body'] || '';
+    const tpl = this._info?.channelTemplates?.reddit?.['reddit-body'] || this._info?.templates?.['reddit-body'] || '';
     if (tpl && (this._authorNote || !/\{author-note\}/.test(tpl))) {
       return tpl + (this._redditKind === 'self' && !/\{url\}/.test(tpl) ? '\n\n{url}' : '');
     }

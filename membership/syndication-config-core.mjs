@@ -25,7 +25,10 @@ export const SYNDICATION_MIRROR_KEY = 'synd:config';
 // SOW-087: `discord-category` is the SECOND Discord post — the same item posted again to the channel mapped to
 // its category in house/content-channels.yml (the featured per-type `discord` post is unchanged). A first-class
 // channel so it gets its own on/off switch and its own per-channel idempotency in the queue.
-export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky']);
+export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky', 'reddit']);
+// SOW-088: the channels a per-channel TEMPLATE override may target (the admin Channels tab tiles). Same set
+// as the pipeline switches; blank/missing overrides fall back to the shared `templates` map, then built-ins.
+export const TEMPLATE_CHANNELS = CHANNELS;
 
 // SOW-087: how a share's topic category is suggested at compose time. `ai` = Workers AI with a keyword
 // fallback; `keyword` = the free keyword match only; `off` = no suggestion (the member picks by hand).
@@ -67,8 +70,9 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   upvote_threshold: 2,
   classify: 'ai', // SOW-087: the share category suggestion mode
   templates: DEFAULT_TEMPLATES, // SOW-087: per-type Discord templates (missing/empty type = its default)
+  channel_templates: Object.freeze({}), // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
   news_engagement: DEFAULT_NEWS_ENGAGEMENT, // SOW-111: engagement-triggered news auto-share
-  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false }),
+  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false }),
 });
 
 function asBool(v, fallback) {
@@ -127,6 +131,24 @@ function normalizeTemplates(raw) {
   return Object.freeze(out);
 }
 
+// SOW-088: per-channel template overrides. Only known channels and types survive; blanks are dropped (they
+// mean "fall back"), and a channel with no surviving overrides is omitted entirely.
+function normalizeChannelTemplates(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const ch of TEMPLATE_CHANNELS) {
+    const block = src[ch];
+    if (!block || typeof block !== 'object' || Array.isArray(block)) continue;
+    const kept = {};
+    for (const t of TEMPLATE_TYPES) {
+      const v = typeof block[t] === 'string' ? block[t].trim() : '';
+      if (v) kept[t] = v;
+    }
+    if (Object.keys(kept).length) out[ch] = Object.freeze(kept);
+  }
+  return Object.freeze(out);
+}
+
 function normalizeChannels(raw) {
   const out = {};
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -148,6 +170,7 @@ export function syndicationConfigFromParsed(parsed) {
     upvote_threshold: asThreshold(raw.upvote_threshold, d.upvote_threshold),
     classify: asClassifyMode(raw.classify, d.classify),
     templates: normalizeTemplates(raw.templates),
+    channel_templates: normalizeChannelTemplates(raw.channel_templates),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
     channels: normalizeChannels(raw.channels),
   });
@@ -184,8 +207,11 @@ export function newsEngagement(cfg) {
   return normalizeNewsEngagement(cfg?.news_engagement);
 }
 
-/** SOW-087: the configured Discord template for a source type, or null (= the built-in message). */
-export function templateFor(cfg, source) {
+/** SOW-087 (+ SOW-088): the configured template for a source type, or null (= the built-in message).
+ *  With a channel, the chain is channel override -> the shared map -> the built-in default. */
+export function templateFor(cfg, source, channel) {
+  const o = channel ? cfg?.channel_templates?.[channel]?.[source] : null;
+  if (typeof o === 'string' && o.trim()) return o.trim();
   const t = cfg?.templates?.[source];
   return typeof t === 'string' && t.trim() ? t.trim() : (DEFAULT_TEMPLATES[source] ?? null);
 }
@@ -203,5 +229,5 @@ export function enabledChannelNames(cfg) {
 /** The small, secret-free object reconcile writes to the KV mirror (synd:config) and the Worker reads back. */
 export function toSyndicationMirror(cfg) {
   const c = syndicationConfigFromParsed(cfg);
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: { ...c.templates }, news_engagement: { ...c.news_engagement }, channels: { ...c.channels } };
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: { ...c.templates }, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels } };
 }

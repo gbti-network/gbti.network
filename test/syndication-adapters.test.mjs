@@ -237,3 +237,23 @@ test('reddit: a dead refresh token and json.errors both surface readable failure
   assert.equal(r2.ok, false);
   assert.match(r2.error, /SUBREDDIT_NOTALLOWED/);
 });
+
+// SOW-088: the two Discord adapters name their template channel, so a per-channel override diverges the
+// featured post from the category post while an override-less config falls back to the shared map.
+test('discord adapters pick their channel template set', async () => {
+  const { createDiscordAdapter, createDiscordCategoryAdapter } = await import('../clients/syndication/discord-channel.mjs');
+  const { syndicationConfigFromParsed } = await import('../membership/syndication-config-core.mjs');
+  const cfg = syndicationConfigFromParsed({ syndication: {
+    templates: { prompt: 'Shared {title}' },
+    channel_templates: { 'discord-category': { prompt: 'In {category}: {title}' } },
+  } });
+  const sent = [];
+  const client = { async postChannelMessage(channelId, content) { sent.push({ channelId, content }); return { id: '1', channel_id: channelId }; } };
+  const env = { DISCORD_BOT_TOKEN: 'b', DISCORD_CHANNEL_PROMPTS: '111' };
+  const it = { source: 'prompt', title: 'T', category: 'ai', author: 'a', url: 'https://x/y' };
+  await createDiscordAdapter({ env, client, cfg }).post(it);
+  assert.equal(sent[0].content, 'Shared T', 'featured: no override -> the shared map');
+  const catAdapter = createDiscordCategoryAdapter({ env, client, cfg, channelMap: { channels: [{ category: 'ai', channelId: '222' }] } });
+  await catAdapter.post(it);
+  assert.equal(sent[1].content, 'In ai: T', 'category: its own override wins');
+});

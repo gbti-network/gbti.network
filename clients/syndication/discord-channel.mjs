@@ -30,9 +30,11 @@ function allowedMentionsFor(mention) {
  *  SOW-087: a configured per-type template (house/syndication-config.yml `templates:`) replaces the built-in
  *  message; the default share template is "Shared by {memberdiscord} {shareurl}" (no-ping full name when the
  *  mention does not resolve). allowed_mentions still caps pings to the author id either way. */
-export async function postToChannel(channelId, item, { env, fetchImpl, client, cfg, textOverride = null }) {
+export async function postToChannel(channelId, item, { env, fetchImpl, client, cfg, textOverride = null, templateChannel = null }) {
   const discord = client ?? createDiscordClient({ botToken: env.DISCORD_BOT_TOKEN, fetch: fetchImpl });
-  const template = templateFor(cfg, item.source);
+  // SOW-088: the caller names which channel's template set applies ('discord' featured vs
+  // 'discord-category'); the chain is channel override -> shared map -> built-in.
+  const template = templateFor(cfg, item.source, templateChannel);
   let content;
   if (typeof textOverride === 'string' && textOverride.trim()) {
     // SOW-088 manual syndicate: the caller already rendered (and mention-sanitized) the message via the
@@ -59,7 +61,7 @@ export function createDiscordAdapter({ env = {}, fetchImpl = globalThis.fetch, c
     async post(item) {
       const channelId = env[CHANNEL_ENV[item.source]] || null;
       if (!channelId) return { ok: false, error: `no Discord channel configured for ${item.source}` };
-      return postToChannel(channelId, item, { env, fetchImpl, client, cfg });
+      return postToChannel(channelId, item, { env, fetchImpl, client, cfg, templateChannel: 'discord' });
     },
   };
 }
@@ -77,7 +79,7 @@ export function createDiscordCategoryAdapter({ env = {}, fetchImpl = globalThis.
       if (!mapped) return { ok: true, skipped: true, reason: item.category ? `no channel mapped for category "${item.category}"` : 'no category on the item' };
       // Misconfiguration guard: the category channel equals the per-type channel; never double-post one channel.
       if (mapped === (env[CHANNEL_ENV[item.source]] || null)) return { ok: true, skipped: true, reason: 'the category channel equals the per-type channel' };
-      return postToChannel(mapped, item, { env, fetchImpl, client, cfg });
+      return postToChannel(mapped, item, { env, fetchImpl, client, cfg, templateChannel: 'discord-category' });
     },
   };
 }

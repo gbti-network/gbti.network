@@ -20,7 +20,7 @@ import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabl
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // SOW-087
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
 import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111 + SOW-088
-import { syndicationConfigFromParsed, TEMPLATE_TYPES, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111
+import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088
 import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 
@@ -370,10 +370,11 @@ export async function getModerationFlagPool(ctx) {
   return { lists };
 }
 
-/** Read the per-type Discord templates (configured + normalized with defaults) for the manager UI. Read-only. */
+/** Read the per-type templates (+ SOW-088 per-channel overrides) for the manager UI. Read-only. */
 export async function getSyndicationTemplatePool(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
-  return { templates: syndicationConfigFromParsed(parsed).templates, types: [...TEMPLATE_TYPES] };
+  const cfg = syndicationConfigFromParsed(parsed);
+  return { templates: cfg.templates, channelTemplates: cfg.channel_templates, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
 }
 
 async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType }) {
@@ -528,13 +529,14 @@ export async function removeModerationFlagTerm(ctx, { list, term } = {}) {
   });
 }
 
-export async function setSyndicationTemplate(ctx, { type, template } = {}) {
-  const slug = slugOf(String(type || ''));
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplateEdit(parsed, { type, template }, actionCtx(ctx)), {
+export async function setSyndicationTemplate(ctx, { type, template, channel } = {}) {
+  const slug = slugOf(`${channel ? `${channel}-` : ''}${String(type || '')}`);
+  const label = channel ? `${channel} ${type}` : type;
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplateEdit(parsed, { type, template, channel }, actionCtx(ctx)), {
     branch: `gbti/syndication-template-${slug}`,
-    message: `Set the ${type} Discord template`,
-    title: `Set Discord template: ${type}`,
-    noopMsg: `template unchanged: ${type}`,
+    message: `Set the ${label} syndication template`,
+    title: `Set syndication template: ${label}`,
+    noopMsg: `template unchanged: ${label}`,
     errType: TemplateEditError,
   });
 }

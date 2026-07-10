@@ -230,3 +230,12 @@ test('POST reddit: redditKind and a server-rendered bodyTemplate reach the adapt
   assert.equal(seen.redditKind, 'link');
   assert.equal(seen.bodyText, undefined);
 });
+
+// SOW-088: the GET carries the per-channel template overrides for the popup's channel-aware defaults.
+test('GET: channelTemplates ride along', async () => {
+  const withOverrides = JSON.stringify({ syndication: { enabled: true, channel_templates: { reddit: { prompt: 'R "{title}"' } } } });
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: withOverrides });
+  const r = await handleSyndicateNowInfo(req(null, 'GET'), { ...ENV_DISCORD, SIGNUP_KV: kv }, { kv, authorize: superadmin });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.channelTemplates, { reddit: { prompt: 'R "{title}"' } });
+});
