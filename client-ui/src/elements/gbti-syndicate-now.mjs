@@ -71,6 +71,7 @@ class GbtiSyndicateNow extends GbtiElement {
       targetSlug: d.gbtiSlug || '',
       targetType: d.gbtiType || '',
       author: d.gbtiAuthor || '',
+      authorName: d.gbtiAuthorName || undefined, // SOW-088 {fullName}: the profile displayName (else @login)
       title: d.gbtiTitle || '',
       url: d.gbtiUrl || '',
       image: d.gbtiImage || undefined,
@@ -165,9 +166,13 @@ class GbtiSyndicateNow extends GbtiElement {
     return this._template ?? destDefault;
   }
 
-  /** The Reddit BODY template that will be sent: an explicit edit, else {url} for a text post, none for a link. */
+  /** The Reddit BODY template that will be sent: an explicit edit wins; the default is the owner's
+   *  author-note framing when the item HAS an intro (a text post appends the link, since the body is the
+   *  whole post there), else {url} for a text post and nothing for a link. */
   _effectiveBody() {
-    return this._bodyTemplate ?? (this._redditKind === 'self' ? '{url}' : '');
+    if (this._bodyTemplate != null) return this._bodyTemplate;
+    if (this._authorNote) return `From GBTI Network member {fullName}:\n\n"{author-note}"${this._redditKind === 'self' ? '\n\n{url}' : ''}`;
+    return this._redditKind === 'self' ? '{url}' : '';
   }
 
   _composeHtml() {
@@ -222,7 +227,7 @@ class GbtiSyndicateNow extends GbtiElement {
     const liNote = dest === 'linkedin'
       ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>`
       : dest === 'reddit'
-        ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === 'self' ? 'a TEXT post: the title template above (300 characters max) plus the body below' : 'a LINK: the title template above becomes the Reddit post title (300 characters max); a body is optional'}.</p>` : '';
+        ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === 'self' ? 'a TEXT post: the title template above (300 characters max) plus the body below' : 'a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the FIRST COMMENT (Reddit link posts cannot carry a body via the API)'}.</p>` : '';
     // Destination-SPECIFIC prior-send messaging: a duplicate warning only when THIS destination already
     // got the item; otherwise an informational note so a Discord-only history never scares a Reddit send.
     const sends = this._destSends();
@@ -233,11 +238,14 @@ class GbtiSyndicateNow extends GbtiElement {
       : elsewhere.length
         ? `<p class="info">Not posted to ${esc(DEST_LABEL[dest] || dest)} yet. Previously posted to ${elsewhere.map((d) => this._sendPhrase(d, sends[d])).join('; ')}.</p>`
         : '';
+    const cmtState = this._result?.comment
+      ? (this._result.comment.error ? ` The body comment failed: ${esc(this._result.comment.error)}.` : ' The body posted as the first comment.')
+      : '';
     const fwdState = this._result?.forwarded
       ? (this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : ' Forwarded to the secondary channel.')
       : '';
     const result = this._result
-      ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}${fwdState}</p>`
+      ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}${fwdState}${cmtState}</p>`
       : '';
     return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note})</span></label>

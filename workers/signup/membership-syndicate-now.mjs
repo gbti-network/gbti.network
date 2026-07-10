@@ -218,5 +218,5 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   } catch { /* dedupe is best-effort; the post already happened */ }
 
   if (!result?.ok) return { status: 502, body: { error: 'post_failed', message: result?.error || 'the destination refused the post', itemId: recorded.id } };
-  return { status: 200, body: { ok: true, sent: true, destination, id: result.id ?? null, url: result.url ?? null, forwarded: result.forwarded ?? null, superseded, itemId: recorded.id, text } };
+  return { status: 200, body: { ok: true, sent: true, destination, id: result.id ?? null, url: result.url ?? null, forwarded: result.forwarded ?? null, comment: result.comment ?? null, superseded, itemId: recorded.id, text } };
 }

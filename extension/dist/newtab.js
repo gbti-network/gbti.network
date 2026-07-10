@@ -13695,6 +13695,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         targetSlug: d.gbtiSlug || "",
         targetType: d.gbtiType || "",
         author: d.gbtiAuthor || "",
+        authorName: d.gbtiAuthorName || void 0,
+        // SOW-088 {fullName}: the profile displayName (else @login)
         title: d.gbtiTitle || "",
         url: d.gbtiUrl || "",
         image: d.gbtiImage || void 0,
@@ -13777,9 +13779,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const destDefault = this._dest === "reddit" ? "{title}" : this._info?.templates?.[this._item().source] || "{title} {url}";
       return this._template ?? destDefault;
     }
-    /** The Reddit BODY template that will be sent: an explicit edit, else {url} for a text post, none for a link. */
+    /** The Reddit BODY template that will be sent: an explicit edit wins; the default is the owner's
+     *  author-note framing when the item HAS an intro (a text post appends the link, since the body is the
+     *  whole post there), else {url} for a text post and nothing for a link. */
     _effectiveBody() {
-      return this._bodyTemplate ?? (this._redditKind === "self" ? "{url}" : "");
+      if (this._bodyTemplate != null) return this._bodyTemplate;
+      if (this._authorNote) return `From GBTI Network member {fullName}:
+
+"{author-note}"${this._redditKind === "self" ? "\n\n{url}" : ""}`;
+      return this._redditKind === "self" ? "{url}" : "";
     }
     _composeHtml() {
       const dest = this._dest;
@@ -13820,13 +13828,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <label>Body preview</label>
         <div class="preview" data-reddit-body-preview>${esc(bodyPreview)}</div>`;
       }
-      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); a body is optional"}.</p>` : "";
+      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the FIRST COMMENT (Reddit link posts cannot carry a body via the API)"}.</p>` : "";
       const sends = this._destSends();
       const here = sends[dest];
       const elsewhere = Object.keys(sends).filter((d) => d !== dest);
       const prior = here ? `<p class="warn">Already posted to ${this._sendPhrase(dest, here)}. Publishing again posts a duplicate there.</p>` : elsewhere.length ? `<p class="info">Not posted to ${esc(DEST_LABEL[dest] || dest)} yet. Previously posted to ${elsewhere.map((d) => this._sendPhrase(d, sends[d])).join("; ")}.</p>` : "";
+      const cmtState = this._result?.comment ? this._result.comment.error ? ` The body comment failed: ${esc(this._result.comment.error)}.` : " The body posted as the first comment." : "";
       const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
-      const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}${fwdState}</p>` : "";
+      const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}${fwdState}${cmtState}</p>` : "";
       return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note})</span></label>
       <textarea data-template>${esc(template)}</textarea>
@@ -14299,7 +14308,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
       const syndUrl = it.url ? it.type === "share" ? it.url : SITE14 + it.url : "";
       const authorDiscord = this._author?.entry?.links?.discord || "";
-      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}" data-gbti-title="${esc(it.title || "")}" data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}" data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS36) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);

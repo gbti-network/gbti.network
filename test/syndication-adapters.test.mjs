@@ -206,14 +206,20 @@ test('reddit: redditKind self posts text with the body, and a link post carries 
   assert.equal(p.get('kind'), 'self');
   assert.equal(p.get('text'), 'Body https://ex.com/a');
   assert.equal(p.get('url'), null, 'a self post sends no url param');
-  await rd.post({ ...item, textOverride: 'T', redditKind: 'link', bodyText: 'extra context' });
+  // A link post's body goes out as the FIRST COMMENT (/api/submit drops text on kind=link).
+  const r2 = await rd.post({ ...item, textOverride: 'T', redditKind: 'link', bodyText: 'extra context' });
   p = new URLSearchParams(calls[3].opts.body);
   assert.equal(p.get('kind'), 'link');
   assert.equal(p.get('url'), 'https://ex.com/a');
-  assert.equal(p.get('text'), 'extra context');
+  assert.equal(p.get('text'), null, 'a link post submits no text param');
+  assert.match(calls[4].url, /oauth\.reddit\.com\/api\/comment/);
+  const cp = new URLSearchParams(calls[4].opts.body);
+  assert.equal(cp.get('thing_id'), 't3_x1');
+  assert.equal(cp.get('text'), 'extra context');
+  assert.ok(r2.comment && !r2.comment.error, 'the comment result is surfaced');
   // A url-less item can never be a link post regardless of the requested kind.
   await rd.post({ ...item, url: null, textOverride: 'T', redditKind: 'link' });
-  p = new URLSearchParams(calls[5].opts.body);
+  p = new URLSearchParams(calls[6].opts.body);
   assert.equal(p.get('kind'), 'self');
 });
 
