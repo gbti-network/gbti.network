@@ -189,6 +189,34 @@ test('reddit: refreshes with Basic auth then submits a link post with the requir
   assert.equal(r.url, 'https://www.reddit.com/r/GBTI_network/comments/abc123/x/');
 });
 
+// SOW-088 Radle-style post kinds: an explicit redditKind=self makes a TEXT post whose body is the
+// Worker-rendered bodyText; a link post carries a provided bodyText as body text under the link.
+test('reddit: redditKind self posts text with the body, and a link post carries bodyText', async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts) => {
+    calls.push({ url, opts });
+    if (url.includes('/api/v1/access_token')) return { ok: true, status: 200, json: async () => ({ access_token: 'at1' }) };
+    return { ok: true, status: 200, json: async () => ({ json: { errors: [], data: { id: 'x1', url: 'https://r/x1' } } }) };
+  };
+  const env = { REDDIT_CLIENT_ID: 'id', REDDIT_CLIENT_SECRET: 'sec', REDDIT_REFRESH_TOKEN: 'rt', REDDIT_SUBREDDIT: 'GBTI_network' };
+  const { createRedditAdapter } = await import('../clients/syndication/reddit.mjs');
+  const rd = createRedditAdapter({ env, fetchImpl });
+  await rd.post({ ...item, textOverride: 'T', redditKind: 'self', bodyText: 'Body https://ex.com/a' });
+  let p = new URLSearchParams(calls[1].opts.body);
+  assert.equal(p.get('kind'), 'self');
+  assert.equal(p.get('text'), 'Body https://ex.com/a');
+  assert.equal(p.get('url'), null, 'a self post sends no url param');
+  await rd.post({ ...item, textOverride: 'T', redditKind: 'link', bodyText: 'extra context' });
+  p = new URLSearchParams(calls[3].opts.body);
+  assert.equal(p.get('kind'), 'link');
+  assert.equal(p.get('url'), 'https://ex.com/a');
+  assert.equal(p.get('text'), 'extra context');
+  // A url-less item can never be a link post regardless of the requested kind.
+  await rd.post({ ...item, url: null, textOverride: 'T', redditKind: 'link' });
+  p = new URLSearchParams(calls[5].opts.body);
+  assert.equal(p.get('kind'), 'self');
+});
+
 test('reddit: a dead refresh token and json.errors both surface readable failures', async () => {
   const { createRedditAdapter } = await import('../clients/syndication/reddit.mjs');
   const env = { REDDIT_CLIENT_ID: 'id', REDDIT_CLIENT_SECRET: 'sec', REDDIT_REFRESH_TOKEN: 'rt', REDDIT_SUBREDDIT: 'GBTI_network' };

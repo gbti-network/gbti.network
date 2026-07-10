@@ -40,8 +40,12 @@ export function createRedditAdapter({ env = {}, fetchImpl = globalThis.fetch } =
       try { token = await refreshAccessToken(env, fetchImpl); }
       catch (err) { return { ok: false, error: err.message }; }
       const params = { sr: String(env.REDDIT_SUBREDDIT || ''), title, api_type: 'json', resubmit: 'true' };
-      if (item.url) { params.kind = 'link'; params.url = String(item.url); }
-      else { params.kind = 'self'; params.text = title; }
+      // Radle-style post kinds: an explicit item.redditKind wins ('self' = a text post whose body is the
+      // Worker-rendered item.bodyText); the default stays a LINK post. Reddit also accepts body text ON a
+      // link post, so a provided bodyText rides along either way.
+      const self = item.redditKind === 'self' || !item.url; // no url can never be a link post
+      if (self) { params.kind = 'self'; params.text = String(item.bodyText || item.url || ''); }
+      else { params.kind = 'link'; params.url = String(item.url); if (item.bodyText) params.text = String(item.bodyText); }
       const res = await fetchImpl('https://oauth.reddit.com/api/submit', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },

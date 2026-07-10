@@ -210,3 +210,23 @@ test('a manual send cancels the pending queue twin and repoints the dedupe at th
   assert.ok(!JSON.parse(kv.store.get('synd:pending')).ids.includes(twin.id), 'the twin left the pending index');
   assert.equal(kv.store.get('synd:dedupe:prompt:ci-skill'), r.body.itemId); // the dedupe points at the manual record
 });
+
+// SOW-088 Radle-style Reddit options: redditKind + a bodyTemplate rendered SERVER-side (same sanitization
+// boundary as the title template) reach the adapter as redditKind/bodyText; other destinations never see them.
+test('POST reddit: redditKind and a server-rendered bodyTemplate reach the adapter', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
+  const envReddit = { REDDIT_CLIENT_ID: 'i', REDDIT_CLIENT_SECRET: 's', REDDIT_REFRESH_TOKEN: 'r', REDDIT_SUBREDDIT: 'GBTI_network', SIGNUP_KV: kv };
+  let seen = null;
+  const adapters = { reddit: { name: 'reddit', enabled: () => true, post: async (it) => { seen = it; return { ok: true, id: 'p1', url: 'https://r/p1' }; } } };
+  const r = await handleSyndicateNow(
+    req({ destination: 'reddit', item: ITEM, template: '{title}', redditKind: 'self', bodyTemplate: 'Read it: {url}' }),
+    envReddit, { kv, authorize: superadmin, adapters });
+  assert.equal(r.status, 200);
+  assert.equal(seen.redditKind, 'self');
+  assert.equal(seen.bodyText, 'Read it: https://gbti.network/prompts/ci-skill/');
+  assert.equal(seen.textOverride, 'CI Skill', 'the payload template is the title, never the stored default');
+  // An invalid kind degrades to link; a missing bodyTemplate sends no bodyText.
+  await handleSyndicateNow(req({ destination: 'reddit', item: ITEM, template: '{title}', redditKind: 'weird' }), envReddit, { kv, authorize: superadmin, adapters });
+  assert.equal(seen.redditKind, 'link');
+  assert.equal(seen.bodyText, undefined);
+});

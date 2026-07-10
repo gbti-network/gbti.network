@@ -151,12 +151,24 @@ class GbtiSyndicateNow extends GbtiElement {
       <div class="actions"><button class="ghost" type="button" data-close>Cancel</button><span></span></div>`;
   }
 
+  /** The template that WILL be sent: an explicit edit, else the per-destination default. ONE definition
+   *  shared by the compose view and _publish (they diverged once: the preview said {title} while publish
+   *  fell back to the stored per-type template, so a Reddit send ignored what the preview showed). */
+  _effectiveTemplate() {
+    const destDefault = this._dest === 'reddit' ? '{title}' : (this._info?.templates?.[this._item().source] || '{title} {url}');
+    return this._template ?? destDefault;
+  }
+
+  /** The Reddit BODY template that will be sent: an explicit edit, else {url} for a text post, none for a link. */
+  _effectiveBody() {
+    return this._bodyTemplate ?? (this._redditKind === 'self' ? '{url}' : '');
+  }
+
   _composeHtml() {
     const dest = this._dest;
     const item = this._item();
-    // Reddit renders the template as the POST TITLE of a link post; a plain {title} reads natural there.
-    const destDefault = dest === 'reddit' ? '{title}' : (this._info?.templates?.[item.source] || '{title} {url}');
-    const template = this._template ?? destDefault;
+    // Reddit renders the template as the POST TITLE; a plain {title} reads natural there.
+    const template = this._effectiveTemplate();
     const preview = renderTemplate(template, item, { limit: 2000 });
     let channelRow = '';
     if (dest === 'discord') {
@@ -184,10 +196,27 @@ class GbtiSyndicateNow extends GbtiElement {
         : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ''}; paste the Discord channel id)</span></label>
           <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || '')}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
     }
+    // Reddit (Radle-style): a post-kind picker (link | text) and an optional templated BODY. A link post
+    // carries the item URL as the link (the body rides under it); a text post's body IS the content.
+    let redditRows = '';
+    if (dest === 'reddit') {
+      const kind = this._redditKind || 'link';
+      const bodyTemplate = this._effectiveBody();
+      const bodyPreview = bodyTemplate ? renderTemplate(bodyTemplate, item, { limit: 2000 }) : '';
+      redditRows = `<label>Post kind</label>
+        <select data-reddit-kind>
+          <option value="link"${kind === 'link' ? ' selected' : ''}>Link post (the item URL is the link)</option>
+          <option value="self"${kind === 'self' ? ' selected' : ''}>Text post (the body below is the content)</option>
+        </select>
+        <label>Body template <span style="font-weight:400">(optional; same tokens as the title)</span></label>
+        <textarea data-reddit-body>${esc(bodyTemplate)}</textarea>
+        <label>Body preview</label>
+        <div class="preview" data-reddit-body-preview>${esc(bodyPreview)}</div>`;
+    }
     const liNote = dest === 'linkedin'
       ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>`
       : dest === 'reddit'
-        ? `<p class="sub" style="margin:8px 0 0">Posts a LINK to the community subreddit; the text above becomes the Reddit post title (300 characters max).</p>` : '';
+        ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === 'self' ? 'a TEXT post: the title template above (300 characters max) plus the body below' : 'a LINK: the title template above becomes the Reddit post title (300 characters max); a body is optional'}.</p>` : '';
     // Destination-SPECIFIC prior-send messaging: a duplicate warning only when THIS destination already
     // got the item; otherwise an informational note so a Discord-only history never scares a Reddit send.
     const sends = this._destSends();
@@ -209,7 +238,7 @@ class GbtiSyndicateNow extends GbtiElement {
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
       <div class="preview" data-preview>${esc(preview)}</div>
-      ${channelRow}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ''}${result}
+      ${channelRow}${redditRows}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ''}${result}
       <div class="actions">
         <button class="ghost" type="button" data-close>${this._result ? 'Done' : 'Cancel'}</button>
         <button class="go" type="button" data-publish ${this._busy || this._result ? 'disabled' : ''}>${this._busy ? '<span class="spin"></span>Publishing...' : 'Publish'}</button>
@@ -232,11 +261,19 @@ class GbtiSyndicateNow extends GbtiElement {
     if (manual) manual.addEventListener('input', () => { this._channelId = manual.value.trim(); });
     const fwd = this.$('[data-forward]');
     if (fwd) fwd.addEventListener('change', () => { this._forwardId = fwd.value; });
+    const rk = this.$('[data-reddit-kind]');
+    if (rk) rk.addEventListener('change', () => { this._redditKind = rk.value === 'self' ? 'self' : 'link'; this.render(); });
+    const rb = this.$('[data-reddit-body]');
+    if (rb) rb.addEventListener('input', () => {
+      this._bodyTemplate = rb.value;
+      const pv = this.$('[data-reddit-body-preview]');
+      if (pv) pv.textContent = rb.value ? renderTemplate(rb.value, this._item(), { limit: 2000 }) : '';
+    });
     this.on('[data-publish]', 'click', () => this._publish());
   }
 
   async _pickDest(dest) {
-    if (dest !== this._dest) this._template = null; // per-destination defaults; an edit never leaks across
+    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
     this._dest = dest;
     this._step = 'compose';
     this._err = null;
@@ -269,11 +306,16 @@ class GbtiSyndicateNow extends GbtiElement {
 
   async _publish() {
     const item = this._item();
-    const template = (this._template ?? (this._info?.templates?.[item.source] || '{title} {url}')).trim();
+    const template = this._effectiveTemplate().trim();
     if (!template) { this._err = 'A message template is required.'; this.render(); return; }
     this._busy = true; this._err = null; this.render();
     try {
       const payload = { destination: this._dest, item, template };
+      if (this._dest === 'reddit') {
+        payload.redditKind = this._redditKind === 'self' ? 'self' : 'link';
+        const body = this._effectiveBody().trim();
+        if (body) payload.bodyTemplate = body;
+      }
       if (this._dest === 'discord') {
         payload.channelId = this._channelId;
         if (this._forwardId && this._forwardId !== this._channelId) payload.forwardChannelId = this._forwardId;

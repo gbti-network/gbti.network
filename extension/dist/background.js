@@ -18833,12 +18833,12 @@ async function getSyndicateNow({ token, signupBase, fetch: fetch2 = globalThis.f
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now info failed (${res.status})`);
   return data;
 }
-async function syndicateNow({ destination, item, template, channelId, forwardChannelId, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase9(signupBase) + "/membership/syndicate-now", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId })
+    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate })
   });
   let data = null;
   try {
@@ -19692,10 +19692,10 @@ async function getSyndicateNowInfo(ctx) {
   const token = ctx.store?.get?.("githubToken");
   return getSyndicateNow({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
-async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId } = {}) {
+async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
-  return syndicateNow({ destination, item, template, channelId, forwardChannelId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  return syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);

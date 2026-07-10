@@ -125,6 +125,10 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   if (!MANUAL_DESTS.includes(destination)) return { status: 400, body: { error: 'invalid', message: 'unknown destination' } };
   const template = String(payload?.template || '').trim();
   if (!template) return { status: 400, body: { error: 'invalid', message: 'a message template is required' } };
+  // Reddit options (Radle-style): the post kind (link | self) and an optional templated BODY. Both are
+  // rendered/sanitized SERVER-side like the title template; other destinations ignore them.
+  const redditKind = payload?.redditKind === 'self' ? 'self' : 'link';
+  const bodyTemplate = String(payload?.bodyTemplate || '').trim();
 
   // The queue-item builder is the validation boundary: type whitelist, slug required, and the no-body
   // guard (a body/encryptedBody never reaches the queue or a channel).
@@ -168,7 +172,10 @@ export async function handleSyndicateNow(request, env, deps = {}) {
     const set = adapters ?? buildAdapters({ env, fetchImpl, cfg });
     const adapter = set[destination];
     if (!adapter) return { status: 400, body: { error: 'invalid', message: 'unknown destination' } };
-    try { result = await adapter.post({ ...item, textOverride: text }); }
+    const extras = destination === 'reddit'
+      ? { redditKind, ...(bodyTemplate ? { bodyText: renderTemplate(bodyTemplate, item, { limit: 9500 }) } : {}) }
+      : {};
+    try { result = await adapter.post({ ...item, textOverride: text, ...extras }); }
     catch (err) { result = { ok: false, error: err?.message || `${destination} post failed` }; }
   }
 
