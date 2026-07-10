@@ -59,6 +59,24 @@ export function rolesFromParsed(parsed) {
   return roles;
 }
 
+/**
+ * SOW-091: a github_id -> login Map from parsed roles.yml (each staff entry carries a login next to its
+ * github_id). rolesFromParsed drops the login; the roster uses this to name a staff/superadmin member who has no
+ * members-index entry (no published content), so their row resolves to "@login" instead of the raw id.
+ */
+export function roleLoginsFromParsed(parsed) {
+  const logins = new Map();
+  const add = (list) => {
+    for (const e of list ?? []) {
+      const id = idOf(e);
+      const login = e?.login != null && e.login !== '' ? String(e.login) : null;
+      if (id && id !== 'REPLACE_AT_M0' && login) logins.set(id, login);
+    }
+  };
+  add(parsed?.moderators); add(parsed?.admins); add(parsed?.superadmins);
+  return logins;
+}
+
 /** Build a Map of banned github_id -> entry from a parsed bans.yml ({ bans: [...] }). */
 export function bansFromParsed(parsed) {
   const bans = new Map();

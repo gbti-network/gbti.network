@@ -94,3 +94,37 @@ test('empty / missing inputs yield an empty roster, not a throw', () => {
   assert.deepEqual(buildRoster({}), { roster: [], summary: { total: 0, staff: 0, grandfathered: 0, banned: 0, members: 0 } });
   assert.deepEqual(buildRoster(), { roster: [], summary: { total: 0, staff: 0, grandfathered: 0, banned: 0, members: 0 } });
 });
+
+// SOW-091: the username resolves through the roles login + the Stripe github_login before the raw-id fallback,
+// so a staff member or a paid/trial member with no published content is named instead of "id <github_id>".
+test('buildRoster: a staff member absent from members-index resolves to its roles.yml login', () => {
+  const { roster } = buildRoster({
+    roles: { admins: [{ github_id: '77', login: 'staffy' }], moderators: [], superadmins: [] },
+    membersIndex: { members: {} }, // no published content -> not in the index
+  });
+  const row = roster.find((r) => r.githubId === '77');
+  assert.equal(row.username, 'staffy');
+  assert.equal(row.role, 'admin');
+});
+
+test('buildRoster: a member present only via Stripe resolves to its github_login (stripeLogins)', () => {
+  const { roster } = buildRoster({
+    membersIndex: { members: {} },
+    stripeStatuses: { 88: 'trialing' },
+    stripeLogins: { 88: 'trialer' },
+  });
+  const row = roster.find((r) => r.githubId === '88');
+  assert.equal(row.username, 'trialer');
+  assert.equal(row.status, 'trialing');
+});
+
+test('buildRoster: members-index wins over the roles login; an unknown member keeps the raw-id fallback (null username)', () => {
+  const { roster } = buildRoster({
+    roles: { admins: [{ github_id: '5', login: 'roles-login' }], moderators: [], superadmins: [] },
+    membersIndex: { members: { 5: 'index-name' } },
+    stripeStatuses: { 99: 'paid' }, // 99 has no login in any source
+  });
+  const by = Object.fromEntries(roster.map((r) => [r.githubId, r]));
+  assert.equal(by['5'].username, 'index-name'); // members-index still wins
+  assert.equal(by['99'].username, null); // no login source -> null (the dashboard falls back to the raw id)
+});

@@ -91,14 +91,17 @@ export async function membershipAdminStatuses(request, env, deps = {}) {
   const stripe = (deps.makeStripe ?? createStripeClient)({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
   const now = deps.now ?? new Date();
   const statuses = {};
+  const logins = {}; // SOW-091: github_id -> github_login (captured at signup) so the roster names a member with no content
   try {
     for await (const customer of stripe.listCustomers()) {
       const gid = String(customer?.metadata?.github_id ?? '');
       if (!gid) continue; // not a membership customer
       statuses[gid] = deriveStatusFromCustomer(customer, now);
+      const login = String(customer?.metadata?.github_login ?? '').trim();
+      if (login) logins[gid] = login;
     }
   } catch {
     return { status: 502, body: { error: 'stripe_unavailable', message: 'could not read membership statuses' } };
   }
-  return { status: 200, body: { ok: true, statuses } };
+  return { status: 200, body: { ok: true, statuses, logins } };
 }

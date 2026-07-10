@@ -39,6 +39,12 @@ const CSS = `
   .cbody p { margin:0 0 .5em; } .cbody :is(h1,h2,h3,h4){ font-weight:700; margin:.6em 0 .2em; }
   .cbody a { color:var(--accent, var(--brand)); }
   .cbody pre { background:var(--bg, rgba(0,0,0,.05)); padding:8px; border-radius:6px; overflow:auto; }
+  /* SOW-096: a per-viewer collapse fold (client-only, distinct from the moderator Hide). */
+  .cfold { flex:none; display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; padding:0; margin-right:1px; background:transparent; border:0; color:var(--muted); cursor:pointer; }
+  .cfold:hover { color:var(--fg); }
+  .cfold svg { width:12px; height:12px; transition:transform .12s ease; }
+  .cfold.collapsed svg { transform:rotate(-90deg); }
+  .cbody.clamp, .clocked.clamp { display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
   .clocked { font-size:12.5px; color:var(--muted); } .clocked a { color:var(--brand); font-weight:600; }
   .empty { color:var(--muted); font-size:12.5px; margin:0 0 8px; }
 `;
@@ -137,6 +143,7 @@ class GbtiDiscussion extends GbtiElement {
     this._last = { targetType, targetSlug, rows }; // re-render locally after a delete (no server round-trip)
     const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
     const TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    const CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'; // SOW-096: the collapse chevron
     const canMod = (RANK[this._role] ?? 0) >= RANK.moderator;
     const canRemove = (RANK[this._role] ?? 0) >= RANK.admin; // admin+ hard-deletes any member comment
     // SOW-112 QA: author notes pin FIRST with a badge (mirroring the public page), never mid-thread as
@@ -145,7 +152,7 @@ class GbtiDiscussion extends GbtiElement {
     const hideNotes = this.hasAttribute('data-gbti-hide-author-notes');
     const visible = hideNotes ? rows.filter(({ c }) => !c.authorNote) : rows;
     const ordered = [...visible.filter(({ c }) => c.authorNote), ...visible.filter(({ c }) => !c.authorNote)];
-    const thread = ordered.map(({ c, html }) => {
+    const thread = ordered.map(({ c, html }, i) => {
       // SOW-112 QA: a deleting/deleted comment renders as a tombstone IMMEDIATELY (optimistic — the popup
       // confirm is the commitment point; the server result upgrades the card or flips it to an error).
       const tombKey = [c.path, c.id, `members/${c.author}/comments/${c.id}.md`].find((k) => k && this._tomb?.has(k));
@@ -158,9 +165,15 @@ class GbtiDiscussion extends GbtiElement {
       const reply = c.parentId ? ' reply' : '';
       const badge = (c.authorNote ? `<span class="cbadge cnote">From the author</span>` : '')
         + (c.visibility === 'members' ? `<span class="cbadge">Members</span>` : '');
+      // SOW-096: a per-viewer collapse fold. Keyed on the comment's stable id/path (index as a last resort);
+      // collapsed clamps the body to one line. Client-only view state, nothing on the server changes.
+      const foldKey = String(c.id ?? c.path ?? `i${i}`);
+      const collapsed = this._collapsed?.has(foldKey);
+      const clamp = collapsed ? ' clamp' : '';
       const bodyHtml = (html && html.locked)
-        ? `<div class="clocked">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>`
-        : (typeof html === 'string' && html) ? `<div class="cbody">${html}</div>` : '';
+        ? `<div class="clocked${clamp}">This reply is for members. <a href="https://gbti.network/membership/">Become a member</a> to unlock.</div>`
+        : (typeof html === 'string' && html) ? `<div class="cbody${clamp}">${html}</div>` : '';
+      const foldBtn = `<button class="cfold${collapsed ? ' collapsed' : ''}" type="button" data-fold="${esc(foldKey)}" aria-label="${collapsed ? 'Expand' : 'Collapse'} comment" aria-expanded="${collapsed ? 'false' : 'true'}">${CHEV}</button>`;
       // SOW-071: a moderator+ can Hide a comment (deplatform its file -> draft, so it drops from the thread). Never a
       // house-authored intro (house/comments/<id>.md is not a members/ path; the server would 403 anyway).
       const houseComment = c.author === 'gbti' || c.author === 'house';
@@ -173,15 +186,23 @@ class GbtiDiscussion extends GbtiElement {
         : own ? `<button class="abtn danger" type="button" data-delown="${esc(c.id)}" data-key="${esc(c.path)}">${TRASH} Delete</button>` : '';
       const acts = hideBtn || delBtn ? `<span class="acts">${hideBtn}${delBtn}</span>` : '';
       return `<div class="comment${reply}">${avatarHtml(c.author)}<div class="cmain">
-        <div class="cmeta"><span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}${acts}</div>
+        <div class="cmeta">${foldBtn}<span class="cname">${esc(authorName(c.author))}</span><span class="cwhen">${esc(relTime(c.createdAt))}</span>${badge}${acts}</div>
         ${bodyHtml}
       </div></div>`;
     }).join('');
     const threadHtml = ordered.length ? `<div class="thread">${thread}</div>` : `<p class="empty">No replies yet. Start the conversation.</p>`;
     this.set(this.css(CSS) + threadHtml + this._composeHtml(targetType, targetSlug));
+    this.$$('[data-fold]').forEach((b) => b.addEventListener('click', () => this._toggleFold(b.dataset.fold)));
     this.$$('[data-hidec]').forEach((b) => b.addEventListener('click', () => this._hideComment(b.dataset.hidec)));
     this.$$('[data-delc]').forEach((b) => b.addEventListener('click', () => this._deleteComment(b.dataset.delc)));
     this.$$('[data-delown]').forEach((b) => b.addEventListener('click', () => this._deleteOwnComment(b.dataset.delown)));
+  }
+
+  // SOW-096: toggle a comment's per-viewer collapse fold + re-render the thread locally (no server round-trip).
+  _toggleFold(key) {
+    if (!this._collapsed) this._collapsed = new Set();
+    if (this._collapsed.has(key)) this._collapsed.delete(key); else this._collapsed.add(key);
+    if (this._last) this._render(this._last.targetType, this._last.targetSlug, this._last.rows);
   }
 
   // SOW-112 QA (owner-directed flow): popup confirm -> the card swaps to a tombstone IMMEDIATELY

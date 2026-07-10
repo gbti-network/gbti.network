@@ -1485,11 +1485,16 @@ export async function getOverridesRoster(ctx) {
   // Worker is down, test mode, or the caller is not admin to it) the roster still renders with 'unknown' Stripe
   // tiers — the override-derived status (the authoritative part) never depends on this call.
   let stripeStatuses = null;
+  let stripeLogins = null; // SOW-091: the github_id -> github_login map, to name a member with no content
   try {
     const token = ctx.store?.get?.('githubToken');
-    if (token) stripeStatuses = await workerGetRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-  } catch { stripeStatuses = null; }
-  return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed, stripeStatuses });
+    if (token) {
+      const r = await workerGetRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+      stripeStatuses = r?.statuses ?? null;
+      stripeLogins = r?.logins ?? null;
+    }
+  } catch { stripeStatuses = null; stripeLogins = null; }
+  return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed, stripeStatuses, stripeLogins });
 }
 
 // SOW-038 P2: the open content-PR queue for the superadmin dashboard. Admin-gated. Lists every OPEN upstream PR

@@ -7,7 +7,11 @@ const trimBase = (signupBase) => String(signupBase || '').replace(/\/$/, '');
 
 export class AdminClientError extends Error {}
 
-/** The { github_id -> stripe status } map for the superadmin dashboard. Admin-only (the Worker enforces it). */
+/**
+ * The Stripe roster maps for the superadmin dashboard. Admin-only (the Worker enforces it). Returns
+ * { statuses: { github_id -> stripe status }, logins: { github_id -> github_login } }; the logins feed the
+ * SOW-091 username fallback for a paid/trial member with no published content.
+ */
 export async function getRosterStatuses({ token, signupBase, fetch = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError('not signed in');
   const res = await fetch(trimBase(signupBase) + '/membership/admin/statuses', {
@@ -17,7 +21,7 @@ export async function getRosterStatuses({ token, signupBase, fetch = globalThis.
   let data = null;
   try { data = await res.json(); } catch { /* ignore */ }
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin statuses request failed (${res.status})`);
-  return data?.statuses ?? {};
+  return { statuses: data?.statuses ?? {}, logins: data?.logins ?? {} };
 }
 
 /** SOW-100: the guild's Discord channels (id, name, type, parentId) for the categories workspace.
