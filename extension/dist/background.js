@@ -18577,6 +18577,20 @@ function rolesFromParsed2(parsed) {
   assign(parsed?.superadmins, ROLE2.superadmin);
   return roles;
 }
+function roleLoginsFromParsed(parsed) {
+  const logins = /* @__PURE__ */ new Map();
+  const add = (list) => {
+    for (const e of list ?? []) {
+      const id = idOf(e);
+      const login = e?.login != null && e.login !== "" ? String(e.login) : null;
+      if (id && id !== "REPLACE_AT_M0" && login) logins.set(id, login);
+    }
+  };
+  add(parsed?.moderators);
+  add(parsed?.admins);
+  add(parsed?.superadmins);
+  return logins;
+}
 function bansFromParsed(parsed) {
   const bans = /* @__PURE__ */ new Map();
   for (const e of parsed?.bans ?? []) {
@@ -18644,12 +18658,14 @@ function isContributionToFolder(paths, ownerFolder) {
 }
 
 // membership/superadmin-roster.mjs
-function buildRoster({ roles, bans, grandfathered, membersIndex, stripeStatuses } = {}, now = /* @__PURE__ */ new Date()) {
+function buildRoster({ roles, bans, grandfathered, membersIndex, stripeStatuses, stripeLogins } = {}, now = /* @__PURE__ */ new Date()) {
   const roleMap = rolesFromParsed2(roles);
+  const roleLogins = roleLoginsFromParsed(roles);
   const banMap = bansFromParsed(bans);
   const gfMap = grandfathersFromParsed(grandfathered);
   const idx = membersIndexFromParsed(membersIndex);
   const stripe = stripeStatuses && typeof stripeStatuses === "object" ? stripeStatuses : {};
+  const stripeLoginMap = stripeLogins && typeof stripeLogins === "object" ? stripeLogins : {};
   const overrides = { bans: banMap, grandfathers: gfMap, roles: roleMap };
   const ids = /* @__PURE__ */ new Set([...idx.keys(), ...roleMap.keys(), ...banMap.keys(), ...gfMap.keys(), ...Object.keys(stripe)]);
   const roster = [...ids].map((id) => {
@@ -18658,7 +18674,9 @@ function buildRoster({ roles, bans, grandfathered, membersIndex, stripeStatuses 
     const gf = gfMap.get(id);
     return {
       githubId: id,
-      username: idx.get(id) || banMap.get(id)?.login || gf?.login || null,
+      // SOW-091: resolve the display username through every known source before falling back to the raw id, so a
+      // staff member (roles login) or a paid/trial member with no published content (Stripe github_login) is named.
+      username: idx.get(id) || banMap.get(id)?.login || gf?.login || roleLogins.get(id) || stripeLoginMap[id] || null,
       role: roleOf2(id, roleMap),
       banned: isBanned(id, banMap),
       grandfathered: grandfatherActive2(id, gfMap, now),
@@ -18761,7 +18779,7 @@ async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis
   } catch {
   }
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin statuses request failed (${res.status})`);
-  return data?.statuses ?? {};
+  return { statuses: data?.statuses ?? {}, logins: data?.logins ?? {} };
 }
 async function getDiscordChannels({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
@@ -19823,13 +19841,19 @@ async function getOverridesRoster(ctx) {
     readText("house/members-index.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {})
   ]);
   let stripeStatuses = null;
+  let stripeLogins = null;
   try {
     const token = ctx.store?.get?.("githubToken");
-    if (token) stripeStatuses = await getRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    if (token) {
+      const r = await getRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+      stripeStatuses = r?.statuses ?? null;
+      stripeLogins = r?.logins ?? null;
+    }
   } catch {
     stripeStatuses = null;
+    stripeLogins = null;
   }
-  return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed, stripeStatuses });
+  return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed, stripeStatuses, stripeLogins });
 }
 async function getOpenPulls(ctx) {
   await requireAdmin(ctx);
