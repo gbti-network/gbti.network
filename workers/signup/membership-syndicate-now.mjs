@@ -132,6 +132,7 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   // rendered/sanitized SERVER-side like the title template; other destinations ignore them.
   const redditKind = payload?.redditKind === 'self' ? 'self' : 'link';
   const bodyTemplate = String(payload?.bodyTemplate || '').trim();
+  const commentTemplate = String(payload?.commentTemplate || '').trim(); // the separately-templated first comment
 
   // The queue-item builder is the validation boundary: type whitelist, slug required, and the no-body
   // guard (a body/encryptedBody never reaches the queue or a channel).
@@ -176,7 +177,11 @@ export async function handleSyndicateNow(request, env, deps = {}) {
     const adapter = set[destination];
     if (!adapter) return { status: 400, body: { error: 'invalid', message: 'unknown destination' } };
     const extras = destination === 'reddit'
-      ? { redditKind, ...(bodyTemplate ? { bodyText: renderTemplate(bodyTemplate, item, { limit: 9500 }) } : {}) }
+      ? {
+          redditKind,
+          ...(bodyTemplate ? { bodyText: renderTemplate(bodyTemplate, item, { limit: 9500 }) } : {}),
+          ...(commentTemplate ? { commentText: renderTemplate(commentTemplate, item, { limit: 9500 }) } : {}),
+        }
       : {};
     try { result = await adapter.post({ ...item, textOverride: text, ...extras }); }
     catch (err) { result = { ok: false, error: err?.message || `${destination} post failed` }; }

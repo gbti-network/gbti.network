@@ -48,7 +48,7 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
   assert.deepEqual(m, {
     enabled: true, require_approval: true, hold_minutes: 60, upvote_threshold: 2, classify: 'ai',
     // SOW-088: reddit-body rides in the mirror like every template type (the drain/manual rail read the admin-edited value from KV).
-    templates: { share: 'New {content-type} published by {member-discord-username}: "{title}" {url}', post: 'New {content-type} published by {member-discord-username}: "{title}" {url}', product: 'New {content-type} published by {member-discord-username}: "{title}" {url}', prompt: 'New {content-type} published by {member-discord-username}: "{title}" {url}', 'reddit-body': 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}' },
+    templates: { share: 'New {content-type} published by {member-discord-username}: "{title}" {url}', post: 'New {content-type} published by {member-discord-username}: "{title}" {url}', product: 'New {content-type} published by {member-discord-username}: "{title}" {url}', prompt: 'New {content-type} published by {member-discord-username}: "{title}" {url}', 'reddit-body': '{short-description}', 'reddit-comment': 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}' },
     news_engagement: { enabled: false, open_threshold: 2, tier: 'paid', comment_autopost: true },
     // SOW-088: reddit joined CHANNELS (default false) so the admin pipeline switch survives normalization.
     channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false },
@@ -122,7 +122,8 @@ test('setSyndicationSettings patches only the supplied fields, validates hard, a
 test('reddit-body: default template, config override, and the admin edit path', async () => {
   const { TEMPLATE_TYPES, DEFAULT_TEMPLATES, templateFor, syndicationConfigFromParsed } = await import('../membership/syndication-config-core.mjs');
   assert.ok(TEMPLATE_TYPES.includes('reddit-body'));
-  assert.match(DEFAULT_TEMPLATES['reddit-body'], /\{author-note\}/);
+  assert.equal(DEFAULT_TEMPLATES['reddit-body'], '{short-description}'); // the description under the title
+  assert.match(DEFAULT_TEMPLATES['reddit-comment'], /\{author-note\}/); // the separately-templated first comment
   assert.equal(templateFor(syndicationConfigFromParsed({}), 'reddit-body'), DEFAULT_TEMPLATES['reddit-body']);
   const cfg = syndicationConfigFromParsed({ syndication: { templates: { 'reddit-body': 'Custom {author-note}' } } });
   assert.equal(templateFor(cfg, 'reddit-body'), 'Custom {author-note}');

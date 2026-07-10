@@ -49,18 +49,21 @@ export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
 // back to the no-ping full name when none resolves), {member-discord-username} (the mention, else the public
 // profile Discord handle, else the GitHub username; SOW-088), {content-type} (article/product/prompt/link),
 // {fullName}, {author}, {shareurl}/{url}, {title}, {category}. A type with no template gets its default.
-export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body']);
+export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment']);
 // SOW-088 (owner-directed): ONE default Discord format for every type.
 const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
-// SOW-088: the Reddit BODY template (a link post's first comment / a text post's content). Owner-authored
-// default; editable in the admin templates card like the per-type title templates.
-const DEFAULT_REDDIT_BODY = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
+// SOW-088: the Reddit BODY template = the DESCRIPTION under the title on the link post (the embed card
+// comes from the item URL automatically); the COMMENT template = the separately-controlled first comment
+// (owner-directed 2026-07-10: keep both, templated independently). Editable in the admin templates card.
+const DEFAULT_REDDIT_BODY = '{short-description}';
+const DEFAULT_REDDIT_COMMENT = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
   post: DEFAULT_FORMAT,
   product: DEFAULT_FORMAT,
   prompt: DEFAULT_FORMAT,
   'reddit-body': DEFAULT_REDDIT_BODY,
+  'reddit-comment': DEFAULT_REDDIT_COMMENT,
 });
 
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({

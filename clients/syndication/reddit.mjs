@@ -64,6 +64,25 @@ export function createRedditAdapter({ env = {}, fetchImpl = globalThis.fetch } =
       const id = body?.json?.data?.id || body?.json?.data?.name || null;
       const url = body?.json?.data?.url || null;
       const out = { ok: true, id, url };
+      // The separately-templated FIRST COMMENT (owner-directed: independent of the post body/description).
+      // Fail-soft: a comment miss never un-sends the post; the result surfaces it.
+      if (item.commentText && id) {
+        const thing = String(body?.json?.data?.name || (String(id).startsWith('t3_') ? id : `t3_${id}`));
+        try {
+          const cRes = await fetchImpl('https://oauth.reddit.com/api/comment', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },
+            body: new URLSearchParams({ api_type: 'json', thing_id: thing, text: String(item.commentText) }).toString(),
+          });
+          const cBody = await cRes.json().catch(() => ({}));
+          const cErrors = cBody?.json?.errors;
+          out.comment = (cRes.ok && !(Array.isArray(cErrors) && cErrors.length))
+            ? { id: cBody?.json?.data?.things?.[0]?.data?.id ?? null }
+            : { error: `reddit comment ${Array.isArray(cErrors) && cErrors.length ? cErrors[0].join(' ') : `status ${cRes.status}`}`.slice(0, 160) };
+        } catch (err) {
+          out.comment = { error: (err?.message || 'reddit comment failed').slice(0, 160) };
+        }
+      }
       return out;
     },
   };

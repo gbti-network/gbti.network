@@ -18855,12 +18855,12 @@ async function getSyndicateNow({ token, signupBase, fetch: fetch2 = globalThis.f
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now info failed (${res.status})`);
   return data;
 }
-async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase9(signupBase) + "/membership/syndicate-now", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate })
+    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate })
   });
   let data = null;
   try {
@@ -19718,10 +19718,10 @@ async function getSyndicateNowInfo(ctx) {
   const token = ctx.store?.get?.("githubToken");
   return getSyndicateNow({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
-async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate } = {}) {
+async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
-  return syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  return syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -20702,9 +20702,10 @@ var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   comment_autopost: true
   // one comment posts immediately (deliberate engagement)
 });
-var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body"]);
+var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
-var DEFAULT_REDDIT_BODY = `The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:
+var DEFAULT_REDDIT_BODY = "{short-description}";
+var DEFAULT_REDDIT_COMMENT = `The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:
 
 "{author-note}"
 
@@ -20718,7 +20719,8 @@ var DEFAULT_TEMPLATES = Object.freeze({
   post: DEFAULT_FORMAT,
   product: DEFAULT_FORMAT,
   prompt: DEFAULT_FORMAT,
-  "reddit-body": DEFAULT_REDDIT_BODY
+  "reddit-body": DEFAULT_REDDIT_BODY,
+  "reddit-comment": DEFAULT_REDDIT_COMMENT
 });
 var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,

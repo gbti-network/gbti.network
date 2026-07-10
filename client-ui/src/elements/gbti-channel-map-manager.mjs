@@ -224,7 +224,7 @@ class GbtiChannelMapManager extends GbtiElement {
       // override; clearing a field saves '' (deletes the override, falls back).
       this._work = {};
       this._base = {};
-      const KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body'];
+      const KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment'];
       for (const ch of TILE_CHANNELS.filter((c) => c.active).map((c) => c.id)) {
         this._work[ch] = {}; this._base[ch] = {};
         for (const k of KEYS) {
@@ -314,8 +314,10 @@ class GbtiChannelMapManager extends GbtiElement {
         <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
         <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || '')}" /></div>`).join('')
       + (cur === 'reddit'
-        ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc('post body / first comment' + custom('reddit-body'))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-body">${esc(work['reddit-body'] || '')}</textarea></div>`
+        ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc('the description under the title' + custom('reddit-body'))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body">${esc(work['reddit-body'] || '')}</textarea></div>
+          <div class="tmpl"><div class="tl"><div class="nm">First comment</div><div class="df">${esc('the brand account\'s first comment' + custom('reddit-comment'))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc(work['reddit-comment'] || '')}</textarea></div>`
         : '');
     return `<section class="card" id="sec-templates" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg></span>

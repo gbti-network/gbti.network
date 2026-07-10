@@ -171,17 +171,28 @@ class GbtiSyndicateNow extends GbtiElement {
     return this._template ?? destDefault;
   }
 
-  /** The Reddit BODY template that will be sent: an explicit edit wins; the default is the ADMIN-stored
-   *  reddit-body template (the templates card), used when the item has an intro or the stored template does
-   *  not reference {author-note} (so a no-intro item never renders empty quotes). A text post appends the
-   *  link when the template lacks {url}, since the body is the whole post there. */
+  /** The ADMIN-stored template for a reddit key (channel override -> shared map), guarded so a template
+   *  referencing {author-note} never pre-fills for a no-intro item (empty quotes read broken). */
+  _redditStored(key) {
+    const tpl = this._info?.channelTemplates?.reddit?.[key] || this._info?.templates?.[key] || '';
+    return tpl && (this._authorNote || !/\{author-note\}/.test(tpl)) ? tpl : '';
+  }
+
+  /** The Reddit BODY template (the DESCRIPTION under the title; the embed card comes from the item URL):
+   *  an explicit edit wins, else the stored reddit-body template. A text post appends the link when the
+   *  template lacks {url}, since the body is the whole post there. */
   _effectiveBody() {
     if (this._bodyTemplate != null) return this._bodyTemplate;
-    const tpl = this._info?.channelTemplates?.reddit?.['reddit-body'] || this._info?.templates?.['reddit-body'] || '';
-    if (tpl && (this._authorNote || !/\{author-note\}/.test(tpl))) {
-      return tpl + (this._redditKind === 'self' && !/\{url\}/.test(tpl) ? '\n\n{url}' : '');
-    }
+    const tpl = this._redditStored('reddit-body');
+    if (tpl) return tpl + (this._redditKind === 'self' && !/\{url\}/.test(tpl) ? '\n\n{url}' : '');
     return this._redditKind === 'self' ? '{url}' : '';
+  }
+
+  /** The separately-templated FIRST COMMENT (owner-directed): an explicit edit wins, else the stored
+   *  reddit-comment template; blank = no comment is posted. */
+  _effectiveComment() {
+    if (this._commentTemplate != null) return this._commentTemplate;
+    return this._redditStored('reddit-comment');
   }
 
   _composeHtml() {
@@ -223,15 +234,21 @@ class GbtiSyndicateNow extends GbtiElement {
       const kind = this._redditKind || 'link';
       const bodyTemplate = this._effectiveBody();
       const bodyPreview = bodyTemplate ? renderTemplate(bodyTemplate, item, { limit: 2000 }) : '';
+      const commentTemplate = this._effectiveComment();
+      const commentPreview = commentTemplate ? renderTemplate(commentTemplate, item, { limit: 2000 }) : '';
       redditRows = `<label>Post kind</label>
         <select data-reddit-kind>
           <option value="link"${kind === 'link' ? ' selected' : ''}>Link post (the item URL is the link)</option>
           <option value="self"${kind === 'self' ? ' selected' : ''}>Text post (the body below is the content)</option>
         </select>
-        <label>Body template <span style="font-weight:400">(optional; same tokens as the title)</span></label>
+        <label>Body template <span style="font-weight:400">(the description under the title; optional; same tokens as the title)</span></label>
         <textarea data-reddit-body>${esc(bodyTemplate)}</textarea>
         <label>Body preview</label>
-        <div class="preview" data-reddit-body-preview>${esc(bodyPreview)}</div>`;
+        <div class="preview" data-reddit-body-preview>${esc(bodyPreview)}</div>
+        <label>First comment template <span style="font-weight:400">(optional; posts as the brand account's first comment; blank = none)</span></label>
+        <textarea data-reddit-comment>${esc(commentTemplate)}</textarea>
+        <label>Comment preview</label>
+        <div class="preview" data-reddit-comment-preview>${esc(commentPreview)}</div>`;
     }
     const liNote = dest === 'linkedin'
       ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>`
@@ -247,11 +264,14 @@ class GbtiSyndicateNow extends GbtiElement {
       : elsewhere.length
         ? `<p class="info">Not posted to ${esc(DEST_LABEL[dest] || dest)} yet. Previously posted to ${elsewhere.map((d) => this._sendPhrase(d, sends[d])).join('; ')}.</p>`
         : '';
+    const cmtState = this._result?.comment
+      ? (this._result.comment.error ? ` The first comment failed: ${esc(this._result.comment.error)}.` : ' The first comment posted.')
+      : '';
     const fwdState = this._result?.forwarded
       ? (this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : ' Forwarded to the secondary channel.')
       : '';
     const result = this._result
-      ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}${fwdState}</p>`
+      ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}${fwdState}${cmtState}</p>`
       : '';
     return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
@@ -289,11 +309,17 @@ class GbtiSyndicateNow extends GbtiElement {
       const pv = this.$('[data-reddit-body-preview]');
       if (pv) pv.textContent = rb.value ? renderTemplate(rb.value, this._item(), { limit: 2000 }) : '';
     });
+    const rc = this.$('[data-reddit-comment]');
+    if (rc) rc.addEventListener('input', () => {
+      this._commentTemplate = rc.value;
+      const pv = this.$('[data-reddit-comment-preview]');
+      if (pv) pv.textContent = rc.value ? renderTemplate(rc.value, this._item(), { limit: 2000 }) : '';
+    });
     this.on('[data-publish]', 'click', () => this._publish());
   }
 
   async _pickDest(dest) {
-    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
+    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
     this._dest = dest;
     this._step = 'compose';
     this._err = null;
@@ -335,6 +361,8 @@ class GbtiSyndicateNow extends GbtiElement {
         payload.redditKind = this._redditKind === 'self' ? 'self' : 'link';
         const body = this._effectiveBody().trim();
         if (body) payload.bodyTemplate = body;
+        const comment = this._effectiveComment().trim();
+        if (comment) payload.commentTemplate = comment;
       }
       if (this._dest === 'discord') {
         payload.channelId = this._channelId;

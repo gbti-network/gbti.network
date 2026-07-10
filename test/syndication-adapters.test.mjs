@@ -254,3 +254,25 @@ test('discord adapters pick their channel template set', async () => {
   await catAdapter.post(it);
   assert.equal(sent[1].content, 'In ai: T', 'category: its own override wins');
 });
+
+// SOW-088 (owner-directed): the FIRST COMMENT is its own templated leg, independent of the post body —
+// a link post carries the body natively AND may post a separately-rendered first comment.
+test('reddit: commentText posts as the first comment alongside the native body', async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts) => {
+    calls.push({ url, opts });
+    if (url.includes('/api/v1/access_token')) return { ok: true, status: 200, json: async () => ({ access_token: 'at1' }) };
+    if (url.includes('/api/comment')) return { ok: true, status: 200, json: async () => ({ json: { errors: [], data: { things: [{ data: { id: 'c9' } }] } } }) };
+    return { ok: true, status: 200, json: async () => ({ json: { errors: [], data: { id: 'x1', name: 't3_x1', url: 'https://r/x1' } } }) };
+  };
+  const env = { REDDIT_CLIENT_ID: 'id', REDDIT_CLIENT_SECRET: 'sec', REDDIT_REFRESH_TOKEN: 'rt', REDDIT_SUBREDDIT: 'GBTI_network' };
+  const { createRedditAdapter } = await import('../clients/syndication/reddit.mjs');
+  const rd = createRedditAdapter({ env, fetchImpl });
+  const r = await rd.post({ ...item, textOverride: 'T', redditKind: 'link', bodyText: 'the description', commentText: 'From GBTI...' });
+  const p = new URLSearchParams(calls[1].opts.body);
+  assert.equal(p.get('text'), 'the description', 'the body stays on the post');
+  const cp = new URLSearchParams(calls[2].opts.body);
+  assert.equal(cp.get('thing_id'), 't3_x1');
+  assert.equal(cp.get('text'), 'From GBTI...');
+  assert.equal(r.comment.id, 'c9');
+});
