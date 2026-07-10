@@ -5904,15 +5904,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           });
         }
       }
+      const bounded = Promise.race([
+        this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }),
+        new Promise((_, rej) => {
+          setTimeout(() => rej(new Error("timed out")), 12e3);
+        })
+      ]);
       try {
-        items = (await this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }))?.items ?? [];
+        items = (await bounded)?.items ?? [];
         wbCacheSet(targetSlug, cacheKey, items).catch(() => {
         });
-      } catch {
-        if (!this._painted) this.set(this.css(CSS7) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
+      } catch (err) {
+        if (!this._painted) this.set(this.css(CSS7) + `<p class="empty">Could not load the discussion right now${err?.message ? ` (${esc(err.message)})` : ""}.</p>` + this._composeHtml(targetType, targetSlug));
         return;
       }
-      await this._resolveAndRender(targetType, targetSlug, items);
+      try {
+        await this._resolveAndRender(targetType, targetSlug, items);
+      } catch (err) {
+        if (!this._painted) this.set(this.css(CSS7) + `<p class="empty">Could not render the discussion (${esc(err?.message || "render error")}).</p>` + this._composeHtml(targetType, targetSlug));
+      }
       this._loaded = true;
     }
     // SOW-089: resolve every body (decrypt members rows via the Worker) and render — shared by the SWR cached

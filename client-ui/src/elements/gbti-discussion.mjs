@@ -123,12 +123,22 @@ class GbtiDiscussion extends GbtiElement {
         this._resolveAndRender(targetType, targetSlug, cached.items).catch(() => {});
       }
     }
-    try { items = (await this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }))?.items ?? []; wbCacheSet(targetSlug, cacheKey, items).catch(() => {}); }
-    catch {
-      if (!this._painted) this.set(this.css(CSS) + `<p class="empty">Could not load the discussion right now.</p>` + this._composeHtml(targetType, targetSlug));
-      return; // the cached paint (if any) stays up when live fails
+    // A hang here used to leave "Loading..." forever with no diagnostics (hit live 2026-07-10): the live
+    // fetch is now TIME-BOUND and the render tail is guarded, so the element always lands on content, the
+    // cached paint, or an error line that says so.
+    const bounded = Promise.race([
+      this.client.listComments({ targetType, targetSlug, aliases: this._aliases() }),
+      new Promise((_, rej) => { setTimeout(() => rej(new Error('timed out')), 12000); }),
+    ]);
+    try { items = (await bounded)?.items ?? []; wbCacheSet(targetSlug, cacheKey, items).catch(() => {}); }
+    catch (err) {
+      if (!this._painted) this.set(this.css(CSS) + `<p class="empty">Could not load the discussion right now${err?.message ? ` (${esc(err.message)})` : ''}.</p>` + this._composeHtml(targetType, targetSlug));
+      return; // the cached paint (if any) stays up when live fails; the compose box is self-contained
     }
-    await this._resolveAndRender(targetType, targetSlug, items);
+    try { await this._resolveAndRender(targetType, targetSlug, items); }
+    catch (err) {
+      if (!this._painted) this.set(this.css(CSS) + `<p class="empty">Could not render the discussion (${esc(err?.message || 'render error')}).</p>` + this._composeHtml(targetType, targetSlug));
+    }
     this._loaded = true;
   }
 
