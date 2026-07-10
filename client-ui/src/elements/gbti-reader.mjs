@@ -228,6 +228,7 @@ class GbtiReader extends GbtiElement {
       ...it,
       title: it.title || fm.title || '',
       author: it.author || fm.author || '',
+      shortDescription: it.shortDescription || fm.shortDescription || '',
       url: it.url || (fm.slug && URL_BASE[it.type] ? `${URL_BASE[it.type]}/${fm.slug}/` : ''),
       publishedAt: it.publishedAt ?? (fm.publishedAt ? Date.parse(fm.publishedAt) : null),
     };
@@ -432,7 +433,7 @@ class GbtiReader extends GbtiElement {
     const syndUrl = it.url ? (it.type === 'share' ? it.url : SITE + it.url) : '';
     const authorDiscord = this._author?.entry?.links?.discord || '';
     const synd = (resolved && slug && ['post', 'product', 'prompt', 'share'].includes(it.type))
-      ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || '')}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ''} data-gbti-title="${esc(it.title || '')}" data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ''}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ''}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ''}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ''}></gbti-syndicate-now>`
+      ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || '')}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ''} data-gbti-title="${esc(it.title || '')}"${it.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription))}"` : ''} data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ''}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ''}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ''}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ''}></gbti-syndicate-now>`
       : '';
     // The author drawer only renders once resolved (so its data is present); while loading the side column is empty.
     const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';

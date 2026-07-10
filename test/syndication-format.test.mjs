@@ -110,3 +110,11 @@ test('{member-url} renders the public profile URL and is empty without an author
   assert.equal(renderTemplate('{member-url}', { source: 'prompt', author: 'atwellpub' }, { limit: 200 }), 'https://gbti.network/members/atwellpub/');
   assert.equal(renderTemplate('x {member-url}', { source: 'prompt' }, { limit: 200 }), 'x');
 });
+
+// SOW-088 {short-description}: the item's shortDescription (the queue item blurb, filled by the CI
+// enqueue and the manual popup alike), sanitized like every var.
+test('{short-description} renders the blurb and sanitizes mentions', () => {
+  assert.equal(renderTemplate('{short-description}', { source: 'prompt', blurb: 'A drop-in /sow skill.' }, { limit: 300 }), 'A drop-in /sow skill.');
+  assert.equal(renderTemplate('x {short-description}', { source: 'prompt' }, { limit: 300 }), 'x');
+  assert.match(renderTemplate('{short-description}', { source: 'prompt', blurb: 'hey @everyone' }, { limit: 300 }), /@.everyone/);
+});

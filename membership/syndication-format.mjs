@@ -39,6 +39,7 @@ function truncate(text, limit) {
  *   {fullName}       the profile displayName (fallback @login text; sanitized, never pings)
  *   {author}         the @login text (sanitized, never pings)
  *   {member-url}     the member's public profile URL (gbti.network/members/<login>/)
+ *   {short-description}  the item's shortDescription (carried as the queue item blurb)
  *   {shareurl} {url} the item's link
  *   {title} {category}  the item metadata
  * Every substitution EXCEPT the validated `<@id>` mention passes through sanitizeMentions, so an
@@ -70,6 +71,7 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
     category: sanitizeMentions(item.category || ''),
     authornote: sanitizeMentions(item.authorNote || ''), // {author-note}: the from-the-author intro (public items only)
     memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : '', // {member-url}: the public profile
+    shortdescription: sanitizeMentions(item.blurb || ''), // {short-description}: the item's shortDescription (the queue item's blurb)
   };
   // Hyphenated token names ({member-discord-username}, {content-type}) normalize to the same key.
   const text = String(template || '')

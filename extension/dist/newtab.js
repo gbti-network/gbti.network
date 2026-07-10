@@ -10423,7 +10423,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <p class="hint">The category to Discord-channel map lives in the Categories workspace (Admin -> Categories); this tab keeps the templates, news auto-share, and moderation word lists. ${this._channels.length} categories are mapped.</p>
       ${this._pipelineHtml()}
-      <h4>Syndication templates <span class="hint">(variables: {memberdiscord} {fullName} {author} {shareurl} {title} {category} {content-type} {author-note} {member-url}; blank = default; reddit-body = the Reddit post body / first comment)</span></h4>
+      <h4>Syndication templates <span class="hint">(variables: {memberdiscord} {fullName} {author} {shareurl} {title} {category} {content-type} {author-note} {member-url} {short-description}; blank = default; reddit-body = the Reddit post body / first comment)</span></h4>
       ${tmplRows}
       ${this._engagementHtml()}
       ${listBlocks}
@@ -13592,8 +13592,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       category: sanitizeMentions(item.category || ""),
       authornote: sanitizeMentions(item.authorNote || ""),
       // {author-note}: the from-the-author intro (public items only)
-      memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : ""
+      memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : "",
       // {member-url}: the public profile
+      shortdescription: sanitizeMentions(item.blurb || "")
+      // {short-description}: the item's shortDescription (the queue item's blurb)
     };
     const text = String(template || "").replace(/\{([a-zA-Z-]+)\}/g, (_, name) => vars[name.toLowerCase().replace(/-/g, "")] ?? "").replace(/[ \t]{2,}/g, " ").trim();
     return truncate(text, limit);
@@ -13700,6 +13702,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         authorName: d.gbtiAuthorName || void 0,
         // SOW-088 {fullName}: the profile displayName (else @login)
         title: d.gbtiTitle || "",
+        blurb: d.gbtiBlurb || void 0,
+        // SOW-088 {short-description}: the item's shortDescription
         url: d.gbtiUrl || "",
         image: d.gbtiImage || void 0,
         category: d.gbtiCategory || void 0,
@@ -13841,7 +13845,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
       const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}${fwdState}${cmtState}</p>` : "";
       return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
-      <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {member-url})</span></label>
+      <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {member-url} {short-description})</span></label>
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
       <div class="preview" data-preview>${esc(preview)}</div>
@@ -14161,6 +14165,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         ...it,
         title: it.title || fm.title || "",
         author: it.author || fm.author || "",
+        shortDescription: it.shortDescription || fm.shortDescription || "",
         url: it.url || (fm.slug && URL_BASE[it.type] ? `${URL_BASE[it.type]}/${fm.slug}/` : ""),
         publishedAt: it.publishedAt ?? (fm.publishedAt ? Date.parse(fm.publishedAt) : null)
       };
@@ -14312,7 +14317,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
       const syndUrl = it.url ? it.type === "share" ? it.url : SITE14 + it.url : "";
       const authorDiscord = this._author?.entry?.links?.discord || "";
-      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}" data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS36) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
