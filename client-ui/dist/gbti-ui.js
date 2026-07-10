@@ -13966,7 +13966,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     async _resolveBody(it) {
       try {
-        if (it.type === "share") return await this._body(it.visibility, it.body, it.encryptedBody);
+        if (it.type === "share") {
+          let body2 = it.body;
+          let enc = it.encryptedBody;
+          if (!body2 && !enc && String(it.visibility || "members") === "members") {
+            try {
+              const { items } = await this.client.listShares({ limit: 100 }) ?? {};
+              const hit = (items ?? []).find((s) => it.id && s.id === it.id || s.author === it.author && (s.createdAt === it.createdAt || it.url && s.url === it.url));
+              if (hit) {
+                body2 = hit.body;
+                enc = hit.encryptedBody;
+              }
+            } catch {
+            }
+          }
+          return await this._body(it.visibility, body2, enc);
+        }
         const { frontmatter, body } = await this.client.readItem({ path: it.path });
         this._rawBody = typeof body === "string" ? body : null;
         this._fmCategories = Array.isArray(frontmatter?.categories) ? frontmatter.categories : null;
