@@ -17996,120 +17996,6 @@ function createRepoClient({ token, upstream, fetch = globalThis.fetch, baseUrl =
   };
 }
 
-// client/src/context.mjs
-var UPSTREAM = process.env.GBTI_UPSTREAM || "gbti-network/gbti.network";
-function buildContext(store) {
-  const repoPath = store.get("repoPath");
-  const reader = createReader(repoPath);
-  return {
-    store,
-    reader,
-    stager: createStager(repoPath),
-    getRepoClient() {
-      const token = store.get("githubToken");
-      return token ? createRepoClient({ token, upstream: UPSTREAM }) : null;
-    },
-    identity() {
-      const id = store.get("identity");
-      if (!id) return null;
-      return { login: id.login, githubId: id.githubId, username: (id.username || id.login || "").toLowerCase() };
-    },
-    /** The signed-in user's role from the LOCAL house/roles.yml via the reader (UX gating only; the gate is
-     * authoritative). Going through the reader keeps role resolution host-agnostic. */
-    role() {
-      const id = store.get("identity");
-      if (!id?.githubId) return "member";
-      return roleOf(id.githubId, rolesFromText(reader.readFile("house/roles.yml")));
-    },
-    /** SOW-046 C: whether the signed-in user may publish news to Discord (admin/superadmin OR a roles.yml
-     * `curators:` listing). UX gating only: the Worker re-checks server-side on every publish. */
-    canCurate() {
-      const id = store.get("identity");
-      if (!id?.githubId) return false;
-      const text = reader.readFile("house/roles.yml");
-      return canCurateNews(roleOf(id.githubId, rolesFromText(text)), curatorsFromText(text).has(String(id.githubId)));
-    },
-    /** SOW-011: the effective membership cached at login (paid/trialing/...). Gates publish + the UI notice. */
-    membership() {
-      return store.get("membership") ?? "unknown";
-    }
-  };
-}
-
-// client/src/publish.mjs
-function branchName(type, slug) {
-  return type === "profile" ? "gbti/profile" : `gbti/${type}-${slug}`;
-}
-function defaultMessage(change) {
-  return change.type === "profile" ? "Update profile" : `${change.slug ? "Update" : "Add"} ${change.type}: ${change.slug ?? ""}`.trim();
-}
-function defaultTitle(change) {
-  return change.type === "profile" ? `Update ${change.username}'s profile` : `${change.type}: ${change.slug}`;
-}
-async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false }) {
-  if (!branch) throw new Error("commitToBranchOnFork: a branch name is required");
-  if (!Array.isArray(files) || files.length === 0) throw new Error("commitToBranchOnFork: at least one file change is required");
-  const fork = await repo.ensureFork();
-  const base2 = await repo.getDefaultBranch(repo.upstream);
-  const baseSha = await repo.getBranchSha(fork.full_name, base2);
-  if (resetStale && repo.findOpenPull && repo.forceBranch) {
-    let tip = null;
-    try {
-      tip = await repo.getBranchSha(fork.full_name, branch);
-    } catch {
-      tip = null;
-    }
-    if (tip && tip !== baseSha) {
-      const open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
-      if (!open) await repo.forceBranch(fork.full_name, branch, baseSha);
-    }
-  }
-  await repo.ensureBranch(fork.full_name, branch, baseSha);
-  for (const f of files) {
-    const existingSha = await repo.getFileSha(fork.full_name, f.path, branch);
-    if (f.content === null) {
-      if (existingSha) await repo.deleteFile(fork.full_name, f.path, { message: message ?? `Remove ${f.path}`, branch, sha: existingSha });
-    } else {
-      await repo.putFile(fork.full_name, f.path, {
-        message: message ?? `Update ${f.path}`,
-        contentBase64: toBase64(f.content),
-        branch,
-        sha: existingSha ?? void 0
-      });
-    }
-  }
-  return { fork: fork.full_name, owner: fork.owner, branch, base: base2 };
-}
-async function publishContent({ repo, change, message, title, body }) {
-  if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
-  const branch = branchName(change.type, change.slug);
-  const { fork, owner, base: base2 } = await commitToBranchOnFork({
-    repo,
-    branch,
-    files: [{ path: change.path, content: change.markdown }],
-    message: message ?? defaultMessage(change),
-    resetStale: true
-    // a leftover branch from a merged PR must not seed a conflicting new PR
-  });
-  const head = `${owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) {
-    return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
-  }
-  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base2, body: body ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
-}
-async function publishFiles({ repo, branch, files, message, title, body }) {
-  if (!branch) throw new Error("publishFiles: a branch name is required");
-  if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
-  const { fork, owner, base: base2 } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true });
-  const head = `${owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
-  const pull = await repo.openPull({ title: title ?? message ?? "Update", head, base: base2, body: body ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
-}
-
 // client/src/membership.mjs
 var STAFF = /* @__PURE__ */ new Set([ROLE.moderator, ROLE.admin, ROLE.superadmin]);
 var NON_PUBLISHABLE = /* @__PURE__ */ new Set(["trialing", "expired", "cancelled", "none", "banned"]);
@@ -18206,6 +18092,138 @@ async function resolveMembership({ githubId, token, signupBase, readFile, fetch 
   const banned = bannedIdsFromText(await readSafe(readFile, "house/bans.yml"));
   const grandfathers = grandfathersFromText(await readSafe(readFile, "house/grandfathered.yml"));
   return { stripeStatus, membership: effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now }) };
+}
+
+// client/src/context.mjs
+var UPSTREAM = process.env.GBTI_UPSTREAM || "gbti-network/gbti.network";
+function buildContext(store) {
+  const repoPath = store.get("repoPath");
+  const reader = createReader(repoPath);
+  let membershipFlight = null;
+  return {
+    store,
+    reader,
+    stager: createStager(repoPath),
+    getRepoClient() {
+      const token = store.get("githubToken");
+      return token ? createRepoClient({ token, upstream: UPSTREAM }) : null;
+    },
+    identity() {
+      const id = store.get("identity");
+      if (!id) return null;
+      return { login: id.login, githubId: id.githubId, username: (id.username || id.login || "").toLowerCase() };
+    },
+    /** The signed-in user's role from the LOCAL house/roles.yml via the reader (UX gating only; the gate is
+     * authoritative). Going through the reader keeps role resolution host-agnostic. */
+    role() {
+      const id = store.get("identity");
+      if (!id?.githubId) return "member";
+      return roleOf(id.githubId, rolesFromText(reader.readFile("house/roles.yml")));
+    },
+    /** SOW-046 C: whether the signed-in user may publish news to Discord (admin/superadmin OR a roles.yml
+     * `curators:` listing). UX gating only: the Worker re-checks server-side on every publish. */
+    canCurate() {
+      const id = store.get("identity");
+      if (!id?.githubId) return false;
+      const text = reader.readFile("house/roles.yml");
+      return canCurateNews(roleOf(id.githubId, rolesFromText(text)), curatorsFromText(text).has(String(id.githubId)));
+    },
+    /** SOW-011: the effective membership cached at login (paid/trialing/...). Gates publish + the UI notice. */
+    membership() {
+      return store.get("membership") ?? "unknown";
+    },
+    /** SOW-089 fix: self-heal an 'unknown' cache (see ext-context.mjs for the full story). */
+    async membershipResolved() {
+      const cached2 = store.get("membership");
+      if (cached2 && cached2 !== "unknown") return cached2;
+      const token = store.get("githubToken");
+      const id = store.get("identity");
+      if (!token || !id?.githubId) return "unknown";
+      if (!membershipFlight) {
+        membershipFlight = resolveMembership({ githubId: String(id.githubId), token, signupBase: SIGNUP_BASE, readFile: (p) => reader.readFile(p) }).then(({ stripeStatus, membership }) => {
+          store.set({ stripeStatus, membership });
+          return membership ?? "unknown";
+        }).catch(() => "unknown").finally(() => {
+          membershipFlight = null;
+        });
+      }
+      return membershipFlight;
+    }
+  };
+}
+
+// client/src/publish.mjs
+function branchName(type, slug) {
+  return type === "profile" ? "gbti/profile" : `gbti/${type}-${slug}`;
+}
+function defaultMessage(change) {
+  return change.type === "profile" ? "Update profile" : `${change.slug ? "Update" : "Add"} ${change.type}: ${change.slug ?? ""}`.trim();
+}
+function defaultTitle(change) {
+  return change.type === "profile" ? `Update ${change.username}'s profile` : `${change.type}: ${change.slug}`;
+}
+async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false }) {
+  if (!branch) throw new Error("commitToBranchOnFork: a branch name is required");
+  if (!Array.isArray(files) || files.length === 0) throw new Error("commitToBranchOnFork: at least one file change is required");
+  const fork = await repo.ensureFork();
+  const base2 = await repo.getDefaultBranch(repo.upstream);
+  const baseSha = await repo.getBranchSha(fork.full_name, base2);
+  if (resetStale && repo.findOpenPull && repo.forceBranch) {
+    let tip = null;
+    try {
+      tip = await repo.getBranchSha(fork.full_name, branch);
+    } catch {
+      tip = null;
+    }
+    if (tip && tip !== baseSha) {
+      const open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
+      if (!open) await repo.forceBranch(fork.full_name, branch, baseSha);
+    }
+  }
+  await repo.ensureBranch(fork.full_name, branch, baseSha);
+  for (const f of files) {
+    const existingSha = await repo.getFileSha(fork.full_name, f.path, branch);
+    if (f.content === null) {
+      if (existingSha) await repo.deleteFile(fork.full_name, f.path, { message: message ?? `Remove ${f.path}`, branch, sha: existingSha });
+    } else {
+      await repo.putFile(fork.full_name, f.path, {
+        message: message ?? `Update ${f.path}`,
+        contentBase64: toBase64(f.content),
+        branch,
+        sha: existingSha ?? void 0
+      });
+    }
+  }
+  return { fork: fork.full_name, owner: fork.owner, branch, base: base2 };
+}
+async function publishContent({ repo, change, message, title, body }) {
+  if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
+  const branch = branchName(change.type, change.slug);
+  const { fork, owner, base: base2 } = await commitToBranchOnFork({
+    repo,
+    branch,
+    files: [{ path: change.path, content: change.markdown }],
+    message: message ?? defaultMessage(change),
+    resetStale: true
+    // a leftover branch from a merged PR must not seed a conflicting new PR
+  });
+  const head = `${owner}:${branch}`;
+  const existing = await repo.findOpenPull({ head });
+  if (existing) {
+    return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
+  }
+  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base2, body: body ?? "" });
+  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
+}
+async function publishFiles({ repo, branch, files, message, title, body }) {
+  if (!branch) throw new Error("publishFiles: a branch name is required");
+  if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
+  const { fork, owner, base: base2 } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true });
+  const head = `${owner}:${branch}`;
+  const existing = await repo.findOpenPull({ head });
+  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
+  const pull = await repo.openPull({ title: title ?? message ?? "Update", head, base: base2, body: body ?? "" });
+  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
 }
 
 // client/src/member-content.mjs
@@ -18395,6 +18413,10 @@ function listContent(ctx2, { type } = {}) {
   const id = requireIdentity(ctx2);
   return { items: ctx2.reader.list(id.username, type || void 0) };
 }
+async function membershipOf(ctx2) {
+  const m = await (ctx2.membershipResolved ? ctx2.membershipResolved() : ctx2.membership?.());
+  return m ?? "unknown";
+}
 function gateMemberComments(items, membership) {
   if (canSeeShares(membership ?? "unknown")) return items ?? [];
   return (items ?? []).filter((c) => String(c?.visibility || "public").toLowerCase() !== "members");
@@ -18444,7 +18466,7 @@ async function listComments(ctx2, { targetType, targetSlug, limit, aliases } = {
     if (typeof ctx2.reader?.listComments !== "function") return { items: [] };
     items = await ctx2.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : []) ?? [];
   }
-  const gated = gateMemberComments(items, await ctx2.membership?.());
+  const gated = gateMemberComments(items, await membershipOf(ctx2));
   return { items: await mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed: gated }) };
 }
 function getContentItem(ctx2, { path: path4 } = {}) {
@@ -18514,7 +18536,7 @@ async function syncForkIfCreatingBranch(ctx2, repo, branch, { sync = workerSyncF
 async function publish(ctx2, { type, input, body, message, title, prBody, authorNote, path: path4 } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
-  const membership = await ctx2.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx2);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError(
       "membership-required",
@@ -18701,7 +18723,7 @@ async function planMemberFiles({ built, body, encrypt }) {
 async function saveDraft(ctx2, { type, input, body, message, path: path4 } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
-  const membership = await ctx2.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx2);
   if (membership !== "unknown" && !canStageDrafts(membership)) {
     throw new OperationError("forbidden", "Saving drafts requires an active trial or paid membership.", { membership });
   }
@@ -18751,7 +18773,7 @@ async function planAndPublishComment(ctx2, repo, built, body, { message, title, 
 async function publishComment(ctx2, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
-  const membership = await ctx2.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx2);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError("membership-required", "Commenting on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to join the conversation.", { membership });
   }
@@ -18790,7 +18812,7 @@ async function editComment(ctx2, { id, body, authorNote } = {}) {
   const idn = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
   if (!id || typeof id !== "string") throw new OperationError("bad-request", "a comment id is required");
-  const membership = await ctx2.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx2);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError("membership-required", "Editing a comment on gbti.network requires a paid membership. Upgrade at https://gbti.network.", { membership });
   }

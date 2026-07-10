@@ -111,9 +111,16 @@ export async function listShares(ctx, { limit } = {}) {
   // A caller who cannot see the members-only stream (not paid/trialing) receives ONLY public shares, so the raw op
   // can no longer be called directly to harvest member-share stubs (title/url/description). Paid/trial see all.
   // (Per-tier completeness past the read cap is a SOW-077 concern; this is the no-leak guarantee.)
-  const membership = (await ctx.membership?.()) ?? 'unknown';
+  const membership = await membershipOf(ctx);
   if (canSeeShares(membership)) return { items };
   return { items: items.filter((s) => String(s?.visibility || 'members').toLowerCase() === 'public') };
+}
+
+/** SOW-089 fix: the awaited membership for read gating. Prefers ctx.membershipResolved (self-heals an
+ *  'unknown' login-time cache from the oracle) and falls back to the sync cache; absent = 'unknown'. */
+async function membershipOf(ctx) {
+  const m = await (ctx.membershipResolved ? ctx.membershipResolved() : ctx.membership?.());
+  return m ?? 'unknown';
 }
 
 // SOW-078: drop MEMBER-visibility comment stubs (author / timestamp / thread placement) for a caller who cannot read
@@ -197,7 +204,7 @@ export async function listComments(ctx, { targetType, targetSlug, limit, aliases
     if (typeof ctx.reader?.listComments !== 'function') return { items: [] };
     items = (await ctx.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : [])) ?? [];
   }
-  const gated = gateMemberComments(items, await ctx.membership?.()); // SOW-078: member comment stubs are tier-gated
+  const gated = gateMemberComments(items, await membershipOf(ctx)); // SOW-078: member comment stubs are tier-gated
   return { items: await mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed: gated }) }; // SOW-076
 }
 
@@ -304,7 +311,7 @@ export async function renameContent(ctx, { path: rel, newSlug } = {}) {
   const slug = String(newSlug || '').trim();
   if (!SLUG_RE.test(slug)) throw new OperationError('bad-request', 'the new permalink must be lowercase letters, digits, and hyphens');
   if (slug === oldSlug) return { ok: true, noop: true, slug };
-  const membership = (await ctx.membership?.()) ?? 'unknown';
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError('membership-required', 'Renaming a published item requires a paid membership.', { membership });
   }
@@ -382,7 +389,7 @@ export async function setOwnContentStatus(ctx, { path: rel, status } = {}) {
     throw new OperationError('forbidden', 'you may only change the status of your own content');
   }
   // The publishing lifecycle is paid-only (SOW-011); the gate is the real authority (unknown fails open to it).
-  const membership = (await ctx.membership?.()) ?? 'unknown';
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError('membership-required', 'Changing a published item requires a paid membership.', { membership });
   }
@@ -440,7 +447,7 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   // BEFORE opening any PR, so their draft stays on their own fork and nothing reaches the canonical repo.
   // 'unknown' (oracle unreachable) fails OPEN to the SOW-005 gate, which is the real authority and rejects a
   // genuinely non-paid PR anyway, so a paid member is never wrongly blocked when the oracle is down.
-  const membership = (await ctx.membership?.()) ?? 'unknown';
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError(
       'membership-required',
@@ -691,7 +698,7 @@ function draftMetaFromBranch(branch) {
 export async function saveDraft(ctx, { type, input, body, message, path } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
-  const membership = (await ctx.membership?.()) ?? 'unknown';
+  const membership = await membershipOf(ctx);
   if (membership !== 'unknown' && !canStageDrafts(membership)) {
     throw new OperationError('forbidden', 'Saving drafts requires an active trial or paid membership.', { membership });
   }
@@ -862,7 +869,7 @@ export async function discardDraft(ctx, { type, slug } = {}) {
 export async function publishDraft(ctx, { type, slug, title, prBody } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
-  const membership = (await ctx.membership?.()) ?? 'unknown';
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError('membership-required', 'Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.', { membership });
   }
@@ -936,7 +943,7 @@ export async function decryptMemberAsset(ctx, { encPath } = {}) {
 export async function publishShare(ctx, { input = {}, body = '', message, title, prBody } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
-  const membership = (await ctx.membership?.()) ?? 'unknown';
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError('membership-required', 'Posting Shares on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to post your Share.', { membership });
   }
@@ -1007,7 +1014,7 @@ async function planAndPublishComment(ctx, repo, built, body, { message, title, p
 export async function publishComment(ctx, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
-  const membership = (await ctx.membership?.()) ?? 'unknown';
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError('membership-required', 'Commenting on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to join the conversation.', { membership });
   }
@@ -1058,7 +1065,7 @@ export async function deleteComment(ctx, { id } = {}) {
   const repo = requireRepo(ctx);
   const cid = String(id || '').trim();
   if (!/^[a-z0-9][a-z0-9._-]*$/i.test(cid)) throw new OperationError('bad-request', 'a comment id is required');
-  const membership = (await ctx.membership?.()) ?? 'unknown';
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError('membership-required', 'Managing comments on the network requires a paid membership.', { membership });
   }
@@ -1098,7 +1105,7 @@ export async function editComment(ctx, { id, body, authorNote } = {}) {
   const idn = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   if (!id || typeof id !== 'string') throw new OperationError('bad-request', 'a comment id is required');
-  const membership = (await ctx.membership?.()) ?? 'unknown';
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError('membership-required', 'Editing a comment on gbti.network requires a paid membership. Upgrade at https://gbti.network.', { membership });
   }

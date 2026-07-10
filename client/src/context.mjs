@@ -5,6 +5,8 @@
 import { createReader, createStager } from './repo-fs.mjs';
 import { createRepoClient } from './github-repo.mjs';
 import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from './roles.mjs';
+import { resolveMembership } from './membership.mjs';
+import { SIGNUP_BASE } from './signup-base.mjs';
 
 export const UPSTREAM = process.env.GBTI_UPSTREAM || 'gbti-network/gbti.network';
 
@@ -14,6 +16,7 @@ export const UPSTREAM = process.env.GBTI_UPSTREAM || 'gbti-network/gbti.network'
 export function buildContext(store) {
   const repoPath = store.get('repoPath');
   const reader = createReader(repoPath);
+  let membershipFlight = null;
   return {
     store,
     reader,
@@ -45,6 +48,21 @@ export function buildContext(store) {
     /** SOW-011: the effective membership cached at login (paid/trialing/...). Gates publish + the UI notice. */
     membership() {
       return store.get('membership') ?? 'unknown';
+    },
+    /** SOW-089 fix: self-heal an 'unknown' cache (see ext-context.mjs for the full story). */
+    async membershipResolved() {
+      const cached = store.get('membership');
+      if (cached && cached !== 'unknown') return cached;
+      const token = store.get('githubToken');
+      const id = store.get('identity');
+      if (!token || !id?.githubId) return 'unknown';
+      if (!membershipFlight) {
+        membershipFlight = resolveMembership({ githubId: String(id.githubId), token, signupBase: SIGNUP_BASE, readFile: (p) => reader.readFile(p) })
+          .then(({ stripeStatus, membership }) => { store.set({ stripeStatus, membership }); return membership ?? 'unknown'; })
+          .catch(() => 'unknown')
+          .finally(() => { membershipFlight = null; });
+      }
+      return membershipFlight;
     },
   };
 }

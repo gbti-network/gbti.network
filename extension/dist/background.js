@@ -17882,109 +17882,6 @@ function createRepoClient({ token, upstream, fetch: fetch2 = globalThis.fetch, b
   };
 }
 
-// extension/src/ext-context.mjs
-var UPSTREAM = "gbti-network/gbti.network";
-function buildExtContext(store) {
-  const token = store.get("githubToken");
-  let authExpired = false;
-  const onAuthError = () => {
-    authExpired = true;
-    store.set({ githubToken: null, githubRefreshToken: null, githubTokenExpiresAt: null, identity: null });
-  };
-  return {
-    store,
-    reader: createGithubReader({ upstream: UPSTREAM, token, onAuthError }),
-    authExpired: () => authExpired,
-    getRepoClient() {
-      const t = store.get("githubToken");
-      return t ? createRepoClient({ token: t, upstream: UPSTREAM }) : null;
-    },
-    identity() {
-      const id = store.get("identity");
-      if (!id) return null;
-      return { login: id.login, githubId: id.githubId, username: (id.username || id.login || "").toLowerCase() };
-    },
-    /** SOW-011: the effective membership cached at login (paid/trialing/...). Gates publish + the UI notice. */
-    membership() {
-      return store.get("membership") ?? "unknown";
-    }
-  };
-}
-
-// client/src/publish.mjs
-function branchName(type, slug) {
-  return type === "profile" ? "gbti/profile" : `gbti/${type}-${slug}`;
-}
-function defaultMessage(change) {
-  return change.type === "profile" ? "Update profile" : `${change.slug ? "Update" : "Add"} ${change.type}: ${change.slug ?? ""}`.trim();
-}
-function defaultTitle(change) {
-  return change.type === "profile" ? `Update ${change.username}'s profile` : `${change.type}: ${change.slug}`;
-}
-async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false }) {
-  if (!branch) throw new Error("commitToBranchOnFork: a branch name is required");
-  if (!Array.isArray(files) || files.length === 0) throw new Error("commitToBranchOnFork: at least one file change is required");
-  const fork = await repo.ensureFork();
-  const base3 = await repo.getDefaultBranch(repo.upstream);
-  const baseSha = await repo.getBranchSha(fork.full_name, base3);
-  if (resetStale && repo.findOpenPull && repo.forceBranch) {
-    let tip = null;
-    try {
-      tip = await repo.getBranchSha(fork.full_name, branch);
-    } catch {
-      tip = null;
-    }
-    if (tip && tip !== baseSha) {
-      const open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
-      if (!open) await repo.forceBranch(fork.full_name, branch, baseSha);
-    }
-  }
-  await repo.ensureBranch(fork.full_name, branch, baseSha);
-  for (const f2 of files) {
-    const existingSha = await repo.getFileSha(fork.full_name, f2.path, branch);
-    if (f2.content === null) {
-      if (existingSha) await repo.deleteFile(fork.full_name, f2.path, { message: message ?? `Remove ${f2.path}`, branch, sha: existingSha });
-    } else {
-      await repo.putFile(fork.full_name, f2.path, {
-        message: message ?? `Update ${f2.path}`,
-        contentBase64: toBase64(f2.content),
-        branch,
-        sha: existingSha ?? void 0
-      });
-    }
-  }
-  return { fork: fork.full_name, owner: fork.owner, branch, base: base3 };
-}
-async function publishContent({ repo, change, message, title, body }) {
-  if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
-  const branch = branchName(change.type, change.slug);
-  const { fork, owner, base: base3 } = await commitToBranchOnFork({
-    repo,
-    branch,
-    files: [{ path: change.path, content: change.markdown }],
-    message: message ?? defaultMessage(change),
-    resetStale: true
-    // a leftover branch from a merged PR must not seed a conflicting new PR
-  });
-  const head = `${owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) {
-    return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
-  }
-  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base3, body: body ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
-}
-async function publishFiles({ repo, branch, files, message, title, body }) {
-  if (!branch) throw new Error("publishFiles: a branch name is required");
-  if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
-  const { fork, owner, base: base3 } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true });
-  const head = `${owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
-  const pull = await repo.openPull({ title: title ?? message ?? "Update", head, base: base3, body: body ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
-}
-
 // client/src/roles.mjs
 var ROLE = Object.freeze({ member: "member", moderator: "moderator", admin: "admin", superadmin: "superadmin" });
 var RANK = Object.freeze({ member: 0, moderator: 1, admin: 2, superadmin: 3 });
@@ -18126,6 +18023,131 @@ async function resolveMembership({ githubId, token, signupBase, readFile, fetch:
   const banned = bannedIdsFromText(await readSafe(readFile, "house/bans.yml"));
   const grandfathers = grandfathersFromText(await readSafe(readFile, "house/grandfathered.yml"));
   return { stripeStatus, membership: effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now }) };
+}
+
+// extension/src/ext-context.mjs
+var UPSTREAM = "gbti-network/gbti.network";
+function buildExtContext(store) {
+  const token = store.get("githubToken");
+  let authExpired = false;
+  let membershipFlight = null;
+  const onAuthError = () => {
+    authExpired = true;
+    store.set({ githubToken: null, githubRefreshToken: null, githubTokenExpiresAt: null, identity: null });
+  };
+  return {
+    store,
+    reader: createGithubReader({ upstream: UPSTREAM, token, onAuthError }),
+    authExpired: () => authExpired,
+    getRepoClient() {
+      const t = store.get("githubToken");
+      return t ? createRepoClient({ token: t, upstream: UPSTREAM }) : null;
+    },
+    identity() {
+      const id = store.get("identity");
+      if (!id) return null;
+      return { login: id.login, githubId: id.githubId, username: (id.username || id.login || "").toLowerCase() };
+    },
+    /** SOW-011: the effective membership cached at login (paid/trialing/...). Gates publish + the UI notice. */
+    membership() {
+      return store.get("membership") ?? "unknown";
+    },
+    /** SOW-089 fix: membership was resolved ONLY at login, so one failed resolution left the session
+     *  'unknown' FOREVER and every fail-closed gate (member comment bodies, the members-only thread,
+     *  shares) locked a paid member out until a re-login. This self-heals: an unknown cache with a live
+     *  token re-resolves via the oracle + house overrides, caches, and returns; failures stay 'unknown'
+     *  (fail-closed). In-flight dedupe keeps a render burst to one resolution. */
+    async membershipResolved() {
+      const cached2 = store.get("membership");
+      if (cached2 && cached2 !== "unknown") return cached2;
+      const t = store.get("githubToken");
+      const id = store.get("identity");
+      if (!t || !id?.githubId) return "unknown";
+      if (!membershipFlight) {
+        membershipFlight = resolveMembership({ githubId: String(id.githubId), token: t, signupBase: SIGNUP_BASE, readFile: (p) => this.reader.readFile(p) }).then(({ stripeStatus, membership }) => {
+          store.set({ stripeStatus, membership });
+          return membership ?? "unknown";
+        }).catch(() => "unknown").finally(() => {
+          membershipFlight = null;
+        });
+      }
+      return membershipFlight;
+    }
+  };
+}
+
+// client/src/publish.mjs
+function branchName(type, slug) {
+  return type === "profile" ? "gbti/profile" : `gbti/${type}-${slug}`;
+}
+function defaultMessage(change) {
+  return change.type === "profile" ? "Update profile" : `${change.slug ? "Update" : "Add"} ${change.type}: ${change.slug ?? ""}`.trim();
+}
+function defaultTitle(change) {
+  return change.type === "profile" ? `Update ${change.username}'s profile` : `${change.type}: ${change.slug}`;
+}
+async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false }) {
+  if (!branch) throw new Error("commitToBranchOnFork: a branch name is required");
+  if (!Array.isArray(files) || files.length === 0) throw new Error("commitToBranchOnFork: at least one file change is required");
+  const fork = await repo.ensureFork();
+  const base3 = await repo.getDefaultBranch(repo.upstream);
+  const baseSha = await repo.getBranchSha(fork.full_name, base3);
+  if (resetStale && repo.findOpenPull && repo.forceBranch) {
+    let tip = null;
+    try {
+      tip = await repo.getBranchSha(fork.full_name, branch);
+    } catch {
+      tip = null;
+    }
+    if (tip && tip !== baseSha) {
+      const open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
+      if (!open) await repo.forceBranch(fork.full_name, branch, baseSha);
+    }
+  }
+  await repo.ensureBranch(fork.full_name, branch, baseSha);
+  for (const f2 of files) {
+    const existingSha = await repo.getFileSha(fork.full_name, f2.path, branch);
+    if (f2.content === null) {
+      if (existingSha) await repo.deleteFile(fork.full_name, f2.path, { message: message ?? `Remove ${f2.path}`, branch, sha: existingSha });
+    } else {
+      await repo.putFile(fork.full_name, f2.path, {
+        message: message ?? `Update ${f2.path}`,
+        contentBase64: toBase64(f2.content),
+        branch,
+        sha: existingSha ?? void 0
+      });
+    }
+  }
+  return { fork: fork.full_name, owner: fork.owner, branch, base: base3 };
+}
+async function publishContent({ repo, change, message, title, body }) {
+  if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
+  const branch = branchName(change.type, change.slug);
+  const { fork, owner, base: base3 } = await commitToBranchOnFork({
+    repo,
+    branch,
+    files: [{ path: change.path, content: change.markdown }],
+    message: message ?? defaultMessage(change),
+    resetStale: true
+    // a leftover branch from a merged PR must not seed a conflicting new PR
+  });
+  const head = `${owner}:${branch}`;
+  const existing = await repo.findOpenPull({ head });
+  if (existing) {
+    return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
+  }
+  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base3, body: body ?? "" });
+  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
+}
+async function publishFiles({ repo, branch, files, message, title, body }) {
+  if (!branch) throw new Error("publishFiles: a branch name is required");
+  if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
+  const { fork, owner, base: base3 } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true });
+  const head = `${owner}:${branch}`;
+  const existing = await repo.findOpenPull({ head });
+  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
+  const pull = await repo.openPull({ title: title ?? message ?? "Update", head, base: base3, body: body ?? "" });
+  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
 }
 
 // client/src/member-content.mjs
@@ -18903,9 +18925,13 @@ async function listShares(ctx, { limit } = {}) {
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 40;
   if (typeof ctx.reader?.listShares !== "function") return { items: [] };
   const items = await ctx.reader.listShares(n) ?? [];
-  const membership = await ctx.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx);
   if (canSeeShares(membership)) return { items };
   return { items: items.filter((s) => String(s?.visibility || "members").toLowerCase() === "public") };
+}
+async function membershipOf(ctx) {
+  const m = await (ctx.membershipResolved ? ctx.membershipResolved() : ctx.membership?.());
+  return m ?? "unknown";
 }
 function gateMemberComments(items, membership) {
   if (canSeeShares(membership ?? "unknown")) return items ?? [];
@@ -18959,7 +18985,7 @@ async function listComments(ctx, { targetType, targetSlug, limit, aliases } = {}
     if (typeof ctx.reader?.listComments !== "function") return { items: [] };
     items = await ctx.reader.listComments(targetType, targetSlug, n, Array.isArray(aliases) ? aliases : []) ?? [];
   }
-  const gated = gateMemberComments(items, await ctx.membership?.());
+  const gated = gateMemberComments(items, await membershipOf(ctx));
   return { items: await mergeCommentEchoesFor(ctx, { targetType, targetSlug, deployed: gated }) };
 }
 async function readContent(ctx, { path } = {}) {
@@ -19023,7 +19049,7 @@ async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = workerSyncFo
 async function publish(ctx, { type, input, body, message, title, prBody: prBody2, authorNote, path } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
-  const membership = await ctx.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError(
       "membership-required",
@@ -19215,7 +19241,7 @@ function draftMetaFromBranch(branch) {
 async function saveDraft(ctx, { type, input, body, message, path } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
-  const membership = await ctx.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx);
   if (membership !== "unknown" && !canStageDrafts(membership)) {
     throw new OperationError("forbidden", "Saving drafts requires an active trial or paid membership.", { membership });
   }
@@ -19376,7 +19402,7 @@ async function discardDraft(ctx, { type, slug } = {}) {
 async function publishDraft(ctx, { type, slug, title, prBody: prBody2 } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
-  const membership = await ctx.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError("membership-required", "Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.", { membership });
   }
@@ -19432,7 +19458,7 @@ async function decryptMemberAsset(ctx, { encPath } = {}) {
 async function publishShare(ctx, { input = {}, body = "", message, title, prBody: prBody2 } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
-  const membership = await ctx.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError("membership-required", "Posting Shares on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to post your Share.", { membership });
   }
@@ -19487,7 +19513,7 @@ async function planAndPublishComment(ctx, repo, built, body, { message, title, p
 async function publishComment(ctx, { targetType, targetSlug, body, authorNote, parentId, visibility, message, title, prBody: prBody2 } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
-  const membership = await ctx.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError("membership-required", "Commenting on gbti.network requires a paid membership. Upgrade to a paid membership at https://gbti.network to join the conversation.", { membership });
   }
@@ -19538,7 +19564,7 @@ async function editComment(ctx, { id, body, authorNote } = {}) {
   const idn = requireIdentity(ctx);
   const repo = requireRepo(ctx);
   if (!id || typeof id !== "string") throw new OperationError("bad-request", "a comment id is required");
-  const membership = await ctx.membership?.() ?? "unknown";
+  const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError("membership-required", "Editing a comment on gbti.network requires a paid membership. Upgrade at https://gbti.network.", { membership });
   }
@@ -21496,7 +21522,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
   try {
     const id = ctx.identity?.();
     if (pathname === "/api/status") {
-      const membership = ctx.membership?.() ?? "unknown";
+      const membership = await (ctx.membershipResolved ? ctx.membershipResolved() : ctx.membership?.()) ?? "unknown";
       const { role, canCurate } = await computeRoleAndCurate(ctx);
       const live = Boolean(ctx.store?.get("githubToken"));
       return ok({

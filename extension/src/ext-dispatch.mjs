@@ -58,7 +58,7 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
   try {
     const id = ctx.identity?.();
     if (pathname === '/api/status') {
-      const membership = ctx.membership?.() ?? 'unknown'; // SOW-011: cached at login; drives the publish notice
+      const membership = (await (ctx.membershipResolved ? ctx.membershipResolved() : ctx.membership?.())) ?? 'unknown'; // SOW-011 (+ SOW-089 self-heal): drives the publish notice + every tier gate
       const { role, canCurate } = await computeRoleAndCurate(ctx); // SOW-046 C: also the first read that proves the token
       // computeRoleAndCurate read house/roles.yml; if the token was dead, the reader already cleared the session.
       // Re-read auth state AFTER that read so an expired token reports unauthenticated + nulls the stale identity,

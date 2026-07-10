@@ -4,6 +4,8 @@
 
 import { createGithubReader } from './github-reader.mjs';
 import { createRepoClient } from '../../client/src/github-repo.mjs';
+import { resolveMembership } from '../../client/src/membership.mjs';
+import { SIGNUP_BASE } from '../../client/src/signup-base.mjs';
 
 export const UPSTREAM = 'gbti-network/gbti.network';
 
@@ -17,6 +19,7 @@ export function buildExtContext(store) {
   // 401 reaching the reader = the refresh token is also dead/revoked, or this is a pre-refresh session). Clear the
   // whole session, refresh fields included, so nothing stale lingers and the splash forces a fresh sign-in.
   let authExpired = false;
+  let membershipFlight = null;
   const onAuthError = () => { authExpired = true; store.set({ githubToken: null, githubRefreshToken: null, githubTokenExpiresAt: null, identity: null }); };
   return {
     store,
@@ -34,6 +37,25 @@ export function buildExtContext(store) {
     /** SOW-011: the effective membership cached at login (paid/trialing/...). Gates publish + the UI notice. */
     membership() {
       return store.get('membership') ?? 'unknown';
+    },
+    /** SOW-089 fix: membership was resolved ONLY at login, so one failed resolution left the session
+     *  'unknown' FOREVER and every fail-closed gate (member comment bodies, the members-only thread,
+     *  shares) locked a paid member out until a re-login. This self-heals: an unknown cache with a live
+     *  token re-resolves via the oracle + house overrides, caches, and returns; failures stay 'unknown'
+     *  (fail-closed). In-flight dedupe keeps a render burst to one resolution. */
+    async membershipResolved() {
+      const cached = store.get('membership');
+      if (cached && cached !== 'unknown') return cached;
+      const t = store.get('githubToken');
+      const id = store.get('identity');
+      if (!t || !id?.githubId) return 'unknown';
+      if (!membershipFlight) {
+        membershipFlight = resolveMembership({ githubId: String(id.githubId), token: t, signupBase: SIGNUP_BASE, readFile: (p) => this.reader.readFile(p) })
+          .then(({ stripeStatus, membership }) => { store.set({ stripeStatus, membership }); return membership ?? 'unknown'; })
+          .catch(() => 'unknown')
+          .finally(() => { membershipFlight = null; });
+      }
+      return membershipFlight;
     },
   };
 }
