@@ -171,8 +171,10 @@ const CSS = `
      FLAT (default): a solid brand fill (--brand is theme-stable #1f9e5f, so white text stays AA in light +
      dark; --accent flips to a light mint in dark where white would fail). GLASS: a translucent brand fill
      that frosts via --glass-blur (SOW-070), per the gbti-card-list glass pattern. Composes with light/dark. */
-  .side-open { display:flex; align-items:center; justify-content:center; gap:9px; width:100%; box-sizing:border-box; margin:8px 0 6px; padding:14px 16px; border-radius:7px; background:var(--brand); color:#fff; font-family:var(--font-display); font-weight:700; font-size:15.5px; text-decoration:none; border:1px solid var(--brand); box-shadow:0 6px 16px rgba(31,158,95,.25); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
-  .side-open:hover { filter:brightness(1.06); }
+  /* SOW-088 QA (owner-directed): the green-TINT treatment of the rail's selected nav item (green-tint band
+     + green text), not a solid brand button. Works in both themes: a translucent brand wash + accent text. */
+  .side-open { display:flex; align-items:center; justify-content:center; gap:9px; width:100%; box-sizing:border-box; margin:8px 0 6px; padding:14px 16px; border-radius:7px; background:rgba(31,158,95,.13); color:var(--accent); font-family:var(--font-display); font-weight:700; font-size:15.5px; text-decoration:none; border:1.5px solid rgba(31,158,95,.3); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); }
+  .side-open:hover { background:rgba(31,158,95,.22); border-color:var(--brand); }
   .side-open svg { width:18px; height:18px; flex:none; }
   :host-context([data-layout="glass"]) .side-open { background:color-mix(in srgb, var(--brand) 68%, transparent); border-color:color-mix(in srgb, var(--brand) 60%, transparent); box-shadow:0 6px 20px rgba(31,158,95,.3); }
   .author .follow { display:inline-flex; align-items:center; justify-content:center; gap:6px; margin-top:14px; width:100%; font:inherit; font-size:13px; font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; text-decoration:none; }
