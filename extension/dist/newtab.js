@@ -13634,6 +13634,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           <select data-forward>${fwdOpts}</select>` : `<label>Channel id <span style="font-weight:400">(the channel list did not load${this._chErr ? `: ${esc(this._chErr)}` : ""}; paste the Discord channel id)</span></label>
           <input data-channel-manual type="text" inputmode="numeric" placeholder="e.g. 1180150623346372638" value="${esc(this._channelId || "")}" style="width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:8px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg)" />`;
       }
+      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : "";
       const prior = this._prior?.length ? `<p class="warn">This item already went out (${this._prior.length === 1 ? "once" : `${this._prior.length} times`}). Publishing again posts a duplicate.</p>` : "";
       const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
       const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}${fwdState}</p>` : "";
@@ -13642,7 +13643,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
       <div class="preview" data-preview>${esc(preview)}</div>
-      ${channelRow}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}${result}
+      ${channelRow}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}${result}
       <div class="actions">
         <button class="ghost" type="button" data-close>${this._result ? "Done" : "Cancel"}</button>
         <button class="go" type="button" data-publish ${this._busy || this._result ? "disabled" : ""}>${this._busy ? '<span class="spin"></span>Publishing...' : "Publish"}</button>

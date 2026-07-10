@@ -128,3 +128,32 @@ test('resolveAdapterRun readies discord-category off the same bot token and hand
   assert.equal(r.ok, true);
   assert.ok(calls[0].url.includes('/channels/555/messages'));
 });
+
+// SOW-088: the LinkedIn adapter targets the versioned Posts API and posts a rich article card.
+test('linkedin: versioned /rest/posts, org author, article card with url, none without, error snippet', async () => {
+  const calls = [];
+  const li = createLinkedinAdapter({
+    env: { LINKEDIN_ACCESS_TOKEN: 'tok', LINKEDIN_ORG_URN: 'urn:li:organization:99' },
+    fetchImpl: async (url, opts) => { calls.push({ url, opts, body: JSON.parse(opts.body) }); return { ok: true, headers: { get: (h) => (h === 'x-restli-id' ? 'urn:li:share:42' : null) } }; },
+  });
+  const r = await li.post({ ...item, textOverride: 'Edited text wins' });
+  assert.equal(calls[0].url, 'https://api.linkedin.com/rest/posts');
+  assert.equal(calls[0].opts.headers['X-Restli-Protocol-Version'], '2.0.0');
+  assert.match(calls[0].opts.headers['LinkedIn-Version'], /^\d{6}$/);
+  assert.equal(calls[0].body.author, 'urn:li:organization:99');
+  assert.equal(calls[0].body.commentary, 'Edited text wins'); // the manual override wins
+  assert.deepEqual(calls[0].body.content.article, { source: 'https://ex.com/a', title: 'Read this', description: 'b' });
+  assert.equal(calls[0].body.visibility, 'PUBLIC');
+  assert.equal(r.url, 'https://www.linkedin.com/feed/update/urn:li:share:42');
+  // No url -> commentary only, no content block.
+  await li.post({ source: 'share', author: 'alice', title: 'T' });
+  assert.equal('content' in calls[1].body, false);
+  // A refusal surfaces the response snippet so the popup says WHY.
+  const bad = createLinkedinAdapter({
+    env: { LINKEDIN_ACCESS_TOKEN: 'tok', LINKEDIN_ORG_URN: 'urn:li:organization:99' },
+    fetchImpl: async () => ({ ok: false, status: 422, text: async () => '{"message":"ACCESS_DENIED: not permitted"}' }),
+  });
+  const err = await bad.post(item);
+  assert.equal(err.ok, false);
+  assert.match(err.error, /linkedin 422 .*ACCESS_DENIED/);
+});

@@ -85,6 +85,15 @@ export async function runProbes({ env = process.env, fetch = globalThis.fetch } 
     const res = await fetch('https://discord.com/api/v10/users/@me', { headers: { Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
     return { ok: res.ok, status: res.status };
   }));
+  // SOW-088: LinkedIn org posting. The access token dies after ~60 days, silently breaking syndication,
+  // so probe a cheap org read; a 401/403 means re-run the OAuth exchange (secrets-ops runbook).
+  if (env.LINKEDIN_ACCESS_TOKEN && env.LINKEDIN_ORG_URN) out.push(await probe('LINKEDIN_ACCESS_TOKEN (LinkedIn org)', async () => {
+    const orgId = String(env.LINKEDIN_ORG_URN).split(':').pop();
+    const res = await fetch(`https://api.linkedin.com/rest/organizations/${orgId}`, {
+      headers: { Authorization: `Bearer ${env.LINKEDIN_ACCESS_TOKEN}`, 'LinkedIn-Version': '202506', 'X-Restli-Protocol-Version': '2.0.0' },
+    });
+    return { ok: res.ok, status: res.status, detail: res.ok ? null : 'token expired/revoked? LinkedIn tokens last ~60 days; re-run the OAuth flow (secrets-ops)' };
+  }));
   if (env.CF_API_TOKEN) out.push(await probe('CF_API_TOKEN (Cloudflare)', async () => {
     const res = await fetch('https://api.cloudflare.com/client/v4/user/tokens/verify', { headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` } });
     let body = null; try { body = await res.json(); } catch { /* */ }
