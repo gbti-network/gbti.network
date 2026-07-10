@@ -69,6 +69,13 @@ const RAIL_FEED = [
   { div: true },
   // SOW-069: the WorkBench item carries quick deep-links into the workspace tabs (always-visible indented children).
   { key: 'workspace', href: 'workspace.html', ico: 'grid', nm: 'WorkBench', sub: 'Your content + tools', children: [
+    // SOW-101: quick deep-links into the member's OWN content-management tabs (distinct from the Member Activity
+    // browse feeds above). The wb- key prefix avoids a highlight collision with the articles/products/prompts/shares
+    // feed items. Shares has no workspace tab yet (SOW-093), so it points at the co-op stream like the feed item.
+    { key: 'wb-post', href: 'workspace.html#tab=post', ico: 'article', nm: 'Articles' },
+    { key: 'wb-product', href: 'workspace.html#tab=product', ico: 'product', nm: 'Products' },
+    { key: 'wb-prompt', href: 'workspace.html#tab=prompt', ico: 'prompt', nm: 'Prompts' },
+    { key: 'wb-shares', href: 'newtab.html#type=share', ico: 'share', nm: 'Shares' },
     { key: 'prs', href: 'workspace.html#tab=prs', ico: 'pr', nm: 'Pull requests' },
     { key: 'saved', href: 'workspace.html#tab=saved', ico: 'bookmark', nm: 'Saved' },
     { key: 'subs', href: 'workspace.html#tab=subs', ico: 'users', nm: 'Following' },

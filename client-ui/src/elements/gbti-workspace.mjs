@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, typeForContentPath, submitAck } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, submitAck } from '../workspace-core.mjs';
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
 const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'product']); // SOW-073: types whose publish invalidates a tab
@@ -123,11 +123,20 @@ class GbtiWorkspace extends GbtiElement {
     this._loadInboxCount();
     // SOW-052: the WorkBench rail deep-links to #tab=<id>; switch the tab on a same-document hash change.
     this._onHash = () => {
-      // SOW-064: a #new=<type> deep-link opens a blank editor (unless one is already open).
-      const nt = (typeof location !== 'undefined' && parseWorkspaceNew(location.hash)) || null;
-      if (nt && !this._editing && this._reviewing == null) { this._editing = { type: nt, frontmatter: {}, body: '' }; this.render(); return; }
-      const t = (typeof location !== 'undefined' && parseWorkspaceTab(location.hash)) || 'overview';
-      if (t !== this._tab && !this._editing && this._reviewing == null) { this._tab = t; this._page = 0; this.render(); this._ensureTab(t); }
+      const h = typeof location !== 'undefined' ? location.hash : '';
+      // SOW-104: planHashRoute (pure, tested) decides the action. A rail nav to a plain tab while an editor/review
+      // pane is open is an explicit EXIT (matching the Back button, which also discards silently); a #new= opens the
+      // editor; a different plain tab switches. The editor encodes &edit= in the hash, so a rail click to #tab=<t>
+      // is a real hashchange even for the current tab.
+      const plan = planHashRoute(h, { editing: !!this._editing, reviewing: this._reviewing != null, tab: this._tab });
+      if (plan.action === 'exit') {
+        this._editing = null; this._reviewing = null;
+        this._tab = plan.tab; this._page = 0; this.render(); this._ensureTab(plan.tab);
+      } else if (plan.action === 'openNew') {
+        this._editing = { type: plan.type, frontmatter: {}, body: '' }; this.render();
+      } else if (plan.action === 'switchTab') {
+        this._tab = plan.tab; this._page = 0; this.render(); this._ensureTab(plan.tab);
+      }
     };
     if (typeof window !== 'undefined') window.addEventListener('hashchange', this._onHash);
     this._wireStorageSync(); // SOW-073: cross-tab cache invalidation sync

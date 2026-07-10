@@ -44,6 +44,23 @@ export function parseWorkspaceDraft(hash) {
   return m ? { type: m[1], slug: m[2] } : null;
 }
 
+/**
+ * SOW-104: decide what a hashchange should do given the current editor/tab state. PURE + testable so the element's
+ * _onHash stays a thin dispatcher. A rail nav to a PLAIN tab (no new/edit/draft component) while an editor or
+ * review pane is open is an explicit EXIT (matching the Back button); otherwise a #new= opens the editor and a
+ * different plain tab switches. Returns { action: 'exit' | 'openNew' | 'switchTab' | 'none', tab?, type? }.
+ */
+export function planHashRoute(hash, { editing = false, reviewing = false, tab = 'overview' } = {}) {
+  const newType = parseWorkspaceNew(hash) || null;
+  const edit = parseWorkspaceEdit(hash) || null;
+  const draft = parseWorkspaceDraft(hash) || null;
+  const tabHash = parseWorkspaceTab(hash) || 'overview';
+  if ((editing || reviewing) && !newType && !edit && !draft) return { action: 'exit', tab: tabHash };
+  if (newType && !editing && !reviewing) return { action: 'openNew', type: newType };
+  if (tabHash !== tab && !editing && !reviewing) return { action: 'switchTab', tab: tabHash };
+  return { action: 'none' };
+}
+
 /** The content type for a canonical content path (posts -> post), or null (a profile path has no list type). */
 export function typeForContentPath(path) {
   const m = /^members\/[a-z0-9][a-z0-9-]*\/(posts|products|prompts)\//.exec(String(path || ''));

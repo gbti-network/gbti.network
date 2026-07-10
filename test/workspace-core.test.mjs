@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, typeForContentPath } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -177,4 +177,30 @@ test('typeForContentPath derives the content type from the path subtree', () => 
   assert.equal(typeForContentPath('members/alice/posts/x/index.md'), 'post');
   assert.equal(typeForContentPath('members/alice/products/y/index.md'), 'product');
   assert.equal(typeForContentPath('members/alice/profile.md'), null);
+});
+
+// SOW-104: planHashRoute -- a rail nav exits the WorkBench editor instead of being swallowed.
+test('planHashRoute: editing + a plain DIFFERENT tab route exits to that tab', () => {
+  assert.deepEqual(planHashRoute('#tab=product', { editing: true, tab: 'post' }), { action: 'exit', tab: 'product' });
+});
+test('planHashRoute: editing + the SAME section route still exits (Articles while editing a post)', () => {
+  assert.deepEqual(planHashRoute('#tab=post', { editing: true, tab: 'post' }), { action: 'exit', tab: 'post' });
+});
+test('planHashRoute: reviewing + a plain tab route exits the review pane', () => {
+  assert.deepEqual(planHashRoute('#tab=prs', { reviewing: true, tab: 'overview' }), { action: 'exit', tab: 'prs' });
+});
+test('planHashRoute: while editing, a hash that still carries &edit= does NOT exit', () => {
+  assert.deepEqual(planHashRoute('#tab=post&edit=members/a/posts/x/index.md', { editing: true, tab: 'post' }), { action: 'none' });
+});
+test('planHashRoute: not editing, a #new= route opens the editor', () => {
+  assert.deepEqual(planHashRoute('#new=prompt', { editing: false, tab: 'overview' }), { action: 'openNew', type: 'prompt' });
+});
+test('planHashRoute: while editing, a #new= route is ignored (no double-open, no exit)', () => {
+  assert.deepEqual(planHashRoute('#new=product', { editing: true, tab: 'post' }), { action: 'none' });
+});
+test('planHashRoute: not editing, a different plain tab switches', () => {
+  assert.deepEqual(planHashRoute('#tab=subs', { editing: false, tab: 'overview' }), { action: 'switchTab', tab: 'subs' });
+});
+test('planHashRoute: not editing, the same tab is a no-op', () => {
+  assert.deepEqual(planHashRoute('#tab=post', { editing: false, tab: 'post' }), { action: 'none' });
 });

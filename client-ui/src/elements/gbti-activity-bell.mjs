@@ -20,6 +20,8 @@ const SEEN_KEY = 'gbti-bell-seen';
 const MAX_OWN_SHARES = 20; // bound the replies-on-Shares fan-out (one listShareComments per own Share)
 
 const BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.3 21a2 2 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+// SOW-095: the "All marked read" confirmation check.
+const CHECK = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
 
 function loadSeen() { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || {}; } catch { return {}; } }
 function saveSeen(s) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(s)); } catch { /* private mode */ } }
@@ -34,8 +36,13 @@ const CSS = `
   .panel[hidden] { display:none; }
   .phead { display:flex; align-items:baseline; justify-content:space-between; padding:8px 10px 6px; }
   .phead b { font-family:var(--font-display, var(--font-body)); font-size:15px; }
-  .phead .clr { background:transparent; border:0; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; }
+  .phead .clr { background:transparent; border:0; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
   .phead .clr:hover { color:var(--accent); }
+  /* SOW-095: the "Mark all read" processing + confirmation states. */
+  .phead .clr[disabled] { cursor:default; }
+  .phead .clr.done { color:var(--accent); }
+  .phead .clr .spin { display:inline-block; width:11px; height:11px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:ab-spin .7s linear infinite; }
+  @keyframes ab-spin { to { transform:rotate(360deg); } }
   .grp { padding:6px 4px 2px; }
   .grp-h { display:flex; align-items:center; gap:7px; padding:4px 8px; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
   .grp-h .n { background:var(--hover); color:var(--fg); border-radius:999px; padding:0 6px; font-size:10px; }
@@ -75,6 +82,7 @@ class GbtiActivityBell extends GbtiElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     clearInterval(this._timer);
+    clearTimeout(this._flashTimer);
     if (this._onDoc) document.removeEventListener('click', this._onDoc);
     if (this._onVis && typeof document !== 'undefined') document.removeEventListener('visibilitychange', this._onVis);
   }
@@ -179,7 +187,7 @@ class GbtiActivityBell extends GbtiElement {
     return lists.flat();
   }
 
-  _close() { this._open = false; this.render(); }
+  _close() { this._open = false; clearTimeout(this._flashTimer); this._clearFlash = null; this.render(); }
 
   _toggle() {
     this._open = !this._open;
@@ -197,6 +205,27 @@ class GbtiActivityBell extends GbtiElement {
     this.render();
   }
 
+  // SOW-095: the "Mark all read" click gets a brief processing indicator, then a confirmation, so the action reads
+  // as acknowledged even though the write is a fast LOCAL watermark. Cosmetic pacing (not a fake delay); the
+  // confirmation auto-dismisses back to the settled all-read state.
+  _doMarkAll() {
+    if (this._clearFlash) return; // already running
+    this._clearFlash = 'busy';
+    this.render();
+    clearTimeout(this._flashTimer);
+    this._flashTimer = setTimeout(() => {
+      this._clearFlash = 'done';
+      this._markAllSeen(); // the watermark write + a render that shows the "All marked read" confirmation
+      this._flashTimer = setTimeout(() => { this._clearFlash = null; this.render(); }, 1500);
+    }, 350);
+  }
+
+  _clrBtn() {
+    if (this._clearFlash === 'busy') return `<button class="clr" type="button" disabled aria-busy="true"><span class="spin"></span>Marking...</button>`;
+    if (this._clearFlash === 'done') return `<button class="clr done" type="button" disabled>${CHECK}All marked read</button>`;
+    return `<button class="clr" type="button" data-clear>Mark all read</button>`;
+  }
+
   render() {
     if (!this.root) return;
     // Gated (Locked/unknown/signed-out) -> render nothing + take no space.
@@ -207,7 +236,7 @@ class GbtiActivityBell extends GbtiElement {
     const panel = this._open ? this._panelHtml() : '';
     this.set(this.css(CSS) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ''}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
     this.on('[data-bell]', 'click', (e) => { e.stopPropagation(); this._toggle(); });
-    this.on('[data-clear]', 'click', (e) => { e.stopPropagation(); this._markAllSeen(); });
+    this.on('[data-clear]', 'click', (e) => { e.stopPropagation(); this._doMarkAll(); });
   }
 
   _panelHtml() {
@@ -231,7 +260,7 @@ class GbtiActivityBell extends GbtiElement {
           return `<div class="grp"><div class="grp-h">${esc(g.label)}${g.unread ? `<span class="n">${g.unread}</span>` : ''}</div>${rows}${moreN > 0 ? `<div class="it s" style="color:var(--muted)">+${moreN} more</div>` : ''}</div>`;
         }).join('')
       : `<div class="empty">You are all caught up.</div>`;
-    return `<div class="panel"><div class="phead"><b>Activity</b><button class="clr" type="button" data-clear>Mark all read</button></div>${body}</div>`;
+    return `<div class="panel"><div class="phead"><b>Activity</b>${this._clrBtn()}</div>${body}</div>`;
   }
 }
 

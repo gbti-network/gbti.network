@@ -2777,6 +2777,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const m = /(?:^|[#&])draft=(post|product|prompt):([a-z0-9][a-z0-9-]*)/.exec(String(hash || ""));
     return m ? { type: m[1], slug: m[2] } : null;
   }
+  function planHashRoute(hash, { editing = false, reviewing = false, tab = "overview" } = {}) {
+    const newType = parseWorkspaceNew(hash) || null;
+    const edit = parseWorkspaceEdit(hash) || null;
+    const draft = parseWorkspaceDraft(hash) || null;
+    const tabHash = parseWorkspaceTab(hash) || "overview";
+    if ((editing || reviewing) && !newType && !edit && !draft) return { action: "exit", tab: tabHash };
+    if (newType && !editing && !reviewing) return { action: "openNew", type: newType };
+    if (tabHash !== tab && !editing && !reviewing) return { action: "switchTab", tab: tabHash };
+    return { action: "none" };
+  }
   function typeForContentPath(path) {
     const m = /^members\/[a-z0-9][a-z0-9-]*\/(posts|products|prompts)\//.exec(String(path || ""));
     return m ? m[1].slice(0, -1) : null;
@@ -3213,6 +3223,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var SEEN_KEY = "gbti-bell-seen";
   var MAX_OWN_SHARES = 20;
   var BELL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10.3 21a2 2 0 0 0 3.4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  var CHECK = '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
   function loadSeen() {
     try {
       return JSON.parse(localStorage.getItem(SEEN_KEY)) || {};
@@ -3236,8 +3247,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .panel[hidden] { display:none; }
   .phead { display:flex; align-items:baseline; justify-content:space-between; padding:8px 10px 6px; }
   .phead b { font-family:var(--font-display, var(--font-body)); font-size:15px; }
-  .phead .clr { background:transparent; border:0; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; }
+  .phead .clr { background:transparent; border:0; color:var(--muted); font:inherit; font-size:12px; cursor:pointer; display:inline-flex; align-items:center; gap:5px; }
   .phead .clr:hover { color:var(--accent); }
+  /* SOW-095: the "Mark all read" processing + confirmation states. */
+  .phead .clr[disabled] { cursor:default; }
+  .phead .clr.done { color:var(--accent); }
+  .phead .clr .spin { display:inline-block; width:11px; height:11px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:ab-spin .7s linear infinite; }
+  @keyframes ab-spin { to { transform:rotate(360deg); } }
   .grp { padding:6px 4px 2px; }
   .grp-h { display:flex; align-items:center; gap:7px; padding:4px 8px; font-family:var(--font-mono, monospace); font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
   .grp-h .n { background:var(--hover); color:var(--fg); border-radius:999px; padding:0 6px; font-size:10px; }
@@ -3278,6 +3294,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     disconnectedCallback() {
       super.disconnectedCallback();
       clearInterval(this._timer);
+      clearTimeout(this._flashTimer);
       if (this._onDoc) document.removeEventListener("click", this._onDoc);
       if (this._onVis && typeof document !== "undefined") document.removeEventListener("visibilitychange", this._onVis);
     }
@@ -3382,6 +3399,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     _close() {
       this._open = false;
+      clearTimeout(this._flashTimer);
+      this._clearFlash = null;
       this.render();
     }
     _toggle() {
@@ -3401,6 +3420,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       this.render();
     }
+    // SOW-095: the "Mark all read" click gets a brief processing indicator, then a confirmation, so the action reads
+    // as acknowledged even though the write is a fast LOCAL watermark. Cosmetic pacing (not a fake delay); the
+    // confirmation auto-dismisses back to the settled all-read state.
+    _doMarkAll() {
+      if (this._clearFlash) return;
+      this._clearFlash = "busy";
+      this.render();
+      clearTimeout(this._flashTimer);
+      this._flashTimer = setTimeout(() => {
+        this._clearFlash = "done";
+        this._markAllSeen();
+        this._flashTimer = setTimeout(() => {
+          this._clearFlash = null;
+          this.render();
+        }, 1500);
+      }, 350);
+    }
+    _clrBtn() {
+      if (this._clearFlash === "busy") return `<button class="clr" type="button" disabled aria-busy="true"><span class="spin"></span>Marking...</button>`;
+      if (this._clearFlash === "done") return `<button class="clr done" type="button" disabled>${CHECK}All marked read</button>`;
+      return `<button class="clr" type="button" data-clear>Mark all read</button>`;
+    }
     render() {
       if (!this.root) return;
       if (this._gated) {
@@ -3419,7 +3460,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       });
       this.on("[data-clear]", "click", (e) => {
         e.stopPropagation();
-        this._markAllSeen();
+        this._doMarkAll();
       });
     }
     _panelHtml() {
@@ -3441,7 +3482,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const moreN = g.items.length - Math.min(g.items.length, 8);
         return `<div class="grp"><div class="grp-h">${esc(g.label)}${g.unread ? `<span class="n">${g.unread}</span>` : ""}</div>${rows}${moreN > 0 ? `<div class="it s" style="color:var(--muted)">+${moreN} more</div>` : ""}</div>`;
       }).join("") : `<div class="empty">You are all caught up.</div>`;
-      return `<div class="panel"><div class="phead"><b>Activity</b><button class="clr" type="button" data-clear>Mark all read</button></div>${body}</div>`;
+      return `<div class="panel"><div class="phead"><b>Activity</b>${this._clrBtn()}</div>${body}</div>`;
     }
   };
   define("gbti-activity-bell", GbtiActivityBell);
@@ -4053,6 +4094,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { div: true },
     // SOW-069: the WorkBench item carries quick deep-links into the workspace tabs (always-visible indented children).
     { key: "workspace", href: "workspace.html", ico: "grid", nm: "WorkBench", sub: "Your content + tools", children: [
+      // SOW-101: quick deep-links into the member's OWN content-management tabs (distinct from the Member Activity
+      // browse feeds above). The wb- key prefix avoids a highlight collision with the articles/products/prompts/shares
+      // feed items. Shares has no workspace tab yet (SOW-093), so it points at the co-op stream like the feed item.
+      { key: "wb-post", href: "workspace.html#tab=post", ico: "article", nm: "Articles" },
+      { key: "wb-product", href: "workspace.html#tab=product", ico: "product", nm: "Products" },
+      { key: "wb-prompt", href: "workspace.html#tab=prompt", ico: "prompt", nm: "Prompts" },
+      { key: "wb-shares", href: "newtab.html#type=share", ico: "share", nm: "Shares" },
       { key: "prs", href: "workspace.html#tab=prs", ico: "pr", nm: "Pull requests" },
       { key: "saved", href: "workspace.html#tab=saved", ico: "bookmark", nm: "Saved" },
       { key: "subs", href: "workspace.html#tab=subs", ico: "users", nm: "Following" }
@@ -5959,7 +6007,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var VIDEO = _svg(`<rect x="3.5" y="6" width="11" height="12" rx="2.2" ${S} stroke-width="1.7"/><path d="M14.5 10l6-2.8v9.6l-6-2.8" ${S} stroke-width="1.7" stroke-linejoin="round"/>`);
   var CHAT = _svg(`<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-4 4v-4H6.5" ${S} stroke-width="1.8" stroke-linejoin="round"/>`);
   var USERS = _svg(`<circle cx="9" cy="8" r="3.2" ${S} stroke-width="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.6M16.5 19a5.5 5.5 0 0 0-2.3-4.5" ${S} stroke-width="1.8" stroke-linecap="round"/>`);
-  var CHECK = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
+  var CHECK2 = _svg(`<path d="M5 12.5l4.5 4.5L19 7" ${S} stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`);
   var SECTION_ICON = { Publishing: EYE, Taxonomy: TAG, Pricing: COIN, Links: LINK, Media: IMG, Details: DOC };
   var DOC_SECTION_KEYS = { product: /* @__PURE__ */ new Set(["video"]) };
   var STAT_DEFS = [
@@ -6944,7 +6992,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           input.publishedAt = nowIso;
         }
         const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || void 0 });
-        this._setChip(`${CHECK} Published`, "ok");
+        this._setChip(`${CHECK2} Published`, "ok");
         this._dirty = false;
         this.$("#publish")?.setAttribute("hidden", "");
         this._banner(`Publishing is not instant. It opens a pull request that auto-merges, then the site rebuilds, so your change reaches the live edge in about 2 to 3 minutes. Track it in your <b>WorkBench</b> under Pull requests.`);
@@ -6984,7 +7032,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (this.fields.some((f) => f.key === "status")) input.status = "draft";
         if (["post", "product", "prompt"].includes(type)) input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
         const res = await this.client.saveDraft({ type, input, body, path: this.itemPath || void 0 });
-        this._setChip(`${CHECK} Draft saved`, "ok");
+        this._setChip(`${CHECK2} Draft saved`, "ok");
         if (res?.renamed) this._banner(`Draft saved with the pending permalink change: <b>${esc(res.renamed.from)}</b> becomes <b>${esc(res.renamed.to)}</b> when you publish. The old link will redirect.`);
         this.out(res?.renamed ? `<span class="tag ok">saved</span> Draft staged on your fork with the pending permalink change (${esc(res.renamed.from)} to ${esc(res.renamed.to)}); the rename happens when you publish.` : '<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
         this.emit("gbti-draft-saved", res);
@@ -12262,18 +12310,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._ensureTab(this._tab);
       this._loadInboxCount();
       this._onHash = () => {
-        const nt = typeof location !== "undefined" && parseWorkspaceNew(location.hash) || null;
-        if (nt && !this._editing && this._reviewing == null) {
-          this._editing = { type: nt, frontmatter: {}, body: "" };
-          this.render();
-          return;
-        }
-        const t = typeof location !== "undefined" && parseWorkspaceTab(location.hash) || "overview";
-        if (t !== this._tab && !this._editing && this._reviewing == null) {
-          this._tab = t;
+        const h = typeof location !== "undefined" ? location.hash : "";
+        const plan = planHashRoute(h, { editing: !!this._editing, reviewing: this._reviewing != null, tab: this._tab });
+        if (plan.action === "exit") {
+          this._editing = null;
+          this._reviewing = null;
+          this._tab = plan.tab;
           this._page = 0;
           this.render();
-          this._ensureTab(t);
+          this._ensureTab(plan.tab);
+        } else if (plan.action === "openNew") {
+          this._editing = { type: plan.type, frontmatter: {}, body: "" };
+          this.render();
+        } else if (plan.action === "switchTab") {
+          this._tab = plan.tab;
+          this._page = 0;
+          this.render();
+          this._ensureTab(plan.tab);
         }
       };
       if (typeof window !== "undefined") window.addEventListener("hashchange", this._onHash);
