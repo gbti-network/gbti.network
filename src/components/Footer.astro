@@ -7,7 +7,7 @@ const year = new Date().getFullYear();
 const columns = [
   {
     title: 'Pages',
-    links: [['Articles', '/articles/'], ['Prompts', '/prompts/'], ['Products', '/products/'], ['Members', '/members/'], ['Revenue Model', '/revenue-model/']],
+    links: [['Articles', '/articles/'], ['Prompts', '/prompts/'], ['Products', '/products/'], ['Members', '/members/'], ['Revenue Model', '/revenue-model/'], ['Brand', '/brand/']],
   },
   {
     title: 'Community',
@@ -19,7 +19,7 @@ const columns = [
   <div class="wrap">
     <div class="foot-top">
       <div>
-        <a class="brand" href="/" aria-label="GBTI Network home"><span class="brand-mark">G</span><span class="brand-word">GBTI Network</span></a>
+        <a class="brand" href="/" aria-label="GBTI Network home"><span class="brand-mark" aria-hidden="true"></span><span class="brand-word">GBTI Network</span></a>
         <div class="foot-social">
           {SOCIAL_LINKS.map((s) => (
             <a href={s.href} target="_blank" rel="noopener noreferrer" data-tooltip={s.label} aria-label={s.label}>

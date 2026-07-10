@@ -260,13 +260,16 @@ section { position: relative; }
 .site-head .brand-word { color: var(--ink); }
 .head-inner { height: 72px; display: flex; align-items: center; justify-content: space-between; }
 .brand { display: flex; align-items: center; gap: 11px; }
+/* Brand mark: the GBTI monogram, masked so it recolors to match the wordmark (ink on the light site header,
+   white on dark grounds). The source is the white-on-transparent mark under /brand/logo/. */
 .brand-mark {
-  width: 34px; height: 34px; border-radius: 7px; flex: none;
-  background: var(--green); color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--f-display); font-weight: 800; font-size: 22px;
-  box-shadow: var(--sh-green);
+  width: 30px; height: 28px; flex: none;
+  background-color: #fff;
+  -webkit-mask: url("/brand/logo/mark-white.png") center / contain no-repeat;
+  mask: url("/brand/logo/mark-white.png") center / contain no-repeat;
 }
+.site-head .brand-mark { background-color: var(--ink); }
+[data-theme="dark"] .site-head .brand-mark { background-color: var(--fg); }
 .brand-word { font-family: var(--f-display); font-weight: 700; font-size: 20px; color: #fff; white-space: nowrap; }
 .nav { display: flex; gap: 30px; }
 .nav a { font-size: 15.5px; font-weight: 500; color: var(--fg-soft); transition: color .15s; white-space: nowrap; }
