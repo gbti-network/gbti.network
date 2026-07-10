@@ -4739,8 +4739,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return MEMBERS_MARKER;
       case "heading":
         return `${"#".repeat(Math.min(6, Math.max(1, b.level || 2)))} ${b.text ?? ""}`;
-      case "code":
-        return "```" + (b.lang ?? "") + "\n" + (b.code ?? "") + "\n```";
+      case "code": {
+        const code = b.code ?? "";
+        const runs = code.match(/^`{3,}/gm) || [];
+        const fence = "`".repeat(Math.max(3, ...runs.map((r) => r.length + 1)));
+        return fence + (b.lang ?? "") + "\n" + code + "\n" + fence;
+      }
       case "callout":
         return "```callout " + normalizeVariant(b.variant) + "\n" + (b.text ?? "") + "\n```";
       case "quote":
@@ -4775,11 +4779,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         continue;
       }
       if (isFence(line)) {
-        const lang = line.replace(/^```/, "").trim();
+        const open = /^(`{3,})(.*)$/.exec(line);
+        const fenceLen = open[1].length;
+        const lang = open[2].trim();
         const info = lang.split(/\s+/);
         const code = [];
         i++;
-        while (i < n && !/^```\s*$/.test(lines[i])) {
+        while (i < n) {
+          const close = /^(`{3,})\s*$/.exec(lines[i]);
+          if (close && close[1].length >= fenceLen) break;
           code.push(lines[i]);
           i++;
         }

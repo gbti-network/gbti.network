@@ -119,3 +119,19 @@ test('SOW-062: the shortcut regexes are exported for the editor', () => {
   assert.ok(isFence('```js') && !isFence('x'));
   assert.deepEqual(CALLOUT_VARIANTS, ['info', 'note', 'warning', 'tip']);
 });
+
+// The nested-fence rule (CommonMark): a ````markdown block carries ``` fences as CONTENT, and the
+// round-trip re-emits a fence longer than any inner run (the /sow skill prompt broke on this in the reader;
+// the editor parser had the same defect and would have corrupted the body on save).
+test('a 4-backtick fence carries inner ``` fences as content and round-trips', () => {
+  const md = '````markdown\n# Skill\n```bash\nmkdir -p .data/sow\n```\ntail\n````';
+  const blocks = parseBlocks(md);
+  assert.equal(blocks.length, 1);
+  assert.equal(blocks[0].type, 'code');
+  assert.equal(blocks[0].lang, 'markdown');
+  assert.match(blocks[0].code, /```bash\nmkdir -p \.data\/sow\n```/);
+  assert.match(blocks[0].code, /tail$/);
+  const back = serializeBlocks(blocks);
+  assert.deepEqual(parseBlocks(back), blocks); // idempotent round-trip
+  assert.match(back, /^````markdown\n/);
+});
