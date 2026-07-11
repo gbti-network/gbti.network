@@ -1,8 +1,8 @@
 ---
-title: 'Manage Statements of Work: a /sow Skill for Claude Code'
+title: 'Manage Scopes of Work: a /sow Skill for Claude Code'
 slug: scope-of-work-manager-claude-code-skill
 shortDescription: >-
-  A drop-in /sow skill for Claude Code: lane-based Statement of Work management (queue, progressing,
+  A drop-in /sow skill for Claude Code: lane-based Scope of Work management (queue, progressing,
   waiting review, completed) with authoring rules that stop duplicate plans, force a real code
   audit, and keep owner decisions in plan mode.
 targets:
@@ -24,7 +24,7 @@ type: prompt
 author: atwellpub
 ---
 
-Claude Code loads any markdown file at `.claude/skills/<name>/SKILL.md` as a reusable slash command (a "skill"). This one gives your agent a `/sow` command for managing Statements of Work: local, lane-based planning documents that move kanban-style from queue to completed, living beside your code but outside version control.
+Claude Code loads any markdown file at `.claude/skills/<name>/SKILL.md` as a reusable slash command (a "skill"). This one gives your agent a `/sow` command for managing Scopes of Work: local, lane-based planning documents that move kanban-style from queue to completed, living beside your code but outside version control.
 
 It exists because agent-driven projects accumulate work items faster than anyone can track them in their head. A SOW gives every work item one canonical markdown file with a status banner, phases, and open questions; the lanes give the whole project a glanceable board; and the authoring rules keep the agent from duplicating items or writing plans detached from the real code.
 
@@ -41,14 +41,14 @@ It exists because agent-driven projects accumulate work items faster than anyone
 ---
 name: sow
 description: >
-  Author or improve a Statement of Work (SOW) in .data/sow/. Invoke for "/sow", "/sow init",
+  Author or improve a Scope of Work (SOW) in .data/sow/. Invoke for "/sow", "/sow init",
   "create a sow", "write a sow", or when the user asks to capture work as a SOW. "/sow init"
   scaffolds the lane framework (idempotent). Otherwise enforce the pre-checks: improve an existing
   SOW before creating a new one, ground it in a code audit, reference related completed SOWs,
   default the lane to queue, and follow the project's plan-mode and writing conventions.
 ---
 
-# Managing Statements of Work
+# Managing Scopes of Work
 
 SOWs are local planning documents in `.data/sow/` (kept OUT of version control), organized into
 lanes a work item moves through: `0_queue` -> `1_progressing` -> `2_waiting_review` ->
