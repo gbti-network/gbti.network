@@ -6,6 +6,8 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 
 const MARK = (variant: string) => `/brand/logo/mark-${variant}.png`;
+// The packaged avatar files (the mark on a brand ground, 1024 x 1024, square + pre-cropped round).
+const AVATAR = (variant: string) => `/brand/avatars/avatar-${variant}.png`;
 // The three social banner grounds, reused per platform.
 const grounds = [
   { key: 'ink', label: 'Ink' },
@@ -76,12 +78,15 @@ const features: [string, string][] = [
 
     <!-- APP ICONS -->
     <section class="b-sec">
-      <div class="b-sect-t"><h2>App icon and avatar tiles</h2><span class="n">rounded square and circle</span></div>
+      <div class="b-sect-t"><h2>App icon and avatar tiles</h2><span class="n">rounded square and circle · 1024 x 1024</span></div>
+      <p class="b-note" style="margin:0 0 20px">The packaged avatar files: the mark centered on a brand ground at 1024 x 1024, sized to survive every
+        platform's circle crop. Each ground ships square (full bleed, for platforms that crop themselves) and round (transparent corners, for
+        surfaces that do not). All six are in the download section below.</p>
       <div class="b-grid g4">
-        <div class="tile"><div class="stage bg-paper"><span class="ic sq" style="background:#25232b"><img src={MARK('white')} alt="" /></span></div><div class="cap"><span>Ink tile</span><span class="sw">white mark</span></div></div>
-        <div class="tile"><div class="stage bg-paper"><span class="ic sq" style="background:#1f9e5f"><img src={MARK('white')} alt="" /></span></div><div class="cap"><span>Green tile</span><span class="sw">white mark</span></div></div>
-        <div class="tile"><div class="stage bg-paper"><span class="ic sq" style="background:#fff;border:1px solid var(--line)"><img src={MARK('ink')} alt="" /></span></div><div class="cap"><span>White tile</span><span class="sw">ink mark</span></div></div>
-        <div class="tile"><div class="stage bg-paper"><span class="ic rd" style="background:#25232b"><img src={MARK('white')} alt="" /></span></div><div class="cap"><span>Avatar circle</span><span class="sw">white on ink</span></div></div>
+        <div class="tile"><div class="stage bg-paper"><img class="av sq" src={AVATAR('ink')} alt="GBTI avatar, white mark on ink" /></div><div class="cap"><span>Ink tile</span><span class="sw">white mark</span></div></div>
+        <div class="tile"><div class="stage bg-paper"><img class="av sq" src={AVATAR('green')} alt="GBTI avatar, white mark on green" /></div><div class="cap"><span>Green tile</span><span class="sw">white mark</span></div></div>
+        <div class="tile"><div class="stage bg-paper"><img class="av sq bordered" src={AVATAR('white')} alt="GBTI avatar, ink mark on white" /></div><div class="cap"><span>White tile</span><span class="sw">ink mark</span></div></div>
+        <div class="tile"><div class="stage bg-paper"><img class="av rd" src={AVATAR('ink-round')} alt="GBTI avatar circle, white mark on ink" /></div><div class="cap"><span>Avatar circle</span><span class="sw">white on ink</span></div></div>
       </div>
     </section>
 
@@ -114,7 +119,7 @@ const features: [string, string][] = [
       <div class="soc-list">
         {platforms.map((p) => (
           <div class="socblock">
-            <div class="socblock-h"><span class="ic rd sm" style="background:#1f9e5f"><img src={MARK('white')} alt="" /></span><span class="socname">{p.name}</span><span class="socdim">{p.dim}</span></div>
+            <div class="socblock-h"><img class="av-chip" src={AVATAR('green-round')} alt="" /><span class="socname">{p.name}</span><span class="socdim">{p.dim}</span></div>
             <div class="soc-variants">
               {grounds.map((g) => (
                 <div class="socvar">
@@ -144,14 +149,20 @@ const features: [string, string][] = [
 
     <!-- DOWNLOAD -->
     <section class="b-sec">
-      <div class="b-sect-t"><h2>Download the assets</h2><span class="n">marks and favicons</span></div>
-      <p class="b-note" style="margin:0 0 18px">The full package (every mark, the favicon set, and a README) is versioned in the repository under
+      <div class="b-sect-t"><h2>Download the assets</h2><span class="n">marks, avatars, and favicons</span></div>
+      <p class="b-note" style="margin:0 0 18px">The full package (every mark, the avatar set, the favicon set, and a README) is versioned in the repository under
         <span class="mono">.product/brand/</span>. The site-served files link directly below.</p>
       <div class="dl-grid">
         <a class="dl" href={MARK('ink')} download><img src={MARK('ink')} alt="" /><span>Mark, ink</span></a>
         <a class="dl" href={MARK('green')} download><img src={MARK('green')} alt="" /><span>Mark, green</span></a>
         <a class="dl" href={MARK('white')} download><span class="dl-dark"><img src={MARK('white')} alt="" /></span><span>Mark, white</span></a>
         <a class="dl" href={MARK('mint')} download><span class="dl-dark"><img src={MARK('mint')} alt="" /></span><span>Mark, mint</span></a>
+        <a class="dl" href={AVATAR('ink')} download><img class="dl-av sq" src={AVATAR('ink')} alt="" /><span>Avatar, ink</span></a>
+        <a class="dl" href={AVATAR('green')} download><img class="dl-av sq" src={AVATAR('green')} alt="" /><span>Avatar, green</span></a>
+        <a class="dl" href={AVATAR('white')} download><img class="dl-av sq bordered" src={AVATAR('white')} alt="" /><span>Avatar, white</span></a>
+        <a class="dl" href={AVATAR('ink-round')} download><img class="dl-av" src={AVATAR('ink-round')} alt="" /><span>Avatar, ink round</span></a>
+        <a class="dl" href={AVATAR('green-round')} download><img class="dl-av" src={AVATAR('green-round')} alt="" /><span>Avatar, green round</span></a>
+        <a class="dl" href={AVATAR('white-round')} download><img class="dl-av bordered rd" src={AVATAR('white-round')} alt="" /><span>Avatar, white round</span></a>
         <a class="dl" href="/favicon-512x512.png" download><img src="/favicon-512x512.png" alt="" /><span>Favicon 512</span></a>
         <a class="dl" href="/apple-touch-icon.png" download><img src="/apple-touch-icon.png" alt="" /><span>Apple touch icon</span></a>
       </div>
@@ -218,6 +229,13 @@ const features: [string, string][] = [
   .ic.sm { width: 40px; height: 40px; border-radius: 50%; box-shadow: none; }
   .ic img { width: 58%; height: 58%; object-fit: contain; }
 
+  /* The packaged avatar files (full-bleed squares + pre-cropped rounds), shown at tile size. */
+  .av { width: 118px; height: 118px; display: block; box-shadow: 0 10px 26px rgba(37,35,43,.22); }
+  .av.sq { border-radius: 27px; }
+  .av.rd { border-radius: 50%; }
+  .av.bordered { border: 1px solid var(--line); }
+  .av-chip { width: 40px; height: 40px; border-radius: 50%; display: block; }
+
   .fav { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .fav .fl { font-family: var(--f-mono); font-size: 10px; color: var(--fg-mute); }
 
@@ -256,6 +274,9 @@ const features: [string, string][] = [
   .dl { display: flex; flex-direction: column; align-items: center; gap: 10px; text-decoration: none; padding: 20px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); transition: border-color .14s, transform .14s; }
   .dl:hover { border-color: var(--green); transform: translateY(-2px); }
   .dl img { width: 54px; height: 54px; object-fit: contain; }
+  .dl .dl-av { border-radius: 50%; }
+  .dl .dl-av.sq { border-radius: 13px; }
+  .dl .dl-av.bordered { border: 1px solid var(--line); }
   .dl .dl-dark { display: flex; align-items: center; justify-content: center; width: 74px; height: 74px; border-radius: 12px; background: #25232b; }
   .dl .dl-dark img { width: 54px; height: 54px; }
   .dl span:last-child { font-family: var(--f-mono); font-size: 12px; color: var(--fg-soft); }

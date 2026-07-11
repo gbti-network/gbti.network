@@ -1,7 +1,7 @@
 # GBTI brand assets
 
-The GBTI Network logo package: the monogram mark, the palette, and the favicon set, for manual reuse (social
-profiles, decks, print, third-party tools). The live style guide is at https://gbti.network/brand/ and the same
+The GBTI Network logo package: the monogram mark, the palette, the avatar set, and the favicon set, for manual
+reuse (social profiles, decks, print, third-party tools). The live style guide is at https://gbti.network/brand/ and the same
 mark art drives the site header, the favicons, and the browser-extension icons.
 
 ## Palette
@@ -24,6 +24,16 @@ trimmed and centered.
 - `mark-green.png`: brand-green mark, for light backgrounds.
 - `mark-white.png`: white mark, for ink or green backgrounds.
 - `mark-mint.png`: mint mark, for ink backgrounds.
+
+`avatars/`: the mark centered on a brand ground at 1024 x 1024, for social profiles and app directories. The
+mark sits at 50 percent of the canvas, which clears the 25 percent clear-space rule with room to spare and
+survives every platform's circle crop. The square files are full bleed (for platforms that crop themselves);
+the `-round` files are pre-cropped circles with transparent corners, for surfaces that do not crop. The same
+files are served under https://gbti.network/brand/avatars/.
+
+- `avatar-ink.png` / `avatar-ink-round.png`: white mark on ink. The primary avatar.
+- `avatar-green.png` / `avatar-green-round.png`: white mark on brand green.
+- `avatar-white.png` / `avatar-white-round.png`: ink mark on white, for dark surrounding UI.
 
 `favicons/`: the mark on an ink rounded tile, at the standard sizes.
 
