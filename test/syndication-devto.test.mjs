@@ -64,7 +64,7 @@ test('devto adapter: the full article payload (org, canonical, cover, draft flag
   const fetchImpl = async (url, opts) => {
     calls.push({ url, opts });
     if (url.startsWith('https://raw.githubusercontent.com/')) return { ok: true, status: 200, text: async () => FILE };
-    return { ok: true, status: 201, json: async () => ({ id: 777, url: 'https://dev.to/gbti-network/my-article-1abc' }) };
+    return { ok: true, status: 201, text: async () => JSON.stringify({ id: 777, url: 'https://dev.to/gbti-network/my-article-1abc' }) };
   };
   const env = { DEVTO_API_KEY: 'k', DEVTO_ORG_ID: '10466' };
   const ad = createDevtoAdapter({ env, fetchImpl });
@@ -93,7 +93,7 @@ test('devto adapter: draft flag, skips (share/members/draft file), and readable 
   const okFetch = async (url, opts) => {
     if (url.startsWith('https://raw.')) return { ok: true, text: async () => FILE };
     lastBody = JSON.parse(opts.body);
-    return { ok: true, status: 201, json: async () => ({ id: 1, url: 'https://dev.to/x' }) };
+    return { ok: true, status: 201, text: async () => JSON.stringify({ id: 1, url: 'https://dev.to/x' }) };
   };
   const ad = createDevtoAdapter({ env, fetchImpl: okFetch });
   const draft = await ad.post({ ...ITEM, devtoDraft: true });
@@ -103,7 +103,7 @@ test('devto adapter: draft flag, skips (share/members/draft file), and readable 
   assert.equal((await ad.post({ ...ITEM, visibility: 'members', membersOnly: true })).skipped, true);
   const draftFile = createDevtoAdapter({ env, fetchImpl: async (u) => (u.startsWith('https://raw.') ? { ok: true, text: async () => FILE.replace('status: published', 'status: draft') } : null) });
   assert.equal((await draftFile.post({ ...ITEM })).skipped, true, 'an unpublished canonical file skips');
-  const err422 = createDevtoAdapter({ env, fetchImpl: async (u) => (u.startsWith('https://raw.') ? { ok: true, text: async () => FILE } : { ok: false, status: 422, json: async () => ({ error: 'Title has already been used' }) }) });
+  const err422 = createDevtoAdapter({ env, fetchImpl: async (u) => (u.startsWith('https://raw.') ? { ok: true, text: async () => FILE } : { ok: false, status: 422, text: async () => JSON.stringify({ error: 'Title has already been used' }) }) });
   const e = await err422.post({ ...ITEM });
   assert.equal(e.ok, false);
   assert.match(e.error, /devto 422 .*Title/);

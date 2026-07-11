@@ -15,6 +15,9 @@ import { channelLimit, secretsPresent } from '../../membership/syndication-chann
 import { contentPathFor, prepareDevtoBody } from './devto-body.mjs';
 
 const RAW_BASE = 'https://raw.githubusercontent.com/gbti-network/gbti.network/main';
+// dev.to's edge 403s UA-less requests (a Workers fetch sends no User-Agent by default; the 403 comes back
+// as an HTML block page, not API JSON) — the same lesson as Reddit's required UA.
+const USER_AGENT = 'gbti-network-syndication/0.1 (+https://gbti.network)';
 const SITE = 'https://gbti.network';
 // The built-in byline; the Worker normally pre-renders the devto-intro template into item.devtoIntro.
 const DEFAULT_INTRO = '**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).';
@@ -42,7 +45,7 @@ export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch } = 
 
       let raw;
       try {
-        const res = await fetchImpl(`${RAW_BASE}/${path}`);
+        const res = await fetchImpl(`${RAW_BASE}/${path}`, { headers: { 'User-Agent': USER_AGENT } });
         if (!res?.ok) return { ok: false, error: `devto: could not read the canonical file (${res?.status ?? 'no response'})` };
         raw = await res.text();
       } catch (err) {
@@ -70,14 +73,18 @@ export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch } = 
       };
       const res = await fetchImpl('https://dev.to/api/articles', {
         method: 'POST',
-        headers: { 'api-key': String(env.DEVTO_API_KEY || ''), 'Content-Type': 'application/json', Accept: 'application/vnd.forem.api-v1+json' },
+        headers: { 'api-key': String(env.DEVTO_API_KEY || ''), 'Content-Type': 'application/json', Accept: 'application/vnd.forem.api-v1+json', 'User-Agent': USER_AGENT },
         body: JSON.stringify({ article }),
       });
       if (res.status === 429) return { ok: false, error: 'devto 429 (rate limited)' };
-      const body = await res.json().catch(() => ({}));
+      const rawText = await res.text().catch(() => '');
+      let body = {};
+      try { body = JSON.parse(rawText); } catch { /* an edge block page is HTML, not JSON */ }
       if (!res.ok) {
-        // Forem carries a readable `error` (e.g. a 422 duplicate-title); surface it so the popup says WHY.
-        return { ok: false, error: `devto ${res.status}${body?.error ? ` ${String(body.error)}` : ''}`.slice(0, 160) };
+        // Forem carries a readable `error` (e.g. a 422 duplicate-title); an HTML page means the edge
+        // blocked the request before the API — surface a snippet either way so the popup says WHY.
+        const detail = body?.error ? String(body.error) : rawText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+        return { ok: false, error: `devto ${res.status}${detail ? ` ${detail}` : ''}`.slice(0, 160) };
       }
       return { ok: true, id: body?.id != null ? String(body.id) : null, url: body?.url || null, draft: article.published === false };
     },
