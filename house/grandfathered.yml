@@ -1,66 +1,62 @@
-# Grandfathered github_ids (ADMIN-owned; see CODEOWNERS). A grandfather grant makes a github_id
-# count as PAID with no Stripe subscription. Permanent by default; set `until` for a time-boxed
-# grant. Precedence: ban > staff > grandfather > Stripe.
-# Complimentary, permanent access for the existing co-op members (predate the paid system). The two
-# superadmins (atwellpub, gbtilabs) are NOT listed: staff already outranks Stripe (ban > staff > grandfather).
 grandfathered:
-  - github_id: "132623795"   # github.com/Aliayashi517
+  - github_id: '132623795'
     login: aliayashi517
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "3306507"     # github.com/andrija-naglic
+  - github_id: '3306507'
     login: andrija-naglic
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "6953730"     # github.com/bomsn (Ali Khallad)
+  - github_id: '6953730'
     login: bomsn
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "6268698"     # github.com/daprela (Giulio Daprelà)
+  - github_id: '6268698'
     login: daprela
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "4893879"     # github.com/elsonponte (Elson Ponte)
+  - github_id: '4893879'
     login: elsonponte
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "89241634"    # github.com/Eyesandnose (Ayodeji Adekore)
+  - github_id: '89241634'
     login: eyesandnose
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "90683647"    # github.com/Giles-Beckley
+  - github_id: '90683647'
     login: giles-beckley
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "4948323"     # github.com/leogopal (Leo Gopal)
+  - github_id: '4948323'
     login: leogopal
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "18620454"    # github.com/MattBissett
+  - github_id: '18620454'
     login: mattbissett
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "7998393"     # github.com/nareshdevineni
+  - github_id: '7998393'
     login: nareshdevineni
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "225425"      # github.com/rfilipo (Ricardo Filipo)
+  - github_id: '225425'
     login: rfilipo
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "8797609"     # github.com/shaneedwardtaylor (Shane Taylor)
+  - github_id: '8797609'
     login: shaneedwardtaylor
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "97899242"    # github.com/srikanthkoneru
+  - github_id: '97899242'
     login: srikanthkoneru
     reason: complimentary access (grandfathered co-op member)
     until: null
-  - github_id: "7199469"     # github.com/Thivieira (Thiago Vieira)
+  - github_id: '7199469'
     login: thivieira
     reason: complimentary access (grandfathered co-op member)
     until: null
-# - github_id: "..."
-#   login: founder
-#   reason: founding member
-#   until: null   # null = permanent; otherwise an ISO date
+  - github_id: '900000035'
+    login: e2e-sentinel-sow035
+    reason: SOW-035 E2E sentinel (auto-removed; never merged)
+    until: null
+    at: '2026-07-11T08:27:33.736Z'
