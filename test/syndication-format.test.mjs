@@ -130,3 +130,11 @@ test('ALL-CAPS tokens uppercase their value, mentions excluded', () => {
   assert.equal(renderTemplate('{title} [{content-type}]', item, { limit: 300 }), 'My Skill [prompt]');
   assert.equal(renderTemplate('{MEMBER-DISCORD-USERNAME}', item, { limit: 300 }), '<@123>', 'a mention is never uppercased');
 });
+
+// SOW-088: {author-note-italic} wraps each non-empty LINE in markdown italics (italics never span
+// line breaks on Reddit), sanitized like {author-note}; empty when the item has no note.
+test('{author-note-italic} italicizes per line', () => {
+  const item = { source: 'prompt', authorNote: 'First paragraph.\n\nSecond one here.' };
+  assert.equal(renderTemplate('{author-note-italic}', item, { limit: 500 }), '*First paragraph.*\n\n*Second one here.*');
+  assert.equal(renderTemplate('x {author-note-italic}', { source: 'prompt' }, { limit: 500 }), 'x');
+});

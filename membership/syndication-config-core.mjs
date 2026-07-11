@@ -56,7 +56,7 @@ const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username
 // comes from the item URL automatically); the COMMENT template = the separately-controlled first comment
 // (owner-directed 2026-07-10: keep both, templated independently). Editable in the admin templates card.
 const DEFAULT_REDDIT_BODY = '{short-description}';
-const DEFAULT_REDDIT_COMMENT = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
+const DEFAULT_REDDIT_COMMENT = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note-italic}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
   post: DEFAULT_FORMAT,

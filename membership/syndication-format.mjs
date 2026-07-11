@@ -40,6 +40,7 @@ function truncate(text, limit) {
  *   {author}         the @login text (sanitized, never pings)
  *   {member-url}     the member's public profile URL (gbti.network/members/<login>/)
  *   {short-description}  the item's shortDescription (carried as the queue item blurb)
+ *   {author-note-italic}  the intro with each line wrapped in markdown italics (for Reddit)
  *   A token written in ALL CAPS uppercases its value: {CONTENT-TYPE} -> "PROMPT" (mentions excluded).
  *   {shareurl} {url} the item's link
  *   {title} {category}  the item metadata
@@ -71,6 +72,12 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
     title: sanitizeMentions(item.title || ''),
     category: sanitizeMentions(item.category || ''),
     authornote: sanitizeMentions(item.authorNote || ''), // {author-note}: the from-the-author intro (public items only)
+    // {author-note-italic}: the intro in markdown ITALICS for channels that render it (Reddit does).
+    // Markdown italics never span line breaks, so each non-empty LINE is wrapped, not the whole block.
+    authornoteitalic: sanitizeMentions(item.authorNote || '')
+      .split('\n')
+      .map((l) => (l.trim() ? `*${l.trim()}*` : l))
+      .join('\n'),
     memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : '', // {member-url}: the public profile
     shortdescription: sanitizeMentions(item.blurb || ''), // {short-description}: the item's shortDescription (the queue item's blurb)
   };

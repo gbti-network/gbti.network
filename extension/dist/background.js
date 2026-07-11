@@ -20707,7 +20707,7 @@ var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}:
 var DEFAULT_REDDIT_BODY = "{short-description}";
 var DEFAULT_REDDIT_COMMENT = `The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:
 
-"{author-note}"
+"{author-note-italic}"
 
 ---
 

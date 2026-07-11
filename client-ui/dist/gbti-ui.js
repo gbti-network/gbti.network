@@ -6245,7 +6245,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "product", nm: "Product", df: "product" },
     { key: "prompt", nm: "Prompt", df: "prompt" }
   ];
-  var VARS = ["{memberdiscord}", "{member-discord-username}", "{fullName}", "{author}", "{title}", "{url}", "{category}", "{content-type}", "{author-note}", "{member-url}", "{short-description}"];
+  var VARS = ["{memberdiscord}", "{member-discord-username}", "{fullName}", "{author}", "{title}", "{url}", "{category}", "{content-type}", "{author-note}", "{author-note-italic}", "{member-url}", "{short-description}"];
   var PIPE_CHIPS = [
     { id: "discord", label: "Discord · featured" },
     { id: "discord-category", label: "Discord · category" },
@@ -13357,6 +13357,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       category: sanitizeMentions(item.category || ""),
       authornote: sanitizeMentions(item.authorNote || ""),
       // {author-note}: the from-the-author intro (public items only)
+      // {author-note-italic}: the intro in markdown ITALICS for channels that render it (Reddit does).
+      // Markdown italics never span line breaks, so each non-empty LINE is wrapped, not the whole block.
+      authornoteitalic: sanitizeMentions(item.authorNote || "").split("\n").map((l) => l.trim() ? `*${l.trim()}*` : l).join("\n"),
       memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : "",
       // {member-url}: the public profile
       shortdescription: sanitizeMentions(item.blurb || "")
@@ -13559,7 +13562,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
      *  referencing {author-note} never pre-fills for a no-intro item (empty quotes read broken). */
     _redditStored(key) {
       const tpl = this._info?.channelTemplates?.reddit?.[key] || this._info?.templates?.[key] || "";
-      return tpl && (this._authorNote || !/\{author-note\}/.test(tpl)) ? tpl : "";
+      return tpl && (this._authorNote || !/\{author-note(-italic)?\}/.test(tpl)) ? tpl : "";
     }
     /** The Reddit BODY template (the DESCRIPTION under the title; the embed card comes from the item URL):
      *  an explicit edit wins, else the stored reddit-body template. A text post appends the link when the
@@ -13630,7 +13633,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
       const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}${fwdState}${cmtState}</p>` : "";
       return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
-      <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
+      <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
       <div class="preview" data-preview>${esc(preview)}</div>

@@ -123,7 +123,7 @@ test('reddit-body: default template, config override, and the admin edit path', 
   const { TEMPLATE_TYPES, DEFAULT_TEMPLATES, templateFor, syndicationConfigFromParsed } = await import('../membership/syndication-config-core.mjs');
   assert.ok(TEMPLATE_TYPES.includes('reddit-body'));
   assert.equal(DEFAULT_TEMPLATES['reddit-body'], '{short-description}'); // the description under the title
-  assert.match(DEFAULT_TEMPLATES['reddit-comment'], /\{author-note\}/); // the separately-templated first comment
+  assert.match(DEFAULT_TEMPLATES['reddit-comment'], /\{author-note-italic\}/); // the note publishes in markdown italics
   assert.equal(templateFor(syndicationConfigFromParsed({}), 'reddit-body'), DEFAULT_TEMPLATES['reddit-body']);
   const cfg = syndicationConfigFromParsed({ syndication: { templates: { 'reddit-body': 'Custom {author-note}' } } });
   assert.equal(templateFor(cfg, 'reddit-body'), 'Custom {author-note}');

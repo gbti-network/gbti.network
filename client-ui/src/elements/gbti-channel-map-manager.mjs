@@ -185,7 +185,7 @@ const TMPL_TYPES = [
   { key: 'product', nm: 'Product', df: 'product' },
   { key: 'prompt', nm: 'Prompt', df: 'prompt' },
 ];
-const VARS = ['{memberdiscord}', '{member-discord-username}', '{fullName}', '{author}', '{title}', '{url}', '{category}', '{content-type}', '{author-note}', '{member-url}', '{short-description}'];
+const VARS = ['{memberdiscord}', '{member-discord-username}', '{fullName}', '{author}', '{title}', '{url}', '{category}', '{content-type}', '{author-note}', '{author-note-italic}', '{member-url}', '{short-description}'];
 // The pipeline destination chips: adapters that exist are toggleable; the rest read "building".
 const PIPE_CHIPS = [
   { id: 'discord', label: 'Discord · featured' },
