@@ -2,15 +2,16 @@
 id: intro-scope-of-work-manager-claude-code-skill
 targetType: prompt
 targetSlug: scope-of-work-manager-claude-code-skill
-createdAt: '2026-07-02T23:14:51.531Z'
 status: published
 visibility: public
 authorNote: true
+createdAt: '2026-07-02T23:14:51.531Z'
+updatedAt: '2026-07-11T18:27:02.971Z'
 type: comment
 author: atwellpub
 ---
 
-A Claude Code skill for authoring and managing Statements of Work (SOWs) as local, lane-based planning documents.
+A Claude Code skill for authoring and managing Scopes of Work (SOWs) as local, lane-based planning documents.
 
 **`/sow init`** scaffolds the framework in the current project. It is idempotent and builds folders only, so it never authors a SOW:
 
