@@ -49,7 +49,7 @@ export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
 // back to the no-ping full name when none resolves), {member-discord-username} (the mention, else the public
 // profile Discord handle, else the GitHub username; SOW-088), {content-type} (article/product/prompt/link),
 // {fullName}, {author}, {shareurl}/{url}, {title}, {category}. A type with no template gets its default.
-export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro']);
+export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer']);
 // SOW-088 (owner-directed): ONE default Discord format for every type.
 const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 // SOW-088: the Reddit BODY template = the DESCRIPTION under the title on the link post (the embed card
@@ -58,6 +58,9 @@ const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username
 const DEFAULT_REDDIT_BODY = '{short-description}';
 // SOW-088: the dev.to byline prepended to the full-body crosspost (the owner's example post shape).
 const DEFAULT_DEVTO_INTRO = '**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).';
+// The CTA appended to EVERY dev.to post, full and stub alike (owner-authored, mirroring the Reddit
+// first-comment closing).
+const DEFAULT_DEVTO_FOOTER = '---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
 const DEFAULT_REDDIT_COMMENT = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note-italic}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
@@ -67,6 +70,7 @@ export const DEFAULT_TEMPLATES = Object.freeze({
   'reddit-body': DEFAULT_REDDIT_BODY,
   'reddit-comment': DEFAULT_REDDIT_COMMENT,
   'devto-intro': DEFAULT_DEVTO_INTRO,
+  'devto-footer': DEFAULT_DEVTO_FOOTER,
 });
 
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({

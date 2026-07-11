@@ -37,19 +37,31 @@ export function normalizeDevtoTags(tags, categoryPath) {
 }
 
 /**
- * Transform the raw canonical file into { ok, body, tags } or { ok: false, reason } (fail-closed).
- * `intro` arrives PRE-RENDERED (the Worker/adapter renders the byline template; no tokens here).
+ * Transform the raw canonical file into { ok, mode, body, tags } or { ok: false, reason } (fail-closed).
+ * `intro` / `footer` / `readMore` arrive PRE-RENDERED (the caller renders the templates; no tokens here).
+ * Mode comes from the FILE's visibility (the authority, never the queue item's copy):
+ *   public  -> 'full': the whole public body (members marker cut) between the byline and the CTA footer;
+ *   members -> 'stub' (owner-directed): the byline + the shortDescription + a read-the-original link +
+ *              the CTA footer — the description and link only, NEVER any of the body.
  */
-export function prepareDevtoBody(rawFileText, item, { intro = '' } = {}) {
+export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', readMore = '' } = {}) {
   const text = String(rawFileText ?? '');
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
   if (!m) return { ok: false, reason: 'no frontmatter in the canonical file' };
   let fm;
   try { fm = yaml.load(m[1]) ?? {}; } catch { return { ok: false, reason: 'unparseable frontmatter' }; }
-  // The canonical file is the authority (never the queue item's copy) — fail closed on anything not
-  // a published, public item.
   if (String(fm.status ?? '') !== 'published') return { ok: false, reason: 'the item is not published' };
-  if (String(fm.visibility ?? 'public') !== 'public') return { ok: false, reason: 'members-only items never crosspost' };
+
+  const tags = normalizeDevtoTags(fm.tags, item?.categoryPath);
+  const lead = String(intro || '').trim();
+  const tail = String(footer || '').trim();
+
+  if (String(fm.visibility ?? 'public') !== 'public') {
+    const description = String(fm.shortDescription || item?.blurb || '').trim();
+    const parts = [lead, description, String(readMore || '').trim(), tail].filter(Boolean);
+    if (!parts.length) return { ok: false, reason: 'nothing public to post for the members-only item' };
+    return { ok: true, mode: 'stub', body: parts.join('\n\n'), tags };
+  }
 
   let body = text.slice(m[0].length);
   const marker = body.indexOf(MEMBERS_MARKER);
@@ -65,8 +77,6 @@ export function prepareDevtoBody(rawFileText, item, { intro = '' } = {}) {
     body = body.replace(/\]\((images\/[^)\s]+)\)/g, `](${DEVTO_CDN_BASE}/${dir}/$1)`);
   }
 
-  const lead = String(intro || '').trim();
-  if (lead) body = `${lead}\n\n${body}`;
-
-  return { ok: true, body, tags: normalizeDevtoTags(fm.tags, item?.categoryPath) };
+  body = [lead, body, tail].filter(Boolean).join('\n\n');
+  return { ok: true, mode: 'full', body, tags };
 }

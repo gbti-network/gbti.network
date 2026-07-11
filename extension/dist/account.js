@@ -6249,7 +6249,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._pipeline = pipeline?.settings || null;
         this._work = {};
         this._base = {};
-        const KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro"];
+        const KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer"];
         for (const ch of TILE_CHANNELS.filter((c) => c.active).map((c) => c.id)) {
           this._work[ch] = {};
           this._base[ch] = {};
@@ -6334,8 +6334,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || "")}" /></div>`).join("") + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc("the description under the title" + custom("reddit-body"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body">${esc(work["reddit-body"] || "")}</textarea></div>
           <div class="tmpl"><div class="tl"><div class="nm">First comment</div><div class="df">${esc("the brand account's first comment" + custom("reddit-comment"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc(work["reddit-comment"] || "")}</textarea></div>` : "") + (cur === "devto" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc("prepended to the full-body crosspost" + custom("devto-intro"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc(work["devto-intro"] || "")}</textarea></div>` : "");
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc(work["reddit-comment"] || "")}</textarea></div>` : "") + (cur === "devto" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc("prepended to the crosspost" + custom("devto-intro"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc(work["devto-intro"] || "")}</textarea></div>
+          <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc("appended to every dev.to post" + custom("devto-footer"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work["devto-footer"] || "")}</textarea></div>` : "");
       return `<section class="card" id="sec-templates" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg></span>
         <div><h2>Syndication templates</h2><p>Configured per destination channel. Blank falls back to the shared template, then the built-in.</p></div>
@@ -13554,6 +13556,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (this._devtoIntroTemplate != null) return this._devtoIntroTemplate;
       return this._info?.channelTemplates?.devto?.["devto-intro"] || this._info?.templates?.["devto-intro"] || "";
     }
+    /** The CTA FOOTER appended to every dev.to post (full and stub): an edit wins, else the stored devto-footer. */
+    _effectiveDevtoFooter() {
+      if (this._devtoFooterTemplate != null) return this._devtoFooterTemplate;
+      return this._info?.channelTemplates?.devto?.["devto-footer"] || this._info?.templates?.["devto-footer"] || "";
+    }
     _composeHtml() {
       const dest = this._dest;
       const item = this._item();
@@ -13603,13 +13610,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (dest === "devto") {
         const introTemplate = this._effectiveDevtoIntro();
         const introPreview = introTemplate ? renderTemplate(introTemplate, item, { limit: 800 }) : "";
+        const footerTemplate = this._effectiveDevtoFooter();
+        const footerPreview = footerTemplate ? renderTemplate(footerTemplate, item, { limit: 1200 }) : "";
         devtoRows = `<label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
         <textarea data-devto-intro>${esc(introTemplate)}</textarea>
         <label>Byline preview</label>
         <div class="preview" data-devto-intro-preview>${esc(introPreview)}</div>
+        <label>CTA footer template <span style="font-weight:400">(appended to the post; markdown; same tokens)</span></label>
+        <textarea data-devto-footer>${esc(footerTemplate)}</textarea>
+        <label>CTA preview</label>
+        <div class="preview" data-devto-footer-preview>${esc(footerPreview)}</div>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-devto-draft style="width:auto"${this._devtoDraft ? " checked" : ""} /> Create as a dev.to DRAFT first (publish from the dev.to dashboard)</label>`;
       }
-      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body"}.</p>` : dest === "devto" ? `<p class="sub" style="margin:8px 0 0">Posts the FULL public article to dev.to under the GBTI organization with a canonical link back to gbti.network. Members-only content never crossposts.</p>` : "";
+      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body"}.</p>` : dest === "devto" ? `<p class="sub" style="margin:8px 0 0">Posts to dev.to under the GBTI organization with a canonical link back to gbti.network: a PUBLIC item crossposts in full; a members-only item posts only its description plus a read-it-on-gbti.network link. The CTA footer is appended either way.</p>` : "";
       const sends = this._destSends();
       const here = sends[dest];
       const elsewhere = Object.keys(sends).filter((d) => d !== dest);
@@ -13677,6 +13690,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const pv = this.$("[data-devto-intro-preview]");
         if (pv) pv.textContent = di.value ? renderTemplate(di.value, this._item(), { limit: 800 }) : "";
       });
+      const df = this.$("[data-devto-footer]");
+      if (df) df.addEventListener("input", () => {
+        this._devtoFooterTemplate = df.value;
+        const pv = this.$("[data-devto-footer-preview]");
+        if (pv) pv.textContent = df.value ? renderTemplate(df.value, this._item(), { limit: 1200 }) : "";
+      });
       const dd = this.$("[data-devto-draft]");
       if (dd) dd.addEventListener("change", () => {
         this._devtoDraft = dd.checked;
@@ -13695,6 +13714,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._bodyTemplate = null;
         this._commentTemplate = null;
         this._devtoIntroTemplate = null;
+        this._devtoFooterTemplate = null;
         this._devtoDraft = false;
         this._redditKind = "link";
       }
@@ -13746,6 +13766,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (this._dest === "devto") {
           const intro = this._effectiveDevtoIntro().trim();
           if (intro) payload.devtoIntroTemplate = intro;
+          const footer = this._effectiveDevtoFooter().trim();
+          if (footer) payload.devtoFooterTemplate = footer;
           if (this._devtoDraft) payload.devtoDraft = true;
         }
         if (this._dest === "discord") {

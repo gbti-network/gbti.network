@@ -75,12 +75,12 @@ export async function getSyndicateNow({ token, signupBase, fetch = globalThis.fe
 }
 
 /** SOW-088: post one item to one destination NOW (SUPERADMIN only; the Worker renders + sanitizes the template). */
-export async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft, token, signupBase, fetch = globalThis.fetch }) {
+export async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft, token, signupBase, fetch = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError('not signed in');
   const res = await fetch(trimBase(signupBase) + '/membership/syndicate-now', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft }),
+    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft }),
   });
   let data = null;
   try { data = await res.json(); } catch { /* ignore */ }

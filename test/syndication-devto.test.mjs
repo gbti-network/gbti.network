@@ -46,12 +46,30 @@ test('prepareDevtoBody: marker cut, CDN rewrite, byline prepend, tag normalizati
   assert.deepEqual(r.tags, ['claudecode', 'agentskills', 'ai', 'workflow'], 'lowercase alphanumeric, capped at 4');
 });
 
-test('prepareDevtoBody fails closed: drafts, members visibility, empty public body', () => {
+test('prepareDevtoBody: a members item STUBS (description + link + CTA, never any body)', () => {
+  const membersFile = FILE.replace('visibility: public', 'visibility: members').replace('title: My Article', 'title: My Article\nshortDescription: A great teaser.');
+  const r = prepareDevtoBody(membersFile, ITEM, { intro: '**By H.**', footer: 'Join us.', readMore: '[Read it](https://gbti.network/x)' });
+  assert.equal(r.ok, true);
+  assert.equal(r.mode, 'stub');
+  assert.equal(r.body, '**By H.**\n\nA great teaser.\n\n[Read it](https://gbti.network/x)\n\nJoin us.');
+  assert.ok(!r.body.includes('Intro paragraph'), 'no body content in a stub');
+  assert.ok(!r.body.includes('SECRET'));
+});
+
+test('prepareDevtoBody appends the CTA footer to a full post', () => {
+  const r = prepareDevtoBody(FILE, ITEM, { intro: '**By H.**', footer: 'Join us at gbti.network.' });
+  assert.equal(r.mode, 'full');
+  assert.ok(r.body.endsWith('Join us at gbti.network.'));
+});
+
+test('prepareDevtoBody fails closed: drafts, empty public body, no frontmatter', () => {
   assert.equal(prepareDevtoBody(FILE.replace('status: published', 'status: draft'), ITEM).ok, false);
-  assert.equal(prepareDevtoBody(FILE.replace('visibility: public', 'visibility: members'), ITEM).ok, false);
   const onlyMembers = '---\nstatus: published\nvisibility: public\n---\n<!-- members-only -->\nSECRET';
   assert.equal(prepareDevtoBody(onlyMembers, ITEM).ok, false, 'nothing public to post');
   assert.equal(prepareDevtoBody('no frontmatter at all', ITEM).ok, false);
+  // A members item with no description and no rendered parts has nothing public either.
+  const bareMembers = '---\nstatus: published\nvisibility: members\n---\nSECRET';
+  assert.equal(prepareDevtoBody(bareMembers, ITEM, {}).ok, false);
 });
 
 test('normalizeDevtoTags falls back to the taxonomy path', () => {
@@ -100,7 +118,17 @@ test('devto adapter: draft flag, skips (share/members/draft file), and readable 
   assert.equal(lastBody.article.published, false);
   assert.equal(draft.draft, true);
   assert.equal((await ad.post({ ...ITEM, source: 'share' })).skipped, true);
-  assert.equal((await ad.post({ ...ITEM, visibility: 'members', membersOnly: true })).skipped, true);
+  // A members-only FILE now posts a STUB (description + link + CTA), not a skip; the queue item's own
+  // visibility copy is ignored (the canonical file is the authority).
+  const membersFile = FILE.replace('visibility: public', 'visibility: members').replace('title: My Article', 'title: My Article\nshortDescription: Teaser.');
+  const stubAd = createDevtoAdapter({ env, fetchImpl: async (u, o) => (u.startsWith('https://raw.') ? { ok: true, text: async () => membersFile } : (lastBody = JSON.parse(o.body), { ok: true, status: 201, text: async () => JSON.stringify({ id: 9, url: 'https://dev.to/s' }) })) });
+  const stub = await stubAd.post({ ...ITEM, visibility: 'members', membersOnly: true, devtoFooter: 'JOIN CTA' });
+  assert.equal(stub.ok, true);
+  assert.equal(stub.stub, true);
+  assert.ok(lastBody.article.body_markdown.includes('Teaser.'));
+  assert.ok(lastBody.article.body_markdown.includes('Read the full article on gbti.network'));
+  assert.ok(lastBody.article.body_markdown.includes('JOIN CTA'));
+  assert.ok(!lastBody.article.body_markdown.includes('Intro paragraph'), 'no body in the stub post');
   const draftFile = createDevtoAdapter({ env, fetchImpl: async (u) => (u.startsWith('https://raw.') ? { ok: true, text: async () => FILE.replace('status: published', 'status: draft') } : null) });
   assert.equal((await draftFile.post({ ...ITEM })).skipped, true, 'an unpublished canonical file skips');
   const err422 = createDevtoAdapter({ env, fetchImpl: async (u) => (u.startsWith('https://raw.') ? { ok: true, text: async () => FILE } : { ok: false, status: 422, text: async () => JSON.stringify({ error: 'Title has already been used' }) }) });

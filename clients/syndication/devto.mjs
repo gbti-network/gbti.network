@@ -11,6 +11,7 @@
 // Thin injectable-fetch client; no SDK. Secrets: DEVTO_API_KEY, DEVTO_ORG_ID (the gbti-network org).
 
 import { renderTemplate } from '../../membership/syndication-format.mjs';
+import { templateFor } from '../../membership/syndication-config-core.mjs';
 import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
 import { contentPathFor, prepareDevtoBody } from './devto-body.mjs';
 
@@ -21,6 +22,7 @@ const USER_AGENT = 'gbti-network-syndication/0.1 (+https://gbti.network)';
 const SITE = 'https://gbti.network';
 // The built-in byline; the Worker normally pre-renders the devto-intro template into item.devtoIntro.
 const DEFAULT_INTRO = '**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).';
+const READ_MORE = '**[Read the full {content-type} on gbti.network]({url})**';
 
 function absoluteImage(image) {
   const v = String(image || '').trim();
@@ -30,16 +32,15 @@ function absoluteImage(image) {
   return `${SITE}${v.startsWith('/') ? '' : '/'}${v}`;
 }
 
-export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch } = {}) {
+export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg = null } = {}) {
   return {
     name: 'devto',
     enabled() { return secretsPresent(env, 'devto'); },
     async post(item) {
-      // Content items only, public only. Skips are terminal no-ops (the drain never retries them).
+      // Content items only. The FULL-vs-STUB decision comes from the canonical FILE's visibility
+      // (owner-directed: a members-only item posts its description + a link, never any body), so no
+      // pre-skip on the queue item's visibility copy. Skips stay terminal no-ops.
       if (item.source === 'share') return { ok: true, skipped: true, reason: 'dev.to crossposts content items only' };
-      if (item.membersOnly || String(item.visibility || 'members') !== 'public') {
-        return { ok: true, skipped: true, reason: 'members-only items never crosspost' };
-      }
       const path = contentPathFor(item);
       if (!path) return { ok: true, skipped: true, reason: 'no canonical path for the item' };
 
@@ -52,10 +53,15 @@ export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch } = 
         return { ok: false, error: `devto: canonical read failed (${err?.message || 'fetch error'})`.slice(0, 160) };
       }
 
+      // The byline + the CTA footer: the manual rail pre-renders them (item.devtoIntro/devtoFooter);
+      // the AUTO rail falls back to the admin-stored channel templates via cfg, then the built-ins.
       const intro = (typeof item.devtoIntro === 'string' && item.devtoIntro.trim())
         ? item.devtoIntro
-        : renderTemplate(DEFAULT_INTRO, item, { limit: 500 });
-      const prepared = prepareDevtoBody(raw, item, { intro });
+        : renderTemplate(templateFor(cfg, 'devto-intro', 'devto') || DEFAULT_INTRO, item, { limit: 800 });
+      const footer = (typeof item.devtoFooter === 'string' && item.devtoFooter.trim())
+        ? item.devtoFooter
+        : renderTemplate(templateFor(cfg, 'devto-footer', 'devto') || '', item, { limit: 1200 });
+      const prepared = prepareDevtoBody(raw, item, { intro, footer, readMore: renderTemplate(READ_MORE, item, { limit: 300 }) });
       if (!prepared.ok) return { ok: true, skipped: true, reason: `devto: ${prepared.reason}` };
 
       const title = ((typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : String(item.title || ''))
@@ -86,7 +92,7 @@ export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch } = 
         const detail = body?.error ? String(body.error) : rawText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
         return { ok: false, error: `devto ${res.status}${detail ? ` ${detail}` : ''}`.slice(0, 160) };
       }
-      return { ok: true, id: body?.id != null ? String(body.id) : null, url: body?.url || null, draft: article.published === false };
+      return { ok: true, id: body?.id != null ? String(body.id) : null, url: body?.url || null, draft: article.published === false, stub: prepared.mode === 'stub' };
     },
   };
 }

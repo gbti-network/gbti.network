@@ -20,7 +20,7 @@ const FACTORIES = {
   mastodon: createMastodonAdapter,
   bluesky: createBlueskyAdapter,
   reddit: createRedditAdapter, // SOW-088,
-  devto: ({ env, fetchImpl }) => createDevtoAdapter({ env, fetchImpl }),
+  devto: ({ env, fetchImpl, cfg }) => createDevtoAdapter({ env, fetchImpl, cfg }),
 };
 
 /** Build every adapter (keyed by name). Pure construction; no network until post() is called.

@@ -203,6 +203,12 @@ class GbtiSyndicateNow extends GbtiElement {
     return this._info?.channelTemplates?.devto?.['devto-intro'] || this._info?.templates?.['devto-intro'] || '';
   }
 
+  /** The CTA FOOTER appended to every dev.to post (full and stub): an edit wins, else the stored devto-footer. */
+  _effectiveDevtoFooter() {
+    if (this._devtoFooterTemplate != null) return this._devtoFooterTemplate;
+    return this._info?.channelTemplates?.devto?.['devto-footer'] || this._info?.templates?.['devto-footer'] || '';
+  }
+
   _composeHtml() {
     const dest = this._dest;
     const item = this._item();
@@ -262,10 +268,16 @@ class GbtiSyndicateNow extends GbtiElement {
     if (dest === 'devto') {
       const introTemplate = this._effectiveDevtoIntro();
       const introPreview = introTemplate ? renderTemplate(introTemplate, item, { limit: 800 }) : '';
+      const footerTemplate = this._effectiveDevtoFooter();
+      const footerPreview = footerTemplate ? renderTemplate(footerTemplate, item, { limit: 1200 }) : '';
       devtoRows = `<label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
         <textarea data-devto-intro>${esc(introTemplate)}</textarea>
         <label>Byline preview</label>
         <div class="preview" data-devto-intro-preview>${esc(introPreview)}</div>
+        <label>CTA footer template <span style="font-weight:400">(appended to the post; markdown; same tokens)</span></label>
+        <textarea data-devto-footer>${esc(footerTemplate)}</textarea>
+        <label>CTA preview</label>
+        <div class="preview" data-devto-footer-preview>${esc(footerPreview)}</div>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-devto-draft style="width:auto"${this._devtoDraft ? ' checked' : ''} /> Create as a dev.to DRAFT first (publish from the dev.to dashboard)</label>`;
     }
     const liNote = dest === 'linkedin'
@@ -273,7 +285,7 @@ class GbtiSyndicateNow extends GbtiElement {
       : dest === 'reddit'
         ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === 'self' ? 'a TEXT post: the title template above (300 characters max) plus the body below' : 'a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body'}.</p>`
         : dest === 'devto'
-          ? `<p class="sub" style="margin:8px 0 0">Posts the FULL public article to dev.to under the GBTI organization with a canonical link back to gbti.network. Members-only content never crossposts.</p>` : '';
+          ? `<p class="sub" style="margin:8px 0 0">Posts to dev.to under the GBTI organization with a canonical link back to gbti.network: a PUBLIC item crossposts in full; a members-only item posts only its description plus a read-it-on-gbti.network link. The CTA footer is appended either way.</p>` : '';
     // Destination-SPECIFIC prior-send messaging: a duplicate warning only when THIS destination already
     // got the item; otherwise an informational note so a Discord-only history never scares a Reddit send.
     const sends = this._destSends();
@@ -335,6 +347,12 @@ class GbtiSyndicateNow extends GbtiElement {
       const pv = this.$('[data-devto-intro-preview]');
       if (pv) pv.textContent = di.value ? renderTemplate(di.value, this._item(), { limit: 800 }) : '';
     });
+    const df = this.$('[data-devto-footer]');
+    if (df) df.addEventListener('input', () => {
+      this._devtoFooterTemplate = df.value;
+      const pv = this.$('[data-devto-footer-preview]');
+      if (pv) pv.textContent = df.value ? renderTemplate(df.value, this._item(), { limit: 1200 }) : '';
+    });
     const dd = this.$('[data-devto-draft]');
     if (dd) dd.addEventListener('change', () => { this._devtoDraft = dd.checked; });
     const rc = this.$('[data-reddit-comment]');
@@ -347,7 +365,7 @@ class GbtiSyndicateNow extends GbtiElement {
   }
 
   async _pickDest(dest) {
-    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._devtoIntroTemplate = null; this._devtoDraft = false; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
+    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._devtoIntroTemplate = null; this._devtoFooterTemplate = null; this._devtoDraft = false; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
     this._dest = dest;
     this._step = 'compose';
     this._err = null;
@@ -395,6 +413,8 @@ class GbtiSyndicateNow extends GbtiElement {
       if (this._dest === 'devto') {
         const intro = this._effectiveDevtoIntro().trim();
         if (intro) payload.devtoIntroTemplate = intro;
+        const footer = this._effectiveDevtoFooter().trim();
+        if (footer) payload.devtoFooterTemplate = footer;
         if (this._devtoDraft) payload.devtoDraft = true;
       }
       if (this._dest === 'discord') {

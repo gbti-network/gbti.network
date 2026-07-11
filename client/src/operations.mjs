@@ -1293,10 +1293,10 @@ export async function getSyndicateNowInfo(ctx) {
 }
 
 /** SOW-088: post one item to one destination NOW (SUPERADMIN only; the Worker renders + sanitizes). */
-export async function syndicateNow(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft } = {}) {
+export async function syndicateNow(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
-  return workerSyndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  return workerSyndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 
 /**

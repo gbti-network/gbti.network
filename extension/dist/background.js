@@ -18855,12 +18855,12 @@ async function getSyndicateNow({ token, signupBase, fetch: fetch2 = globalThis.f
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now info failed (${res.status})`);
   return data;
 }
-async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase9(signupBase) + "/membership/syndicate-now", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft })
+    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft })
   });
   let data = null;
   try {
@@ -19718,10 +19718,10 @@ async function getSyndicateNowInfo(ctx) {
   const token = ctx.store?.get?.("githubToken");
   return getSyndicateNow({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
-async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft } = {}) {
+async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
-  return syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  return syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -20702,10 +20702,11 @@ var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   comment_autopost: true
   // one comment posts immediately (deliberate engagement)
 });
-var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro"]);
+var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 var DEFAULT_REDDIT_BODY = "{short-description}";
 var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
+var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
 var DEFAULT_REDDIT_COMMENT = `The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:
 
 "{author-note-italic}"
@@ -20722,7 +20723,8 @@ var DEFAULT_TEMPLATES = Object.freeze({
   prompt: DEFAULT_FORMAT,
   "reddit-body": DEFAULT_REDDIT_BODY,
   "reddit-comment": DEFAULT_REDDIT_COMMENT,
-  "devto-intro": DEFAULT_DEVTO_INTRO
+  "devto-intro": DEFAULT_DEVTO_INTRO,
+  "devto-footer": DEFAULT_DEVTO_FOOTER
 });
 var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,

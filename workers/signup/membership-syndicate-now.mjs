@@ -135,6 +135,7 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   const commentTemplate = String(payload?.commentTemplate || '').trim(); // the separately-templated first comment
   // dev.to options: the byline template (rendered server-side like everything else) + the draft flag.
   const devtoIntroTemplate = String(payload?.devtoIntroTemplate || '').trim();
+  const devtoFooterTemplate = String(payload?.devtoFooterTemplate || '').trim();
   const devtoDraft = payload?.devtoDraft === true;
 
   // The queue-item builder is the validation boundary: type whitelist, slug required, and the no-body
@@ -188,8 +189,10 @@ export async function handleSyndicateNow(request, env, deps = {}) {
       : destination === 'devto'
         ? {
             devtoDraft,
-            // The byline: the popup's edit, else the stored devto-intro (channel override -> shared -> built-in).
+            // The byline + the CTA footer: the popup's edits, else the stored templates
+            // (channel override -> shared -> built-in).
             devtoIntro: renderTemplate(devtoIntroTemplate || templateFor(cfg, 'devto-intro', 'devto') || '', item, { limit: 800 }),
+            devtoFooter: renderTemplate(devtoFooterTemplate || templateFor(cfg, 'devto-footer', 'devto') || '', item, { limit: 1200 }),
           }
         : {};
     try { result = await adapter.post({ ...item, textOverride: text, ...extras }); }

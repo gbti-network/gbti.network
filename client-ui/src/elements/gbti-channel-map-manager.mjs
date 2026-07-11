@@ -227,7 +227,7 @@ class GbtiChannelMapManager extends GbtiElement {
       // override; clearing a field saves '' (deletes the override, falls back).
       this._work = {};
       this._base = {};
-      const KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro'];
+      const KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer'];
       for (const ch of TILE_CHANNELS.filter((c) => c.active).map((c) => c.id)) {
         this._work[ch] = {}; this._base[ch] = {};
         for (const k of KEYS) {
@@ -323,8 +323,10 @@ class GbtiChannelMapManager extends GbtiElement {
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc(work['reddit-comment'] || '')}</textarea></div>`
         : '')
       + (cur === 'devto'
-        ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc('prepended to the full-body crosspost' + custom('devto-intro'))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc(work['devto-intro'] || '')}</textarea></div>`
+        ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc('prepended to the crosspost' + custom('devto-intro'))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc(work['devto-intro'] || '')}</textarea></div>
+          <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc('appended to every dev.to post' + custom('devto-footer'))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work['devto-footer'] || '')}</textarea></div>`
         : '');
     return `<section class="card" id="sec-templates" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg></span>
