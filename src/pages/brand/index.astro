@@ -8,21 +8,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 const MARK = (variant: string) => `/brand/logo/mark-${variant}.png`;
 // The packaged avatar files (the mark on a brand ground, 1024 x 1024, square + pre-cropped round).
 const AVATAR = (variant: string) => `/brand/avatars/avatar-${variant}.png`;
-// The packaged social cover files (the lockup on a brand ground, per platform at native dimensions).
-const COVER = (platform: string, ground: string) => `/brand/covers/cover-${platform}-${ground}.png`;
+// The packaged social cover files (the lockup on a brand ground, per platform at native dimensions, in three
+// lockup alignments so the platform's overlaid avatar never clashes with the lockup).
+const COVER = (platform: string, ground: string, align: string) => `/brand/covers/cover-${platform}-${ground}-${align}.png`;
+const ALIGNS = ['left', 'center', 'right'];
 // The three social banner grounds, reused per platform.
 const grounds = [
   { key: 'ink', label: 'Ink' },
   { key: 'green', label: 'Brand green' },
   { key: 'ink-green', label: 'Ink, green glow' },
 ];
+// YouTube is center only: its lockup is sized to the TV-safe area, which left/right would leave on TV crops.
 const platforms = [
-  { key: 'x', name: 'X', dim: '1500 x 500' },
-  { key: 'bluesky', name: 'Bluesky', dim: '3000 x 1000' },
-  { key: 'mastodon', name: 'Mastodon', dim: '1500 x 500' },
-  { key: 'reddit', name: 'Reddit', dim: '1920 x 384' },
-  { key: 'linkedin', name: 'LinkedIn', dim: '1584 x 396' },
-  { key: 'youtube', name: 'YouTube', dim: '2560 x 1440' },
+  { key: 'x', name: 'X', dim: '1500 x 500', aligns: ALIGNS },
+  { key: 'bluesky', name: 'Bluesky', dim: '3000 x 1000', aligns: ALIGNS },
+  { key: 'mastodon', name: 'Mastodon', dim: '1500 x 500', aligns: ALIGNS },
+  { key: 'reddit', name: 'Reddit', dim: '1920 x 384', aligns: ALIGNS },
+  { key: 'linkedin', name: 'LinkedIn', dim: '1584 x 396', aligns: ALIGNS },
+  { key: 'youtube', name: 'YouTube', dim: '2560 x 1440', aligns: ['center'] },
 ];
 // The per-type default feature images (the fallback share/cover image when no custom image is set).
 const features: [string, string][] = [
@@ -118,7 +121,9 @@ const features: [string, string][] = [
     <section class="b-sec">
       <div class="b-sect-t"><h2>Social profiles and banners</h2><span class="n">avatar plus header per platform</span></div>
       <p class="b-note" style="margin:0 0 20px">Each platform gets the round mark avatar and a cover in one of three grounds, all inside the GBTI palette so
-        any choice reads as one system. Every cover below is the real packaged file at the platform's native dimensions; click one to download it.</p>
+        any choice reads as one system. Every cover below is the real packaged file at the platform's native dimensions, with the lockup in three
+        alignments; most platforms overlay the profile avatar on the banner's bottom-left, so center or right usually sits clear of it. Click an
+        alignment to download that file (the preview shows center).</p>
       <div class="soc-list">
         {platforms.map((p) => (
           <div class="socblock">
@@ -126,8 +131,10 @@ const features: [string, string][] = [
             <div class="soc-variants">
               {grounds.map((g) => (
                 <div class="socvar">
-                  <a class="socbanner-dl" href={COVER(p.key, g.key)} download><img src={COVER(p.key, g.key)} alt={`GBTI ${p.name} cover, ${g.label.toLowerCase()}`} loading="lazy" /></a>
-                  <span class="socvar-l">{g.label}</span>
+                  <a class="socbanner-dl" href={COVER(p.key, g.key, 'center')} download><img src={COVER(p.key, g.key, 'center')} alt={`GBTI ${p.name} cover, ${g.label.toLowerCase()}, centered lockup`} loading="lazy" /></a>
+                  <span class="socvar-l">{g.label} · {p.aligns.map((a, i) => (
+                    <>{i > 0 && ' / '}<a class="socalign" href={COVER(p.key, g.key, a)} download>{a}</a></>
+                  ))}</span>
                 </div>
               ))}
             </div>
@@ -260,6 +267,8 @@ const features: [string, string][] = [
   .socbanner-dl { display: block; border-radius: 13px; overflow: hidden; box-shadow: var(--sh-lg, 0 12px 30px rgba(0,0,0,.16)); transition: transform .14s; }
   .socbanner-dl:hover { transform: translateY(-2px); }
   .socbanner-dl img { display: block; width: 100%; height: auto; }
+  .socalign { color: var(--green-700); text-decoration: none; }
+  .socalign:hover { text-decoration: underline; }
 
   .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
   @media (max-width: 620px) { .feat-grid { grid-template-columns: 1fr; } }

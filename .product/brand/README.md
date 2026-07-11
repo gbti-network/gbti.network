@@ -37,7 +37,10 @@ files are served under https://gbti.network/brand/avatars/.
 
 `covers/`: the social profile banners (the white lockup on a brand ground with the top-right glow), rendered at
 each platform's native dimensions. Three grounds per platform: `ink` (solid), `green` (the green radial), and
-`ink-green` (ink with the green glow). Any choice reads as one system. The same files are served under
+`ink-green` (ink with the green glow), each in three lockup alignments: `-left`, `-center`, and `-right`
+(`cover-<platform>-<ground>-<alignment>.png`). Most platforms overlay the round profile avatar on the banner's
+bottom-left, where it clashes with a left lockup; pick center or right there, and check the platform's current
+overlap before choosing left. Any choice reads as one system. The same files are served under
 https://gbti.network/brand/covers/ and are the images shown on the brand page's social section.
 
 - `cover-x-*.png`: 1500 x 500.
@@ -45,7 +48,8 @@ https://gbti.network/brand/covers/ and are the images shown on the brand page's 
 - `cover-mastodon-*.png`: 1500 x 500.
 - `cover-reddit-*.png`: 1920 x 384.
 - `cover-linkedin-*.png`: 1584 x 396.
-- `cover-youtube-*.png`: 2560 x 1440, with the lockup centered in the TV-safe area.
+- `cover-youtube-*.png`: 2560 x 1440, center only, with the lockup sized to the 1546 x 423 TV-safe area
+  (left and right alignments would leave the safe area on TV crops).
 
 `favicons/`: the mark on an ink rounded tile, at the standard sizes.
 
