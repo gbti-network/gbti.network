@@ -291,7 +291,7 @@ class GbtiSyndicateNow extends GbtiElement {
       ? (this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : ' Forwarded to the secondary channel.')
       : '';
     const result = this._result
-      ? `<p class="okmsg">${this._result.draft ? 'Draft created on dev.to (publish it from the dashboard).' : 'Posted.'}${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}${fwdState}${cmtState}</p>`
+      ? `<p class="okmsg">${this._result.draft ? `Draft created. <a href="https://dev.to/dashboard" target="_blank" rel="noopener">Review it on the dev.to dashboard</a> (a draft's direct URL 404s until it publishes).` : `Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}`}${fwdState}${cmtState}</p>`
       : '';
     return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
