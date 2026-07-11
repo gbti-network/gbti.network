@@ -10468,7 +10468,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .chtile.on::after { content:''; position:absolute; top:7px; right:7px; width:15px; height:15px; border-radius:50%; background:var(--brand); }
   .chtile.on::before { content:''; position:absolute; top:11px; right:10.5px; width:7px; height:4px; border-left:2px solid #fff; border-bottom:2px solid #fff; transform:rotate(-45deg); z-index:1; }
   .chtile.soon { opacity:.55; cursor:default; }
-  .br-discord { background:#5865F2; } .br-reddit { background:#FF4500; } .br-x { background:#000; }
+  .br-discord { background:#5865F2; } .br-reddit { background:#FF4500; } .br-x { background:#000; } .br-devto { background:#0a0a0a; }
   .br-li { background:#0A66C2; } .br-masto { background:#6364FF; } .br-bsky { background:#1185FE; }
 
   /* template rows + variable chips */
@@ -10530,6 +10530,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   <g id="c-plus"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></g>
   <g id="cb-discord"><path fill="currentColor" d="M19.6 5.6A16 16 0 0 0 15.6 4.4l-.2.4a12 12 0 0 1 3.5 1.8 13.4 13.4 0 0 0-11.8 0A12 12 0 0 1 10.6 4.8l-.3-.4A16 16 0 0 0 6.4 5.6C3.9 9.3 3.2 12.9 3.5 16.4a16.1 16.1 0 0 0 4.9 2.5l.4-.6c-.6-.2-1.2-.5-1.8-.9l.4-.3a11.5 11.5 0 0 0 9.8 0l.4.3c-.6.4-1.2.7-1.8.9l.4.6a16 16 0 0 0 4.9-2.5c.4-4-.7-7.6-3.4-10.8zM9.4 14.3c-1 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.8.9 1.7 1.9-.8 1.9-1.7 1.9zm5.2 0c-1 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.8.9 1.7 1.9-.7 1.9-1.7 1.9z"/></g>
   <g id="cb-reddit"><path fill="currentColor" d="M22 12.3c0-1.2-1-2.2-2.2-2.2-.6 0-1.1.2-1.5.6a10.6 10.6 0 0 0-5.4-1.7l.9-4.1 2.9.6a1.6 1.6 0 1 0 .2-1l-3.3-.7c-.2 0-.4.1-.4.3l-1 4.6a10.7 10.7 0 0 0-5.5 1.7 2.2 2.2 0 1 0-2.4 3.6 4 4 0 0 0 0 .6c0 3.1 3.6 5.6 8 5.6s8-2.5 8-5.6a4 4 0 0 0 0-.6c.7-.4 1.2-1.1 1.2-2zM7 13.9a1.6 1.6 0 1 1 3.2 0 1.6 1.6 0 0 1-3.2 0zm8.9 4.2c-1.1 1.1-3.3 1.2-3.9 1.2-.6 0-2.8-.1-3.9-1.2a.4.4 0 0 1 .6-.6c.7.7 2.2.9 3.3.9s2.6-.2 3.3-.9a.4.4 0 1 1 .6.6zm-.3-2.5a1.6 1.6 0 1 1 0-3.2 1.6 1.6 0 0 1 0 3.2z"/></g>
+  <g id="cb-devto"><path fill="currentColor" d="M7.2 9.2c-.3-.2-.6-.3-.9-.3H5v6.3h1.3c.3 0 .6-.1.9-.3.3-.2.4-.5.4-.9v-3.9c0-.4-.1-.7-.4-.9zM3.5 7.4h2.9c.8 0 1.5.3 2 .8s.8 1.2.8 2v3.7c0 .8-.3 1.5-.8 2s-1.2.8-2 .8H3.5V7.4zm8.4 1.5v2.1h2.5v1.5h-2.5v2.1h2.9v1.5h-3.4c-.3 0-.6-.1-.8-.3-.2-.2-.3-.5-.3-.8V9c0-.3.1-.6.3-.8.2-.2.5-.3.8-.3h3.4v1.5h-2.9zm6.9 7.7c-.4 0-.8-.1-1.1-.4-.3-.3-.5-.6-.6-1L15.6 8h1.9l1.2 5.3L19.9 8h1.9l-1.6 7.2c-.1.4-.3.7-.6 1-.3.3-.7.4-1.1.4z"/></g>
   <g id="cb-x"><path fill="currentColor" d="M17.5 4h2.9l-6.3 7.2L21.5 20h-5.8l-4.5-5.9L5.9 20H3l6.7-7.7L2.8 4h5.9l4.1 5.4L17.5 4zm-1 14.3h1.6L8.1 5.6H6.3l10.2 12.7z"/></g>
   <g id="cb-linkedin"><path fill="currentColor" d="M6.1 8.6H2.9V20h3.2V8.6zM4.5 3.5a1.9 1.9 0 1 0 0 3.8 1.9 1.9 0 0 0 0-3.8zM20.9 20h-3.2v-5.6c0-1.3 0-3-1.9-3s-2.1 1.4-2.1 2.9V20H10.5V8.6h3v1.6h.1c.4-.8 1.5-1.6 3-1.6 3.2 0 3.8 2.1 3.8 4.9V20z"/></g>
   <g id="cb-mastodon"><path fill="currentColor" d="M21 8.6c0-3.1-2-4-2-4A17 17 0 0 0 12.9 3.5c-2.8-.2-5.2 0-6.3.5 0 0-2.1.9-2.1 4.1 0 3.6-.2 8 3.4 9 1.7.4 3.1.5 4.2.4 1.9-.1 2.9-.7 2.9-.7l-.1-1.4s-1.3.4-2.8.4c-1.5-.1-3-.2-3.2-2 0-.2 0-.3-.1-.5 3.3.8 6.1.4 6.9.3 2.2-.3 4.1-1.6 4.3-2.9.4-2 .3-3.6.3-3.6zm-2.6 4.3h-1.6V9c0-.9-.4-1.3-1.1-1.3-.8 0-1.2.5-1.2 1.5v2.1h-1.6V9.2c0-1-.4-1.5-1.2-1.5-.7 0-1.1.4-1.1 1.3v3.9H7.4V8.8c0-.9.2-1.6.7-2.1.5-.5 1.1-.8 1.9-.8.9 0 1.6.4 2 1l.4.7.4-.7c.4-.6 1.1-1 2-1 .8 0 1.4.3 1.9.8.5.5.7 1.2.7 2.1v4.1z"/></g>
@@ -10539,6 +10540,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "discord", name: "Discord", sub: "Featured", icon: "cb-discord", cls: "br-discord", active: true },
     { id: "discord-category", name: "Discord", sub: "Category", icon: "cb-discord", cls: "br-discord", active: true },
     { id: "reddit", name: "Reddit", sub: "Subreddit", icon: "cb-reddit", cls: "br-reddit", active: true },
+    { id: "devto", name: "dev.to", sub: "Org blog", icon: "cb-devto", cls: "br-devto", active: true },
     { id: "x", name: "X", sub: "Building", icon: "cb-x", cls: "br-x", active: false },
     { id: "linkedin", name: "LinkedIn", sub: "Building", icon: "cb-linkedin", cls: "br-li", active: false },
     { id: "mastodon", name: "Mastodon", sub: "Building", icon: "cb-mastodon", cls: "br-masto", active: false },
@@ -10555,6 +10557,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "discord", label: "Discord · featured" },
     { id: "discord-category", label: "Discord · category" },
     { id: "reddit", label: "Reddit" },
+    { id: "devto", label: "dev.to" },
     { id: "x", label: "X", soon: true },
     { id: "linkedin", label: "LinkedIn", soon: true },
     { id: "mastodon", label: "Mastodon", soon: true },
@@ -10586,7 +10589,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._pipeline = pipeline?.settings || null;
         this._work = {};
         this._base = {};
-        const KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment"];
+        const KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro"];
         for (const ch of TILE_CHANNELS.filter((c) => c.active).map((c) => c.id)) {
           this._work[ch] = {};
           this._base[ch] = {};
@@ -10671,7 +10674,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || "")}" /></div>`).join("") + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc("the description under the title" + custom("reddit-body"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body">${esc(work["reddit-body"] || "")}</textarea></div>
           <div class="tmpl"><div class="tl"><div class="nm">First comment</div><div class="df">${esc("the brand account's first comment" + custom("reddit-comment"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc(work["reddit-comment"] || "")}</textarea></div>` : "");
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc(work["reddit-comment"] || "")}</textarea></div>` : "") + (cur === "devto" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc("prepended to the full-body crosspost" + custom("devto-intro"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc(work["devto-intro"] || "")}</textarea></div>` : "");
       return `<section class="card" id="sec-templates" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg></span>
         <div><h2>Syndication templates</h2><p>Configured per destination channel. Blank falls back to the shared template, then the built-in.</p></div>
@@ -14060,7 +14064,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-syndicate-now.mjs
-  var DEST_LABEL = { discord: "Discord", reddit: "Reddit", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
+  var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
   var CSS35 = `
   :host { display:block; }
   .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
@@ -14205,7 +14209,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const label = DEST_LABEL[d.id] || d.id;
         const s = sends[d.id];
         const badge = s ? `<span class="sentb">sent ${esc(new Date(s.last).toLocaleDateString())}${s.manual ? " (manual)" : ""}</span>` : "";
-        return d.ready ? `<button class="tile" type="button" data-dest="${esc(d.id)}">${esc(label)}${badge}</button>` : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(d.reason || "not available")}</span>${badge}</button>`;
+        const shareBlocked = d.id === "devto" && this._item().source === "share";
+        return d.ready && !shareBlocked ? `<button class="tile" type="button" data-dest="${esc(d.id)}">${esc(label)}${badge}</button>` : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(shareBlocked ? "content items only" : d.reason || "not available")}</span>${badge}</button>`;
       }).join("");
       const sent = Object.keys(sends);
       const prior = sent.length ? `<p class="warn">Already posted to ${sent.map((d) => this._sendPhrase(d, sends[d])).join("; ")}.</p><p class="info">Destinations without a badge have not received this item yet.</p>` : "";
@@ -14218,7 +14223,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _effectiveTemplate() {
       const src = this._item().source;
       const override = this._info?.channelTemplates?.[this._dest]?.[src];
-      const destDefault = override || (this._dest === "reddit" ? "{title}" : this._info?.templates?.[src] || "{title} {url}");
+      const destDefault = override || (this._dest === "reddit" || this._dest === "devto" ? "{title}" : this._info?.templates?.[src] || "{title} {url}");
       return this._template ?? destDefault;
     }
     /** The ADMIN-stored template for a reddit key (channel override -> shared map), guarded so a template
@@ -14241,6 +14246,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _effectiveComment() {
       if (this._commentTemplate != null) return this._commentTemplate;
       return this._redditStored("reddit-comment");
+    }
+    /** The dev.to BYLINE prepended to the full-body crosspost: an edit wins, else the stored devto-intro. */
+    _effectiveDevtoIntro() {
+      if (this._devtoIntroTemplate != null) return this._devtoIntroTemplate;
+      return this._info?.channelTemplates?.devto?.["devto-intro"] || this._info?.templates?.["devto-intro"] || "";
     }
     _composeHtml() {
       const dest = this._dest;
@@ -14287,20 +14297,30 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <label>Comment preview</label>
         <div class="preview" data-reddit-comment-preview>${esc(commentPreview)}</div>`;
       }
-      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body"}.</p>` : "";
+      let devtoRows = "";
+      if (dest === "devto") {
+        const introTemplate = this._effectiveDevtoIntro();
+        const introPreview = introTemplate ? renderTemplate(introTemplate, item, { limit: 800 }) : "";
+        devtoRows = `<label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
+        <textarea data-devto-intro>${esc(introTemplate)}</textarea>
+        <label>Byline preview</label>
+        <div class="preview" data-devto-intro-preview>${esc(introPreview)}</div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-devto-draft style="width:auto"${this._devtoDraft ? " checked" : ""} /> Create as a dev.to DRAFT first (publish from the dev.to dashboard)</label>`;
+      }
+      const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body"}.</p>` : dest === "devto" ? `<p class="sub" style="margin:8px 0 0">Posts the FULL public article to dev.to under the GBTI organization with a canonical link back to gbti.network. Members-only content never crossposts.</p>` : "";
       const sends = this._destSends();
       const here = sends[dest];
       const elsewhere = Object.keys(sends).filter((d) => d !== dest);
       const prior = here ? `<p class="warn">Already posted to ${this._sendPhrase(dest, here)}. Publishing again posts a duplicate there.</p>` : elsewhere.length ? `<p class="info">Not posted to ${esc(DEST_LABEL[dest] || dest)} yet. Previously posted to ${elsewhere.map((d) => this._sendPhrase(d, sends[d])).join("; ")}.</p>` : "";
       const cmtState = this._result?.comment ? this._result.comment.error ? ` The first comment failed: ${esc(this._result.comment.error)}.` : " The first comment posted." : "";
       const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
-      const result = this._result ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}${fwdState}${cmtState}</p>` : "";
+      const result = this._result ? `<p class="okmsg">${this._result.draft ? "Draft created on dev.to (publish it from the dashboard)." : "Posted."}${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}${fwdState}${cmtState}</p>` : "";
       return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
       <div class="preview" data-preview>${esc(preview)}</div>
-      ${channelRow}${redditRows}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}${result}
+      ${channelRow}${redditRows}${devtoRows}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}${result}
       <div class="actions">
         <button class="ghost" type="button" data-close>${this._result ? "Done" : "Cancel"}</button>
         <button class="go" type="button" data-publish ${this._busy || this._result ? "disabled" : ""}>${this._busy ? '<span class="spin"></span>Publishing...' : "Publish"}</button>
@@ -14349,6 +14369,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const pv = this.$("[data-reddit-body-preview]");
         if (pv) pv.textContent = rb.value ? renderTemplate(rb.value, this._item(), { limit: 2e3 }) : "";
       });
+      const di = this.$("[data-devto-intro]");
+      if (di) di.addEventListener("input", () => {
+        this._devtoIntroTemplate = di.value;
+        const pv = this.$("[data-devto-intro-preview]");
+        if (pv) pv.textContent = di.value ? renderTemplate(di.value, this._item(), { limit: 800 }) : "";
+      });
+      const dd = this.$("[data-devto-draft]");
+      if (dd) dd.addEventListener("change", () => {
+        this._devtoDraft = dd.checked;
+      });
       const rc = this.$("[data-reddit-comment]");
       if (rc) rc.addEventListener("input", () => {
         this._commentTemplate = rc.value;
@@ -14362,6 +14392,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._template = null;
         this._bodyTemplate = null;
         this._commentTemplate = null;
+        this._devtoIntroTemplate = null;
+        this._devtoDraft = false;
         this._redditKind = "link";
       }
       this._dest = dest;
@@ -14408,6 +14440,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           if (body) payload.bodyTemplate = body;
           const comment = this._effectiveComment().trim();
           if (comment) payload.commentTemplate = comment;
+        }
+        if (this._dest === "devto") {
+          const intro = this._effectiveDevtoIntro().trim();
+          if (intro) payload.devtoIntroTemplate = intro;
+          if (this._devtoDraft) payload.devtoDraft = true;
         }
         if (this._dest === "discord") {
           payload.channelId = this._channelId;

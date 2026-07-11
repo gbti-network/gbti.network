@@ -18855,12 +18855,12 @@ async function getSyndicateNow({ token, signupBase, fetch: fetch2 = globalThis.f
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now info failed (${res.status})`);
   return data;
 }
-async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase9(signupBase) + "/membership/syndicate-now", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate })
+    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft })
   });
   let data = null;
   try {
@@ -19718,10 +19718,10 @@ async function getSyndicateNowInfo(ctx) {
   const token = ctx.store?.get?.("githubToken");
   return getSyndicateNow({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
-async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate } = {}) {
+async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
-  return syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  return syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoDraft, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -20688,7 +20688,7 @@ function removeFlagTerm(doc, { list, term } = {}, ctx = {}) {
 }
 
 // membership/syndication-config-core.mjs
-var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit"]);
+var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto"]);
 var TEMPLATE_CHANNELS = CHANNELS;
 var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
 var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
@@ -20702,9 +20702,10 @@ var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   comment_autopost: true
   // one comment posts immediately (deliberate engagement)
 });
-var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment"]);
+var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 var DEFAULT_REDDIT_BODY = "{short-description}";
+var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
 var DEFAULT_REDDIT_COMMENT = `The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:
 
 "{author-note-italic}"
@@ -20720,7 +20721,8 @@ var DEFAULT_TEMPLATES = Object.freeze({
   product: DEFAULT_FORMAT,
   prompt: DEFAULT_FORMAT,
   "reddit-body": DEFAULT_REDDIT_BODY,
-  "reddit-comment": DEFAULT_REDDIT_COMMENT
+  "reddit-comment": DEFAULT_REDDIT_COMMENT,
+  "devto-intro": DEFAULT_DEVTO_INTRO
 });
 var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,
@@ -20736,7 +20738,7 @@ var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
   news_engagement: DEFAULT_NEWS_ENGAGEMENT,
   // SOW-111: engagement-triggered news auto-share
-  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false })
+  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false })
 });
 function asBool(v, fallback) {
   if (v === true || v === false) return v;
@@ -20920,7 +20922,7 @@ function setTemplate(doc, { type, template, channel } = {}, ctx = {}) {
   d.syndication.templates = nextTemplates;
   return { next: d, changed: true, audit: auditEntry6(ctx, t, { template: value || null }) };
 }
-var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit"]);
+var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto"]);
 function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === "object" ? doc : {});
   if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};

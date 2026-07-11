@@ -25,7 +25,7 @@ export const SYNDICATION_MIRROR_KEY = 'synd:config';
 // SOW-087: `discord-category` is the SECOND Discord post — the same item posted again to the channel mapped to
 // its category in house/content-channels.yml (the featured per-type `discord` post is unchanged). A first-class
 // channel so it gets its own on/off switch and its own per-channel idempotency in the queue.
-export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky', 'reddit']);
+export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky', 'reddit', 'devto']);
 // SOW-088: the channels a per-channel TEMPLATE override may target (the admin Channels tab tiles). Same set
 // as the pipeline switches; blank/missing overrides fall back to the shared `templates` map, then built-ins.
 export const TEMPLATE_CHANNELS = CHANNELS;
@@ -49,13 +49,15 @@ export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
 // back to the no-ping full name when none resolves), {member-discord-username} (the mention, else the public
 // profile Discord handle, else the GitHub username; SOW-088), {content-type} (article/product/prompt/link),
 // {fullName}, {author}, {shareurl}/{url}, {title}, {category}. A type with no template gets its default.
-export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment']);
+export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro']);
 // SOW-088 (owner-directed): ONE default Discord format for every type.
 const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 // SOW-088: the Reddit BODY template = the DESCRIPTION under the title on the link post (the embed card
 // comes from the item URL automatically); the COMMENT template = the separately-controlled first comment
 // (owner-directed 2026-07-10: keep both, templated independently). Editable in the admin templates card.
 const DEFAULT_REDDIT_BODY = '{short-description}';
+// SOW-088: the dev.to byline prepended to the full-body crosspost (the owner's example post shape).
+const DEFAULT_DEVTO_INTRO = '**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).';
 const DEFAULT_REDDIT_COMMENT = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note-italic}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
@@ -64,6 +66,7 @@ export const DEFAULT_TEMPLATES = Object.freeze({
   prompt: DEFAULT_FORMAT,
   'reddit-body': DEFAULT_REDDIT_BODY,
   'reddit-comment': DEFAULT_REDDIT_COMMENT,
+  'devto-intro': DEFAULT_DEVTO_INTRO,
 });
 
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
@@ -75,7 +78,7 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   templates: DEFAULT_TEMPLATES, // SOW-087: per-type Discord templates (missing/empty type = its default)
   channel_templates: Object.freeze({}), // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
   news_engagement: DEFAULT_NEWS_ENGAGEMENT, // SOW-111: engagement-triggered news auto-share
-  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false }),
+  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
 });
 
 function asBool(v, fallback) {

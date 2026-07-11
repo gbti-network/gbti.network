@@ -239,3 +239,24 @@ test('GET: channelTemplates ride along', async () => {
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.channelTemplates, { reddit: { prompt: 'R "{title}"' } });
 });
+
+// SOW-088 dev.to: the manual rail renders the byline server-side, passes the draft flag, and a SKIP
+// (members/share/unpublished) returns 409 with the reason instead of recording a phantom send.
+test('POST devto: the byline + draft flag reach the adapter; a skip is a 409', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
+  const envDevto = { DEVTO_API_KEY: 'k', DEVTO_ORG_ID: '10466', SIGNUP_KV: kv };
+  let seen = null;
+  const adapters = { devto: { name: 'devto', enabled: () => true, post: async (it) => { seen = it; return { ok: true, id: '7', url: 'https://dev.to/x', draft: it.devtoDraft === true }; } } };
+  const r = await handleSyndicateNow(
+    req({ destination: 'devto', item: ITEM, template: '{title}', devtoIntroTemplate: 'By {fullName}.', devtoDraft: true }),
+    envDevto, { kv, authorize: superadmin, adapters });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.draft, true);
+  assert.equal(seen.devtoDraft, true);
+  assert.match(seen.devtoIntro, /^By @?.?atwellpub\.|^By /);
+  // A skip surfaces as a refusal, never a sent record.
+  const skipping = { devto: { name: 'devto', enabled: () => true, post: async () => ({ ok: true, skipped: true, reason: 'members-only items never crosspost' }) } };
+  const sk = await handleSyndicateNow(req({ destination: 'devto', item: ITEM, template: '{title}' }), envDevto, { kv, authorize: superadmin, adapters: skipping });
+  assert.equal(sk.status, 409);
+  assert.match(sk.body.message, /members-only/);
+});

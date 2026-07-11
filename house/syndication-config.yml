@@ -38,3 +38,4 @@ syndication:
     mastodon: false  # OFF 2026-07-09: still building this destination
     bluesky: false  # OFF 2026-07-09: still building this destination
     reddit: false   # OFF by default: manual syndication works independently; flip in the admin pipeline card
+    devto: false    # SOW-088: full-body crossposts to the GBTI dev.to org; flip in the admin pipeline card when ready

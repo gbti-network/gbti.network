@@ -51,7 +51,7 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
     templates: {},
     news_engagement: { enabled: false, open_threshold: 2, tier: 'paid', comment_autopost: true },
     // SOW-088: reddit joined CHANNELS (default false) so the admin pipeline switch survives normalization.
-    channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false },
+    channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false },
     channel_templates: {},
   });
   // No surprise keys (no token/secret fields).

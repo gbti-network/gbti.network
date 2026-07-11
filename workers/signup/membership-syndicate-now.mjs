@@ -26,7 +26,7 @@ import { createStripeClient } from '../../clients/stripe.mjs';
 import { createDiscordClient } from '../../clients/discord.mjs';
 
 // The destinations the manual flow offers (SOW-088: the Reddit adapter landed, the Radle port).
-const MANUAL_DESTS = ['discord', 'reddit', 'x', 'linkedin', 'mastodon', 'bluesky'];
+const MANUAL_DESTS = ['discord', 'reddit', 'x', 'linkedin', 'mastodon', 'bluesky', 'devto'];
 
 const FEATURED_ENV = { post: 'DISCORD_CHANNEL_POSTS', product: 'DISCORD_CHANNEL_PRODUCTS', prompt: 'DISCORD_CHANNEL_PROMPTS', share: 'DISCORD_CHANNEL_SHARES' };
 
@@ -133,6 +133,9 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   const redditKind = payload?.redditKind === 'self' ? 'self' : 'link';
   const bodyTemplate = String(payload?.bodyTemplate || '').trim();
   const commentTemplate = String(payload?.commentTemplate || '').trim(); // the separately-templated first comment
+  // dev.to options: the byline template (rendered server-side like everything else) + the draft flag.
+  const devtoIntroTemplate = String(payload?.devtoIntroTemplate || '').trim();
+  const devtoDraft = payload?.devtoDraft === true;
 
   // The queue-item builder is the validation boundary: type whitelist, slug required, and the no-body
   // guard (a body/encryptedBody never reaches the queue or a channel).
@@ -182,9 +185,21 @@ export async function handleSyndicateNow(request, env, deps = {}) {
           ...(bodyTemplate ? { bodyText: renderTemplate(bodyTemplate, item, { limit: 9500 }) } : {}),
           ...(commentTemplate ? { commentText: renderTemplate(commentTemplate, item, { limit: 9500 }) } : {}),
         }
-      : {};
+      : destination === 'devto'
+        ? {
+            devtoDraft,
+            // The byline: the popup's edit, else the stored devto-intro (channel override -> shared -> built-in).
+            devtoIntro: renderTemplate(devtoIntroTemplate || templateFor(cfg, 'devto-intro', 'devto') || '', item, { limit: 800 }),
+          }
+        : {};
     try { result = await adapter.post({ ...item, textOverride: text, ...extras }); }
     catch (err) { result = { ok: false, error: err?.message || `${destination} post failed` }; }
+  }
+
+  // A SKIP (dev.to: a share / members-only / unpublished item) is a refusal, not a send: tell the popup
+  // why and record nothing (the item never reached the destination).
+  if (result?.ok && result?.skipped) {
+    return { status: 409, body: { error: 'skipped', message: result.reason || 'the destination skipped this item' } };
   }
 
   // Tracker record: a terminal manual item (never in the pending index), so the syndication tracker and
@@ -226,5 +241,5 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   } catch { /* dedupe is best-effort; the post already happened */ }
 
   if (!result?.ok) return { status: 502, body: { error: 'post_failed', message: result?.error || 'the destination refused the post', itemId: recorded.id } };
-  return { status: 200, body: { ok: true, sent: true, destination, id: result.id ?? null, url: result.url ?? null, forwarded: result.forwarded ?? null, comment: result.comment ?? null, superseded, itemId: recorded.id, text } };
+  return { status: 200, body: { ok: true, sent: true, destination, id: result.id ?? null, url: result.url ?? null, forwarded: result.forwarded ?? null, comment: result.comment ?? null, draft: result.draft === true, superseded, itemId: recorded.id, text } };
 }

@@ -13,7 +13,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { renderTemplate } from '../../../membership/syndication-format.mjs';
 import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
 
-const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', mastodon: 'Mastodon' };
+const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', mastodon: 'Mastodon' };
 
 const CSS = `
   :host { display:block; }
@@ -147,9 +147,11 @@ class GbtiSyndicateNow extends GbtiElement {
       const label = DEST_LABEL[d.id] || d.id;
       const s = sends[d.id];
       const badge = s ? `<span class="sentb">sent ${esc(new Date(s.last).toLocaleDateString())}${s.manual ? ' (manual)' : ''}</span>` : '';
-      return d.ready
+      // dev.to crossposts the FULL article body, so a share (no article) cannot go there.
+      const shareBlocked = d.id === 'devto' && this._item().source === 'share';
+      return d.ready && !shareBlocked
         ? `<button class="tile" type="button" data-dest="${esc(d.id)}">${esc(label)}${badge}</button>`
-        : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(d.reason || 'not available')}</span>${badge}</button>`;
+        : `<button class="tile" type="button" disabled>${esc(label)}<span class="why">${esc(shareBlocked ? 'content items only' : (d.reason || 'not available'))}</span>${badge}</button>`;
     }).join('');
     const sent = Object.keys(sends);
     const prior = sent.length
@@ -167,7 +169,7 @@ class GbtiSyndicateNow extends GbtiElement {
     // the per-destination built-in ({title} reads natural as a Reddit post title).
     const src = this._item().source;
     const override = this._info?.channelTemplates?.[this._dest]?.[src];
-    const destDefault = override || (this._dest === 'reddit' ? '{title}' : (this._info?.templates?.[src] || '{title} {url}'));
+    const destDefault = override || (this._dest === 'reddit' || this._dest === 'devto' ? '{title}' : (this._info?.templates?.[src] || '{title} {url}'));
     return this._template ?? destDefault;
   }
 
@@ -193,6 +195,12 @@ class GbtiSyndicateNow extends GbtiElement {
   _effectiveComment() {
     if (this._commentTemplate != null) return this._commentTemplate;
     return this._redditStored('reddit-comment');
+  }
+
+  /** The dev.to BYLINE prepended to the full-body crosspost: an edit wins, else the stored devto-intro. */
+  _effectiveDevtoIntro() {
+    if (this._devtoIntroTemplate != null) return this._devtoIntroTemplate;
+    return this._info?.channelTemplates?.devto?.['devto-intro'] || this._info?.templates?.['devto-intro'] || '';
   }
 
   _composeHtml() {
@@ -250,10 +258,22 @@ class GbtiSyndicateNow extends GbtiElement {
         <label>Comment preview</label>
         <div class="preview" data-reddit-comment-preview>${esc(commentPreview)}</div>`;
     }
+    let devtoRows = '';
+    if (dest === 'devto') {
+      const introTemplate = this._effectiveDevtoIntro();
+      const introPreview = introTemplate ? renderTemplate(introTemplate, item, { limit: 800 }) : '';
+      devtoRows = `<label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
+        <textarea data-devto-intro>${esc(introTemplate)}</textarea>
+        <label>Byline preview</label>
+        <div class="preview" data-devto-intro-preview>${esc(introPreview)}</div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-devto-draft style="width:auto"${this._devtoDraft ? ' checked' : ''} /> Create as a dev.to DRAFT first (publish from the dev.to dashboard)</label>`;
+    }
     const liNote = dest === 'linkedin'
       ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>`
       : dest === 'reddit'
-        ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === 'self' ? 'a TEXT post: the title template above (300 characters max) plus the body below' : 'a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body'}.</p>` : '';
+        ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === 'self' ? 'a TEXT post: the title template above (300 characters max) plus the body below' : 'a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body'}.</p>`
+        : dest === 'devto'
+          ? `<p class="sub" style="margin:8px 0 0">Posts the FULL public article to dev.to under the GBTI organization with a canonical link back to gbti.network. Members-only content never crossposts.</p>` : '';
     // Destination-SPECIFIC prior-send messaging: a duplicate warning only when THIS destination already
     // got the item; otherwise an informational note so a Discord-only history never scares a Reddit send.
     const sends = this._destSends();
@@ -271,14 +291,14 @@ class GbtiSyndicateNow extends GbtiElement {
       ? (this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : ' Forwarded to the secondary channel.')
       : '';
     const result = this._result
-      ? `<p class="okmsg">Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}${fwdState}${cmtState}</p>`
+      ? `<p class="okmsg">${this._result.draft ? 'Draft created on dev.to (publish it from the dashboard).' : 'Posted.'}${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}${fwdState}${cmtState}</p>`
       : '';
     return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
       <div class="preview" data-preview>${esc(preview)}</div>
-      ${channelRow}${redditRows}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ''}${result}
+      ${channelRow}${redditRows}${devtoRows}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ''}${result}
       <div class="actions">
         <button class="ghost" type="button" data-close>${this._result ? 'Done' : 'Cancel'}</button>
         <button class="go" type="button" data-publish ${this._busy || this._result ? 'disabled' : ''}>${this._busy ? '<span class="spin"></span>Publishing...' : 'Publish'}</button>
@@ -309,6 +329,14 @@ class GbtiSyndicateNow extends GbtiElement {
       const pv = this.$('[data-reddit-body-preview]');
       if (pv) pv.textContent = rb.value ? renderTemplate(rb.value, this._item(), { limit: 2000 }) : '';
     });
+    const di = this.$('[data-devto-intro]');
+    if (di) di.addEventListener('input', () => {
+      this._devtoIntroTemplate = di.value;
+      const pv = this.$('[data-devto-intro-preview]');
+      if (pv) pv.textContent = di.value ? renderTemplate(di.value, this._item(), { limit: 800 }) : '';
+    });
+    const dd = this.$('[data-devto-draft]');
+    if (dd) dd.addEventListener('change', () => { this._devtoDraft = dd.checked; });
     const rc = this.$('[data-reddit-comment]');
     if (rc) rc.addEventListener('input', () => {
       this._commentTemplate = rc.value;
@@ -319,7 +347,7 @@ class GbtiSyndicateNow extends GbtiElement {
   }
 
   async _pickDest(dest) {
-    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
+    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._devtoIntroTemplate = null; this._devtoDraft = false; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
     this._dest = dest;
     this._step = 'compose';
     this._err = null;
@@ -363,6 +391,11 @@ class GbtiSyndicateNow extends GbtiElement {
         if (body) payload.bodyTemplate = body;
         const comment = this._effectiveComment().trim();
         if (comment) payload.commentTemplate = comment;
+      }
+      if (this._dest === 'devto') {
+        const intro = this._effectiveDevtoIntro().trim();
+        if (intro) payload.devtoIntroTemplate = intro;
+        if (this._devtoDraft) payload.devtoDraft = true;
       }
       if (this._dest === 'discord') {
         payload.channelId = this._channelId;
