@@ -1,7 +1,7 @@
 # GBTI brand assets
 
-The GBTI Network logo package: the monogram mark, the palette, the avatar set, and the favicon set, for manual
-reuse (social profiles, decks, print, third-party tools). The live style guide is at https://gbti.network/brand/ and the same
+The GBTI Network logo package: the monogram mark, the palette, the avatar set, the social cover set, and the
+favicon set, for manual reuse (social profiles, decks, print, third-party tools). The live style guide is at https://gbti.network/brand/ and the same
 mark art drives the site header, the favicons, and the browser-extension icons.
 
 ## Palette
@@ -34,6 +34,18 @@ files are served under https://gbti.network/brand/avatars/.
 - `avatar-ink.png` / `avatar-ink-round.png`: white mark on ink. The primary avatar.
 - `avatar-green.png` / `avatar-green-round.png`: white mark on brand green.
 - `avatar-white.png` / `avatar-white-round.png`: ink mark on white, for dark surrounding UI.
+
+`covers/`: the social profile banners (the white lockup on a brand ground with the top-right glow), rendered at
+each platform's native dimensions. Three grounds per platform: `ink` (solid), `green` (the green radial), and
+`ink-green` (ink with the green glow). Any choice reads as one system. The same files are served under
+https://gbti.network/brand/covers/ and are the images shown on the brand page's social section.
+
+- `cover-x-*.png`: 1500 x 500.
+- `cover-bluesky-*.png`: 3000 x 1000.
+- `cover-mastodon-*.png`: 1500 x 500.
+- `cover-reddit-*.png`: 1920 x 384.
+- `cover-linkedin-*.png`: 1584 x 396.
+- `cover-youtube-*.png`: 2560 x 1440, with the lockup centered in the TV-safe area.
 
 `favicons/`: the mark on an ink rounded tile, at the standard sizes.
 
