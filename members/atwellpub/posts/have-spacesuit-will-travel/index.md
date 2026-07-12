@@ -46,14 +46,3 @@ Not only were they now prisoners, they were only minutes away from landing on no
 Not only is _Have Spacesuit Will Travel_ a great short story, it is a deep dive into the technologies that power a space suit and how a spacesuit serves an astronaut as they brave the unforgiving frontiers of outer space.
 
 If you enjoy an educational adventure about space travel, _Have Spacesuit Will Travel_ should offer a fun and thrilling escape.
-
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://https://)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)

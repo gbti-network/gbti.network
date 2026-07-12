@@ -60,15 +60,3 @@ Anyway, I’m trying my luck at building a node-based local MPC server that will
 And remember, it’s also always worth exploring the ways today’s technologies influence tomorrow’s consumer.  
   
 Thanks for paying attention and remember, a read is a leader!  
-
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://twitter.com/atwellpub)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)

@@ -78,18 +78,6 @@ Development and maintenance is handled by our members here at the [GBTI Network]
 
 We hope you enjoy this plugin! If you need help installing it, or would like something similar built for your platform, [please let us know](https://gbti.network/hire/wordpress-developers/)! We can help arrange talent very quickly for your small and large projects alike.
 
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://twitter.com/atwellpub)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)
-
 ## Notes & References
 
 1.  **Search Engine Optimization (SEO)** is the process of improving a website’s visibility in search engines.

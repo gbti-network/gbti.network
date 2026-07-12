@@ -54,15 +54,3 @@ WP-CLI staging is open source and available for pull requests and merge requests
 Also, If the repo gets over [25 stars](https://github.com/atwellpub/wpcli-staging) I will list it on the [WordPress Plugins Directory](https://wordpress.org/plugins/).
 
 **To close out this article,** I wanted to throw an honorable mention to fellow WordPress colleague [J Michael Ward](https://jmichaelward.com/using-wp-cli-to-import-a-remote-database/) and his article that shows a different but also effective route at doing this same thing using wp-cli native commands, no plugins needed.
-
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://twitter.com/atwellpub)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)

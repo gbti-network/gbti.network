@@ -64,15 +64,3 @@ Be kind to your ideas and **don’t give up**, _if you do not have to_. Finish a
 4.  It’s important to bring ideas to a published state — which does require dedication as well as prioritization. Consider breaking ideas into small <50 hours, medium <150 hours, and large 150 hours+, and then focusing on small projects to begin with and the others in-between small projects. It will be important for your self esteem to have **W’s**, and not risk falling into starting ideas and never finishing them, as the latter may negatively affect your self esteem.
 
 _Thanks for paying attention!_
-
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://twitter.com/atwellpub)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)

@@ -183,17 +183,3 @@ Thanks for paying attention!
 _It’s nice weather for ducks out there…_
 
 ![YouTube video thumbnail](https://img.youtube.com/vi/ioudby-xooc/maxresdefault.jpg)
-
-CjxmaWd1cmUgY2xhc3M9IndwLWJsb2NrLWVtYmVkIGFsaWduY2VudGVyIGlzLXR5cGUtdmlkZW8gaXMtcHJvdmlkZXIteW91dHViZSB3cC1ibG9jay1lbWJlZC15b3V0dWJlIHdwLWVtYmVkLWFzcGVjdC0xNi05IHdwLWhhcy1hc3BlY3QtcmF0aW8iIGRhdGEtbGF6eS1sb2FkPSJ0cnVlIj48ZGl2IGNsYXNzPSJ3cC1ibG9jay1lbWJlZF9fd3JhcHBlciI+CjxpZnJhbWUgdGl0bGU9IkxlbW9uIEplbGx5IC0gTmljZSBXZWF0aGVyIGZvciBEdWNrcyAgKExvc3QgSG9yaXpvbnMpIiB3aWR0aD0iNzYwIiBoZWlnaHQ9IjQyOCIgc3JjPSJodHRwczovL3d3dy55b3V0dWJlLmNvbS9lbWJlZC9pb3VkYnkteG9vYz9mZWF0dXJlPW9lbWJlZCIgZnJhbWVib3JkZXI9IjAiIGFsbG93PSJhY2NlbGVyb21ldGVyOyBhdXRvcGxheTsgY2xpcGJvYXJkLXdyaXRlOyBlbmNyeXB0ZWQtbWVkaWE7IGd5cm9zY29wZTsgcGljdHVyZS1pbi1waWN0dXJlOyB3ZWItc2hhcmUiIHJlZmVycmVycG9saWN5PSJzdHJpY3Qtb3JpZ2luLXdoZW4tY3Jvc3Mtb3JpZ2luIiBhbGxvd2Z1bGxzY3JlZW4+PC9pZnJhbWU+CjwvZGl2PjwvZmlndXJlPgo=
-
-![Hudson Atwell](https://secure.gravatar.com/avatar/4b04f3868d5d00557a0e117f43262a23de2b023b16cf33e18bf233ecce7e4515?s=479&d=mm&r=g)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Avid product developer and founding member of the GBTI network. With a long background in developing products for markets, Hudson has built, marketed and maintained a number of plugins, mods, and extensions.
-
--   [X](https://x.com/atwellpub)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [Bluesky](https://bsky.app/profile/atwellpub.bsky.social)
--   [Discord](https://discord.gg/EwmcKcJZC6)

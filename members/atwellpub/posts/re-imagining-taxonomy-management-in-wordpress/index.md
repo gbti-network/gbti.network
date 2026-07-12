@@ -60,15 +60,3 @@ Anyone can enjoy the [Advanced Taxonomy Manager](https://gbti.network/products/b
 > [Advanced Taxonomy Manager on WordPress.org](https://wordpress.org/plugins/better-category-manager/)
 
 Thanks for reading and paying attention! Please consider becoming a [network member](https://gbti.network/membership) to support our work!
-
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://twitter.com/atwellpub)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)

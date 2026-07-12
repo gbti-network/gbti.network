@@ -68,15 +68,3 @@ Alone, I plan to publish at least 1 more small-to-medium sized WordPress plugin 
 For now, we’ll continue to provide our best work for [GBTI Network Members](https://gbti.network/membership/), and where it makes sense we will release that work free on the WordPress plugin directory, as we have now done with Radle in full.  
   
 Thanks for reading.
-
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://twitter.com/atwellpub)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)

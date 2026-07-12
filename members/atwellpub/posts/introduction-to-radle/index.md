@@ -167,18 +167,6 @@ We’re not quite ready to release yet, so please keep an eye out for new update
   
 If you like this concept, please check it out by using the discussion feature below, powered by Radle.
 
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://twitter.com/atwellpub)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)
-
 ## HOW TO DOWNLOAD
 
 Radle was officially released on December 1, 2024 and is now free for everyone on the WordPress plugin directory:  

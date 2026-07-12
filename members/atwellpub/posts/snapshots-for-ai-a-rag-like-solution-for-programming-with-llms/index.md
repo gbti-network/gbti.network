@@ -87,15 +87,3 @@ We also wanted to send a shout-out to [16x Prompt Engineer](https://prompt.16x.
 As LLMs continue to evolve to support coders, tools like [Snapshots for AI](https://plugins.jetbrains.com/plugin/24889-snapshots-for-ai/) will play a healthy role in bridging the gap between human developers and LLM assistants. I’m personally excited to see how developers at all levels will use this tool to enhance their productivity and problem-solving capabilities and I’m also excited to see what the future brings in regard to LLM assisted development.
 
 Happy coding, and here’s to pushing the boundaries of what’s possible in software development!
-
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://twitter.com/atwellpub)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)

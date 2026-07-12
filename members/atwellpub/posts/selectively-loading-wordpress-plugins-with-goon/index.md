@@ -175,15 +175,3 @@ _I’m planning to add several other types of conditions, like:_
 ## Conclusion
 
 Goon appears to be a lightweight performance-seeking tool that can help WordPress users discover additional savings by allowing control over where and when plugins are loaded. We highly recommend trying out the [free version here](https://wordpress.org/plugins/goon-plugin-control/) and considering purchasing a [lifetime license](http://getgoon.pro/) as well if you like the plugin asset.
-
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://twitter.com/atwellpub)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)

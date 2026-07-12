@@ -211,15 +211,3 @@ _Thanks for reading!_
 18.  Ant colonies demonstrate emergent intelligence through stigmergy—indirect coordination through environmental modifications. Individual ants following simple rules create complex collective behaviors including efficient foraging, nest construction, and dynamic task allocation without any centralized control. “Ant colony optimization algorithms,” Wikipedia, accessed July 6, 2025, [https://en.wikipedia.org/wiki/Ant\_colony\_optimization\_algorithms](https://en.wikipedia.org/wiki/Ant_colony_optimization_algorithms).
 19.  Mycorrhizal networks connect trees through underground fungal threads, enabling resource sharing and communication across forest ecosystems. Research has shown these networks facilitate nutrient exchange, stress signaling, and even parental care, suggesting a form of distributed forest intelligence. “Mycorrhizal network,” Wikipedia, accessed July 6, 2025, [https://en.wikipedia.org/wiki/Mycorr](https://en.wikipedia.org/wiki/Mycorrhizal_network)[h](https://en.wikipedia.org/wiki/Mycorrhizal_network)[izal\_network](https://en.wikipedia.org/wiki/Mycorrhizal_network).
 20.  **Editor’s Note:** In 2025 it’s a gift to be assisted with large language models both as research assistant as well as a writing assistant. The composition of this article was narrated into a handheld device via voice dictate while on a treadmill and massaged into its final state through collaboration with GPT 4o, Claude 4 Sonnet, and Caude 4 Opus over the course of a weekend. On a personal level, I am very happy with how well it turned out. I also happen to be duly educated as well as entertained beside the reader (hopefully you’ve enjoyed this article); with much of the historic learning/research being a new exposure to me. It will be interesting to see how the audience responds to compositions and executions like this one both today and in the future as writers lean more and more on their LLM assistants.
-
-![](./images/Hudson-Atwell_c51a21549d2d5d9f9211078078b876ae-cropped.webp)
-
-We hope you enjoyed this article by **Hudson Atwell**, GBTI Member.
-
-Python, NextJS, NodeJS, JavaScript, PHP, WordPress, Developer Relations, Novelty, Curation, DevOps, Blockchain, IoT, and more.
-
--   [X](https://twitter.com/atwellpub)
--   [YouTube](https://www.youtube.com/@HudsonAtwell)
--   [GitHub](https://github.com/atwellpub)
--   [WordPress](https://profiles.wordpress.org/hudson-atwell/)
--   [LinkedIn](https://www.linkedin.com/in/hudsonatwell)
