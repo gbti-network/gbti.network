@@ -34,7 +34,8 @@ export async function postToChannel(channelId, item, { env, fetchImpl, client, c
   const discord = client ?? createDiscordClient({ botToken: env.DISCORD_BOT_TOKEN, fetch: fetchImpl });
   // SOW-088: the caller names which channel's template set applies ('discord' featured vs
   // 'discord-category'); the chain is channel override -> shared map -> built-in.
-  const template = templateFor(cfg, item.source, templateChannel);
+  // SOW-088 Proposal A: a members-only item renders the channel's STUB template set.
+  const template = templateFor(cfg, item.source, templateChannel, { stub: item.membersOnly === true });
   let content;
   if (typeof textOverride === 'string' && textOverride.trim()) {
     // SOW-088 manual syndicate: the caller already rendered (and mention-sanitized) the message via the

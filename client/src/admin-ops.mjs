@@ -374,7 +374,7 @@ export async function getModerationFlagPool(ctx) {
 export async function getSyndicationTemplatePool(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
   const cfg = syndicationConfigFromParsed(parsed);
-  return { templates: cfg.templates, channelTemplates: cfg.channel_templates, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
+  return { templates: cfg.templates, channelTemplates: cfg.channel_templates, stubTemplates: cfg.stub_templates, channelTemplatesStub: cfg.channel_templates_stub, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
 }
 
 async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType }) {
@@ -529,10 +529,10 @@ export async function removeModerationFlagTerm(ctx, { list, term } = {}) {
   });
 }
 
-export async function setSyndicationTemplate(ctx, { type, template, channel } = {}) {
-  const slug = slugOf(`${channel ? `${channel}-` : ''}${String(type || '')}`);
+export async function setSyndicationTemplate(ctx, { type, template, channel, stub } = {}) {
+  const slug = slugOf(`${channel ? `${channel}-` : ''}${stub ? 'stub-' : ''}${String(type || '')}`);
   const label = channel ? `${channel} ${type}` : type;
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplateEdit(parsed, { type, template, channel }, actionCtx(ctx)), {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplateEdit(parsed, { type, template, channel, stub }, actionCtx(ctx)), {
     branch: `gbti/syndication-template-${slug}`,
     message: `Set the ${label} syndication template`,
     title: `Set syndication template: ${label}`,

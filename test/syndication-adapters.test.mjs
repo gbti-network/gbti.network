@@ -276,3 +276,21 @@ test('reddit: commentText posts as the first comment alongside the native body',
   assert.equal(cp.get('text'), 'From GBTI...');
   assert.equal(r.comment.id, 'c9');
 });
+
+// SOW-088 Proposal A: a members-only item renders the channel's STUB template on both Discord legs.
+test('discord legs render the stub template for members items', async () => {
+  const { createDiscordAdapter, createDiscordCategoryAdapter } = await import('../clients/syndication/discord-channel.mjs');
+  const { syndicationConfigFromParsed } = await import('../membership/syndication-config-core.mjs');
+  const cfg = syndicationConfigFromParsed({});
+  const sent = [];
+  const client = { async postChannelMessage(channelId, content) { sent.push(content); return { id: '1', channel_id: channelId }; } };
+  const env = { DISCORD_BOT_TOKEN: 'b', DISCORD_CHANNEL_PROMPTS: '111' };
+  const it = { source: 'prompt', title: 'Secret Skill', category: 'ai', author: 'a', url: 'https://x/y', membersOnly: true, visibility: 'members' };
+  await createDiscordAdapter({ env, client, cfg }).post(it);
+  assert.match(sent[0], /members-only prompt/, 'the featured leg uses the Discord stub default');
+  await createDiscordCategoryAdapter({ env, client, cfg, channelMap: { channels: [{ category: 'ai', channelId: '222' }] } }).post(it);
+  assert.match(sent[1], /landed in ai/, 'the category leg uses its own stub default');
+  // A public item is untouched.
+  await createDiscordAdapter({ env, client, cfg }).post({ ...it, membersOnly: false, visibility: 'public' });
+  assert.match(sent[2], /^New prompt published by/);
+});

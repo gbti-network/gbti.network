@@ -53,9 +53,11 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
     // SOW-088: reddit joined CHANNELS (default false) so the admin pipeline switch survives normalization.
     channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false },
     channel_templates: {},
+    stub_templates: {},
+    channel_templates_stub: {},
   });
   // No surprise keys (no token/secret fields).
-  assert.deepEqual(Object.keys(m).sort(), ['channel_templates', 'channels', 'classify', 'enabled', 'hold_minutes', 'news_engagement', 'require_approval', 'templates', 'upvote_threshold']);
+  assert.deepEqual(Object.keys(m).sort(), ['channel_templates', 'channel_templates_stub', 'channels', 'classify', 'enabled', 'hold_minutes', 'news_engagement', 'require_approval', 'stub_templates', 'templates', 'upvote_threshold']);
 });
 
 test('DEFAULT_SYNDICATION_CONFIG is frozen and disabled', () => {
@@ -176,4 +178,38 @@ test('setTemplate with a channel targets the override and empties clean up', asy
 test('toSyndicationMirror keeps configured templates and drops folded defaults', () => {
   const m = toSyndicationMirror({ syndication: { templates: { share: 'Custom {shareurl}', post: '   ' } } });
   assert.deepEqual(m.templates, { share: 'Custom {shareurl}' });
+});
+
+// SOW-088 Proposal A: the MEMBERS-stub template dimension. The stub chain runs channel stub override ->
+// shared stub -> the per-channel built-in -> the shared built-in -> the public chain; the mirror carries
+// the stub maps configured-only.
+test('stub templates: the resolution chain and the mirror', async () => {
+  const { DEFAULT_CHANNEL_STUB_TEMPLATES, DEFAULT_STUB_TEMPLATES, DEFAULT_TEMPLATES } = await import('../membership/syndication-config-core.mjs');
+  const empty = syndicationConfigFromParsed({});
+  assert.equal(templateFor(empty, 'post', 'discord', { stub: true }), DEFAULT_CHANNEL_STUB_TEMPLATES.discord.post, 'per-channel built-in');
+  assert.equal(templateFor(empty, 'post', 'x', { stub: true }), DEFAULT_STUB_TEMPLATES.post, 'shared built-in for channels without their own');
+  assert.equal(templateFor(empty, 'devto-intro', 'devto', { stub: true }), templateFor(empty, 'devto-intro', 'devto'), 'no stub built-in -> the public chain');
+  const cfg = syndicationConfigFromParsed({ syndication: {
+    stub_templates: { post: 'Shared stub {title}' },
+    channel_templates_stub: { discord: { post: 'Discord stub {title}' } },
+  } });
+  assert.equal(templateFor(cfg, 'post', 'discord', { stub: true }), 'Discord stub {title}');
+  assert.equal(templateFor(cfg, 'post', 'reddit', { stub: true }), 'Shared stub {title}', 'a shared stub beats the per-channel built-in');
+  assert.equal(templateFor(cfg, 'post', 'discord'), DEFAULT_TEMPLATES.post, 'the public chain is untouched');
+  const m = toSyndicationMirror({ syndication: { stub_templates: { post: 'S {title}' } } });
+  assert.deepEqual(m.stub_templates, { post: 'S {title}' });
+  assert.deepEqual(m.channel_templates_stub, {});
+});
+
+test('setTemplate stub=true targets the stub maps with the same semantics', async () => {
+  const { setTemplate } = await import('../membership/syndication-template-edits.mjs');
+  const ctx = { now: 0, actor: { githubId: '1' } };
+  const a = setTemplate({}, { type: 'post', template: 'Stub {title}', channel: 'discord', stub: true }, ctx);
+  assert.deepEqual(a.next.syndication.channel_templates_stub, { discord: { post: 'Stub {title}' } });
+  assert.equal(a.next.syndication.channel_templates, undefined, 'the public map is untouched');
+  assert.equal(a.audit.detail.stub, true);
+  const b = setTemplate(a.next, { type: 'post', template: '', channel: 'discord', stub: true }, ctx);
+  assert.equal(b.next.syndication.channel_templates_stub, undefined, 'empty deletes the override');
+  const c = setTemplate({}, { type: 'post', template: 'Shared stub', stub: true }, ctx);
+  assert.deepEqual(c.next.syndication.stub_templates, { post: 'Shared stub' });
 });

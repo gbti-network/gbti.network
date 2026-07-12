@@ -46,9 +46,9 @@ test('prepareDevtoBody: marker cut, CDN rewrite, byline prepend, tag normalizati
   assert.deepEqual(r.tags, ['claudecode', 'agentskills', 'ai', 'workflow'], 'lowercase alphanumeric, capped at 4');
 });
 
-test('prepareDevtoBody: a members item STUBS (description + link + CTA, never any body)', () => {
-  const membersFile = FILE.replace('visibility: public', 'visibility: members').replace('title: My Article', 'title: My Article\nshortDescription: A great teaser.');
-  const r = prepareDevtoBody(membersFile, ITEM, { intro: '**By H.**', footer: 'Join us.', readMore: '[Read it](https://gbti.network/x)' });
+test('prepareDevtoBody: a members item STUBS (the rendered stub template, never any body)', () => {
+  const membersFile = FILE.replace('visibility: public', 'visibility: members');
+  const r = prepareDevtoBody(membersFile, ITEM, { intro: '**By H.**', footer: 'Join us.', stubBody: 'A great teaser.\n\n[Read it](https://gbti.network/x)' });
   assert.equal(r.ok, true);
   assert.equal(r.mode, 'stub');
   assert.equal(r.body, '**By H.**\n\nA great teaser.\n\n[Read it](https://gbti.network/x)\n\nJoin us.');
@@ -120,9 +120,11 @@ test('devto adapter: draft flag, skips (share/members/draft file), and readable 
   assert.equal((await ad.post({ ...ITEM, source: 'share' })).skipped, true);
   // A members-only FILE now posts a STUB (description + link + CTA), not a skip; the queue item's own
   // visibility copy is ignored (the canonical file is the authority).
-  const membersFile = FILE.replace('visibility: public', 'visibility: members').replace('title: My Article', 'title: My Article\nshortDescription: Teaser.');
+  const membersFile = FILE.replace('visibility: public', 'visibility: members');
   const stubAd = createDevtoAdapter({ env, fetchImpl: async (u, o) => (u.startsWith('https://raw.') ? { ok: true, text: async () => membersFile } : (lastBody = JSON.parse(o.body), { ok: true, status: 201, text: async () => JSON.stringify({ id: 9, url: 'https://dev.to/s' }) })) });
-  const stub = await stubAd.post({ ...ITEM, visibility: 'members', membersOnly: true, devtoFooter: 'JOIN CTA' });
+  // No pre-rendered devtoStub: the adapter renders the built-in devto-stub template ({short-description}
+  // from the queue item blurb + the read-more line).
+  const stub = await stubAd.post({ ...ITEM, visibility: 'members', membersOnly: true, blurb: 'Teaser.', devtoFooter: 'JOIN CTA' });
   assert.equal(stub.ok, true);
   assert.equal(stub.stub, true);
   assert.ok(lastBody.article.body_markdown.includes('Teaser.'));

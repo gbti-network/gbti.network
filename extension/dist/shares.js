@@ -6039,6 +6039,82 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-syndication-tracker", GbtiSyndicationTracker);
 
+  // membership/syndication-config-core.mjs
+  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto"]);
+  var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
+  var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
+  var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
+    enabled: false,
+    // fail-closed: nothing auto-posts until the owner flips it in house/syndication-config.yml
+    open_threshold: 2,
+    // distinct members opening the detail view before the item auto-posts
+    tier: "paid",
+    // whose engagement counts (owner-toggleable in the admin Channels tab)
+    comment_autopost: true
+    // one comment posts immediately (deliberate engagement)
+  });
+  var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"]);
+  var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
+  var DEFAULT_REDDIT_BODY = "{short-description}";
+  var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
+  var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
+  var DEFAULT_REDDIT_COMMENT = `The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:
+
+"{author-note-italic}"
+
+---
+
+Are you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network
+
+To follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}`;
+  var DEFAULT_TEMPLATES = Object.freeze({
+    share: DEFAULT_FORMAT,
+    post: DEFAULT_FORMAT,
+    product: DEFAULT_FORMAT,
+    prompt: DEFAULT_FORMAT,
+    "reddit-body": DEFAULT_REDDIT_BODY,
+    "reddit-comment": DEFAULT_REDDIT_COMMENT,
+    "devto-intro": DEFAULT_DEVTO_INTRO,
+    "devto-footer": DEFAULT_DEVTO_FOOTER
+  });
+  var STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
+  var DEFAULT_STUB_TEMPLATES = Object.freeze({
+    share: STUB_FORMAT,
+    post: STUB_FORMAT,
+    product: STUB_FORMAT,
+    prompt: STUB_FORMAT,
+    "reddit-body": "{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}",
+    "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url})** Membership unlocks it, and members earn from the work they publish."
+  });
+  var DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it now: {url}';
+  var DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
+  var REDDIT_TITLE_STUB = "{title} (a members-only {content-type} from the GBTI Network)";
+  var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
+    discord: Object.freeze({ share: DISCORD_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
+    "discord-category": Object.freeze({ share: DISCORD_CAT_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
+    reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB })
+  });
+  var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
+    enabled: false,
+    require_approval: true,
+    // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
+    hold_minutes: 60,
+    upvote_threshold: 2,
+    classify: "ai",
+    // SOW-087: the share category suggestion mode
+    templates: DEFAULT_TEMPLATES,
+    // SOW-087: per-type Discord templates (missing/empty type = its default)
+    channel_templates: Object.freeze({}),
+    // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
+    stub_templates: Object.freeze({}),
+    // SOW-088 Proposal A: the shared MEMBERS-stub set (configured only)
+    channel_templates_stub: Object.freeze({}),
+    // SOW-088 Proposal A: per-channel stub overrides
+    news_engagement: DEFAULT_NEWS_ENGAGEMENT,
+    // SOW-111: engagement-triggered news auto-share
+    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false })
+  });
+
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
   var CSS16 = `
@@ -6244,21 +6320,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._lists = flags?.lists || {};
         this._templates = templates?.templates || {};
         this._channelTemplates = templates?.channelTemplates || {};
+        this._stubTemplates = templates?.stubTemplates || {};
+        this._channelTemplatesStub = templates?.channelTemplatesStub || {};
         this._engagement = engagement?.settings || null;
         this._tiers = engagement?.tiers || ["paid", "paid-trial", "signed-in"];
         this._pipeline = pipeline?.settings || null;
         this._work = {};
         this._base = {};
-        const KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer"];
+        const KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"];
+        const effPub = (ch, k) => this._channelTemplates[ch]?.[k] ?? this._templates?.[k] ?? "";
+        const effStub = (ch, k) => this._channelTemplatesStub[ch]?.[k] ?? this._stubTemplates?.[k] ?? DEFAULT_CHANNEL_STUB_TEMPLATES[ch]?.[k] ?? DEFAULT_STUB_TEMPLATES[k] ?? effPub(ch, k);
         for (const ch of TILE_CHANNELS.filter((c) => c.active).map((c) => c.id)) {
-          this._work[ch] = {};
-          this._base[ch] = {};
-          for (const k of KEYS) {
-            const eff = this._channelTemplates[ch]?.[k] ?? this._templates?.[k] ?? "";
-            this._work[ch][k] = eff;
-            this._base[ch][k] = eff;
+          for (const vis of ["pub", "stub"]) {
+            const key = `${vis}:${ch}`;
+            this._work[key] = {};
+            this._base[key] = {};
+            for (const k of KEYS) {
+              const eff = vis === "stub" ? effStub(ch, k) : effPub(ch, k);
+              this._work[key][k] = eff;
+              this._base[key][k] = eff;
+            }
           }
         }
+        this._tmplVis = this._tmplVis || "pub";
         this._tmplDirty = /* @__PURE__ */ new Set();
         this._pipeDirty = false;
         this._engDirty = false;
@@ -6327,8 +6411,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <span class="ct-i ${esc(c.cls)}"><svg viewBox="0 0 24 24"><use href="#${esc(c.icon)}"/></svg></span>
         <span class="ct-n">${esc(c.name)}</span><span class="ct-s">${esc(c.sub)}</span></button>`).join("");
       const chips = VARS.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join("");
-      const work = this._work?.[cur] || {};
-      const custom = (k) => this._channelTemplates?.[cur]?.[k] ? " · custom" : "";
+      const vis = this._tmplVis || "pub";
+      const work = this._work?.[`${vis}:${cur}`] || {};
+      const custom = (k) => (vis === "stub" ? this._channelTemplatesStub?.[cur]?.[k] : this._channelTemplates?.[cur]?.[k]) ? " · custom" : "";
       const rows = TMPL_TYPES.map((t) => `<div class="tmpl">
         <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
         <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || "")}" /></div>`).join("") + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc("the description under the title" + custom("reddit-body"))}</div></div>
@@ -6336,6 +6421,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           <div class="tmpl"><div class="tl"><div class="nm">First comment</div><div class="df">${esc("the brand account's first comment" + custom("reddit-comment"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc(work["reddit-comment"] || "")}</textarea></div>` : "") + (cur === "devto" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc("prepended to the crosspost" + custom("devto-intro"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc(work["devto-intro"] || "")}</textarea></div>
+          ${vis === "stub" ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc("the members-only teaser middle" + custom("devto-stub"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-stub">${esc(work["devto-stub"] || "")}</textarea></div>` : ""}
           <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc("appended to every dev.to post" + custom("devto-footer"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work["devto-footer"] || "")}</textarea></div>` : "");
       return `<section class="card" id="sec-templates" data-sec>
@@ -6345,6 +6432,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="card-b">
         <div class="field" style="margin-bottom:16px"><label>Editing templates for</label>
           <div class="chtiles">${tiles}</div></div>
+        <div class="field" style="margin-bottom:14px"><label>Visibility set</label>
+          <div class="termtabs" style="margin-bottom:0">
+            <button class="termtab${vis === "pub" ? " on" : ""}" type="button" data-vis="pub">Public</button>
+            <button class="termtab${vis === "stub" ? " on" : ""}" type="button" data-vis="stub">Members stub</button>
+          </div>
+          <span class="hint">${vis === "stub" ? "These templates render for MEMBERS-ONLY items on this channel (the teaser framing)." : "These templates render for public items on this channel."}</span></div>
         <p class="varnote">Click a variable to insert it into the focused field. Write a token in CAPS to uppercase its value ({CONTENT-TYPE}).</p>
         <div class="varbar">${chips}</div>
         <div data-tmplfields>${rows}</div>
@@ -6501,9 +6594,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.on("[data-save-pipe]", "click", () => this._savePipeline());
       this.$$("[data-tile]").forEach((t) => t.addEventListener("click", () => {
         const id = t.dataset.tile;
-        if (!this._work[id] || id === this._curCh) return;
+        if (!this._work[`pub:${id}`] || id === this._curCh) return;
         this._captureTmpl();
         this._curCh = id;
+        this.render();
+        this.$("#sec-templates")?.scrollIntoView({ block: "nearest" });
+        if (this._tmplDirty.size) this._markDirty("sec-templates");
+      }));
+      this.$$("[data-vis]").forEach((b) => b.addEventListener("click", () => {
+        if (b.dataset.vis === this._tmplVis) return;
+        this._captureTmpl();
+        this._tmplVis = b.dataset.vis;
         this.render();
         this.$("#sec-templates")?.scrollIntoView({ block: "nearest" });
         if (this._tmplDirty.size) this._markDirty("sec-templates");
@@ -6513,9 +6614,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._lastField = f;
         });
         f.addEventListener("input", () => {
-          this._work[this._curCh][f.dataset.tk] = f.value;
-          const key = `${this._curCh}:${f.dataset.tk}`;
-          if (f.value === (this._base[this._curCh]?.[f.dataset.tk] ?? "")) this._tmplDirty.delete(key);
+          const wk = `${this._tmplVis}:${this._curCh}`;
+          this._work[wk][f.dataset.tk] = f.value;
+          const key = `${wk}:${f.dataset.tk}`;
+          if (f.value === (this._base[wk]?.[f.dataset.tk] ?? "")) this._tmplDirty.delete(key);
           else this._tmplDirty.add(key);
           this._markDirty("sec-templates", this._tmplDirty.size > 0);
         });
@@ -6594,8 +6696,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.$$("[data-term-remove]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.removeModerationFlagTerm({ list: b.dataset.list, term: b.dataset.term }))));
     }
     _captureTmpl() {
+      const wk = `${this._tmplVis}:${this._curCh}`;
       this.$$("[data-tk]").forEach((f) => {
-        this._work[this._curCh][f.dataset.tk] = f.value;
+        if (this._work[wk]) this._work[wk][f.dataset.tk] = f.value;
       });
     }
     async _savePipeline() {
@@ -6625,15 +6728,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       let firstPr = null;
       let err = null;
       for (const key of dirty) {
-        const [channel, type] = key.split(":");
+        const [vis, channel, type] = key.split(":");
         try {
-          const r = await this.client.setSyndicationTemplate({ type, template: (this._work[channel]?.[type] || "").trim(), channel });
+          const r = await this.client.setSyndicationTemplate({ type, template: (this._work[`${vis}:${channel}`]?.[type] || "").trim(), channel, stub: vis === "stub" });
           if (r && !r.noop) {
             saved++;
             if (!firstPr && r.prNumber) firstPr = r.prNumber;
           }
         } catch (e) {
-          err = e?.message || `Could not save the ${channel} ${type} template.`;
+          err = e?.message || `Could not save the ${channel} ${type} ${vis === "stub" ? "stub " : ""}template.`;
           break;
         }
       }
@@ -13455,7 +13558,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         // SOW-088: the public profile Discord handle
         authorNote: this._authorNote || void 0,
         // SOW-088 {author-note}: the from-the-author intro comment
-        visibility: "public"
+        visibility: d.gbtiVisibility === "members" ? "members" : "public"
+        // SOW-088 Proposal A: drives the STUB template set
       };
     }
     async _loadInfo() {
@@ -13526,14 +13630,27 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
      *  fell back to the stored per-type template, so a Reddit send ignored what the preview showed). */
     _effectiveTemplate() {
       const src = this._item().source;
-      const override = this._info?.channelTemplates?.[this._dest]?.[src];
-      const destDefault = override || (this._dest === "reddit" || this._dest === "devto" ? "{title}" : this._info?.templates?.[src] || "{title} {url}");
+      const stored = this._stored(this._dest, src);
+      const destDefault = stored || (this._dest === "reddit" || this._dest === "devto" ? "{title}" : "{title} {url}");
       return this._template ?? destDefault;
     }
-    /** The ADMIN-stored template for a reddit key (channel override -> shared map), guarded so a template
-     *  referencing {author-note} never pre-fills for a no-intro item (empty quotes read broken). */
+    _isStub() {
+      return this._item().visibility === "members";
+    }
+    /** The ADMIN-stored template for a channel key, stub-aware: for a members item the STUB chain runs
+     *  first (channel stub -> shared stub -> the built-in stub maps served by the GET), then the public
+     *  chain (mirroring templateFor in the core). */
+    _stored(channel, key) {
+      if (this._isStub()) {
+        const stub = this._info?.channelTemplatesStub?.[channel]?.[key] || this._info?.stubTemplates?.[key] || this._info?.stubDefaults?.[channel]?.[key] || this._info?.stubDefaults?.[""]?.[key] || "";
+        if (stub) return stub;
+      }
+      return this._info?.channelTemplates?.[channel]?.[key] || this._info?.templates?.[key] || "";
+    }
+    /** The reddit-key resolver, guarded so a template referencing {author-note} never pre-fills for a
+     *  no-intro item (empty quotes read broken). */
     _redditStored(key) {
-      const tpl = this._info?.channelTemplates?.reddit?.[key] || this._info?.templates?.[key] || "";
+      const tpl = this._stored("reddit", key);
       return tpl && (this._authorNote || !/\{author-note(-italic)?\}/.test(tpl)) ? tpl : "";
     }
     /** The Reddit BODY template (the DESCRIPTION under the title; the embed card comes from the item URL):
@@ -13551,15 +13668,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (this._commentTemplate != null) return this._commentTemplate;
       return this._redditStored("reddit-comment");
     }
-    /** The dev.to BYLINE prepended to the full-body crosspost: an edit wins, else the stored devto-intro. */
+    /** The dev.to BYLINE prepended to the crosspost: an edit wins, else the stored devto-intro. */
     _effectiveDevtoIntro() {
       if (this._devtoIntroTemplate != null) return this._devtoIntroTemplate;
-      return this._info?.channelTemplates?.devto?.["devto-intro"] || this._info?.templates?.["devto-intro"] || "";
+      return this._stored("devto", "devto-intro");
+    }
+    /** The STUB middle for a members item on dev.to: an edit wins, else the stored devto-stub chain. */
+    _effectiveDevtoStub() {
+      if (this._devtoStubTemplate != null) return this._devtoStubTemplate;
+      return this._stored("devto", "devto-stub");
     }
     /** The CTA FOOTER appended to every dev.to post (full and stub): an edit wins, else the stored devto-footer. */
     _effectiveDevtoFooter() {
       if (this._devtoFooterTemplate != null) return this._devtoFooterTemplate;
-      return this._info?.channelTemplates?.devto?.["devto-footer"] || this._info?.templates?.["devto-footer"] || "";
+      return this._stored("devto", "devto-footer");
     }
     _composeHtml() {
       const dest = this._dest;
@@ -13612,7 +13734,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const introPreview = introTemplate ? renderTemplate(introTemplate, item, { limit: 800 }) : "";
         const footerTemplate = this._effectiveDevtoFooter();
         const footerPreview = footerTemplate ? renderTemplate(footerTemplate, item, { limit: 1200 }) : "";
-        devtoRows = `<label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
+        const stubRows = this._isStub() ? (() => {
+          const stubTemplate = this._effectiveDevtoStub();
+          const stubPreview = stubTemplate ? renderTemplate(stubTemplate, item, { limit: 1200 }) : "";
+          return `<label>Stub template <span style="font-weight:400">(the members-only teaser body; markdown; same tokens)</span></label>
+        <textarea data-devto-stub>${esc(stubTemplate)}</textarea>
+        <label>Stub preview</label>
+        <div class="preview" data-devto-stub-preview>${esc(stubPreview)}</div>`;
+        })() : "";
+        devtoRows = `${this._isStub() ? '<p class="warn">Members-only item: the STUB templates apply (description + link, never the body).</p>' : ""}
+        <label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
         <textarea data-devto-intro>${esc(introTemplate)}</textarea>
         <label>Byline preview</label>
         <div class="preview" data-devto-intro-preview>${esc(introPreview)}</div>
@@ -13620,6 +13751,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <textarea data-devto-footer>${esc(footerTemplate)}</textarea>
         <label>CTA preview</label>
         <div class="preview" data-devto-footer-preview>${esc(footerPreview)}</div>
+        ${stubRows}
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-devto-draft style="width:auto"${this._devtoDraft ? " checked" : ""} /> Create as a dev.to DRAFT first (publish from the dev.to dashboard)</label>`;
       }
       const liNote = dest === "linkedin" ? `<p class="sub" style="margin:8px 0 0">Posts as the GBTI organization page. The item link becomes a rich article card automatically; the text above is the commentary.</p>` : dest === "reddit" ? `<p class="sub" style="margin:8px 0 0">Posts to the community subreddit as ${this._redditKind === "self" ? "a TEXT post: the title template above (300 characters max) plus the body below" : "a LINK: the title template above becomes the Reddit post title (300 characters max); an optional body posts as the link post body"}.</p>` : dest === "devto" ? `<p class="sub" style="margin:8px 0 0">Posts to dev.to under the GBTI organization with a canonical link back to gbti.network: a PUBLIC item crossposts in full; a members-only item posts only its description plus a read-it-on-gbti.network link. The CTA footer is appended either way.</p>` : "";
@@ -13630,7 +13762,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const cmtState = this._result?.comment ? this._result.comment.error ? ` The first comment failed: ${esc(this._result.comment.error)}.` : " The first comment posted." : "";
       const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
       const result = this._result ? `<p class="okmsg">${this._result.draft ? `Draft created. <a href="https://dev.to/dashboard" target="_blank" rel="noopener">Review it on the dev.to dashboard</a> (a draft's direct URL 404s until it publishes).` : `Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}`}${fwdState}${cmtState}</p>` : "";
+      const stubNote = this._isStub() && dest !== "devto" ? `<p class="warn">Members-only item: the STUB template set applies on this channel.</p>` : "";
       return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
+      ${stubNote}
       <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
@@ -13696,6 +13830,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const pv = this.$("[data-devto-footer-preview]");
         if (pv) pv.textContent = df.value ? renderTemplate(df.value, this._item(), { limit: 1200 }) : "";
       });
+      const ds = this.$("[data-devto-stub]");
+      if (ds) ds.addEventListener("input", () => {
+        this._devtoStubTemplate = ds.value;
+        const pv = this.$("[data-devto-stub-preview]");
+        if (pv) pv.textContent = ds.value ? renderTemplate(ds.value, this._item(), { limit: 1200 }) : "";
+      });
       const dd = this.$("[data-devto-draft]");
       if (dd) dd.addEventListener("change", () => {
         this._devtoDraft = dd.checked;
@@ -13715,6 +13855,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._commentTemplate = null;
         this._devtoIntroTemplate = null;
         this._devtoFooterTemplate = null;
+        this._devtoStubTemplate = null;
         this._devtoDraft = false;
         this._redditKind = "link";
       }
@@ -13768,6 +13909,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           if (intro) payload.devtoIntroTemplate = intro;
           const footer = this._effectiveDevtoFooter().trim();
           if (footer) payload.devtoFooterTemplate = footer;
+          const stubT = this._isStub() ? this._effectiveDevtoStub().trim() : "";
+          if (stubT) payload.devtoStubTemplate = stubT;
           if (this._devtoDraft) payload.devtoDraft = true;
         }
         if (this._dest === "discord") {
@@ -14154,7 +14297,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
       const syndUrl = it.url ? it.type === "share" ? it.url : SITE13 + it.url : "";
       const authorDiscord = this._author?.entry?.links?.discord || "";
-      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS36) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
@@ -14711,8 +14854,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-087
       syndicationTemplatePool: () => request("GET", "/api/syndication-template-pool"),
       // SOW-087: { templates, types }
-      setSyndicationTemplate: ({ type, template, channel }) => request("POST", "/api/admin", { action: "syndication-template-set", type, template, channel }),
-      // SOW-087 (+ SOW-088 per-channel)
+      setSyndicationTemplate: ({ type, template, channel, stub }) => request("POST", "/api/admin", { action: "syndication-template-set", type, template, channel, stub }),
+      // SOW-087 (+ SOW-088 per-channel + stub)
       newsEngagementSettings: () => request("GET", "/api/news-engagement"),
       // SOW-111: { settings, tiers }
       setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request("POST", "/api/admin", { action: "news-engagement-set", enabled, openThreshold, tier, commentAutopost }),

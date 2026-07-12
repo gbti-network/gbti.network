@@ -41,10 +41,10 @@ export function normalizeDevtoTags(tags, categoryPath) {
  * `intro` / `footer` / `readMore` arrive PRE-RENDERED (the caller renders the templates; no tokens here).
  * Mode comes from the FILE's visibility (the authority, never the queue item's copy):
  *   public  -> 'full': the whole public body (members marker cut) between the byline and the CTA footer;
- *   members -> 'stub' (owner-directed): the byline + the shortDescription + a read-the-original link +
+ *   members -> 'stub' (owner-directed): the byline + the rendered devto-stub template +
  *              the CTA footer — the description and link only, NEVER any of the body.
  */
-export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', readMore = '' } = {}) {
+export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', stubBody = '' } = {}) {
   const text = String(rawFileText ?? '');
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
   if (!m) return { ok: false, reason: 'no frontmatter in the canonical file' };
@@ -57,8 +57,9 @@ export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', r
   const tail = String(footer || '').trim();
 
   if (String(fm.visibility ?? 'public') !== 'public') {
-    const description = String(fm.shortDescription || item?.blurb || '').trim();
-    const parts = [lead, description, String(readMore || '').trim(), tail].filter(Boolean);
+    // The middle of a stub is the pre-rendered devto-stub TEMPLATE (which normally carries the
+    // description + the read-more link); nothing from the body ever enters a stub.
+    const parts = [lead, String(stubBody || '').trim(), tail].filter(Boolean);
     if (!parts.length) return { ok: false, reason: 'nothing public to post for the members-only item' };
     return { ok: true, mode: 'stub', body: parts.join('\n\n'), tags };
   }

@@ -9,6 +9,7 @@
 // client (the SOW-070 upgrade race).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck } from '../workspace-core.mjs';
+import { DEFAULT_STUB_TEMPLATES, DEFAULT_CHANNEL_STUB_TEMPLATES } from '../../../membership/syndication-config-core.mjs'; // SOW-088 Proposal A: the built-in stub defaults
 import './gbti-syndication-tracker.mjs'; // SOW-088: the Publishing Activity datatable nests inside this workspace
 
 const AMBER = '#d8901a';
@@ -217,6 +218,8 @@ class GbtiChannelMapManager extends GbtiElement {
       this._lists = flags?.lists || {};
       this._templates = templates?.templates || {};
       this._channelTemplates = templates?.channelTemplates || {};
+      this._stubTemplates = templates?.stubTemplates || {};
+      this._channelTemplatesStub = templates?.channelTemplatesStub || {};
       this._engagement = engagement?.settings || null;
       this._tiers = engagement?.tiers || ['paid', 'paid-trial', 'signed-in'];
       this._pipeline = pipeline?.settings || null;
@@ -225,16 +228,29 @@ class GbtiChannelMapManager extends GbtiElement {
       // built-in defaults) as their VALUE (owner-directed: real values, not placeholders). The baseline
       // map makes dirty = differs-from-loaded, so an untouched inherited value is never saved as an
       // override; clearing a field saves '' (deletes the override, falls back).
+      // SOW-088 Proposal A: TWO working sets per channel, keyed `pub:` / `stub:`. Fields show the
+      // EFFECTIVE value for that visibility (the stub chain mirrors templateFor: channel stub -> shared
+      // stub -> the built-in stub defaults -> the public effective value).
       this._work = {};
       this._base = {};
-      const KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer'];
+      const KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer', 'devto-stub'];
+      const effPub = (ch, k) => this._channelTemplates[ch]?.[k] ?? this._templates?.[k] ?? '';
+      const effStub = (ch, k) => this._channelTemplatesStub[ch]?.[k]
+        ?? this._stubTemplates?.[k]
+        ?? DEFAULT_CHANNEL_STUB_TEMPLATES[ch]?.[k]
+        ?? DEFAULT_STUB_TEMPLATES[k]
+        ?? effPub(ch, k);
       for (const ch of TILE_CHANNELS.filter((c) => c.active).map((c) => c.id)) {
-        this._work[ch] = {}; this._base[ch] = {};
-        for (const k of KEYS) {
-          const eff = this._channelTemplates[ch]?.[k] ?? this._templates?.[k] ?? '';
-          this._work[ch][k] = eff; this._base[ch][k] = eff;
+        for (const vis of ['pub', 'stub']) {
+          const key = `${vis}:${ch}`;
+          this._work[key] = {}; this._base[key] = {};
+          for (const k of KEYS) {
+            const eff = vis === 'stub' ? effStub(ch, k) : effPub(ch, k);
+            this._work[key][k] = eff; this._base[key][k] = eff;
+          }
         }
       }
+      this._tmplVis = this._tmplVis || 'pub';
       this._tmplDirty = new Set();
       this._pipeDirty = false;
       this._engDirty = false;
@@ -310,9 +326,10 @@ class GbtiChannelMapManager extends GbtiElement {
         <span class="ct-i ${esc(c.cls)}"><svg viewBox="0 0 24 24"><use href="#${esc(c.icon)}"/></svg></span>
         <span class="ct-n">${esc(c.name)}</span><span class="ct-s">${esc(c.sub)}</span></button>`).join('');
     const chips = VARS.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join('');
-    const work = this._work?.[cur] || {};
-    // Placeholders show the EFFECTIVE fallback (the shared map value, then the built-in default text).
-    const custom = (k) => (this._channelTemplates?.[cur]?.[k] ? ' · custom' : '');
+    const vis = this._tmplVis || 'pub';
+    const work = this._work?.[`${vis}:${cur}`] || {};
+    // The `· custom` marker reflects a stored override IN THE ACTIVE visibility map.
+    const custom = (k) => ((vis === 'stub' ? this._channelTemplatesStub?.[cur]?.[k] : this._channelTemplates?.[cur]?.[k]) ? ' · custom' : '');
     const rows = TMPL_TYPES.map((t) => `<div class="tmpl">
         <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
         <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || '')}" /></div>`).join('')
@@ -325,6 +342,8 @@ class GbtiChannelMapManager extends GbtiElement {
       + (cur === 'devto'
         ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc('prepended to the crosspost' + custom('devto-intro'))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc(work['devto-intro'] || '')}</textarea></div>
+          ${vis === 'stub' ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc('the members-only teaser middle' + custom('devto-stub'))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-stub">${esc(work['devto-stub'] || '')}</textarea></div>` : ''}
           <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc('appended to every dev.to post' + custom('devto-footer'))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work['devto-footer'] || '')}</textarea></div>`
         : '');
@@ -335,6 +354,12 @@ class GbtiChannelMapManager extends GbtiElement {
       <div class="card-b">
         <div class="field" style="margin-bottom:16px"><label>Editing templates for</label>
           <div class="chtiles">${tiles}</div></div>
+        <div class="field" style="margin-bottom:14px"><label>Visibility set</label>
+          <div class="termtabs" style="margin-bottom:0">
+            <button class="termtab${vis === 'pub' ? ' on' : ''}" type="button" data-vis="pub">Public</button>
+            <button class="termtab${vis === 'stub' ? ' on' : ''}" type="button" data-vis="stub">Members stub</button>
+          </div>
+          <span class="hint">${vis === 'stub' ? 'These templates render for MEMBERS-ONLY items on this channel (the teaser framing).' : 'These templates render for public items on this channel.'}</span></div>
         <p class="varnote">Click a variable to insert it into the focused field. Write a token in CAPS to uppercase its value ({CONTENT-TYPE}).</p>
         <div class="varbar">${chips}</div>
         <div data-tmplfields>${rows}</div>
@@ -472,9 +497,17 @@ class GbtiChannelMapManager extends GbtiElement {
     // Templates: tile switching keeps per-channel working copies; fields arm the card.
     this.$$('[data-tile]').forEach((t) => t.addEventListener('click', () => {
       const id = t.dataset.tile;
-      if (!this._work[id] || id === this._curCh) return;
+      if (!this._work[`pub:${id}`] || id === this._curCh) return;
       this._captureTmpl();
       this._curCh = id;
+      this.render();
+      this.$('#sec-templates')?.scrollIntoView({ block: 'nearest' });
+      if (this._tmplDirty.size) this._markDirty('sec-templates');
+    }));
+    this.$$('[data-vis]').forEach((b) => b.addEventListener('click', () => {
+      if (b.dataset.vis === this._tmplVis) return;
+      this._captureTmpl();
+      this._tmplVis = b.dataset.vis;
       this.render();
       this.$('#sec-templates')?.scrollIntoView({ block: 'nearest' });
       if (this._tmplDirty.size) this._markDirty('sec-templates');
@@ -482,9 +515,10 @@ class GbtiChannelMapManager extends GbtiElement {
     this.$$('[data-tk]').forEach((f) => {
       f.addEventListener('focusin', () => { this._lastField = f; });
       f.addEventListener('input', () => {
-        this._work[this._curCh][f.dataset.tk] = f.value;
-        const key = `${this._curCh}:${f.dataset.tk}`;
-        if (f.value === (this._base[this._curCh]?.[f.dataset.tk] ?? '')) this._tmplDirty.delete(key);
+        const wk = `${this._tmplVis}:${this._curCh}`;
+        this._work[wk][f.dataset.tk] = f.value;
+        const key = `${wk}:${f.dataset.tk}`;
+        if (f.value === (this._base[wk]?.[f.dataset.tk] ?? '')) this._tmplDirty.delete(key);
         else this._tmplDirty.add(key);
         this._markDirty('sec-templates', this._tmplDirty.size > 0);
       });
@@ -541,7 +575,8 @@ class GbtiChannelMapManager extends GbtiElement {
   }
 
   _captureTmpl() {
-    this.$$('[data-tk]').forEach((f) => { this._work[this._curCh][f.dataset.tk] = f.value; });
+    const wk = `${this._tmplVis}:${this._curCh}`;
+    this.$$('[data-tk]').forEach((f) => { if (this._work[wk]) this._work[wk][f.dataset.tk] = f.value; });
   }
 
   async _savePipeline() {
@@ -566,11 +601,11 @@ class GbtiChannelMapManager extends GbtiElement {
     this._busy = true; this._msg = ''; this.render();
     let saved = 0; let firstPr = null; let err = null;
     for (const key of dirty) {
-      const [channel, type] = key.split(':');
+      const [vis, channel, type] = key.split(':');
       try {
-        const r = await this.client.setSyndicationTemplate({ type, template: (this._work[channel]?.[type] || '').trim(), channel });
+        const r = await this.client.setSyndicationTemplate({ type, template: (this._work[`${vis}:${channel}`]?.[type] || '').trim(), channel, stub: vis === 'stub' });
         if (r && !r.noop) { saved++; if (!firstPr && r.prNumber) firstPr = r.prNumber; }
-      } catch (e) { err = e?.message || `Could not save the ${channel} ${type} template.`; break; }
+      } catch (e) { err = e?.message || `Could not save the ${channel} ${type} ${vis === 'stub' ? 'stub ' : ''}template.`; break; }
     }
     this._msg = err || (saved
       ? `${saved} template${saved === 1 ? '' : 's'} saved${firstPr ? `; ${submitAck({ prNumber: firstPr, autoMerge: false })}` : ''}`

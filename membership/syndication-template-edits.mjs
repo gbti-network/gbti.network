@@ -79,7 +79,7 @@ export function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAu
 }
 
 /** SET (or clear, with an empty string) the Discord template for one content type. Idempotent. */
-export function setTemplate(doc, { type, template, channel } = {}, ctx = {}) {
+export function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === 'object' ? doc : {});
   if (!d.syndication || typeof d.syndication !== 'object' || Array.isArray(d.syndication)) d.syndication = {};
   const t = String(type || '').trim();
@@ -88,33 +88,37 @@ export function setTemplate(doc, { type, template, channel } = {}, ctx = {}) {
   if (value.length > MAX_TEMPLATE) throw new TemplateEditError(`a template is capped at ${MAX_TEMPLATE} characters`);
   // SOW-088: with a channel, the edit targets syndication.channel_templates[channel][type] (an empty value
   // deletes the override so the field falls back to the shared map, then the built-in default).
+  // SOW-088 Proposal A: stub=true targets the MEMBERS-stub maps with identical semantics.
+  const isStub = stub === true;
+  const chField = isStub ? 'channel_templates_stub' : 'channel_templates';
+  const sharedField = isStub ? 'stub_templates' : 'templates';
   const ch = String(channel || '').trim();
   if (ch) {
     if (!SYNDICATION_CHANNEL_NAMES.includes(ch)) throw new TemplateEditError(`unknown channel "${ch}"`);
-    const all = d.syndication.channel_templates && typeof d.syndication.channel_templates === 'object' && !Array.isArray(d.syndication.channel_templates)
-      ? d.syndication.channel_templates : {};
+    const all = d.syndication[chField] && typeof d.syndication[chField] === 'object' && !Array.isArray(d.syndication[chField])
+      ? d.syndication[chField] : {};
     const curCh = all[ch] && typeof all[ch] === 'object' && !Array.isArray(all[ch]) ? all[ch] : {};
     const existing = typeof curCh[t] === 'string' ? curCh[t].trim() : '';
-    if (existing === value) return { next: d, changed: false, audit: auditEntry(ctx, t, { channel: ch, template: value || null, noop: true }) };
+    if (existing === value) return { next: d, changed: false, audit: auditEntry(ctx, t, { channel: ch, stub: isStub || undefined, template: value || null, noop: true }) };
     const nextCh = { ...curCh };
     if (value) nextCh[t] = value;
     else delete nextCh[t];
     const nextAll = { ...all };
     if (Object.keys(nextCh).length) nextAll[ch] = nextCh;
     else delete nextAll[ch]; // no overrides left for this channel
-    if (Object.keys(nextAll).length) d.syndication.channel_templates = nextAll;
-    else delete d.syndication.channel_templates;
-    return { next: d, changed: true, audit: auditEntry(ctx, t, { channel: ch, template: value || null }) };
+    if (Object.keys(nextAll).length) d.syndication[chField] = nextAll;
+    else delete d.syndication[chField];
+    return { next: d, changed: true, audit: auditEntry(ctx, t, { channel: ch, stub: isStub || undefined, template: value || null }) };
   }
-  const cur = d.syndication.templates && typeof d.syndication.templates === 'object' && !Array.isArray(d.syndication.templates)
-    ? d.syndication.templates : {};
+  const cur = d.syndication[sharedField] && typeof d.syndication[sharedField] === 'object' && !Array.isArray(d.syndication[sharedField])
+    ? d.syndication[sharedField] : {};
   const existing = typeof cur[t] === 'string' ? cur[t].trim() : '';
-  if (existing === value) return { next: d, changed: false, audit: auditEntry(ctx, t, { template: value || null, noop: true }) };
+  if (existing === value) return { next: d, changed: false, audit: auditEntry(ctx, t, { stub: isStub || undefined, template: value || null, noop: true }) };
   const nextTemplates = { ...cur };
   if (value) nextTemplates[t] = value;
   else delete nextTemplates[t]; // fall back to the type default / the built-in message
-  d.syndication.templates = nextTemplates;
-  return { next: d, changed: true, audit: auditEntry(ctx, t, { template: value || null }) };
+  d.syndication[sharedField] = nextTemplates;
+  return { next: d, changed: true, audit: auditEntry(ctx, t, { stub: isStub || undefined, template: value || null }) };
 }
 
 // SOW-088: the syndication PIPELINE settings (master switch, approval mode, hold window, per-channel

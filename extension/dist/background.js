@@ -18855,12 +18855,12 @@ async function getSyndicateNow({ token, signupBase, fetch: fetch2 = globalThis.f
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `syndicate-now info failed (${res.status})`);
   return data;
 }
-async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoStubTemplate, devtoDraft, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase9(signupBase) + "/membership/syndicate-now", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft })
+    body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoStubTemplate, devtoDraft })
   });
   let data = null;
   try {
@@ -19718,10 +19718,10 @@ async function getSyndicateNowInfo(ctx) {
   const token = ctx.store?.get?.("githubToken");
   return getSyndicateNow({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
-async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft } = {}) {
+async function syndicateNow2(ctx, { destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoStubTemplate, devtoDraft } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
-  return syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoDraft, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  return syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoStubTemplate, devtoDraft, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getNews(ctx, { category, since, limit } = {}) {
   requireIdentity(ctx);
@@ -20702,7 +20702,7 @@ var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   comment_autopost: true
   // one comment posts immediately (deliberate engagement)
 });
-var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer"]);
+var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 var DEFAULT_REDDIT_BODY = "{short-description}";
 var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
@@ -20726,6 +20726,23 @@ var DEFAULT_TEMPLATES = Object.freeze({
   "devto-intro": DEFAULT_DEVTO_INTRO,
   "devto-footer": DEFAULT_DEVTO_FOOTER
 });
+var STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
+var DEFAULT_STUB_TEMPLATES = Object.freeze({
+  share: STUB_FORMAT,
+  post: STUB_FORMAT,
+  product: STUB_FORMAT,
+  prompt: STUB_FORMAT,
+  "reddit-body": "{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}",
+  "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url})** Membership unlocks it, and members earn from the work they publish."
+});
+var DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it now: {url}';
+var DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
+var REDDIT_TITLE_STUB = "{title} (a members-only {content-type} from the GBTI Network)";
+var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
+  discord: Object.freeze({ share: DISCORD_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
+  "discord-category": Object.freeze({ share: DISCORD_CAT_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
+  reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB })
+});
 var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,
   require_approval: true,
@@ -20738,6 +20755,10 @@ var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   // SOW-087: per-type Discord templates (missing/empty type = its default)
   channel_templates: Object.freeze({}),
   // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
+  stub_templates: Object.freeze({}),
+  // SOW-088 Proposal A: the shared MEMBERS-stub set (configured only)
+  channel_templates_stub: Object.freeze({}),
+  // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT,
   // SOW-111: engagement-triggered news auto-share
   channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false })
@@ -20804,6 +20825,15 @@ function normalizeChannelTemplates(raw) {
   }
   return Object.freeze(out);
 }
+function normalizeConfiguredTemplates(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const t of TEMPLATE_TYPES) {
+    const v = typeof src[t] === "string" ? src[t].trim() : "";
+    if (v) out[t] = v;
+  }
+  return Object.freeze(out);
+}
 function normalizeChannels(raw) {
   const out = {};
   const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
@@ -20821,6 +20851,8 @@ function syndicationConfigFromParsed(parsed) {
     classify: asClassifyMode(raw.classify, d.classify),
     templates: normalizeTemplates(raw.templates),
     channel_templates: normalizeChannelTemplates(raw.channel_templates),
+    stub_templates: normalizeConfiguredTemplates(raw.stub_templates),
+    channel_templates_stub: normalizeChannelTemplates(raw.channel_templates_stub),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
     channels: normalizeChannels(raw.channels)
   });
@@ -20891,38 +20923,41 @@ function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost 
   };
   return { next: d, changed: true, audit: audit2({ ...next }) };
 }
-function setTemplate(doc, { type, template, channel } = {}, ctx = {}) {
+function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === "object" ? doc : {});
   if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
   const t = String(type || "").trim();
   if (!TEMPLATE_TYPES.includes(t)) throw new TemplateEditError(`the type must be one of: ${TEMPLATE_TYPES.join(", ")}`);
   const value = String(template ?? "").trim();
   if (value.length > MAX_TEMPLATE) throw new TemplateEditError(`a template is capped at ${MAX_TEMPLATE} characters`);
+  const isStub = stub === true;
+  const chField = isStub ? "channel_templates_stub" : "channel_templates";
+  const sharedField = isStub ? "stub_templates" : "templates";
   const ch = String(channel || "").trim();
   if (ch) {
     if (!SYNDICATION_CHANNEL_NAMES.includes(ch)) throw new TemplateEditError(`unknown channel "${ch}"`);
-    const all = d.syndication.channel_templates && typeof d.syndication.channel_templates === "object" && !Array.isArray(d.syndication.channel_templates) ? d.syndication.channel_templates : {};
+    const all = d.syndication[chField] && typeof d.syndication[chField] === "object" && !Array.isArray(d.syndication[chField]) ? d.syndication[chField] : {};
     const curCh = all[ch] && typeof all[ch] === "object" && !Array.isArray(all[ch]) ? all[ch] : {};
     const existing2 = typeof curCh[t] === "string" ? curCh[t].trim() : "";
-    if (existing2 === value) return { next: d, changed: false, audit: auditEntry6(ctx, t, { channel: ch, template: value || null, noop: true }) };
+    if (existing2 === value) return { next: d, changed: false, audit: auditEntry6(ctx, t, { channel: ch, stub: isStub || void 0, template: value || null, noop: true }) };
     const nextCh = { ...curCh };
     if (value) nextCh[t] = value;
     else delete nextCh[t];
     const nextAll = { ...all };
     if (Object.keys(nextCh).length) nextAll[ch] = nextCh;
     else delete nextAll[ch];
-    if (Object.keys(nextAll).length) d.syndication.channel_templates = nextAll;
-    else delete d.syndication.channel_templates;
-    return { next: d, changed: true, audit: auditEntry6(ctx, t, { channel: ch, template: value || null }) };
+    if (Object.keys(nextAll).length) d.syndication[chField] = nextAll;
+    else delete d.syndication[chField];
+    return { next: d, changed: true, audit: auditEntry6(ctx, t, { channel: ch, stub: isStub || void 0, template: value || null }) };
   }
-  const cur = d.syndication.templates && typeof d.syndication.templates === "object" && !Array.isArray(d.syndication.templates) ? d.syndication.templates : {};
+  const cur = d.syndication[sharedField] && typeof d.syndication[sharedField] === "object" && !Array.isArray(d.syndication[sharedField]) ? d.syndication[sharedField] : {};
   const existing = typeof cur[t] === "string" ? cur[t].trim() : "";
-  if (existing === value) return { next: d, changed: false, audit: auditEntry6(ctx, t, { template: value || null, noop: true }) };
+  if (existing === value) return { next: d, changed: false, audit: auditEntry6(ctx, t, { stub: isStub || void 0, template: value || null, noop: true }) };
   const nextTemplates = { ...cur };
   if (value) nextTemplates[t] = value;
   else delete nextTemplates[t];
-  d.syndication.templates = nextTemplates;
-  return { next: d, changed: true, audit: auditEntry6(ctx, t, { template: value || null }) };
+  d.syndication[sharedField] = nextTemplates;
+  return { next: d, changed: true, audit: auditEntry6(ctx, t, { stub: isStub || void 0, template: value || null }) };
 }
 var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto"]);
 function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels } = {}, ctx = {}) {
@@ -21307,7 +21342,7 @@ async function getModerationFlagPool(ctx) {
 async function getSyndicationTemplatePool(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
   const cfg = syndicationConfigFromParsed(parsed);
-  return { templates: cfg.templates, channelTemplates: cfg.channel_templates, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
+  return { templates: cfg.templates, channelTemplates: cfg.channel_templates, stubTemplates: cfg.stub_templates, channelTemplatesStub: cfg.channel_templates_stub, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] };
 }
 async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopMsg, errType }) {
   requireRole(ctx, canManageRoles, "superadmin");
@@ -21452,10 +21487,10 @@ async function removeModerationFlagTerm(ctx, { list, term } = {}) {
     errType: ModerationFlagEditError
   });
 }
-async function setSyndicationTemplate(ctx, { type, template, channel } = {}) {
-  const slug = slugOf(`${channel ? `${channel}-` : ""}${String(type || "")}`);
+async function setSyndicationTemplate(ctx, { type, template, channel, stub } = {}) {
+  const slug = slugOf(`${channel ? `${channel}-` : ""}${stub ? "stub-" : ""}${String(type || "")}`);
   const label = channel ? `${channel} ${type}` : type;
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplate(parsed, { type, template, channel }, actionCtx(ctx)), {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setTemplate(parsed, { type, template, channel, stub }, actionCtx(ctx)), {
     branch: `gbti/syndication-template-${slug}`,
     message: `Set the ${label} syndication template`,
     title: `Set syndication template: ${label}`,

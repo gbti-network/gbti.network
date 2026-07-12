@@ -18,7 +18,7 @@ import { ROLE } from '../../membership/overrides-core.mjs';
 import { buildQueueItem, dedupeKey, canCancel, markCancelled } from '../../membership/syndication-queue.mjs';
 import { renderTemplate } from '../../membership/syndication-format.mjs';
 import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
-import { templateFor, TEMPLATE_TYPES, DEFAULT_TEMPLATES } from '../../membership/syndication-config-core.mjs';
+import { templateFor, TEMPLATE_TYPES, DEFAULT_TEMPLATES, DEFAULT_STUB_TEMPLATES, DEFAULT_CHANNEL_STUB_TEMPLATES } from '../../membership/syndication-config-core.mjs';
 import { buildAdapters } from '../../membership/syndication-adapters.mjs';
 import { postToChannel } from '../../clients/syndication/discord-channel.mjs';
 import { readSyndicationConfig, readContentChannels, putItem, getItem, removeFromPending, SYND_DEDUPE_KEY } from './syndication-store.mjs';
@@ -57,9 +57,14 @@ export async function handleSyndicateNowInfo(request, env, deps = {}) {
   // SOW-088: the per-channel overrides ride along so the popup resolves channel-aware defaults
   // (the reddit tile's own set when destination = reddit) with the same fallback chain.
   const channelTemplates = cfg.channel_templates ?? {};
+  // SOW-088 Proposal A: the STUB maps + the built-in stub defaults (per-channel keyed; '' = the shared
+  // fallbacks) so the popup resolves the members chain exactly like templateFor does.
+  const stubTemplates = cfg.stub_templates ?? {};
+  const channelTemplatesStub = cfg.channel_templates_stub ?? {};
+  const stubDefaults = { ...DEFAULT_CHANNEL_STUB_TEMPLATES, '': DEFAULT_STUB_TEMPLATES };
   const featured = {};
   for (const [type, key] of Object.entries(FEATURED_ENV)) featured[type] = env?.[key] || null;
-  return { status: 200, body: { ok: true, destinations, templates, channelTemplates, channelMap: channelMap?.channels ?? [], featured } };
+  return { status: 200, body: { ok: true, destinations, templates, channelTemplates, stubTemplates, channelTemplatesStub, stubDefaults, channelMap: channelMap?.channels ?? [], featured } };
 }
 
 /** POST: render the edited template server-side and post one item to one destination now. */
@@ -136,6 +141,7 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   // dev.to options: the byline template (rendered server-side like everything else) + the draft flag.
   const devtoIntroTemplate = String(payload?.devtoIntroTemplate || '').trim();
   const devtoFooterTemplate = String(payload?.devtoFooterTemplate || '').trim();
+  const devtoStubTemplate = String(payload?.devtoStubTemplate || '').trim();
   const devtoDraft = payload?.devtoDraft === true;
 
   // The queue-item builder is the validation boundary: type whitelist, slug required, and the no-body
@@ -193,6 +199,7 @@ export async function handleSyndicateNow(request, env, deps = {}) {
             // (channel override -> shared -> built-in).
             devtoIntro: renderTemplate(devtoIntroTemplate || templateFor(cfg, 'devto-intro', 'devto') || '', item, { limit: 800 }),
             devtoFooter: renderTemplate(devtoFooterTemplate || templateFor(cfg, 'devto-footer', 'devto') || '', item, { limit: 1200 }),
+            devtoStub: renderTemplate(devtoStubTemplate || templateFor(cfg, 'devto-stub', 'devto', { stub: true }) || '', item, { limit: 1200 }),
           }
         : {};
     try { result = await adapter.post({ ...item, textOverride: text, ...extras }); }

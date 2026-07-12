@@ -260,3 +260,13 @@ test('POST devto: the byline + draft flag reach the adapter; a skip is a 409', a
   assert.equal(sk.status, 409);
   assert.match(sk.body.message, /members-only/);
 });
+
+// SOW-088 Proposal A: the GET serves the stub maps + built-in stub defaults for the popup's chain.
+test('GET: the stub template maps ride along', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, channel_templates_stub: { discord: { post: 'S {title}' } } } }) });
+  const r = await handleSyndicateNowInfo(req(null, 'GET'), { ...ENV_DISCORD, SIGNUP_KV: kv }, { kv, authorize: superadmin });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.channelTemplatesStub, { discord: { post: 'S {title}' } });
+  assert.ok(r.body.stubDefaults.discord.post.includes('members-only'), 'built-in channel stub defaults ride along');
+  assert.ok(r.body.stubDefaults[''].post.includes('Members-only'), 'the shared fallback rides under the empty key');
+});

@@ -22,7 +22,8 @@ const USER_AGENT = 'gbti-network-syndication/0.1 (+https://gbti.network)';
 const SITE = 'https://gbti.network';
 // The built-in byline; the Worker normally pre-renders the devto-intro template into item.devtoIntro.
 const DEFAULT_INTRO = '**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).';
-const READ_MORE = '**[Read the full {content-type} on gbti.network]({url})**';
+// The stub middle is now the devto-stub TEMPLATE (admin-editable; the old hardcoded read-more line
+// lives on inside DEFAULT_STUB_TEMPLATES['devto-stub']).
 
 function absoluteImage(image) {
   const v = String(image || '').trim();
@@ -61,7 +62,10 @@ export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg
       const footer = (typeof item.devtoFooter === 'string' && item.devtoFooter.trim())
         ? item.devtoFooter
         : renderTemplate(templateFor(cfg, 'devto-footer', 'devto') || '', item, { limit: 1200 });
-      const prepared = prepareDevtoBody(raw, item, { intro, footer, readMore: renderTemplate(READ_MORE, item, { limit: 300 }) });
+      const stubBody = (typeof item.devtoStub === 'string' && item.devtoStub.trim())
+        ? item.devtoStub
+        : renderTemplate(templateFor(cfg, 'devto-stub', 'devto', { stub: true }) || '', item, { limit: 1200 });
+      const prepared = prepareDevtoBody(raw, item, { intro, footer, stubBody });
       if (!prepared.ok) return { ok: true, skipped: true, reason: `devto: ${prepared.reason}` };
 
       const title = ((typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : String(item.title || ''))

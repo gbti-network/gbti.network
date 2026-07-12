@@ -49,7 +49,7 @@ export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
 // back to the no-ping full name when none resolves), {member-discord-username} (the mention, else the public
 // profile Discord handle, else the GitHub username; SOW-088), {content-type} (article/product/prompt/link),
 // {fullName}, {author}, {shareurl}/{url}, {title}, {category}. A type with no template gets its default.
-export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer']);
+export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer', 'devto-stub']);
 // SOW-088 (owner-directed): ONE default Discord format for every type.
 const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 // SOW-088: the Reddit BODY template = the DESCRIPTION under the title on the link post (the embed card
@@ -73,6 +73,28 @@ export const DEFAULT_TEMPLATES = Object.freeze({
   'devto-footer': DEFAULT_DEVTO_FOOTER,
 });
 
+// SOW-088 Proposal A (owner-approved 2026-07-11): every channel gets a distinct template SET for
+// MEMBERS-ONLY (stub) items. Built-in defaults carry tasteful per-channel differentiation (the owner
+// rider): each channel's default stub reads native to that channel with no configuration. Keys with no
+// stub built-in (reddit-comment, devto-intro, devto-footer) inherit the public chain.
+const STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
+export const DEFAULT_STUB_TEMPLATES = Object.freeze({
+  share: STUB_FORMAT,
+  post: STUB_FORMAT,
+  product: STUB_FORMAT,
+  prompt: STUB_FORMAT,
+  'reddit-body': '{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}',
+  'devto-stub': '{short-description}\n\n**[Read the full {content-type} on gbti.network]({url})** Membership unlocks it, and members earn from the work they publish.',
+});
+const DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it now: {url}';
+const DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
+const REDDIT_TITLE_STUB = '{title} (a members-only {content-type} from the GBTI Network)';
+export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
+  discord: Object.freeze({ share: DISCORD_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
+  'discord-category': Object.freeze({ share: DISCORD_CAT_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
+  reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+});
+
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,
   require_approval: true, // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
@@ -81,6 +103,8 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   classify: 'ai', // SOW-087: the share category suggestion mode
   templates: DEFAULT_TEMPLATES, // SOW-087: per-type Discord templates (missing/empty type = its default)
   channel_templates: Object.freeze({}), // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
+  stub_templates: Object.freeze({}), // SOW-088 Proposal A: the shared MEMBERS-stub set (configured only)
+  channel_templates_stub: Object.freeze({}), // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT, // SOW-111: engagement-triggered news auto-share
   channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
 });
@@ -159,6 +183,18 @@ function normalizeChannelTemplates(raw) {
   return Object.freeze(out);
 }
 
+// The stub maps are CONFIGURED-ONLY (never fold defaults in; the 2026-07-10 mirror lesson): resolution
+// consults the defaults at read time so code-default changes track deploys.
+function normalizeConfiguredTemplates(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const t of TEMPLATE_TYPES) {
+    const v = typeof src[t] === 'string' ? src[t].trim() : '';
+    if (v) out[t] = v;
+  }
+  return Object.freeze(out);
+}
+
 function normalizeChannels(raw) {
   const out = {};
   const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -181,6 +217,8 @@ export function syndicationConfigFromParsed(parsed) {
     classify: asClassifyMode(raw.classify, d.classify),
     templates: normalizeTemplates(raw.templates),
     channel_templates: normalizeChannelTemplates(raw.channel_templates),
+    stub_templates: normalizeConfiguredTemplates(raw.stub_templates),
+    channel_templates_stub: normalizeChannelTemplates(raw.channel_templates_stub),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
     channels: normalizeChannels(raw.channels),
   });
@@ -218,8 +256,20 @@ export function newsEngagement(cfg) {
 }
 
 /** SOW-087 (+ SOW-088): the configured template for a source type, or null (= the built-in message).
- *  With a channel, the chain is channel override -> the shared map -> the built-in default. */
-export function templateFor(cfg, source, channel) {
+ *  With a channel, the chain is channel override -> the shared map -> the built-in default. With
+ *  { stub: true } (a members-only item) the STUB chain runs first: channel stub override -> shared stub
+ *  -> the per-channel built-in stub -> the shared built-in stub -> then the full public chain. */
+export function templateFor(cfg, source, channel, { stub = false } = {}) {
+  if (stub) {
+    const cs = channel ? cfg?.channel_templates_stub?.[channel]?.[source] : null;
+    if (typeof cs === 'string' && cs.trim()) return cs.trim();
+    const ss = cfg?.stub_templates?.[source];
+    if (typeof ss === 'string' && ss.trim()) return ss.trim();
+    const dc = channel ? DEFAULT_CHANNEL_STUB_TEMPLATES[channel]?.[source] : null;
+    if (dc) return dc;
+    if (DEFAULT_STUB_TEMPLATES[source]) return DEFAULT_STUB_TEMPLATES[source];
+    // no stub-specific template anywhere: fall through to the public chain
+  }
   const o = channel ? cfg?.channel_templates?.[channel]?.[source] : null;
   if (typeof o === 'string' && o.trim()) return o.trim();
   const t = cfg?.templates?.[source];
@@ -250,5 +300,5 @@ export function toSyndicationMirror(cfg) {
     const v = typeof rawTemplates[t] === 'string' ? rawTemplates[t].trim() : '';
     if (v) configured[t] = v;
   }
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels } };
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels } };
 }

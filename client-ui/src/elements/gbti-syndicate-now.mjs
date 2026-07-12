@@ -80,7 +80,7 @@ class GbtiSyndicateNow extends GbtiElement {
       categoryPath: d.gbtiCategoryPath ? d.gbtiCategoryPath.split(',').filter(Boolean) : undefined, // SOW-088: leaf-first routing
       authorDiscord: d.gbtiDiscord || undefined, // SOW-088: the public profile Discord handle
       authorNote: this._authorNote || undefined, // SOW-088 {author-note}: the from-the-author intro comment
-      visibility: 'public',
+      visibility: d.gbtiVisibility === 'members' ? 'members' : 'public', // SOW-088 Proposal A: drives the STUB template set
     };
   }
 
@@ -168,15 +168,32 @@ class GbtiSyndicateNow extends GbtiElement {
     // SOW-088: the destination's own channel-template override wins, then the shared per-type map, then
     // the per-destination built-in ({title} reads natural as a Reddit post title).
     const src = this._item().source;
-    const override = this._info?.channelTemplates?.[this._dest]?.[src];
-    const destDefault = override || (this._dest === 'reddit' || this._dest === 'devto' ? '{title}' : (this._info?.templates?.[src] || '{title} {url}'));
+    const stored = this._stored(this._dest, src);
+    const destDefault = stored || (this._dest === 'reddit' || this._dest === 'devto' ? '{title}' : '{title} {url}');
     return this._template ?? destDefault;
   }
 
-  /** The ADMIN-stored template for a reddit key (channel override -> shared map), guarded so a template
-   *  referencing {author-note} never pre-fills for a no-intro item (empty quotes read broken). */
+  _isStub() { return this._item().visibility === 'members'; }
+
+  /** The ADMIN-stored template for a channel key, stub-aware: for a members item the STUB chain runs
+   *  first (channel stub -> shared stub -> the built-in stub maps served by the GET), then the public
+   *  chain (mirroring templateFor in the core). */
+  _stored(channel, key) {
+    if (this._isStub()) {
+      const stub = this._info?.channelTemplatesStub?.[channel]?.[key]
+        || this._info?.stubTemplates?.[key]
+        || this._info?.stubDefaults?.[channel]?.[key]
+        || this._info?.stubDefaults?.['']?.[key]
+        || '';
+      if (stub) return stub;
+    }
+    return this._info?.channelTemplates?.[channel]?.[key] || this._info?.templates?.[key] || '';
+  }
+
+  /** The reddit-key resolver, guarded so a template referencing {author-note} never pre-fills for a
+   *  no-intro item (empty quotes read broken). */
   _redditStored(key) {
-    const tpl = this._info?.channelTemplates?.reddit?.[key] || this._info?.templates?.[key] || '';
+    const tpl = this._stored('reddit', key);
     return tpl && (this._authorNote || !/\{author-note(-italic)?\}/.test(tpl)) ? tpl : '';
   }
 
@@ -197,16 +214,22 @@ class GbtiSyndicateNow extends GbtiElement {
     return this._redditStored('reddit-comment');
   }
 
-  /** The dev.to BYLINE prepended to the full-body crosspost: an edit wins, else the stored devto-intro. */
+  /** The dev.to BYLINE prepended to the crosspost: an edit wins, else the stored devto-intro. */
   _effectiveDevtoIntro() {
     if (this._devtoIntroTemplate != null) return this._devtoIntroTemplate;
-    return this._info?.channelTemplates?.devto?.['devto-intro'] || this._info?.templates?.['devto-intro'] || '';
+    return this._stored('devto', 'devto-intro');
+  }
+
+  /** The STUB middle for a members item on dev.to: an edit wins, else the stored devto-stub chain. */
+  _effectiveDevtoStub() {
+    if (this._devtoStubTemplate != null) return this._devtoStubTemplate;
+    return this._stored('devto', 'devto-stub');
   }
 
   /** The CTA FOOTER appended to every dev.to post (full and stub): an edit wins, else the stored devto-footer. */
   _effectiveDevtoFooter() {
     if (this._devtoFooterTemplate != null) return this._devtoFooterTemplate;
-    return this._info?.channelTemplates?.devto?.['devto-footer'] || this._info?.templates?.['devto-footer'] || '';
+    return this._stored('devto', 'devto-footer');
   }
 
   _composeHtml() {
@@ -270,7 +293,18 @@ class GbtiSyndicateNow extends GbtiElement {
       const introPreview = introTemplate ? renderTemplate(introTemplate, item, { limit: 800 }) : '';
       const footerTemplate = this._effectiveDevtoFooter();
       const footerPreview = footerTemplate ? renderTemplate(footerTemplate, item, { limit: 1200 }) : '';
-      devtoRows = `<label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
+      const stubRows = this._isStub()
+        ? (() => {
+            const stubTemplate = this._effectiveDevtoStub();
+            const stubPreview = stubTemplate ? renderTemplate(stubTemplate, item, { limit: 1200 }) : '';
+            return `<label>Stub template <span style="font-weight:400">(the members-only teaser body; markdown; same tokens)</span></label>
+        <textarea data-devto-stub>${esc(stubTemplate)}</textarea>
+        <label>Stub preview</label>
+        <div class="preview" data-devto-stub-preview>${esc(stubPreview)}</div>`;
+          })()
+        : '';
+      devtoRows = `${this._isStub() ? '<p class="warn">Members-only item: the STUB templates apply (description + link, never the body).</p>' : ''}
+        <label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
         <textarea data-devto-intro>${esc(introTemplate)}</textarea>
         <label>Byline preview</label>
         <div class="preview" data-devto-intro-preview>${esc(introPreview)}</div>
@@ -278,6 +312,7 @@ class GbtiSyndicateNow extends GbtiElement {
         <textarea data-devto-footer>${esc(footerTemplate)}</textarea>
         <label>CTA preview</label>
         <div class="preview" data-devto-footer-preview>${esc(footerPreview)}</div>
+        ${stubRows}
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-devto-draft style="width:auto"${this._devtoDraft ? ' checked' : ''} /> Create as a dev.to DRAFT first (publish from the dev.to dashboard)</label>`;
     }
     const liNote = dest === 'linkedin'
@@ -305,7 +340,10 @@ class GbtiSyndicateNow extends GbtiElement {
     const result = this._result
       ? `<p class="okmsg">${this._result.draft ? `Draft created. <a href="https://dev.to/dashboard" target="_blank" rel="noopener">Review it on the dev.to dashboard</a> (a draft's direct URL 404s until it publishes).` : `Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}`}${fwdState}${cmtState}</p>`
       : '';
+    const stubNote = this._isStub() && dest !== 'devto'
+      ? `<p class="warn">Members-only item: the STUB template set applies on this channel.</p>` : '';
     return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
+      ${stubNote}
       <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
       <textarea data-template>${esc(template)}</textarea>
       <label>Preview</label>
@@ -353,6 +391,12 @@ class GbtiSyndicateNow extends GbtiElement {
       const pv = this.$('[data-devto-footer-preview]');
       if (pv) pv.textContent = df.value ? renderTemplate(df.value, this._item(), { limit: 1200 }) : '';
     });
+    const ds = this.$('[data-devto-stub]');
+    if (ds) ds.addEventListener('input', () => {
+      this._devtoStubTemplate = ds.value;
+      const pv = this.$('[data-devto-stub-preview]');
+      if (pv) pv.textContent = ds.value ? renderTemplate(ds.value, this._item(), { limit: 1200 }) : '';
+    });
     const dd = this.$('[data-devto-draft]');
     if (dd) dd.addEventListener('change', () => { this._devtoDraft = dd.checked; });
     const rc = this.$('[data-reddit-comment]');
@@ -365,7 +409,7 @@ class GbtiSyndicateNow extends GbtiElement {
   }
 
   async _pickDest(dest) {
-    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._devtoIntroTemplate = null; this._devtoFooterTemplate = null; this._devtoDraft = false; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
+    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._devtoIntroTemplate = null; this._devtoFooterTemplate = null; this._devtoStubTemplate = null; this._devtoDraft = false; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
     this._dest = dest;
     this._step = 'compose';
     this._err = null;
@@ -415,6 +459,8 @@ class GbtiSyndicateNow extends GbtiElement {
         if (intro) payload.devtoIntroTemplate = intro;
         const footer = this._effectiveDevtoFooter().trim();
         if (footer) payload.devtoFooterTemplate = footer;
+        const stubT = this._isStub() ? this._effectiveDevtoStub().trim() : '';
+        if (stubT) payload.devtoStubTemplate = stubT;
         if (this._devtoDraft) payload.devtoDraft = true;
       }
       if (this._dest === 'discord') {
