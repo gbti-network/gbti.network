@@ -294,3 +294,26 @@ test('discord legs render the stub template for members items', async () => {
   await createDiscordAdapter({ env, client, cfg }).post({ ...it, membersOnly: false, visibility: 'public' });
   assert.match(sent[2], /^New prompt published by/);
 });
+
+// Adversarial follow-up: the reddit AUTO rail renders the channel templates (stub-aware), not
+// buildChannelText, when cfg is provided.
+test('reddit auto rail renders templates: public {title} default and the members stub', async () => {
+  const { createRedditAdapter } = await import('../clients/syndication/reddit.mjs');
+  const { syndicationConfigFromParsed } = await import('../membership/syndication-config-core.mjs');
+  const cfg = syndicationConfigFromParsed({});
+  const calls = [];
+  const fetchImpl = async (url, opts) => {
+    calls.push({ url, opts });
+    if (url.includes('/api/v1/access_token')) return { ok: true, status: 200, json: async () => ({ access_token: 'a' }) };
+    return { ok: true, status: 200, json: async () => ({ json: { errors: [], data: { id: 'x', url: 'u' } } }) };
+  };
+  const env = { REDDIT_CLIENT_ID: 'i', REDDIT_CLIENT_SECRET: 's', REDDIT_REFRESH_TOKEN: 'r', REDDIT_SUBREDDIT: 'GBTI_network' };
+  const rd = createRedditAdapter({ env, fetchImpl, cfg });
+  await rd.post({ source: 'prompt', title: 'Public Skill', author: 'a', url: 'https://x/y', visibility: 'public' });
+  let p = new URLSearchParams(calls[1].opts.body);
+  assert.equal(p.get('title'), 'Public Skill', 'public auto title = the {title} channel default');
+  await rd.post({ source: 'prompt', title: 'Secret Skill', author: 'a', url: 'https://x/y', visibility: 'members', membersOnly: true, blurb: 'Teaser.' });
+  p = new URLSearchParams(calls[3].opts.body);
+  assert.match(p.get('title'), /Secret Skill.*members-only prompt from the GBTI Network/, 'members auto title = the reddit title stub');
+  assert.match(p.get('text') || '', /members library/, 'members auto body = the reddit-body stub');
+});

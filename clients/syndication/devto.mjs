@@ -56,12 +56,16 @@ export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg
 
       // The byline + the CTA footer: the manual rail pre-renders them (item.devtoIntro/devtoFooter);
       // the AUTO rail falls back to the admin-stored channel templates via cfg, then the built-ins.
+      // Stub-aware template selection on the AUTO rail (adversarial finding: stub-saved intro/footer
+      // overrides were dead here). The queue item's visibility keys the TEMPLATE choice only; the
+      // canonical FILE stays the authority for full-vs-stub mode.
+      const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
       const intro = (typeof item.devtoIntro === 'string' && item.devtoIntro.trim())
         ? item.devtoIntro
-        : renderTemplate(templateFor(cfg, 'devto-intro', 'devto') || DEFAULT_INTRO, item, { limit: 800 });
+        : renderTemplate(templateFor(cfg, 'devto-intro', 'devto', { stub: stubish }) || DEFAULT_INTRO, item, { limit: 800 });
       const footer = (typeof item.devtoFooter === 'string' && item.devtoFooter.trim())
         ? item.devtoFooter
-        : renderTemplate(templateFor(cfg, 'devto-footer', 'devto') || '', item, { limit: 1200 });
+        : renderTemplate(templateFor(cfg, 'devto-footer', 'devto', { stub: stubish }) || '', item, { limit: 1200 });
       const stubBody = (typeof item.devtoStub === 'string' && item.devtoStub.trim())
         ? item.devtoStub
         : renderTemplate(templateFor(cfg, 'devto-stub', 'devto', { stub: true }) || '', item, { limit: 1200 });

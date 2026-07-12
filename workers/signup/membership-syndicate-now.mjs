@@ -197,8 +197,8 @@ export async function handleSyndicateNow(request, env, deps = {}) {
             devtoDraft,
             // The byline + the CTA footer: the popup's edits, else the stored templates
             // (channel override -> shared -> built-in).
-            devtoIntro: renderTemplate(devtoIntroTemplate || templateFor(cfg, 'devto-intro', 'devto') || '', item, { limit: 800 }),
-            devtoFooter: renderTemplate(devtoFooterTemplate || templateFor(cfg, 'devto-footer', 'devto') || '', item, { limit: 1200 }),
+            devtoIntro: renderTemplate(devtoIntroTemplate || templateFor(cfg, 'devto-intro', 'devto', { stub: item.membersOnly === true }) || '', item, { limit: 800 }),
+            devtoFooter: renderTemplate(devtoFooterTemplate || templateFor(cfg, 'devto-footer', 'devto', { stub: item.membersOnly === true }) || '', item, { limit: 1200 }),
             devtoStub: renderTemplate(devtoStubTemplate || templateFor(cfg, 'devto-stub', 'devto', { stub: true }) || '', item, { limit: 1200 }),
           }
         : {};

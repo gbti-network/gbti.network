@@ -10424,15 +10424,17 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     product: STUB_FORMAT,
     prompt: STUB_FORMAT,
     "reddit-body": "{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}",
-    "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url})** Membership unlocks it, and members earn from the work they publish."
+    "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish."
   });
-  var DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it now: {url}';
+  var DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it on gbti.network. {url}';
   var DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
   var REDDIT_TITLE_STUB = "{title} (a members-only {content-type} from the GBTI Network)";
   var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
     discord: Object.freeze({ share: DISCORD_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
     "discord-category": Object.freeze({ share: DISCORD_CAT_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
-    reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB })
+    reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+    // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
+    devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB })
   });
   var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
     enabled: false,
@@ -14328,9 +14330,13 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
      *  fell back to the stored per-type template, so a Reddit send ignored what the preview showed). */
     _effectiveTemplate() {
       const src = this._item().source;
+      if (this._dest === "reddit" || this._dest === "devto") {
+        const stub = this._isStub() ? this._info?.channelTemplatesStub?.[this._dest]?.[src] || this._info?.stubDefaults?.[this._dest]?.[src] || "" : "";
+        const pub = this._info?.channelTemplates?.[this._dest]?.[src] || "";
+        return this._template ?? (stub || pub || "{title}");
+      }
       const stored = this._stored(this._dest, src);
-      const destDefault = stored || (this._dest === "reddit" || this._dest === "devto" ? "{title}" : "{title} {url}");
-      return this._template ?? destDefault;
+      return this._template ?? (stored || "{title} {url}");
     }
     _isStub() {
       return this._item().visibility === "members";
@@ -14995,7 +15001,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
       const syndUrl = it.url ? it.type === "share" ? it.url : SITE14 + it.url : "";
       const authorDiscord = this._author?.entry?.links?.discord || "";
-      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(it.visibility || "members"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS36) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);

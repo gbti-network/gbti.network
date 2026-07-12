@@ -84,15 +84,17 @@ export const DEFAULT_STUB_TEMPLATES = Object.freeze({
   product: STUB_FORMAT,
   prompt: STUB_FORMAT,
   'reddit-body': '{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}',
-  'devto-stub': '{short-description}\n\n**[Read the full {content-type} on gbti.network]({url})** Membership unlocks it, and members earn from the work they publish.',
+  'devto-stub': '{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish.',
 });
-const DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it now: {url}';
+const DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it on gbti.network. {url}';
 const DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
 const REDDIT_TITLE_STUB = '{title} (a members-only {content-type} from the GBTI Network)';
 export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   discord: Object.freeze({ share: DISCORD_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
   'discord-category': Object.freeze({ share: DISCORD_CAT_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
   reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+  // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
+  devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
 });
 
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
@@ -259,19 +261,24 @@ export function newsEngagement(cfg) {
  *  With a channel, the chain is channel override -> the shared map -> the built-in default. With
  *  { stub: true } (a members-only item) the STUB chain runs first: channel stub override -> shared stub
  *  -> the per-channel built-in stub -> the shared built-in stub -> then the full public chain. */
-export function templateFor(cfg, source, channel, { stub = false } = {}) {
+export function templateFor(cfg, source, channel, { stub = false, channelOnly = false } = {}) {
   if (stub) {
     const cs = channel ? cfg?.channel_templates_stub?.[channel]?.[source] : null;
     if (typeof cs === 'string' && cs.trim()) return cs.trim();
-    const ss = cfg?.stub_templates?.[source];
-    if (typeof ss === 'string' && ss.trim()) return ss.trim();
+    if (!channelOnly) {
+      const ss = cfg?.stub_templates?.[source];
+      if (typeof ss === 'string' && ss.trim()) return ss.trim();
+    }
     const dc = channel ? DEFAULT_CHANNEL_STUB_TEMPLATES[channel]?.[source] : null;
     if (dc) return dc;
-    if (DEFAULT_STUB_TEMPLATES[source]) return DEFAULT_STUB_TEMPLATES[source];
+    if (!channelOnly && DEFAULT_STUB_TEMPLATES[source]) return DEFAULT_STUB_TEMPLATES[source];
     // no stub-specific template anywhere: fall through to the public chain
   }
   const o = channel ? cfg?.channel_templates?.[channel]?.[source] : null;
   if (typeof o === 'string' && o.trim()) return o.trim();
+  // channelOnly (SOW-088: reddit/devto TITLES): the shared per-type map is Discord-voiced message copy
+  // and must never become a post title; the caller supplies its own fallback (usually {title}).
+  if (channelOnly) return null;
   const t = cfg?.templates?.[source];
   return typeof t === 'string' && t.trim() ? t.trim() : (DEFAULT_TEMPLATES[source] ?? null);
 }

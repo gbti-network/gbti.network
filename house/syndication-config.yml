@@ -20,6 +20,10 @@ syndication:
                             # mention, falling back to the no-ping full name), {fullName}, {author}, {shareurl},
                             # {url}, {title}, {category}. A missing/blank type keeps its default or the built-in text.
     share: "Shared by {memberdiscord} {shareurl}"
+    # stub_templates / channel_templates_stub (SOW-088 Proposal A): the MEMBERS-STUB template sets.
+    # A members-only item renders these instead of the public templates (channel stub -> shared stub ->
+    # the built-in stub defaults -> the public chain). Edit them from the admin Templates card's
+    # Public / Members stub toggle; both maps store CONFIGURED values only.
     # reddit-body: the Reddit BODY template (a link post's first comment / a text post's content); extra
     # variables {content-type}, {author-note} (the from-the-author intro), and {member-url} (the public
     # profile). Blank = the built-in default: the author-note framing plus the join-the-network and

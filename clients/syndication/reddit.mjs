@@ -12,7 +12,8 @@
 // Secrets: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_REFRESH_TOKEN, REDDIT_SUBREDDIT. Mint/renew the
 // refresh token with scripts/reddit-auth.mjs (the app's redirect URI must be localhost:8976/callback).
 
-import { buildChannelText } from '../../membership/syndication-format.mjs';
+import { buildChannelText, renderTemplate } from '../../membership/syndication-format.mjs';
+import { templateFor } from '../../membership/syndication-config-core.mjs';
 import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
 
 const USER_AGENT = 'cloudflare-worker:network.gbti.syndication:v0.1 (by /u/gbti_network)';
@@ -29,14 +30,17 @@ async function refreshAccessToken(env, fetchImpl) {
   return body.access_token;
 }
 
-export function createRedditAdapter({ env = {}, fetchImpl = globalThis.fetch } = {}) {
+export function createRedditAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg = null } = {}) {
   return {
     name: 'reddit',
     enabled() { return secretsPresent(env, 'reddit'); },
     async post(item) {
       // SOW-088 manual syndicate: the rendered template IS the Reddit post title (an already-sanitized
-      // override wins over the built text). Reddit titles cap at 300.
-      const title = ((typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : buildChannelText(item, { limit: channelLimit('reddit'), includeUrl: false })).slice(0, channelLimit('reddit'));
+      // override wins). The AUTO rail renders the reddit channel templates (stub-aware for members items;
+      // adversarial finding: it previously ignored the template system entirely via buildChannelText).
+      const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
+      const autoTitle = cfg ? renderTemplate(templateFor(cfg, item.source, 'reddit', { stub: stubish, channelOnly: true }) || '{title}', item, { limit: channelLimit('reddit') }) : buildChannelText(item, { limit: channelLimit('reddit'), includeUrl: false });
+      const title = ((typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : autoTitle).slice(0, channelLimit('reddit'));
       let token;
       try { token = await refreshAccessToken(env, fetchImpl); }
       catch (err) { return { ok: false, error: err.message }; }
@@ -46,9 +50,11 @@ export function createRedditAdapter({ env = {}, fetchImpl = globalThis.fetch } =
       // body text on kind=link (field-proven 2026-07-10 by post 1u35tf7, selftext stored on the link post;
       // the earlier body-less test was a stale-extension-background miss, not an API limit), so the body
       // rides natively on the post instead of a first comment.
+      const autoBody = (!item.bodyText && cfg) ? renderTemplate(templateFor(cfg, 'reddit-body', 'reddit', { stub: stubish }) || '', item, { limit: 9500 }) : '';
+      const bodyText = String(item.bodyText || autoBody || '');
       const self = item.redditKind === 'self' || !item.url; // no url can never be a link post
-      if (self) { params.kind = 'self'; params.text = String(item.bodyText || item.url || ''); }
-      else { params.kind = 'link'; params.url = String(item.url); if (item.bodyText) params.text = String(item.bodyText); }
+      if (self) { params.kind = 'self'; params.text = bodyText || String(item.url || ''); }
+      else { params.kind = 'link'; params.url = String(item.url); if (bodyText) params.text = bodyText; }
       const res = await fetchImpl('https://oauth.reddit.com/api/submit', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': USER_AGENT },

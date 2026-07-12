@@ -168,9 +168,18 @@ class GbtiSyndicateNow extends GbtiElement {
     // SOW-088: the destination's own channel-template override wins, then the shared per-type map, then
     // the per-destination built-in ({title} reads natural as a Reddit post title).
     const src = this._item().source;
+    // Reddit/dev.to titles resolve CHANNEL-scoped only (the shared per-type map is Discord-voiced and
+    // must never become a post title; adversarial finding): channel stub override -> the channel's
+    // built-in stub -> channel public override -> {title}.
+    if (this._dest === 'reddit' || this._dest === 'devto') {
+      const stub = this._isStub()
+        ? (this._info?.channelTemplatesStub?.[this._dest]?.[src] || this._info?.stubDefaults?.[this._dest]?.[src] || '')
+        : '';
+      const pub = this._info?.channelTemplates?.[this._dest]?.[src] || '';
+      return this._template ?? (stub || pub || '{title}');
+    }
     const stored = this._stored(this._dest, src);
-    const destDefault = stored || (this._dest === 'reddit' || this._dest === 'devto' ? '{title}' : '{title} {url}');
-    return this._template ?? destDefault;
+    return this._template ?? (stored || '{title} {url}');
   }
 
   _isStub() { return this._item().visibility === 'members'; }

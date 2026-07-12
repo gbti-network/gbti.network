@@ -270,3 +270,16 @@ test('GET: the stub template maps ride along', async () => {
   assert.ok(r.body.stubDefaults.discord.post.includes('members-only'), 'built-in channel stub defaults ride along');
   assert.ok(r.body.stubDefaults[''].post.includes('Members-only'), 'the shared fallback rides under the empty key');
 });
+
+// Adversarial follow-up: devtoStubTemplate forwards into the adapter extras rendered.
+test('POST devto: devtoStubTemplate renders into item.devtoStub', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
+  const envDevto = { DEVTO_API_KEY: 'k', DEVTO_ORG_ID: '10466', SIGNUP_KV: kv };
+  let seen = null;
+  const adapters = { devto: { name: 'devto', enabled: () => true, post: async (it) => { seen = it; return { ok: true, id: '7', url: 'https://dev.to/x' }; } } };
+  const r = await handleSyndicateNow(
+    req({ destination: 'devto', item: ITEM, template: '{title}', devtoStubTemplate: 'Teaser: {title}' }),
+    envDevto, { kv, authorize: superadmin, adapters });
+  assert.equal(r.status, 200);
+  assert.equal(seen.devtoStub, 'Teaser: CI Skill');
+});
