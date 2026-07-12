@@ -115,3 +115,15 @@ test('integration: a single revisited item is BOTH first and last (owner gets 40
   assert.equal(firstTouch.owner, 'alice');
   assert.equal(lastTouch.owner, 'alice'); // same owner both -> 40% downstream
 });
+
+// SOW-059 (owner decision 2026-07-11): a member PROFILE page is an eligible entry-point touch, first-class
+// in the touch store like post/product/prompt.
+test('a profile touch records and resolves like any content touch', () => {
+  let rec = addTouch(emptyTouches(), { owner: '2002207', type: 'profile', slug: 'atwellpub', at: 1000 }, { now: () => 1000 });
+  rec = addTouch(rec, { owner: '999', type: 'post', slug: 'later-article', at: 2000 }, { now: () => 2000 });
+  assert.equal(rec.items.length, 2);
+  const profile = rec.items.find((it) => it.type === 'profile');
+  assert.equal(profile.owner, '2002207');
+  assert.equal(profile.firstAt, 1000, 'the profile landing holds the earliest touch');
+  assert.throws(() => addTouch(emptyTouches(), { owner: 'x', type: 'wiki', slug: 's', at: 1 }, { now: () => 1 }), /touch/i);
+});

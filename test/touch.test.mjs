@@ -43,3 +43,9 @@ test('validTouchSignal: needs a known type + owner + slug', () => {
   assert.equal(validTouchSignal({}), false);
   assert.equal(validTouchSignal(), false);
 });
+
+// SOW-059 (owner decision 2026-07-11): the client-side whitelist copy accepts the profile entry-point
+// touch (a regression here silently drops every profile landing before it reaches the Worker).
+test('validTouchSignal accepts the profile type', () => {
+  assert.equal(validTouchSignal({ owner: '2002207', type: 'profile', slug: 'atwellpub' }), true);
+});

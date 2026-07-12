@@ -9,7 +9,7 @@ export const TOUCH_CAPTURE_ENABLED = true; // SOW-059 ACTIVATED: client capture 
 export const TOUCH_ENDPOINT = 'https://signup.gbti.network/touch';
 export const TOUCH_SID_COOKIE = 'gbti_sid'; // a rotating, opaque, first-party session id (NOT a stable identifier)
 export const TOUCH_SID_DAYS = 90; // the attribution window
-export const TOUCH_TYPES = new Set(['post', 'product', 'prompt']);
+export const TOUCH_TYPES = new Set(['post', 'product', 'prompt', 'profile']); // profile = the member-page entry point (owner decision 2026-07-11)
 
 /** Mint a rotating, opaque session id that matches the Worker's /^[A-Za-z0-9_-]{16,128}$/ rule: 24 random bytes
  *  base64url-encoded -> 32 url-safe chars. Pure; the caller supplies the randomness (crypto.getRandomValues). */

@@ -46,7 +46,10 @@ export async function handleTouch(request, env, { kv = env?.SIGNUP_KV, now = Dat
   // A CONTENT touch is recorded ONLY with explicit consent (the pre-signup content-attribution GDPR surface).
   if (payload.touch != null) {
     if (payload.consent !== true) return { status: 200, body: { ok: true, recorded: false, reason: 'no_consent' } };
-    try { rec = addTouch(rec, payload.touch, { now }); changed = true; }
+    // Adversarial finding (2026-07-11): a client-supplied `at` could plant a window-floor first touch
+    // that beats every genuine one. The anonymous route SERVER-stamps time; only owner/type/slug are read.
+    const { owner, type, slug } = payload.touch ?? {};
+    try { rec = addTouch(rec, { owner, type, slug }, { now }); changed = true; }
     catch (err) { if (err instanceof TouchError) return { status: 400, body: { error: 'invalid', message: err.message } }; throw err; }
   }
 

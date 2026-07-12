@@ -1,5 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
+import TouchSignal from '../../components/TouchSignal.astro';
+import { refCodeForAuthor } from '../../lib/referral';
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Container from '../../components/Container.astro';
 import ProfileHeader from '../../components/members/ProfileHeader.astro';
@@ -25,6 +27,10 @@ const isOrg = d.username === 'gbti';
 const total = posts.length + products.length + prompts.length;
 ---
 <BaseLayout title={`${d.displayName}, Member`} description={`${d.displayName} on the GBTI Network.`}>
+  {/* SOW-059 (owner decision 2026-07-11): a member profile page is a referral entry point. Landing here
+      records a PROFILE touch owned by this member (consent-gated by TouchTracker; no ?ref needed).
+      refCodeForAuthor omits the house account + unindexed members, so no wrong attribution. */}
+  <TouchSignal type="profile" ownerId={refCodeForAuthor(d.username)} slug={d.username} />
   <ProfileHeader profile={profile}>
     <div class="mx-auto max-w-xl sm:mx-0 lead">
       <Content />

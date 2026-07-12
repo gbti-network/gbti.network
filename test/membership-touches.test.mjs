@@ -91,3 +91,14 @@ test('eraseTouches hard-deletes the session record (right to erasure)', async ()
   const e = await eraseTouches({ SIGNUP_KV: kv }, SESSION);
   assert.equal(e.ok, true); assert.equal(kv.store.has(TOUCH_KEY(SESSION)), false);
 });
+
+// Adversarial finding (2026-07-11): the anonymous /touch route SERVER-stamps time — a client-supplied
+// `at` can never plant an artificially early first touch.
+test('the route ignores a client-supplied at (server-stamped time wins)', async () => {
+  const kv = fakeKV();
+  const sid = SESSION;
+  const r = await handleTouch(req({ session: sid, consent: true, touch: { owner: '42', type: 'profile', slug: 'atwellpub', at: 1 } }), { SIGNUP_KV: kv }, { kv, now: () => 555000 });
+  assert.equal(r.status, 200);
+  const rec = JSON.parse(kv.store.get(TOUCH_KEY(sid)));
+  assert.equal(rec.items[0].firstAt, 555000, 'the forged at:1 is discarded');
+});
