@@ -10223,6 +10223,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .cancel:hover { border-color:var(--danger, #e06c6c); }
   .empty { padding:14px 10px; font-family:var(--font-mono, monospace); font-size:11.5px; color:var(--muted); text-align:center; }
 `;
+  var QUEUE_CACHE = null;
+  var CACHE_FRESH_MS = 3e4;
   var SRC_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
   var STATUSES = ["pending", "approved", "sent", "failed", "cancelled"];
   var GbtiSyndicationTracker = class extends GbtiElement {
@@ -10230,7 +10232,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load().
     connectedCallback() {
       super.connectedCallback();
-      this._data = null;
+      this._data = QUEUE_CACHE?.data ?? null;
       this._msg = "";
       this._err = false;
       this._busy = false;
@@ -10247,10 +10249,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         this._data = await this.client.syndicationQueue();
         this._err = false;
+        QUEUE_CACHE = { data: this._data, at: Date.now() };
       } catch (e) {
-        this._data = null;
-        this._err = true;
-        this._msg = e?.message || "Could not load the syndication queue.";
+        if (!this._data) {
+          this._err = true;
+          this._msg = e?.message || "Could not load the syndication queue.";
+        }
       }
       this._loading = false;
       this.render();
@@ -10281,6 +10285,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         this.set(this.css(CSS19) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
+      }
+      if (!this._loading && (!QUEUE_CACHE || Date.now() - QUEUE_CACHE.at > CACHE_FRESH_MS)) {
+        this._loading = true;
+        this.load();
       }
       const rows = this._rows();
       const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(label)}</option>`;
@@ -10939,16 +10947,14 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
         if (!this._work[`pub:${id}`] || id === this._curCh) return;
         this._captureTmpl();
         this._curCh = id;
-        this.render();
-        this.$("#sec-templates")?.scrollIntoView({ block: "nearest" });
+        this._renderKeepingScroll();
         if (this._tmplDirty.size) this._markDirty("sec-templates");
       }));
       this.$$("[data-vis]").forEach((b) => b.addEventListener("click", () => {
         if (b.dataset.vis === this._tmplVis) return;
         this._captureTmpl();
         this._tmplVis = b.dataset.vis;
-        this.render();
-        this.$("#sec-templates")?.scrollIntoView({ block: "nearest" });
+        this._renderKeepingScroll();
         if (this._tmplDirty.size) this._markDirty("sec-templates");
       }));
       this.$$("[data-tk]").forEach((f) => {
@@ -11036,6 +11042,13 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
         }
       });
       this.$$("[data-term-remove]").forEach((b) => b.addEventListener("click", () => this._run(() => this.client.removeModerationFlagTerm({ list: b.dataset.list, term: b.dataset.term }))));
+    }
+    /** Re-render without the viewport drifting: a tile/visibility switch replaces the whole shadow tree
+     *  (which re-creates the nested Publishing Activity), so pin the scroll position across it. */
+    _renderKeepingScroll() {
+      const y = window.scrollY;
+      this.render();
+      window.scrollTo({ top: y });
     }
     _captureTmpl() {
       const wk = `${this._tmplVis}:${this._curCh}`;

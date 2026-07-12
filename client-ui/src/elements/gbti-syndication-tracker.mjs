@@ -61,6 +61,12 @@ const CSS = `
   .empty { padding:14px 10px; font-family:var(--font-mono, monospace); font-size:11.5px; color:var(--muted); text-align:center; }
 `;
 
+// A workspace re-render re-creates this element (the admin card re-renders on template tile switches);
+// painting the LAST data instantly keeps the page height stable (no Loading collapse = no scroll jump),
+// while a quiet background refresh keeps it current.
+let QUEUE_CACHE = null; // { data, at }
+const CACHE_FRESH_MS = 30_000;
+
 const SRC_LABEL = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
 const STATUSES = ['pending', 'approved', 'sent', 'failed', 'cancelled'];
 
@@ -69,7 +75,7 @@ class GbtiSyndicationTracker extends GbtiElement {
   // the load the moment the client arrives (setClient re-renders subscribers) -- no eager load().
   connectedCallback() {
     super.connectedCallback();
-    this._data = null;
+    this._data = QUEUE_CACHE?.data ?? null; // paint the cache instantly on a re-mount
     this._msg = '';
     this._err = false;
     this._busy = false;
@@ -81,8 +87,14 @@ class GbtiSyndicationTracker extends GbtiElement {
 
   async load() {
     if (!this.client) { this.render(); return; }
-    try { this._data = await this.client.syndicationQueue(); this._err = false; }
-    catch (e) { this._data = null; this._err = true; this._msg = e?.message || 'Could not load the syndication queue.'; }
+    try {
+      this._data = await this.client.syndicationQueue();
+      this._err = false;
+      QUEUE_CACHE = { data: this._data, at: Date.now() };
+    } catch (e) {
+      // Keep any cached paint on a refresh failure; only a cold load shows the error state.
+      if (!this._data) { this._err = true; this._msg = e?.message || 'Could not load the syndication queue.'; }
+    }
     this._loading = false;
     this.render();
   }
@@ -105,6 +117,8 @@ class GbtiSyndicationTracker extends GbtiElement {
     if (!this.client) { this.set(this.css(CSS) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`); return; }
     if (this._err) { this.set(this.css(CSS) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`); this.$('[data-reload]')?.addEventListener('click', () => this.load()); return; }
     if (!this._data) { if (!this._err && !this._loading) { this._loading = true; this.load(); } this.set(this.css(CSS) + `<p class="muted">Loading the publishing activity...</p>`); return; }
+    // A cache paint that has gone stale refreshes QUIETLY (the table stays on screen; no height flap).
+    if (!this._loading && (!QUEUE_CACHE || Date.now() - QUEUE_CACHE.at > CACHE_FRESH_MS)) { this._loading = true; this.load(); }
     const rows = this._rows();
     const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(label)}</option>`;
     const body = rows.map((it) => this._row(it)).join('');

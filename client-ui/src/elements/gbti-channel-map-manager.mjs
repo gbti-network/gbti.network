@@ -500,16 +500,14 @@ class GbtiChannelMapManager extends GbtiElement {
       if (!this._work[`pub:${id}`] || id === this._curCh) return;
       this._captureTmpl();
       this._curCh = id;
-      this.render();
-      this.$('#sec-templates')?.scrollIntoView({ block: 'nearest' });
+      this._renderKeepingScroll();
       if (this._tmplDirty.size) this._markDirty('sec-templates');
     }));
     this.$$('[data-vis]').forEach((b) => b.addEventListener('click', () => {
       if (b.dataset.vis === this._tmplVis) return;
       this._captureTmpl();
       this._tmplVis = b.dataset.vis;
-      this.render();
-      this.$('#sec-templates')?.scrollIntoView({ block: 'nearest' });
+      this._renderKeepingScroll();
       if (this._tmplDirty.size) this._markDirty('sec-templates');
     }));
     this.$$('[data-tk]').forEach((f) => {
@@ -572,6 +570,14 @@ class GbtiChannelMapManager extends GbtiElement {
     if (input) input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTerm(); } });
     this.$$('[data-term-remove]').forEach((b) => b.addEventListener('click', () =>
       this._run(() => this.client.removeModerationFlagTerm({ list: b.dataset.list, term: b.dataset.term }))));
+  }
+
+  /** Re-render without the viewport drifting: a tile/visibility switch replaces the whole shadow tree
+   *  (which re-creates the nested Publishing Activity), so pin the scroll position across it. */
+  _renderKeepingScroll() {
+    const y = window.scrollY;
+    this.render();
+    window.scrollTo({ top: y });
   }
 
   _captureTmpl() {
