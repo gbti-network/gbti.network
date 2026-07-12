@@ -62,7 +62,7 @@ import {
   banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit,
   getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, getQuotePool,
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
-  setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate,
+  setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
   getNewsEngagementSettings, setNewsEngagementSettings, getSyndicationSettings, setSyndicationSettings,
 } from './admin-ops.mjs';
 
@@ -86,6 +86,7 @@ const ADMIN_ACTIONS = {
   'flag-term-add': addModerationFlagTerm, // SOW-087: moderation word lists
   'flag-term-remove': removeModerationFlagTerm, // SOW-087
   'syndication-template-set': setSyndicationTemplate, // SOW-087: the per-type Discord template
+  'syndication-templates-set': setSyndicationTemplates, // SOW-088: the admin card batch (one PR per Save)
   'news-engagement-set': setNewsEngagementSettings, // SOW-111: the news auto-share settings
   'syndication-settings-set': setSyndicationSettings, // SOW-088: pipeline master/approval/hold/channel switches
 };

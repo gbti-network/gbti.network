@@ -18162,7 +18162,7 @@ function defaultMessage(change) {
 function defaultTitle(change) {
   return change.type === "profile" ? `Update ${change.username}'s profile` : `${change.type}: ${change.slug}`;
 }
-async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false }) {
+async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false, clobberOpenPull = false }) {
   if (!branch) throw new Error("commitToBranchOnFork: a branch name is required");
   if (!Array.isArray(files) || files.length === 0) throw new Error("commitToBranchOnFork: at least one file change is required");
   const fork = await repo.ensureFork();
@@ -18176,7 +18176,7 @@ async function commitToBranchOnFork({ repo, branch, files, message, resetStale =
       tip = null;
     }
     if (tip && tip !== baseSha) {
-      const open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
+      const open = clobberOpenPull ? null : await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
       if (!open) await repo.forceBranch(fork.full_name, branch, baseSha);
     }
   }
@@ -18215,10 +18215,10 @@ async function publishContent({ repo, change, message, title, body }) {
   const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base2, body: body ?? "" });
   return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
 }
-async function publishFiles({ repo, branch, files, message, title, body }) {
+async function publishFiles({ repo, branch, files, message, title, body, clobberOpenPull = false }) {
   if (!branch) throw new Error("publishFiles: a branch name is required");
   if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
-  const { fork, owner, base: base2 } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true });
+  const { fork, owner, base: base2 } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true, clobberOpenPull });
   const head = `${owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });
   if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };

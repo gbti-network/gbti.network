@@ -599,16 +599,16 @@ class GbtiChannelMapManager extends GbtiElement {
     const dirty = [...this._tmplDirty];
     if (!dirty.length) return;
     this._busy = true; this._msg = ''; this.render();
-    let saved = 0; let firstPr = null; let err = null;
-    for (const key of dirty) {
+    // ONE batch op -> ONE house PR (per-field PRs raced each other on the same file; hit live 2026-07-12).
+    const edits = dirty.map((key) => {
       const [vis, channel, type] = key.split(':');
-      try {
-        const r = await this.client.setSyndicationTemplate({ type, template: (this._work[`${vis}:${channel}`]?.[type] || '').trim(), channel, stub: vis === 'stub' });
-        if (r && !r.noop) { saved++; if (!firstPr && r.prNumber) firstPr = r.prNumber; }
-      } catch (e) { err = e?.message || `Could not save the ${channel} ${type} ${vis === 'stub' ? 'stub ' : ''}template.`; break; }
-    }
-    this._msg = err || (saved
-      ? `${saved} template${saved === 1 ? '' : 's'} saved${firstPr ? `; ${submitAck({ prNumber: firstPr, autoMerge: false })}` : ''}`
+      return { type, template: (this._work[`${vis}:${channel}`]?.[type] || '').trim(), channel, stub: vis === 'stub' };
+    });
+    let err = null; let r = null;
+    try { r = await this.client.setSyndicationTemplates({ edits }); }
+    catch (e) { err = e?.message || 'Could not save the templates.'; }
+    this._msg = err || (r && !r.noop
+      ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? '' : 's'} saved${r.prNumber ? `; ${submitAck({ prNumber: r.prNumber, autoMerge: false })}` : ''}`
       : 'No changes.');
     this._busy = false;
     this._loaded = false; // reload the committed values

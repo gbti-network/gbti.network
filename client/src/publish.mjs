@@ -45,7 +45,7 @@ function defaultTitle(change) {
  *
  * @returns {Promise<{ fork: string, owner: string, branch: string, base: string }>}
  */
-export async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false }) {
+export async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false, clobberOpenPull = false }) {
   if (!branch) throw new Error('commitToBranchOnFork: a branch name is required');
   if (!Array.isArray(files) || files.length === 0) throw new Error('commitToBranchOnFork: at least one file change is required');
 
@@ -60,7 +60,11 @@ export async function commitToBranchOnFork({ repo, branch, files, message, reset
     let tip = null;
     try { tip = await repo.getBranchSha(fork.full_name, branch); } catch { tip = null; }
     if (tip && tip !== baseSha) {
-      const open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
+      // clobberOpenPull (SOW-088 admin saves): a house-config branch's open PR is ALWAYS this same
+      // single-file edit, so force-resetting under it self-heals a stale CONFLICTING PR to fresh
+      // content instead of letting it rot (hit live 2026-07-12, PR #107 blocked every later template
+      // save). Content publishes never pass the flag, so the SOW-053 in-flight protection stands.
+      const open = clobberOpenPull ? null : await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
       if (!open) await repo.forceBranch(fork.full_name, branch, baseSha);
     }
   }
@@ -124,11 +128,11 @@ export async function publishContent({ repo, change, message, title, body }) {
  *
  * @returns {Promise<{prNumber, prUrl, branch, fork, updated}>}
  */
-export async function publishFiles({ repo, branch, files, message, title, body }) {
+export async function publishFiles({ repo, branch, files, message, title, body, clobberOpenPull = false }) {
   if (!branch) throw new Error('publishFiles: a branch name is required');
   if (!Array.isArray(files) || files.length === 0) throw new Error('publishFiles: at least one file change is required');
 
-  const { fork, owner, base } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true });
+  const { fork, owner, base } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true, clobberOpenPull });
 
   const head = `${owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });

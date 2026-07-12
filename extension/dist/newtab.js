@@ -11066,23 +11066,18 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       this._busy = true;
       this._msg = "";
       this.render();
-      let saved = 0;
-      let firstPr = null;
-      let err = null;
-      for (const key of dirty) {
+      const edits = dirty.map((key) => {
         const [vis, channel, type] = key.split(":");
-        try {
-          const r = await this.client.setSyndicationTemplate({ type, template: (this._work[`${vis}:${channel}`]?.[type] || "").trim(), channel, stub: vis === "stub" });
-          if (r && !r.noop) {
-            saved++;
-            if (!firstPr && r.prNumber) firstPr = r.prNumber;
-          }
-        } catch (e) {
-          err = e?.message || `Could not save the ${channel} ${type} ${vis === "stub" ? "stub " : ""}template.`;
-          break;
-        }
+        return { type, template: (this._work[`${vis}:${channel}`]?.[type] || "").trim(), channel, stub: vis === "stub" };
+      });
+      let err = null;
+      let r = null;
+      try {
+        r = await this.client.setSyndicationTemplates({ edits });
+      } catch (e) {
+        err = e?.message || "Could not save the templates.";
       }
-      this._msg = err || (saved ? `${saved} template${saved === 1 ? "" : "s"} saved${firstPr ? `; ${submitAck({ prNumber: firstPr, autoMerge: false })}` : ""}` : "No changes.");
+      this._msg = err || (r && !r.noop ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? "" : "s"} saved${r.prNumber ? `; ${submitAck({ prNumber: r.prNumber, autoMerge: false })}` : ""}` : "No changes.");
       this._busy = false;
       this._loaded = false;
       this.render();
@@ -15560,6 +15555,8 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       // SOW-087: { templates, types }
       setSyndicationTemplate: ({ type, template, channel, stub }) => request("POST", "/api/admin", { action: "syndication-template-set", type, template, channel, stub }),
       // SOW-087 (+ SOW-088 per-channel + stub)
+      setSyndicationTemplates: ({ edits }) => request("POST", "/api/admin", { action: "syndication-templates-set", edits }),
+      // SOW-088: the batch save (one PR)
       newsEngagementSettings: () => request("GET", "/api/news-engagement"),
       // SOW-111: { settings, tiers }
       setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request("POST", "/api/admin", { action: "news-engagement-set", enabled, openThreshold, tier, commentAutopost }),

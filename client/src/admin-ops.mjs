@@ -387,7 +387,9 @@ async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopM
   try { result = edit(parsed); }
   catch (err) { if (err instanceof errType) throw new OperationError('bad-request', err.message); throw err; }
   if (!result.changed) return noop(noopMsg, result.audit);
-  const pr = await publishFiles({ repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
+  // clobberOpenPull: a house-config branch's open PR is always this same edit, so a stale CONFLICTING
+  // PR self-heals to fresh content on the next save (hit live 2026-07-12, PR #107).
+  const pr = await publishFiles({ repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit), clobberOpenPull: true });
   return { ...pr, changed: true, audit: result.audit };
 }
 
@@ -527,6 +529,41 @@ export async function removeModerationFlagTerm(ctx, { list, term } = {}) {
     noopMsg: `term not in ${list}`,
     errType: ModerationFlagEditError,
   });
+}
+
+/** SOW-088: apply a BATCH of template edits as ONE house PR (the admin card's Save; per-field PRs raced
+ *  each other on the same file). Each edit applies the pure setTemplate core over the same parsed doc;
+ *  no-ops are skipped; the first invalid edit aborts the batch (nothing published). Superadmin. */
+export async function setSyndicationTemplates(ctx, { edits } = {}) {
+  requireRole(ctx, canManageRoles, 'superadmin');
+  const { repo } = requireRepo(ctx);
+  const list = Array.isArray(edits) ? edits : [];
+  if (!list.length) return noop('no template edits', null);
+  const raw = (await ctx.reader?.readFile?.(SYNDICATION_CONFIG_PATH)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  const audits = [];
+  let doc = parsed;
+  let changed = 0;
+  for (const e of list) {
+    let result;
+    try { result = setTemplateEdit(doc, { type: e?.type, template: e?.template, channel: e?.channel, stub: e?.stub === true }, actionCtx(ctx)); }
+    catch (err) { if (err instanceof TemplateEditError) throw new OperationError('bad-request', err.message); throw err; }
+    doc = result.next;
+    audits.push(result.audit);
+    if (result.changed) changed++;
+  }
+  if (!changed) return noop('no template changes', audits);
+  const pr = await publishFiles({
+    repo,
+    branch: 'gbti/syndication-templates',
+    files: [{ path: SYNDICATION_CONFIG_PATH, content: leadingComment(raw) + dumpYaml(doc) }],
+    message: `Set ${changed} syndication template${changed === 1 ? '' : 's'}`,
+    title: `Set syndication templates (${changed})`,
+    body: prBody(null, audits),
+    clobberOpenPull: true,
+  });
+  return { ...pr, changed: true, count: changed, audit: audits };
 }
 
 export async function setSyndicationTemplate(ctx, { type, template, channel, stub } = {}) {

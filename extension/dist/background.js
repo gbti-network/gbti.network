@@ -18086,7 +18086,7 @@ function defaultMessage(change) {
 function defaultTitle(change) {
   return change.type === "profile" ? `Update ${change.username}'s profile` : `${change.type}: ${change.slug}`;
 }
-async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false }) {
+async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false, clobberOpenPull = false }) {
   if (!branch) throw new Error("commitToBranchOnFork: a branch name is required");
   if (!Array.isArray(files) || files.length === 0) throw new Error("commitToBranchOnFork: at least one file change is required");
   const fork = await repo.ensureFork();
@@ -18100,7 +18100,7 @@ async function commitToBranchOnFork({ repo, branch, files, message, resetStale =
       tip = null;
     }
     if (tip && tip !== baseSha) {
-      const open = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
+      const open = clobberOpenPull ? null : await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
       if (!open) await repo.forceBranch(fork.full_name, branch, baseSha);
     }
   }
@@ -18139,10 +18139,10 @@ async function publishContent({ repo, change, message, title, body }) {
   const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base3, body: body ?? "" });
   return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
 }
-async function publishFiles({ repo, branch, files, message, title, body }) {
+async function publishFiles({ repo, branch, files, message, title, body, clobberOpenPull = false }) {
   if (!branch) throw new Error("publishFiles: a branch name is required");
   if (!Array.isArray(files) || files.length === 0) throw new Error("publishFiles: at least one file change is required");
-  const { fork, owner, base: base3 } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true });
+  const { fork, owner, base: base3 } = await commitToBranchOnFork({ repo, branch, files, message, resetStale: true, clobberOpenPull });
   const head = `${owner}:${branch}`;
   const existing = await repo.findOpenPull({ head });
   if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
@@ -21364,7 +21364,7 @@ async function editHouseYaml(ctx, relPath, edit, { branch, message, title, noopM
     throw err;
   }
   if (!result.changed) return noop(noopMsg, result.audit);
-  const pr = await publishFiles({ repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
+  const pr = await publishFiles({ repo, branch, files: [{ path: relPath, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit), clobberOpenPull: true });
   return { ...pr, changed: true, audit: result.audit };
 }
 async function applyTagEdit(ctx, { mode, action, tag, to, paths } = {}) {
@@ -21489,6 +21489,45 @@ async function removeModerationFlagTerm(ctx, { list, term } = {}) {
     errType: ModerationFlagEditError
   });
 }
+async function setSyndicationTemplates(ctx, { edits } = {}) {
+  requireRole(ctx, canManageRoles, "superadmin");
+  const { repo } = requireRepo2(ctx);
+  const list = Array.isArray(edits) ? edits : [];
+  if (!list.length) return noop("no template edits", null);
+  const raw = await ctx.reader?.readFile?.(SYNDICATION_CONFIG_PATH) || "";
+  let parsed;
+  try {
+    parsed = index_vite_proxy_tmp_default.load(raw) || {};
+  } catch {
+    parsed = {};
+  }
+  const audits = [];
+  let doc = parsed;
+  let changed = 0;
+  for (const e of list) {
+    let result;
+    try {
+      result = setTemplate(doc, { type: e?.type, template: e?.template, channel: e?.channel, stub: e?.stub === true }, actionCtx(ctx));
+    } catch (err) {
+      if (err instanceof TemplateEditError) throw new OperationError("bad-request", err.message);
+      throw err;
+    }
+    doc = result.next;
+    audits.push(result.audit);
+    if (result.changed) changed++;
+  }
+  if (!changed) return noop("no template changes", audits);
+  const pr = await publishFiles({
+    repo,
+    branch: "gbti/syndication-templates",
+    files: [{ path: SYNDICATION_CONFIG_PATH, content: leadingComment(raw) + dumpYaml(doc) }],
+    message: `Set ${changed} syndication template${changed === 1 ? "" : "s"}`,
+    title: `Set syndication templates (${changed})`,
+    body: prBody(null, audits),
+    clobberOpenPull: true
+  });
+  return { ...pr, changed: true, count: changed, audit: audits };
+}
 async function setSyndicationTemplate(ctx, { type, template, channel, stub } = {}) {
   const slug = slugOf(`${channel ? `${channel}-` : ""}${stub ? "stub-" : ""}${String(type || "")}`);
   const label = channel ? `${channel} ${type}` : type;
@@ -21531,7 +21570,7 @@ async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, co
 }
 
 // extension/src/ext-dispatch.mjs
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "news-engagement-set": setNewsEngagementSettings, "syndication-settings-set": setSyndicationSettings2 };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "syndication-settings-set": setSyndicationSettings2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,

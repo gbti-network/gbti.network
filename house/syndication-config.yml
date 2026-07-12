@@ -9,37 +9,27 @@
 # channel switched on here still also requires its secret to be configured at drain time (otherwise it is
 # recorded "skipped", never "failed").
 syndication:
-  enabled: true            # ACTIVE 2026-06-24. Approval-gated: nothing posts until a superadmin approves it.
-  require_approval: false   # AUTO-POST since 2026-07-09 (owner-directed): a new item posts after the hold window
-                            # with NO approval step. FLAGGED items still always require approval (built-in), and
-                            # hold_minutes below is the cancel window before a post goes out.
-  hold_minutes: 60          # legacy auto-hold; IGNORED while require_approval is true (approval is the gate)
-  upvote_threshold: 2       # retired as a syndication trigger (SOW-087: shares enqueue on publish); kept for the news follow-up
-  classify: ai              # SOW-087: the share category suggestion (ai = Workers AI + keyword fallback | keyword | off)
-  templates:                # SOW-087: per-type Discord post templates. Variables: {memberdiscord} (the resolved
-                            # mention, falling back to the no-ping full name), {fullName}, {author}, {shareurl},
-                            # {url}, {title}, {category}. A missing/blank type keeps its default or the built-in text.
-    share: "Shared by {memberdiscord} {shareurl}"
-    # stub_templates / channel_templates_stub (SOW-088 Proposal A): the MEMBERS-STUB template sets.
-    # A members-only item renders these instead of the public templates (channel stub -> shared stub ->
-    # the built-in stub defaults -> the public chain). Edit them from the admin Templates card's
-    # Public / Members stub toggle; both maps store CONFIGURED values only.
-    # reddit-body: the Reddit BODY template (a link post's first comment / a text post's content); extra
-    # variables {content-type}, {author-note} (the from-the-author intro), and {member-url} (the public
-    # profile). Blank = the built-in default: the author-note framing plus the join-the-network and
-    # follow-the-member closing (see DEFAULT_TEMPLATES in membership/syndication-config-core.mjs).
-  news_engagement:          # SOW-111: engagement-triggered news auto-share (to the item's mapped category channel
-                            # in the Worker var NEWS_CHANNELS; never the member #shares channel; unmapped = no post).
-    enabled: true           # master switch for both engagement signals
-    open_threshold: 2       # distinct members opening the detail view before the item auto-posts
-    tier: paid              # whose engagement counts: paid | paid-trial | signed-in (banned never counts)
-    comment_autopost: true  # one comment posts the item immediately (a comment is deliberate engagement)
-  channels:                 # full syndication: all channels attempted on approval (one still needs its secret, else skipped)
+  enabled: true
+  require_approval: false
+  hold_minutes: 60
+  upvote_threshold: 2
+  classify: ai
+  templates:
+    share: Shared by {memberdiscord} {shareurl}
+  news_engagement:
+    enabled: true
+    open_threshold: 2
+    tier: paid
+    comment_autopost: true
+  channels:
     discord: true
-    discord-category: true  # SOW-087: the SECOND Discord post, to the category channel in house/content-channels.yml
-    x: false  # OFF 2026-07-09: still building this destination
-    linkedin: false  # OFF 2026-07-09: still building this destination
-    mastodon: false  # OFF 2026-07-09: still building this destination
-    bluesky: false  # OFF 2026-07-09: still building this destination
-    reddit: false   # OFF by default: manual syndication works independently; flip in the admin pipeline card
-    devto: false    # SOW-088: full-body crossposts to the GBTI dev.to org; flip in the admin pipeline card when ready
+    discord-category: true
+    x: false
+    linkedin: false
+    mastodon: false
+    bluesky: false
+    reddit: false
+    devto: false
+  channel_templates:
+    devto:
+      devto-footer: "The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. \n\n---\n\n>Are you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\n>To follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}"
