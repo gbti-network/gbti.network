@@ -182,4 +182,6 @@ Thanks for paying attention!
 
 _It’s nice weather for ducks out there…_
 
-![YouTube video thumbnail](https://img.youtube.com/vi/ioudby-xooc/maxresdefault.jpg)
+```embed
+https://www.youtube.com/watch?v=ioudby-xooc
+```
