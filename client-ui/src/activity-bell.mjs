@@ -10,6 +10,7 @@
 import { toMs } from './all-merge.mjs';
 
 export const BELL_GROUPS = [
+  { key: 'approvals', label: 'To approve' }, // superadmin-only: syndication items holding (early approval)
   { key: 'replies', label: 'Replies' },
   { key: 'following', label: 'Following' },
   { key: 'prs', label: 'Your PRs' },

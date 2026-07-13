@@ -94,8 +94,8 @@ class GbtiActivityBell extends GbtiElement {
     this._busy = true;
     try {
       let membership = 'unknown';
-      try { const st = await this.client?.status?.(); membership = st?.membership ?? 'unknown'; this._login = st?.identity?.login || null; }
-      catch { membership = 'unknown'; this._login = null; }
+      try { const st = await this.client?.status?.(); membership = st?.membership ?? 'unknown'; this._login = st?.identity?.login || null; this._role = st?.role || 'member'; }
+      catch { membership = 'unknown'; this._login = null; this._role = 'member'; }
       // The bell is for active members only; a Locked/unknown/signed-out account hides it (no count).
       if (!canSeeShares(membership) || !this._login) { this._gated = true; this._bell = { total: 0, groups: [] }; this.render(); return; }
       this._gated = false;
@@ -107,13 +107,36 @@ class GbtiActivityBell extends GbtiElement {
   }
 
   async _fetchSources(login) {
-    const [review, prs, following, replies] = await Promise.all([
+    const [review, prs, following, replies, approvals] = await Promise.all([
       this._safe(() => this._review()),
       this._safe(() => this._prs()),
       this._safe(() => this._following(login)),
       this._safe(() => this._replies(login)),
+      // SOW-088: superadmin-only. A non-superadmin never fetches (the Worker queue read is
+      // superadmin-gated anyway, and _safe fails closed to []).
+      this._role === 'superadmin' ? this._safe(() => this._approvals()) : Promise.resolve([]),
     ]);
-    return { review, prs, following, replies };
+    return { review, prs, following, replies, approvals };
+  }
+
+  // SOW-088: syndication items HOLDING (pending: still in the cancel window, or a flagged item awaiting
+  // approval). Surfacing them lets a superadmin APPROVE early so the item posts on the next drain tick
+  // instead of waiting out the hold. Approved items are already going out, so they are not notified.
+  async _approvals() {
+    const q = (await this.client.syndicationQueue()) || {};
+    const pending = Array.isArray(q.pending) ? q.pending : [];
+    const TYPE = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
+    return pending.map((it) => {
+      const flagged = Array.isArray(it.flags) && it.flags.length;
+      const type = TYPE[it.source] || 'Item';
+      return {
+        id: `syn:${it.id}`,
+        ts: toMs(it.enqueuedAt),
+        title: it.title || it.targetSlug || 'Untitled',
+        sub: flagged ? `Flagged ${type.toLowerCase()}: needs approval` : `${type} holding: approve to post now`,
+        href: 'admin.html#tab=syndication',
+      };
+    });
   }
 
   async _review() {

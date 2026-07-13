@@ -161,10 +161,16 @@ export function normalizeItem(raw) {
  */
 export function isDue(item, now = Date.now(), { requireApproval = false } = {}) {
   if (!item) return false;
+  // An explicit superadmin approval is a universal "post now": due on the next tick in EVERY mode,
+  // bypassing any remaining hold (early approval). This also fixes a latent break: under
+  // require_approval:false, approving an item moved it to 'approved', which the old pending-only path
+  // never treated as due, so the item never drained.
+  if (item.status === 'approved') return true;
+  if (item.status !== 'pending') return false;
   // SOW-087: a moderation-flagged item ALWAYS waits for a superadmin, even when require_approval is off.
-  if (Array.isArray(item.flags) && item.flags.length) return item.status === 'approved';
-  if (requireApproval) return item.status === 'approved';
-  return item.status === 'pending' && Number(now) >= Number(item.availableAt);
+  if (Array.isArray(item.flags) && item.flags.length) return false;
+  if (requireApproval) return false;
+  return Number(now) >= Number(item.availableAt);
 }
 
 /** Partition the not-terminal items into { due, holding } at time `now`. Terminal items are excluded entirely. */

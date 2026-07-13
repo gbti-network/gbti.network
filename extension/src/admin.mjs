@@ -22,6 +22,13 @@ function showAdminTab(name) {
   try { localStorage.setItem(ADMIN_TAB_KEY, name); } catch (e) { /* storage unavailable */ }
 }
 adminTabs.forEach((t) => t.addEventListener('click', () => showAdminTab(t.dataset.tab)));
+// SOW-088: a `#tab=<name>` deep link (the activity bell's "To approve" notice links to
+// admin.html#tab=syndication) wins over the persisted tab; falls back to the stored tab, then members.
+function tabFromHash() {
+  const m = /(?:^|[#&])tab=([a-z-]+)/.exec(location.hash || '');
+  return m && adminPanels.some((p) => p.dataset.panel === m[1]) ? m[1] : null;
+}
 let initialAdminTab = 'members';
 try { initialAdminTab = localStorage.getItem(ADMIN_TAB_KEY) || 'members'; } catch (e) { /* storage unavailable */ }
-showAdminTab(initialAdminTab);
+showAdminTab(tabFromHash() || initialAdminTab);
+window.addEventListener('hashchange', () => { const t = tabFromHash(); if (t) showAdminTab(t); });

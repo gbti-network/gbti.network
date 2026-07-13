@@ -135,3 +135,20 @@ test('SOW-087: a flagged item is due ONLY when approved, even with require_appro
   assert.equal(isDue(approved, 10, { requireApproval: false }), true);
   assert.equal(isDue(approved, 10, { requireApproval: true }), true);
 });
+
+// Early approval: an approved item is due on the next tick in EVERY mode, bypassing any remaining hold.
+// The approved-UNFLAGGED case under require_approval:false was the latent break (it never drained).
+test('an approved item is due immediately in all modes (early approval)', () => {
+  const base = buildQueueItem({ source: 'share', targetSlug: 's', visibility: 'members' }, { now: () => 0, holdMs: 60 * 60_000 });
+  const approved = markApproved(base, { now: () => 5, actor: 'root' });
+  // Well before availableAt (which is 1h out), and in every mode:
+  assert.equal(isDue(approved, 10, { requireApproval: false }), true, 'approved posts even under auto-hold mode');
+  assert.equal(isDue(approved, 10, { requireApproval: true }), true, 'approved posts under approval mode');
+  // A still-pending item is unchanged: not due before the hold, due after (auto-hold), never without approval otherwise.
+  assert.equal(isDue(base, 10, { requireApproval: false }), false, 'pending, hold not elapsed');
+  assert.equal(isDue({ ...base, availableAt: 5 }, 10, { requireApproval: false }), true, 'pending, hold elapsed');
+  assert.equal(isDue({ ...base, availableAt: 5 }, 10, { requireApproval: true }), false, 'pending never posts in approval mode');
+  // A terminal item is never due.
+  assert.equal(isDue({ ...base, status: 'sent' }, 10), false);
+  assert.equal(isDue({ ...base, status: 'cancelled' }, 10), false);
+});

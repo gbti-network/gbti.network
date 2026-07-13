@@ -9,9 +9,10 @@ const T0 = Date.parse('2026-06-10T00:00:00Z');
 const T1 = Date.parse('2026-06-16T00:00:00Z');
 const reply = (id, ts) => ({ id, ts, title: `r${id}`, href: 'newtab.html#tab=share' });
 
-test('buildBell exposes the four groups in order', () => {
+test('buildBell exposes the groups in order (approvals first)', () => {
   const out = buildBell({}, {});
   assert.deepEqual(out.groups.map((g) => g.key), BELL_GROUPS.map((g) => g.key));
+  assert.equal(out.groups[0].key, 'approvals');
   assert.equal(out.total, 0);
 });
 
@@ -66,4 +67,14 @@ test('markSeen advances the ms sources to now and records the current PR ids', (
 
 test('markSeen on empty sources yields an empty PR set', () => {
   assert.deepEqual(markSeen({}, T1).prsSeen, []);
+});
+
+// SOW-088: the superadmin approvals source aggregates + counts unread like any timestamped group.
+test('buildBell counts holding approvals as unread past the watermark', () => {
+  const sources = { approvals: [{ id: 'syn:a', ts: T1, title: 'A held share', sub: 'Share holding' }, { id: 'syn:b', ts: T0, title: 'Old', sub: 'x' }] };
+  const out = buildBell(sources, { approvals: T0 });
+  const g = out.groups.find((x) => x.key === 'approvals');
+  assert.equal(g.unread, 1, 'only the item past the watermark is unread');
+  assert.equal(g.items[0].id, 'syn:a', 'newest-first');
+  assert.equal(out.total, 1);
 });
