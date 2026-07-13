@@ -44,6 +44,10 @@ grandfathered:
     login: nareshdevineni
     reason: complimentary access (grandfathered co-op member)
     until: null
+  - github_id: "1367750"     # github.com/rafael-minuesa (Rafael Minuesa)
+    login: rafael-minuesa
+    reason: complimentary access (grandfathered co-op member)
+    until: null
   - github_id: "225425"      # github.com/rfilipo (Ricardo Filipo)
     login: rfilipo
     reason: complimentary access (grandfathered co-op member)
