@@ -58,14 +58,19 @@ All commands run from the repo root with the `gh` CLI (it resolves the repo from
 
 ## Tooling lore (read first)
 
-- **Fetching logs:** `gh run view <id> --log-failed` often returns NOTHING. The reliable recipe:
+- **Fetching logs:** `gh run view <id> --log-failed` often returns NOTHING. The reliable recipe (pick the
+  FAILED job, not the first one):
   ```bash
-  JOB=$(gh run view <run-id> --json jobs -q '.jobs[0].databaseId')
+  JOB=$(gh run view <run-id> --json jobs -q '[.jobs[] | select(.conclusion == "failure")][0].databaseId')
   gh api repos/{owner}/{repo}/actions/jobs/$JOB/logs > /tmp/job.log
   ```
-  Then grep the file; strip the timestamp column with `cut -c30-` when quoting. Multi-job runs: iterate
-  `.jobs[]` and pick by `.conclusion == "failure"`. Step-level status without logs:
-  `gh api repos/{owner}/{repo}/actions/runs/<id>/jobs -q '.jobs[0].steps[] | .name + " " + .conclusion'`.
+  Then grep the file; strip the timestamp column with `cut -c30-` when quoting. Step-level status without
+  logs: `gh api repos/{owner}/{repo}/actions/runs/<id>/jobs -q '.jobs[].steps[] | .name + " " + .conclusion'`.
+- **Old logs are GONE (HTTP 410):** the logs endpoint returns 410 on runs older than the log retention
+  (~90 days). Job and step metadata outlive the logs, so for an old red fall back to the step table plus
+  the commit diff around the breakage date.
+- **Never extract run or job ids with `--template`:** Go templates print JSON numbers as float64
+  (`{{.databaseId}}` renders like `2.9079759914e+10`). Ids must come from `-q`/`--jq`.
 - **Scheduled-failure attribution:** the failure email for a SCHEDULED workflow cites the LATEST main sha,
   which is often NOT the commit that broke it. Always check
   `gh run list --workflow <file> --limit 5 --json conclusion,createdAt,event` first; if the failures predate
@@ -91,6 +96,11 @@ forcing it into a wrong response.
 3. **Flaky / external:** network hiccup, provider outage, rate limit; the same job passed before and after
    without a related change. `gh run rerun <id> --failed` once, then re-check.
 
+Conclusions are not binary. `cancelled` (common under concurrency groups) and `skipped` are NOT red and
+must not count toward a streak; `startup_failure` means the workflow file itself is broken (bad YAML) and
+belongs in broken-by-commit; `action_required` is a fork PR awaiting approval, not a failure. Only
+`failure` (and a `timed_out`) is red.
+
 ## Fix discipline (failing tests especially)
 
 When a test fails, evaluate the REAL defect the test is exposing and propose a fix for that root cause.
@@ -104,9 +114,12 @@ tests: a fix that makes the red go away without explaining WHY it was red is a s
 
 ### /ci health [N]   (also: /ci health check; the default)
 
-1. `gh run list --limit ${N:-30} --json databaseId,workflowName,conclusion,headSha,event,createdAt` and
-   group by workflow. Report a red/green board: latest conclusion per workflow, streak (consecutive fails),
-   and the event (push vs schedule).
+1. Build the board PER WORKFLOW, not from one grouped list (a chatty cron floods a `--limit 30` window and
+   rare workflows silently vanish): `gh workflow list --all --json name,path,state` to enumerate (this also
+   surfaces disabled workflows), then per workflow
+   `gh run list --workflow <file> --limit ${N:-5} --json databaseId,conclusion,event,createdAt`. Report a
+   red/green board: latest conclusion per workflow, streak (consecutive `failure` conclusions only), and
+   the event (push vs schedule).
 2. For each currently-red workflow: pull its recent history (`--workflow <file> --limit 5`) to date the
    breakage, download the failed job log (recipe above), and triage it (the taxonomy above) with a
    one-line root cause and the proposed fix.
@@ -118,10 +131,11 @@ tests: a fix that makes the red go away without explaining WHY it was red is a s
 The post-push ritual. Find the runs for the current HEAD and watch until all conclude:
 ```bash
 SHA=$(git rev-parse HEAD)
-gh run list --limit 15 --json databaseId,workflowName,conclusion,headSha \
-  -q ".[] | select(.headSha==\"$SHA\")"
+gh run list --commit "$SHA" --json databaseId,workflowName,conclusion
 gh run watch <id> --exit-status   # per unfinished run
 ```
+Runs may not exist yet right after a push (a race): poll for a few seconds before concluding "no runs for
+HEAD". `--commit` is exact; never jq-filter a recent-runs window by headSha (busy repos overflow it).
 Report each result; diagnose any red as in health.
 
 ### /ci drift   (only if your repo commits build artifacts)
@@ -143,6 +157,10 @@ cadence. A scheduled job can be silently red for days; nobody rereads yesterday'
 scheduled jobs are load-bearing (a backup, a data sync something else depends on) so staleness there is
 escalated, not just listed.
 
+Also check for SILENT DISABLING: GitHub disables cron workflows after 60 days without repo activity, with
+no failure signal at all, so "last success too old" alone cannot distinguish a red streak from a disabled
+workflow. `gh workflow list --all --json name,state` and alarm on any state other than `active`.
+
 ### /ci diagnose <run-id | workflow-name>
 
 Deep-dive one run (or the latest run of a named workflow): step table, failed job log to disk,
@@ -155,7 +173,9 @@ provisioning gap (it cannot pass) or a broken-by-commit red (fix the root cause 
 
 ### /ci list
 
-Print this workflow inventory (keep it current when workflows are added or changed):
+Print this workflow inventory, then police it: diff the table rows against the actual files in
+`.github/workflows/` and flag any workflow missing from the table or any row whose file no longer exists
+(update the table as part of the same run). The living doc polices itself.
 
 | Workflow (file) | Trigger | What it does | Needs |
 |---|---|---|---|
@@ -181,3 +201,5 @@ And treat the failure taxonomy as a starting point, not a fixed set: projects fa
 ## Why the odd details are in there
 
 Each lore item is a real failure mode: `--log-failed` silently returning nothing while the jobs API works; a scheduled backup that failed for four days while its failure emails blamed whatever commit happened to be newest on main; a workflow reading a secret nobody ever created and reporting it as a vague downstream error instead of failing fast; a drift check that stayed red because the rebuild command regenerated only one of two committed bundles. The Fix discipline section is there because agents notoriously "fix" a failing test by editing the test — the classification buckets plus that rule keep the agent from the three classic wastes: rerunning a job that can never pass, "fixing" code that was never broken, and silencing a test that was telling the truth.
+
+Several of the sharpest edges were folded in from a member running the skill on their own repo the morning it shipped: the per-workflow health board (a chatty cron floods a grouped window), `--commit` for the post-push watcher, the non-binary conclusion states, the 60-day cron auto-disable, the log-retention 410 fallback, and the `--template` float-id trap. That is exactly how a living skill should grow; when yours diverges, fold the lessons back into the file.
