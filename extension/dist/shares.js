@@ -6095,11 +6095,13 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish."
   });
   var DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it on gbti.network. {url}';
+  var DISCORD_SHARE_STUB = '{member-discord-username} shared the following link: "{title}" {url}';
   var DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
+  var DISCORD_CAT_SHARE_STUB = '{member-discord-username} shared a link in {category}: "{title}" {url}';
   var REDDIT_TITLE_STUB = "{title} (a members-only {content-type} from the GBTI Network)";
   var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
-    discord: Object.freeze({ share: DISCORD_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
-    "discord-category": Object.freeze({ share: DISCORD_CAT_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
+    discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
+    "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
     reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
     // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
     devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB })

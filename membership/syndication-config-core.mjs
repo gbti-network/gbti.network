@@ -87,11 +87,15 @@ export const DEFAULT_STUB_TEMPLATES = Object.freeze({
   'devto-stub': '{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish.',
 });
 const DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it on gbti.network. {url}';
+// A members SHARE is just an external link, so it posts the destination directly (no "read it on
+// gbti.network", which points off-site): owner-directed 2026-07-13.
+const DISCORD_SHARE_STUB = '{member-discord-username} shared the following link: "{title}" {url}';
 const DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
+const DISCORD_CAT_SHARE_STUB = '{member-discord-username} shared a link in {category}: "{title}" {url}';
 const REDDIT_TITLE_STUB = '{title} (a members-only {content-type} from the GBTI Network)';
 export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
-  discord: Object.freeze({ share: DISCORD_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
-  'discord-category': Object.freeze({ share: DISCORD_CAT_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
+  discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
+  'discord-category': Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
   reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
   devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),

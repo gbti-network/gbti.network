@@ -317,3 +317,18 @@ test('reddit auto rail renders templates: public {title} default and the members
   assert.match(p.get('title'), /Secret Skill.*members-only prompt from the GBTI Network/, 'members auto title = the reddit title stub');
   assert.match(p.get('text') || '', /members library/, 'members auto body = the reddit-body stub');
 });
+
+// SOW-088: a members SHARE posts its external link directly on Discord (no "read it on gbti.network"),
+// distinct from the members post/product/prompt stub.
+test('discord share stub shares the link directly, not a read-on-site line', async () => {
+  const { createDiscordAdapter } = await import('../clients/syndication/discord-channel.mjs');
+  const { syndicationConfigFromParsed } = await import('../membership/syndication-config-core.mjs');
+  const cfg = syndicationConfigFromParsed({});
+  const sent = [];
+  const client = { async postChannelMessage(id, content) { sent.push(content); return { id: '1', channel_id: id }; } };
+  const env = { DISCORD_BOT_TOKEN: 'b', DISCORD_CHANNEL_SHARES: '111' };
+  await createDiscordAdapter({ env, client, cfg }).post({ source: 'share', title: 'A Video', author: 'a', url: 'https://youtu.be/x', membersOnly: true, visibility: 'members' });
+  assert.match(sent[0], /shared the following link/);
+  assert.ok(!sent[0].includes('read it on gbti.network'), 'no read-on-site line for a share');
+  assert.match(sent[0], /https:\/\/youtu\.be\/x/);
+});
