@@ -1,0 +1,318 @@
+---
+// The Member Handbook: one canonical, searchable reference for how the network works, with a sticky
+// section sidebar (scrollspy) and client-side search (the ProductDirectory filter idiom: vanilla JS,
+// substring match over block text, show/hide + per-section counts). Site-owned copy, hand-authored like
+// membership.astro / revenue-model.astro; every number imports from src/lib/membership.ts so the page
+// can never drift from the real config. Honest-status rules apply: only live capabilities are stated as
+// live (Discord syndication live, socials building, Substack manual; member-only content is obfuscation
+// for perks, not secrecy).
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {
+  MEMBERSHIP_PRICE_LABEL,
+  BILLING_PERIOD,
+  TRIAL_DAYS_SITE,
+  FIRST_TOUCH_PCT,
+  LAST_TOUCH_PCT,
+  COLLAB_POOL_PCT,
+  INVITE_PCT,
+  PLATFORM_RETAINED_PCT,
+  HOLD_DAYS,
+} from '../../lib/membership';
+
+const sections = [
+  { id: 'onboarding', label: 'Onboarding' },
+  { id: 'syndication', label: 'Syndication Model' },
+  { id: 'revenue', label: 'Revenue Model' },
+  { id: 'publishing', label: 'Publishing & Workbench' },
+  { id: 'framework', label: 'The Technical Framework' },
+  { id: 'discord', label: 'Discord Community' },
+  { id: 'profile', label: 'Editing Member Profile' },
+];
+---
+
+<BaseLayout
+  title="Member Handbook · GBTI Network"
+  description="The canonical reference for GBTI Network members: onboarding, syndication, the revenue model, publishing and the workbench, the technical framework, Discord, and your member profile."
+>
+  <main class="hb-wrap">
+    <header class="hb-head">
+      <p class="eyebrow">Handbook</p>
+      <h1 class="hb-title">Member handbook</h1>
+      <p class="hb-lead">How the network works, in one place. Search it, or jump to a section. When a
+        detail here disagrees with a dedicated page, the dedicated page wins; each section links to its
+        deeper reference.</p>
+    </header>
+
+    <div class="hb-grid">
+      <aside class="hb-side">
+        <div class="hb-search">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="text" data-hb-search placeholder="Search the handbook" aria-label="Search the handbook" />
+        </div>
+        <nav class="hb-nav" aria-label="Handbook sections">
+          {sections.map((s) => (
+            <a href={`#${s.id}`} data-nav={s.id}>{s.label}<span class="cnt" data-count={s.id}></span></a>
+          ))}
+        </nav>
+      </aside>
+
+      <div class="hb-content">
+        <p class="hb-empty" data-hb-empty hidden>Nothing in the handbook matches that search.</p>
+
+        <!-- 1. ONBOARDING -->
+        <section class="hb-sec" id="onboarding" data-sec>
+          <h2>Onboarding</h2>
+          <div class="blk" data-blk><p>GBTI Network has no website login. Your identity lives in the
+            <a href="/extension/">GBTI browser extension</a>, which is also your reading and publishing
+            workbench. Install it, then click the toolbar icon to open the setup wizard.</p></div>
+          <div class="blk" data-blk><p>Setup is three steps, each backed by durable GitHub state, so you
+            can never lose progress:</p>
+            <ol>
+              <li><strong>Sign in with GitHub.</strong> A device sign-in: visit the URL, enter the code.
+                No password or secret is ever stored in a page.</li>
+              <li><strong>Make your copy.</strong> Fork the public content repository from the GitHub UI.
+                Your fork is where your drafts live.</li>
+              <li><strong>Give access.</strong> Install the GBTI GitHub App scoped to that one forked
+                repository, so the workbench can stage and publish for you.</li>
+            </ol></div>
+          <div class="blk" data-blk><p>Access comes in four tiers. Signed out, you can browse the public
+            site. <strong>Free</strong> (signed in with any GitHub account, no card) adds the reading
+            perks: follow the news feed, save favorites, build collections, follow members and topics.
+            The <strong>trial</strong> ({TRIAL_DAYS_SITE} days, no card) adds the member Shares stream,
+            draft authoring on your own fork, and read-only Discord. <strong>Paid</strong>
+            ({MEMBERSHIP_PRICE_LABEL} per {BILLING_PERIOD}) unlocks publishing, contributions, comments,
+            member-only content, and the full Discord community. The
+            <a href="/membership/">membership page</a> has the complete comparison.</p></div>
+          <div class="blk" data-blk><p>After setup, a welcome view walks you through the first two moves:
+            join the Discord (your invite is minted on demand) and discover members to follow. Following
+            gives you a feed of what those members publish.</p></div>
+        </section>
+
+        <!-- 2. SYNDICATION MODEL -->
+        <section class="hb-sec" id="syndication" data-sec>
+          <h2>Syndication Model</h2>
+          <div class="blk" data-blk><p>Publish once; the network amplifies it. When your content merges,
+            it enters the syndication queue and posts outward with attribution to you, so your work
+            travels without you re-posting it by hand.</p></div>
+          <div class="blk" data-blk><p><strong>Live today:</strong> Discord. Every published item posts to
+            the shared #shares channel and a second time to its mapped category channel. Posts credit you
+            by name, and when your Discord account is linked, as a real @mention.</p></div>
+          <div class="blk" data-blk><p><strong>Being provisioned:</strong> X, LinkedIn, Mastodon, and
+            Bluesky adapters are built or in progress but switched off until their accounts and tokens are
+            approved. Reddit is planned. <strong>Substack is manual only</strong>: it has no public
+            posting API, so anything on Substack is cross-posted by hand. We list a channel as live only
+            when it actually is.</p></div>
+          <div class="blk" data-blk><p>Items post automatically after a 60 minute hold window, which is
+            also your cancel window. Posts are shaped by per-channel templates; anything a moderation
+            filter flags waits for human approval instead of auto-posting.</p></div>
+          <div class="blk" data-blk><p>Members-only content never leaks through syndication. An outbound
+            post for a members-only item carries the title and link only, never the body; the queue is
+            structurally incapable of carrying a gated body.</p></div>
+        </section>
+
+        <!-- 3. REVENUE MODEL -->
+        <section class="hb-sec" id="revenue" data-sec>
+          <h2>Revenue Model</h2>
+          <div class="blk" data-blk><p>Membership is {MEMBERSHIP_PRICE_LABEL} per {BILLING_PERIOD}. When a
+            visitor becomes a paid member, the content that brought them in shares the revenue:</p>
+            <ul>
+              <li><strong>{FIRST_TOUCH_PCT} first touch</strong>: the author of the earliest member item
+                in the visitor's journey.</li>
+              <li><strong>{LAST_TOUCH_PCT} last touch</strong>: the author of the final item before they
+                joined.</li>
+              <li><strong>{COLLAB_POOL_PCT} collaboration pool</strong>: shared equally by members whose
+                comments or accepted contributions live on those two items.</li>
+              <li><strong>{PLATFORM_RETAINED_PCT} platform</strong>: keeps the network running.</li>
+            </ul></div>
+          <div class="blk" data-blk><p>A separate invite lane pays a flat {INVITE_PCT} lifetime commission
+            on anyone who joins through your personal invite link, funded from the platform share so
+            content earnings are never diluted. No double dip: if you already earn a content share on a
+            conversion, you take the larger of the two, not both.</p></div>
+          <div class="blk" data-blk><p>Attribution uses a 90 day window, splits freeze at conversion, and
+            payouts settle after a {HOLD_DAYS} day hold (refunds and chargebacks come out first). Your
+            profile page counts as an entry point too: a visitor who lands on your profile and later joins
+            credits you without any special link. Payouts arrive via Stripe Connect.</p></div>
+          <div class="blk" data-blk><p>The full explainer, with the worked example, every rule, and the
+            FAQ, lives on the <a href="/revenue-model/">revenue model page</a>.</p></div>
+        </section>
+
+        <!-- 4. PUBLISHING & WORKBENCH -->
+        <section class="hb-sec" id="publishing" data-sec>
+          <h2>Publishing &amp; Workbench</h2>
+          <div class="blk" data-blk><p>You author through either of two surfaces, and both use the same
+            flow. The <strong>extension workbench</strong> gives you a workspace (your articles, prompts,
+            products, and their pull requests), a browse view, and an in-extension reader. The
+            <strong>npm CMS</strong> (<code>gbti-network</code>) runs a local editor in your browser plus
+            an MCP server, so your AI agents can author through the exact same guarded flow you do.</p></div>
+          <div class="blk" data-blk><p>Under the hood every edit is <strong>fork, branch, pull
+            request</strong> against the public content repository. The membership gate is the only
+            authority on what merges; the tools just make the motions effortless. Your content lives in
+            your own folder (<code>members/&lt;username&gt;/</code>) with posts, products, prompts, and
+            images, and your pull requests auto-merge only inside that folder.</p></div>
+          <div class="blk" data-blk><p>During the trial, drafts stay on your fork; nothing you stage
+            reaches the canonical repository. Publishing is for paid members. The moment you upgrade, the
+            workbench publishes your staged drafts.</p></div>
+          <div class="blk" data-blk><p>Paid members can also contribute to one another member's folder.
+            That pull request waits until the folder owner approves it with a GitHub review, then merges
+            with you credited as a contributor.</p></div>
+          <div class="blk" data-blk><p>Content can be public or members-only. Members-only supports a
+            whole gated item, a public teaser stub with a locked body, or a public item with one gated
+            section. Gated bodies are encrypted and unlock through the membership service. One honest
+            caveat: this protects perks, it is not a vault; a paying member can always copy what they can
+            read. Keep true secrets out of content.</p></div>
+        </section>
+
+        <!-- 5. THE TECHNICAL FRAMEWORK -->
+        <section class="hb-sec" id="framework" data-sec>
+          <h2>The Technical Framework</h2>
+          <div class="blk" data-blk><p>The network is local-first and git-native. The <strong>public git
+            repository is the database</strong>; the static site is its published read view; your
+            workbench is your own authoring node. Content syncs through membership-gated pull requests.
+            There is no separate application database to breach, migrate, or lose.</p></div>
+          <div class="blk" data-blk><p><strong>Stripe is the only registry.</strong> Your GitHub id keys a
+            Stripe customer; membership status is derived from it (an active subscription means paid, a
+            card-less customer inside {TRIAL_DAYS_SITE} days means trial). Every membership check fails
+            closed: on any doubt, the system treats an account as not paid rather than guessing.</p></div>
+          <div class="blk" data-blk><p>The site builds with Astro and deploys to Cloudflare Pages; one
+            Cloudflare Worker handles signup, membership checks, and member-content encryption. The
+            merge gate and the daily reconcile run as GitHub Actions. Nothing always-on, near zero
+            hosting cost.</p></div>
+          <div class="blk" data-blk><p>The repository is public and anyone can open a pull request, but
+            the gate reads metadata only and never executes submitted code, auto-merge is scoped to your
+            own folder, and the governance files are code-owned. Roles and permissions are structurally
+            out of reach of a content pull request.</p></div>
+          <div class="blk" data-blk><p>Nothing is deleted when membership lapses. Content flips to draft
+            and comes back exactly as it was when you resubscribe.</p></div>
+        </section>
+
+        <!-- 6. DISCORD COMMUNITY -->
+        <section class="hb-sec" id="discord" data-sec>
+          <h2>Discord Community</h2>
+          <div class="blk" data-blk><p>The community is the product. The Discord guild runs on three
+            roles, exactly one per member, swapped automatically as your status changes: <strong>Member</strong>
+            (paid, full access), <strong>Trial</strong> (read along while you evaluate), and
+            <strong>Locked</strong> (lapsed or banned; you stay in the guild but the gated channels close).
+            Nobody is ever kicked by the system.</p></div>
+          <div class="blk" data-blk><p>The weekly two hour shop-talk session is the heartbeat: product
+            development, publishing, business progress, technical decisions, and member coaching.</p></div>
+          <div class="blk" data-blk><p>The #shares channel carries everything members publish, and each
+            item posts again into its category channel, so following a topic means watching one channel.
+            Trending developer news lands in the category channels too, curated rather than automatic, so
+            the channels stay signal.</p></div>
+          <div class="blk" data-blk><p>Your invite arrives in the welcome view after setup (and signup can
+            add you to the guild automatically when you link Discord). Roles follow your membership on
+            their own; there is nothing to configure.</p></div>
+        </section>
+
+        <!-- 7. EDITING MEMBER PROFILE -->
+        <section class="hb-sec" id="profile" data-sec>
+          <h2>Editing Member Profile</h2>
+          <div class="blk" data-blk><p>Your public profile is one file you own:
+            <code>members/&lt;username&gt;/profile.md</code>. Edit it from the extension account page, or
+            through the CMS and MCP like any other content. It publishes through the same pull request
+            flow, and publishing a profile is a paid-member capability.</p></div>
+          <div class="blk" data-blk><p>Fields you control: display name, headline, avatar (defaults to
+            your GitHub avatar), location, roles and skills, social links, a for-hire flag, and
+            <code>directory: true</code> to opt in to the <a href="/members/">member directory</a>.
+            Fields the system controls: your tier, your join date, and the author identity, which is
+            always forced to the signed-in account.</p></div>
+          <div class="blk" data-blk><p>Your profile page at <code>/members/&lt;username&gt;/</code> is
+            more than a bio: it counts as a revenue attribution entry point. A visitor who lands on your
+            profile and later becomes a member credits you in the revenue split, no special link
+            required.</p></div>
+        </section>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script>
+  // Handbook search + scrollspy (vanilla, the ProductDirectory filter idiom). Search matches each
+  // content block's text; a section with no visible blocks collapses; the sidebar shows per-section
+  // match counts while a query is active. Scrollspy pauses during a search.
+  document.querySelectorAll<HTMLElement>('.hb-wrap').forEach((root) => {
+    const input = root.querySelector<HTMLInputElement>('[data-hb-search]');
+    const empty = root.querySelector<HTMLElement>('[data-hb-empty]');
+    const secs = Array.from(root.querySelectorAll<HTMLElement>('[data-sec]'));
+    const navLinks = Array.from(root.querySelectorAll<HTMLAnchorElement>('[data-nav]'));
+    const linkFor = (id: string) => navLinks.find((a) => a.dataset.nav === id);
+
+    let searching = false;
+    function applySearch() {
+      const q = (input?.value || '').trim().toLowerCase();
+      searching = q.length > 0;
+      let total = 0;
+      secs.forEach((sec) => {
+        const blocks = Array.from(sec.querySelectorAll<HTMLElement>('[data-blk]'));
+        let hits = 0;
+        blocks.forEach((b) => {
+          const match = !q || (b.textContent || '').toLowerCase().includes(q);
+          b.hidden = !match;
+          if (match) hits += 1;
+        });
+        sec.hidden = q ? hits === 0 : false;
+        total += hits;
+        const link = linkFor(sec.id);
+        if (link) {
+          const cnt = link.querySelector<HTMLElement>('.cnt');
+          if (cnt) cnt.textContent = q && hits ? String(hits) : '';
+          link.classList.toggle('dim', Boolean(q) && hits === 0);
+        }
+      });
+      if (empty) empty.hidden = !q || total > 0;
+    }
+    input?.addEventListener('input', applySearch);
+
+    // Scrollspy: highlight the section nearest the top of the viewport.
+    const spy = new IntersectionObserver(
+      (entries) => {
+        if (searching) return;
+        entries.forEach((e) => {
+          if (!e.isIntersecting) return;
+          navLinks.forEach((a) => a.classList.toggle('on', a.dataset.nav === e.target.id));
+        });
+      },
+      { rootMargin: '-10% 0px -75% 0px', threshold: 0 },
+    );
+    secs.forEach((s) => spy.observe(s));
+  });
+</script>
+
+<style>
+  .hb-wrap { max-width: var(--maxw); margin: 0 auto; padding: 44px var(--gut) 96px; }
+  .hb-head { max-width: 720px; margin-bottom: 36px; }
+  .hb-title { font-family: var(--f-display); font-weight: 800; font-size: clamp(30px, 5vw, 42px); letter-spacing: -0.01em; color: var(--fg); margin: 0; }
+  .hb-lead { color: var(--fg-soft); font-size: 16px; line-height: 1.65; margin: 14px 0 0; }
+
+  .hb-grid { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 48px; align-items: start; }
+  @media (max-width: 900px) { .hb-grid { grid-template-columns: 1fr; gap: 24px; } .hb-side { position: static; } }
+
+  .hb-side { position: sticky; top: 84px; }
+  .hb-search { display: flex; align-items: center; gap: 8px; border: 1.5px solid var(--line); border-radius: 9px; background: var(--paper); padding: 9px 12px; color: var(--fg-mute); margin-bottom: 14px; }
+  .hb-search:focus-within { border-color: var(--green); }
+  .hb-search input { border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 14px; width: 100%; }
+  .hb-search input::placeholder { color: var(--fg-mute); }
+
+  .hb-nav { display: flex; flex-direction: column; }
+  .hb-nav a { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-left: 2px solid var(--line); color: var(--fg-soft); text-decoration: none; font-size: 13.5px; line-height: 1.35; }
+  .hb-nav a:hover { color: var(--fg); }
+  .hb-nav a.on { color: var(--green-700); border-left-color: var(--green); font-weight: 600; }
+  .hb-nav a.dim { opacity: .45; }
+  .hb-nav .cnt { font-family: var(--f-mono); font-size: 10.5px; color: var(--green-700); }
+
+  .hb-empty { border: 1.5px dashed var(--line); border-radius: 12px; padding: 26px; color: var(--fg-mute); text-align: center; }
+
+  .hb-sec { padding: 8px 0 34px; border-bottom: 1px solid var(--line); margin-bottom: 34px; scroll-margin-top: 84px; }
+  .hb-sec:last-child { border-bottom: 0; margin-bottom: 0; }
+  .hb-sec h2 { font-family: var(--f-display); font-weight: 700; font-size: 23px; color: var(--fg); margin: 0 0 6px; }
+  .blk { margin-top: 14px; }
+  .blk p { color: var(--fg-soft); font-size: 15px; line-height: 1.7; margin: 0; }
+  .blk ul, .blk ol { color: var(--fg-soft); font-size: 15px; line-height: 1.7; margin: 10px 0 0; padding-left: 22px; }
+  /* The global reset strips list markers; restore them for handbook prose. */
+  .blk ul { list-style: disc; }
+  .blk ol { list-style: decimal; }
+  .blk li { margin-top: 6px; }
+  .blk strong { color: var(--fg); }
+  .blk a { color: var(--green-700); text-decoration: underline; text-underline-offset: 2px; }
+  .blk code { font-family: var(--f-mono); font-size: .88em; background: var(--tint, rgba(31,158,95,.08)); border-radius: 5px; padding: 1px 5px; }
+</style>
