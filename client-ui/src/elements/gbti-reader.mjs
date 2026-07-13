@@ -262,24 +262,22 @@ class GbtiReader extends GbtiElement {
       if (it.type === 'share') {
         let body = it.body;
         let enc = it.encryptedBody;
-        // SOW-089 fix: an activity-feed / deep-link share projection carries NO body (the public build
-        // artifact never holds a member body), so the reader used to lock on visibility alone — even for
-        // a paid member. Fetch the real share record through the tier-gated op (paid/trial get member
-        // shares with body/encryptedBody; below the tier the record simply is not returned and the
-        // locked notice stands, fail-closed).
+        // SOW-089: a feed/deep-link share projection carries NO body (the public build artifact never
+        // holds a member body), so backfill the real record through the tier-gated op (paid/trial get
+        // body/encryptedBody; below the tier the record is not returned at all).
         if (!body && !enc && String(it.visibility || 'members') === 'members') {
           try {
             const { items } = (await this.client.listShares({ limit: 100 })) ?? {};
             const hit = (items ?? []).find((s) => (it.id && s.id === it.id)
               || (s.author === it.author && (s.createdAt === it.createdAt || (it.url && s.url === it.url))));
-            // The full record in hand and still no body = the share simply HAS no note (a note is
-            // optional): render nothing instead of a phantom locked-comment block no tier can unlock.
-            if (hit) {
-              body = hit.body; enc = hit.encryptedBody;
-              if (!body && !enc) return '';
-            }
-          } catch { /* fail-closed to the locked notice */ }
+            if (hit) { body = hit.body; enc = hit.encryptedBody; }
+          } catch { /* the backfill is best-effort; the no-enc guard below fails closed to no note */ }
         }
+        // A share is a link + an OPTIONAL note. Its `members` visibility governs STREAM placement, not
+        // gated body content, so only an ENCRYPTED note can ever be locked. With no encrypted note we
+        // render the plaintext note (paid backfill) or NOTHING (no note, or below-tier / a fresh share
+        // not yet in the index) — never a phantom "become a member" block no tier can unlock.
+        if (!enc) return body ? ((await this.client.preview({ body }))?.html ?? '') : '';
         return await this._body(it.visibility, body, enc);
       }
       const { frontmatter, body } = await this.client.readItem({ path: it.path });

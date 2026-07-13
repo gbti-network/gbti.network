@@ -14203,11 +14203,11 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
               if (hit) {
                 body2 = hit.body;
                 enc = hit.encryptedBody;
-                if (!body2 && !enc) return "";
               }
             } catch {
             }
           }
+          if (!enc) return body2 ? (await this.client.preview({ body: body2 }))?.html ?? "" : "";
           return await this._body(it.visibility, body2, enc);
         }
         const { frontmatter, body } = await this.client.readItem({ path: it.path });
