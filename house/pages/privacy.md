@@ -36,6 +36,17 @@ We practice data minimization. We do not store your email address or payment det
 - **Activity data.** Your private bookmarks (favorites) and collections are stored in a separate, deletable store at the network edge, keyed to your GitHub id. They are private to you and are not published to the repository.
 - **Operational data.** Our infrastructure provider, Cloudflare, processes technical request data such as IP addresses for security and reliability, and we use Cloudflare Turnstile to deter automated abuse at sign-up.
 
+### The browser extension
+
+The optional GBTI Network browser extension lets members author and read their gbti.network content in place. It is a single-purpose tool, and its data handling is limited to that purpose.
+
+- **What it stores, and where.** The extension stores on your own device, in the browser extension's local storage, your GitHub access token and refresh token, your cached membership status, and your interface preferences. This data stays on your device. It is not sent to us or to any third party.
+- **Token isolation.** Your GitHub access token is held only by the extension's background service worker. It is never exposed to any web page, including gbti.network itself.
+- **What it accesses, and why.** To sign you in, the extension uses GitHub's device authorization flow at github.com and reads your membership status from our sign-up service. To let you author and read member content, it reads from and writes to the public content repository through the GitHub API. It communicates only with gbti.network, our sign-up service at signup.gbti.network, and GitHub.
+- **No tracking, no browsing collection.** The extension contains no analytics or tracking code. Its content script runs only on gbti.network pages; it does not read or record your activity on any other website, and it collects no web browsing activity.
+- **Use limitation.** Extension data is used solely to provide the extension's single purpose: authentication, and authoring and reading your gbti.network member content. We do not sell it, transfer it to third parties, or use it for advertising or any unrelated purpose.
+- **Removing it.** Uninstalling or disabling the extension removes its locally stored data from your device. You can revoke the extension's access to your GitHub account at any time at github.com/settings/applications.
+
 ## 4. How we use your data, and our lawful bases
 
 - To provide the service you signed up for: authentication, publishing, membership, billing, role assignment, and community access. Our lawful basis is performance of our contract with you.
