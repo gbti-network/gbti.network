@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 9
+    date: 2026-07-14
+    type: build
+    title: X (Twitter) syndication destination
+    notes:
+      - Finished the X destination: a post or a share can now syndicate to the co-op X account.
+      - A members-only item posts a short stub with the link, never the gated content.
+
+  - version: 0.1.0
     build: 8
     date: 2026-07-13
     type: build

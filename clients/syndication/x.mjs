@@ -1,27 +1,63 @@
-// SOW-058: the X (Twitter) syndication adapter. Posts via the v2 POST /2/tweets endpoint with an OAuth2
-// user-context bearer (X_ACCESS_TOKEN). Thin injectable-fetch client; no SDK.
+// SOW-058 + SOW-120: the X (Twitter) syndication adapter. Posts a single tweet via the v2 POST /2/tweets
+// endpoint, authorized with an OAuth 1.0a user-context signature (the brand account's consumer key/secret +
+// access token/secret). The link rides in the tweet text and X auto-unfurls it into a link card.
 //
-// PROVISIONING CAVEAT (SOW-058): X requires an OAuth app + an OAuth2 user-context (or OAuth1.0a) token with write
-// scope, and the free tier write cap is very low. This adapter ships disabled until its secrets exist; token
-// acquisition/refresh is owner-provisioning (see the SOW). When unconfigured it is recorded "skipped", never
-// "failed".
+// SOW-120 fixed two defects in the SOW-058 scaffold: (1) it sent the OAuth 1.0a access token as an OAuth 2.0
+// bearer, which /2/tweets rejects with 401 (now it signs the request per RFC 5849); (2) it ignored the
+// template system (now the AUTO rail renders the configured `x` channel template, stub-aware for a
+// members-only item, exactly like the Reddit adapter). Thin injectable-fetch client; no SDK.
+//
+// PROVISIONING (SOW-120): X requires an app with Read + Write and the four OAuth 1.0a credentials
+// (X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET), generated in the developer portal. The Free
+// tier (about 500 writes/month) covers co-op volume. When unconfigured the drain records "skipped", never
+// "failed". The tokens are long-lived, so there is no refresh flow.
 
-import { buildChannelText } from '../../membership/syndication-format.mjs';
+import { buildChannelText, renderTemplate } from '../../membership/syndication-format.mjs';
+import { templateFor } from '../../membership/syndication-config-core.mjs';
 import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
+import { authHeader } from './oauth1.mjs';
 
-export function createXAdapter({ env = {}, fetchImpl = globalThis.fetch } = {}) {
+const TWEETS_URL = 'https://api.twitter.com/2/tweets';
+
+export function createXAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg = null } = {}) {
   return {
     name: 'x',
     enabled() { return secretsPresent(env, 'x'); },
-    async post(item) {
-      // SOW-088 manual syndicate: an already-rendered (sanitized) message wins over the built text.
-      const text = (typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : buildChannelText(item, { limit: channelLimit('x') });
-      const res = await fetchImpl('https://api.twitter.com/2/tweets', {
+    async post(item, { nonce, timestamp } = {}) {
+      // The AUTO rail renders the configured `x` template (stub-aware for a members-only item); the MANUAL
+      // rail's already-sanitized textOverride wins. Default template: the title plus the link (X cards it).
+      const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
+      const autoText = cfg
+        ? renderTemplate(templateFor(cfg, item.source, 'x', { stub: stubish, channelOnly: true }) || '{title} {url}', item, { limit: channelLimit('x') })
+        : buildChannelText(item, { limit: channelLimit('x') });
+      const text = ((typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : autoText).slice(0, channelLimit('x'));
+
+      let header;
+      try {
+        header = await authHeader({
+          method: 'POST',
+          url: TWEETS_URL,
+          consumerKey: env.X_API_KEY,
+          consumerSecret: env.X_API_SECRET,
+          token: env.X_ACCESS_TOKEN,
+          tokenSecret: env.X_ACCESS_SECRET,
+          nonce,
+          timestamp,
+        });
+      } catch (err) {
+        return { ok: false, error: `x sign ${(err?.message || 'failed').slice(0, 120)}` };
+      }
+
+      const res = await fetchImpl(TWEETS_URL, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${env.X_ACCESS_TOKEN}`, 'Content-Type': 'application/json' },
+        headers: { Authorization: header, 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       });
-      if (!res || !res.ok) return { ok: false, error: `x ${res ? res.status : 'no response'}` };
+      if (!res || !res.ok) {
+        const body = res ? await res.json().catch(() => ({})) : {};
+        const detail = body?.detail || body?.title || (body?.errors && body.errors[0] && (body.errors[0].message || body.errors[0].detail)) || (res ? `status ${res.status}` : 'no response');
+        return { ok: false, error: `x ${detail}`.slice(0, 160) };
+      }
       const json = await res.json().catch(() => ({}));
       const id = json?.data?.id || null;
       return { ok: true, id, url: id ? `https://x.com/i/web/status/${id}` : null };

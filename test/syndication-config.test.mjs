@@ -187,7 +187,8 @@ test('stub templates: the resolution chain and the mirror', async () => {
   const { DEFAULT_CHANNEL_STUB_TEMPLATES, DEFAULT_STUB_TEMPLATES, DEFAULT_TEMPLATES } = await import('../membership/syndication-config-core.mjs');
   const empty = syndicationConfigFromParsed({});
   assert.equal(templateFor(empty, 'post', 'discord', { stub: true }), DEFAULT_CHANNEL_STUB_TEMPLATES.discord.post, 'per-channel built-in');
-  assert.equal(templateFor(empty, 'post', 'x', { stub: true }), DEFAULT_STUB_TEMPLATES.post, 'shared built-in for channels without their own');
+  assert.equal(templateFor(empty, 'post', 'x', { stub: true }), DEFAULT_CHANNEL_STUB_TEMPLATES.x.post, 'SOW-120: X has its own per-channel built-in stub');
+  assert.equal(templateFor(empty, 'post', 'mastodon', { stub: true }), DEFAULT_STUB_TEMPLATES.post, 'shared built-in for channels without their own');
   assert.equal(templateFor(empty, 'devto-intro', 'devto', { stub: true }), templateFor(empty, 'devto-intro', 'devto'), 'no stub built-in -> the public chain');
   const cfg = syndicationConfigFromParsed({ syndication: {
     stub_templates: { post: 'Shared stub {title}' },
