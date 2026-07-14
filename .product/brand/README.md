@@ -70,6 +70,12 @@ ink wordmark; on ink or green grounds use the white mark and white wordmark.
 - Do not place the mark on a low-contrast ground. Keep it legible.
 - Do not recolor the mark outside this palette.
 
+## Related packages
+
+The Chrome Web Store listing set (marquee, small promo tile, store icon, four feature screenshots) lives in
+the sibling folder `.product/chrome-extension/` and is served under https://gbti.network/brand/chrome-extension/
+(shown on the brand page's Chrome extension listing section).
+
 ## Source
 
 Built from the DesignSync "GBTI Logo Package" project. These PNGs are derived from the packaged monogram at the
