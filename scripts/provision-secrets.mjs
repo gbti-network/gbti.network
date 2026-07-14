@@ -48,6 +48,12 @@ const REGISTRY = [
   { name: 'GH_BOT_TOKEN', targets: ['actions'], localName: 'GITHUB_BOT_TOKEN', note: 'gbtilabs PAT for Actions (gate/reconcile/award).' },
   { name: 'CF_API_TOKEN', targets: ['actions'], note: 'Cloudflare KV write for the reconcile overrides mirror.' },
   { name: 'RESEND_API_KEY', targets: ['actions'], optional: true, note: 'Transactional email (day-87 reminder).' },
+  // SOW-120: the X (Twitter) syndication destination. OAuth 1.0a user-context (long-lived, no refresh). The
+  // drain runs in the Worker, so these are Worker-only (Actions only enqueues). Free tier is fine for write.
+  { name: 'X_API_KEY', targets: ['worker'], optional: true, note: 'X app consumer key (Keys and tokens > Consumer Keys).' },
+  { name: 'X_API_SECRET', targets: ['worker'], optional: true, note: 'X app consumer secret.' },
+  { name: 'X_ACCESS_TOKEN', targets: ['worker'], optional: true, note: 'X brand-account access token (Read and Write; regenerate if it was minted read-only).' },
+  { name: 'X_ACCESS_SECRET', targets: ['worker'], optional: true, note: 'X brand-account access token secret.' },
 ];
 
 // ---- safe local env parsing (values are read but NEVER printed) ----
