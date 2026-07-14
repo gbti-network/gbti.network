@@ -24,7 +24,7 @@ syndication:
   channels:
     discord: true
     discord-category: true
-    x: false
+    x: true
     linkedin: false
     mastodon: false
     bluesky: false
