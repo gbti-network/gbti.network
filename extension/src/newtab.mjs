@@ -26,6 +26,31 @@ function longDate() {
   return new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+// SOW-118: fill the bottom-right version indicator. The installed version comes from the manifest (always
+// available); the build number comes from the public changelog artifact (fail-soft, so an offline tab still
+// shows the version). The whole control links to /changelog.
+async function initVersionIndicator() {
+  const el = $('[data-version]');
+  const txt = el?.querySelector('[data-version-text]');
+  if (!el || !txt) return;
+  let version = '';
+  try { version = chrome.runtime?.getManifest?.().version || ''; } catch { version = ''; }
+  if (!version) return; // nothing meaningful to show
+  const paint = (build) => {
+    txt.textContent = build > 0 ? `v${version} · build ${build}` : `v${version}`;
+    el.classList.add('show');
+  };
+  paint(0); // show the version immediately; the build number lands after the fetch
+  try {
+    const res = await fetch(`${SITE}/changelog.json`, { cache: 'no-cache' });
+    if (res.ok) {
+      const data = await res.json();
+      const build = Number(data?.build);
+      if (Number.isFinite(build) && build > 0) paint(build);
+    }
+  } catch { /* offline or the artifact is unreachable: the version-only label is fine */ }
+}
+
 let ENTRIES = [];
 // SOW-111 QA fix: the single-type views are the UNCAPPED directories, but /activity-index.json is a capped
 // river (40 newest), so filtering it silently dropped older items (e.g. only 8 of 46 articles). Each content
@@ -633,6 +658,7 @@ function init() {
   syncModeButtons();
   syncTypeButtons();
   initFooterTip();
+  initVersionIndicator();
   // SOW-077: status drives the read-only upgrade banner + the feed's Shares (public-vs-member) + News visibility;
   // once it resolves, pull whatever the default/persisted filter needs and re-render. No hard lock anymore.
   applyMembershipState().then(() => { ensureSharesForFilter(); ensureNewsForFilter(); });

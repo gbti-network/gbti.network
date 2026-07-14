@@ -15688,6 +15688,32 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
   function longDate() {
     return (/* @__PURE__ */ new Date()).toLocaleDateString(void 0, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   }
+  async function initVersionIndicator() {
+    const el = $("[data-version]");
+    const txt = el?.querySelector("[data-version-text]");
+    if (!el || !txt) return;
+    let version = "";
+    try {
+      version = chrome.runtime?.getManifest?.().version || "";
+    } catch {
+      version = "";
+    }
+    if (!version) return;
+    const paint = (build) => {
+      txt.textContent = build > 0 ? `v${version} · build ${build}` : `v${version}`;
+      el.classList.add("show");
+    };
+    paint(0);
+    try {
+      const res = await fetch(`${SITE16}/changelog.json`, { cache: "no-cache" });
+      if (res.ok) {
+        const data = await res.json();
+        const build = Number(data?.build);
+        if (Number.isFinite(build) && build > 0) paint(build);
+      }
+    } catch {
+    }
+  }
   var ENTRIES = [];
   var DIRECTORY_URL = { post: "blog-index.json", product: "products-index.json", prompt: "prompts-index.json" };
   var DIRECTORY = { post: null, product: null, prompt: null };
@@ -16257,6 +16283,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     syncModeButtons();
     syncTypeButtons();
     initFooterTip();
+    initVersionIndicator();
     applyMembershipState().then(() => {
       ensureSharesForFilter();
       ensureNewsForFilter();

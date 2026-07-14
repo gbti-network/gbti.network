@@ -1,0 +1,81 @@
+# SOW-118: the git-native changelog journal (portable, admin-CODEOWNED house data). This file IS the
+# curation: a fork that clones this repo carries its own changelog, and its build publishes its own
+# /changelog.json. The Astro build emits src/pages/changelog.json.ts from this, the public /changelog page
+# renders it, and the extension new-tab version indicator reads it to show the current build number.
+#
+# Each entry: { version, build, date, type, title, notes }.
+#   version : the semver the extension manifest carries at that point (a release bumps it, a build reuses it).
+#   build   : a monotonic integer that increases by one on every entry. The extension shows the highest build.
+#   date    : an absolute date (YYYY-MM-DD).
+#   type    : release (a public version members see) or build (a dev iteration, shown only when the
+#             changelog page's "Show build notes" view is turned on).
+#   title   : a short headline (writing conventions: no dashes, no contractions, no smart quotes).
+#   notes   : a list of plain lines describing what changed. Never a secret, a token, or a private URL.
+#
+# The deployment SOP (.data/ops/deployment-ops/README.md) tells the agent to APPEND one entry here on every
+# version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
+entries:
+  - version: 0.1.0
+    build: 7
+    date: 2026-07-13
+    type: release
+    title: Version 0.1.0, the first public release
+    notes:
+      - The new-tab member hub: sign in with GitHub, then browse the co-op activity feed and the curated news.
+      - Author and read your gbti.network content in place, with member-only bodies decrypted through the worker.
+      - Syndicate a share or a post to Discord and to dev.to, with a hold window you can approve early.
+      - Submitted to the Chrome Web Store and pending review. The direct download stays the fallback.
+
+  - version: 0.1.0
+    build: 6
+    date: 2026-07-13
+    type: build
+    title: Chrome Web Store submission
+    notes:
+      - Prepared and submitted the v0.1.0 package for review, set to publish publicly once it passes.
+      - Generated the store icon, screenshots, and promo tiles from the brand and stored them under the product folder.
+      - Extended the privacy policy to describe the extension data handling.
+
+  - version: 0.1.0
+    build: 5
+    date: 2026-07-13
+    type: build
+    title: The dev.to destination
+    notes:
+      - Crosspost a post or a share to the GBTI organization on dev.to, manually or automatically.
+      - A member-only item posts a stub with its description and a link, never the gated body.
+      - Added an admin-editable call-to-action footer and the short-description token.
+
+  - version: 0.1.0
+    build: 4
+    date: 2026-07-12
+    type: build
+    title: Syndication datatable and per-channel stubs
+    notes:
+      - Rebuilt the syndication admin view as a filterable datatable with low padding.
+      - Gave every channel its own members-stub template so each destination reads in its own voice.
+
+  - version: 0.1.0
+    build: 3
+    date: 2026-07-12
+    type: build
+    title: Reddit posting options
+    notes:
+      - The manual Reddit composer now supports a link post or a text post.
+      - The template drives the post body, with a separately templated first comment.
+
+  - version: 0.1.0
+    build: 2
+    date: 2026-07-11
+    type: build
+    title: Member profile referral touches
+    notes:
+      - A visit to a member profile page now counts as a first-touch referral entry point, with no ref code needed.
+
+  - version: 0.1.0
+    build: 1
+    date: 2026-07-11
+    type: build
+    title: The update banner
+    notes:
+      - The new tab shows a non-blocking banner when a newer extension version is available to download.

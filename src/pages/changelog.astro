@@ -1,0 +1,113 @@
+---
+// SOW-118: the public changelog blog. Reads the git-native journal (house/changelog.yml) through the same
+// normalizer the extension artifact uses (src/lib/changelog.mjs), so the page and the /changelog.json feed
+// never diverge. It defaults to OFFICIAL RELEASES only; a "Show build notes" toggle reveals the dev build
+// entries and PERSISTS in localStorage, so once the main dev turns it on it stays on across visits. The
+// extension new-tab version indicator links here.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { allEntries, currentBuild, currentVersion } from '../lib/changelog.mjs';
+
+const entries = allEntries();
+const version = currentVersion();
+const build = currentBuild();
+
+const fmtDate = (d) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+const anchorFor = (e) => (e.type === 'release' ? `v${e.version}` : `build-${e.build}`);
+---
+<BaseLayout
+  title="Changelog"
+  description="Every version of the GBTI Network, with the notes for each release. Turn on the build notes view to see the development iterations behind each release."
+>
+  <section class="band-sm">
+    <div class="wrap cl-wrap">
+      <div class="chip chip-green" style="display:inline-flex"><span class="chip-dot"></span> Changelog</div>
+      <h1 class="h1 mt8">What changed, version by version</h1>
+      <p class="lead cl-lead">The current build is version {version}, build {build}. Releases are the versions everyone
+        runs. Turn on the build notes to see the development iterations behind each release.</p>
+
+      <div class="cl-controls">
+        <label class="cl-toggle">
+          <input type="checkbox" data-buildnotes-toggle />
+          <span class="cl-toggle-track"><span class="cl-toggle-thumb"></span></span>
+          <span class="cl-toggle-label">Show build notes</span>
+        </label>
+        <span class="body-sm muted cl-toggle-hint">Off shows official releases only.</span>
+      </div>
+
+      <ol class="cl-list" data-changelog>
+        {entries.map((e) => (
+          <li id={anchorFor(e)} class={`cl-entry ${e.type === 'build' ? 'cl-build' : 'cl-release'}`}>
+            <div class="cl-entry-head">
+              <a class="cl-badge" href={`#${anchorFor(e)}`}>
+                {e.type === 'release' ? `Version ${e.version}` : `Build ${e.build}`}
+              </a>
+              {e.type === 'build' && <span class="cl-tag">Build note</span>}
+              <time class="cl-date" datetime={e.date}>{fmtDate(e.date)}</time>
+            </div>
+            <h2 class="h3 cl-title">{e.title}</h2>
+            {e.notes.length > 0 && (
+              <ul class="cl-notes">
+                {e.notes.map((n) => <li>{n}</li>)}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .cl-wrap { max-width: 760px; }
+  .cl-lead { max-width: 640px; }
+
+  .cl-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin: 28px 0 10px; }
+  .cl-toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+  .cl-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .cl-toggle-track { position: relative; width: 40px; height: 22px; border-radius: 999px; background: var(--paper-3); border: 1.5px solid var(--line); transition: background .15s, border-color .15s; }
+  .cl-toggle-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--fg-mute); transition: transform .15s, background .15s; }
+  .cl-toggle input:checked + .cl-toggle-track { background: var(--green-tint); border-color: var(--green); }
+  .cl-toggle input:checked + .cl-toggle-track .cl-toggle-thumb { transform: translateX(18px); background: var(--green); }
+  .cl-toggle input:focus-visible + .cl-toggle-track { outline: 2px solid var(--green); outline-offset: 2px; }
+  .cl-toggle-label { font-weight: 700; font-size: 14px; color: var(--fg); }
+  .cl-toggle-hint { margin: 0; }
+
+  .cl-list { list-style: none; margin: 12px 0 0; padding: 0; }
+  .cl-entry { padding: 22px 0; border-top: 1.5px solid var(--line); scroll-margin-top: 90px; }
+  .cl-entry:first-child { border-top: 0; }
+
+  /* Build notes are hidden until the toggle turns them on (the list carries .cl-show-builds). */
+  .cl-build { display: none; }
+  .cl-list.cl-show-builds .cl-build { display: block; }
+
+  .cl-entry-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+  .cl-badge { font-family: var(--f-mono); font-size: 12.5px; font-weight: 700; color: var(--green-700); text-decoration: none; padding: 3px 10px; border: 1.5px solid var(--green); border-radius: 999px; background: var(--green-tint); }
+  .cl-badge:hover { background: var(--green); color: #fff; }
+  .cl-build .cl-badge { color: var(--fg-mute); border-color: var(--line-2); background: var(--paper-3); }
+  .cl-build .cl-badge:hover { background: var(--fg-mute); color: var(--paper); }
+  .cl-tag { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--fg-mute); }
+  .cl-date { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-mute); margin-left: auto; }
+
+  .cl-title { margin: 0 0 8px; }
+  .cl-notes { margin: 0; padding-left: 20px; }
+  .cl-notes li { margin: 5px 0; color: var(--fg-soft); line-height: 1.55; }
+</style>
+
+<script>
+  // Persist the build-notes view: default OFF (releases only). Once turned on it stays on across visits.
+  const KEY = 'gbti-changelog-buildnotes';
+  const list = document.querySelector('[data-changelog]');
+  const toggle = document.querySelector('[data-buildnotes-toggle]');
+  if (list && toggle) {
+    const apply = (on) => {
+      list.classList.toggle('cl-show-builds', on);
+      toggle.checked = on;
+    };
+    apply(localStorage.getItem(KEY) === '1');
+    toggle.addEventListener('change', () => {
+      const on = toggle.checked;
+      localStorage.setItem(KEY, on ? '1' : '0');
+      apply(on);
+    });
+  }
+</script>
