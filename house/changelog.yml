@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 8
+    date: 2026-07-13
+    type: build
+    title: The changelog and version indicator
+    notes:
+      - Added this changelog and a version indicator to the new-tab hub, bottom right, that links here.
+      - The page shows official releases by default, with a toggle to reveal the development build notes.
+
+  - version: 0.1.0
     build: 7
     date: 2026-07-13
     type: release
