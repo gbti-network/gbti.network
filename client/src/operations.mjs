@@ -35,7 +35,7 @@ import yaml from 'js-yaml';
 import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow, getCouponUsage as workerGetCouponUsage, rotateCouponLink as workerRotateCouponLink } from './member-admin-client.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
 
@@ -1526,6 +1526,30 @@ export async function listDiscordChannels(ctx) {
   const token = ctx.store?.get?.('githubToken');
   const channels = await workerGetDiscordChannels({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   return { channels };
+}
+
+/** SOW-119: per-coupon usage + invite links (the Worker is the authority; admin-gated there). */
+export async function getCouponUsageOp(ctx) {
+  await requireAdmin(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) throw new OperationError('not-authenticated', 'sign in first');
+  try {
+    return await workerGetCouponUsage({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new OperationError('admin-op-failed', err?.message || 'could not read coupon usage');
+  }
+}
+
+/** SOW-119: mint or rotate a coupon's shareable invite-link token. */
+export async function rotateCouponLinkOp(ctx, { code } = {}) {
+  await requireAdmin(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) throw new OperationError('not-authenticated', 'sign in first');
+  try {
+    return await workerRotateCouponLink({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, code });
+  } catch (err) {
+    throw new OperationError('admin-op-failed', err?.message || 'could not rotate the coupon link');
+  }
 }
 
 export async function triggerAdminOp(ctx, { action, params } = {}) {

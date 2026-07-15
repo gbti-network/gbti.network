@@ -20,6 +20,7 @@ import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabl
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // SOW-087
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
 import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111 + SOW-088
+import { addCouponEdit, updateCouponEdit, CouponEditError } from '../../membership/coupon-edits.mjs'; // SOW-119
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088
 import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
@@ -302,6 +303,46 @@ export async function setNewsSourceEnabled(ctx, { id, enabled } = {}) {
   const on = !!enabled;
   return editNewsSources(ctx, (parsed) => setSourceEnabledEdit(parsed, { id, enabled: on }, actionCtx(ctx)),
     { branch: `gbti/news-source-${on ? 'enable' : 'disable'}-${sid}`, message: `${on ? 'Enable' : 'Disable'} news source ${id}`, title: `${on ? 'Enable' : 'Disable'} news source: ${id}`, noopMsg: `news source already ${on ? 'enabled' : 'disabled'}: ${id}` });
+}
+
+// SOW-119: the coupon-pool manager (config half). Each edit applies the pure coupon-edits core to the parsed
+// house/coupons.yml and opens an auto-merged house PR, exactly like the news-source manager. Edits reach the
+// signup Worker at the next coupons:config mirror sync (reconcile or the 6h sync-overrides-mirror tick). The
+// runtime half (usage counts + invite links) is Worker/KV via member-admin-client (operations.mjs).
+const COUPONS_PATH = 'house/coupons.yml';
+
+/** Read the current coupon pool for the manager UI. Admin-owned config; read-only here. */
+export async function getCouponPool(ctx) {
+  const raw = (await ctx.reader?.readFile?.(COUPONS_PATH)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  return { coupons: Array.isArray(parsed.coupons) ? parsed.coupons : [] };
+}
+
+async function editCoupons(ctx, edit, { branch, message, title, noopMsg }) {
+  requireRole(ctx, canBanGrandfather, 'admin');
+  const { repo } = requireRepo(ctx);
+  const raw = (await ctx.reader?.readFile?.(COUPONS_PATH)) || '';
+  let parsed;
+  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
+  let result;
+  try { result = edit(parsed); }
+  catch (err) { if (err instanceof CouponEditError) throw new OperationError('bad-request', err.message); throw err; }
+  if (!result.changed) return noop(noopMsg, result.audit);
+  const pr = await publishFiles({ repo, branch, files: [{ path: COUPONS_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
+  return { ...pr, changed: true, audit: result.audit };
+}
+
+export async function addCoupon(ctx, { code, freeDays, note, maxRedemptions, expiresAt } = {}) {
+  const c = String(code || '').trim().toUpperCase();
+  return editCoupons(ctx, (parsed) => addCouponEdit(parsed, { code, freeDays, note, maxRedemptions, expiresAt }, actionCtx(ctx)),
+    { branch: `gbti/coupon-add-${c.toLowerCase()}`, message: `Add coupon ${c}`, title: `Add coupon: ${c}`, noopMsg: `coupon already present: ${c}` });
+}
+
+export async function updateCoupon(ctx, { code, patch } = {}) {
+  const c = String(code || '').trim().toUpperCase();
+  return editCoupons(ctx, (parsed) => updateCouponEdit(parsed, { code, patch }, actionCtx(ctx)),
+    { branch: `gbti/coupon-update-${c.toLowerCase()}-${Date.now()}`, message: `Update coupon ${c}`, title: `Update coupon: ${c}`, noopMsg: `coupon already in that state: ${c}` });
 }
 
 // SOW-063 Phase 3: the superadmin quote-pool manager. Each edit applies the pure quote-edits core to the parsed

@@ -54,6 +54,8 @@ import {
   approveSyndication,
   getSyndicateNowInfo,
   syndicateNow,
+  getCouponUsageOp,
+  rotateCouponLinkOp,
 } from './operations.mjs';
 import { getSettings, updateSettings, getBilling, getReferral } from './settings-ops.mjs';
 import { fieldsFor } from './form-fields.mjs';
@@ -64,6 +66,7 @@ import {
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
   getNewsEngagementSettings, setNewsEngagementSettings, getSyndicationSettings, setSyndicationSettings,
+  getCouponPool, addCoupon, updateCoupon,
 } from './admin-ops.mjs';
 
 export { CLIENT_VERSION } from './operations.mjs';
@@ -89,6 +92,8 @@ const ADMIN_ACTIONS = {
   'syndication-templates-set': setSyndicationTemplates, // SOW-088: the admin card batch (one PR per Save)
   'news-engagement-set': setNewsEngagementSettings, // SOW-111: the news auto-share settings
   'syndication-settings-set': setSyndicationSettings, // SOW-088: pipeline master/approval/hold/channel switches
+  'coupon-add': addCoupon, // SOW-119: the coupon registry (house/coupons.yml)
+  'coupon-update': updateCoupon, // SOW-119
 };
 
 const STATUS_FOR = {
@@ -198,6 +203,9 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/syndicate-now') return run(() => getSyndicateNowInfo(ctx)); // SOW-088: manual syndicate readiness
   if (method === 'POST' && pathname === '/api/syndicate-now') return run(() => syndicateNow(ctx, body)); // SOW-088: post one item to one destination now
   if (method === 'POST' && pathname === '/api/admin-ops') return run(() => triggerAdminOp(ctx, body ?? {})); // SOW-038 P3: reconcile/E2E trigger
+  if (method === 'GET' && pathname === '/api/coupon-pool') return run(() => getCouponPool(ctx)); // SOW-119: the coupon registry
+  if (method === 'GET' && pathname === '/api/coupon-usage') return run(() => getCouponUsageOp(ctx)); // SOW-119: KV usage + links (Worker-gated)
+  if (method === 'POST' && pathname === '/api/coupon-link-rotate') return run(() => rotateCouponLinkOp(ctx, body ?? {})); // SOW-119
 
   // Role-gated admin/superadmin actions (the operations enforce the capability; the gate is authoritative).
   if (method === 'POST' && pathname === '/api/admin') {

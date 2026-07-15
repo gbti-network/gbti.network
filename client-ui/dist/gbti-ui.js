@@ -5864,8 +5864,159 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-quote-manager", GbtiQuoteManager);
 
-  // client-ui/src/elements/gbti-syndication-tracker.mjs
+  // client-ui/src/elements/gbti-coupon-manager.mjs
+  var INVITE_PATH = "/codeable-invite/?t=";
   var CSS15 = `
+  :host { display:block; }
+  .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
+  .head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
+  .hint { font-size:12.5px; color:var(--muted); }
+  .msg { font-size:13px; color:var(--accent); margin:0 0 12px; }
+  .busy { opacity:.55; pointer-events:none; }
+  .add { display:grid; grid-template-columns: 1.2fr .7fr .7fr 1.4fr auto; gap:8px; margin:0 0 16px; }
+  @media (max-width: 760px) { .add { grid-template-columns: 1fr 1fr; } }
+  .add input { min-width:0; font:inherit; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:7px 9px; }
+  .btn { border:1px solid var(--accent); background:var(--accent); color:#fff; border-radius:7px; font:inherit; font-weight:700; font-size:13px; padding:7px 14px; cursor:pointer; }
+  .list { list-style:none; margin:0; padding:0; }
+  .c { border-top:1px solid var(--line); padding:12px 2px; }
+  .c:first-child { border-top:0; }
+  .c.off { opacity:.6; }
+  .crow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .code { font-family:var(--font-mono, monospace); font-weight:700; font-size:14px; color:var(--fg); letter-spacing:.04em; }
+  .meta { font-size:12.5px; color:var(--muted); }
+  .sp { flex:1; }
+  .lk { border:1px solid var(--line); background:var(--paper, transparent); color:var(--fg); border-radius:7px; font:inherit; font-size:12.5px; font-weight:600; padding:5px 11px; cursor:pointer; }
+  .lk:hover { border-color:var(--accent); color:var(--accent); }
+  .linkrow { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .linkrow input { flex:1 1 320px; min-width:0; font-family:var(--font-mono, monospace); font-size:12px; color:var(--fg); background:var(--paper, transparent); border:1px solid var(--line); border-radius:7px; padding:6px 9px; }
+  .use { margin-top:8px; font-size:12.5px; color:var(--muted); }
+  .use b { color:var(--fg); }
+  .reds { list-style:none; margin:6px 0 0; padding:0; }
+  .reds li { font-size:12.5px; color:var(--muted); padding:2px 0; font-family:var(--font-mono, monospace); }
+  .muted { color:var(--muted); }
+`;
+  var GbtiCouponManager = class extends GbtiElement {
+    // SOW-070: static admin.html markup upgrades before setClient; render() retries the load once the client lands.
+    connectedCallback() {
+      super.connectedCallback?.();
+    }
+    async load() {
+      if (!this.client) {
+        this.render();
+        return;
+      }
+      try {
+        this._coupons = (await this.client.couponPool())?.coupons || [];
+      } catch {
+        this._coupons = [];
+        this._msg = "Could not load the coupon registry.";
+      }
+      try {
+        const u = await this.client.couponUsage();
+        this._usage = u?.usage || {};
+        this._links = u?.links || {};
+      } catch {
+        this._usage = {};
+        this._links = {};
+      }
+      this._loading = false;
+      this.render();
+    }
+    _siteBase() {
+      return "https://gbti.network";
+    }
+    render() {
+      if (!this.client) {
+        this.set(this.css(CSS15) + `<p class="muted">Open in the GBTI client (admin) to manage coupons.</p>`);
+        return;
+      }
+      if (!this._coupons) {
+        if (!this._loading) {
+          this._loading = true;
+          this.load();
+        }
+        this.set(this.css(CSS15) + `<p class="muted">Loading coupons...</p>`);
+        return;
+      }
+      const rows = this._coupons.map((c) => {
+        const code = String(c.code || "").toUpperCase();
+        const u = this._usage[code] || { count: 0, redemptions: [] };
+        const token = this._links[code];
+        const link = token ? `${this._siteBase()}${INVITE_PATH}${token}` : "";
+        const reds = (u.redemptions || []).slice(0, 8).map((r) => `<li>${esc(r.login || r.githubId)} · ${esc(String(r.redeemedAt || "").slice(0, 10))} → ${esc(String(r.until || "").slice(0, 10))}</li>`).join("");
+        return `<li class="c${c.active === false ? " off" : ""}" data-code="${esc(code)}">
+        <div class="crow">
+          <span class="code">${esc(code)}</span>
+          <span class="meta">${esc(String(c.freeDays))} free day${Number(c.freeDays) === 1 ? "" : "s"}${c.maxRedemptions != null ? ` · max ${esc(String(c.maxRedemptions))}` : " · unlimited"}${c.note ? ` · ${esc(c.note)}` : ""}</span>
+          <span class="sp"></span>
+          <button class="lk" data-toggle="${esc(code)}">${c.active === false ? "Activate" : "Deactivate"}</button>
+          <button class="lk" data-rotate="${esc(code)}">${token ? "Regenerate link" : "Create link"}</button>
+        </div>
+        ${link ? `<div class="linkrow"><input readonly value="${esc(link)}" aria-label="Invite link for ${esc(code)}" /><button class="lk" data-copy="${esc(link)}">Copy</button></div>` : ""}
+        <div class="use">Redemptions: <b>${esc(String(u.count ?? 0))}</b>${u.max != null ? ` of ${esc(String(u.max))}` : ""}</div>
+        ${reds ? `<ul class="reds">${reds}</ul>` : ""}
+      </li>`;
+      }).join("");
+      this.set(this.css(CSS15) + `
+      <div class="head"><h3>Coupons</h3><span class="hint">Free-time signup codes. Config edits land as an audited house PR and go live at the next mirror sync; links resolve immediately.</span></div>
+      ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
+      <div class="add">
+        <input data-f="code" placeholder="CODE (A-Z 0-9)" maxlength="32" />
+        <input data-f="freeDays" type="number" min="1" max="3650" placeholder="Free days" />
+        <input data-f="maxRedemptions" type="number" min="1" placeholder="Max uses (empty = unlimited)" />
+        <input data-f="note" placeholder="Note" maxlength="160" />
+        <button class="btn" data-add>Add coupon</button>
+      </div>
+      <ul class="list">${rows || '<li class="c muted">No coupons yet.</li>'}</ul>
+    `);
+      this.$("[data-add]")?.addEventListener("click", () => this._add());
+      this.$$("[data-toggle]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.toggle)));
+      this.$$("[data-rotate]").forEach((b) => b.addEventListener("click", () => this._rotate(b.dataset.rotate)));
+      this.$$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(b.dataset.copy);
+          b.textContent = "Copied";
+          setTimeout(() => {
+            b.textContent = "Copy";
+          }, 1500);
+        } catch {
+        }
+      }));
+    }
+    async _add() {
+      const v = (k) => this.$(`[data-f="${k}"]`)?.value?.trim() ?? "";
+      const code = v("code");
+      const freeDays = Number(v("freeDays"));
+      if (!code || !freeDays) {
+        this._msg = "A code and the free days are required.";
+        this.render();
+        return;
+      }
+      await this._run(() => this.client.addCoupon({ code, freeDays, note: v("note"), maxRedemptions: v("maxRedemptions") || null, expiresAt: null }), `Coupon ${code.toUpperCase()} added`);
+    }
+    async _toggle(code) {
+      const cur = this._coupons.find((c) => String(c.code).toUpperCase() === code);
+      const next = cur?.active === false;
+      await this._run(() => this.client.updateCoupon({ code, patch: { active: next } }), `${code} ${next ? "activated" : "deactivated"}`);
+    }
+    async _rotate(code) {
+      await this._run(() => this.client.rotateCouponLink({ code }), `New invite link for ${code} (old links are dead)`);
+    }
+    async _run(fn, okMsg) {
+      try {
+        const r = await fn();
+        this._msg = r?.prNumber ? `${okMsg}. ${submitAck({ prNumber: r.prNumber })}` : okMsg;
+      } catch (err) {
+        this._msg = err?.message || "The action failed.";
+      }
+      this._coupons = null;
+      this.render();
+    }
+  };
+  define("gbti-coupon-manager", GbtiCouponManager);
+
+  // client-ui/src/elements/gbti-syndication-tracker.mjs
+  var CSS16 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .hint { color:var(--muted); font-size:12px; margin:0 0 10px; }
   .msg { font-size:13px; color:var(--accent); margin:6px 0 10px; }
@@ -5965,11 +6116,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS15) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Open in the GBTI client (admin) to view the publishing activity.</p>`);
         return;
       }
       if (this._err) {
-        this.set(this.css(CSS15) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
+        this.set(this.css(CSS16) + `<p class="msg err">${esc(this._msg)}</p><button class="cancel" data-reload type="button" style="color:var(--accent)">Retry</button>`);
         this.$("[data-reload]")?.addEventListener("click", () => this.load());
         return;
       }
@@ -5978,7 +6129,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS15) + `<p class="muted">Loading the publishing activity...</p>`);
+        this.set(this.css(CSS16) + `<p class="muted">Loading the publishing activity...</p>`);
         return;
       }
       if (!this._loading && (!QUEUE_CACHE || Date.now() - QUEUE_CACHE.at > CACHE_FRESH_MS)) {
@@ -5988,7 +6139,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const rows = this._rows();
       const opt = (v, label, cur) => `<option value="${esc(v)}"${cur === v ? " selected" : ""}>${esc(label)}</option>`;
       const body = rows.map((it) => this._row(it)).join("");
-      this.set(this.css(CSS15) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS16) + `<div class="${this._busy ? "busy" : ""}">
       <p class="hint">A pending item posts to every enabled channel once approved (or after the hold window when auto-post is on). Flagged items always wait for a human.</p>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="fbar">
@@ -6167,7 +6318,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
-  var CSS16 = `
+  var CSS17 = `
   :host { display:block; }
   .busy { opacity:.55; pointer-events:none; }
   .muted { color:var(--muted); }
@@ -6572,7 +6723,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS16) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
+        this.set(this.css(CSS17) + `<p class="muted">Open in the GBTI client (superadmin) to manage the channels.</p>`);
         return;
       }
       if (!this._loaded) {
@@ -6580,10 +6731,10 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
           this._loading = true;
           this.load();
         }
-        this.set(this.css(CSS16) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
+        this.set(this.css(CSS17) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
-      this.set(this.css(CSS16) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS17) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <nav class="subnav" data-subnav>
         <a data-go="sec-activity" class="on"><svg viewBox="0 0 24 24"><use href="#c-kanban"/></svg>Publishing Activity</a>
@@ -7061,7 +7212,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
 
   // client-ui/src/elements/gbti-favorite.mjs
   var heart = (filled) => `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 7.6 3.7 3.7 0 0 1 19 10.7c0 4.9-7 9.3-7 9.3z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS17 = `
+  var CSS18 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -7082,7 +7233,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const c = Math.max(0, this._count);
       const label = !this.client ? "Sign in to favorite" : this._faved ? "Remove favorite" : "Add favorite";
       this.set(
-        this.css(CSS17) + `<button class="pill ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
+        this.css(CSS18) + `<button class="pill ${this._faved ? "on" : ""}" type="button" aria-pressed="${this._faved}" aria-label="${label}">${heart(this._faved)}${c > 0 ? `<span class="c">${c}</span>` : ""}</button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -7117,7 +7268,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
 
   // client-ui/src/elements/gbti-collection.mjs
   var folder = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h3.2l1.6 2H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
-  var CSS18 = `
+  var CSS19 = `
   :host { position: relative; display: inline-flex; }
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
@@ -7143,7 +7294,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     render() {
       const open = this._open ? this._renderPop() : "";
       const label = !this.client ? "Sign in to save to a collection" : "Save to a collection";
-      this.set(this.css(CSS18) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}">${folder}<span>Save</span></button>${open}`);
+      this.set(this.css(CSS19) + `<button class="pill ${this._inAny() ? "on" : ""}" type="button" aria-haspopup="true" aria-expanded="${!!this._open}" aria-label="${label}">${folder}<span>Save</span></button>${open}`);
       this.on(".pill", "click", (e) => {
         e.stopPropagation();
         this._toggleOpen();
@@ -7263,7 +7414,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
 
   // client-ui/src/elements/gbti-subscribe.mjs
   var mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
-  var CSS19 = `
+  var CSS20 = `
   .btn { display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font-body);
     font-size:14px; font-weight:600; border-radius:10px; padding:9px 16px;
     border:1.5px solid var(--brand); background:var(--brand); color:#08231a;
@@ -7295,7 +7446,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const label = !known ? "Subscribe to activity" : following ? "Following" : "Subscribe to activity";
       const onCls = following ? "on" : "";
       this.set(
-        this.css(CSS19) + `<button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>`
+        this.css(CSS20) + `<button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? "" : "disabled"} aria-label="${label}">${mega}<span class="t">${label}</span></button>`
       );
       this.on(".btn", "click", () => this._onClick());
       if (this.client && username && !this._loaded) this._loadState(username);
@@ -7415,7 +7566,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
   // client-ui/src/elements/gbti-share-composer.mjs
   var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var SITE6 = "https://gbti.network";
-  var CSS20 = `
+  var CSS21 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .card { background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:14px; padding:16px; }
   h3 { margin:0 0 4px; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -7480,8 +7631,8 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     }
     render() {
       const m = this._membership;
-      if (!this.client) return this.set(this.css(CSS20) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
-      if (m === void 0) return this.set(this.css(CSS20) + `<div class="card"><p class="sub">Loading…</p></div>`);
+      if (!this.client) return this.set(this.css(CSS21) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
+      if (m === void 0) return this.set(this.css(CSS21) + `<div class="card"><p class="sub">Loading…</p></div>`);
       if (LOCKED3.has(m)) return this._renderLocked();
       if (m === "trialing") return this._renderTrial();
       return this._renderComposer();
@@ -7490,21 +7641,21 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       return `<div class="notice"><span class="lock">${glyph}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
     }
     _renderLocked() {
-      this.set(this.css(CSS20) + this._noticeHtml(
+      this.set(this.css(CSS21) + this._noticeHtml(
         "Your access is locked",
         'Your membership has lapsed, so Shares are locked. <a href="https://gbti.network/membership/">Renew your membership</a> to read and post in the community stream again.',
         "🔒"
       ));
     }
     _renderTrial() {
-      this.set(this.css(CSS20) + this._noticeHtml(
+      this.set(this.css(CSS21) + this._noticeHtml(
         "Reading only on the free trial",
         'On the trial you can READ the community Shares stream. Posting Shares requires a paid membership. <a href="https://gbti.network/membership/">Upgrade to a paid membership</a> to post.',
         "👀"
       ));
     }
     _renderComposer() {
-      this.set(this.css(CSS20) + `
+      this.set(this.css(CSS21) + `
       <div class="card">
         <h3>Share an update</h3>
         <p class="sub">A short note or an off-network link for the co-op. Members-only by default.</p>
@@ -7881,7 +8032,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     return `${Math.floor(d / 365)} year${Math.floor(d / 365) === 1 ? "" : "s"} ago`;
   }
   var lockIco = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
-  var CSS21 = `
+  var CSS22 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); --feed-radius:7px; }
   .media { position:relative; flex:none; display:flex; align-items:center; justify-content:center; overflow:hidden; color:#fff;
     background:linear-gradient(145deg, color-mix(in srgb, var(--ka, #5b6472) 60%, white), var(--ka, #5b6472)); }
@@ -8058,11 +8209,11 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     render() {
       if (!this._items) return;
       if (!this._items.length) {
-        this.set(this.css(CSS21) + `<p class="empty">Nothing here yet.</p>`);
+        this.set(this.css(CSS22) + `<p class="empty">Nothing here yet.</p>`);
         return;
       }
       const body = this.mode === "compact" ? this._compact(this._items) : this.mode === "card" ? this._card(this._items) : this._detailed(this._items);
-      this.set(this.css(CSS21) + body);
+      this.set(this.css(CSS22) + body);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -8087,7 +8238,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
 
   // client-ui/src/elements/gbti-upvote.mjs
   var arrow = (filled) => `<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4l8 9h-5v7h-6v-7H4z" fill="${filled ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>`;
-  var CSS22 = `
+  var CSS23 = `
   .pill { display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--font-body);
     font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
     border:1.5px solid var(--line); border-radius:999px; padding:5px 11px;
@@ -8108,7 +8259,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const c = Math.max(0, this._count);
       const label = !this.client ? "Sign in to upvote" : this._voted ? "Remove upvote" : "Upvote";
       this.set(
-        this.css(CSS22) + `<button class="pill ${this._voted ? "on" : ""}" type="button" aria-pressed="${this._voted}" aria-label="${label}" title="${label}">${arrow(this._voted)}<span class="c">${c}</span></button>`
+        this.css(CSS23) + `<button class="pill ${this._voted ? "on" : ""}" type="button" aria-pressed="${this._voted}" aria-label="${label}" title="${label}">${arrow(this._voted)}<span class="c">${c}</span></button>`
       );
       this.on(".pill", "click", () => this._onClick(targetType, targetSlug));
     }
@@ -8143,7 +8294,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
 
   // client-ui/src/elements/gbti-shares-feed.mjs
   var LOCKED4 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  var CSS23 = `
+  var CSS24 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
   .head h3 { margin:0; font-family:var(--font-display, var(--font-body)); font-size:16px; }
@@ -8265,10 +8416,10 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     /** quiet=true refreshes the stream WITHOUT painting (used behind an open reading view). */
     async reload(quiet = false) {
       if (!this.client) {
-        if (!quiet) this.set(this.css(CSS23) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
+        if (!quiet) this.set(this.css(CSS24) + `<p class="muted">Open in the GBTI client to read Shares.</p>`);
         return;
       }
-      if (!quiet) this.set(this.css(CSS23) + `<p class="muted">Loading the co-op stream…</p>`);
+      if (!quiet) this.set(this.css(CSS24) + `<p class="muted">Loading the co-op stream…</p>`);
       let membership = "unknown";
       try {
         const st = await this.client.status();
@@ -8285,7 +8436,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       try {
         this._items = (await this.client.listShares())?.items ?? [];
       } catch {
-        if (!quiet) this.set(this.css(CSS23) + `<p class="muted">Could not load Shares right now.</p>`);
+        if (!quiet) this.set(this.css(CSS24) + `<p class="muted">Could not load Shares right now.</p>`);
         return;
       }
       if (this._openSlug && !this._reading) {
@@ -8309,11 +8460,11 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const head = `<div class="head"><h3>Co-op stream</h3><button class="refresh" type="button">Refresh</button></div>`;
       const items = this._items || [];
       if (!items.length) {
-        this.set(this.css(CSS23) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
+        this.set(this.css(CSS24) + head + `<p class="muted">No Shares yet. Post the first one with the + button.</p>`);
         this.on(".refresh", "click", () => this.reload());
         return;
       }
-      this.set(this.css(CSS23) + head + `<div data-list></div>`);
+      this.set(this.css(CSS24) + head + `<div data-list></div>`);
       this.on(".refresh", "click", () => this.reload());
       const list = document.createElement("gbti-card-list");
       list.mode = "detailed";
@@ -8347,7 +8498,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     </div>` : "";
       const discussion = slug ? `<div class="discussion-wrap"><h4>Discussion</h4><gbti-discussion data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-discussion></div>` : "";
       const mod = share.author && share.id ? `<gbti-mod-actions data-gbti-type="share" data-gbti-author="${esc(share.author)}" data-gbti-id="${esc(share.id)}"></gbti-mod-actions>` : "";
-      this.set(this.css(CSS23) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
+      this.set(this.css(CSS24) + `<div class="rtop"><button class="back" type="button" data-back>&larr; Back to the stream</button>${mod}</div>
       <article class="reading">
         <div class="who"><span class="name">${esc(authorName3(share.author))}</span><span class="when">${esc(relTime3(share.createdAt))}</span>${badge}</div>
         ${title}${desc}${actions}
@@ -8390,21 +8541,21 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       }
     }
     _splash() {
-      this.set(this.css(CSS23) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
+      this.set(this.css(CSS24) + `<div class="splash"><div class="lock">🔒</div><h3>Your access is locked</h3>
       <p class="muted">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to read the community Shares stream again.</p></div>`);
     }
   };
   define("gbti-shares-feed", GbtiSharesFeed);
 
   // client-ui/src/elements/gbti-shares.mjs
-  var CSS24 = `
+  var CSS25 = `
   :host { display:block; }
   .stack { display:flex; flex-direction:column; gap:20px; }
   hr { border:0; border-top:1px solid var(--line); margin:0; }
 `;
   var GbtiShares = class extends GbtiElement {
     render() {
-      this.set(this.css(CSS24) + `<div class="stack">
+      this.set(this.css(CSS25) + `<div class="stack">
       <gbti-share-composer></gbti-share-composer>
       <hr />
       <gbti-shares-feed></gbti-shares-feed>
@@ -10787,7 +10938,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
   }
 
   // client-ui/src/elements/gbti-lock-gate.mjs
-  var CSS25 = `
+  var CSS26 = `
   :host { display: block; }
   .checking { color: var(--muted); font-size: 13px; padding: 12px 0; }
   .splash { text-align: center; padding: 56px 20px; }
@@ -10803,7 +10954,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       this._check();
     }
     async _check() {
-      this.set(this.css(CSS25) + `<div class="checking">Checking your membership…</div>`);
+      this.set(this.css(CSS26) + `<div class="checking">Checking your membership…</div>`);
       let membership = "unknown";
       try {
         membership = (await this.client?.status())?.membership ?? "unknown";
@@ -10811,7 +10962,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
         membership = "unknown";
       }
       if (isLockedMembership(membership)) {
-        this.set(this.css(CSS25) + `<div class="splash">
+        this.set(this.css(CSS26) + `<div class="splash">
         <div class="lock">🔒</div>
         <h2>Your access is locked</h2>
         <p>Your GBTI membership has lapsed, so the extension is locked. Renew to rejoin the co-op, read the
@@ -10820,7 +10971,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       </div>`);
         return;
       }
-      this.set(this.css(CSS25) + `<slot></slot>`);
+      this.set(this.css(CSS26) + `<slot></slot>`);
     }
   };
   define("gbti-lock-gate", GbtiLockGate);
@@ -10833,7 +10984,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     fork: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>`,
     install: `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`
   };
-  var CSS26 = `
+  var CSS27 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .head h2 { font-family:var(--font-display); font-size:16px; margin:0; text-transform:none; letter-spacing:0; color:var(--fg); }
@@ -10930,11 +11081,11 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     render() {
       const s = this._status;
       if (!s) {
-        this.set(this.css(CSS26) + `<p class="note">Checking your setup...</p>`);
+        this.set(this.css(CSS27) + `<p class="note">Checking your setup...</p>`);
         return;
       }
       if (s.ready) {
-        this.set(this.css(CSS26) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
+        this.set(this.css(CSS27) + `<div class="ready">${check(true)}<div class="big">You are ready to publish</div>
         <p class="note">Your drafts save to your copy, and we open the review request for you.</p>
         <button class="btn" data-start style="margin-top:12px">Complete Integration</button></div>`);
         this.on("[data-start]", "click", () => this.emit("gbti:onboarding-start"));
@@ -10950,7 +11101,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
         return `<li class="row"><span class="ic">${check(false)}</span>${this._card(id, meta, s)}</li>`;
       }).filter(Boolean).join("");
       const reached = s.reachedGithub !== false;
-      this.set(this.css(CSS26) + `
+      this.set(this.css(CSS27) + `
       <div class="head"><h2>Set up publishing</h2><span class="count">${nDone} of 3</span></div>
       <div class="bar"><i style="width:${Math.round(nDone / 3 * 100)}%"></i></div>
       <ul>${rows}</ul>
@@ -11035,7 +11186,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
   // client-ui/src/elements/gbti-topic-picker.mjs
   var SITE7 = "https://gbti.network";
   var MAX_TOPICS = 40;
-  var CSS27 = `
+  var CSS28 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
   .srch { flex:1; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
@@ -11082,14 +11233,14 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     }
     render() {
       if (!this._topics) {
-        this.set(this.css(CSS27) + `<p class="muted">Loading topics...</p>`);
+        this.set(this.css(CSS28) + `<p class="muted">Loading topics...</p>`);
         return;
       }
       if (!this._topics.length) {
-        this.set(this.css(CSS27) + `<p class="muted">No topics available right now.</p>`);
+        this.set(this.css(CSS28) + `<p class="muted">No topics available right now.</p>`);
         return;
       }
-      this.set(this.css(CSS27) + `
+      this.set(this.css(CSS28) + `
       <div class="bar">
         <input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" />
         <span class="cnt" data-cnt></span>
@@ -11153,7 +11304,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
   var redditIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M14.5 15.4c.1.1.1.3 0 .4-.7.7-1.8.8-2.5.8s-1.8-.1-2.5-.8c-.1-.1-.1-.3 0-.4s.3-.1.4 0c.5.5 1.4.6 2.1.6s1.6-.1 2.1-.6c.1-.1.3-.1.4 0zM10.2 12.6c0-.6-.5-1.1-1.1-1.1S8 12 8 12.6s.5 1.1 1.1 1.1 1.1-.5 1.1-1.1zm4.7-1.1c-.6 0-1.1.5-1.1 1.1s.5 1.1 1.1 1.1 1.1-.5 1.1-1.1-.5-1.1-1.1-1.1zM22 12c0 5.5-4.5 10-10 10S2 17.5 2 12 6.5 2 12 2s10 4.5 10 10zm-4.6-1.6c-.4 0-.8.2-1.1.4-1-.7-2.4-1.2-3.9-1.2l.8-3.5 2.5.6c0 .6.5 1.1 1.1 1.1s1.1-.5 1.1-1.1-.5-1.2-1.1-1.2c-.4 0-.8.3-1 .6l-2.7-.6c-.2 0-.3.1-.4.2l-.8 3.9c-1.5.1-2.9.5-3.9 1.2-.3-.3-.7-.4-1.1-.4-1.6 0-2.1 2.1-.7 2.9v.4c0 2.2 2.6 4 5.8 4s5.8-1.8 5.8-4v-.4c1.4-.8.9-2.9-.4-2.9z"/></svg>`;
   var megaIco = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4z" fill="currentColor"/></svg>`;
-  var CSS28 = `
+  var CSS29 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); padding:32px 28px; max-width:680px; margin:0 auto; }
   .head { text-align:center; margin-bottom:22px; }
   .head .ic { display:inline-grid; place-items:center; }
@@ -11322,7 +11473,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
            <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(CSS28) + `
+      this.set(this.css(CSS29) + `
       <div class="head">
         <span class="ic">${check2}</span>
         <h2>Sign in to GBTI Network</h2>
@@ -11342,7 +11493,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     }
     render() {
       if (!this._loaded) {
-        this.set(this.css(CSS28) + `<p class="loading">Setting up your welcome...</p>`);
+        this.set(this.css(CSS29) + `<p class="loading">Setting up your welcome...</p>`);
         return;
       }
       if (this._authGate && !this._authenticated) {
@@ -11360,7 +11511,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
       ${isLast ? `<button class="btn done" data-done type="button">I am all set</button>` : `<button class="btn" data-step-next type="button">Continue &rarr;</button>`}
     </div>`;
-      this.set(this.css(CSS28) + `
+      this.set(this.css(CSS29) + `
       <div class="head">
         <span class="ic">${check2}</span>
         <div class="phase">${esc(ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "Welcome")}</div>
@@ -11513,7 +11664,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
 
   // client-ui/src/elements/gbti-saved.mjs
   var SITE9 = "https://gbti.network";
-  var CSS29 = `
+  var CSS30 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -11585,15 +11736,15 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS29) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
+        this.set(this.css(CSS30) + `<p class="muted">Sign in with the GBTI client to manage your saved items.</p>`);
         return;
       }
       if (!this._activity) {
-        this.set(this.css(CSS29) + `<p class="muted">Loading your saved items...</p>`);
+        this.set(this.css(CSS30) + `<p class="muted">Loading your saved items...</p>`);
         return;
       }
       if (this._activity.error === "not-authenticated") {
-        this.set(this.css(CSS29) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
+        this.set(this.css(CSS30) + `<p class="muted">Sign in to manage favorites and collections.</p>`);
         return;
       }
       const idx = this._index || buildItemIndex({});
@@ -11609,7 +11760,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
             <span class="coll-act"><button class="lk" data-rename data-cid="${esc(c.id)}" type="button">Rename</button><button class="lk danger" data-del data-cid="${esc(c.id)}" type="button">Delete</button></span></div>
           <ul class="rows">${(c.items || []).length ? (c.items || []).map((it) => this._itemRow(resolveItem(idx, it.type, it.slug), { cid: c.id })).join("") : '<li class="empty">Empty collection.</li>'}</ul>
         </div>`).join("") : `<p class="muted">No collections yet. Use "Save to a collection" on any item to start one.</p>`;
-      this.set(this.css(CSS29) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS30) + `<div class="${this._busy ? "busy" : ""}">
       ${chipsHtml}
       <section class="sec"><h3>Favorites</h3>${favHtml}</section>
       <section class="sec"><h3>Collections</h3>${collHtml}
@@ -11667,7 +11818,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
   var SITE10 = "https://gbti.network";
   var lc4 = (s) => String(s || "").toLowerCase();
   var followList = (r) => Array.isArray(r) ? r : r?.following ?? [];
-  var CSS30 = `
+  var CSS31 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .sec { margin:0 0 26px; }
   .sec h3 { font-size:15px; margin:0 0 12px; }
@@ -11750,11 +11901,11 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS30) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
+        this.set(this.css(CSS31) + `<p class="muted">Sign in with the GBTI client to manage who you follow.</p>`);
         return;
       }
       if (!this._loaded) {
-        this.set(this.css(CSS30) + `<p class="muted">Loading your follows...</p>`);
+        this.set(this.css(CSS31) + `<p class="muted">Loading your follows...</p>`);
         return;
       }
       const subtabs = `<div class="subtabs">
@@ -11763,7 +11914,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       <button class="subtab ${this._view === "topics" ? "on" : ""}" data-view="topics" type="button">Topics</button>
     </div>`;
       const body = this._view === "channels" ? this._channelsHtml() : this._view === "topics" ? this._topicsHtml() : this._membersHtml();
-      this.set(this.css(CSS30) + `<div class="${this._busy ? "busy" : ""}">
+      this.set(this.css(CSS31) + `<div class="${this._busy ? "busy" : ""}">
       <section class="sec"><h3>Following</h3>${subtabs}${body}</section>
     </div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
@@ -11865,7 +12016,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     // SOW-052: placeholder for referrals + rewards (SOW-007/008)
   ];
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
-  var CSS31 = `
+  var CSS32 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:2px; padding:4px; margin:0 0 16px; flex-wrap:wrap; } /* SOW-052 squared aesthetic: 2px nav bar */
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:2px; cursor:pointer; }
@@ -12323,7 +12474,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       }
       if (typeof document !== "undefined") document.body?.classList.toggle("gbti-editing", !!this._editing);
       if (this._editing) {
-        this.set(this.css(CSS31) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
+        this.set(this.css(CSS32) + `<button class="btn back" data-back type="button">&larr; Back to my work</button><gbti-content-editor></gbti-content-editor>`);
         this.on("[data-back]", "click", () => {
           this._editing = null;
           this._writeHash(`#tab=${encodeURIComponent(this._tab)}`);
@@ -12350,7 +12501,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
         return;
       }
       if (this._reviewing != null) {
-        this.set(this.css(CSS31) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
+        this.set(this.css(CSS32) + `<button class="btn back" data-back type="button">&larr; Back to inbox</button><gbti-contrib-review number="${esc(this._reviewing)}"></gbti-contrib-review>`);
         this.on("[data-back]", "click", () => {
           this._reviewing = null;
           this.render();
@@ -12366,7 +12517,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
         const badge = t.id === "inbox" && this._inboxCount ? `<span class="tbadge">${esc(this._inboxCount)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
-      this.set(this.css(CSS31) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
+      this.set(this.css(CSS32) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._msg = null;
@@ -12668,7 +12819,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     } catch {
     }
   }
-  var CSS32 = `
+  var CSS33 = `
   :host { position:relative; display:inline-flex; font-family:var(--font-body); }
   .btn { width:40px; height:40px; border-radius:50%; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; transition:border-color .15s, color .15s; }
   .btn:hover { color:var(--fg); }
@@ -12908,7 +13059,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const total = this._bell?.total || 0;
       const dot = total > 0 ? `<span class="dot">${total > 99 ? "99+" : total}</span>` : "";
       const panel = this._open ? this._panelHtml() : "";
-      this.set(this.css(CSS32) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
+      this.set(this.css(CSS33) + `<button class="btn" type="button" data-bell aria-label="Activity${total ? `, ${total} new` : ""}" aria-haspopup="true" aria-expanded="${this._open}">${BELL}${dot}</button>${panel}`);
       this.on("[data-bell]", "click", (e) => {
         e.stopPropagation();
         this._toggle();
@@ -13047,7 +13198,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       return m ? m[1].replace(/^www\./, "") : "";
     }
   }
-  var CSS33 = `
+  var CSS34 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 14px; flex-wrap:wrap; }
   .head .t h3 { margin:0 0 2px; font-family:var(--font-display, var(--font-body)); font-size:18px; }
@@ -13207,12 +13358,12 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS33) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS34) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const tabs = `<div class="tabs"><button data-view="feed" class="${this._view === "feed" ? "on" : ""}" type="button">Feed</button><button data-view="channels" class="${this._view === "channels" ? "on" : ""}" type="button">Channels</button></div>`;
       const head = `<div class="head"><div class="t"><h3>News</h3><p class="sub">Curated developer news, refreshed hourly. A members-only perk.</p></div>${tabs}</div>`;
-      this.set(this.css(CSS33) + head + `<div data-body></div>`);
+      this.set(this.css(CSS34) + head + `<div data-body></div>`);
       this.$$("[data-view]").forEach((b) => b.addEventListener("click", () => this._setView(b.dataset.view)));
       if (this._view === "channels") {
         this._renderChannels();
@@ -13323,7 +13474,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
 
   // client-ui/src/elements/gbti-news-reader.mjs
   var lc6 = (s) => String(s ?? "").toLowerCase();
-  var CSS34 = `
+  var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   /* two columns (content + a right sidebar), mirroring <gbti-reader>; stacks below 960px */
   .wrap { max-width:1160px; margin:0 auto; }
@@ -13436,12 +13587,12 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     }
     render() {
       if (!this.client) {
-        this.set(this.css(CSS34) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">Open in the GBTI client to read the news.</p>`);
         return;
       }
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS34) + `<p class="muted">No item selected.</p>`);
+        this.set(this.css(CSS35) + `<p class="muted">No item selected.</p>`);
         return;
       }
       const fav = faviconFor(it.link || it.openHref);
@@ -13459,7 +13610,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const chanCount = pub?.count != null ? `<span class="cc-count">${esc(String(pub.count))} items</span>` : "";
       const followBtn = followable ? `<button class="fbtn ${followed ? "on" : ""}" data-follow type="button">${followed ? "Following" : "Follow"}</button>` : "";
       const chanCard = `<div class="chan-card"><div class="cc-eyebrow">Channel</div><div class="cc-top"><span class="pav">${fav ? `<img class="avimg" src="${esc(fav)}" alt="">` : ""}</span><div class="cc-name">${esc(pub?.name || it.source || "Publisher")}</div></div>${chanDesc}${chanCount}${followBtn}</div>`;
-      this.set(this.css(CSS34) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
+      this.set(this.css(CSS35) + `<div class="wrap"><div class="cols"><div class="main">` + hero + `<h2>${esc(it.title || "News")}</h2>` + (it.category ? `<div class="metarow"><span class="mlabel">Category</span><span class="catchip">${esc(it.category)}</span></div>` : "") + `<p class="sum">${esc(it.excerpt || "No summary available.")}</p><div class="acts">${open ? `<a class="src" href="${esc(open)}" target="_blank" rel="noopener noreferrer">Open source ↗</a>` : ""}${disc}</div>${note}</div><aside class="side">${chanCard}${discussion}</aside></div></div>`);
       if (!this._wiredErr) {
         this.root?.addEventListener("error", (e) => {
           const t = e.target;
@@ -13600,7 +13751,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
 
   // client-ui/src/elements/gbti-syndicate-now.mjs
   var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
-  var CSS35 = `
+  var CSS36 = `
   :host { display:block; }
   .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
   .snbtn:hover { border-color:var(--accent); color:var(--accent); }
@@ -13645,7 +13796,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
         this.set("");
         return;
       }
-      this.set(this.css(CSS35) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
+      this.set(this.css(CSS36) + `<button class="snbtn" type="button">Manually Syndicate</button>${this._open ? this._modalHtml() : ""}`);
       this.on(".snbtn", "click", () => {
         this._open = true;
         this._step = "dest";
@@ -14113,7 +14264,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     if (!base) return /^[\w.-]+\.[a-z]{2,}/i.test(v) ? `https://${v}` : "";
     return `${base}${v.replace(/^@/, "")}`;
   }
-  var CSS36 = `
+  var CSS37 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .wrap { max-width:1160px; margin:0 auto; }
   .cols { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:40px; align-items:start; }
@@ -14406,7 +14557,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     render() {
       const it = this._item;
       if (!it) {
-        this.set(this.css(CSS36));
+        this.set(this.css(CSS37));
         return;
       }
       const view = it.type === "share" ? it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? "Watch video" : "Read article"} on ${esc(hostOf2(it.url))}</a>` : "" : it.url ? `<a class="view" href="${esc(SITE13 + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : "";
@@ -14439,7 +14590,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
-      this.set(this.css(CSS36) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
+      this.set(this.css(CSS37) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
       if (resolved) {
         this._enhanceCode();
         this._wireFollow(it);
@@ -14540,7 +14691,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     } catch {
     }
   }
-  var CSS37 = `
+  var CSS38 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .tabs { display:flex; gap:4px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border:1px solid var(--line); border-radius:999px; padding:4px; margin:0 0 16px; flex-wrap:wrap; }
   .tab { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:700; font-size:13px; padding:7px 15px; border-radius:999px; cursor:pointer; }
@@ -14674,7 +14825,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     render() {
       if (this._reading) {
         const label = TABS2.find((t) => t.id === this._reading.type)?.label || "list";
-        this.set(this.css(CSS37) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
+        this.set(this.css(CSS38) + `<button class="btn" data-back type="button">&larr; Back to ${esc(label)}</button><div data-reader></div>`);
         this.on("[data-back]", "click", () => {
           this._reading = null;
           this.render();
@@ -14687,7 +14838,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
         return;
       }
       const tabs = TABS2.map((t) => `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button">${esc(t.label)}</button>`).join("");
-      this.set(this.css(CSS37) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
+      this.set(this.css(CSS38) + `<div class="tabs" role="tablist">${tabs}</div><div data-body></div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._cat = [];
@@ -14977,6 +15128,16 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       // SOW-056 P2
       setNewsSourceEnabled: ({ id, enabled }) => request("POST", "/api/admin", { action: "news-source-toggle", id, enabled }),
       // SOW-056 P2
+      couponPool: () => request("GET", "/api/coupon-pool"),
+      // SOW-119: the coupon registry { coupons } for the manager
+      addCoupon: ({ code, freeDays, note, maxRedemptions, expiresAt }) => request("POST", "/api/admin", { action: "coupon-add", code, freeDays, note, maxRedemptions, expiresAt }),
+      // SOW-119
+      updateCoupon: ({ code, patch }) => request("POST", "/api/admin", { action: "coupon-update", code, patch }),
+      // SOW-119
+      couponUsage: () => request("GET", "/api/coupon-usage"),
+      // SOW-119: per-coupon KV usage + invite links
+      rotateCouponLink: ({ code }) => request("POST", "/api/coupon-link-rotate", { code }),
+      // SOW-119
       quotePool: () => request("GET", "/api/quote-pool"),
       // SOW-063 P3: the splash quote pool { quotes } for the manager
       contentChannelPool: () => request("GET", "/api/content-channel-pool"),

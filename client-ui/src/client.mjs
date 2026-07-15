@@ -142,6 +142,11 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     addNewsSource: ({ id, name, url, description }) => request('POST', '/api/admin', { action: 'news-source-add', id, name, url, description }), // SOW-056 P2
     removeNewsSource: ({ id }) => request('POST', '/api/admin', { action: 'news-source-remove', id }), // SOW-056 P2
     setNewsSourceEnabled: ({ id, enabled }) => request('POST', '/api/admin', { action: 'news-source-toggle', id, enabled }), // SOW-056 P2
+    couponPool: () => request('GET', '/api/coupon-pool'), // SOW-119: the coupon registry { coupons } for the manager
+    addCoupon: ({ code, freeDays, note, maxRedemptions, expiresAt }) => request('POST', '/api/admin', { action: 'coupon-add', code, freeDays, note, maxRedemptions, expiresAt }), // SOW-119
+    updateCoupon: ({ code, patch }) => request('POST', '/api/admin', { action: 'coupon-update', code, patch }), // SOW-119
+    couponUsage: () => request('GET', '/api/coupon-usage'), // SOW-119: per-coupon KV usage + invite links
+    rotateCouponLink: ({ code }) => request('POST', '/api/coupon-link-rotate', { code }), // SOW-119
     quotePool: () => request('GET', '/api/quote-pool'), // SOW-063 P3: the splash quote pool { quotes } for the manager
     contentChannelPool: () => request('GET', '/api/content-channel-pool'), // SOW-087: the category -> Discord-channel map { channels }
     setContentChannel: ({ category, channelId }) => request('POST', '/api/admin', { action: 'content-channel-set', category, channelId }), // SOW-087
