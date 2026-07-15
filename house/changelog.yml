@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 10
+    date: 2026-07-15
+    type: build
+    title: Richer X posts (author handle plus hashtags)
+    notes:
+      - An X post now tags the author by their X handle when their profile lists one, else their full name.
+      - The content tags and the category post as hashtags for discovery.
+
+  - version: 0.1.0
     build: 9
     date: 2026-07-14
     type: build

@@ -1,7 +1,7 @@
 // SOW-058: the pure message formatter. Sanitization, truncation, URL preservation, no body leak.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChannelText, sanitizeMentions, hostOf, renderTemplate } from '../membership/syndication-format.mjs';
+import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, xHandleFrom, toHashtag } from '../membership/syndication-format.mjs';
 
 test('sanitizeMentions neutralizes @mentions and Discord mass-ping tokens', () => {
   assert.ok(!/@everyone/.test(sanitizeMentions('hey @everyone')));
@@ -137,4 +137,45 @@ test('{author-note-italic} italicizes per line', () => {
   const item = { source: 'prompt', authorNote: 'First paragraph.\n\nSecond one here.' };
   assert.equal(renderTemplate('{author-note-italic}', item, { limit: 500 }), '*First paragraph.*\n\n*Second one here.*');
   assert.equal(renderTemplate('x {author-note-italic}', { source: 'prompt' }, { limit: 500 }), 'x');
+});
+
+// SOW-120 follow-up: the X handle token + hashtag tokens.
+test('xHandleFrom parses a URL, a bare @handle, and rejects junk', () => {
+  assert.equal(xHandleFrom('https://x.com/atwellpub'), 'atwellpub');
+  assert.equal(xHandleFrom('https://twitter.com/Some_User?ref=1'), 'Some_User');
+  assert.equal(xHandleFrom('@atwellpub'), 'atwellpub');
+  assert.equal(xHandleFrom('atwellpub'), 'atwellpub');
+  assert.equal(xHandleFrom('https://x.com/'), ''); // no handle
+  assert.equal(xHandleFrom('not a handle with spaces'), '');
+  assert.equal(xHandleFrom(''), '');
+  assert.equal(xHandleFrom('waytoolonghandlethatexceedsfifteen'), ''); // > 15 chars
+});
+
+test('toHashtag PascalCases multi-word, preserves a single word and acronyms, drops junk', () => {
+  assert.equal(toHashtag('agent skills'), '#AgentSkills');
+  assert.equal(toHashtag('Claude-Code'), '#ClaudeCode');
+  assert.equal(toHashtag('AI'), '#AI');
+  assert.equal(toHashtag('Prompts'), '#Prompts');
+  assert.equal(toHashtag('ai/ml'), '#AiMl');
+  assert.equal(toHashtag('  '), '');
+  assert.equal(toHashtag('!!!'), '');
+});
+
+test('{member-x-handle}: the X @handle when present, else the full name', () => {
+  const withX = renderTemplate('{member-x-handle}', { author: 'atwellpub', authorName: 'Hudson Atwell', authorX: 'https://x.com/atwellpub' }, { limit: 200 });
+  assert.equal(withX, '@atwellpub'); // a REAL mention (no zero-width space), from the validated own handle
+  const noX = renderTemplate('{member-x-handle}', { author: 'atwellpub', authorName: 'Hudson Atwell' }, { limit: 200 });
+  assert.equal(noX, 'Hudson Atwell');
+  const noXnoName = renderTemplate('{member-x-handle}', { author: 'bob' }, { limit: 200 });
+  assert.ok(noXnoName.includes('bob')); // falls to @login via fullName
+});
+
+test('{category-hashtag}, {tags-hashtags}, {hashtags} render and de-duplicate', () => {
+  const item = { source: 'prompt', category: 'AI', tags: ['Prompts', 'Skill', 'agent skills'] };
+  assert.equal(renderTemplate('{category-hashtag}', item, { limit: 200 }), '#AI');
+  assert.equal(renderTemplate('{tags-hashtags}', item, { limit: 200 }), '#Prompts #Skill #AgentSkills');
+  // {hashtags} = category + tags, de-duplicated (AI appears once even if also a tag)
+  assert.equal(renderTemplate('{hashtags}', { source: 'prompt', category: 'AI', tags: ['AI', 'Prompts'] }, { limit: 200 }), '#AI #Prompts');
+  // missing tags/category render empty and collapse whitespace
+  assert.equal(renderTemplate('done {tags-hashtags}{category-hashtag}', { source: 'prompt' }, { limit: 200 }), 'done');
 });

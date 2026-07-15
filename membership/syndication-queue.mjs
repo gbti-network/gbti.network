@@ -9,9 +9,11 @@
 // is structurally incapable of copying a body field; the leak-guard test asserts this).
 //
 // Shape (synd:item:<id>):
-//   { id, source, targetType, targetSlug, author, authorName, title, blurb, url, image, category, visibility,
-//     membersOnly, mention, flags, trigger, enqueuedAt, availableAt, status, claimedAt, perChannel, sentAt,
-//     failedAt, cancelledAt, cancelledBy }
+//   { id, source, targetType, targetSlug, author, authorName, authorDiscord, authorX, tags, title, blurb, url,
+//     image, category, categoryPath, visibility, membersOnly, mention, flags, trigger, enqueuedAt, availableAt,
+//     status, claimedAt, perChannel, sentAt, failedAt, cancelledAt, cancelledBy }
+//   SOW-120: `authorX` (the profile X handle/URL, feeds {member-x-handle}) and `tags` (free-form, feed
+//   {tags-hashtags}) are public metadata only.
 //
 // SOW-087: `category` (one flat topic key for a share, or the top-level taxonomy key for content) routes the
 // second, category-channel Discord post; `authorName` (the profile displayName) feeds the no-ping template;
@@ -75,6 +77,8 @@ export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HO
     author: trimOrNull(input.author),
     authorName: trimOrNull(input.authorName), // SOW-087: the profile displayName for the no-ping template
     authorDiscord: trimOrNull(input.authorDiscord), // SOW-088: the public profile Discord handle ({member-discord-username})
+    authorX: trimOrNull(input.authorX), // SOW-120: the public profile X handle/URL ({member-x-handle})
+    tags: Array.isArray(input.tags) ? input.tags.map((t) => String(t ?? '').trim()).filter(Boolean).slice(0, 10) : null, // SOW-120: free-form tags for {tags-hashtags} (public metadata)
     // SOW-088 {author-note}: the from-the-author intro COMMENT text. PUBLIC items only, so a members-only
     // item's (possibly encrypted) intro can never ride into a channel; capped, never a content body.
     authorNote: visibility === 'public' ? (trimOrNull(input.authorNote)?.slice(0, 4000) ?? null) : null,
@@ -127,6 +131,8 @@ export function normalizeItem(raw) {
     author: trimOrNull(raw.author),
     authorName: trimOrNull(raw.authorName),
     authorDiscord: trimOrNull(raw.authorDiscord),
+    authorX: trimOrNull(raw.authorX), // SOW-120
+    tags: Array.isArray(raw.tags) ? raw.tags.map((t) => String(t ?? '').trim()).filter(Boolean).slice(0, 10) : null, // SOW-120
     authorNote: visibility === 'public' ? (trimOrNull(raw.authorNote)?.slice(0, 4000) ?? null) : null,
     title: trimOrNull(raw.title),
     blurb: trimOrNull(raw.blurb),

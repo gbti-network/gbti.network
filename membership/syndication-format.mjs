@@ -30,6 +30,45 @@ function truncate(text, limit) {
 }
 
 /**
+ * SOW-120 follow-up: extract a bare X handle from a profile value. Accepts a full x.com / twitter.com URL
+ * (the last path segment), a bare "@handle", or a bare "handle"; returns '' for anything that is not a
+ * plausible handle (X handles are 1-15 chars of letters/digits/underscore). Pure.
+ */
+export function xHandleFrom(value) {
+  let s = String(value || '').trim();
+  if (!s) return '';
+  const m = s.match(/^https?:\/\/(?:www\.)?(?:x|twitter|mobile\.twitter)\.com\/([^/?#]+)/i);
+  if (m) s = m[1];
+  s = s.replace(/^@/, '').trim();
+  return /^[A-Za-z0-9_]{1,15}$/.test(s) ? s : '';
+}
+
+/**
+ * SOW-120 follow-up: normalize a free-form tag or category label into a single hashtag token. Splits on any
+ * non-alphanumeric run, capitalizes the first letter of each part (so a multi-word label survives as one
+ * token and a single word keeps its casing, preserving acronyms), and prefixes '#'. Returns '' when nothing
+ * usable remains. Examples: "agent skills" -> "#AgentSkills", "Claude-Code" -> "#ClaudeCode", "AI" -> "#AI".
+ */
+export function toHashtag(label) {
+  const parts = String(label || '').split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if (!parts.length) return '';
+  const body = parts.length === 1 ? parts[0] : parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+  return body ? `#${body}` : '';
+}
+
+/** SOW-120 follow-up: a de-duplicated, space-joined hashtag string from a list of labels. Pure. */
+function hashtagList(labels) {
+  const seen = new Set();
+  const out = [];
+  for (const l of Array.isArray(labels) ? labels : []) {
+    const h = toHashtag(l);
+    const key = h.toLowerCase();
+    if (h && !seen.has(key)) { seen.add(key); out.push(h); }
+  }
+  return out.join(' ');
+}
+
+/**
  * Build the message body for a queue item, sanitized + truncated to `limit`. `includeUrl` appends the link on its
  * own line (skip it for channels that attach the link via a separate facet/card). Pure.
  */
@@ -40,6 +79,10 @@ function truncate(text, limit) {
  *   {author}         the @login text (sanitized, never pings)
  *   {member-url}     the member's public profile URL (gbti.network/members/<login>/)
  *   {short-description}  the item's shortDescription (carried as the queue item blurb)
+ *   {member-x-handle}  the member's X handle as @handle (from profile links.x), else the full name (SOW-120)
+ *   {category-hashtag}  the category as a single hashtag, e.g. #DevOps (SOW-120)
+ *   {tags-hashtags}   the item's tags as hashtags, e.g. #AI #Prompts (SOW-120)
+ *   {hashtags}       the category plus the tags, de-duplicated, as one hashtag set (SOW-120)
  *   {author-note-italic}  the intro with each line wrapped in markdown italics (for Reddit)
  *   A token written in ALL CAPS uppercases its value: {CONTENT-TYPE} -> "PROMPT" (mentions excluded).
  *   {shareurl} {url} the item's link
@@ -80,6 +123,14 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
       .join('\n'),
     memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : '', // {member-url}: the public profile
     shortdescription: sanitizeMentions(item.blurb || ''), // {short-description}: the item's shortDescription (the queue item's blurb)
+    // SOW-120 follow-up: {member-x-handle} is the member's OWN validated X handle rendered as a real
+    // @mention (X @mentions tag a user, they are not a mass broadcast like Discord, and xHandleFrom
+    // strictly validates the shape), else the sanitized full name. {category-hashtag} / {tags-hashtags} /
+    // {hashtags} are alphanumeric-only, so they carry no mention risk.
+    memberxhandle: xHandleFrom(item.authorX) ? `@${xHandleFrom(item.authorX)}` : fullName,
+    categoryhashtag: toHashtag(item.category),
+    tagshashtags: hashtagList(item.tags),
+    hashtags: hashtagList([item.category, ...(Array.isArray(item.tags) ? item.tags : [])]),
   };
   // Hyphenated token names ({member-discord-username}, {content-type}) normalize to the same key, and a
   // token written in ALL CAPS uppercases its value ({CONTENT-TYPE} -> "PROMPT"); a `<@id>` mention is

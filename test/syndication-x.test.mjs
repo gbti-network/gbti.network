@@ -75,6 +75,30 @@ test('a non-ok response surfaces the X error detail, fail-closed', async () => {
   assert.ok(/not permitted/.test(r.error), r.error);
 });
 
+test('the auto rail renders a configured x channel template with {member-x-handle} + hashtags', async () => {
+  const cfg = syndicationConfigFromParsed({ syndication: { channel_templates: { x: {
+    prompt: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}',
+  } } } });
+  const { calls, fetchImpl } = capture(OK);
+  await createXAdapter({ env: ENV, fetchImpl, cfg }).post(
+    { ...ITEM, source: 'prompt', authorX: 'https://x.com/atwellpub', category: 'AI', tags: ['Prompts', 'Skill'] },
+    SIGN,
+  );
+  const text = bodyOf(calls).text;
+  assert.ok(text.includes('@atwellpub'), 'the X handle mention resolves');
+  assert.ok(text.includes('#AI'), 'category hashtag');
+  assert.ok(text.includes('#Prompts') && text.includes('#Skill'), 'tag hashtags');
+  assert.ok(text.includes(ITEM.url), 'the url survives');
+});
+
+test('member without an X handle falls back to the full name', async () => {
+  const cfg = syndicationConfigFromParsed({ syndication: { channel_templates: { post: {} }, } });
+  const cfg2 = syndicationConfigFromParsed({ syndication: { channel_templates: { x: { post: 'by {member-x-handle}: {url}' } } } });
+  const { calls, fetchImpl } = capture(OK);
+  await createXAdapter({ env: ENV, fetchImpl, cfg: cfg2 }).post({ ...ITEM, authorName: 'Hudson Atwell' }, SIGN);
+  assert.ok(bodyOf(calls).text.startsWith('by Hudson Atwell:'));
+});
+
 test('works without cfg (falls back to buildChannelText)', async () => {
   const { calls, fetchImpl } = capture(OK);
   const r = await createXAdapter({ env: ENV, fetchImpl }).post(ITEM, SIGN);

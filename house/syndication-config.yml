@@ -33,3 +33,12 @@ syndication:
   channel_templates:
     devto:
       devto-footer: "The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. \n\n---\n\n>Are you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\n>To follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}"
+    # SOW-120: the X default message. {member-x-handle} resolves to the author's X @handle (from their
+    # profile links.x) when present, else their full name. The URL sits before the hashtags so a 280-char
+    # trim clips a trailing hashtag, never the link (X auto-cards the URL). A members-only item ignores this
+    # and uses the X stub instead.
+    x:
+      post: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      product: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      prompt: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      share: '{member-x-handle} shared: "{title}" {url} {category-hashtag} {tags-hashtags}'

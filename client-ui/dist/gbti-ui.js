@@ -6134,12 +6134,15 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
   var DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
   var DISCORD_CAT_SHARE_STUB = '{member-discord-username} shared a link in {category}: "{title}" {url}';
   var REDDIT_TITLE_STUB = "{title} (a members-only {content-type} from the GBTI Network)";
+  var X_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+  var X_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
   var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
     discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
     "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
     reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
     // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
-    devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB })
+    devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+    x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB })
   });
   var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
     enabled: false,
@@ -13501,6 +13504,33 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     if (!Number.isFinite(limit) || s.length <= limit) return s;
     return s.slice(0, Math.max(0, limit - 1)).trimEnd() + "…";
   }
+  function xHandleFrom(value) {
+    let s = String(value || "").trim();
+    if (!s) return "";
+    const m = s.match(/^https?:\/\/(?:www\.)?(?:x|twitter|mobile\.twitter)\.com\/([^/?#]+)/i);
+    if (m) s = m[1];
+    s = s.replace(/^@/, "").trim();
+    return /^[A-Za-z0-9_]{1,15}$/.test(s) ? s : "";
+  }
+  function toHashtag(label) {
+    const parts = String(label || "").split(/[^A-Za-z0-9]+/).filter(Boolean);
+    if (!parts.length) return "";
+    const body = parts.length === 1 ? parts[0] : parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join("");
+    return body ? `#${body}` : "";
+  }
+  function hashtagList(labels) {
+    const seen = /* @__PURE__ */ new Set();
+    const out = [];
+    for (const l of Array.isArray(labels) ? labels : []) {
+      const h = toHashtag(l);
+      const key = h.toLowerCase();
+      if (h && !seen.has(key)) {
+        seen.add(key);
+        out.push(h);
+      }
+    }
+    return out.join(" ");
+  }
   function renderTemplate(template, item = {}, { limit = 2e3 } = {}) {
     const mention = /^<@!?\d+>$/.test(String(item.mention || "")) ? item.mention : null;
     const fullName = sanitizeMentions(item.authorName || (item.author ? `@${item.author}` : "a member"));
@@ -13526,8 +13556,16 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       authornoteitalic: sanitizeMentions(item.authorNote || "").split("\n").map((l) => l.trim() ? `*${l.trim()}*` : l).join("\n"),
       memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : "",
       // {member-url}: the public profile
-      shortdescription: sanitizeMentions(item.blurb || "")
+      shortdescription: sanitizeMentions(item.blurb || ""),
       // {short-description}: the item's shortDescription (the queue item's blurb)
+      // SOW-120 follow-up: {member-x-handle} is the member's OWN validated X handle rendered as a real
+      // @mention (X @mentions tag a user, they are not a mass broadcast like Discord, and xHandleFrom
+      // strictly validates the shape), else the sanitized full name. {category-hashtag} / {tags-hashtags} /
+      // {hashtags} are alphanumeric-only, so they carry no mention risk.
+      memberxhandle: xHandleFrom(item.authorX) ? `@${xHandleFrom(item.authorX)}` : fullName,
+      categoryhashtag: toHashtag(item.category),
+      tagshashtags: hashtagList(item.tags),
+      hashtags: hashtagList([item.category, ...Array.isArray(item.tags) ? item.tags : []])
     };
     const text = String(template || "").replace(/\{([a-zA-Z-]+)\}/g, (_, name) => {
       const val = vars[name.toLowerCase().replace(/-/g, "")] ?? "";
@@ -13646,6 +13684,10 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
         // SOW-088: leaf-first routing
         authorDiscord: d.gbtiDiscord || void 0,
         // SOW-088: the public profile Discord handle
+        authorX: d.gbtiX || void 0,
+        // SOW-120: the public profile X handle ({member-x-handle})
+        tags: d.gbtiTags ? d.gbtiTags.split(",").map((t) => t.trim()).filter(Boolean) : void 0,
+        // SOW-120: {tags-hashtags}
         authorNote: this._authorNote || void 0,
         // SOW-088 {author-note}: the from-the-author intro comment
         visibility: d.gbtiVisibility === "members" ? "members" : "public"
@@ -14391,7 +14433,10 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
       const syndUrl = it.url ? it.type === "share" ? it.url : SITE13 + it.url : "";
       const authorDiscord = this._author?.entry?.links?.discord || "";
-      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(it.visibility || "members"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const authorX = this._author?.entry?.links?.x || "";
+      const tagsList = Array.isArray(this._fm?.tags) ? this._fm.tags : Array.isArray(it.tags) ? it.tags : [];
+      const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
+      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(it.visibility || "members"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS36) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
