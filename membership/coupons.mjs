@@ -69,6 +69,9 @@ export function redemptionUntil(now, freeDays) {
   return t.toISOString();
 }
 
+/** The KV key the coupons:config mirror lives under (written by reconcile + sync-overrides-mirror). */
+export const COUPONS_MIRROR_KEY = 'coupons:config';
+
 /** The KV keys for a redemption record and a per-code counter (one place, so every reader agrees). */
 export function redemptionKey(code, githubId) {
   return `redemption:${normalizeCouponCode(code)}:${String(githubId)}`;

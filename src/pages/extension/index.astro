@@ -56,7 +56,7 @@ const mcpPrompt = [
   <div class="trial-ribbon" data-trial-ribbon hidden>
     <div class="wrap trial-ribbon-row">
       <span class="trial-ribbon-dot" aria-hidden="true">&#127881;</span>
-      <p>Welcome to your GBTI Network trial. Download and install the extension below to start authoring and join the community.</p>
+      <p data-trial-copy>Welcome to your GBTI Network trial. Download and install the extension below to start authoring and join the community.</p>
       <button type="button" class="trial-ribbon-x" data-trial-close aria-label="Dismiss welcome">&times;</button>
     </div>
   </div>
@@ -75,7 +75,17 @@ const mcpPrompt = [
       const el = document.querySelector('[data-trial-ribbon]');
       if (!el) return;
       let show = false;
-      try { show = new URLSearchParams(location.search).get('welcome') === 'trial' && localStorage.getItem(KEY) !== '1'; } catch (e) { /* no storage */ }
+      let couponApplied = false;
+      try {
+        const params = new URLSearchParams(location.search);
+        show = params.get('welcome') === 'trial' && localStorage.getItem(KEY) !== '1';
+        couponApplied = params.get('coupon') === 'applied'; // SOW-119
+      } catch (e) { /* no storage */ }
+      // SOW-119: a coupon signup is a full membership from day one, so the ribbon says so.
+      if (couponApplied) {
+        const copy = el.querySelector('[data-trial-copy]');
+        if (copy) copy.textContent = 'Welcome to GBTI Network. Your coupon is applied and your membership is active. Download and install the extension below to start authoring and join the community.';
+      }
       if (show) el.hidden = false;
       el.querySelector('[data-trial-close]')?.addEventListener('click', () => {
         el.hidden = true;

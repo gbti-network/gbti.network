@@ -47,6 +47,7 @@ import {
 import { verifyTurnstile, rateLimit } from './abuse.mjs';
 import { runSignup } from './signup.mjs';
 import { resolveCustomerId, createCheckout } from './checkout.mjs';
+import { validateCouponParam } from './coupons.mjs'; // SOW-119
 import { startOnboarding } from './connect.mjs';
 import { verifyStripeSignature, isDuplicateEvent, markEventSeen, handleStripeEvent } from './webhook.mjs';
 import { membershipStatus } from './membership-status.mjs';
@@ -181,9 +182,13 @@ async function handleStart(request, env) {
   // no attribution binding). Carried in the signed state so the conversion handler can later locate touch:<sid>.
   const sidParam = url.searchParams.get('sid') || '';
   const sid = SESSION_RE.test(sidParam) ? sidParam : '';
+  // SOW-119: an optional coupon code (the /codeable-invite path or a hand-entered code). Validated against
+  // the coupons:config mirror NOW so only a redeemable, normalized code ever enters the signed state; an
+  // unknown/inactive code (or a stale mirror) drops silently and the signup proceeds as a normal trial.
+  const coupon = await validateCouponParam(env.SIGNUP_KV, url.searchParams.get('coupon') || '');
   // SOW security fix: bind the state to THIS browser with a per-flow nonce (cookie + embedded in the signed state).
   const nonce = crypto.randomUUID();
-  const state = await packState({ ref, via, sid, nonce }, env);
+  const state = await packState({ ref, via, sid, nonce, ...(coupon ? { coupon } : {}) }, env);
   const location = githubAuthorizeUrl({
     clientId: env.GITHUB_OAUTH_CLIENT_ID,
     redirectUri: `${env.PUBLIC_BASE_URL}/signup/github/callback`,
@@ -218,7 +223,7 @@ async function handleGithubCallback(request, env) {
   // no guild join) and sign the session. The member links Discord later from the extension welcome (which re-runs
   // the same Discord OAuth + idempotently attaches discord_user_id + the role to this Customer).
   const { stripe, discord } = clientsFromEnv(env);
-  await runSignup({
+  const signup = await runSignup({
     identity: { githubId, githubLogin, discordUserId: null, email, discordAccessToken: null },
     stripe,
     discord,
@@ -227,6 +232,7 @@ async function handleGithubCallback(request, env) {
     refCode: state.ref,
     via: state.via,
     touchSession: state.sid, // SOW-059: bind the touch session to this new Customer (new-customer-only)
+    coupon: state.coupon, // SOW-119: a pre-validated code from the signed state (absent for a plain signup)
   });
 
   const session = await signSession({ githubId, githubLogin }, env.SESSION_SECRET);
@@ -234,7 +240,9 @@ async function handleGithubCallback(request, env) {
   // only via the extension). ?welcome=trial drives the welcome ribbon; u=<login> is a DISPLAY-ONLY hint (the public
   // github_login, NOT auth) the site header reads into localStorage to show the signed-in avatar before the
   // extension is installed -- once the extension is in, its SOW-030 signal takes over.
-  const dest = `${env.SITE_BASE_URL}/extension/?welcome=trial&u=${encodeURIComponent(githubLogin || '')}`;
+  // SOW-119: &coupon=applied lets the welcome surfaces confirm the free period without another round-trip.
+  const couponParam = signup?.couponApplied ? '&coupon=applied' : '';
+  const dest = `${env.SITE_BASE_URL}/extension/?welcome=trial&u=${encodeURIComponent(githubLogin || '')}${couponParam}`;
   return redirect(dest, { 'Set-Cookie': sessionCookieHeader(session) });
 }
 
@@ -277,6 +285,7 @@ async function handleDiscordCallback(request, env) {
     refCode: state.ref,
     via: state.via,
     touchSession: state.sid, // SOW-059 P1c: bind the touch session to this new Customer (new-customer-only)
+    coupon: state.coupon, // SOW-119: idempotent (the grant record is the lock), so the re-run is safe
   });
 
   const session = await signSession({ githubId: state.githubId, githubLogin: state.githubLogin }, env.SESSION_SECRET);

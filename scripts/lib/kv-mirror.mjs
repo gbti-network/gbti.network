@@ -8,13 +8,13 @@
 
 import { toSyndicationMirror } from '../../membership/syndication-config.mjs';
 import { toTopicsMirror, TOPICS_MIRROR_KEY } from '../../membership/topics-vocab.mjs';
-import { toCouponsMirror } from '../../membership/coupons.mjs';
+import { toCouponsMirror, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs';
 
 export const OVERRIDES_KV_KEY = 'overrides:mirror';
 export const SYNDICATION_KV_KEY = 'synd:config';
 export const CONTENT_CHANNELS_KV_KEY = 'synd:channels'; // SOW-087: house/content-channels.yml
 export const TOPICS_KV_KEY = TOPICS_MIRROR_KEY; // SOW-087: house/topics.yml (the share category suggester)
-export const COUPONS_KV_KEY = 'coupons:config'; // SOW-119: house/coupons.yml (signup coupon validation)
+export const COUPONS_KV_KEY = COUPONS_MIRROR_KEY; // SOW-119: house/coupons.yml (signup coupon validation)
 
 /** Build the compact mirror blob the Worker reads. Stores the RAW parsed YAML (the Worker rebuilds Maps). */
 export function buildOverridesMirror(raw, now = new Date()) {

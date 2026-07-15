@@ -15,6 +15,7 @@ import { deriveStatus } from '../../membership/derive-status.mjs';
 import { effectiveStatus, bansFromParsed, rolesFromParsed, grandfathersFromParsed } from '../../membership/overrides-core.mjs';
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { decryptAssetText, encryptAsset } from '../../client/src/crypto-assets.mjs';
+import { readCouponGrant } from './coupons.mjs'; // SOW-119: the coupon fast-path grant
 
 export const OVERRIDES_KV_KEY = 'overrides:mirror';
 // The mirror must be fresher than this or we fail closed (a stale mirror could serve a since-banned member).
@@ -75,6 +76,15 @@ export async function resolveEffective(request, env, { fetchImpl = globalThis.fe
     grandfathers: grandfathersFromParsed(mirror.grandfathered),
   };
   const effective = effectiveStatus(githubId, derived, overrides, now);
+
+  // SOW-119: the coupon fast-path. A fresh redemption makes the member effective-paid IMMEDIATELY (the
+  // daily reconcile lands the durable git grant later). Consulted only when the mirror-derived status is
+  // neither paid (nothing to add) nor banned (ban outranks everything, including a coupon).
+  if (effective.status !== 'paid' && effective.status !== 'banned') {
+    const grant = await readCouponGrant(kv, githubId, now);
+    if (grant) return { ok: true, githubId, login: user.githubLogin ?? null, status: 'paid', source: 'coupon' };
+  }
+
   return { ok: true, githubId, login: user.githubLogin ?? null, status: effective.status, source: effective.source };
 }
 

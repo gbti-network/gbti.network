@@ -13,6 +13,7 @@ import { createStripeClient } from '../../clients/stripe.mjs';
 import { rolesFromParsed, roleOf, curatorsFromParsed, isCurator, canCurateNews } from '../../membership/overrides-core.mjs';
 import { OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from './membership-content.mjs';
 import { recordUsage } from './analytics.mjs'; // SOW-061: usage analytics seam
+import { readCouponGrant } from './coupons.mjs'; // SOW-119: the coupon fast-path grant
 import { usageBucket, overridesFromMirror } from '../../membership/usage-bucket.mjs'; // SOW-061: effective tier bucket
 
 // SOW-046 C: best-effort read of the caller's NEWS-CURATOR capability from the KV overrides mirror. Used ONLY to
@@ -60,7 +61,14 @@ export async function membershipStatus(request, env, { fetchImpl = globalThis.fe
   const stripe = makeStripe({ apiKey: env.STRIPE_SECRET_KEY, fetch: fetchImpl });
 
   // deriveStatus already fails closed to 'none' on any lookup error, so a Stripe outage never default-opens.
-  const status = await deriveStatus(user.githubId, stripe);
+  let status = await deriveStatus(user.githubId, stripe);
+  // SOW-119: the coupon fast-path. A fresh redemption reports as paid so the client unlocks immediately
+  // (the durable git grant lands at the next reconcile). The client still folds its own overrides on top,
+  // so a ban keeps outranking this exactly as it outranks a real subscription.
+  if (status !== 'paid') {
+    const grant = await readCouponGrant(env.SIGNUP_KV, String(user.githubId), now);
+    if (grant) status = 'paid';
+  }
   const mirror = await readFreshMirror(env, now); // one read, reused for the curator hint + the analytics bucket
   const canCurate = computeCanCurate(mirror, String(user.githubId)); // SOW-046 C: UI hint only; the Worker re-checks on publish
   // SOW-061: record the EFFECTIVE tier bucket (ban > staff > grandfather > Stripe), so the cohort matches the gate.
