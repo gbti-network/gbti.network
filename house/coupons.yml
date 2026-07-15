@@ -1,0 +1,18 @@
+# SOW-119: the coupon registry (ADMIN-owned; see CODEOWNERS). A coupon grants a redeeming signup
+# `freeDays` of effective-paid time: the signup Worker records the redemption in KV, and the daily
+# reconcile folds it into house/grandfathered.yml as an `until`-bounded grant
+# (reason: coupon:<CODE>). At expiry the standard lapse machinery runs; checkout is the way back in.
+#
+# Mirrored to the KV key `coupons:config` by reconcile + sync-overrides-mirror, so the Worker
+# validates codes against live values without a redeploy. This file carries no secrets.
+#
+# Fields: code (3-32 chars A-Z 0-9, case-insensitive at entry), freeDays (1-3650), active,
+# note, maxRedemptions (optional; null = unlimited), expiresAt (optional ISO date; the coupon's
+# own shelf life, not the grant length).
+coupons:
+  - code: CODEABLEYEAR
+    freeDays: 365
+    active: true
+    note: Codeable experts, first year free (SOW-119)
+    maxRedemptions: null
+    expiresAt: null

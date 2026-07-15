@@ -8,11 +8,13 @@
 
 import { toSyndicationMirror } from '../../membership/syndication-config.mjs';
 import { toTopicsMirror, TOPICS_MIRROR_KEY } from '../../membership/topics-vocab.mjs';
+import { toCouponsMirror } from '../../membership/coupons.mjs';
 
 export const OVERRIDES_KV_KEY = 'overrides:mirror';
 export const SYNDICATION_KV_KEY = 'synd:config';
 export const CONTENT_CHANNELS_KV_KEY = 'synd:channels'; // SOW-087: house/content-channels.yml
 export const TOPICS_KV_KEY = TOPICS_MIRROR_KEY; // SOW-087: house/topics.yml (the share category suggester)
+export const COUPONS_KV_KEY = 'coupons:config'; // SOW-119: house/coupons.yml (signup coupon validation)
 
 /** Build the compact mirror blob the Worker reads. Stores the RAW parsed YAML (the Worker rebuilds Maps). */
 export function buildOverridesMirror(raw, now = new Date()) {
@@ -94,4 +96,9 @@ export async function mirrorContentChannelsToKv({ raw, env = process.env, now = 
 /** SOW-087: PUT house/topics.yml -> KV topics:vocab, so the Worker's share category suggester sees the live vocabulary. */
 export async function mirrorTopicsToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = TOPICS_KV_KEY } = {}) {
   return putKvJson({ label: 'topics vocabulary', body: JSON.stringify(toTopicsMirror(raw, () => now.toISOString())), env, fetchImpl, key });
+}
+
+/** SOW-119: PUT house/coupons.yml -> KV coupons:config, so signup validates coupon codes against live values. */
+export async function mirrorCouponsToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = COUPONS_KV_KEY } = {}) {
+  return putKvJson({ label: 'coupons', body: JSON.stringify(toCouponsMirror(raw, now)), env, fetchImpl, key });
 }

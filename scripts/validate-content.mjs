@@ -11,6 +11,7 @@ import yaml from 'js-yaml';
 import { isImageGenTarget } from '../client/src/image-models.mjs';
 import { membersIndexFromParsed, overrideConsistencyErrors } from '../membership/overrides-core.mjs';
 import { validateNewsChannels } from '../membership/news-channels.mjs'; // SOW-043: the news-category -> Discord channel map
+import { validateCoupons } from '../membership/coupons.mjs'; // SOW-119: the coupon registry
 import { validateTopicMap } from '../membership/topic-map.mjs'; // SOW-054: the followed-topic -> news-category map
 import { topicVocabKeys } from '../membership/topics-vocab.mjs'; // SOW-080: the flat house/topics.yml topic vocabulary
 import { CATEGORY_NAMES } from '../workers/news/config/categories.mjs'; // SOW-054: the canonical news category labels
@@ -396,6 +397,18 @@ function validateNewsChannelsConfig() {
   for (const err of validateNewsChannels(parsed)) errors.push(err);
 }
 validateNewsChannelsConfig();
+
+// SOW-119: the coupon registry (house/coupons.yml). A malformed coupon fails CI rather than silently
+// granting nothing at signup (the runtime core also fails closed, but the author should know).
+function validateCouponsConfig() {
+  const rel = 'house/coupons.yml';
+  if (!has(path.join(ROOT, rel))) return; // optional config
+  let parsed;
+  try { parsed = yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')); }
+  catch { errors.push(`${rel}: not valid YAML`); return; }
+  for (const err of validateCoupons(parsed, { file: rel })) errors.push(err);
+}
+validateCouponsConfig();
 
 // SOW-087: the content/share category -> Discord channel map (house/content-channels.yml). The same shape and
 // rules as the news map (a list of { category, numeric channelId }, no duplicate category), validated by the

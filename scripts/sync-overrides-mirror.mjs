@@ -18,8 +18,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { loadOverridesRaw } from '../membership/overrides.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorCouponsToKv } from './lib/kv-mirror.mjs';
 import { toSyndicationMirror } from '../membership/syndication-config.mjs';
+import { toCouponsMirror } from '../membership/coupons.mjs';
 
 /**
  * Build the overrides mirror from the repo's house/ files and write it to KV. Pure over its injected deps
@@ -72,5 +73,20 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       else if (s.written) console.log(`sync-mirror: wrote synd:config (${s.bytes} bytes).`);
       else { console.error(`sync-mirror: synd:config NOT written (${s.reason}).`); process.exitCode = 1; }
     } catch (e) { console.error('sync-mirror: synd:config FAILED:', e?.message ?? e); process.exitCode = 1; }
+
+    // 3) coupons:config — SOW-119: signup validates coupon codes against this, so a coupon edit
+    // (create, deactivate, freeDays change) goes live at the next tick without a redeploy.
+    try {
+      let rawCoupons = {};
+      try { rawCoupons = yaml.load(fs.readFileSync(path.join(ROOT, 'house', 'coupons.yml'), 'utf8')) || {}; } catch { rawCoupons = {}; }
+      if (dryRun) {
+        const m = toCouponsMirror(rawCoupons);
+        console.log(`sync-mirror: DRY RUN would write coupons:config (${m.coupons.length} coupon${m.coupons.length === 1 ? '' : 's'}).`);
+      } else {
+        const c = await mirrorCouponsToKv({ raw: rawCoupons });
+        if (c.written) console.log(`sync-mirror: wrote coupons:config (${c.bytes} bytes).`);
+        else { console.error(`sync-mirror: coupons:config NOT written (${c.reason}).`); process.exitCode = 1; }
+      }
+    } catch (e) { console.error('sync-mirror: coupons:config FAILED:', e?.message ?? e); process.exitCode = 1; }
   })();
 }

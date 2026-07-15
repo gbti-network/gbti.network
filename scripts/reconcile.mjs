@@ -29,7 +29,7 @@ import { deriveStatusFromCustomer, STATUS } from '../membership/derive-status.mj
 import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '../membership/overrides.mjs';
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorCouponsToKv } from './lib/kv-mirror.mjs';
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
 import { syncUpvoteCounts, readCountsFromDisk as readUpvoteCountsFromDisk } from './lib/upvote-counts.mjs';
 import { mergeState, alreadyLabeled, conflictComment, CONFLICT_LABEL } from './lib/pr-conflict.mjs';
@@ -545,6 +545,7 @@ async function main() {
   for (const { file, run, key } of [
     { file: 'content-channels.yml', run: mirrorContentChannelsToKv, key: 'synd:channels' },
     { file: 'topics.yml', run: mirrorTopicsToKv, key: 'topics:vocab' },
+    { file: 'coupons.yml', run: mirrorCouponsToKv, key: 'coupons:config' }, // SOW-119
   ]) {
     let rawDoc = {};
     try { rawDoc = yaml.load(fs.readFileSync(path.join(ROOT, 'house', file), 'utf8')) || {}; } catch { rawDoc = {}; }
