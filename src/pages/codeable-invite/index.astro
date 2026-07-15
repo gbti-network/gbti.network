@@ -1,0 +1,151 @@
+---
+// SOW-119: the Codeable expert invite page. Unlisted by design: noindex meta + excluded from the sitemap
+// (astro.config.mjs filter). A shared link may carry ?t=<token>; the page resolves it against the Worker
+// (GET /membership/coupon-link) and locks the coupon field to the resolved code; otherwise the field is
+// hand-editable (manual coupon entry at signup). The CTA is the same Turnstile-gated /signup/start flow
+// as /membership/, plus the coupon parameter. Honest terms: first period free, no card, pay to continue.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { REF_COOKIE, REF_VIA_COOKIE } from '../../lib/referral';
+import { TOUCH_CAPTURE_ENABLED, TOUCH_SID_COOKIE } from '../../lib/touch.mjs';
+import { MEMBERSHIP_PRICE_LABEL, BILLING_PERIOD, TURNSTILE_SITE_KEY, SIGNUP_BASE } from '../../lib/membership';
+
+const included = [
+  'Publish your profile, articles, products, and prompts under your own name',
+  'Full Discord access plus the weekly build session and coaching',
+  'Revenue share when your content brings a new member in',
+  'The extension workbench plus the npm CMS and MCP server for you and your AI agents',
+];
+---
+
+<BaseLayout
+  title="Codeable experts: your first year on us · GBTI Network"
+  description="A private invitation for Codeable experts: a full GBTI Network membership, first year free with your coupon."
+  noindex
+>
+  <main class="ci-wrap">
+    <header class="ci-head">
+      <p class="eyebrow">For Codeable experts</p>
+      <h1 class="ci-title">Your first year on us</h1>
+      <p class="ci-lead">GBTI Network is a creator co-op for developers: publish under your own name, share
+        in the revenue your work brings in, and build alongside people who ship. As a Codeable expert, your
+        first year of full membership is free with the coupon below. No card required.</p>
+    </header>
+
+    <div class="ci-grid">
+      <div class="ci-card">
+        <p class="eyebrow tcenter">Full membership</p>
+        <div class="ci-price"><span class="ci-num">Year one free</span></div>
+        <p class="ci-sub">then {MEMBERSHIP_PRICE_LABEL} per {BILLING_PERIOD} if you choose to stay</p>
+        <ul class="ci-list">
+          {included.map((item) => (
+            <li><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m5 12.5 4.5 4.5L19 7.5"/></svg><span>{item}</span></li>
+          ))}
+        </ul>
+        <label class="ci-coupon-label" for="ci-coupon">Coupon</label>
+        <input id="ci-coupon" class="ci-coupon" type="text" autocomplete="off" spellcheck="false" placeholder="Enter your coupon code" />
+        <p class="ci-coupon-note" data-coupon-note>Your invite link fills this in automatically; you can also type a code by hand.</p>
+        <div class="signup-cta">
+          <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-callback="gbtiTurnstileOk" data-expired-callback="gbtiTurnstileReset" data-error-callback="gbtiTurnstileReset" data-theme="auto"></div>
+          <button id="signup-go" type="button" class="btn btn-primary btn-lg" style="width:100%;margin-top:14px" disabled>Claim your free year</button>
+        </div>
+        <p class="ci-fine">Complete the check above to continue. Sign in with GitHub; no card at any point
+          during the free year. Near the end of your year we send one reminder; continuing is
+          {MEMBERSHIP_PRICE_LABEL} per {BILLING_PERIOD}, and nothing bills automatically.</p>
+      </div>
+
+      <div class="ci-side">
+        <h2>How it works</h2>
+        <ol>
+          <li><strong>Claim.</strong> The coupon rides your GitHub sign-in; your membership is active the
+            moment signup completes.</li>
+          <li><strong>Publish.</strong> Install the extension, set up your workbench, and publish articles,
+            products, and prompts from day one.</li>
+          <li><strong>Decide later.</strong> Your year runs its course with no card on file. If GBTI is not
+            for you, everything you published simply unpublishes at the end; rejoin any time and it all
+            comes back.</li>
+        </ol>
+        <p>Questions first? Read the <a href="/handbook/">member handbook</a> or the
+          <a href="/revenue-model/">revenue model</a>.</p>
+      </div>
+    </div>
+  </main>
+</BaseLayout>
+
+<script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script define:vars={{ signupBase: SIGNUP_BASE, refCookie: REF_COOKIE, viaCookie: REF_VIA_COOKIE, sidCookie: TOUCH_SID_COOKIE, touchEnabled: TOUCH_CAPTURE_ENABLED }}>
+  // The same Turnstile-gated /signup/start navigation as /membership/, plus the coupon parameter.
+  // A ?t=<token> invite link resolves to its code via the Worker and locks the field; a rotated or
+  // unknown token silently leaves the field editable (manual entry stays available).
+  (function () {
+    function cookie(name) {
+      var c = document.cookie.split('; ').find(function (x) { return x.indexOf(name + '=') === 0; });
+      return c ? decodeURIComponent(c.split('=').slice(1).join('=')) : '';
+    }
+    var input = document.getElementById('ci-coupon');
+    var note = document.querySelector('[data-coupon-note]');
+    var t = new URLSearchParams(location.search).get('t');
+    if (t && input) {
+      fetch(signupBase + '/membership/coupon-link?t=' + encodeURIComponent(t))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (d && d.code) {
+            input.value = d.code;
+            input.readOnly = true;
+            input.classList.add('locked');
+            if (note) note.textContent = 'Your Codeable coupon is attached.';
+          }
+        })
+        .catch(function () { /* manual entry stays available */ });
+    }
+
+    var btn = document.getElementById('signup-go');
+    window.gbtiTurnstileOk = function (token) { if (btn) { btn.disabled = false; btn.dataset.token = token; } };
+    window.gbtiTurnstileReset = function () { if (btn) { btn.disabled = true; delete btn.dataset.token; } };
+    if (btn) btn.addEventListener('click', function () {
+      var token = btn.dataset.token;
+      if (!token) return;
+      var u = new URL(signupBase + '/signup/start');
+      u.searchParams.set('cf-turnstile-response', token);
+      var code = input && input.value ? input.value.trim() : '';
+      if (code) u.searchParams.set('coupon', code);
+      var ref = cookie(refCookie); if (ref) u.searchParams.set('ref', ref);
+      var via = cookie(viaCookie); if (via) u.searchParams.set('via', via);
+      if (touchEnabled) { var sid = cookie(sidCookie); if (sid) u.searchParams.set('sid', sid); }
+      window.location.href = u.toString();
+    });
+  })();
+</script>
+
+<style>
+  .ci-wrap { max-width: var(--maxw); margin: 0 auto; padding: 52px var(--gut) 96px; }
+  .ci-head { max-width: 680px; margin-bottom: 40px; }
+  .ci-title { font-family: var(--f-display); font-weight: 800; font-size: clamp(32px, 5vw, 46px); letter-spacing: -0.01em; color: var(--fg); margin: 0; }
+  .ci-lead { color: var(--fg-soft); font-size: 16.5px; line-height: 1.65; margin: 14px 0 0; }
+
+  .ci-grid { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 48px; align-items: start; }
+  @media (max-width: 860px) { .ci-grid { grid-template-columns: 1fr; } }
+
+  .ci-card { border: 1.5px solid var(--line); border-radius: 16px; background: var(--paper); padding: 28px; box-shadow: var(--sh, 0 1px 3px rgba(0,0,0,.05)); }
+  .tcenter { text-align: center; }
+  .ci-price { text-align: center; margin: 10px 0 2px; }
+  .ci-num { font-family: var(--f-display); font-weight: 800; font-size: 34px; color: var(--fg); }
+  .ci-sub { text-align: center; color: var(--fg-mute); font-size: 13.5px; margin: 0 0 16px; }
+  .ci-list { list-style: none; padding: 0; margin: 0 0 20px; }
+  .ci-list li { display: flex; gap: 10px; align-items: flex-start; color: var(--fg-soft); font-size: 14.5px; line-height: 1.5; margin-top: 9px; }
+  .ci-list svg { flex: none; color: var(--green); margin-top: 2px; }
+
+  .ci-coupon-label { display: block; font-family: var(--f-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-mute); margin: 0 0 6px; }
+  .ci-coupon { width: 100%; border: 1.5px solid var(--line); border-radius: 10px; background: var(--paper-2, var(--paper)); color: var(--fg); font-family: var(--f-mono); font-size: 15px; letter-spacing: .06em; text-transform: uppercase; padding: 11px 13px; }
+  .ci-coupon:focus { outline: none; border-color: var(--green); }
+  .ci-coupon.locked { border-color: var(--green); background: var(--green-tint, rgba(31,158,95,.08)); }
+  .ci-coupon-note { color: var(--fg-mute); font-size: 12.5px; margin: 7px 0 16px; }
+  .signup-cta .cf-turnstile { margin: 0 auto; min-height: 65px; }
+  .ci-fine { color: var(--fg-mute); font-size: 12.5px; line-height: 1.6; margin: 14px 0 0; }
+
+  .ci-side h2 { font-family: var(--f-display); font-weight: 700; font-size: 22px; color: var(--fg); margin: 4px 0 12px; }
+  .ci-side ol { color: var(--fg-soft); font-size: 15px; line-height: 1.7; padding-left: 22px; margin: 0 0 16px; list-style: decimal; }
+  .ci-side li { margin-top: 10px; }
+  .ci-side strong { color: var(--fg); }
+  .ci-side p { color: var(--fg-soft); font-size: 14.5px; }
+  .ci-side a { color: var(--green-700); text-decoration: underline; text-underline-offset: 2px; }
+</style>

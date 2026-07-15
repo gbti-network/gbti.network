@@ -48,6 +48,7 @@ import { verifyTurnstile, rateLimit } from './abuse.mjs';
 import { runSignup } from './signup.mjs';
 import { resolveCustomerId, createCheckout } from './checkout.mjs';
 import { validateCouponParam } from './coupons.mjs'; // SOW-119
+import { couponLinkKey } from '../../membership/coupons.mjs'; // SOW-119: the shareable link token -> code
 import { startOnboarding } from './connect.mjs';
 import { verifyStripeSignature, isDuplicateEvent, markEventSeen, handleStripeEvent } from './webhook.mjs';
 import { membershipStatus } from './membership-status.mjs';
@@ -824,6 +825,20 @@ export default {
         if (method === 'POST') {
           const r = await handleSyndicateNow(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // SOW-119: resolve a shareable coupon-link token to its coupon code, for the invite page's pre-attached
+      // field. Public by design (the token IS the secret; regenerating it kills leaked URLs); returns only the
+      // code, never usage data. An unknown/rotated token is a 404 the page treats as "manual entry".
+      if (pathname === '/membership/coupon-link') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const t = String(url.searchParams.get('t') || '').trim();
+          const code = t && /^[A-Za-z0-9_-]{8,64}$/.test(t) ? await env.SIGNUP_KV.get(couponLinkKey(t)) : null;
+          const headers = { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store' };
+          if (!code) return json({ error: 'not_found' }, 404, headers);
+          return json({ ok: true, code }, 200, headers);
         }
       }
 
