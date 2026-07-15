@@ -16,6 +16,14 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 12
+    date: 2026-07-15
+    type: build
+    title: Full-screen splash hides the sidebar without an image
+    notes:
+      - The full-screen new-tab background now hides the sidebar even when no background image is loaded.
+
+  - version: 0.1.0
     build: 11
     date: 2026-07-15
     type: build

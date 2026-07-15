@@ -16040,10 +16040,12 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
   function applySplashBg() {
     clearSplashBg();
     const mode = normalizeBgMode(lsItem("gbti-splash-bg-mode"));
-    if (mode === "off" || !SPLASH_BG_IMG) return;
+    if (mode === "off") return;
+    if (!SPLASH_BG_IMG && mode !== "full") return;
     const root = document.documentElement;
-    root.style.setProperty("--splash-bg", `url("${SPLASH_BG_IMG}")`);
     root.setAttribute("data-splash-bg", mode);
+    if (!SPLASH_BG_IMG) return;
+    root.style.setProperty("--splash-bg", `url("${SPLASH_BG_IMG}")`);
     const dim = (100 - normalizeBgOpacity(lsItem("gbti-splash-bg-opacity"))) / 100;
     root.style.setProperty("--splash-bg-dim", `rgba(0,0,0,${dim.toFixed(2)})`);
     root.style.setProperty("--card-op", (normalizeBgOpacity(lsItem("gbti-splash-bg-card-op"), 70) / 100).toFixed(2));

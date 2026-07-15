@@ -351,12 +351,18 @@ function clearSplashBg() {
 function applySplashBg() {
   clearSplashBg();
   const mode = normalizeBgMode(lsItem('gbti-splash-bg-mode'));
-  if (mode === 'off' || !SPLASH_BG_IMG) return; // off, or no image yet -> the plain splash
+  if (mode === 'off') return; // off -> the plain splash
+  // content/fill PLACE an image, so with no image there is nothing to show: fall back to the plain splash.
+  // full is a LAYOUT (a fixed full-viewport curtain that covers the rail), so it applies even with NO image,
+  // so the sidebar is hidden whether or not a background image is set (owner-requested). The CSS gives the
+  // full curtain an opaque background so it covers the app even without an image.
+  if (!SPLASH_BG_IMG && mode !== 'full') return;
   // Drive the placement off html[data-splash-bg] (+ --splash-bg on :root) so the CSS can target the splash block
   // (content), the whole content column (fill), or a fixed full-viewport overlay (full) from one switch.
   const root = document.documentElement;
-  root.style.setProperty('--splash-bg', `url("${SPLASH_BG_IMG}")`);
   root.setAttribute('data-splash-bg', mode);
+  if (!SPLASH_BG_IMG) return; // full-mode curtain with no image: the layout is applied; skip the image + appearance vars
+  root.style.setProperty('--splash-bg', `url("${SPLASH_BG_IMG}")`);
   // SOW-074: the appearance vars apply on ANY enabled background (content / fill / full).
   const dim = (100 - normalizeBgOpacity(lsItem('gbti-splash-bg-opacity'))) / 100; // higher opacity = brighter image
   root.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);

@@ -103,6 +103,9 @@
        those still win; data-unauth still hides it (the .nt-main ancestor is display:none). */
     html[data-splash][data-splash-bg="full"] .nt-splash {
       position: fixed; inset: 0; z-index: 150; margin: 0; min-height: 100vh;
+      /* SOW-074: an opaque base so the full-viewport curtain covers the rail + feed even with NO image set
+         (--splash-bg unset drops the background-image, leaving this color). With an image the image covers it. */
+      background-color: var(--bg);
       background-image: linear-gradient(var(--splash-bg-dim, rgba(0,0,0,.5)), var(--splash-bg-dim, rgba(0,0,0,.5))), var(--splash-bg);
       background-size: cover; background-position: center;
     }
