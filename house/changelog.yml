@@ -16,6 +16,14 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 11
+    date: 2026-07-15
+    type: build
+    title: Syndicate popup respects a public item
+    notes:
+      - Fixed the manual syndicate popup treating a public item as members-only when its index row lacked a visibility flag.
+
+  - version: 0.1.0
     build: 10
     date: 2026-07-15
     type: build
