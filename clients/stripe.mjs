@@ -108,7 +108,9 @@ export function createStripeClient({ apiKey, fetch = globalThis.fetch, baseUrl =
       return req('DELETE', `/customers/${customerId}`);
     },
 
-    async createCheckoutSession({ customer, priceId, successUrl, cancelUrl, clientReferenceId }) {
+    async createCheckoutSession({ customer, priceId, successUrl, cancelUrl, clientReferenceId, couponId }) {
+      // SOW-119: couponId applies a STRIPE coupon to the session (a card-first discount path). The live
+      // coupon flow (the no-card free year) never uses this; it exists for future card-first promotions.
       return req('POST', '/checkout/sessions', {
         mode: 'subscription',
         customer,
@@ -116,6 +118,7 @@ export function createStripeClient({ apiKey, fetch = globalThis.fetch, baseUrl =
         cancel_url: cancelUrl,
         'line_items': [{ price: priceId, quantity: 1 }],
         ...(clientReferenceId ? { client_reference_id: clientReferenceId } : {}),
+        ...(couponId ? { discounts: [{ coupon: couponId }] } : {}),
       });
     },
 
