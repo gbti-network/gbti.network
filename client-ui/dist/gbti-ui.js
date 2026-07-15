@@ -6313,7 +6313,12 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     // SOW-088 Proposal A: per-channel stub overrides
     news_engagement: DEFAULT_NEWS_ENGAGEMENT,
     // SOW-111: engagement-triggered news auto-share
-    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false })
+    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
+    // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
+    // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
+    // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
+    // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
+    manual_assist_channels: Object.freeze([])
   });
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
@@ -14048,7 +14053,7 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const prior = here ? `<p class="warn">Already posted to ${this._sendPhrase(dest, here)}. Publishing again posts a duplicate there.</p>` : elsewhere.length ? `<p class="info">Not posted to ${esc(DEST_LABEL[dest] || dest)} yet. Previously posted to ${elsewhere.map((d) => this._sendPhrase(d, sends[d])).join("; ")}.</p>` : "";
       const cmtState = this._result?.comment ? this._result.comment.error ? ` The first comment failed: ${esc(this._result.comment.error)}.` : " The first comment posted." : "";
       const fwdState = this._result?.forwarded ? this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : " Forwarded to the secondary channel." : "";
-      const result = this._result ? `<p class="okmsg">${this._result.draft ? `Draft created. <a href="https://dev.to/dashboard" target="_blank" rel="noopener">Review it on the dev.to dashboard</a> (a draft's direct URL 404s until it publishes).` : `Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}`}${fwdState}${cmtState}</p>` : "";
+      const result = this._result ? `<p class="okmsg">${this._result.queued ? "Queued to the Social Queue. Open it from your avatar menu to post it by hand (this channel is manual-assist, so nothing is charged)." : this._result.draft ? `Draft created. <a href="https://dev.to/dashboard" target="_blank" rel="noopener">Review it on the dev.to dashboard</a> (a draft's direct URL 404s until it publishes).` : `Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ""}`}${fwdState}${cmtState}</p>` : "";
       const stubNote = this._isStub() && dest !== "devto" ? `<p class="warn">Members-only item: the STUB template set applies on this channel.</p>` : "";
       return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       ${stubNote}
@@ -15179,6 +15184,10 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       cancelSyndication: ({ id }) => request("POST", "/api/syndication/cancel", { id }),
       // SOW-058: superadmin reject/cancel
       approveSyndication: ({ id }) => request("POST", "/api/syndication/approve", { id }),
+      socialQueue: () => request("GET", "/api/social-queue"),
+      // SOW-121: superadmin manual-assist queue { pending, done }
+      socialQueueAction: ({ action, id }) => request("POST", "/api/social-queue", { action, id }),
+      // SOW-121: done/delete
       getSyndicateNow: () => request("GET", "/api/syndicate-now"),
       // SOW-088: destinations + templates + channel map (superadmin)
       syndicateNow: (p) => request("POST", "/api/syndicate-now", p),

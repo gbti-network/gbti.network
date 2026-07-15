@@ -18,8 +18,10 @@ import { ROLE } from '../../membership/overrides-core.mjs';
 import { buildQueueItem, dedupeKey, canCancel, markCancelled } from '../../membership/syndication-queue.mjs';
 import { renderTemplate } from '../../membership/syndication-format.mjs';
 import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
-import { templateFor, TEMPLATE_TYPES, DEFAULT_TEMPLATES, DEFAULT_STUB_TEMPLATES, DEFAULT_CHANNEL_STUB_TEMPLATES } from '../../membership/syndication-config-core.mjs';
+import { templateFor, TEMPLATE_TYPES, DEFAULT_TEMPLATES, DEFAULT_STUB_TEMPLATES, DEFAULT_CHANNEL_STUB_TEMPLATES, isManualAssist } from '../../membership/syndication-config-core.mjs';
 import { buildAdapters } from '../../membership/syndication-adapters.mjs';
+import { buildSocialTask } from '../../membership/social-queue.mjs'; // SOW-121
+import { putTask } from './social-queue-store.mjs'; // SOW-121
 import { postToChannel } from '../../clients/syndication/discord-channel.mjs';
 import { readSyndicationConfig, readContentChannels, putItem, getItem, removeFromPending, SYND_DEDUPE_KEY } from './syndication-store.mjs';
 import { createStripeClient } from '../../clients/stripe.mjs';
@@ -158,6 +160,15 @@ export async function handleSyndicateNow(request, env, deps = {}) {
 
   const cfg = await readSyndicationConfig(kv);
   const text = renderTemplate(template, item, { limit: channelLimit(destination) });
+
+  // SOW-121: a manual-assist destination (e.g. X, whose free API tier was deprecated) is NEVER posted via
+  // the paid API from here. Enqueue a Social Queue task with the popup's rendered text; a superadmin posts
+  // it by hand through the free web composer, then marks it done. Returns "queued".
+  if (isManualAssist(cfg, destination)) {
+    const task = buildSocialTask({ item, channel: destination, text, trigger: 'manual', now: Number(now()) });
+    await putTask(kv, task);
+    return { status: 200, body: { ok: true, queued: true, id: task.id, destination, message: `Queued to the Social Queue for a manual post to ${destination}.` } };
+  }
 
   let result;
   let channelRecordKey = destination;

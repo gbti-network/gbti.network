@@ -24,12 +24,18 @@ syndication:
   channels:
     discord: true
     discord-category: true
-    x: true
+    x: false
     linkedin: false
     mastodon: false
     bluesky: false
     reddit: false
     devto: false
+  # SOW-121: channels the system NEVER auto-posts to (no adapter call). Instead it enqueues a superadmin
+  # Social Queue task (a human posts it by hand through the free web composer). X is here because its API
+  # posting costs $0.20 per link-bearing tweet after the free tier was deprecated. A channel here must be
+  # OFF in `channels` above (auto-post and manual-assist are mutually exclusive).
+  manual_assist_channels:
+    - x
   channel_templates:
     devto:
       devto-footer: "The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. \n\n---\n\n>Are you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\n>To follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}"

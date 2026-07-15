@@ -63,6 +63,7 @@ import { freezeAndPersist } from './conversion-snapshot-store.mjs'; // SOW-059 P
 import { handleUpvote } from './membership-upvote.mjs';
 import { handleOgPreview } from './membership-og.mjs';
 import { handleSyndicationTracker, handleSyndicationCancel, handleSyndicationApprove } from './syndication-admin.mjs';
+import { handleSocialQueueGet, handleSocialQueueAction } from './social-queue-admin.mjs'; // SOW-121
 import { handleSyndicateNowInfo, handleSyndicateNow } from './membership-syndicate-now.mjs'; // SOW-088: manual syndicate
 import { drainSyndication } from './syndication-drain.mjs';
 import { handleFollows } from './membership-follows.mjs';
@@ -830,6 +831,19 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'POST') {
           const r = await handleSyndicationCancel(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+      // SOW-121: the superadmin Social Queue (manual-assist worklist). GET the pending + done tasks; POST an
+      // action (done/delete). Fail-closed via the overrides mirror + superadmin role; never cached.
+      if (pathname === '/membership/social-queue') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = await handleSocialQueueGet(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+        if (method === 'POST') {
+          const r = await handleSocialQueueAction(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

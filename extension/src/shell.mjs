@@ -7,6 +7,7 @@
 
 import '../../client-ui/src/elements/gbti-share-composer.mjs'; // SOW-041 P5: the top-bar "+" mounts this composer
 import '../../client-ui/src/elements/gbti-activity-bell.mjs'; // SOW-042 P3: the top-bar activity bell
+import '../../client-ui/src/elements/gbti-social-queue.mjs'; // SOW-121: the avatar-menu Social Queue popup
 import '../../client-ui/src/elements/gbti-welcome.mjs'; // SOW-048: dual-purposed as the forced-sign-in login splash
 import { wbCacheSet } from '../../client-ui/src/workbench-cache.mjs'; // SOW-073 P5: warm the workbench cache from the create-recent prefetch
 
@@ -141,6 +142,7 @@ function controlsHtml() {
         <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
+        <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
         <div class="me-sep" role="separator"></div>
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
@@ -223,6 +225,9 @@ function applyAccount(root, status) {
     // self-gates each tool and the SOW-005 gate + CODEOWNERS stay the real boundary.
     const showAdmin = (RANK[status.role] ?? 0) >= RANK.moderator;
     root.querySelectorAll('[data-admin-only]').forEach((el) => { el.hidden = !showAdmin; });
+    // SOW-121: the Social Queue is superadmin-only (the Worker read is superadmin-gated too).
+    const showSuper = (RANK[status.role] ?? 0) >= RANK.superadmin;
+    root.querySelectorAll('[data-super-only]').forEach((el) => { el.hidden = !showSuper; });
     if (greetName) greetName.textContent = `, @${login}`;
     if (meBtn) meBtn.hidden = false;
     if (signinBtn) signinBtn.hidden = true;
@@ -314,6 +319,24 @@ function wireAccount(root) {
     try { await chrome.runtime.sendMessage({ type: 'signout' }); } catch (e) { /* worker unreachable */ }
     location.reload(); // re-evaluate identity + the membership lock gate on this page
   });
+  // SOW-121: the superadmin Social Queue opens as a centered popup (the item is superadmin-gated in render()).
+  root.querySelector('[data-social-queue]')?.addEventListener('click', () => { close(); openSocialQueueModal(); });
+}
+
+// SOW-121: the avatar-menu "Social Queue" opens a centered popup mounting <gbti-social-queue> (the superadmin
+// manual-assist worklist). Reuses the .compose-modal overlay (backdrop + Esc); the component's X close button
+// dispatches gbti-social-close, which we catch to close.
+function openSocialQueueModal() {
+  if (document.querySelector('.social-modal')) return; // already open
+  const overlay = document.createElement('div');
+  overlay.className = 'compose-modal social-modal';
+  overlay.innerHTML = `<gbti-social-queue></gbti-social-queue>`;
+  const onEsc = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onEsc); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); }); // backdrop click closes
+  overlay.addEventListener('gbti-social-close', close);
+  document.addEventListener('keydown', onEsc);
+  document.body.appendChild(overlay);
 }
 
 // SOW-041 P5: the top-bar "+" opens a modal that mounts the existing <gbti-share-composer> (the literal owner ask:

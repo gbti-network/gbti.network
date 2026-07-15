@@ -12,9 +12,8 @@
 // tier (about 500 writes/month) covers co-op volume. When unconfigured the drain records "skipped", never
 // "failed". The tokens are long-lived, so there is no refresh flow.
 
-import { buildChannelText, renderTemplate } from '../../membership/syndication-format.mjs';
-import { templateFor } from '../../membership/syndication-config-core.mjs';
-import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
+import { secretsPresent } from '../../membership/syndication-channels.mjs';
+import { renderChannelText } from '../../membership/syndication-render.mjs';
 import { authHeader } from './oauth1.mjs';
 
 const TWEETS_URL = 'https://api.twitter.com/2/tweets';
@@ -24,13 +23,10 @@ export function createXAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg = n
     name: 'x',
     enabled() { return secretsPresent(env, 'x'); },
     async post(item, { nonce, timestamp } = {}) {
-      // The AUTO rail renders the configured `x` template (stub-aware for a members-only item); the MANUAL
-      // rail's already-sanitized textOverride wins. Default template: the title plus the link (X cards it).
-      const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
-      const autoText = cfg
-        ? renderTemplate(templateFor(cfg, item.source, 'x', { stub: stubish, channelOnly: true }) || '{title} {url}', item, { limit: channelLimit('x') })
-        : buildChannelText(item, { limit: channelLimit('x') });
-      const text = ((typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : autoText).slice(0, channelLimit('x'));
+      // SOW-121: the shared per-channel text builder (the AUTO rail renders the configured `x` template,
+      // stub-aware; the MANUAL rail's already-sanitized textOverride wins). One source, so a manual-assist
+      // Social Queue task carries the same text this adapter would have posted.
+      const text = renderChannelText(cfg, item, 'x', { textOverride: item.textOverride });
 
       let header;
       try {

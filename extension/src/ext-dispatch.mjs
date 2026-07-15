@@ -6,7 +6,7 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, saveDraft, listDrafts, readDraft, discardDraft, publishDraft, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, recordNewsOpen, setOwnContentStatus, renameContent, deleteComment, listDiscordChannels, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, listComments } from '../../client/src/operations.mjs';
+import { OperationError, validateContent, publish, saveDraft, listDrafts, readDraft, discardDraft, publishDraft, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, recordNewsOpen, setOwnContentStatus, renameContent, deleteComment, listDiscordChannels, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue, socialQueueAction, listComments } from '../../client/src/operations.mjs';
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
@@ -198,6 +198,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await cancelSyndication(ctx, body ?? {}));
       case '/api/syndicate-now': // SOW-088: manual syndicate (GET readiness/templates, POST direct post; superadmin only)
         return ok(method === 'POST' ? await syndicateNow(ctx, body ?? {}) : await getSyndicateNowInfo(ctx));
+      case '/api/social-queue': // SOW-121: the superadmin Social Queue (GET tasks, POST done/delete)
+        return ok(method === 'POST' ? await socialQueueAction(ctx, body ?? {}) : await getSocialQueue(ctx));
       case '/api/discord-channels': // SOW-100: the guild channel names (admin-gated by the Worker). Was npm-host-only, so the extension pickers showed "No channels loaded".
         return ok(await listDiscordChannels(ctx));
       case '/api/admin-ops': // SOW-038 P3: trigger reconcile / E2E-smoke (admin-gated; the Worker holds the dispatch token)

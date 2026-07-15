@@ -118,6 +118,11 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   channel_templates_stub: Object.freeze({}), // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT, // SOW-111: engagement-triggered news auto-share
   channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
+  // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
+  // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
+  // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
+  // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
+  manual_assist_channels: Object.freeze([]),
 });
 
 function asBool(v, fallback) {
@@ -213,6 +218,14 @@ function normalizeChannels(raw) {
   return Object.freeze(out);
 }
 
+// SOW-121: the manual-assist channel list (only known channel names, de-duplicated).
+function normalizeManualAssist(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  const out = [];
+  for (const v of list) { const s = String(v ?? '').trim(); if (CHANNELS.includes(s) && !out.includes(s)) out.push(s); }
+  return Object.freeze(out);
+}
+
 /**
  * Normalize a parsed syndication-config.yml ({ syndication: {...} } or a bare {...}) into a validated config.
  * Unknown/missing keys fall back to DEFAULT_SYNDICATION_CONFIG. Never throws.
@@ -232,6 +245,7 @@ export function syndicationConfigFromParsed(parsed) {
     channel_templates_stub: normalizeChannelTemplates(raw.channel_templates_stub),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
     channels: normalizeChannels(raw.channels),
+    manual_assist_channels: normalizeManualAssist(raw.manual_assist_channels), // SOW-121
   });
 }
 
@@ -302,6 +316,16 @@ export function enabledChannelNames(cfg) {
   return CHANNELS.filter((name) => isChannelEnabled(cfg, name));
 }
 
+/** SOW-121: is this channel manual-assist (never auto-posted; enqueues a Social Queue task instead)? */
+export function isManualAssist(cfg, name) {
+  return Array.isArray(cfg?.manual_assist_channels) && cfg.manual_assist_channels.includes(name);
+}
+
+/** SOW-121: the manual-assist channel names (a copy). */
+export function manualAssistChannels(cfg) {
+  return Array.isArray(cfg?.manual_assist_channels) ? [...cfg.manual_assist_channels] : [];
+}
+
 /** The small, secret-free object reconcile writes to the KV mirror (synd:config) and the Worker reads back. */
 export function toSyndicationMirror(cfg) {
   const c = syndicationConfigFromParsed(cfg);
@@ -316,5 +340,5 @@ export function toSyndicationMirror(cfg) {
     const v = typeof rawTemplates[t] === 'string' ? rawTemplates[t].trim() : '';
     if (v) configured[t] = v;
   }
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels } };
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels }, manual_assist_channels: [...c.manual_assist_channels] };
 }

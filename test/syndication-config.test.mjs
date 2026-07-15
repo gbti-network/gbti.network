@@ -55,9 +55,10 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
     channel_templates: {},
     stub_templates: {},
     channel_templates_stub: {},
+    manual_assist_channels: [], // SOW-121
   });
   // No surprise keys (no token/secret fields).
-  assert.deepEqual(Object.keys(m).sort(), ['channel_templates', 'channel_templates_stub', 'channels', 'classify', 'enabled', 'hold_minutes', 'news_engagement', 'require_approval', 'stub_templates', 'templates', 'upvote_threshold']);
+  assert.deepEqual(Object.keys(m).sort(), ['channel_templates', 'channel_templates_stub', 'channels', 'classify', 'enabled', 'hold_minutes', 'manual_assist_channels', 'news_engagement', 'require_approval', 'stub_templates', 'templates', 'upvote_threshold']);
 });
 
 test('DEFAULT_SYNDICATION_CONFIG is frozen and disabled', () => {

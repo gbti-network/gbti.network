@@ -56,6 +56,17 @@ export function toHashtag(label) {
   return body ? `#${body}` : '';
 }
 
+/**
+ * SOW-121: the FREE web-composer URL for a manual-assist channel, pre-filled with the rendered message so a
+ * superadmin can post the item by hand (no paid API call). X opens the intent composer; other channels have
+ * no simple pre-filled composer yet, so they return null (the Social Queue then offers copy-only). Pure.
+ */
+export function webComposeUrl(channel, text) {
+  const t = String(text || '');
+  if (channel === 'x') return `https://twitter.com/intent/tweet?text=${encodeURIComponent(t)}`;
+  return null;
+}
+
 /** SOW-120 follow-up: a de-duplicated, space-joined hashtag string from a list of labels. Pure. */
 function hashtagList(labels) {
   const seen = new Set();

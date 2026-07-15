@@ -168,6 +168,8 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     syndicationQueue: () => request('GET', '/api/syndication'), // SOW-058: superadmin tracker { pending, sent, cancelled, failed }
     cancelSyndication: ({ id }) => request('POST', '/api/syndication/cancel', { id }), // SOW-058: superadmin reject/cancel
     approveSyndication: ({ id }) => request('POST', '/api/syndication/approve', { id }),
+    socialQueue: () => request('GET', '/api/social-queue'), // SOW-121: superadmin manual-assist queue { pending, done }
+    socialQueueAction: ({ action, id }) => request('POST', '/api/social-queue', { action, id }), // SOW-121: done/delete
     getSyndicateNow: () => request('GET', '/api/syndicate-now'), // SOW-088: destinations + templates + channel map (superadmin)
     syndicateNow: (p) => request('POST', '/api/syndicate-now', p), // SOW-088: { destination, item, template, channelId? } // SOW-058: superadmin approve -> posts next drain tick
     adminOp: (action, params) => request('POST', '/api/admin-ops', params ? { action, params } : { action }), // SOW-038 P3 (reconcile/e2e); SOW-055 category-migrate carries params

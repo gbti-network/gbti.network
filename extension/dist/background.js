@@ -18900,6 +18900,32 @@ async function approveSyndication({ id, token, signupBase, fetch: fetch2 = globa
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `approve request failed (${res.status})`);
   return data;
 }
+async function getSocialQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase9(signupBase) + "/membership/social-queue", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `social queue request failed (${res.status})`);
+  return data;
+}
+async function socialQueueAction({ action, id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase9(signupBase) + "/membership/social-queue", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ action, id })
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `social queue action failed (${res.status})`);
+  return data;
+}
 
 // client/src/operations.mjs
 var OperationError = class extends Error {
@@ -19712,6 +19738,16 @@ async function approveSyndication2(ctx, { id } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   return approveSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+async function getSocialQueue2(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  return getSocialQueue({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+async function socialQueueAction2(ctx, { action, id } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  return socialQueueAction({ action, id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 async function getSyndicateNowInfo(ctx) {
   requireIdentity(ctx);
@@ -20768,7 +20804,12 @@ var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT,
   // SOW-111: engagement-triggered news auto-share
-  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false })
+  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
+  // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
+  // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
+  // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
+  // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
+  manual_assist_channels: Object.freeze([])
 });
 function asBool(v, fallback) {
   if (v === true || v === false) return v;
@@ -20847,6 +20888,15 @@ function normalizeChannels(raw) {
   for (const name of CHANNELS) out[name] = asBool(src[name], DEFAULT_SYNDICATION_CONFIG.channels[name]);
   return Object.freeze(out);
 }
+function normalizeManualAssist(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  const out = [];
+  for (const v of list) {
+    const s = String(v ?? "").trim();
+    if (CHANNELS.includes(s) && !out.includes(s)) out.push(s);
+  }
+  return Object.freeze(out);
+}
 function syndicationConfigFromParsed(parsed) {
   const raw = parsed?.syndication ?? parsed ?? {};
   const d = DEFAULT_SYNDICATION_CONFIG;
@@ -20861,7 +20911,9 @@ function syndicationConfigFromParsed(parsed) {
     stub_templates: normalizeConfiguredTemplates(raw.stub_templates),
     channel_templates_stub: normalizeChannelTemplates(raw.channel_templates_stub),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
-    channels: normalizeChannels(raw.channels)
+    channels: normalizeChannels(raw.channels),
+    manual_assist_channels: normalizeManualAssist(raw.manual_assist_channels)
+    // SOW-121
   });
 }
 function newsEngagement(cfg) {
@@ -21744,6 +21796,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await cancelSyndication2(ctx, body ?? {}));
       case "/api/syndicate-now":
         return ok(method === "POST" ? await syndicateNow2(ctx, body ?? {}) : await getSyndicateNowInfo(ctx));
+      case "/api/social-queue":
+        return ok(method === "POST" ? await socialQueueAction2(ctx, body ?? {}) : await getSocialQueue2(ctx));
       case "/api/discord-channels":
         return ok(await listDiscordChannels(ctx));
       case "/api/admin-ops":

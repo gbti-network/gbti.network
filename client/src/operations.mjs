@@ -35,7 +35,7 @@ import yaml from 'js-yaml';
 import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow, getCouponUsage as workerGetCouponUsage, rotateCouponLink as workerRotateCouponLink } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow, getSocialQueue as workerGetSocialQueue, socialQueueAction as workerSocialQueueAction, getCouponUsage as workerGetCouponUsage, rotateCouponLink as workerRotateCouponLink } from './member-admin-client.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
 
@@ -1283,6 +1283,20 @@ export async function approveSyndication(ctx, { id } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
   return workerApproveSyndication({ id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+
+/** SOW-121: the superadmin Social Queue read (manual-assist tasks: pending + done). */
+export async function getSocialQueue(ctx) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  return workerGetSocialQueue({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+}
+
+/** SOW-121: mark a manual-assist task done or delete it (SUPERADMIN only; the Worker enforces). */
+export async function socialQueueAction(ctx, { action, id } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  return workerSocialQueueAction({ action, id, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
 }
 
 /** SOW-088: the Manually Syndicate readiness read (SUPERADMIN only; the Worker enforces). */

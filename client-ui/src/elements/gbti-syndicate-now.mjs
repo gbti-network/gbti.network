@@ -349,7 +349,7 @@ class GbtiSyndicateNow extends GbtiElement {
       ? (this._result.forwarded.error ? ` Forward failed: ${esc(this._result.forwarded.error)}.` : ' Forwarded to the secondary channel.')
       : '';
     const result = this._result
-      ? `<p class="okmsg">${this._result.draft ? `Draft created. <a href="https://dev.to/dashboard" target="_blank" rel="noopener">Review it on the dev.to dashboard</a> (a draft's direct URL 404s until it publishes).` : `Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}`}${fwdState}${cmtState}</p>`
+      ? `<p class="okmsg">${this._result.queued ? 'Queued to the Social Queue. Open it from your avatar menu to post it by hand (this channel is manual-assist, so nothing is charged).' : this._result.draft ? `Draft created. <a href="https://dev.to/dashboard" target="_blank" rel="noopener">Review it on the dev.to dashboard</a> (a draft's direct URL 404s until it publishes).` : `Posted.${this._result.url ? ` <a href="${esc(this._result.url)}" target="_blank" rel="noopener">Open the post</a>` : ''}`}${fwdState}${cmtState}</p>`
       : '';
     const stubNote = this._isStub() && dest !== 'devto'
       ? `<p class="warn">Members-only item: the STUB template set applies on this channel.</p>` : '';

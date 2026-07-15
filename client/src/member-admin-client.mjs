@@ -142,3 +142,27 @@ export async function approveSyndication({ id, token, signupBase, fetch = global
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `approve request failed (${res.status})`);
   return data;
 }
+
+/** SOW-121: the superadmin Social Queue read (manual-assist tasks: pending + done). */
+export async function getSocialQueue({ token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/social-queue', { method: 'GET', headers: { Authorization: 'Bearer ' + token } });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `social queue request failed (${res.status})`);
+  return data;
+}
+
+/** SOW-121: mark a manual-assist task done or delete it (SUPERADMIN only; the Worker enforces). */
+export async function socialQueueAction({ action, id, token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/social-queue', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, id }),
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `social queue action failed (${res.status})`);
+  return data;
+}

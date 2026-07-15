@@ -6,7 +6,10 @@
 
 import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue } from '../../membership/syndication-queue.mjs';
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
-import { isSyndicationEnabled, requiresApproval } from '../../membership/syndication-config-core.mjs';
+import { isSyndicationEnabled, requiresApproval, manualAssistChannels } from '../../membership/syndication-config-core.mjs';
+import { renderChannelText } from '../../membership/syndication-render.mjs'; // SOW-121
+import { buildSocialTask } from '../../membership/social-queue.mjs'; // SOW-121
+import { putTask } from './social-queue-store.mjs'; // SOW-121
 import { readSyndicationConfig, readContentChannels, getItem, putItem, listDue, removeFromPending } from './syndication-store.mjs';
 import { resolveGuildMention } from './membership-syndicate-now.mjs'; // SOW-088: a real author mention for the auto path
 
@@ -29,6 +32,7 @@ export async function drainSyndication(env, {
   // SOW-087: the category -> channel map feeds the discord-category adapter (null = category posts no-op).
   const channelMap = await readContentChannels(kv);
   const { ready, skipped } = resolveAdapterRun({ cfg, env, adapters, fetchImpl, channelMap });
+  const manualAssist = manualAssistChannels(cfg); // SOW-121: channels that enqueue a manual task instead of posting
 
   let sent = 0;
   let failed = 0;
@@ -45,6 +49,19 @@ export async function drainSyndication(env, {
     // Record config-enabled-but-unconfigured channels as skipped (not failed).
     for (const name of skipped) {
       if (!channelDone(item, name)) item = recordChannel(item, name, { status: 'skipped', reason: 'not configured', at: Number(now()) });
+    }
+
+    // SOW-121: manual-assist channels (e.g. X after its free API tier was deprecated) are NEVER auto-posted.
+    // For each such channel not already tasked, render the SAME text an adapter would post and enqueue a
+    // Social Queue task (a superadmin posts it by hand). A 'queued-manual' per-channel marker records it and
+    // lets the item terminalize normally, with ZERO paid API calls. Fail-soft: a task write miss retries next tick.
+    for (const ch of manualAssist) {
+      if (item.perChannel?.[ch]) continue; // already tasked/marked on a prior tick
+      try {
+        const text = renderChannelText(cfg, item, ch);
+        await putTask(kv, buildSocialTask({ item, channel: ch, text, trigger: 'auto', now: Number(now()) }));
+        item = recordChannel(item, ch, { status: 'queued-manual', at: Number(now()) });
+      } catch { /* leave untasked; retried next tick */ }
     }
 
     // SOW-088: a REAL author mention for the auto path too. The CI enqueue's DISCORD_MENTION_OVERRIDES map

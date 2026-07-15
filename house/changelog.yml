@@ -16,6 +16,16 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 13
+    date: 2026-07-15
+    type: build
+    title: Social Queue for manual posting
+    notes:
+      - Added a superadmin Social Queue in the avatar menu for channels that cost money to post to, like X.
+      - The system queues the post with the text ready; a human posts it by hand through the free web composer, then marks it done.
+      - X is now a manual-assist channel, so nothing auto-posts to it and there is no per-tweet API charge.
+
+  - version: 0.1.0
     build: 12
     date: 2026-07-15
     type: build
