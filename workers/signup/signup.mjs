@@ -153,7 +153,7 @@ export async function runSignup({ identity, stripe, discord, kv, config, refCode
   // re-run of this chain cannot double-redeem). Fail closed: any problem means a normal trial signup.
   let couponGrant = null;
   if (coupon && kv) {
-    couponGrant = await redeemCoupon({ kv, code: coupon, githubId, now });
+    couponGrant = await redeemCoupon({ kv, code: coupon, githubId, login: githubLogin, now });
   }
 
   // Add the user to the guild (guilds.join uses the user's OAuth access token). The `roles` param is

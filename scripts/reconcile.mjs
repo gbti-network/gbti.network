@@ -31,6 +31,7 @@ import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
 import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorCouponsToKv } from './lib/kv-mirror.mjs';
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
+import { syncCouponGrants, readGrandfatheredFromDisk } from './lib/coupon-grants.mjs'; // SOW-119
 import { syncUpvoteCounts, readCountsFromDisk as readUpvoteCountsFromDisk } from './lib/upvote-counts.mjs';
 import { mergeState, alreadyLabeled, conflictComment, CONFLICT_LABEL } from './lib/pr-conflict.mjs';
 
@@ -109,7 +110,16 @@ export function memberEntryFor(customer, overrides, now, { repoIndex = null, dis
     trialStartedAt: meta.trial_started_at ?? null,
     converted: isConverted(customer),
     discordRoles,
+    couponGrant: couponGrantFor(githubId, overrides), // SOW-119: feeds the coupon-expiry reminder
   };
+}
+
+/** SOW-119: extract a coupon grant ({ code, until }) from the member's grandfather entry, if any. */
+export function couponGrantFor(githubId, overrides) {
+  const entry = overrides?.grandfathers?.get?.(String(githubId));
+  const reason = String(entry?.reason ?? '');
+  if (!entry || !entry.until || !reason.startsWith('coupon:')) return null;
+  return { code: reason.slice('coupon:'.length), until: entry.until };
 }
 
 /** Base64 a string for the GitHub Contents API putContent({ content }). */
@@ -237,16 +247,25 @@ async function enactDiscord(discord, action, env) {
  * recipient address exist.
  */
 async function enactReminder(action, { resend, discord, env = {} } = {}) {
-  const body =
-    'Your GBTI Network trial ends in a few days. Add a membership to keep your profile, posts, ' +
-    'products, and prompts published. Visit your account to add a membership before day 90.';
+  // SOW-119: the coupon-expiry nudge reuses the same delivery (email primary, Discord DM secondary).
+  const isCoupon = action.type === 'coupon-expiry';
+  const untilDate = isCoupon && action.until ? action.until.slice(0, 10) : null;
+  const body = isCoupon
+    ? `Your complimentary GBTI Network membership ends on ${untilDate}. Add a membership to keep your ` +
+      'profile, posts, products, and prompts published and to stay in the community. Visit your account ' +
+      'to add a membership before it ends.'
+    : 'Your GBTI Network trial ends in a few days. Add a membership to keep your profile, posts, ' +
+      'products, and prompts published. Visit your account to add a membership before day 90.';
+  const subject = isCoupon
+    ? 'Your complimentary GBTI Network membership ends soon'
+    : 'Your GBTI Network trial ends soon: add a membership to stay published';
 
   // PRIMARY: email via Resend when configured and the action carries a recipient address.
   if (resend && env.RESEND_FROM && action.email) {
     await resend.sendEmail({
       from: env.RESEND_FROM,
       to: action.email,
-      subject: 'Your GBTI Network trial ends soon: add a membership to stay published',
+      subject,
       text: body,
     });
   }
@@ -558,6 +577,25 @@ async function main() {
       console.log(r.written ? `reconcile: mirrored house/${file} to KV (${r.bytes} bytes).` : `reconcile: house/${file} KV mirror SKIPPED (${r.reason}).`);
     } catch (e) {
       console.error(`reconcile: house/${file} KV mirror FAILED:`, e?.message ?? e);
+      process.exitCode = 1;
+    }
+  }
+
+  // SOW-119: fold coupon redemptions (KV) into house/grandfathered.yml as until-bounded grants, BEFORE the
+  // member gathering has to see them next run (the Worker fast-path covers the gap in the meantime). Dry
+  // run reports intent; apply lists KV + opens one auto-merged PR for any missing grant.
+  if (dryRun) {
+    console.log('reconcile: DRY RUN would fold coupon redemptions from KV -> house/grandfathered.yml (requires CF creds + a GitHub PR).');
+  } else {
+    try {
+      const r = await syncCouponGrants({ env, github, now, readGrandfathered: () => readGrandfatheredFromDisk(ROOT) });
+      console.log(
+        r.synced
+          ? `reconcile: folded ${r.additions} coupon redemption(s) into grandfather grants (PR #${r.prNumber}).`
+          : `reconcile: coupon-grants sync SKIPPED (${r.reason}).`,
+      );
+    } catch (e) {
+      console.error('reconcile: coupon-grants sync FAILED:', e?.message ?? e);
       process.exitCode = 1;
     }
   }

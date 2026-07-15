@@ -48,7 +48,7 @@ export async function validateCouponParam(kv, code, now = new Date()) {
  * Redeem `code` for `githubId`. Returns { code, redeemedAt, until, already } on success (already = an
  * existing grant was found, nothing new written), or null when no redemption happened (fail closed).
  */
-export async function redeemCoupon({ kv, code, githubId, now = new Date() } = {}) {
+export async function redeemCoupon({ kv, code, githubId, login = null, now = new Date() } = {}) {
   if (!kv || !code || !githubId) return null;
   try {
     // One coupon per member, ever: an existing grant is the idempotency lock (retries, GitHub-then-Discord
@@ -68,7 +68,7 @@ export async function redeemCoupon({ kv, code, githubId, now = new Date() } = {}
     const until = redemptionUntil(now, coupon.freeDays);
     if (!until) return null;
 
-    const record = { code: coupon.code, redeemedAt: now.toISOString(), until };
+    const record = { code: coupon.code, redeemedAt: now.toISOString(), until, ...(login ? { login: String(login) } : {}) };
     await kv.put(couponGrantKey(githubId), JSON.stringify(record));
     await kv.put(redemptionKey(coupon.code, githubId), JSON.stringify(record));
     const count = Number(await kv.get(redemptionCountKey(coupon.code))) || 0;

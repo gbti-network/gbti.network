@@ -17,6 +17,7 @@ import { TRIAL_DAYS } from '../../membership/derive-status.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REMINDER_DAY = 87; // day-87 trial reminder window opens here and closes at TRIAL_DAYS (90)
+const COUPON_REMINDER_DAYS = 14; // SOW-119: the coupon-expiry reminder window opens 14 days before `until`
 
 // Which effective statuses keep a member's content published (and grant the full member Discord role).
 // A grandfather grant resolves to effective.status === 'paid' (source 'grandfather'), so it is covered.
@@ -175,6 +176,27 @@ export function planReconcile({ members = [], repoIndex = {}, now = new Date() }
       actions.push({ kind: 'reminder', type: 'day-87', githubId, email: m.email ?? null, discordUserId: m.discordUserId ?? null });
     }
 
+    // 3b. SOW-119 coupon-expiry reminder: a coupon grant inside its final COUPON_REMINDER_DAYS window and
+    //     not converted. `couponGrant` is populated by the caller from the grandfather entry when the
+    //     reason carries the coupon: prefix. Same safe direction as day-87: any doubt means no nag.
+    if (!banned && !m.converted && m.couponGrant?.until) {
+      const until = new Date(m.couponGrant.until);
+      if (!Number.isNaN(until.getTime())) {
+        const windowOpen = until.getTime() - COUPON_REMINDER_DAYS * DAY_MS;
+        if (now.getTime() >= windowOpen && now.getTime() < until.getTime()) {
+          actions.push({
+            kind: 'reminder',
+            type: 'coupon-expiry',
+            githubId,
+            email: m.email ?? null,
+            discordUserId: m.discordUserId ?? null,
+            until: until.toISOString(),
+            code: m.couponGrant.code ?? null,
+          });
+        }
+      }
+    }
+
     // 4. Block marker: a ban is a hard deplatform. Emit it after the draft + role-removal actions so an
     //    enactor can log the deplatform once the content and roles are handled.
     if (banned) {
@@ -185,4 +207,4 @@ export function planReconcile({ members = [], repoIndex = {}, now = new Date() }
   return actions;
 }
 
-export { ROLE, REMINDER_DAY };
+export { ROLE, REMINDER_DAY, COUPON_REMINDER_DAYS };
