@@ -41,22 +41,26 @@
    var(--glass-glow,1) so the "Color highlight intensity" setting scales the whole glow (0 = off, default 1, higher =
    more vivid). The neutral base color stays solid so contrast never depends on the glow. */
 [data-layout="glass"] body {
-  background:
+  background: var(--shell-bg);
+  background-attachment: fixed;
+}
+/* SOW-074 full-splash fix: the shell page background as a VARIABLE, so the full-screen splash curtain can
+   paint the same opaque backdrop (glass --paper-2 is translucent by design, so the curtain cannot use it). */
+[data-layout="glass"] {
+  --shell-bg:
     radial-gradient(40% 50% at 12% 8%, rgba(54,170,110,calc(.34 * var(--glass-glow,1))), transparent 70%),
     radial-gradient(44% 54% at 92% 6%, rgba(120,162,230,calc(.3 * var(--glass-glow,1))), transparent 70%),
     radial-gradient(50% 60% at 88% 96%, rgba(222,182,92,calc(.32 * var(--glass-glow,1))), transparent 72%),
     radial-gradient(46% 54% at 8% 98%, rgba(150,112,210,calc(.24 * var(--glass-glow,1))), transparent 72%),
     #eef2ec;
-  background-attachment: fixed;
 }
-[data-layout="glass"][data-theme="dark"] body {
-  background:
+[data-layout="glass"][data-theme="dark"] {
+  --shell-bg:
     radial-gradient(40% 50% at 12% 8%, rgba(34,140,86,calc(.4 * var(--glass-glow,1))), transparent 70%),
     radial-gradient(44% 54% at 92% 6%, rgba(70,110,180,calc(.34 * var(--glass-glow,1))), transparent 70%),
     radial-gradient(50% 60% at 88% 96%, rgba(170,134,60,calc(.3 * var(--glass-glow,1))), transparent 72%),
     radial-gradient(46% 54% at 8% 98%, rgba(110,80,160,calc(.28 * var(--glass-glow,1))), transparent 72%),
     #0b120e;
-  background-attachment: fixed;
 }
 /* Frost the Phase-1 shell surfaces (rail, search, view tabs, icon buttons, account pill, menu, app switcher). The
    token re-point above makes them translucent; the blur makes them frosted. The feed + compose modal are Phase 2. */

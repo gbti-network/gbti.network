@@ -103,9 +103,17 @@
        those still win; data-unauth still hides it (the .nt-main ancestor is display:none). */
     html[data-splash][data-splash-bg="full"] .nt-splash {
       position: fixed; inset: 0; z-index: 150; margin: 0; min-height: 100vh;
-      /* SOW-074: an opaque base so the full-viewport curtain covers the rail + feed even with NO image set
-         (--splash-bg unset drops the background-image, leaving this color). With an image the image covers it. */
-      background-color: var(--bg);
+      /* SOW-074 fix: the curtain must be OPAQUE with no image so it truly covers the rail + feed. It paints
+         the shell's own page background (--shell-bg carries the glass glow gradients; the fallback covers the
+         non-glass layouts where --paper-2 is a solid color). The earlier var(--bg) base computed to
+         transparent (that token exists only inside the component shadow DOMs), which is why full-screen mode
+         appeared to need an image. The image + dim live on ::before so they never clobber this base. */
+      background: var(--shell-bg, var(--paper-2, #17151b));
+    }
+    html[data-splash][data-splash-bg="full"] .nt-splash::before {
+      content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+      /* --splash-bg unset makes this whole declaration invalid -> a transparent overlay (no dim over the
+         plain curtain). With an image: the dimmed cover image, exactly as before. */
       background-image: linear-gradient(var(--splash-bg-dim, rgba(0,0,0,.5)), var(--splash-bg-dim, rgba(0,0,0,.5))), var(--splash-bg);
       background-size: cover; background-position: center;
     }

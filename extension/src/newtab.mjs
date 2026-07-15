@@ -361,11 +361,14 @@ function applySplashBg() {
   // (content), the whole content column (fill), or a fixed full-viewport overlay (full) from one switch.
   const root = document.documentElement;
   root.setAttribute('data-splash-bg', mode);
-  if (!SPLASH_BG_IMG) return; // full-mode curtain with no image: the layout is applied; skip the image + appearance vars
-  root.style.setProperty('--splash-bg', `url("${SPLASH_BG_IMG}")`);
-  // SOW-074: the appearance vars apply on ANY enabled background (content / fill / full).
-  const dim = (100 - normalizeBgOpacity(lsItem('gbti-splash-bg-opacity'))) / 100; // higher opacity = brighter image
-  root.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);
+  // full-mode curtain with no image: the layout + the card/pattern appearance still apply; only the image
+  // var is skipped (leaving it unset also invalidates the dim gradient declaration, so nothing darkens the
+  // opaque curtain color). content/fill never reach here without an image (the early return above).
+  if (SPLASH_BG_IMG) {
+    root.style.setProperty('--splash-bg', `url("${SPLASH_BG_IMG}")`);
+    const dim = (100 - normalizeBgOpacity(lsItem('gbti-splash-bg-opacity'))) / 100; // higher opacity = brighter image
+    root.style.setProperty('--splash-bg-dim', `rgba(0,0,0,${dim.toFixed(2)})`);
+  }
   root.style.setProperty('--card-op', (normalizeBgOpacity(lsItem('gbti-splash-bg-card-op'), 70) / 100).toFixed(2));
   root.style.setProperty('--card-blur', `${normalizeCardBlur(lsItem('gbti-splash-bg-card-blur'))}px`);
   const pattern = normalizeBgPattern(lsItem('gbti-splash-bg-pattern'));
