@@ -13,6 +13,7 @@
 import { githubFetchUser } from './oauth.mjs';
 import { scrapeOgPreview } from '../lib/og-scrape.mjs';
 import { oembedEndpointFor, previewFromOembed } from '../lib/oembed-providers.mjs'; // SOW-102: provider fallback
+import { mediumFeedUrlFor, previewFromMediumFeed } from '../lib/medium-preview.mjs'; // Medium RSS fallback (bot-challenged pages)
 import { suggestTopic } from './topic-suggest.mjs';
 
 const FETCH_TIMEOUT_MS = 8000;
@@ -105,6 +106,27 @@ export async function handleOgPreview(request, env, {
       if (res && res.ok) preview = previewFromOembed(await res.json());
     } catch { /* fall through to the generic scrape */ }
     finally { clearTimeout(ot); }
+  }
+
+  // Medium fallback: Medium bot-challenges EVERY page fetch (so the generic scrape below always comes back
+  // empty) and has no oEmbed, but the author/publication RSS feed still answers a plain server fetch and
+  // carries recent items' title + lead image. Best-effort: an article older than the feed window stays
+  // previewless. Any failure falls through to the generic scrape (harmless; it 403s into the empty preview).
+  if (!preview) {
+    const feedUrl = mediumFeedUrlFor(target.url);
+    if (feedUrl) {
+      const mc = new AbortController();
+      const mt = setTimeout(() => mc.abort(), FETCH_TIMEOUT_MS);
+      try {
+        const res = await fetchImpl(feedUrl, {
+          signal: mc.signal,
+          headers: { 'User-Agent': 'gbti-link-preview/0.1 (+https://gbti.network)', Accept: 'application/rss+xml, application/xml, text/xml' },
+          cf: { cacheTtl: 1800, cacheEverything: true },
+        });
+        if (res && res.ok) preview = previewFromMediumFeed(await res.text(), target.url);
+      } catch { /* fall through */ }
+      finally { clearTimeout(mt); }
+    }
   }
 
   // Bounded, timed-out fetch. Any failure returns a clean empty preview (never a 500), since an OG miss is normal.
