@@ -78,20 +78,44 @@ export async function githubRefreshToken({ clientId, clientSecret, refreshToken 
   };
 }
 
-/** Fetch the GitHub user. Returns { githubId, githubLogin }. github_id is the immutable primary key. */
-export async function githubFetchUser(accessToken, fetchImpl = globalThis.fetch) {
-  const res = await fetchImpl(GITHUB_USER, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'gbti-network-signup',
-    },
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`github user fetch failed ${res.status}: ${text}`);
-  const u = JSON.parse(text);
-  if (u.id === undefined || u.id === null) throw new Error('github user fetch: missing id');
-  return { githubId: String(u.id), githubLogin: u.login ? String(u.login) : '' };
+/** Fetch the GitHub user. Returns { githubId, githubLogin }. github_id is the immutable primary key.
+ *  GitHub intermittently rejects the Worker's egress with a TRANSIENT 403 (secondary rate limit) / 429 / 5xx,
+ *  which read as "the token could not be verified" even though the token is fine. Retry those a couple times with
+ *  a short backoff so a valid caller is not spuriously denied. A 401 (a genuinely bad/expired token) is NOT
+ *  retried. On a final failure the thrown Error carries `.status` so the caller can surface the real code. */
+export async function githubFetchUser(accessToken, fetchImpl = globalThis.fetch, { retries = 2, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  let lastStatus = 0;
+  let lastText = '';
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let res;
+    try {
+      res = await fetchImpl(GITHUB_USER, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'gbti-network-signup',
+        },
+      });
+    } catch (netErr) {
+      lastStatus = 0; lastText = String(netErr?.message ?? netErr);
+      if (attempt < retries) { await sleep(250 * (attempt + 1)); continue; }
+      const e = new Error(`github user fetch failed (network): ${lastText}`); e.status = 0; throw e;
+    }
+    const text = await res.text();
+    if (res.ok) {
+      const u = JSON.parse(text);
+      if (u.id === undefined || u.id === null) throw new Error('github user fetch: missing id');
+      return { githubId: String(u.id), githubLogin: u.login ? String(u.login) : '' };
+    }
+    lastStatus = res.status; lastText = text;
+    // 403 (secondary rate limit) / 429 / 5xx are transient; 401 (bad credentials) is not.
+    const transient = res.status === 403 || res.status === 429 || res.status >= 500;
+    if (transient && attempt < retries) { await sleep(250 * (attempt + 1)); continue; }
+    break;
+  }
+  const e = new Error(`github user fetch failed ${lastStatus}: ${lastText}`);
+  e.status = lastStatus;
+  throw e;
 }
 
 /**

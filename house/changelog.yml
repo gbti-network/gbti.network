@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 23
+    date: 2026-07-16
+    type: build
+    title: Manually Syndicate no longer fails on a transient GitHub hiccup
+    notes:
+      - The server now retries GitHub's identity check when GitHub rate-limits it, instead of reporting a valid session as an unverifiable token.
+      - When it does fail, the message now names GitHub's real status so the cause is clear.
+
+  - version: 0.1.0
     build: 22
     date: 2026-07-16
     type: build

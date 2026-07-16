@@ -31,7 +31,13 @@ async function resolveCaller(request, env, { fetchImpl = globalThis.fetch, fetch
   if (!token) return fail(401, 'unauthorized', 'a GitHub bearer token is required');
 
   let user;
-  try { user = await fetchUser(token, fetchImpl); } catch { return fail(401, 'unauthorized', 'could not verify the GitHub token'); }
+  try { user = await fetchUser(token, fetchImpl); }
+  catch (e) {
+    // Surface GitHub's real status so a transient rate-limit (403/429/5xx, retried in githubFetchUser) is not
+    // confused with a genuinely bad token (401). Never echo the response body (it can carry sensitive detail).
+    const gh = Number.isFinite(e?.status) && e.status ? ` (github ${e.status})` : '';
+    return fail(401, 'unauthorized', `could not verify the GitHub token${gh}`);
+  }
   if (!user?.githubId) return fail(401, 'unauthorized', 'the GitHub token has no user id');
   const githubId = String(user.githubId);
 
