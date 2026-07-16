@@ -70,7 +70,7 @@ export function categoryOf(item, fm) {
 }
 
 /** Map a buildSyndicationItem result + its frontmatter to a buildQueueItem INPUT (metadata only, never the body). */
-export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = null, authorDiscord = null, authorX = null, moderation = null }) {
+export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = null, authorDiscord = null, authorX = null, authorBluesky = null, moderation = null }) {
   const title = item.title;
   const blurb = (fm.shortDescription || fm.excerpt || fm.description || '').toString().trim() || null;
   return {
@@ -81,6 +81,7 @@ export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = 
     authorName: authorName || null, // SOW-087: profile displayName, feeds the no-ping template
     authorDiscord: authorDiscord || null, // SOW-088: the public profile Discord handle
     authorX: authorX || null, // SOW-120: the public profile X handle, feeds {member-x-handle}
+    authorBluesky: authorBluesky || null, // SOW-122: the public profile Bluesky handle, feeds {member-bluesky-handle}
     tags: Array.isArray(fm.tags) ? fm.tags.filter((t) => typeof t === 'string') : null, // SOW-120: feeds {tags-hashtags}
     title,
     blurb,
@@ -161,6 +162,8 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   const resolveAuthorDiscord = deps.resolveAuthorDiscord ?? ((author) => readProfileFm(author)?.links?.discord || null);
   // SOW-120: the profile's PUBLIC X handle feeds {member-x-handle}.
   const resolveAuthorX = deps.resolveAuthorX ?? ((author) => readProfileFm(author)?.links?.x || null);
+  // SOW-122: the profile's PUBLIC Bluesky handle feeds {member-bluesky-handle}.
+  const resolveAuthorBluesky = deps.resolveAuthorBluesky ?? ((author) => readProfileFm(author)?.links?.bluesky || null);
 
   const inputs = [];
   for (const b of built) {
@@ -171,6 +174,7 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
       authorName: resolveAuthorName(b.item.author),
       authorDiscord: resolveAuthorDiscord(b.item.author),
       authorX: resolveAuthorX(b.item.author),
+      authorBluesky: resolveAuthorBluesky(b.item.author),
       moderation,
     }));
   }

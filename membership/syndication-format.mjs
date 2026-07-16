@@ -44,6 +44,21 @@ export function xHandleFrom(value) {
 }
 
 /**
+ * SOW-122 follow-up: extract a Bluesky handle from a profile value. Accepts a bsky.app profile URL
+ * (`https://bsky.app/profile/<handle>`), a bare "@handle", or a bare "handle". A Bluesky handle is a
+ * domain-shaped string (labels of letters/digits/hyphen separated by dots, e.g. `atwellpub.bsky.social` or a
+ * custom domain). Returns '' for anything implausible. Pure.
+ */
+export function blueskyHandleFrom(value) {
+  let s = String(value || '').trim();
+  if (!s) return '';
+  const m = s.match(/^https?:\/\/(?:www\.)?bsky\.app\/profile\/([^/?#]+)/i);
+  if (m) s = m[1];
+  s = s.replace(/^@/, '').trim();
+  return /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$/i.test(s) ? s : '';
+}
+
+/**
  * SOW-120 follow-up: normalize a free-form tag or category label into a single hashtag token. Splits on any
  * non-alphanumeric run, capitalizes the first letter of each part (so a multi-word label survives as one
  * token and a single word keeps its casing, preserving acronyms), and prefixes '#'. Returns '' when nothing
@@ -91,6 +106,7 @@ function hashtagList(labels) {
  *   {member-url}     the member's public profile URL (gbti.network/members/<login>/)
  *   {short-description}  the item's shortDescription (carried as the queue item blurb)
  *   {member-x-handle}  the member's X handle as @handle (from profile links.x), else the full name (SOW-120)
+ *   {member-bluesky-handle}  the member's Bluesky handle as @handle (from profile links.bluesky), else the full name (SOW-122)
  *   {category-hashtag}  the category as a single hashtag, e.g. #DevOps (SOW-120)
  *   {tags-hashtags}   the item's tags as hashtags, e.g. #AI #Prompts (SOW-120)
  *   {hashtags}       the category plus the tags, de-duplicated, as one hashtag set (SOW-120)
@@ -139,6 +155,10 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
     // strictly validates the shape), else the sanitized full name. {category-hashtag} / {tags-hashtags} /
     // {hashtags} are alphanumeric-only, so they carry no mention risk.
     memberxhandle: xHandleFrom(item.authorX) ? `@${xHandleFrom(item.authorX)}` : fullName,
+    // SOW-122: {member-bluesky-handle} = the member's Bluesky @handle (from profile links.bluesky), else the
+    // full name. On Bluesky a plain @handle is not a live mention; the bluesky adapter adds a resolved-DID
+    // FACET over this handle so it links + notifies.
+    memberblueskyhandle: blueskyHandleFrom(item.authorBluesky) ? `@${blueskyHandleFrom(item.authorBluesky)}` : fullName,
     categoryhashtag: toHashtag(item.category),
     tagshashtags: hashtagList(item.tags),
     hashtags: hashtagList([item.category, ...(Array.isArray(item.tags) ? item.tags : [])]),

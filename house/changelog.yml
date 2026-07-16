@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 16
+    date: 2026-07-16
+    type: build
+    title: Bluesky posts mention the author
+    notes:
+      - A Bluesky post now tags the author by their Bluesky handle when their profile lists one, else their full name.
+      - The handle is a real, clickable mention (a resolved facet), so the member is notified.
+
+  - version: 0.1.0
     build: 15
     date: 2026-07-16
     type: build

@@ -11,12 +11,31 @@
 
 import { secretsPresent } from '../../membership/syndication-channels.mjs';
 import { renderChannelText } from '../../membership/syndication-render.mjs';
+import { blueskyHandleFrom } from '../../membership/syndication-format.mjs';
 
 /** The public web URL for a post from its at:// uri (at://did/app.bsky.feed.post/<rkey>) + the handle. Pure. */
 export function blueskyWebUrl(uri, handle) {
   const rkey = String(uri || '').split('/').pop();
   const h = String(handle || '').replace(/^@/, '');
   return rkey && h ? `https://bsky.app/profile/${h}/post/${rkey}` : (uri || null);
+}
+
+/**
+ * SOW-122: build a Bluesky rich-text MENTION facet over the first `@<handle>` occurrence in `text`, using the
+ * UTF-8 byte range the AT protocol requires and the resolved `did`. Returns null when the handle/did is
+ * missing or the `@handle` is not in the text. Pure. This is what makes the @handle a real, notifying mention
+ * (a plain @handle in Bluesky text does not link on its own).
+ */
+export function mentionFacet(text, handle, did) {
+  if (!handle || !did) return null;
+  const s = String(text || '');
+  const mentionText = `@${handle}`;
+  const idx = s.indexOf(mentionText);
+  if (idx < 0) return null;
+  const enc = new TextEncoder();
+  const byteStart = enc.encode(s.slice(0, idx)).length;
+  const byteEnd = byteStart + enc.encode(mentionText).length;
+  return { index: { byteStart, byteEnd }, features: [{ $type: 'app.bsky.richtext.facet#mention', did }] };
 }
 
 export function createBlueskyAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg = null } = {}) {
@@ -51,6 +70,20 @@ export function createBlueskyAdapter({ env = {}, fetchImpl = globalThis.fetch, c
           },
         };
       }
+      // SOW-122: a REAL mention. If the author's profile carries a Bluesky handle and the rendered text
+      // includes it (from {member-bluesky-handle}), resolve it to a DID and attach a mention facet so the
+      // @handle links + notifies the member (like an X mention). Only the member's OWN handle is faceted.
+      // Fail-soft: a resolve miss leaves the plain @handle text and never blocks the post.
+      const handle = blueskyHandleFrom(item.authorBluesky);
+      if (handle && text.includes(`@${handle}`)) {
+        try {
+          const rh = await fetchImpl(`${base}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle)}`);
+          const did = (rh && rh.ok) ? (await rh.json().catch(() => ({})))?.did : null;
+          const facet = mentionFacet(text, handle, did);
+          if (facet) record.facets = [facet];
+        } catch { /* fail-soft: no facet */ }
+      }
+
       const res = await fetchImpl(`${base}/xrpc/com.atproto.repo.createRecord`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.accessJwt}`, 'Content-Type': 'application/json' },

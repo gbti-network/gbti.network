@@ -3,7 +3,7 @@
 // 300 truncation, and error mapping. Injected two-call fetch (createSession then createRecord); no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBlueskyAdapter, blueskyWebUrl } from '../clients/syndication/bluesky.mjs';
+import { createBlueskyAdapter, blueskyWebUrl, mentionFacet } from '../clients/syndication/bluesky.mjs';
 import { syndicationConfigFromParsed } from '../membership/syndication-config-core.mjs';
 
 const ENV = { BLUESKY_HANDLE: 'gbti.bsky.social', BLUESKY_APP_PASSWORD: 'app-pass' };
@@ -12,15 +12,19 @@ const CFG = syndicationConfigFromParsed({ syndication: { channel_templates: { bl
 } } } });
 const ITEM = { source: 'post', title: 'Hello World', url: 'https://gbti.network/articles/hello/', authorName: 'Hudson Atwell', blurb: 'A tutorial.', category: 'AI', tags: ['Prompts'], enqueuedAt: 1000 };
 
-function fakeFetch({ authOk = true, postOk = true, uri = 'at://did:plc:abc/app.bsky.feed.post/xyz123' } = {}) {
+function fakeFetch({ authOk = true, postOk = true, uri = 'at://did:plc:abc/app.bsky.feed.post/xyz123', resolveDid = 'did:plc:author', resolveOk = true } = {}) {
   const calls = [];
   const fetchImpl = async (url, opts) => {
     calls.push({ url, opts });
     if (url.includes('createSession')) return authOk ? { ok: true, json: async () => ({ accessJwt: 'jwt', did: 'did:plc:abc' }) } : { ok: false, status: 401, json: async () => ({ message: 'bad password' }) };
+    if (url.includes('resolveHandle')) return resolveOk ? { ok: true, json: async () => ({ did: resolveDid }) } : { ok: false, status: 400, json: async () => ({}) };
     return postOk ? { ok: true, json: async () => ({ uri }) } : { ok: false, status: 400, json: async () => ({ message: 'record too long' }) };
   };
   return { calls, fetchImpl };
 }
+const BSKY_CFG = syndicationConfigFromParsed({ syndication: { channel_templates: { bluesky: {
+  post: 'New {content-type} by {member-bluesky-handle}: "{title}"',
+} } } });
 const recordOf = (calls) => JSON.parse(calls.find((c) => c.url.includes('createRecord')).opts.body).record;
 
 test('enabled() requires the handle + app password', () => {
@@ -75,4 +79,52 @@ test('blueskyWebUrl builds bsky.app/profile/<handle>/post/<rkey>', () => {
   assert.equal(blueskyWebUrl('at://did:plc:abc/app.bsky.feed.post/xyz123', 'gbti.bsky.social'), 'https://bsky.app/profile/gbti.bsky.social/post/xyz123');
   assert.equal(blueskyWebUrl('at://did/coll/r', '@handle'), 'https://bsky.app/profile/handle/post/r');
   assert.equal(blueskyWebUrl('', 'h'), null);
+});
+
+// SOW-122 follow-up: the {member-bluesky-handle} mention facet.
+test('a member with a Bluesky handle: the handle is rendered and faceted with the resolved DID', async () => {
+  const { calls, fetchImpl } = fakeFetch({ resolveDid: 'did:plc:author' });
+  await createBlueskyAdapter({ env: ENV, fetchImpl, cfg: BSKY_CFG })
+    .post({ ...ITEM, authorBluesky: 'https://bsky.app/profile/atwellpub.bsky.social' });
+  const rec = recordOf(calls);
+  assert.ok(rec.text.includes('@atwellpub.bsky.social'), 'the handle is in the text');
+  assert.ok(Array.isArray(rec.facets) && rec.facets.length === 1, 'a facet is attached');
+  const f = rec.facets[0];
+  assert.equal(f.features[0]['$type'], 'app.bsky.richtext.facet#mention');
+  assert.equal(f.features[0].did, 'did:plc:author');
+  // The byte range covers exactly "@atwellpub.bsky.social".
+  const start = new TextEncoder().encode(rec.text.slice(0, rec.text.indexOf('@atwellpub.bsky.social'))).length;
+  assert.equal(f.index.byteStart, start);
+  assert.equal(f.index.byteEnd, start + new TextEncoder().encode('@atwellpub.bsky.social').length);
+  assert.ok(calls.some((c) => c.url.includes('resolveHandle')), 'resolveHandle was called');
+});
+
+test('a member without a Bluesky handle: full-name fallback, no facet, no resolve call', async () => {
+  const { calls, fetchImpl } = fakeFetch();
+  await createBlueskyAdapter({ env: ENV, fetchImpl, cfg: BSKY_CFG }).post({ ...ITEM, authorName: 'Hudson Atwell' });
+  const rec = recordOf(calls);
+  assert.ok(rec.text.includes('Hudson Atwell'));
+  assert.equal(rec.facets, undefined);
+  assert.ok(!calls.some((c) => c.url.includes('resolveHandle')));
+});
+
+test('a resolve miss leaves the plain @handle and no facet (post still succeeds)', async () => {
+  const { calls, fetchImpl } = fakeFetch({ resolveOk: false });
+  const r = await createBlueskyAdapter({ env: ENV, fetchImpl, cfg: BSKY_CFG })
+    .post({ ...ITEM, authorBluesky: '@propertunity.bsky.social' });
+  assert.equal(r.ok, true);
+  const rec = recordOf(calls);
+  assert.ok(rec.text.includes('@propertunity.bsky.social'));
+  assert.equal(rec.facets, undefined);
+});
+
+test('mentionFacet computes the byte range (multibyte-safe) or null', () => {
+  const f = mentionFacet('hi @a.bsky.social there', 'a.bsky.social', 'did:x');
+  assert.equal(f.index.byteStart, 3);
+  assert.equal(f.index.byteEnd, 3 + '@a.bsky.social'.length);
+  // multibyte prefix shifts the byte offsets
+  const f2 = mentionFacet('café @a.bsky.social', 'a.bsky.social', 'did:x'); // the combining accent is 2 bytes
+  assert.equal(f2.index.byteStart, new TextEncoder().encode('café ').length);
+  assert.equal(mentionFacet('no mention here', 'a.bsky.social', 'did:x'), null);
+  assert.equal(mentionFacet('@a.bsky.social', 'a.bsky.social', null), null); // no did
 });

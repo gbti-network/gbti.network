@@ -1,7 +1,7 @@
 // SOW-058: the pure message formatter. Sanitization, truncation, URL preservation, no body leak.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, xHandleFrom, toHashtag } from '../membership/syndication-format.mjs';
+import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, xHandleFrom, toHashtag, blueskyHandleFrom } from '../membership/syndication-format.mjs';
 
 test('sanitizeMentions neutralizes @mentions and Discord mass-ping tokens', () => {
   assert.ok(!/@everyone/.test(sanitizeMentions('hey @everyone')));
@@ -178,4 +178,21 @@ test('{category-hashtag}, {tags-hashtags}, {hashtags} render and de-duplicate', 
   assert.equal(renderTemplate('{hashtags}', { source: 'prompt', category: 'AI', tags: ['AI', 'Prompts'] }, { limit: 200 }), '#AI #Prompts');
   // missing tags/category render empty and collapse whitespace
   assert.equal(renderTemplate('done {tags-hashtags}{category-hashtag}', { source: 'prompt' }, { limit: 200 }), 'done');
+});
+
+// SOW-122: the Bluesky handle token.
+test('blueskyHandleFrom parses a bsky.app URL, a bare @handle, and rejects junk', () => {
+  assert.equal(blueskyHandleFrom('https://bsky.app/profile/atwellpub.bsky.social'), 'atwellpub.bsky.social');
+  assert.equal(blueskyHandleFrom('@propertunity.bsky.social'), 'propertunity.bsky.social');
+  assert.equal(blueskyHandleFrom('someone.custom.com'), 'someone.custom.com'); // custom-domain handle
+  assert.equal(blueskyHandleFrom('nodot'), ''); // a handle needs at least one dot
+  assert.equal(blueskyHandleFrom('has spaces .social'), '');
+  assert.equal(blueskyHandleFrom(''), '');
+});
+
+test('{member-bluesky-handle}: the Bluesky @handle when present, else the full name', () => {
+  const withBsky = renderTemplate('{member-bluesky-handle}', { author: 'atwellpub', authorName: 'Hudson Atwell', authorBluesky: 'https://bsky.app/profile/atwellpub.bsky.social' }, { limit: 200 });
+  assert.equal(withBsky, '@atwellpub.bsky.social');
+  const noBsky = renderTemplate('{member-bluesky-handle}', { author: 'atwellpub', authorName: 'Hudson Atwell' }, { limit: 200 });
+  assert.equal(noBsky, 'Hudson Atwell');
 });
