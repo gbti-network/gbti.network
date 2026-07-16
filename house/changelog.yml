@@ -16,6 +16,14 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 14
+    date: 2026-07-15
+    type: build
+    title: Social Queue popup polish
+    notes:
+      - Widened the Social Queue popup, added channel brand logos, compact rows, type and channel filters, and pagination.
+
+  - version: 0.1.0
     build: 13
     date: 2026-07-15
     type: build
