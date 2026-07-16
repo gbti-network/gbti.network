@@ -16421,6 +16421,10 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     if (rv) rv.hidden = true;
     sv.hidden = false;
     const root = document.documentElement;
+    if (root.hasAttribute("data-unauth")) {
+      sv.hidden = true;
+      return;
+    }
     root.setAttribute("data-splash", "1");
     root.toggleAttribute("data-splash-nocards", !splashShowsCards(lsItem("gbti-splash-show-cards")));
     root.toggleAttribute("data-splash-noquote", !splashShowsQuote(lsItem("gbti-splash-show-quote")));

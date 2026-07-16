@@ -278,6 +278,9 @@ function showSplash() {
   if (rv) rv.hidden = true;
   sv.hidden = false;
   const root = document.documentElement;
+  // SOW-048 precedence: sign-in overrules the splash. The gate mounts async, so the CSS also pins the
+  // splash hidden under html[data-unauth]; this guard just avoids doing the work when the wall is already up.
+  if (root.hasAttribute('data-unauth')) { sv.hidden = true; return; }
   root.setAttribute('data-splash', '1');
   // SOW-074: the standalone splash-content toggles (any mode). No cards -> the splash is a click-anywhere screen.
   root.toggleAttribute('data-splash-nocards', !splashShowsCards(lsItem('gbti-splash-show-cards')));

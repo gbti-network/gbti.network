@@ -87,7 +87,16 @@ html[data-unauth] [data-shell] > *:not(.gbti-authwrap) { display: none !importan
 /* Defensive: hide any body-level overlay (e.g. the Share compose modal) while the gate is up — its trigger is
    already hidden, but this guarantees nothing escapes the wall. */
 html[data-unauth] .compose-modal { display: none !important; }
-.gbti-authwrap { position: fixed; inset: 0; z-index: 250; overflow: auto; background: var(--paper-2);
+/* Sign-in overrules the splash, ALWAYS: the SOW-074 full-mode splash curtain is position:fixed, so pin it
+   hidden explicitly under the gate (belt and braces beyond the shell-child rule above) and drop its
+   background attributes so no curtain paints beneath the wall. */
+html[data-unauth] .nt-splash,
+html[data-unauth] [data-splashview],
+html[data-unauth] .splash-pattern { display: none !important; }
+/* The wall itself is OPAQUE: glass-mode --paper-2 is translucent by design, which let anything that ever
+   painted below the gate bleed through it. --shell-bg is the opaque page backdrop (shell.css glass blocks);
+   the fallback covers the non-glass layouts where --paper-2 is a solid color. */
+.gbti-authwrap { position: fixed; inset: 0; z-index: 250; overflow: auto; background: var(--shell-bg, var(--paper-2));
   display: grid; place-items: center; padding: 28px 16px; box-sizing: border-box; }
 
 /* ============================ control cluster (top-right of content; SOW-052) ============================ */
