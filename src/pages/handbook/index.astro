@@ -25,6 +25,8 @@ const sections = [
   { id: 'revenue', label: 'Revenue Model' },
   { id: 'publishing', label: 'Publishing & Workbench' },
   { id: 'framework', label: 'The Technical Framework' },
+  { id: 'data', label: 'Where Your Data Lives' },
+  { id: 'encryption', label: 'Member-Only Encryption' },
   { id: 'discord', label: 'Discord Community' },
   { id: 'profile', label: 'Editing Member Profile' },
 ];
@@ -185,7 +187,63 @@ const sections = [
             and comes back exactly as it was when you resubscribe.</p></div>
         </section>
 
-        <!-- 6. DISCORD COMMUNITY -->
+        <!-- 6. WHERE YOUR DATA LIVES -->
+        <section class="hb-sec" id="data" data-sec>
+          <h2>Where Your Data Lives</h2>
+          <div class="blk" data-blk><p>Everything about you lives in exactly one of three homes, chosen by
+            what the data is. There is no hidden application database.</p>
+            <ul>
+              <li><strong>Published works</strong> (your profile, posts, products, prompts, and comments)
+                live in the public git repository. That is the point: your work is publicly yours, versioned,
+                and portable.</li>
+              <li><strong>Billing identity</strong> lives in Stripe and only in Stripe. Your email is passed
+                straight to your Stripe customer at signup; the platform keeps no email store of its own.</li>
+              <li><strong>Preferences and activity</strong> (favorites, collections, who and what you follow,
+                your news and category preferences) live in a deletable edge store keyed by your GitHub id.
+                None of it ever reaches the immutable git history.</li>
+            </ul></div>
+          <div class="blk" data-blk><p>Some preferences never leave your device at all: your theme, the
+            new-tab splash settings, and any splash background image you upload stay in your own browser
+            storage, on this device only.</p></div>
+          <div class="blk" data-blk><p>The only activity-shaped things committed to git are
+            member-identity-free aggregates: a favorite count per item, and the opt-in "favorited by" list
+            for members who explicitly turn that on. Usage analytics are aggregate and PII-free by
+            construction (a tier bucket and an event name, never an id, login, or address).</p></div>
+          <div class="blk" data-blk><p>This split is what makes erasure real. Deleting your account hard
+            deletes the edge-store data and unpublishes your works; the honest limit is that the content
+            repository is public, so copies in third-party forks, caches, and archives cannot be guaranteed
+            gone. We disclose that plainly rather than pretending otherwise. Backups of the edge-store data
+            are encrypted and retention-bounded, so deleted data ages out of them too. The full posture is
+            in the <a href="/privacy/">privacy policy</a>.</p></div>
+        </section>
+
+        <!-- 7. MEMBER-ONLY ENCRYPTION -->
+        <section class="hb-sec" id="encryption" data-sec>
+          <h2>Member-Only Encryption</h2>
+          <div class="blk" data-blk><p>When you mark content member-only, the gated markdown is encrypted
+            with AES-256-GCM into an envelope file, and only that ciphertext is committed to the public
+            repository. The encryption key never leaves the membership service: your client sends ciphertext
+            up to decrypt (reading) or plaintext up to encrypt (publishing), and the service answers only a
+            caller whose membership checks out as paid. The key is never in the page, the extension, or the
+            repository.</p></div>
+          <div class="blk" data-blk><p>Three gating modes cover the shapes member-only content takes: a
+            whole item with no public page, a whole item with a public teaser stub (a locked card with a
+            join prompt), or a public item with one members-only section. The static site ships an inert
+            locked placeholder either way; the extension upgrades it into the decrypted content for
+            members.</p></div>
+          <div class="blk" data-blk><p>Two guarantees hold at build time: gated plaintext never reaches the
+            published site bundle (a build guard proves it), and the key rotates on a schedule with the old
+            key destroyed, so old ciphertext sitting in git history permanently becomes permanently
+            unreadable. A compromise is bounded to one rotation window.</p></div>
+          <div class="blk" data-blk><p>The honest framing, stated everywhere we describe this: member-only
+            encryption is <strong>obfuscation for perks, not absolute secrecy</strong>. A paying member is
+            served the plaintext by design and can copy what they read; no client-side cryptography can stop
+            an authorized reader. It reliably stops anonymous scrapers and lapsed or banned accounts at the
+            point of delivery. Do not put credentials, personal data, or anything catastrophic to disclose
+            inside member-only content.</p></div>
+        </section>
+
+        <!-- 8. DISCORD COMMUNITY -->
         <section class="hb-sec" id="discord" data-sec>
           <h2>Discord Community</h2>
           <div class="blk" data-blk><p>The community is the product. The Discord guild runs on three
