@@ -444,8 +444,11 @@ async function ensureDirectoryForFilter() {
 /** Load Shares once for any signed-in member (SOW-077). The op + mergeAll filter by tier: paid/trial see member +
  *  public shares, a free/banned reader sees PUBLIC shares only. Fail-closed to [] for a signed-out/unknown caller. */
 async function loadShares() {
-  SHARES_LOADED = true;
+  // Only mark loaded once the membership gate PASSES. A call made while MEMBERSHIP is still 'unknown' (a
+  // first-load race, or a transient membership-oracle miss) must NOT permanently blank the shares feed: leave
+  // SHARES_LOADED false so it retries once membership resolves (applyMembershipState -> ensureSharesForFilter).
   if (!canBrowse(MEMBERSHIP)) { SHARES = []; return; }
+  SHARES_LOADED = true;
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/shares', query: {} } });
     SHARES = Array.isArray(r?.json?.items) ? r.json.items : [];

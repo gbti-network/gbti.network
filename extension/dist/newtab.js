@@ -16610,11 +16610,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   }
   async function loadShares() {
-    SHARES_LOADED = true;
     if (!canBrowse(MEMBERSHIP)) {
       SHARES = [];
       return;
     }
+    SHARES_LOADED = true;
     try {
       const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/shares", query: {} } });
       SHARES = Array.isArray(r?.json?.items) ? r.json.items : [];
