@@ -3,7 +3,7 @@
 // 300 truncation, and error mapping. Injected two-call fetch (createSession then createRecord); no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBlueskyAdapter, blueskyWebUrl, mentionFacet } from '../clients/syndication/bluesky.mjs';
+import { createBlueskyAdapter, blueskyWebUrl, mentionFacet, hashtagFacets } from '../clients/syndication/bluesky.mjs';
 import { syndicationConfigFromParsed } from '../membership/syndication-config-core.mjs';
 
 const ENV = { BLUESKY_HANDLE: 'gbti.bsky.social', BLUESKY_APP_PASSWORD: 'app-pass' };
@@ -127,4 +127,27 @@ test('mentionFacet computes the byte range (multibyte-safe) or null', () => {
   assert.equal(f2.index.byteStart, new TextEncoder().encode('café ').length);
   assert.equal(mentionFacet('no mention here', 'a.bsky.social', 'did:x'), null);
   assert.equal(mentionFacet('@a.bsky.social', 'a.bsky.social', null), null); // no did
+});
+
+// SOW-122: hashtag tag facets.
+test('hashtagFacets makes each #tag a tag facet at the right byte range', () => {
+  const f = hashtagFacets('hello #AI world #ClaudeCode');
+  assert.equal(f.length, 2);
+  assert.equal(f[0].features[0]['$type'], 'app.bsky.richtext.facet#tag');
+  assert.equal(f[0].features[0].tag, 'AI');
+  assert.equal(f[0].index.byteStart, 6);           // "hello " = 6 bytes
+  assert.equal(f[0].index.byteEnd, 6 + '#AI'.length);
+  assert.equal(f[1].features[0].tag, 'ClaudeCode');
+  assert.deepEqual(hashtagFacets('no tags here'), []);
+});
+
+test('a post with hashtags AND a mention carries both, ordered by byte offset', async () => {
+  const cfg = syndicationConfigFromParsed({ syndication: { channel_templates: { bluesky: { post: 'By {member-bluesky-handle} #AI #Skill' } } } });
+  const { calls, fetchImpl } = fakeFetch({ resolveDid: 'did:plc:a' });
+  await createBlueskyAdapter({ env: ENV, fetchImpl, cfg }).post({ ...ITEM, authorBluesky: 'https://bsky.app/profile/atwellpub.bsky.social' });
+  const facets = recordOf(calls).facets;
+  const types = facets.map((x) => x.features[0]['$type']);
+  assert.ok(types.includes('app.bsky.richtext.facet#mention'));
+  assert.equal(types.filter((t) => t === 'app.bsky.richtext.facet#tag').length, 2);
+  for (let i = 1; i < facets.length; i++) assert.ok(facets[i].index.byteStart >= facets[i - 1].index.byteStart, 'ordered by byteStart');
 });

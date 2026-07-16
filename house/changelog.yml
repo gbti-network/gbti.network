@@ -16,6 +16,14 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 17
+    date: 2026-07-16
+    type: build
+    title: Bluesky hashtags are real tags
+    notes:
+      - Bluesky posts now render the hashtags as real, clickable, searchable tags (faceted), not plain text.
+
+  - version: 0.1.0
     build: 16
     date: 2026-07-16
     type: build

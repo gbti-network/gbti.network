@@ -38,6 +38,25 @@ export function mentionFacet(text, handle, did) {
   return { index: { byteStart, byteEnd }, features: [{ $type: 'app.bsky.richtext.facet#mention', did }] };
 }
 
+/**
+ * SOW-122: build rich-text TAG facets for every "#hashtag" in the text (the AT protocol tag feature carries
+ * the tag WITHOUT the leading #), at UTF-8 byte ranges. A plain #tag in Bluesky text is not a clickable
+ * hashtag on its own; this makes each one a real, searchable tag. Pure.
+ */
+export function hashtagFacets(text) {
+  const s = String(text || '');
+  const enc = new TextEncoder();
+  const out = [];
+  const re = /#(\w+)/g;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    const byteStart = enc.encode(s.slice(0, m.index)).length;
+    const byteEnd = byteStart + enc.encode(m[0]).length;
+    out.push({ index: { byteStart, byteEnd }, features: [{ $type: 'app.bsky.richtext.facet#tag', tag: m[1] }] });
+  }
+  return out;
+}
+
 export function createBlueskyAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg = null } = {}) {
   const base = (env.BLUESKY_BASE_URL || 'https://bsky.social').replace(/\/$/, '');
   return {
@@ -70,19 +89,21 @@ export function createBlueskyAdapter({ env = {}, fetchImpl = globalThis.fetch, c
           },
         };
       }
-      // SOW-122: a REAL mention. If the author's profile carries a Bluesky handle and the rendered text
-      // includes it (from {member-bluesky-handle}), resolve it to a DID and attach a mention facet so the
-      // @handle links + notifies the member (like an X mention). Only the member's OWN handle is faceted.
-      // Fail-soft: a resolve miss leaves the plain @handle text and never blocks the post.
+      // SOW-122: rich-text FACETS make the #hashtags clickable tags and the author @handle a real mention
+      // (a plain #tag / @handle in Bluesky text is inert on its own). Hashtag facets are pure; the mention
+      // facet needs the handle resolved to a DID (fail-soft: a resolve miss leaves the plain @handle). Only
+      // the member's OWN handle is faceted. Facets must be ordered by byte offset + non-overlapping.
+      const facets = hashtagFacets(text);
       const handle = blueskyHandleFrom(item.authorBluesky);
       if (handle && text.includes(`@${handle}`)) {
         try {
           const rh = await fetchImpl(`${base}/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(handle)}`);
           const did = (rh && rh.ok) ? (await rh.json().catch(() => ({})))?.did : null;
-          const facet = mentionFacet(text, handle, did);
-          if (facet) record.facets = [facet];
-        } catch { /* fail-soft: no facet */ }
+          const mf = mentionFacet(text, handle, did);
+          if (mf) facets.push(mf);
+        } catch { /* fail-soft: no mention facet */ }
       }
+      if (facets.length) record.facets = facets.sort((a, b) => a.index.byteStart - b.index.byteStart);
 
       const res = await fetchImpl(`${base}/xrpc/com.atproto.repo.createRecord`, {
         method: 'POST',
