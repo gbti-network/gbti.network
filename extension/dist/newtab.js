@@ -2369,11 +2369,12 @@
   // client/src/membership.mjs
   var STAFF = /* @__PURE__ */ new Set([ROLE.moderator, ROLE.admin, ROLE.superadmin]);
   var READ_TIER = /* @__PURE__ */ new Set(["paid", "trialing", "expired", "cancelled", "none", "banned"]);
-  function canBrowse(membership) {
-    return READ_TIER.has(membership);
-  }
   function canSeeNews(membership) {
     return READ_TIER.has(membership);
+  }
+  var SEE_SHARES_TIER = /* @__PURE__ */ new Set(["paid", "trialing"]);
+  function canSeeShares(membership) {
+    return SEE_SHARES_TIER.has(membership);
   }
   var LOCKED_MEMBERSHIP = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   function isLockedMembership(membership) {
@@ -2475,7 +2476,7 @@
 
   // client-ui/src/all-merge.mjs
   var SHARE_OK = /* @__PURE__ */ new Set(["paid", "trialing"]);
-  function canSeeShares(membership) {
+  function canSeeShares2(membership) {
     return SHARE_OK.has(String(membership || "").toLowerCase());
   }
   function toMs(v) {
@@ -2508,7 +2509,7 @@
   function mergeAll({ items = [], shares = null, membership = "unknown" } = {}) {
     const out = Array.isArray(items) ? items.slice() : [];
     if (Array.isArray(shares)) {
-      const memberOk = canSeeShares(membership);
+      const memberOk = canSeeShares2(membership);
       for (const s of shares) {
         const isPublic = String(s.visibility || "members").toLowerCase() === "public";
         if (isPublic || memberOk) out.push(shareToItem(s));
@@ -3318,7 +3319,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._login = null;
           this._role = "member";
         }
-        if (!canSeeShares(membership) || !this._login) {
+        if (!canSeeShares2(membership) || !this._login) {
           this._gated = true;
           this._bell = { total: 0, groups: [] };
           this.render();
@@ -15798,7 +15799,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         } catch {
           this._membership = "unknown";
         }
-        if (canSeeShares(this._membership)) {
+        if (canSeeShares2(this._membership)) {
           try {
             this._shares = (await this.client.listShares())?.items ?? [];
           } catch {
@@ -16290,6 +16291,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var MEMBERSHIP = "unknown";
   var SHARES = null;
   var SHARES_LOADED = false;
+  var SHARES_LOADED_AT = null;
   var NEWS = null;
   var NEWS_LOADED = false;
   var PAGE_SIZE3 = 40;
@@ -16610,23 +16612,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   }
   async function loadShares() {
-    if (!canBrowse(MEMBERSHIP)) {
-      SHARES = [];
-      return;
-    }
-    SHARES_LOADED = true;
     try {
       const r = await chrome.runtime.sendMessage({ type: "api", req: { method: "GET", pathname: "/api/shares", query: {} } });
-      SHARES = Array.isArray(r?.json?.items) ? r.json.items : [];
+      if (!Array.isArray(r?.json?.items)) {
+        SHARES = SHARES ?? [];
+        return;
+      }
+      SHARES = r.json.items;
+      SHARES_LOADED = true;
+      SHARES_LOADED_AT = MEMBERSHIP;
     } catch {
-      SHARES = [];
     }
   }
   async function ensureSharesForFilter() {
-    if (feedSources(TYPE).wantShares && !SHARES_LOADED) {
-      await loadShares();
-      renderFeed($("[data-filter]")?.value || "");
-    }
+    if (!feedSources(TYPE).wantShares) return;
+    const stale = SHARES_LOADED && SHARES_LOADED_AT !== MEMBERSHIP && canSeeShares(MEMBERSHIP);
+    if (SHARES_LOADED && !stale) return;
+    await loadShares();
+    renderFeed($("[data-filter]")?.value || "");
   }
   var NEWS_CACHE_KEY = "gbti-news-cache";
   async function readNewsCache() {

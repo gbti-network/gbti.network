@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 22
+    date: 2026-07-16
+    type: build
+    title: The shares feed shows public shares while your membership resolves
+    notes:
+      - The new-tab shares feed now loads the public shares immediately instead of staying blank until membership resolves, then folds in the member-only stream once you are confirmed paid.
+      - This fixes a case where a slow or transient membership check left the shares screen empty even though shares existed.
+
+  - version: 0.1.0
     build: 21
     date: 2026-07-16
     type: build

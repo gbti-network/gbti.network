@@ -4,7 +4,7 @@
 // banner (SOW-026/029), and the lapsed-member lock (SOW-018). Fetches the public activity index over the
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
-import { canSeeNews, canBrowse, upgradePromptKind } from '../../client/src/membership.mjs'; // SOW-060/077: free-tier read perks + the read-only upgrade prompt
+import { canSeeNews, canSeeShares, upgradePromptKind } from '../../client/src/membership.mjs'; // SOW-060/077: free-tier read perks + the read-only upgrade prompt
 import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, splashKeepsDarkCards, normalizePatternGap, normalizeCardBlur, asciiAnchor, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
 import { mergeAll, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
@@ -92,6 +92,7 @@ let TYPE = typeForHash(hashStr()); // bare newtab.html -> 'all' (the river); #ty
 let MEMBERSHIP = 'unknown';
 let SHARES = null;
 let SHARES_LOADED = false;
+let SHARES_LOADED_AT = null; // the MEMBERSHIP the loaded SHARES were fetched under, so an upgrade re-fetches
 let NEWS = null;
 let NEWS_LOADED = false;
 // SOW-111 QA follow-up (owner-refined): every view renders in 40-item chunks and AUTO-LOADS the next chunk as
@@ -444,23 +445,28 @@ async function ensureDirectoryForFilter() {
 /** Load Shares once for any signed-in member (SOW-077). The op + mergeAll filter by tier: paid/trial see member +
  *  public shares, a free/banned reader sees PUBLIC shares only. Fail-closed to [] for a signed-out/unknown caller. */
 async function loadShares() {
-  // Only mark loaded once the membership gate PASSES. A call made while MEMBERSHIP is still 'unknown' (a
-  // first-load race, or a transient membership-oracle miss) must NOT permanently blank the shares feed: leave
-  // SHARES_LOADED false so it retries once membership resolves (applyMembershipState -> ensureSharesForFilter).
-  if (!canBrowse(MEMBERSHIP)) { SHARES = []; return; }
-  SHARES_LOADED = true;
+  // ALWAYS fetch: the SERVER is the visibility boundary (operations.listShares requires an identity, then returns
+  // only PUBLIC shares to a non-paid/unknown session and the full stream to paid/trialing). Fetching while
+  // MEMBERSHIP is still 'unknown' therefore shows the PUBLIC shares immediately rather than a blank feed, and the
+  // membership-resolved retry re-fetches to fold in the member-only stream. Mark loaded (and record the tier it
+  // was loaded under) only on a SUCCESSFUL fetch, so a transient failure or a later upgrade re-fetches.
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/shares', query: {} } });
-    SHARES = Array.isArray(r?.json?.items) ? r.json.items : [];
-  } catch { SHARES = []; }
+    if (!Array.isArray(r?.json?.items)) { SHARES = SHARES ?? []; return; } // failure/no identity -> keep any prior, allow retry
+    SHARES = r.json.items;
+    SHARES_LOADED = true;
+    SHARES_LOADED_AT = MEMBERSHIP;
+  } catch { /* leave SHARES_LOADED false so the next ensure re-fetches */ }
 }
 
-/** If the active filter needs Shares and they are not loaded yet, fetch them, then re-render the feed. */
+/** If the active filter needs Shares and they are not loaded (or were loaded under a lower tier than the now
+ *  resolved one, so the member-only stream is still missing), fetch them, then re-render the feed. */
 async function ensureSharesForFilter() {
-  if (feedSources(TYPE).wantShares && !SHARES_LOADED) {
-    await loadShares();
-    renderFeed($('[data-filter]')?.value || '');
-  }
+  if (!feedSources(TYPE).wantShares) return;
+  const stale = SHARES_LOADED && SHARES_LOADED_AT !== MEMBERSHIP && canSeeShares(MEMBERSHIP);
+  if (SHARES_LOADED && !stale) return;
+  await loadShares();
+  renderFeed($('[data-filter]')?.value || '');
 }
 
 // News cache (chrome.storage.local): news is the SAME curated feed for every paid member (not per-member), so we
