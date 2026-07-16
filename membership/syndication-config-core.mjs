@@ -61,7 +61,11 @@ const DEFAULT_DEVTO_INTRO = '**By [{fullName}]({member-url}), GBTI Network Membe
 // The CTA appended to EVERY dev.to post, full and stub alike (owner-authored, mirroring the Reddit
 // first-comment closing).
 const DEFAULT_DEVTO_FOOTER = '---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
-const DEFAULT_REDDIT_COMMENT = 'The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. More information provided in the following author note:\n\n"{author-note-italic}"\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
+// SOW-088 + side-quest 2026-07-16: the Reddit first comment credits the poster. It uses {short-description}
+// (which BOTH content items and SHARES carry) rather than {author-note-italic} (a posts/products/prompts-only
+// intro), so it also fires for a share; the popup's _redditStored guard blanks a comment that references the
+// author note when none exists, which is why a share got no crediting comment before.
+const DEFAULT_REDDIT_COMMENT = 'Shared to the community by GBTI Network member {fullName}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
   post: DEFAULT_FORMAT,

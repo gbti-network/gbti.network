@@ -16,6 +16,14 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 19
+    date: 2026-07-16
+    type: build
+    title: Reddit first comment credits the poster on shares
+    notes:
+      - The Reddit first-comment default now credits the member and works for shares, not just posts.
+
+  - version: 0.1.0
     build: 18
     date: 2026-07-16
     type: build
