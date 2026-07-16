@@ -54,6 +54,9 @@ const REGISTRY = [
   { name: 'X_API_SECRET', targets: ['worker'], optional: true, note: 'X app consumer secret.' },
   { name: 'X_ACCESS_TOKEN', targets: ['worker'], optional: true, note: 'X brand-account access token (Read and Write; regenerate if it was minted read-only).' },
   { name: 'X_ACCESS_SECRET', targets: ['worker'], optional: true, note: 'X brand-account access token secret.' },
+  // SOW-122: the Bluesky syndication destination (free, a normal auto channel). Worker-only.
+  { name: 'BLUESKY_HANDLE', targets: ['worker'], optional: true, note: 'The brand Bluesky handle, e.g. gbti.bsky.social.' },
+  { name: 'BLUESKY_APP_PASSWORD', targets: ['worker'], optional: true, note: 'A bsky.app App Password (Settings > App Passwords), NOT the account password.' },
 ];
 
 // ---- safe local env parsing (values are read but NEVER printed) ----

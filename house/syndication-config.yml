@@ -27,7 +27,7 @@ syndication:
     x: false
     linkedin: false
     mastodon: false
-    bluesky: false
+    bluesky: true
     reddit: false
     devto: false
   # SOW-121: channels the system NEVER auto-posts to (no adapter call). Instead it enqueues a superadmin
@@ -48,3 +48,10 @@ syndication:
       product: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       prompt: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       share: '{member-x-handle} shared: "{title}" {url} {category-hashtag} {tags-hashtags}'
+    # SOW-122: the Bluesky default message. It OMITS {url} because the adapter attaches an external embed
+    # card (a clickable link preview); the AT protocol does not auto-link a bare URL in post text.
+    bluesky:
+      post: 'New {content-type} by {fullName}: "{title}" {category-hashtag} {tags-hashtags}'
+      product: 'New {content-type} by {fullName}: "{title}" {category-hashtag} {tags-hashtags}'
+      prompt: 'New {content-type} by {fullName}: "{title}" {category-hashtag} {tags-hashtags}'
+      share: '{fullName} shared: "{title}" {category-hashtag} {tags-hashtags}'
