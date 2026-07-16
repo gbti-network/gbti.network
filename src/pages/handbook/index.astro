@@ -93,9 +93,9 @@ const sections = [
         <!-- 2. SYNDICATION MODEL -->
         <section class="hb-sec" id="syndication" data-sec>
           <h2>Syndication Model</h2>
-          <div class="blk" data-blk><p>Publish once; the network amplifies it. When your content merges,
-            it enters the syndication queue and posts outward with attribution to you, so your work
-            travels without you re-posting it by hand.</p></div>
+          <div class="blk" data-blk><p>When your content merges, it enters the syndication queue and posts
+            outward to the network channels with attribution to you. You publish here once and skip the
+            re-posting by hand.</p></div>
           <div class="blk" data-blk><p><strong>Live today:</strong> Discord. Every published item posts to
             the shared #shares channel and a second time to its mapped category channel. Posts credit you
             by name, and when your Discord account is linked, as a real @mention.</p></div>
@@ -148,7 +148,7 @@ const sections = [
             an MCP server, so your AI agents can author through the exact same guarded flow you do.</p></div>
           <div class="blk" data-blk><p>Under the hood every edit is <strong>fork, branch, pull
             request</strong> against the public content repository. The membership gate is the only
-            authority on what merges; the tools just make the motions effortless. Your content lives in
+            authority on what merges; the tools handle the git motions for you. Your content lives in
             your own folder (<code>members/&lt;username&gt;/</code>) with posts, products, prompts, and
             images, and your pull requests auto-merge only inside that folder.</p></div>
           <div class="blk" data-blk><p>During the trial, drafts stay on your fork; nothing you stage
@@ -160,8 +160,8 @@ const sections = [
           <div class="blk" data-blk><p>Content can be public or members-only. Members-only supports a
             whole gated item, a public teaser stub with a locked body, or a public item with one gated
             section. Gated bodies are encrypted and unlock through the membership service. One honest
-            caveat: this protects perks, it is not a vault; a paying member can always copy what they can
-            read. Keep true secrets out of content.</p></div>
+            caveat: an authorized member can always copy what they read, so treat member-only as a perk
+            boundary and keep real secrets out of content.</p></div>
         </section>
 
         <!-- 5. THE TECHNICAL FRAMEWORK -->
@@ -170,15 +170,15 @@ const sections = [
           <div class="blk" data-blk><p>The network is local-first and git-native. The <strong>public git
             repository is the database</strong>; the static site is its published read view; your
             workbench is your own authoring node. Content syncs through membership-gated pull requests.
-            There is no separate application database to breach, migrate, or lose.</p></div>
+            There is no separate application database.</p></div>
           <div class="blk" data-blk><p><strong>Stripe is the only registry.</strong> Your GitHub id keys a
             Stripe customer; membership status is derived from it (an active subscription means paid, a
             card-less customer inside {TRIAL_DAYS_SITE} days means trial). Every membership check fails
             closed: on any doubt, the system treats an account as not paid rather than guessing.</p></div>
           <div class="blk" data-blk><p>The site builds with Astro and deploys to Cloudflare Pages; one
             Cloudflare Worker handles signup, membership checks, and member-content encryption. The
-            merge gate and the daily reconcile run as GitHub Actions. Nothing always-on, near zero
-            hosting cost.</p></div>
+            merge gate and the daily reconcile run as GitHub Actions. Nothing is always-on, and hosting
+            costs stay near zero.</p></div>
           <div class="blk" data-blk><p>The repository is public and anyone can open a pull request, but
             the gate reads metadata only and never executes submitted code, auto-merge is scoped to your
             own folder, and the governance files are code-owned. Roles and permissions are structurally
@@ -194,8 +194,8 @@ const sections = [
             what the data is. There is no hidden application database.</p>
             <ul>
               <li><strong>Published works</strong> (your profile, posts, products, prompts, and comments)
-                live in the public git repository. That is the point: your work is publicly yours, versioned,
-                and portable.</li>
+                live in the public git repository, which is public on purpose: your work stays versioned and
+                portable under your own name.</li>
               <li><strong>Billing identity</strong> lives in Stripe and only in Stripe. Your email is passed
                 straight to your Stripe customer at signup; the platform keeps no email store of its own.</li>
               <li><strong>Preferences and activity</strong> (favorites, collections, who and what you follow,
@@ -209,12 +209,11 @@ const sections = [
             member-identity-free aggregates: a favorite count per item, and the opt-in "favorited by" list
             for members who explicitly turn that on. Usage analytics are aggregate and PII-free by
             construction (a tier bucket and an event name, never an id, login, or address).</p></div>
-          <div class="blk" data-blk><p>This split is what makes erasure real. Deleting your account hard
-            deletes the edge-store data and unpublishes your works; the honest limit is that the content
+          <div class="blk" data-blk><p>The split is what erasure depends on. Deleting your account hard
+            deletes the edge-store data and unpublishes your works. The honest limit: the content
             repository is public, so copies in third-party forks, caches, and archives cannot be guaranteed
-            gone. We disclose that plainly rather than pretending otherwise. Backups of the edge-store data
-            are encrypted and retention-bounded, so deleted data ages out of them too. The full posture is
-            in the <a href="/privacy/">privacy policy</a>.</p></div>
+            gone, and the <a href="/privacy/">privacy policy</a> says so plainly. Backups of the edge-store
+            data are encrypted and retention-bounded, so deleted data ages out of them too.</p></div>
         </section>
 
         <!-- 7. MEMBER-ONLY ENCRYPTION -->
@@ -233,14 +232,14 @@ const sections = [
             members.</p></div>
           <div class="blk" data-blk><p>Two guarantees hold at build time: gated plaintext never reaches the
             published site bundle (a build guard proves it), and the key rotates on a schedule with the old
-            key destroyed, so old ciphertext sitting in git history permanently becomes permanently
-            unreadable. A compromise is bounded to one rotation window.</p></div>
-          <div class="blk" data-blk><p>The honest framing, stated everywhere we describe this: member-only
-            encryption is <strong>obfuscation for perks, not absolute secrecy</strong>. A paying member is
+            key destroyed, so ciphertext that sits in git history forever becomes unreadable. A
+            compromise is bounded to one rotation window.</p></div>
+          <div class="blk" data-blk><p>The honest framing we state everywhere: member-only encryption
+            <strong>controls delivery, and it does not make content secret</strong>. A paying member is
             served the plaintext by design and can copy what they read; no client-side cryptography can stop
-            an authorized reader. It reliably stops anonymous scrapers and lapsed or banned accounts at the
-            point of delivery. Do not put credentials, personal data, or anything catastrophic to disclose
-            inside member-only content.</p></div>
+            an authorized reader. What it reliably does is stop anonymous scrapers and lapsed or banned
+            accounts at the point of delivery. Do not put credentials, personal data, or anything
+            catastrophic to disclose inside member-only content.</p></div>
         </section>
 
         <!-- 8. DISCORD COMMUNITY -->
@@ -251,12 +250,12 @@ const sections = [
             (paid, full access), <strong>Trial</strong> (read along while you evaluate), and
             <strong>Locked</strong> (lapsed or banned; you stay in the guild but the gated channels close).
             Nobody is ever kicked by the system.</p></div>
-          <div class="blk" data-blk><p>The weekly two hour shop-talk session is the heartbeat: product
+          <div class="blk" data-blk><p>The weekly two hour shop-talk session anchors the community: product
             development, publishing, business progress, technical decisions, and member coaching.</p></div>
           <div class="blk" data-blk><p>The #shares channel carries everything members publish, and each
             item posts again into its category channel, so following a topic means watching one channel.
-            Trending developer news lands in the category channels too, curated rather than automatic, so
-            the channels stay signal.</p></div>
+            Trending developer news lands in the category channels too, curated by hand, so the channels
+            stay readable.</p></div>
           <div class="blk" data-blk><p>Your invite arrives in the welcome view after setup (and signup can
             add you to the guild automatically when you link Discord). Roles follow your membership on
             their own; there is nothing to configure.</p></div>
@@ -274,10 +273,9 @@ const sections = [
             <code>directory: true</code> to opt in to the <a href="/members/">member directory</a>.
             Fields the system controls: your tier, your join date, and the author identity, which is
             always forced to the signed-in account.</p></div>
-          <div class="blk" data-blk><p>Your profile page at <code>/members/&lt;username&gt;/</code> is
-            more than a bio: it counts as a revenue attribution entry point. A visitor who lands on your
-            profile and later becomes a member credits you in the revenue split, no special link
-            required.</p></div>
+          <div class="blk" data-blk><p>Your profile page at <code>/members/&lt;username&gt;/</code> also
+            works as a revenue attribution entry point. A visitor who lands on your profile and later
+            becomes a member credits you in the revenue split, no special link required.</p></div>
         </section>
       </div>
     </div>
