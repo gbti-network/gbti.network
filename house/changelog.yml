@@ -16,6 +16,14 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 20
+    date: 2026-07-16
+    type: build
+    title: Fix opening a share directly in the new tab
+    notes:
+      - Fixed a new-tab crash when a share was opened by a direct deep link (a helper was called before it was defined).
+
+  - version: 0.1.0
     build: 19
     date: 2026-07-16
     type: build

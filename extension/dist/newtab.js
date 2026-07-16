@@ -16895,6 +16895,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         else openReader({ type: t, path: rd, doAction: act });
       }
     });
+    window.gbtiOpenShareBySlug = (slug, tries = 20) => {
+      const found = Array.isArray(SHARES) ? SHARES.find((x) => `${x.author}/${x.id}` === slug) : null;
+      if (found) {
+        openReader({ ...found, type: "share" });
+        return;
+      }
+      if (tries > 0) setTimeout(() => window.gbtiOpenShareBySlug(slug, tries - 1), 300);
+    };
     const deepRead = readFromHash();
     if (deepRead) {
       const act = doFromHash();
@@ -16936,14 +16944,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) loadSetupBanner();
     });
-    window.gbtiOpenShareBySlug = (slug, tries = 20) => {
-      const found = Array.isArray(SHARES) ? SHARES.find((x) => `${x.author}/${x.id}` === slug) : null;
-      if (found) {
-        openReader({ ...found, type: "share" });
-        return;
-      }
-      if (tries > 0) setTimeout(() => window.gbtiOpenShareBySlug(slug, tries - 1), 300);
-    };
     document.addEventListener("gbti-share-posted", (e) => {
       const item = e?.detail?.item;
       if (!item) return;

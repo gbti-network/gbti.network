@@ -742,6 +742,16 @@ function init() {
     }
   });
 
+  // SOW-092: a SHARE deep link (#tab=share&read=<author>/<id>) resolves against the Shares stream, which loads
+  // async; retry briefly until it lands (fail-soft to the filtered feed when the share is gone). DEFINED HERE,
+  // before the first-load deep-read block below that may call it immediately: it was previously assigned AFTER
+  // that call, so opening the new tab on a share deep-link threw "gbtiOpenShareBySlug is not a function".
+  window.gbtiOpenShareBySlug = (slug, tries = 20) => {
+    const found = Array.isArray(SHARES) ? SHARES.find((x) => `${x.author}/${x.id}` === slug) : null;
+    if (found) { openReader({ ...found, type: 'share' }); return; }
+    if (tries > 0) setTimeout(() => window.gbtiOpenShareBySlug(slug, tries - 1), 300);
+  };
+
   // A bell deep-link present on first load opens that item straight into the in-place reader (the feed still
   // renders underneath, so Back reveals it). The reader resolves the title/body from the path via the client.
   const deepRead = readFromHash();
@@ -789,13 +799,6 @@ function init() {
 
   // Re-check the setup banner when the member returns to this tab (e.g. after forking in another tab).
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadSetupBanner(); });
-  // SOW-092: a SHARE deep link (#tab=share&read=<author>/<id>) resolves against the Shares stream, which
-  // loads async; retry briefly until it lands (fail-soft to the filtered feed when the share is gone).
-  window.gbtiOpenShareBySlug = (slug, tries = 20) => {
-    const found = Array.isArray(SHARES) ? SHARES.find((x) => `${x.author}/${x.id}` === slug) : null;
-    if (found) { openReader({ ...found, type: 'share' }); return; }
-    if (tries > 0) setTimeout(() => window.gbtiOpenShareBySlug(slug, tries - 1), 300);
-  };
   // SOW-092: a share posted from the shell "+" modal opens IMMEDIATELY in the page reader (the composer
   // emits a reader-ready optimistic item; SOW-076 instant-feel). Claiming the event stops the shell's
   // no-reader fallback from also navigating to shares.html.
