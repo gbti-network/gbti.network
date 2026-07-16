@@ -100,6 +100,9 @@ const X_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the
 // SOW-122: Bluesky stubs omit {url} because the adapter attaches an external embed card for the link.
 const BLUESKY_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it.';
 const BLUESKY_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it.';
+// SOW-123: Mastodon includes {url} (Mastodon auto-links + builds a preview card from it).
+const MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+const MASTODON_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
 export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
   'discord-category': Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
@@ -108,6 +111,7 @@ export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
   bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
+  mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB }),
 });
 
 export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({

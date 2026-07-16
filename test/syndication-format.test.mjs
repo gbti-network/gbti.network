@@ -1,7 +1,7 @@
 // SOW-058: the pure message formatter. Sanitization, truncation, URL preservation, no body leak.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, xHandleFrom, toHashtag, blueskyHandleFrom } from '../membership/syndication-format.mjs';
+import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom } from '../membership/syndication-format.mjs';
 
 test('sanitizeMentions neutralizes @mentions and Discord mass-ping tokens', () => {
   assert.ok(!/@everyone/.test(sanitizeMentions('hey @everyone')));
@@ -195,4 +195,21 @@ test('{member-bluesky-handle}: the Bluesky @handle when present, else the full n
   assert.equal(withBsky, '@atwellpub.bsky.social');
   const noBsky = renderTemplate('{member-bluesky-handle}', { author: 'atwellpub', authorName: 'Hudson Atwell' }, { limit: 200 });
   assert.equal(noBsky, 'Hudson Atwell');
+});
+
+// SOW-123: the Mastodon handle token.
+test('mastodonHandleFrom parses an instance URL, @user@instance, user@instance, rejects junk', () => {
+  assert.equal(mastodonHandleFrom('https://mastodon.social/@propertunity'), 'propertunity@mastodon.social');
+  assert.equal(mastodonHandleFrom('@propertunity@mastodon.social'), 'propertunity@mastodon.social');
+  assert.equal(mastodonHandleFrom('propertunity@mastodon.social'), 'propertunity@mastodon.social');
+  assert.equal(mastodonHandleFrom('https://mastodon.social/@a/statuses/1'), ''); // not a bare profile url
+  assert.equal(mastodonHandleFrom('nodomain'), '');
+  assert.equal(mastodonHandleFrom(''), '');
+});
+
+test('{member-mastodon-handle}: the fediverse @user@instance when present, else the full name', () => {
+  const withM = renderTemplate('{member-mastodon-handle}', { author: 'x', authorName: 'Shane Taylor', authorMastodon: 'https://mastodon.social/@propertunity' }, { limit: 200 });
+  assert.equal(withM, '@propertunity@mastodon.social');
+  const noM = renderTemplate('{member-mastodon-handle}', { author: 'x', authorName: 'Shane Taylor' }, { limit: 200 });
+  assert.equal(noM, 'Shane Taylor');
 });

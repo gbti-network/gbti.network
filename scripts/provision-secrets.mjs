@@ -57,6 +57,9 @@ const REGISTRY = [
   // SOW-122: the Bluesky syndication destination (free, a normal auto channel). Worker-only.
   { name: 'BLUESKY_HANDLE', targets: ['worker'], optional: true, note: 'The brand Bluesky handle, e.g. gbti.bsky.social.' },
   { name: 'BLUESKY_APP_PASSWORD', targets: ['worker'], optional: true, note: 'A bsky.app App Password (Settings > App Passwords), NOT the account password.' },
+  // SOW-123: the Mastodon syndication destination (free, a normal auto channel). Worker-only.
+  { name: 'MASTODON_BASE_URL', targets: ['worker'], kind: 'var', optional: true, note: 'The brand instance origin, e.g. https://mastodon.social. NON-SECRET; may live in wrangler.toml [env.production.vars].' },
+  { name: 'MASTODON_ACCESS_TOKEN', targets: ['worker'], optional: true, note: 'A Mastodon Development-app access token with write:statuses (instance Settings > Development).' },
 ];
 
 // ---- safe local env parsing (values are read but NEVER printed) ----

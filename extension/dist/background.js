@@ -20780,6 +20780,8 @@ var X_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Members
 var X_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
 var BLUESKY_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it.';
 var BLUESKY_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it.';
+var MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+var MASTODON_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
 var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
   "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
@@ -20787,7 +20789,8 @@ var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
   devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
-  bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB })
+  bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
+  mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB })
 });
 var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   enabled: false,

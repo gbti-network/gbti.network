@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 18
+    date: 2026-07-16
+    type: build
+    title: Mastodon syndication destination
+    notes:
+      - Finished the Mastodon destination: posts use the templates and credit the author by their Mastodon handle.
+      - Mastodon is a free auto channel, enabled once the instance URL and access token are provisioned.
+
+  - version: 0.1.0
     build: 17
     date: 2026-07-16
     type: build

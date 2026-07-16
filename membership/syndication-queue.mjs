@@ -9,7 +9,7 @@
 // is structurally incapable of copying a body field; the leak-guard test asserts this).
 //
 // Shape (synd:item:<id>):
-//   { id, source, targetType, targetSlug, author, authorName, authorDiscord, authorX, authorBluesky, tags, title, blurb, url,
+//   { id, source, targetType, targetSlug, author, authorName, authorDiscord, authorX, authorBluesky, authorMastodon, tags, title, blurb, url,
 //     image, category, categoryPath, visibility, membersOnly, mention, flags, trigger, enqueuedAt, availableAt,
 //     status, claimedAt, perChannel, sentAt, failedAt, cancelledAt, cancelledBy }
 //   SOW-120: `authorX` (the profile X handle/URL, feeds {member-x-handle}) and `tags` (free-form, feed
@@ -79,6 +79,7 @@ export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HO
     authorDiscord: trimOrNull(input.authorDiscord), // SOW-088: the public profile Discord handle ({member-discord-username})
     authorX: trimOrNull(input.authorX), // SOW-120: the public profile X handle/URL ({member-x-handle})
     authorBluesky: trimOrNull(input.authorBluesky), // SOW-122: the public profile Bluesky handle/URL ({member-bluesky-handle})
+    authorMastodon: trimOrNull(input.authorMastodon), // SOW-123: the public profile Mastodon handle/URL ({member-mastodon-handle})
     tags: Array.isArray(input.tags) ? input.tags.map((t) => String(t ?? '').trim()).filter(Boolean).slice(0, 10) : null, // SOW-120: free-form tags for {tags-hashtags} (public metadata)
     // SOW-088 {author-note}: the from-the-author intro COMMENT text. PUBLIC items only, so a members-only
     // item's (possibly encrypted) intro can never ride into a channel; capped, never a content body.
@@ -134,6 +135,7 @@ export function normalizeItem(raw) {
     authorDiscord: trimOrNull(raw.authorDiscord),
     authorX: trimOrNull(raw.authorX), // SOW-120
     authorBluesky: trimOrNull(raw.authorBluesky), // SOW-122
+    authorMastodon: trimOrNull(raw.authorMastodon), // SOW-123
     tags: Array.isArray(raw.tags) ? raw.tags.map((t) => String(t ?? '').trim()).filter(Boolean).slice(0, 10) : null, // SOW-120
     authorNote: visibility === 'public' ? (trimOrNull(raw.authorNote)?.slice(0, 4000) ?? null) : null,
     title: trimOrNull(raw.title),

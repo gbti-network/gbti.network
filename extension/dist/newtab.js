@@ -10939,6 +10939,8 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
   var X_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
   var BLUESKY_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it.';
   var BLUESKY_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it.';
+  var MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+  var MASTODON_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
   var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
     discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
     "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
@@ -10946,7 +10948,8 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
     devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
     x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
-    bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB })
+    bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
+    mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB })
   });
   var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
     enabled: false,
@@ -14640,6 +14643,16 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
     s = s.replace(/^@/, "").trim();
     return /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$/i.test(s) ? s : "";
   }
+  function mastodonHandleFrom(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const domain = /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$/i;
+    const url = raw.match(/^https?:\/\/([^/]+)\/@([A-Za-z0-9_]+)\/?$/i);
+    if (url && domain.test(url[1])) return `${url[2]}@${url[1].toLowerCase()}`;
+    const parts = raw.replace(/^@/, "").split("@");
+    if (parts.length === 2 && /^[A-Za-z0-9_]+$/.test(parts[0]) && domain.test(parts[1])) return `${parts[0]}@${parts[1].toLowerCase()}`;
+    return "";
+  }
   function toHashtag(label) {
     const parts = String(label || "").split(/[^A-Za-z0-9]+/).filter(Boolean);
     if (!parts.length) return "";
@@ -14695,6 +14708,9 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       // full name. On Bluesky a plain @handle is not a live mention; the bluesky adapter adds a resolved-DID
       // FACET over this handle so it links + notifies.
       memberblueskyhandle: blueskyHandleFrom(item.authorBluesky) ? `@${blueskyHandleFrom(item.authorBluesky)}` : fullName,
+      // SOW-123: {member-mastodon-handle} = the member's Mastodon @user@instance (from profile links.mastodon),
+      // else the full name. Mastodon renders @user@instance in status text as a native mention (no facet).
+      membermastodonhandle: mastodonHandleFrom(item.authorMastodon) ? `@${mastodonHandleFrom(item.authorMastodon)}` : fullName,
       categoryhashtag: toHashtag(item.category),
       tagshashtags: hashtagList(item.tags),
       hashtags: hashtagList([item.category, ...Array.isArray(item.tags) ? item.tags : []])
@@ -14820,6 +14836,8 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
         // SOW-120: the public profile X handle ({member-x-handle})
         authorBluesky: d.gbtiBluesky || void 0,
         // SOW-122: the public profile Bluesky handle ({member-bluesky-handle})
+        authorMastodon: d.gbtiMastodon || void 0,
+        // SOW-123: the public profile Mastodon handle ({member-mastodon-handle})
         tags: d.gbtiTags ? d.gbtiTags.split(",").map((t) => t.trim()).filter(Boolean) : void 0,
         // SOW-120: {tags-hashtags}
         authorNote: this._authorNote || void 0,
@@ -15569,9 +15587,10 @@ To follow {fullName}'s work more closely, consider joining our network and subsc
       const authorDiscord = this._author?.entry?.links?.discord || "";
       const authorX = this._author?.entry?.links?.x || "";
       const authorBluesky = this._author?.entry?.links?.bluesky || "";
+      const authorMastodon = this._author?.entry?.links?.mastodon || "";
       const tagsList = Array.isArray(this._fm?.tags) ? this._fm.tags : Array.isArray(it.tags) ? it.tags : [];
       const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
-      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS38) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);

@@ -59,6 +59,23 @@ export function blueskyHandleFrom(value) {
 }
 
 /**
+ * SOW-123: extract a Mastodon fediverse address (`user@instance`) from a profile value. Accepts an instance
+ * profile URL (`https://<instance>/@<user>`), a bare "@user@instance", or a bare "user@instance". Returns ''
+ * for anything implausible. The instance must be a domain; the user is letters/digits/underscore. Mastodon
+ * renders "@user@instance" in status text as a native mention, so no facet is needed. Pure.
+ */
+export function mastodonHandleFrom(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const domain = /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?)+$/i;
+  const url = raw.match(/^https?:\/\/([^/]+)\/@([A-Za-z0-9_]+)\/?$/i);
+  if (url && domain.test(url[1])) return `${url[2]}@${url[1].toLowerCase()}`;
+  const parts = raw.replace(/^@/, '').split('@');
+  if (parts.length === 2 && /^[A-Za-z0-9_]+$/.test(parts[0]) && domain.test(parts[1])) return `${parts[0]}@${parts[1].toLowerCase()}`;
+  return '';
+}
+
+/**
  * SOW-120 follow-up: normalize a free-form tag or category label into a single hashtag token. Splits on any
  * non-alphanumeric run, capitalizes the first letter of each part (so a multi-word label survives as one
  * token and a single word keeps its casing, preserving acronyms), and prefixes '#'. Returns '' when nothing
@@ -107,6 +124,7 @@ function hashtagList(labels) {
  *   {short-description}  the item's shortDescription (carried as the queue item blurb)
  *   {member-x-handle}  the member's X handle as @handle (from profile links.x), else the full name (SOW-120)
  *   {member-bluesky-handle}  the member's Bluesky handle as @handle (from profile links.bluesky), else the full name (SOW-122)
+ *   {member-mastodon-handle}  the member's Mastodon @user@instance (from profile links.mastodon), else the full name (SOW-123)
  *   {category-hashtag}  the category as a single hashtag, e.g. #DevOps (SOW-120)
  *   {tags-hashtags}   the item's tags as hashtags, e.g. #AI #Prompts (SOW-120)
  *   {hashtags}       the category plus the tags, de-duplicated, as one hashtag set (SOW-120)
@@ -159,6 +177,9 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
     // full name. On Bluesky a plain @handle is not a live mention; the bluesky adapter adds a resolved-DID
     // FACET over this handle so it links + notifies.
     memberblueskyhandle: blueskyHandleFrom(item.authorBluesky) ? `@${blueskyHandleFrom(item.authorBluesky)}` : fullName,
+    // SOW-123: {member-mastodon-handle} = the member's Mastodon @user@instance (from profile links.mastodon),
+    // else the full name. Mastodon renders @user@instance in status text as a native mention (no facet).
+    membermastodonhandle: mastodonHandleFrom(item.authorMastodon) ? `@${mastodonHandleFrom(item.authorMastodon)}` : fullName,
     categoryhashtag: toHashtag(item.category),
     tagshashtags: hashtagList(item.tags),
     hashtags: hashtagList([item.category, ...(Array.isArray(item.tags) ? item.tags : [])]),
