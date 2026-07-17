@@ -161,8 +161,12 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   if (!r.available) { console.error(`promote-popular: --apply needs CF creds (${r.reason})`); return { promoted: 0, reason: r.reason }; }
   let watermarked = 0;
   for (let i = 0; i < selections.length; i++) {
+    // Watermark ONLY when the popular item is (or is already) in the queue. With the trigger-scoped dedupeKey a
+    // 'duplicate' now means THIS popular promotion is already queued (never a collision with the publish item),
+    // so both outcomes mean "promoted"; a refused/errored enqueue is retried next run. Store a JSON OBJECT so the
+    // shared KV lister (listKvByPrefix keeps only object values) actually retains the watermark on read-back.
     if (r.results[i]?.enqueued || r.results[i]?.reason === 'duplicate') {
-      try { await putKvValue({ key: POPULAR_PROMOTED_KEY(selections[i].item.targetSlug), value: String(Date.now()), env, fetchImpl }); watermarked++; } catch { /* retried next run */ }
+      try { await putKvValue({ key: POPULAR_PROMOTED_KEY(selections[i].item.targetSlug), value: JSON.stringify({ promotedAt: Date.now() }), env, fetchImpl }); watermarked++; } catch { /* retried next run */ }
     }
   }
   console.log(`promote-popular: enqueued ${r.enqueued}/${selections.length}, watermarked ${watermarked}`);

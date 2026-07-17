@@ -39,10 +39,13 @@ export async function drainSyndication(env, {
   // SOW-125: a `ready` adapter is auto-`on` for THIS item's type. A `ready` channel set to off/popular for the
   // type is recorded as a terminal skip (never posts). A per-channel hold that has not elapsed leaves the channel
   // HOLDING for a later tick. The `channelHoldMs` is read from the LIVE config, so a mid-flight hold change applies.
-  // SOW-126: a `popular` cell is deliverable ONLY for an item the engagement engine promoted (trigger:'popular'),
-  // so a plain publish never reaches a `popular` channel while a promoted item reaches exactly its popular ones.
-  const onFor = (item, name) => isAutoOn(cfg, item.source, name)
-    || (item?.trigger === 'popular' && autoModeFor(cfg, item.source, name) === 'popular');
+  // SOW-126: the trigger decides which cells deliver, EXCLUSIVELY. A `popular`-promoted item delivers ONLY to
+  // its `popular` channels (never the `on` ones), so a promotion can never re-post to or resurrect an `on`
+  // channel; a plain publish delivers ONLY to its `on` channels (never a `popular` one). This keeps the two
+  // syndications of one piece of content strictly separate.
+  const onFor = (item, name) => (item?.trigger === 'popular'
+    ? autoModeFor(cfg, item.source, name) === 'popular'
+    : isAutoOn(cfg, item.source, name));
   // SOW-125: the per-channel hold is mode-aware. In the APPROVAL model an approved item posts "now" (an explicit
   // override still staggers from approval, but a no-override channel is 0 -> the next tick); in auto-hold mode the
   // delay is the override or the global hold. `channelDue` uses the approvedAt baseline, so these compose.

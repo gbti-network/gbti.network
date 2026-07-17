@@ -340,3 +340,32 @@ test('SOW-126: a trigger:popular item posts to its popular channel; a plain item
   assert.equal(item2.perChannel.discord.reason, 'auto-off');
   assert.equal(item2.status, 'sent');
 });
+
+// SOW-126 review MUST-FIX: for a type with BOTH an `on` and a `popular` channel, the publish item and the
+// popular promotion are DISTINCT queue items (trigger-scoped dedupe), and each delivers EXCLUSIVELY to its own
+// channels: publish -> the `on` channel only; popular -> the `popular` channel only (never resurrecting `on`).
+test('SOW-126: on+popular type -> publish hits only on, popular promotion hits only popular (not swallowed, not leaked)', async () => {
+  const cfgJson = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
+    channels: { discord: true, bluesky: true }, auto_matrix: { post: { discord: 'on', bluesky: 'popular' } } } });
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfgJson });
+  // 1) Publish the post (trigger 'publish'): delivers to discord (on), never bluesky (popular).
+  const rp = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'members/a/posts/x', url: 'https://gbti.network/articles/x/', visibility: 'public', trigger: 'publish' }, { kv, now: at(0) });
+  const dP = [], bP = [];
+  await drainSyndication(bskyEnv(), { kv, now: at(AFTER_HOLD), adapters: twoChannelAdapters(dP, bP) });
+  assert.equal(dP.length, 1, 'publish posts to the on channel');
+  assert.equal(bP.length, 0, 'publish never posts to the popular channel');
+  assert.equal((await getItem(kv, rp.id)).status, 'sent');
+  // 2) The SAME post becomes popular -> the promoter enqueues trigger:'popular'. It must NOT be swallowed by the
+  //    still-active publish item's dedupe (distinct key), and must deliver ONLY to bluesky (popular), not discord.
+  const rr = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'members/a/posts/x', url: 'https://gbti.network/articles/x/', visibility: 'public', trigger: 'popular' }, { kv, now: at(AFTER_HOLD) });
+  assert.equal(rr.enqueued, true, 'the popular promotion is a distinct item, not a duplicate of the publish item');
+  assert.notEqual(rr.id, rp.id);
+  const dR = [], bR = [];
+  await drainSyndication(bskyEnv(), { kv, now: at(AFTER_HOLD * 2), adapters: twoChannelAdapters(dR, bR) });
+  assert.equal(bR.length, 1, 'the popular promotion posts to the popular channel');
+  assert.equal(dR.length, 0, 'the popular promotion never re-posts to the on channel');
+  const promoted = await getItem(kv, rr.id);
+  assert.equal(promoted.perChannel.bluesky.status, 'sent');
+  assert.equal(promoted.perChannel.discord.reason, 'auto-off');
+  assert.equal(promoted.status, 'sent');
+});

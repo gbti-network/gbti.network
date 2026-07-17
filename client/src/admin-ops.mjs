@@ -19,9 +19,9 @@ import { addSource as addSourceEdit, removeSource as removeSourceEdit, setSource
 import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabled as setQuoteEnabledEdit, QuoteEditError } from '../../membership/quote-edits.mjs'; // SOW-063 P3
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // SOW-087
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
-import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111 + SOW-088
+import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setContentEngagement as setContentEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-126
 import { addCouponEdit, updateCouponEdit, CouponEditError } from '../../membership/coupon-edits.mjs'; // SOW-119
-import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-125
+import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, contentEngagement, CONTENT_ENGAGEMENT_SIGNALS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-125 + SOW-126
 import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 
@@ -667,6 +667,25 @@ export async function setNewsEngagementSettings(ctx, { enabled, openThreshold, t
     message: 'Set the news engagement auto-share settings',
     title: 'Set news auto-share settings',
     noopMsg: 'news engagement settings unchanged',
+    errType: TemplateEditError,
+  });
+}
+
+// SOW-126: the content engagement auto-share settings (house/syndication-config.yml `content_engagement`),
+// the `popular` matrix engine's tunables. Same shape as the news engagement settings above.
+
+/** Read the normalized content engagement settings for the manager UI. Public data; read-only. */
+export async function getContentEngagementSettings(ctx) {
+  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
+  return { settings: { ...contentEngagement(syndicationConfigFromParsed(parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS], signals: [...CONTENT_ENGAGEMENT_SIGNALS] };
+}
+
+export async function setContentEngagementSettings(ctx, { enabled, threshold, tier, signals } = {}) {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setContentEngagementEdit(parsed, { enabled, threshold, tier, signals }, actionCtx(ctx)), {
+    branch: 'gbti/content-engagement-set',
+    message: 'Set content engagement auto-share settings',
+    title: 'Set content engagement auto-share settings',
+    noopMsg: 'content engagement settings unchanged',
     errType: TemplateEditError,
   });
 }

@@ -160,6 +160,8 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     setSyndicationTemplates: ({ edits }) => request('POST', '/api/admin', { action: 'syndication-templates-set', edits }), // SOW-088: the batch save (one PR)
     newsEngagementSettings: () => request('GET', '/api/news-engagement'), // SOW-111: { settings, tiers }
     setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request('POST', '/api/admin', { action: 'news-engagement-set', enabled, openThreshold, tier, commentAutopost }), // SOW-111
+    contentEngagementSettings: () => request('GET', '/api/content-engagement'), // SOW-126: { settings, tiers, signals }
+    setContentEngagementSettings: ({ enabled, threshold, tier, signals }) => request('POST', '/api/admin', { action: 'content-engagement-set', enabled, threshold, tier, signals }), // SOW-126
     syndicationSettings: () => request('GET', '/api/syndication-settings'), // SOW-088: { settings, channelNames }
     setSyndicationSettings: (p) => request('POST', '/api/admin', { action: 'syndication-settings-set', ...p }), // SOW-088
     addQuote: ({ text, author }) => request('POST', '/api/admin', { action: 'quote-add', text, author }), // SOW-063 P3

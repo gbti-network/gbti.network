@@ -88,7 +88,7 @@ export async function removeFromPending(kv, id) {
 export async function enqueue(env, input, { kv = env?.SIGNUP_KV, now = Date.now, cfg = null } = {}) {
   if (!kv) return { enqueued: false, reason: 'the syndication store is not configured' };
   const config = cfg ?? (await readSyndicationConfig(kv));
-  const key = dedupeKey({ source: input?.source, targetSlug: input?.targetSlug });
+  const key = dedupeKey({ source: input?.source, targetSlug: input?.targetSlug, trigger: input?.trigger }); // SOW-126: a popular promotion keys separately from the publish item
 
   // Idempotency: a still-active item with this dedupeKey blocks a duplicate. 'approved' counts as active (it is
   // about to post), so a re-enqueue while it is awaiting the drain cannot create a second item that double-posts.

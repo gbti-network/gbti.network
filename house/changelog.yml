@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 26
+    date: 2026-07-17
+    type: build
+    title: Auto-share content when it gets popular
+    notes:
+      - A content type set to Popular on a channel now auto-shares once enough distinct members engage with it (opening the expanded view counts by default).
+      - Tune the threshold and which interactions count in the admin Content engagement card. Off by default.
+
+  - version: 0.1.0
     build: 25
     date: 2026-07-16
     type: build

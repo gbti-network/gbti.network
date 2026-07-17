@@ -6563,12 +6563,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       try {
-        const [channels, flags, templates, engagement, pipeline] = await Promise.all([
+        const [channels, flags, templates, engagement, pipeline, contentEng] = await Promise.all([
           this.client.contentChannelPool(),
           this.client.moderationFlagPool(),
           this.client.syndicationTemplatePool(),
           this.client.newsEngagementSettings ? this.client.newsEngagementSettings() : null,
-          this.client.syndicationSettings ? this.client.syndicationSettings().catch(() => null) : null
+          this.client.syndicationSettings ? this.client.syndicationSettings().catch(() => null) : null,
+          this.client.contentEngagementSettings ? this.client.contentEngagementSettings().catch(() => null) : null
         ]);
         this._mapCount = (channels?.channels || []).length;
         this._lists = flags?.lists || {};
@@ -6578,6 +6579,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._channelTemplatesStub = templates?.channelTemplatesStub || {};
         this._engagement = engagement?.settings || null;
         this._tiers = engagement?.tiers || ["paid", "paid-trial", "signed-in"];
+        this._contentEng = contentEng?.settings || null;
+        this._contentTiers = contentEng?.tiers || ["paid", "paid-trial", "signed-in"];
+        this._contentSignals = contentEng?.signals || ["opens", "favorites", "upvotes", "comments"];
         this._pipeline = pipeline?.settings || null;
         this._work = {};
         this._base = {};
@@ -6600,6 +6604,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._tmplDirty = /* @__PURE__ */ new Set();
         this._pipeDirty = false;
         this._engDirty = false;
+        this._contentEngDirty = false;
         this._curCh = this._curCh && this._work[this._curCh] ? this._curCh : "discord";
         this._termTab = this._termTab || Object.keys(this._lists)[0] || "political";
         this._loaded = true;
@@ -6756,6 +6761,44 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <button class="btn btn-primary" type="button" data-save-eng disabled><svg viewBox="0 0 24 24"><use href="#c-check"/></svg> Save changes</button></div>
     </section>`;
     }
+    // SOW-126: the content engagement auto-share card (the `popular` matrix engine). Mirrors _autoshareCard: an
+    // Enable select, a distinct-member threshold, the counting tier, and the row of engagement signals that count.
+    _contentEngagementCard() {
+      const e = this._contentEng;
+      if (!e) return "";
+      const tierLabel = { paid: "Paid members only", "paid-trial": "Trial + paid", "signed-in": "Any signed-in member" };
+      const tierOpts = (this._contentTiers || []).map((t) => `<option value="${esc(t)}"${e.tier === t ? " selected" : ""}>${esc(tierLabel[t] || t)}</option>`).join("");
+      const signalLabel = { opens: "Opens", favorites: "Favorites", upvotes: "Upvotes", comments: "Comments" };
+      const signals = e.signals || {};
+      const sigChips = (this._contentSignals || ["opens", "favorites", "upvotes", "comments"]).map((s) => `<span class="chan${signals[s] ? " on" : ""}" data-ceng-signal="${esc(s)}" role="checkbox" aria-checked="${signals[s] ? "true" : "false"}" tabindex="0"><span class="cbx"><svg viewBox="0 0 24 24"><use href="#c-check"/></svg></span>${esc(signalLabel[s] || s)}</span>`).join("");
+      return `<section class="card" id="sec-content-autoshare" data-sec>
+      <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg></span>
+        <div><h2>Content engagement auto-share</h2><p>Promotes a member content item to auto-share on its Popular channels once enough members engage.</p></div>
+        <span class="sp"></span>${this._pill(false)}</div>
+      <div class="card-b">
+        <div class="fgrid">
+          <div class="field"><label>Auto-share</label>
+            <select class="ctrl" data-ceng-enabled>
+              <option value="true"${e.enabled ? " selected" : ""}>On</option>
+              <option value="false"${e.enabled ? "" : " selected"}>Off</option>
+            </select>
+            <span class="hint">Master switch for the Popular promotion engine. Applies after the next reconcile mirror sync.</span></div>
+          <div class="field"><label>Member threshold</label>
+            <div class="sfxwrap"><input class="ctrl" type="number" min="1" max="1000" value="${esc(String(e.threshold))}" data-ceng-threshold /><span class="sfx">members</span></div>
+            <span class="hint">Distinct members who must engage. Banned accounts never count.</span></div>
+          <div class="field"><label>Counts which members</label>
+            <select class="ctrl" data-ceng-tier>${tierOpts}</select>
+            <span class="hint">Membership tier that qualifies toward the threshold.</span></div>
+        </div>
+        <div class="field" style="margin-top:18px"><label>Signals that count</label>
+          <div class="chgroup">${sigChips}</div>
+          <span class="hint">When enough distinct members engage with a member content item, the reconcile promotes it to auto-share on its Popular channels. Opens counts a member opening the expanded reader view.</span></div>
+      </div>
+      <div class="cardfoot"><span class="fmsg" data-fmsg></span>
+        <button class="btn btn-ghost" type="button" data-discard="ceng">Discard</button>
+        <button class="btn btn-primary" type="button" data-save-ceng disabled><svg viewBox="0 0 24 24"><use href="#c-check"/></svg> Save changes</button></div>
+    </section>`;
+    }
     _wordlistsCard() {
       const names = Object.keys(this._lists || {});
       if (!names.length) return "";
@@ -6797,7 +6840,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <a data-go="sec-activity" class="on"><svg viewBox="0 0 24 24"><use href="#c-kanban"/></svg>Publishing Activity</a>
         <a data-go="sec-pipeline"><svg viewBox="0 0 24 24"><use href="#c-pipe"/></svg>Pipeline</a>
         <a data-go="sec-templates"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg>Templates</a>
-        <a data-go="sec-autoshare"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg>Auto-share</a>
+        <a data-go="sec-autoshare"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg>News auto-share</a>
+        <a data-go="sec-content-autoshare"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg>Content auto-share</a>
         <a data-go="sec-words"><svg viewBox="0 0 24 24"><use href="#c-shield"/></svg>Word lists</a>
       </nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
@@ -6805,6 +6849,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ${this._pipelineCard()}
       ${this._templatesCard()}
       ${this._autoshareCard()}
+      ${this._contentEngagementCard()}
       ${this._wordlistsCard()}
     </div>`);
       this._wire();
@@ -6818,7 +6863,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         pill.className = `pill${on ? " dirty" : ""}`;
         pill.innerHTML = `<span class="dot"></span>${on ? "Unsaved changes" : "Saved"}`;
       }
-      const save = sec.querySelector("[data-save-pipe],[data-save-tmpl],[data-save-eng]");
+      const save = sec.querySelector("[data-save-pipe],[data-save-tmpl],[data-save-eng],[data-save-ceng]");
       if (save) save.disabled = !on;
       const m = sec.querySelector("[data-fmsg]");
       if (m && on) m.textContent = "";
@@ -6939,6 +6984,35 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         this._run(() => this.client.setNewsEngagement({ enabled, openThreshold, tier, commentAutopost }));
       });
+      ["[data-ceng-enabled]", "[data-ceng-threshold]", "[data-ceng-tier]"].forEach((sel) => {
+        const el = this.$(sel);
+        if (el) {
+          el.addEventListener("change", () => {
+            this._contentEngDirty = true;
+            this._markDirty("sec-content-autoshare");
+          });
+          el.addEventListener("input", () => {
+            this._contentEngDirty = true;
+            this._markDirty("sec-content-autoshare");
+          });
+        }
+      });
+      this.$$("[data-ceng-signal]").forEach((ch) => {
+        const flip = () => {
+          ch.classList.toggle("on");
+          ch.setAttribute("aria-checked", ch.classList.contains("on") ? "true" : "false");
+          this._contentEngDirty = true;
+          this._markDirty("sec-content-autoshare");
+        };
+        ch.addEventListener("click", flip);
+        ch.addEventListener("keydown", (e) => {
+          if (e.key === " " || e.key === "Enter") {
+            e.preventDefault();
+            flip();
+          }
+        });
+      });
+      this.on("[data-save-ceng]", "click", () => this._saveContentEngagement());
       this.$$("[data-discard]").forEach((b) => b.addEventListener("click", () => {
         this._loaded = false;
         this._msg = "";
@@ -7019,6 +7093,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         autoMatrix,
         channelHoldMinutes
       }));
+    }
+    // SOW-126: read the content-engagement card back and save it (mirrors the news _save-eng handler).
+    _saveContentEngagement() {
+      const enabled = this.$("[data-ceng-enabled]")?.value === "true";
+      const threshold = Number(this.$("[data-ceng-threshold]")?.value || 0);
+      const tier = this.$("[data-ceng-tier]")?.value || "signed-in";
+      const signals = {};
+      this.$$("[data-ceng-signal]").forEach((ch) => {
+        signals[ch.dataset.cengSignal] = ch.classList.contains("on");
+      });
+      if (!Number.isInteger(threshold) || threshold < 1) {
+        this._msg = "The member threshold must be a whole number of 1 or more.";
+        this.render();
+        return;
+      }
+      this._run(() => this.client.setContentEngagementSettings({ enabled, threshold, tier, signals }));
     }
     async _saveTemplates() {
       this._captureTmpl();
@@ -15281,6 +15371,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-111: { settings, tiers }
       setNewsEngagement: ({ enabled, openThreshold, tier, commentAutopost }) => request("POST", "/api/admin", { action: "news-engagement-set", enabled, openThreshold, tier, commentAutopost }),
       // SOW-111
+      contentEngagementSettings: () => request("GET", "/api/content-engagement"),
+      // SOW-126: { settings, tiers, signals }
+      setContentEngagementSettings: ({ enabled, threshold, tier, signals }) => request("POST", "/api/admin", { action: "content-engagement-set", enabled, threshold, tier, signals }),
+      // SOW-126
       syndicationSettings: () => request("GET", "/api/syndication-settings"),
       // SOW-088: { settings, channelNames }
       setSyndicationSettings: (p) => request("POST", "/api/admin", { action: "syndication-settings-set", ...p }),

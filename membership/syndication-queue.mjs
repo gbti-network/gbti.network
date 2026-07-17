@@ -49,9 +49,14 @@ const normFlags = (v) => {
   return out;
 };
 
-/** The idempotency key for an item: one logical thing being syndicated maps to exactly one key. */
-export function dedupeKey({ source, targetSlug } = {}) {
-  return `${str(source)}:${str(targetSlug)}`;
+/** The idempotency key for an item: one logical thing being syndicated maps to exactly one key. SOW-126: a
+ *  `popular`-promoted item keys SEPARATELY from the same content's publish-time item (`popular:` prefix), so an
+ *  engagement promotion is never collapsed onto a still-active publish item and lost (the two are distinct
+ *  syndications: publish -> the `on` channels, popular -> the `popular` channels). Every other trigger shares
+ *  the base key so a republish/retried enqueue still dedupes. */
+export function dedupeKey({ source, targetSlug, trigger } = {}) {
+  const base = `${str(source)}:${str(targetSlug)}`;
+  return str(trigger) === 'popular' ? `popular:${base}` : base;
 }
 
 /**
@@ -68,9 +73,10 @@ export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HO
   const visibility = input.visibility === 'public' ? 'public' : 'members';
   const enqueuedAt = Number(now());
   const hold = Number.isFinite(Number(holdMs)) ? Math.max(0, Math.floor(Number(holdMs))) : DEFAULT_HOLD_MS;
+  const trigger = trimOrNull(input.trigger) || 'publish'; // SOW-126: a `popular` trigger keys separately (dedupeKey)
 
   return {
-    id: `${dedupeKey({ source, targetSlug })}#${enqueuedAt}`,
+    id: `${dedupeKey({ source, targetSlug, trigger })}#${enqueuedAt}`,
     source,
     targetType: str(input.targetType) || source,
     targetSlug,
@@ -94,7 +100,7 @@ export function buildQueueItem(input = {}, { now = Date.now, holdMs = DEFAULT_HO
     membersOnly: visibility === 'members',
     mention: trimOrNull(input.mention),
     flags: normFlags(input.flags), // SOW-087: moderation word-list hits; non-empty forces approval
-    trigger: trimOrNull(input.trigger) || 'publish',
+    trigger,
     enqueuedAt,
     availableAt: enqueuedAt + hold,
     status: 'pending',

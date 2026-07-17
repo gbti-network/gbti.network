@@ -87,5 +87,10 @@ test('main() --apply: enqueues a popular item with trigger:popular and watermark
   const item = JSON.parse(store.get(itemKeys[0]));
   assert.equal(item.trigger, 'popular');
   assert.equal(item.source, 'share');
-  assert.ok([...store.keys()].some((k) => k.startsWith('popular-promoted:members/alice/shares/x')), 'watermark written');
+  const wmKey = [...store.keys()].find((k) => k.startsWith('popular-promoted:members/alice/shares/x'));
+  assert.ok(wmKey, 'watermark written');
+  // SOW-126 review fix: the watermark must be a JSON OBJECT (a bare number is silently dropped by the KV lister).
+  const wmVal = JSON.parse(store.get(wmKey));
+  assert.equal(typeof wmVal, 'object');
+  assert.ok(Number.isFinite(wmVal.promotedAt));
 });

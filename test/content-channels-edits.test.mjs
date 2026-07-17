@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setChannel, removeChannel, ContentChannelEditError } from '../membership/content-channels-edits.mjs';
 import { addFlagTerm, removeFlagTerm, ModerationFlagEditError } from '../membership/moderation-flags-edits.mjs';
-import { setTemplate, setNewsEngagement, TemplateEditError } from '../membership/syndication-template-edits.mjs';
+import { setTemplate, setNewsEngagement, setContentEngagement, TemplateEditError } from '../membership/syndication-template-edits.mjs';
 import { templateFor, syndicationConfigFromParsed } from '../membership/syndication-config.mjs';
 
 const ctx = { actor: { githubId: '42', login: 'root' }, now: '2026-07-04T00:00:00Z' };
@@ -78,6 +78,31 @@ test('setNewsEngagement patches only the supplied fields, validates hard, and is
   assert.throws(() => setNewsEngagement(doc, { tier: 'everyone' }, ctx), TemplateEditError);
   assert.throws(() => setNewsEngagement(doc, { openThreshold: 0 }, ctx), TemplateEditError);
   assert.throws(() => setNewsEngagement(doc, { enabled: 'yes' }, ctx), TemplateEditError);
+});
+
+// SOW-126: the content engagement (`popular` engine) settings edit (same file as the templates + news engagement).
+test('setContentEngagement patches only changed fields, validates hard, and is idempotent', () => {
+  const doc = { syndication: { enabled: true, templates: { share: 'x' } } };
+  const set = setContentEngagement(doc, { enabled: true, threshold: 5, tier: 'paid', signals: { favorites: true } }, ctx);
+  assert.equal(set.changed, true);
+  // only the supplied signal changed; the fail-closed defaults (opens on, the rest off) fill the rest
+  assert.deepEqual(set.next.syndication.content_engagement, { enabled: true, threshold: 5, tier: 'paid', signals: { opens: true, favorites: true, upvotes: false, comments: false } });
+  assert.equal(set.next.syndication.templates.share, 'x'); // the rest of the config survives
+  assert.equal(set.audit.action, 'content-engagement.set');
+  // idempotent against the normalized current state
+  assert.equal(setContentEngagement(set.next, { threshold: 5, signals: { favorites: true } }, ctx).changed, false);
+  // partial patch: only the tier changes, the threshold + signals are untouched
+  const tierOnly = setContentEngagement(set.next, { tier: 'signed-in' }, ctx);
+  assert.equal(tierOnly.next.syndication.content_engagement.threshold, 5);
+  assert.equal(tierOnly.next.syndication.content_engagement.tier, 'signed-in');
+  assert.equal(tierOnly.next.syndication.content_engagement.signals.favorites, true);
+  // hard validation
+  assert.throws(() => setContentEngagement(doc, { tier: 'everyone' }, ctx), TemplateEditError);
+  assert.throws(() => setContentEngagement(doc, { threshold: 0 }, ctx), TemplateEditError);
+  assert.throws(() => setContentEngagement(doc, { threshold: 1001 }, ctx), TemplateEditError);
+  assert.throws(() => setContentEngagement(doc, { enabled: 'yes' }, ctx), TemplateEditError);
+  assert.throws(() => setContentEngagement(doc, { signals: { bogus: true } }, ctx), TemplateEditError);
+  assert.throws(() => setContentEngagement(doc, { signals: { opens: 'yes' } }, ctx), TemplateEditError);
 });
 
 // SOW-100: the batch apply (N pending workspace edits -> ONE house PR). Uses the admin-ops surface.

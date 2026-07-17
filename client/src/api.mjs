@@ -67,7 +67,7 @@ import {
   getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, getQuotePool,
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
-  getNewsEngagementSettings, setNewsEngagementSettings, getSyndicationSettings, setSyndicationSettings,
+  getNewsEngagementSettings, setNewsEngagementSettings, getContentEngagementSettings, setContentEngagementSettings, getSyndicationSettings, setSyndicationSettings,
   getCouponPool, addCoupon, updateCoupon,
 } from './admin-ops.mjs';
 
@@ -93,6 +93,7 @@ const ADMIN_ACTIONS = {
   'syndication-template-set': setSyndicationTemplate, // SOW-087: the per-type Discord template
   'syndication-templates-set': setSyndicationTemplates, // SOW-088: the admin card batch (one PR per Save)
   'news-engagement-set': setNewsEngagementSettings, // SOW-111: the news auto-share settings
+  'content-engagement-set': setContentEngagementSettings, // SOW-126: the content auto-share (`popular` engine) settings
   'syndication-settings-set': setSyndicationSettings, // SOW-088: pipeline master/approval/hold/channel switches
   'coupon-add': addCoupon, // SOW-119: the coupon registry (house/coupons.yml)
   'coupon-update': updateCoupon, // SOW-119
@@ -198,6 +199,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/moderation-flag-pool') return run(() => getModerationFlagPool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/syndication-template-pool') return run(() => getSyndicationTemplatePool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/news-engagement') return run(() => getNewsEngagementSettings(ctx)); // SOW-111
+  if (method === 'GET' && pathname === '/api/content-engagement') return run(() => getContentEngagementSettings(ctx)); // SOW-126
   if (method === 'GET' && pathname === '/api/syndication-settings') return run(() => getSyndicationSettings(ctx)); // SOW-088
   if (method === 'GET' && pathname === '/api/open-pulls') return run(() => getOpenPulls(ctx)); // SOW-038 P2: open content-PR queue (admin-gated)
   if (method === 'GET' && pathname === '/api/syndication') return run(() => getSyndicationQueue(ctx)); // SOW-058: superadmin syndication tracker

@@ -21149,6 +21149,9 @@ function syndicationConfigFromParsed(parsed) {
 function newsEngagement(cfg) {
   return normalizeNewsEngagement(cfg?.news_engagement);
 }
+function contentEngagement(cfg) {
+  return normalizeContentEngagement(cfg?.content_engagement);
+}
 
 // membership/syndication-template-edits.mjs
 var TemplateEditError = class extends Error {
@@ -21209,6 +21212,54 @@ function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAutopost 
     open_threshold: next.open_threshold,
     tier: next.tier,
     comment_autopost: next.comment_autopost
+  };
+  return { next: d, changed: true, audit: audit2({ ...next }) };
+}
+function setContentEngagement(doc, { enabled, threshold, tier, signals } = {}, ctx = {}) {
+  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
+  if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
+  const cur = contentEngagement({ content_engagement: d.syndication.content_engagement });
+  const next = { ...cur, signals: { ...cur.signals } };
+  if (enabled !== void 0) {
+    if (typeof enabled !== "boolean") throw new TemplateEditError("enabled must be true or false");
+    next.enabled = enabled;
+  }
+  if (threshold !== void 0) {
+    const n = Number(threshold);
+    if (!Number.isInteger(n) || n < 1 || n > 1e3) throw new TemplateEditError("threshold must be an integer from 1 to 1000");
+    next.threshold = n;
+  }
+  if (tier !== void 0) {
+    const t = String(tier || "").trim().toLowerCase();
+    if (!NEWS_ENGAGEMENT_TIERS.includes(t)) throw new TemplateEditError(`tier must be one of: ${NEWS_ENGAGEMENT_TIERS.join(", ")}`);
+    next.tier = t;
+  }
+  if (signals !== void 0) {
+    if (!signals || typeof signals !== "object" || Array.isArray(signals)) throw new TemplateEditError("signals must be an object of { signal: boolean }");
+    for (const [name, on] of Object.entries(signals)) {
+      if (!CONTENT_ENGAGEMENT_SIGNALS.includes(name)) throw new TemplateEditError(`unknown signal "${name}"`);
+      if (typeof on !== "boolean") throw new TemplateEditError(`signal "${name}" must be true or false`);
+      next.signals[name] = on;
+    }
+  }
+  const audit2 = (detail) => {
+    const a = ctx?.actor || null;
+    return {
+      at: isoOf7(ctx?.now),
+      actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+      action: "content-engagement.set",
+      target: { file: "house/syndication-config.yml" },
+      detail
+    };
+  };
+  const sameSignals = CONTENT_ENGAGEMENT_SIGNALS.every((s) => next.signals[s] === cur.signals[s]);
+  const same = next.enabled === cur.enabled && next.threshold === cur.threshold && next.tier === cur.tier && sameSignals;
+  if (same) return { next: d, changed: false, audit: audit2({ ...next, noop: true }) };
+  d.syndication.content_engagement = {
+    enabled: next.enabled,
+    threshold: next.threshold,
+    tier: next.tier,
+    signals: { ...next.signals }
   };
   return { next: d, changed: true, audit: audit2({ ...next }) };
 }
@@ -21915,9 +21966,22 @@ async function setNewsEngagementSettings(ctx, { enabled, openThreshold, tier, co
     errType: TemplateEditError
   });
 }
+async function getContentEngagementSettings(ctx) {
+  const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
+  return { settings: { ...contentEngagement(syndicationConfigFromParsed(parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS], signals: [...CONTENT_ENGAGEMENT_SIGNALS] };
+}
+async function setContentEngagementSettings(ctx, { enabled, threshold, tier, signals } = {}) {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setContentEngagement(parsed, { enabled, threshold, tier, signals }, actionCtx(ctx)), {
+    branch: "gbti/content-engagement-set",
+    message: "Set content engagement auto-share settings",
+    title: "Set content engagement auto-share settings",
+    noopMsg: "content engagement settings unchanged",
+    errType: TemplateEditError
+  });
+}
 
 // extension/src/ext-dispatch.mjs
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "syndication-settings-set": setSyndicationSettings2 };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "content-engagement-set": setContentEngagementSettings, "syndication-settings-set": setSyndicationSettings2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -21981,6 +22045,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/moderation-flag-pool") return ok(await getModerationFlagPool(ctx));
     if (pathname === "/api/syndication-template-pool") return ok(await getSyndicationTemplatePool(ctx));
     if (pathname === "/api/news-engagement") return ok(await getNewsEngagementSettings(ctx));
+    if (pathname === "/api/content-engagement") return ok(await getContentEngagementSettings(ctx));
     if (pathname === "/api/syndication-settings") return ok(await getSyndicationSettings(ctx));
     const username = id?.username;
     if (!username) throw new OperationError("no-identity", "no signed-in identity; sign in first");

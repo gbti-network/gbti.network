@@ -38,8 +38,8 @@ export function normalizeContentOpens(raw) {
   return r;
 }
 
-/** Record one member's open. PURE. Re-opening is a no-op beyond the updatedAt stamp (the set dedupes). The
- *  author of the item is excluded by the caller (their own open must not count toward their item's popularity). */
+/** Record one member's open. PURE. Re-opening is a no-op beyond the updatedAt stamp (the set dedupes). The item
+ *  author is NOT excluded (an accepted, bounded self-open inflation; see the promoter header), unlike upvotes. */
 export function applyOpen(record, { openerId }, { now = Date.now } = {}) {
   const opener = id(openerId);
   if (!opener) throw new ContentOpenError('openerId is required');

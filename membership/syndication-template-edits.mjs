@@ -5,7 +5,7 @@
 //
 // SECURITY: this only COMPUTES the file edit. CODEOWNERS + the gate are the real boundary.
 
-import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement, syndicationConfigFromParsed, AUTO_TYPES, MATRIX_CHANNELS, AUTO_MODES } from './syndication-config-core.mjs';
+import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement, CONTENT_ENGAGEMENT_SIGNALS, contentEngagement, syndicationConfigFromParsed, AUTO_TYPES, MATRIX_CHANNELS, AUTO_MODES } from './syndication-config-core.mjs';
 
 export class TemplateEditError extends Error {}
 
@@ -74,6 +74,60 @@ export function setNewsEngagement(doc, { enabled, openThreshold, tier, commentAu
     open_threshold: next.open_threshold,
     tier: next.tier,
     comment_autopost: next.comment_autopost,
+  };
+  return { next: d, changed: true, audit: audit({ ...next }) };
+}
+
+/**
+ * SOW-126: SET the content engagement auto-share settings (the `popular` matrix engine's tunables). A partial
+ * patch: only the supplied fields change. Values are validated hard (a bad tier, threshold, or signal is an
+ * error, never silently coerced into policy). Idempotent against the CURRENT normalized settings.
+ */
+export function setContentEngagement(doc, { enabled, threshold, tier, signals } = {}, ctx = {}) {
+  const d = structuredClone(doc && typeof doc === 'object' ? doc : {});
+  if (!d.syndication || typeof d.syndication !== 'object' || Array.isArray(d.syndication)) d.syndication = {};
+  const cur = contentEngagement({ content_engagement: d.syndication.content_engagement });
+  const next = { ...cur, signals: { ...cur.signals } };
+  if (enabled !== undefined) {
+    if (typeof enabled !== 'boolean') throw new TemplateEditError('enabled must be true or false');
+    next.enabled = enabled;
+  }
+  if (threshold !== undefined) {
+    const n = Number(threshold);
+    if (!Number.isInteger(n) || n < 1 || n > 1000) throw new TemplateEditError('threshold must be an integer from 1 to 1000');
+    next.threshold = n;
+  }
+  if (tier !== undefined) {
+    const t = String(tier || '').trim().toLowerCase();
+    if (!NEWS_ENGAGEMENT_TIERS.includes(t)) throw new TemplateEditError(`tier must be one of: ${NEWS_ENGAGEMENT_TIERS.join(', ')}`);
+    next.tier = t;
+  }
+  if (signals !== undefined) {
+    if (!signals || typeof signals !== 'object' || Array.isArray(signals)) throw new TemplateEditError('signals must be an object of { signal: boolean }');
+    for (const [name, on] of Object.entries(signals)) {
+      if (!CONTENT_ENGAGEMENT_SIGNALS.includes(name)) throw new TemplateEditError(`unknown signal "${name}"`);
+      if (typeof on !== 'boolean') throw new TemplateEditError(`signal "${name}" must be true or false`);
+      next.signals[name] = on;
+    }
+  }
+  const audit = (detail) => {
+    const a = ctx?.actor || null;
+    return {
+      at: isoOf(ctx?.now),
+      actor: a ? { github_id: a.githubId != null ? String(a.githubId) : (a.github_id != null ? String(a.github_id) : null), login: a.login ?? null } : null,
+      action: 'content-engagement.set',
+      target: { file: 'house/syndication-config.yml' },
+      detail,
+    };
+  };
+  const sameSignals = CONTENT_ENGAGEMENT_SIGNALS.every((s) => next.signals[s] === cur.signals[s]);
+  const same = next.enabled === cur.enabled && next.threshold === cur.threshold && next.tier === cur.tier && sameSignals;
+  if (same) return { next: d, changed: false, audit: audit({ ...next, noop: true }) };
+  d.syndication.content_engagement = {
+    enabled: next.enabled,
+    threshold: next.threshold,
+    tier: next.tier,
+    signals: { ...next.signals },
   };
   return { next: d, changed: true, audit: audit({ ...next }) };
 }
