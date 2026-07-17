@@ -14,6 +14,13 @@ main = "index.mjs"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
 
+# SOW-124: retain Worker logs (the wlog() diagnostic lines + the console.error paths) in the Cloudflare
+# dashboard, not only via a live `wrangler tail`. Mirrors workers/news. head_sampling_rate=1 keeps all traces
+# (this Worker's request volume is low). Re-declared under [env.production] because wrangler does not inherit.
+[observability]
+enabled = true
+head_sampling_rate = 1
+
 [vars]
 # Public origin of this Worker (no trailing slash). Used to build OAuth redirect URIs and the
 # checkout return URLs.
@@ -201,3 +208,8 @@ dataset = "gbti_ext_usage"
 # SOW-058: the syndication drain cron for production (wrangler does not inherit the top-level [triggers]).
 [env.production.triggers]
 crons = ["*/5 * * * *"]
+
+# SOW-124: retain production Worker logs in the dashboard (wrangler does not inherit the top-level block).
+[env.production.observability]
+enabled = true
+head_sampling_rate = 1

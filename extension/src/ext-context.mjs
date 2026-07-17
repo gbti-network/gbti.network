@@ -6,6 +6,7 @@ import { createGithubReader } from './github-reader.mjs';
 import { createRepoClient } from '../../client/src/github-repo.mjs';
 import { resolveMembership } from '../../client/src/membership.mjs';
 import { SIGNUP_BASE } from '../../client/src/signup-base.mjs';
+import { devlog } from './devlog.mjs';
 
 export const UPSTREAM = 'gbti-network/gbti.network';
 
@@ -23,7 +24,8 @@ export function buildExtContext(store) {
   const onAuthError = () => { authExpired = true; store.set({ githubToken: null, githubRefreshToken: null, githubTokenExpiresAt: null, identity: null }); };
   return {
     store,
-    reader: createGithubReader({ upstream: UPSTREAM, token, onAuthError }),
+    devlog, // SOW-124: the background realm's devlog (superadmin + flag gated; a strict no-op otherwise)
+    reader: createGithubReader({ upstream: UPSTREAM, token, onAuthError, devlog }),
     authExpired: () => authExpired,
     getRepoClient() {
       const t = store.get('githubToken');
@@ -45,14 +47,15 @@ export function buildExtContext(store) {
      *  (fail-closed). In-flight dedupe keeps a render burst to one resolution. */
     async membershipResolved() {
       const cached = store.get('membership');
-      if (cached && cached !== 'unknown') return cached;
+      if (cached && cached !== 'unknown') { devlog('membership', 'resolved from cache', { membership: cached }); return cached; }
       const t = store.get('githubToken');
       const id = store.get('identity');
-      if (!t || !id?.githubId) return 'unknown';
+      if (!t || !id?.githubId) { devlog('membership', 'unknown: no token or identity', { hasToken: !!t, hasId: !!id?.githubId }); return 'unknown'; }
       if (!membershipFlight) {
+        devlog('membership', 'resolving via oracle + house overrides');
         membershipFlight = resolveMembership({ githubId: String(id.githubId), token: t, signupBase: SIGNUP_BASE, readFile: (p) => this.reader.readFile(p) })
-          .then(({ stripeStatus, membership }) => { store.set({ stripeStatus, membership }); return membership ?? 'unknown'; })
-          .catch(() => 'unknown')
+          .then(({ stripeStatus, membership }) => { store.set({ stripeStatus, membership }); devlog('membership', 'resolved', { stripeStatus, membership: membership ?? 'unknown' }); return membership ?? 'unknown'; })
+          .catch((e) => { devlog('membership', 'resolve failed, fail-closed to unknown', { error: e?.message }); return 'unknown'; })
           .finally(() => { membershipFlight = null; });
       }
       return membershipFlight;

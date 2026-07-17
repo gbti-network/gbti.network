@@ -8,8 +8,10 @@
 import '../../client-ui/src/elements/gbti-share-composer.mjs'; // SOW-041 P5: the top-bar "+" mounts this composer
 import '../../client-ui/src/elements/gbti-activity-bell.mjs'; // SOW-042 P3: the top-bar activity bell
 import '../../client-ui/src/elements/gbti-social-queue.mjs'; // SOW-121: the avatar-menu Social Queue popup
+import '../../client-ui/src/elements/gbti-debug-panel.mjs'; // SOW-124: the superadmin Debug panel (devlog viewer)
 import '../../client-ui/src/elements/gbti-welcome.mjs'; // SOW-048: dual-purposed as the forced-sign-in login splash
 import { wbCacheSet } from '../../client-ui/src/workbench-cache.mjs'; // SOW-073 P5: warm the workbench cache from the create-recent prefetch
+import { devlog, devlogFlagOn, setDevlogFlag } from './devlog.mjs'; // SOW-124: the page realm's devlog + the shared flag
 
 const SITE = 'https://gbti.network';
 const DAILYDEV_ID = 'jlmpjdjjbgclbocgajdjefcidcncaied';
@@ -143,6 +145,7 @@ function controlsHtml() {
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>
+        <button class="mi" role="menuitem" type="button" data-debug-panel data-super-only hidden>Debug</button>
         <div class="me-sep" role="separator"></div>
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
@@ -321,6 +324,37 @@ function wireAccount(root) {
   });
   // SOW-121: the superadmin Social Queue opens as a centered popup (the item is superadmin-gated in render()).
   root.querySelector('[data-social-queue]')?.addEventListener('click', () => { close(); openSocialQueueModal(); });
+  // SOW-124: the superadmin Debug panel (the devlog viewer; the item is superadmin-gated by [data-super-only]).
+  root.querySelector('[data-debug-panel]')?.addEventListener('click', () => { close(); openDebugPanelModal(); });
+}
+
+// SOW-124: the avatar-menu "Debug" opens a centered popup mounting <gbti-debug-panel>. The panel is a
+// host-agnostic view; here we inject the `adapter` that does the realm plumbing: the toggle writes the shared
+// flag, refresh MERGES this page's ring with the background service worker's ring (fetched over one message,
+// superadmin-gated on the worker side), and clear empties both. Every logged value is already redacted.
+function openDebugPanelModal() {
+  if (document.querySelector('.debug-modal')) return; // already open
+  const overlay = document.createElement('div');
+  overlay.className = 'compose-modal debug-modal';
+  overlay.innerHTML = `<gbti-debug-panel></gbti-debug-panel>`;
+  const onEsc = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onEsc); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.addEventListener('gbti-debug-close', close);
+  document.addEventListener('keydown', onEsc);
+  const panel = overlay.querySelector('gbti-debug-panel');
+  panel.adapter = {
+    isEnabled: () => devlogFlagOn(),
+    async refresh() {
+      const page = devlog.recent().map((e) => ({ ...e, realm: 'page' }));
+      let bg = [];
+      try { const r = await chrome.runtime.sendMessage({ type: 'devlog-recent' }); if (r?.ok && Array.isArray(r.entries)) bg = r.entries.map((e) => ({ ...e, realm: 'bg' })); } catch { /* worker unreachable */ }
+      return page.concat(bg);
+    },
+    async toggle(on) { await setDevlogFlag(on); },
+    async clear() { devlog.clear(); try { await chrome.runtime.sendMessage({ type: 'devlog-clear' }); } catch { /* best-effort */ } },
+  };
+  document.body.appendChild(overlay);
 }
 
 // SOW-121: the avatar-menu "Social Queue" opens a centered popup mounting <gbti-social-queue> (the superadmin

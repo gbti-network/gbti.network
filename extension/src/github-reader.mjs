@@ -39,7 +39,7 @@ function safeRel(relPath) {
  * @param {string} [a.ref]      branch/ref to read (default the repo default branch via 'HEAD').
  * @param {Function} [a.fetch]  injected for tests.
  */
-export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = globalThis.fetch, onAuthError } = {}) {
+export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = globalThis.fetch, onAuthError, devlog = () => {} } = {}) {
   const [owner, repo] = String(upstream || '').split('/');
   const headers = { Accept: 'application/vnd.github+json' };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -52,7 +52,10 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
   let signaled = false;
   async function ghFetch(url) {
     const res = await fetch(url, { headers });
-    if (res.status === 401 && token && onAuthError && !signaled) { signaled = true; try { onAuthError(); } catch { /* never let the signal throw */ } }
+    // SOW-124: a non-ok GitHub read is the root of the "empty shares / wrong membership" class of bug, so log it
+    // (redacted; the URL carries no secret, the token is never logged). A 401 carrying our token = a dead session.
+    if (!res.ok) devlog('reader', 'github read not ok', { status: res.status, url, hadToken: !!token });
+    if (res.status === 401 && token && onAuthError && !signaled) { signaled = true; devlog('reader', 'onAuthError: token rejected, clearing session', { url }); try { onAuthError(); } catch { /* never let the signal throw */ } }
     return res;
   }
 

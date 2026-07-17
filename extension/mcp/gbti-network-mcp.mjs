@@ -2157,8 +2157,8 @@ var require_dumper = /* @__PURE__ */ __commonJSMin(((exports, module) => {
   }
   function blockHeader(string4, indentPerLevel) {
     const indentIndicator = needIndentIndicator(string4) ? String(indentPerLevel) : "";
-    const clip = string4[string4.length - 1] === "\n";
-    return indentIndicator + (clip && (string4[string4.length - 2] === "\n" || string4 === "\n") ? "+" : clip ? "" : "-") + "\n";
+    const clip2 = string4[string4.length - 1] === "\n";
+    return indentIndicator + (clip2 && (string4[string4.length - 2] === "\n" || string4 === "\n") ? "+" : clip2 ? "" : "-") + "\n";
   }
   function dropEndingNewline(string4) {
     return string4[string4.length - 1] === "\n" ? string4.slice(0, -1) : string4;
@@ -18094,14 +18094,81 @@ async function resolveMembership({ githubId, token, signupBase, readFile, fetch 
   return { stripeStatus, membership: effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now }) };
 }
 
+// membership/devlog-core.mjs
+var SECRET_KEY = /token|secret|authorization|bearer|password|refresh|api[_-]?key|cookie|credential|client[_-]?secret/i;
+var MAX_STRING = 200;
+var MAX_DEPTH = 3;
+function clip(s) {
+  const str = String(s);
+  return str.length > MAX_STRING ? `${str.slice(0, MAX_STRING)}…(${str.length})` : str;
+}
+function redactDeep(value, depth = 0) {
+  if (value == null) return value;
+  const t = typeof value;
+  if (t === "string") return clip(value);
+  if (t === "number" || t === "boolean") return value;
+  if (t === "bigint") return `${value}n`;
+  if (t === "function") return `[fn ${value.name || "anonymous"}]`;
+  if (t !== "object") return String(value);
+  if (depth >= MAX_DEPTH) return Array.isArray(value) ? `[array(${value.length})]` : "[object]";
+  if (Array.isArray(value)) return value.slice(0, 20).map((v) => redactDeep(v, depth + 1));
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (SECRET_KEY.test(k)) {
+      out[k] = v == null || v === "" ? "<empty>" : "<redacted>";
+      continue;
+    }
+    out[k] = redactDeep(v, depth + 1);
+  }
+  return out;
+}
+function isOn(enabled) {
+  try {
+    return typeof enabled === "function" ? !!enabled() : !!enabled;
+  } catch {
+    return false;
+  }
+}
+function createDevlog({ enabled = false, sink = console, now = Date.now, ringSize = 200 } = {}) {
+  let gate = enabled;
+  const ring = [];
+  const emit = typeof sink === "function" ? sink : sink && typeof sink.log === "function" ? (...a) => sink.log(...a) : () => {
+  };
+  const devlog = (area, msg, data) => {
+    if (!isOn(gate)) return;
+    const t = now();
+    const safe = data === void 0 ? void 0 : redactDeep(data);
+    const entry = { t, area: String(area || "app"), msg: String(msg == null ? "" : msg) };
+    if (safe !== void 0) entry.data = safe;
+    ring.push(entry);
+    if (ring.length > ringSize) ring.splice(0, ring.length - ringSize);
+    try {
+      safe === void 0 ? emit(`[gbti:${entry.area}] ${entry.msg}`) : emit(`[gbti:${entry.area}] ${entry.msg}`, safe);
+    } catch {
+    }
+  };
+  devlog.recent = () => ring.slice();
+  devlog.clear = () => {
+    ring.length = 0;
+  };
+  devlog.setEnabled = (next) => {
+    gate = next;
+  };
+  devlog.enabled = () => isOn(gate);
+  return devlog;
+}
+
 // client/src/context.mjs
 var UPSTREAM = process.env.GBTI_UPSTREAM || "gbti-network/gbti.network";
+var npmDevlog = createDevlog({ enabled: () => !!process.env.GBTI_DEVLOG, sink: console });
 function buildContext(store) {
   const repoPath = store.get("repoPath");
   const reader = createReader(repoPath);
   let membershipFlight = null;
   return {
     store,
+    devlog: npmDevlog,
+    // SOW-124: host-agnostic devlog (GBTI_DEVLOG gated; a no-op otherwise)
     reader,
     stager: createStager(repoPath),
     getRepoClient() {

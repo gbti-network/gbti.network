@@ -14,6 +14,7 @@ import { rolesFromParsed, roleOf, isAdminRole, curatorsFromParsed, isCurator, ca
 import { deriveStatusFromCustomer } from '../../membership/derive-status.mjs';
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from './membership-content.mjs';
+import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacted)
 
 const fail = (status, error, message) => ({ ok: false, status, body: { error, message } });
 
@@ -35,6 +36,7 @@ async function resolveCaller(request, env, { fetchImpl = globalThis.fetch, fetch
   catch (e) {
     // Surface GitHub's real status so a transient rate-limit (403/429/5xx, retried in githubFetchUser) is not
     // confused with a genuinely bad token (401). Never echo the response body (it can carry sensitive detail).
+    wlog('admin', 'token verify failed', { githubStatus: e?.status ?? null }); // SOW-124
     const gh = Number.isFinite(e?.status) && e.status ? ` (github ${e.status})` : '';
     return fail(401, 'unauthorized', `could not verify the GitHub token${gh}`);
   }

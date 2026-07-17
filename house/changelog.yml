@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 24
+    date: 2026-07-16
+    type: build
+    title: Superadmin Debug panel
+    notes:
+      - Added a superadmin-only Debug item in the avatar menu that turns on structured, redacted diagnostics across the extension and shows them live.
+      - Secrets are never logged, and it stays completely off for everyone else.
+
+  - version: 0.1.0
     build: 23
     date: 2026-07-16
     type: build

@@ -31,7 +31,7 @@ const CODE_STATUS = Object.freeze({
 
 const ok = (json) => ({ status: 200, json });
 
-async function computeRole(ctx) {
+export async function computeRole(ctx) {
   const id = ctx.identity?.();
   if (!id?.githubId) return 'member';
   const text = await ctx.reader.readFile('house/roles.yml');
@@ -55,6 +55,7 @@ function requireRepo(ctx) {
 
 /** Answer one /api/* request. @returns {Promise<{status:number, json:any}>} */
 export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body } = {}) {
+  ctx.devlog?.('dispatch', 'request', { method, pathname }); // SOW-124 (no-op unless superadmin + Debug on)
   try {
     const id = ctx.identity?.();
     if (pathname === '/api/status') {
@@ -225,7 +226,8 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return { status: 404, json: { error: 'not_found' } };
     }
   } catch (err) {
-    if (err instanceof OperationError) return { status: CODE_STATUS[err.code] ?? 400, json: { error: err.code, message: err.message } };
+    if (err instanceof OperationError) { ctx.devlog?.('dispatch', 'operation error', { pathname, code: err.code, message: err.message }); return { status: CODE_STATUS[err.code] ?? 400, json: { error: err.code, message: err.message } }; }
+    ctx.devlog?.('dispatch', 'internal error', { pathname, message: err?.message });
     return { status: 500, json: { error: 'internal', message: err?.message } };
   }
 }

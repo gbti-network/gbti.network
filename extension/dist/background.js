@@ -2102,8 +2102,8 @@ var require_dumper = /* @__PURE__ */ __commonJSMin(((exports, module) => {
   }
   function blockHeader(string4, indentPerLevel) {
     const indentIndicator = needIndentIndicator(string4) ? String(indentPerLevel) : "";
-    const clip = string4[string4.length - 1] === "\n";
-    return indentIndicator + (clip && (string4[string4.length - 2] === "\n" || string4 === "\n") ? "+" : clip ? "" : "-") + "\n";
+    const clip2 = string4[string4.length - 1] === "\n";
+    return indentIndicator + (clip2 && (string4[string4.length - 2] === "\n" || string4 === "\n") ? "+" : clip2 ? "" : "-") + "\n";
   }
   function dropEndingNewline(string4) {
     return string4[string4.length - 1] === "\n" ? string4.slice(0, -1) : string4;
@@ -17381,15 +17381,18 @@ function decodeBase64Utf8(b64) {
 function safeRel(relPath) {
   return typeof relPath === "string" && relPath.length > 0 && !relPath.includes("..") && !relPath.includes("\\") && !relPath.startsWith("/");
 }
-function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = globalThis.fetch, onAuthError } = {}) {
+function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = globalThis.fetch, onAuthError, devlog: devlog2 = () => {
+} } = {}) {
   const [owner, repo] = String(upstream || "").split("/");
   const headers = { Accept: "application/vnd.github+json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   let signaled = false;
   async function ghFetch(url2) {
     const res = await fetch2(url2, { headers });
+    if (!res.ok) devlog2("reader", "github read not ok", { status: res.status, url: url2, hadToken: !!token });
     if (res.status === 401 && token && onAuthError && !signaled) {
       signaled = true;
+      devlog2("reader", "onAuthError: token rejected, clearing session", { url: url2 });
       try {
         onAuthError();
       } catch {
@@ -18025,6 +18028,88 @@ async function resolveMembership({ githubId, token, signupBase, readFile, fetch:
   return { stripeStatus, membership: effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now }) };
 }
 
+// membership/devlog-core.mjs
+var SECRET_KEY = /token|secret|authorization|bearer|password|refresh|api[_-]?key|cookie|credential|client[_-]?secret/i;
+var MAX_STRING = 200;
+var MAX_DEPTH = 3;
+function clip(s) {
+  const str = String(s);
+  return str.length > MAX_STRING ? `${str.slice(0, MAX_STRING)}…(${str.length})` : str;
+}
+function redactDeep(value, depth = 0) {
+  if (value == null) return value;
+  const t = typeof value;
+  if (t === "string") return clip(value);
+  if (t === "number" || t === "boolean") return value;
+  if (t === "bigint") return `${value}n`;
+  if (t === "function") return `[fn ${value.name || "anonymous"}]`;
+  if (t !== "object") return String(value);
+  if (depth >= MAX_DEPTH) return Array.isArray(value) ? `[array(${value.length})]` : "[object]";
+  if (Array.isArray(value)) return value.slice(0, 20).map((v) => redactDeep(v, depth + 1));
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (SECRET_KEY.test(k)) {
+      out[k] = v == null || v === "" ? "<empty>" : "<redacted>";
+      continue;
+    }
+    out[k] = redactDeep(v, depth + 1);
+  }
+  return out;
+}
+function isOn(enabled) {
+  try {
+    return typeof enabled === "function" ? !!enabled() : !!enabled;
+  } catch {
+    return false;
+  }
+}
+function createDevlog({ enabled = false, sink = console, now = Date.now, ringSize = 200 } = {}) {
+  let gate = enabled;
+  const ring = [];
+  const emit = typeof sink === "function" ? sink : sink && typeof sink.log === "function" ? (...a) => sink.log(...a) : () => {
+  };
+  const devlog2 = (area, msg, data) => {
+    if (!isOn(gate)) return;
+    const t = now();
+    const safe = data === void 0 ? void 0 : redactDeep(data);
+    const entry = { t, area: String(area || "app"), msg: String(msg == null ? "" : msg) };
+    if (safe !== void 0) entry.data = safe;
+    ring.push(entry);
+    if (ring.length > ringSize) ring.splice(0, ring.length - ringSize);
+    try {
+      safe === void 0 ? emit(`[gbti:${entry.area}] ${entry.msg}`) : emit(`[gbti:${entry.area}] ${entry.msg}`, safe);
+    } catch {
+    }
+  };
+  devlog2.recent = () => ring.slice();
+  devlog2.clear = () => {
+    ring.length = 0;
+  };
+  devlog2.setEnabled = (next) => {
+    gate = next;
+  };
+  devlog2.enabled = () => isOn(gate);
+  return devlog2;
+}
+
+// extension/src/devlog.mjs
+var DEVLOG_FLAG_KEY = "gbti-devlog";
+var FLAG = false;
+try {
+  chrome?.storage?.local?.get?.(DEVLOG_FLAG_KEY)?.then?.((r) => {
+    FLAG = r?.[DEVLOG_FLAG_KEY] === true;
+  })?.catch?.(() => {
+  });
+  chrome?.storage?.onChanged?.addListener?.((changes, area) => {
+    if (area === "local" && changes?.[DEVLOG_FLAG_KEY]) FLAG = changes[DEVLOG_FLAG_KEY].newValue === true;
+  });
+} catch {
+}
+function devlogFlagOn() {
+  return FLAG === true;
+}
+var devlog = createDevlog({ enabled: devlogFlagOn, sink: console });
+
 // extension/src/ext-context.mjs
 var UPSTREAM = "gbti-network/gbti.network";
 function buildExtContext(store) {
@@ -18037,7 +18122,9 @@ function buildExtContext(store) {
   };
   return {
     store,
-    reader: createGithubReader({ upstream: UPSTREAM, token, onAuthError }),
+    devlog,
+    // SOW-124: the background realm's devlog (superadmin + flag gated; a strict no-op otherwise)
+    reader: createGithubReader({ upstream: UPSTREAM, token, onAuthError, devlog }),
     authExpired: () => authExpired,
     getRepoClient() {
       const t = store.get("githubToken");
@@ -18059,15 +18146,26 @@ function buildExtContext(store) {
      *  (fail-closed). In-flight dedupe keeps a render burst to one resolution. */
     async membershipResolved() {
       const cached2 = store.get("membership");
-      if (cached2 && cached2 !== "unknown") return cached2;
+      if (cached2 && cached2 !== "unknown") {
+        devlog("membership", "resolved from cache", { membership: cached2 });
+        return cached2;
+      }
       const t = store.get("githubToken");
       const id = store.get("identity");
-      if (!t || !id?.githubId) return "unknown";
+      if (!t || !id?.githubId) {
+        devlog("membership", "unknown: no token or identity", { hasToken: !!t, hasId: !!id?.githubId });
+        return "unknown";
+      }
       if (!membershipFlight) {
+        devlog("membership", "resolving via oracle + house overrides");
         membershipFlight = resolveMembership({ githubId: String(id.githubId), token: t, signupBase: SIGNUP_BASE, readFile: (p) => this.reader.readFile(p) }).then(({ stripeStatus, membership }) => {
           store.set({ stripeStatus, membership });
+          devlog("membership", "resolved", { stripeStatus, membership: membership ?? "unknown" });
           return membership ?? "unknown";
-        }).catch(() => "unknown").finally(() => {
+        }).catch((e) => {
+          devlog("membership", "resolve failed, fail-closed to unknown", { error: e?.message });
+          return "unknown";
+        }).finally(() => {
           membershipFlight = null;
         });
       }
@@ -21656,6 +21754,7 @@ function requireRepo3(ctx) {
   return repo;
 }
 async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}) {
+  ctx.devlog?.("dispatch", "request", { method, pathname });
   try {
     const id = ctx.identity?.();
     if (pathname === "/api/status") {
@@ -21816,7 +21915,11 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return { status: 404, json: { error: "not_found" } };
     }
   } catch (err) {
-    if (err instanceof OperationError) return { status: CODE_STATUS[err.code] ?? 400, json: { error: err.code, message: err.message } };
+    if (err instanceof OperationError) {
+      ctx.devlog?.("dispatch", "operation error", { pathname, code: err.code, message: err.message });
+      return { status: CODE_STATUS[err.code] ?? 400, json: { error: err.code, message: err.message } };
+    }
+    ctx.devlog?.("dispatch", "internal error", { pathname, message: err?.message });
     return { status: 500, json: { error: "internal", message: err?.message } };
   }
 }
@@ -22076,6 +22179,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } catch (e) {
           sendResponse({ ok: false, error: e?.message ?? "open_failed" });
         }
+      } else if (msg?.type === "devlog-recent" || msg?.type === "devlog-clear") {
+        let role = "member";
+        try {
+          role = await computeRole(buildExtContext(store));
+        } catch {
+          role = "member";
+        }
+        if (role !== "superadmin") {
+          sendResponse({ ok: false, error: "forbidden" });
+          return;
+        }
+        if (msg.type === "devlog-clear") {
+          devlog.clear();
+          sendResponse({ ok: true });
+        } else sendResponse({ ok: true, entries: devlog.recent() });
       } else {
         sendResponse({ error: "unknown_message" });
       }

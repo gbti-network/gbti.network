@@ -32,6 +32,7 @@
 
 import { createStripeClient } from '../../clients/stripe.mjs';
 import { createDiscordClient } from '../../clients/discord.mjs';
+import { wlog } from './wlog.mjs'; // SOW-124: Worker diagnostic logger (redacted, retained via [observability])
 
 import { signSession, verifySession, sessionCookieHeader, readSessionCookie } from './session.mjs';
 import {
@@ -909,7 +910,7 @@ export default {
       return json({ error: 'not_found' }, 404);
     } catch (err) {
       // Never leak internals; log server-side. Fail closed (no partial success surfaced to the client).
-      console.error('signup worker error', pathname, err?.message);
+      wlog('worker', 'unhandled request error', { method, pathname, message: err?.message }); // SOW-124 (redacted, retained)
       return json({ error: 'internal_error' }, 500);
     }
   },

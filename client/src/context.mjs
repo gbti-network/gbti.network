@@ -7,8 +7,13 @@ import { createRepoClient } from './github-repo.mjs';
 import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from './roles.mjs';
 import { resolveMembership } from './membership.mjs';
 import { SIGNUP_BASE } from './signup-base.mjs';
+import { createDevlog } from '../../membership/devlog-core.mjs';
 
 export const UPSTREAM = process.env.GBTI_UPSTREAM || 'gbti-network/gbti.network';
+
+// SOW-124: the npm host's devlog. Gated on GBTI_DEVLOG (the node host has no superadmin UI toggle; the operator
+// who runs the local CMS is already the trusted node owner). Redaction is enforced by the core regardless.
+const npmDevlog = createDevlog({ enabled: () => !!process.env.GBTI_DEVLOG, sink: console });
 
 // The node host wires the fs-backed Reader + Stager into the host-agnostic core. The extension host builds
 // the same shape with GitHub-Contents-API + chrome.storage implementations, so api.mjs / operations.mjs /
@@ -19,6 +24,7 @@ export function buildContext(store) {
   let membershipFlight = null;
   return {
     store,
+    devlog: npmDevlog, // SOW-124: host-agnostic devlog (GBTI_DEVLOG gated; a no-op otherwise)
     reader,
     stager: createStager(repoPath),
     getRepoClient() {

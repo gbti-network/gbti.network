@@ -5,6 +5,7 @@
 // extension's gbti.network host permission. CSP-safe (no inline handlers).
 
 import { canSeeNews, canSeeShares, upgradePromptKind } from '../../client/src/membership.mjs'; // SOW-060/077: free-tier read perks + the read-only upgrade prompt
+import { devlog } from './devlog.mjs'; // SOW-124: the page realm's devlog (superadmin + Debug-flag gated; inert otherwise)
 import { BUNDLED_QUOTES, pickQuote, shouldShowSplash, splashDestHash, normalizeBgMode, normalizeBgOpacity, normalizeBgPattern, splashShowsCards, splashShowsQuote, splashKeepsDarkCards, normalizePatternGap, normalizeCardBlur, asciiAnchor, GBTI_ASCII } from '../../client-ui/src/splash.mjs'; // SOW-063 landing splash + SOW-074 background
 import { mergeAll, toMs } from '../../client-ui/src/all-merge.mjs'; // SOW-042: the All merge + Shares policy (per-share visibility filter is inside mergeAll)
 import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend members-only news into the feed
@@ -452,11 +453,12 @@ async function loadShares() {
   // was loaded under) only on a SUCCESSFUL fetch, so a transient failure or a later upgrade re-fetches.
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/shares', query: {} } });
-    if (!Array.isArray(r?.json?.items)) { SHARES = SHARES ?? []; return; } // failure/no identity -> keep any prior, allow retry
+    if (!Array.isArray(r?.json?.items)) { devlog('shares', 'fetch returned no items array, keeping prior + retrying', { membership: MEMBERSHIP, error: r?.json?.error }); SHARES = SHARES ?? []; return; } // failure/no identity -> keep any prior, allow retry
     SHARES = r.json.items;
     SHARES_LOADED = true;
     SHARES_LOADED_AT = MEMBERSHIP;
-  } catch { /* leave SHARES_LOADED false so the next ensure re-fetches */ }
+    devlog('shares', 'loaded', { count: SHARES.length, membership: MEMBERSHIP });
+  } catch (e) { devlog('shares', 'fetch threw, will retry', { error: e?.message }); /* leave SHARES_LOADED false so the next ensure re-fetches */ }
 }
 
 /** If the active filter needs Shares and they are not loaded (or were loaded under a lower tier than the now
@@ -601,7 +603,8 @@ async function applyMembershipState() {
   try {
     const r = await chrome.runtime.sendMessage({ type: 'api', req: { method: 'GET', pathname: '/api/status', query: {} } });
     MEMBERSHIP = r?.json?.membership ?? 'unknown'; // SOW-042: drives the feed's Shares (public-vs-member) + News visibility
-  } catch (e) { MEMBERSHIP = 'unknown'; /* worker unreachable -> fail open to a read-only feed */ }
+    devlog('membership', 'applied to the feed', { membership: MEMBERSHIP, role: r?.json?.role });
+  } catch (e) { MEMBERSHIP = 'unknown'; devlog('membership', 'status fetch failed, read-only feed', { error: e?.message }); /* worker unreachable -> fail open to a read-only feed */ }
   showUpgradeBanner();
 }
 

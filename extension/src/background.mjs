@@ -5,7 +5,8 @@
 
 import { createExtStore } from './ext-store.mjs';
 import { buildExtContext, UPSTREAM } from './ext-context.mjs';
-import { dispatch } from './ext-dispatch.mjs';
+import { dispatch, computeRole } from './ext-dispatch.mjs';
+import { devlog } from './devlog.mjs';
 import { createGithubReader } from './github-reader.mjs';
 import { deviceFlowLogin } from '../../client/src/auth-device.mjs';
 import { createRepoClient } from '../../client/src/github-repo.mjs';
@@ -187,6 +188,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } catch (e) {
           sendResponse({ ok: false, error: e?.message ?? 'open_failed' });
         }
+      } else if (msg?.type === 'devlog-recent' || msg?.type === 'devlog-clear') {
+        // SOW-124: the Debug panel reads/clears the BACKGROUND realm's ring. Superadmin-gated (fail-closed): the
+        // ring can carry redacted diagnostics, so only a superadmin caller gets it. The role is read from
+        // house/roles.yml via the same path /api/status uses.
+        let role = 'member';
+        try { role = await computeRole(buildExtContext(store)); } catch { role = 'member'; }
+        if (role !== 'superadmin') { sendResponse({ ok: false, error: 'forbidden' }); return; }
+        if (msg.type === 'devlog-clear') { devlog.clear(); sendResponse({ ok: true }); }
+        else sendResponse({ ok: true, entries: devlog.recent() });
       } else {
         sendResponse({ error: 'unknown_message' });
       }
