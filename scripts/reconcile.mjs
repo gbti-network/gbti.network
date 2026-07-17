@@ -33,6 +33,7 @@ import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv,
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
 import { syncCouponGrants, readGrandfatheredFromDisk } from './lib/coupon-grants.mjs'; // SOW-119
 import { syncUpvoteCounts, readCountsFromDisk as readUpvoteCountsFromDisk } from './lib/upvote-counts.mjs';
+import { main as promotePopular } from './promote-popular.mjs'; // SOW-126: the engagement-triggered popular promoter
 import { mergeState, alreadyLabeled, conflictComment, CONFLICT_LABEL } from './lib/pr-conflict.mjs';
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
@@ -640,6 +641,18 @@ async function main() {
       console.error('reconcile: upvote-counts sync FAILED:', e?.message ?? e);
       process.exitCode = 1;
     }
+  }
+
+  // SOW-126: the engagement-triggered `popular` promoter. Reads the live content-open KV sets + the on-disk
+  // favorite/upvote counts, and enqueues any content item whose engagement crossed the threshold to its
+  // `popular` channels (trigger:'popular'), watermarked so it promotes once. Disabled by default (content
+  // engagement off), so this is a clean no-op until the owner turns it on in the admin Channels workspace.
+  try {
+    const r = await promotePopular({ argv: dryRun ? [] : ['--apply'], root: ROOT, env });
+    if (r?.reason && r.reason !== 'disabled') console.log(`reconcile: popular promotion SKIPPED (${r.reason}).`);
+    else if ((r?.promoted ?? 0) > 0) console.log(`reconcile: promoted ${r.promoted} popular item(s) to auto-share.`);
+  } catch (e) {
+    console.error('reconcile: popular promotion FAILED (non-fatal):', e?.message ?? e);
   }
 
   // SOW-053 Part B: surface conflicting PRs (auto-merge stalls silently on them). Runs in both modes; the sweep

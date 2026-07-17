@@ -6,7 +6,7 @@
 
 import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue, channelDue } from '../../membership/syndication-queue.mjs';
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
-import { isSyndicationEnabled, requiresApproval, manualAssistChannels, isAutoOn, channelHoldMs, explicitChannelHoldMs } from '../../membership/syndication-config-core.mjs';
+import { isSyndicationEnabled, requiresApproval, manualAssistChannels, isAutoOn, autoModeFor, channelHoldMs, explicitChannelHoldMs } from '../../membership/syndication-config-core.mjs';
 import { renderChannelText } from '../../membership/syndication-render.mjs'; // SOW-121
 import { buildSocialTask } from '../../membership/social-queue.mjs'; // SOW-121
 import { putTask } from './social-queue-store.mjs'; // SOW-121
@@ -39,7 +39,10 @@ export async function drainSyndication(env, {
   // SOW-125: a `ready` adapter is auto-`on` for THIS item's type. A `ready` channel set to off/popular for the
   // type is recorded as a terminal skip (never posts). A per-channel hold that has not elapsed leaves the channel
   // HOLDING for a later tick. The `channelHoldMs` is read from the LIVE config, so a mid-flight hold change applies.
-  const onFor = (item, name) => isAutoOn(cfg, item.source, name);
+  // SOW-126: a `popular` cell is deliverable ONLY for an item the engagement engine promoted (trigger:'popular'),
+  // so a plain publish never reaches a `popular` channel while a promoted item reaches exactly its popular ones.
+  const onFor = (item, name) => isAutoOn(cfg, item.source, name)
+    || (item?.trigger === 'popular' && autoModeFor(cfg, item.source, name) === 'popular');
   // SOW-125: the per-channel hold is mode-aware. In the APPROVAL model an approved item posts "now" (an explicit
   // override still staggers from approval, but a no-override channel is 0 -> the next tick); in auto-hold mode the
   // delay is the override or the global hold. `channelDue` uses the approvedAt baseline, so these compose.
