@@ -99,3 +99,16 @@ export async function workerNewsOpened({ token, signupBase, fetch = globalThis.f
   if (!res.ok) throw new NewsClientError('could not record the open (' + res.status + ')');
   return res.json();
 }
+
+/** SOW-126: the member-content detail-open engagement beacon. Best-effort tally; the reconcile promotes a
+ *  `popular` item past the threshold. Mirrors workerNewsOpened. */
+export async function workerContentOpened({ token, signupBase, fetch = globalThis.fetch, type, slug } = {}) {
+  if (!token || !signupBase) throw new NewsClientError('not signed in');
+  const t = String(type || '').trim();
+  const s = String(slug || '').trim();
+  if (!t || !s) throw new NewsClientError('a content type + slug is required');
+  const res = await fetch(`${base(signupBase)}/membership/content-opened`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ type: t, slug: s }) });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError('not signed in');
+  if (!res.ok) throw new NewsClientError('could not record the open (' + res.status + ')');
+  return res.json();
+}

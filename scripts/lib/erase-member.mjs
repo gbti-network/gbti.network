@@ -18,6 +18,7 @@ import { flipStatus } from '../reconcile.mjs';
 import { buildAuditRecord, storeAuditRecord } from './erase-audit.mjs';
 import { scrubVoter } from '../../membership/share-votes.mjs';
 import { scrubOpener } from '../../membership/news-opens.mjs'; // SOW-111: per-item news detail-open sets
+import { scrubOpener as scrubContentOpener } from '../../membership/content-opens.mjs'; // SOW-126: per-item content-open sets
 import { scrubCounterpart } from '../../workers/signup/conversion-snapshot-store.mjs'; // SOW-059 P1c
 
 export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
@@ -151,6 +152,26 @@ export async function eraseNewsOpens({ githubId, env = process.env, fetchImpl = 
   let scrubbed = 0;
   for (const { key, value } of listed.entries) {
     const { record, changed } = scrubOpener(value, String(githubId));
+    if (changed) {
+      await putKvValue({ key, value: JSON.stringify(record), env, fetchImpl });
+      scrubbed++;
+    }
+  }
+  return { scrubbed };
+}
+
+/**
+ * SOW-126 GDPR: scrub the member's github_id from every per-item content detail-open set (`content-opens:*`).
+ * Keyed by content item (not by member), so the per-member activity: delete does not reach them. Mirrors
+ * eraseNewsOpens. Reported no-op without CF creds.
+ */
+export async function eraseContentOpens({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (!githubId) throw new Error('a github_id is required');
+  const listed = await listKvByPrefix({ prefix: 'content-opens:', env, fetchImpl });
+  if (!listed.available) return { skipped: true, reason: listed.reason };
+  let scrubbed = 0;
+  for (const { key, value } of listed.entries) {
+    const { record, changed } = scrubContentOpener(value, String(githubId));
     if (changed) {
       await putKvValue({ key, value: JSON.stringify(record), env, fetchImpl });
       scrubbed++;
@@ -381,6 +402,7 @@ export async function runErasure({
   await runStep('lookup-cache', () => eraseLookupCache({ githubId, env, fetchImpl }));
   await runStep('share-votes', () => eraseShareVotes({ githubId, env, fetchImpl })); // SOW-057: per-target voter sets
   await runStep('news-opens', () => eraseNewsOpens({ githubId, env, fetchImpl })); // SOW-111: per-item opener sets
+  await runStep('content-opens', () => eraseContentOpens({ githubId, env, fetchImpl })); // SOW-126: per-item content-open sets
   await runStep('conv-snapshot', () => eraseConversionSnapshot({ githubId, env, fetchImpl })); // SOW-059: own frozen snapshot
   await runStep('conv-counterpart', () => scrubConversionSnapshots({ githubId, env, fetchImpl })); // SOW-059: scrub as counterpart
   await runStep('discord', () => eraseDiscordRoles({ githubId, stripe, discord, env }));

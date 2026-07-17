@@ -79,6 +79,19 @@ export const DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   comment_autopost: true, // one comment posts immediately (deliberate engagement)
 });
 
+// SOW-126: the ENGINE behind the SOW-125 `popular` matrix state. When enough DISTINCT members engage with a
+// member content item, the reconcile promotes it to auto-share on its `popular` channels. Which signals count
+// (opening the expanded reader view, favoriting, upvoting, commenting) + the threshold + the counting tier are
+// all admin-editable (the owner may retune what qualifies). Fail-closed: disabled until the owner turns it on.
+// Tiers reuse NEWS_ENGAGEMENT_TIERS (banned always excluded; the author never counts toward their own item).
+export const CONTENT_ENGAGEMENT_SIGNALS = Object.freeze(['opens', 'favorites', 'upvotes', 'comments']);
+export const DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
+  enabled: false,
+  threshold: 3, // distinct engaged members before a `popular` item promotes (tunable; the network is small)
+  tier: 'signed-in', // whose engagement counts (any non-banned signed-in member by default)
+  signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false }), // opens = the owner's chosen counter
+});
+
 // SOW-087: per-type Discord post templates. Variables: {memberdiscord} (the resolved <@id> mention, falling
 // back to the no-ping full name when none resolves), {member-discord-username} (the mention, else the public
 // profile Discord handle, else the GitHub username; SOW-088), {content-type} (article/product/prompt/link),
@@ -163,6 +176,7 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   stub_templates: Object.freeze({}), // SOW-088 Proposal A: the shared MEMBERS-stub set (configured only)
   channel_templates_stub: Object.freeze({}), // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT, // SOW-111: engagement-triggered news auto-share
+  content_engagement: DEFAULT_CONTENT_ENGAGEMENT, // SOW-126: engagement-triggered content auto-share (the `popular` engine)
   channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
   // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
   // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
@@ -226,6 +240,24 @@ function normalizeNewsEngagement(raw) {
     open_threshold: asThreshold(src.open_threshold, d.open_threshold),
     tier,
     comment_autopost: asBool(src.comment_autopost, d.comment_autopost),
+  });
+}
+
+// SOW-126: normalize the content engagement block; every field fail-closed. `signals` is the set of interactions
+// that count (each a bool). `threshold` is the distinct-engaged-member count (>= 1). `tier` reuses the news tiers.
+function normalizeContentEngagement(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const d = DEFAULT_CONTENT_ENGAGEMENT;
+  const tier = typeof src.tier === 'string' && NEWS_ENGAGEMENT_TIERS.includes(src.tier.trim().toLowerCase())
+    ? src.tier.trim().toLowerCase() : d.tier;
+  const rawSignals = src.signals && typeof src.signals === 'object' && !Array.isArray(src.signals) ? src.signals : {};
+  const signals = {};
+  for (const s of CONTENT_ENGAGEMENT_SIGNALS) signals[s] = asBool(rawSignals[s], d.signals[s]);
+  return Object.freeze({
+    enabled: asBool(src.enabled, d.enabled),
+    threshold: asThreshold(src.threshold, d.threshold),
+    tier,
+    signals: Object.freeze(signals),
   });
 }
 
@@ -339,6 +371,7 @@ export function syndicationConfigFromParsed(parsed) {
     stub_templates: normalizeConfiguredTemplates(raw.stub_templates),
     channel_templates_stub: normalizeChannelTemplates(raw.channel_templates_stub),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
+    content_engagement: normalizeContentEngagement(raw.content_engagement), // SOW-126
     channels: normalizeChannels(raw.channels),
     manual_assist_channels: normalizeManualAssist(raw.manual_assist_channels), // SOW-121
     auto_matrix: normalizeAutoMatrix(raw.auto_matrix), // SOW-125
@@ -375,6 +408,11 @@ export function classifyMode(cfg) {
 /** SOW-111: the normalized news engagement settings ({ enabled, open_threshold, tier, comment_autopost }). */
 export function newsEngagement(cfg) {
   return normalizeNewsEngagement(cfg?.news_engagement);
+}
+
+/** SOW-126: the normalized content engagement settings ({ enabled, threshold, tier, signals{...} }). */
+export function contentEngagement(cfg) {
+  return normalizeContentEngagement(cfg?.content_engagement);
 }
 
 /** SOW-087 (+ SOW-088): the configured template for a source type, or null (= the built-in message).
@@ -451,6 +489,14 @@ export function deliverChannelsForType(cfg, type) {
     && (channelCapability(ch) === 'manual' ? isManualAssist(cfg, ch) : isChannelEnabled(cfg, ch)));
 }
 
+/** SOW-126: the channels a type would deliver to WHEN PROMOTED as popular — matrix cell `popular` AND the
+ *  channel is wired (an auto channel enabled, or a manual channel in manual_assist). The engagement engine
+ *  enqueues a promoted item with `trigger:'popular'` to exactly this set; a plain publish never hits it. */
+export function popularChannelsForType(cfg, type) {
+  return MATRIX_CHANNELS.filter((ch) => autoModeFor(cfg, type, ch) === 'popular'
+    && (channelCapability(ch) === 'manual' ? isManualAssist(cfg, ch) : isChannelEnabled(cfg, ch)));
+}
+
 /** SOW-125: the hold window in ms for a specific channel — the per-channel override if set, else the global. */
 export function channelHoldMs(cfg, channel) {
   const v = cfg?.channel_hold_minutes?.[channel];
@@ -503,5 +549,5 @@ export function toSyndicationMirror(cfg) {
     for (const ch of MATRIX_CHANNELS) { const m = typeof row[ch] === 'string' ? row[ch].trim().toLowerCase() : ''; if (AUTO_MODES.includes(m)) outRow[ch] = m; }
     if (Object.keys(outRow).length) configuredMatrix[t] = outRow;
   }
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels }, manual_assist_channels: [...c.manual_assist_channels], auto_matrix: configuredMatrix, channel_hold_minutes: { ...c.channel_hold_minutes } };
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, content_engagement: { ...c.content_engagement, signals: { ...c.content_engagement.signals } }, channels: { ...c.channels }, manual_assist_channels: [...c.manual_assist_channels], auto_matrix: configuredMatrix, channel_hold_minutes: { ...c.channel_hold_minutes } };
 }

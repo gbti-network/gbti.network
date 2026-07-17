@@ -6,6 +6,7 @@ import {
   DEFAULT_SYNDICATION_CONFIG, CHANNELS, syndicationConfigFromParsed, isSyndicationEnabled, holdMs,
   upvoteThreshold, isChannelEnabled, enabledChannelNames, toSyndicationMirror, classifyMode, templateFor, newsEngagement,
   AUTO_TYPES, AUTO_CHANNELS, AUTO_MODES, channelCapability, autoModeFor, isAutoOn, autoChannelsForType, channelHoldMs, explicitChannelHoldMs, defaultAutoMode,
+  contentEngagement, popularChannelsForType, CONTENT_ENGAGEMENT_SIGNALS,
 } from '../membership/syndication-config.mjs';
 
 test('a missing/empty config fails closed to the safe defaults', () => {
@@ -51,6 +52,8 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
     // SOW-088: the mirror carries ONLY configured templates (readers re-normalize, so code defaults track deploys).
     templates: {},
     news_engagement: { enabled: false, open_threshold: 2, tier: 'paid', comment_autopost: true },
+    // SOW-126: the content-engagement (`popular` engine) settings, mirrored like news_engagement.
+    content_engagement: { enabled: false, threshold: 3, tier: 'signed-in', signals: { opens: true, favorites: false, upvotes: false, comments: false } },
     // SOW-088: reddit joined CHANNELS (default false) so the admin pipeline switch survives normalization.
     channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false },
     channel_templates: {},
@@ -63,12 +66,44 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
     channel_hold_minutes: {}, // SOW-125: no per-channel overrides -> the global hold applies
   });
   // No surprise keys (no token/secret fields).
-  assert.deepEqual(Object.keys(m).sort(), ['auto_matrix', 'channel_hold_minutes', 'channel_templates', 'channel_templates_stub', 'channels', 'classify', 'enabled', 'hold_minutes', 'manual_assist_channels', 'news_engagement', 'require_approval', 'stub_templates', 'templates', 'upvote_threshold']);
+  assert.deepEqual(Object.keys(m).sort(), ['auto_matrix', 'channel_hold_minutes', 'channel_templates', 'channel_templates_stub', 'channels', 'classify', 'content_engagement', 'enabled', 'hold_minutes', 'manual_assist_channels', 'news_engagement', 'require_approval', 'stub_templates', 'templates', 'upvote_threshold']);
 });
 
 test('DEFAULT_SYNDICATION_CONFIG is frozen and disabled', () => {
   assert.ok(Object.isFrozen(DEFAULT_SYNDICATION_CONFIG));
   assert.equal(DEFAULT_SYNDICATION_CONFIG.enabled, false);
+});
+
+// SOW-126: the content-engagement (`popular` engine) config + the popular-channel resolver.
+
+test('SOW-126: contentEngagement normalizes fail-closed (disabled, opens-on, tier + signals)', () => {
+  const d = contentEngagement(syndicationConfigFromParsed({}));
+  assert.equal(d.enabled, false);
+  assert.equal(d.threshold, 3);
+  assert.equal(d.tier, 'signed-in');
+  assert.deepEqual(d.signals, { opens: true, favorites: false, upvotes: false, comments: false });
+  // an admin config is honored + unknown signals dropped, bad tier -> default, threshold >= 1.
+  const c = contentEngagement(syndicationConfigFromParsed({ content_engagement: { enabled: true, threshold: 5, tier: 'paid', signals: { favorites: true, bogus: true }, } }));
+  assert.equal(c.enabled, true);
+  assert.equal(c.threshold, 5);
+  assert.equal(c.tier, 'paid');
+  assert.deepEqual(Object.keys(c.signals).sort(), CONTENT_ENGAGEMENT_SIGNALS.slice().sort());
+  assert.equal(c.signals.favorites, true);
+  assert.equal(c.signals.opens, true); // absent -> default on
+  assert.equal(c.signals.bogus, undefined); // unknown dropped
+  assert.equal(contentEngagement(syndicationConfigFromParsed({ content_engagement: { tier: 'martian', threshold: 0 } })).tier, 'signed-in');
+});
+
+test('SOW-126: popularChannelsForType returns only channels whose cell is popular AND wired', () => {
+  const c = syndicationConfigFromParsed({
+    channels: { discord: true, bluesky: true, mastodon: false },
+    manual_assist_channels: ['x'],
+    auto_matrix: { share: { discord: 'popular', bluesky: 'on', mastodon: 'popular', x: 'popular' } },
+  });
+  // discord: popular + enabled -> in. bluesky: on (not popular) -> out. mastodon: popular but disabled -> out.
+  // x: popular + manual-assist -> in (a promoted popular manual task).
+  assert.deepEqual(popularChannelsForType(c, 'share').sort(), ['discord', 'x']);
+  assert.deepEqual(popularChannelsForType(c, 'post'), []); // post defaults on everywhere, no popular cells
 });
 
 // SOW-125: the per-type-per-channel auto-share matrix + per-channel delay.

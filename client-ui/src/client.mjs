@@ -83,6 +83,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     publishNews: (item) => request('POST', '/api/news-publish', { item }), // SOW-046 C: curator-only "Add to Discord" -> { ok, posted }
     newsDiscussed: (guid) => request('POST', '/api/news-discussed', { guid }), // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
     newsOpened: (guid, source) => request('POST', '/api/news-opened', { guid, ...(source ? { source } : {}) }), // SOW-111: the detail-open engagement beacon -> { ok, counted, posted }
+    contentOpened: (type, slug) => request('POST', '/api/content-opened', { type, slug }), // SOW-126: the content detail-open engagement beacon -> { ok, counted, openers }
     setContentStatus: ({ path, status }) => request('POST', '/api/content/status', { path, status }), // SOW-106: member self-unpublish/republish -> { ok, prNumber?, noop? }
     renameContent: ({ path, newSlug }) => request('POST', '/api/content/rename', { path, newSlug }), // SOW-112: permalink rename -> { ok, prNumber?, path, slug }
     deleteComment: ({ id }) => request('POST', '/api/comment/delete', { id }), // SOW-112 QA: delete one's own comment -> { ok, prNumber? }

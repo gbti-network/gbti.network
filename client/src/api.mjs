@@ -44,7 +44,7 @@ import {
   getPrefs,
   setPrefs,
   publishNews,
-  reflectNewsDiscussion, recordNewsOpen, setOwnContentStatus, renameContent, deleteComment, listDiscordChannels,
+  reflectNewsDiscussion, recordNewsOpen, recordContentOpen, setOwnContentStatus, renameContent, deleteComment, listDiscordChannels,
   getOnboardingStatus,
   getOverridesRoster,
   getOpenPulls,
@@ -164,6 +164,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/news-publish') return run(() => publishNews(ctx, body ?? {})); // SOW-046 C: curator -> Discord
   if (method === 'POST' && pathname === '/api/news-discussed') return run(() => reflectNewsDiscussion(ctx, body ?? {})); // SOW-046 D: reflect discussion onto Discord
   if (method === 'POST' && pathname === '/api/news-opened') return run(() => recordNewsOpen(ctx, body ?? {})); // SOW-111: the detail-open beacon
+  if (method === 'POST' && pathname === '/api/content-opened') return run(() => recordContentOpen(ctx, body ?? {})); // SOW-126: the content detail-open beacon
   if (method === 'POST' && pathname === '/api/content/status') return run(() => setOwnContentStatus(ctx, body ?? {})); // SOW-106: member self-unpublish/republish
   if (method === 'POST' && pathname === '/api/content/rename') return run(() => renameContent(ctx, body ?? {})); // SOW-112: the true permalink rename
   if (method === 'POST' && pathname === '/api/comment/delete') return run(() => deleteComment(ctx, body ?? {})); // SOW-112 QA: a member deletes their own comment

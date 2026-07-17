@@ -18574,6 +18574,25 @@ async function workerNewsDiscussed({ token, signupBase, fetch: fetch2 = globalTh
   if (!res.ok) throw new NewsClientError("could not reflect the discussion (" + res.status + ")");
   return res.json();
 }
+async function workerNewsOpened({ token, signupBase, fetch: fetch2 = globalThis.fetch, guid: guid3, source } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const g = String(guid3 || "").trim();
+  if (!g) throw new NewsClientError("a news item is required");
+  const res = await fetch2(`${base2(signupBase)}/membership/news-opened`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ guid: g, ...source ? { source: String(source) } : {} }) });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("not signed in");
+  if (!res.ok) throw new NewsClientError("could not record the open (" + res.status + ")");
+  return res.json();
+}
+async function workerContentOpened({ token, signupBase, fetch: fetch2 = globalThis.fetch, type, slug } = {}) {
+  if (!token || !signupBase) throw new NewsClientError("not signed in");
+  const t = String(type || "").trim();
+  const s = String(slug || "").trim();
+  if (!t || !s) throw new NewsClientError("a content type + slug is required");
+  const res = await fetch2(`${base2(signupBase)}/membership/content-opened`, { method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ type: t, slug: s }) });
+  if (res.status === 401 || res.status === 403) throw new NewsClientError("not signed in");
+  if (!res.ok) throw new NewsClientError("could not record the open (" + res.status + ")");
+  return res.json();
+}
 
 // client/src/github-app-probe.mjs
 var GH = "https://api.github.com";
@@ -19922,6 +19941,26 @@ async function reflectNewsDiscussion(ctx, { guid: guid3 } = {}) {
     throw new OperationError("news-failed", err?.message || "could not reflect the discussion");
   }
 }
+async function recordNewsOpen(ctx, { guid: guid3, source } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerNewsOpened({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, guid: guid3, source });
+  } catch (err) {
+    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", "Sign in first.");
+    throw new OperationError("news-failed", err?.message || "could not record the open");
+  }
+}
+async function recordContentOpen(ctx, { type, slug } = {}) {
+  requireIdentity(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  try {
+    return await workerContentOpened({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, type, slug });
+  } catch (err) {
+    if (err instanceof NewsClientError && /not signed in/i.test(err.message)) throw new OperationError("not-authenticated", "Sign in first.");
+    throw new OperationError("news-failed", err?.message || "could not record the open");
+  }
+}
 async function getDiscordInvite2(ctx) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
@@ -20859,6 +20898,16 @@ var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
   comment_autopost: true
   // one comment posts immediately (deliberate engagement)
 });
+var CONTENT_ENGAGEMENT_SIGNALS = Object.freeze(["opens", "favorites", "upvotes", "comments"]);
+var DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
+  enabled: false,
+  threshold: 3,
+  // distinct engaged members before a `popular` item promotes (tunable; the network is small)
+  tier: "signed-in",
+  // whose engagement counts (any non-banned signed-in member by default)
+  signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false })
+  // opens = the owner's chosen counter
+});
 var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 var DEFAULT_REDDIT_BODY = "{short-description}";
@@ -20923,6 +20972,8 @@ var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT,
   // SOW-111: engagement-triggered news auto-share
+  content_engagement: DEFAULT_CONTENT_ENGAGEMENT,
+  // SOW-126: engagement-triggered content auto-share (the `popular` engine)
   channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
   // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
   // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
@@ -20979,6 +21030,20 @@ function normalizeNewsEngagement(raw) {
     open_threshold: asThreshold(src.open_threshold, d.open_threshold),
     tier,
     comment_autopost: asBool(src.comment_autopost, d.comment_autopost)
+  });
+}
+function normalizeContentEngagement(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const d = DEFAULT_CONTENT_ENGAGEMENT;
+  const tier = typeof src.tier === "string" && NEWS_ENGAGEMENT_TIERS.includes(src.tier.trim().toLowerCase()) ? src.tier.trim().toLowerCase() : d.tier;
+  const rawSignals = src.signals && typeof src.signals === "object" && !Array.isArray(src.signals) ? src.signals : {};
+  const signals = {};
+  for (const s of CONTENT_ENGAGEMENT_SIGNALS) signals[s] = asBool(rawSignals[s], d.signals[s]);
+  return Object.freeze({
+    enabled: asBool(src.enabled, d.enabled),
+    threshold: asThreshold(src.threshold, d.threshold),
+    tier,
+    signals: Object.freeze(signals)
   });
 }
 function normalizeTemplates(raw) {
@@ -21070,6 +21135,8 @@ function syndicationConfigFromParsed(parsed) {
     stub_templates: normalizeConfiguredTemplates(raw.stub_templates),
     channel_templates_stub: normalizeChannelTemplates(raw.channel_templates_stub),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
+    content_engagement: normalizeContentEngagement(raw.content_engagement),
+    // SOW-126
     channels: normalizeChannels(raw.channels),
     manual_assist_channels: normalizeManualAssist(raw.manual_assist_channels),
     // SOW-121
@@ -21995,6 +22062,10 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await publishNews(ctx, body ?? {}));
       case "/api/news-discussed":
         return ok(await reflectNewsDiscussion(ctx, body ?? {}));
+      case "/api/news-opened":
+        return ok(await recordNewsOpen(ctx, body ?? {}));
+      case "/api/content-opened":
+        return ok(await recordContentOpen(ctx, body ?? {}));
       case "/api/billing":
         return ok(getBilling(ctx));
       case "/api/referral":

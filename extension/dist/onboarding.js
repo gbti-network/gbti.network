@@ -6235,6 +6235,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     comment_autopost: true
     // one comment posts immediately (deliberate engagement)
   });
+  var CONTENT_ENGAGEMENT_SIGNALS = Object.freeze(["opens", "favorites", "upvotes", "comments"]);
+  var DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
+    enabled: false,
+    threshold: 3,
+    // distinct engaged members before a `popular` item promotes (tunable; the network is small)
+    tier: "signed-in",
+    // whose engagement counts (any non-banned signed-in member by default)
+    signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false })
+    // opens = the owner's chosen counter
+  });
   var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"]);
   var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
   var DEFAULT_REDDIT_BODY = "{short-description}";
@@ -6299,6 +6309,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-088 Proposal A: per-channel stub overrides
     news_engagement: DEFAULT_NEWS_ENGAGEMENT,
     // SOW-111: engagement-triggered news auto-share
+    content_engagement: DEFAULT_CONTENT_ENGAGEMENT,
+    // SOW-126: engagement-triggered content auto-share (the `popular` engine)
     channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
     // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
     // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
@@ -14488,6 +14500,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._fm = null;
       this.render();
       this._resolve();
+      try {
+        const slug = targetSlugFor(item || {});
+        if (slug && TYPE_LABEL6[item?.type] && this.client?.contentOpened) Promise.resolve(this.client.contentOpened(item.type, slug)).catch(() => {
+        });
+      } catch {
+      }
     }
     async _resolve() {
       const it = this._item || {};
@@ -15141,6 +15159,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-046 D: reflect discussion onto Discord -> { ok, reflected }
       newsOpened: (guid, source) => request("POST", "/api/news-opened", { guid, ...source ? { source } : {} }),
       // SOW-111: the detail-open engagement beacon -> { ok, counted, posted }
+      contentOpened: (type, slug) => request("POST", "/api/content-opened", { type, slug }),
+      // SOW-126: the content detail-open engagement beacon -> { ok, counted, openers }
       setContentStatus: ({ path, status: status2 }) => request("POST", "/api/content/status", { path, status: status2 }),
       // SOW-106: member self-unpublish/republish -> { ok, prNumber?, noop? }
       renameContent: ({ path, newSlug }) => request("POST", "/api/content/rename", { path, newSlug }),
