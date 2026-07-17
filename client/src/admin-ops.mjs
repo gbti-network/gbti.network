@@ -21,7 +21,7 @@ import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, Conte
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
 import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111 + SOW-088
 import { addCouponEdit, updateCouponEdit, CouponEditError } from '../../membership/coupon-edits.mjs'; // SOW-119
-import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088
+import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-125
 import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
 
@@ -627,11 +627,24 @@ export async function getSyndicationSettings(ctx) {
   const cfg = syndicationConfigFromParsed(parsed);
   const channels = {};
   for (const name of SYNDICATION_CHANNEL_NAMES) channels[name] = Boolean(cfg.channels?.[name]);
-  return { settings: { enabled: cfg.enabled, requireApproval: cfg.require_approval, holdMinutes: cfg.hold_minutes, channels }, channelNames: [...SYNDICATION_CHANNEL_NAMES] };
+  // SOW-125: the per-type-per-channel auto-share matrix, the per-channel delay overrides, and the
+  // channel-capability map so the UI derives auto/manual/building from ONE source (no stale "building" flags).
+  const autoMatrix = {};
+  for (const t of AUTO_TYPES) { autoMatrix[t] = {}; for (const ch of MATRIX_CHANNELS) autoMatrix[t][ch] = cfg.auto_matrix?.[t]?.[ch] ?? 'off'; }
+  return {
+    settings: {
+      enabled: cfg.enabled, requireApproval: cfg.require_approval, holdMinutes: cfg.hold_minutes, channels,
+      autoMatrix, channelHoldMinutes: { ...cfg.channel_hold_minutes },
+    },
+    channelNames: [...SYNDICATION_CHANNEL_NAMES],
+    // SOW-125: matrixChannels (auto + manual) drive the matrix columns; autoChannels (auto-only) drive the
+    // per-channel delay inputs; capability lets the UI derive auto/manual/building from ONE source.
+    autoTypes: [...AUTO_TYPES], matrixChannels: [...MATRIX_CHANNELS], autoChannels: [...AUTO_CHANNELS], autoModes: [...AUTO_MODES], capability: { ...CHANNEL_CAPABILITY },
+  };
 }
 
-export async function setSyndicationSettings(ctx, { enabled, requireApproval, holdMinutes, channels } = {}) {
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setSyndicationSettingsEdit(parsed, { enabled, requireApproval, holdMinutes, channels }, actionCtx(ctx)), {
+export async function setSyndicationSettings(ctx, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes } = {}) {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setSyndicationSettingsEdit(parsed, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes }, actionCtx(ctx)), {
     branch: 'gbti/syndication-settings',
     message: 'Set the syndication pipeline settings',
     title: 'Set syndication settings',

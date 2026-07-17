@@ -11183,6 +11183,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // membership/syndication-config-core.mjs
   var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto"]);
+  var CHANNEL_CAPABILITY = Object.freeze({
+    discord: "auto",
+    "discord-category": "auto",
+    reddit: "auto",
+    devto: "auto",
+    mastodon: "auto",
+    // SOW-123
+    bluesky: "auto",
+    // SOW-122
+    x: "manual",
+    // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
+    linkedin: "building"
+  });
+  function channelCapability(name) {
+    return CHANNEL_CAPABILITY[name] ?? "building";
+  }
+  var AUTO_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
+  var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
+  var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
+  var AUTO_MODES = Object.freeze(["off", "on", "popular"]);
+  function defaultAutoMode(type) {
+    return type === "share" ? "off" : "on";
+  }
   var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
   var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
   var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
@@ -11264,8 +11287,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
     // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
     // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
-    manual_assist_channels: Object.freeze([])
+    manual_assist_channels: Object.freeze([]),
+    // SOW-125: per-type-per-channel auto-share modes (off | on | popular). Layers on `channels` (a channel must
+    // also be enabled + have its secret). The default (an absent matrix) is shares OFF, every other type ON.
+    auto_matrix: buildDefaultAutoMatrix(),
+    // SOW-125: per-channel delay override in minutes (absent -> the global hold_minutes). Lets one channel post
+    // sooner/later than another for the same item.
+    channel_hold_minutes: Object.freeze({})
   });
+  function buildDefaultAutoMatrix() {
+    const m = {};
+    for (const t of AUTO_TYPES) {
+      m[t] = {};
+      for (const ch of MATRIX_CHANNELS) m[t][ch] = defaultAutoMode(t);
+      Object.freeze(m[t]);
+    }
+    return Object.freeze(m);
+  }
 
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
@@ -11405,6 +11443,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .note-inline { font-size:12.5px; color:var(--muted); line-height:1.5; margin-top:14px; padding-top:14px; border-top:1.5px solid var(--line); }
   .note-inline b { color:var(--fg); }
 
+  /* SOW-125: auto-share matrix + per-channel delays */
+  .mtx-scroll { overflow-x:auto; border:1.5px solid var(--line); border-radius:7px; }
+  table.matrix { border-collapse:collapse; width:100%; font-size:12px; }
+  table.matrix th, table.matrix td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:7px 9px; text-align:center; white-space:nowrap; }
+  table.matrix tr:last-child td { border-bottom:0; }
+  table.matrix th:last-child, table.matrix td:last-child { border-right:0; }
+  table.matrix thead th { font-family:var(--font-mono, monospace); font-size:10px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); font-weight:600; background:var(--hover); }
+  table.matrix th.rowh, table.matrix td.rowh { text-align:left; }
+  table.matrix td.rowh { font-weight:600; color:var(--fg); background:var(--hover); }
+  table.matrix select { width:100%; min-width:76px; box-sizing:border-box; background:var(--bg); border:1.5px solid var(--line); border-radius:6px; color:var(--fg); font:inherit; font-size:12px; padding:5px 6px; outline:none; }
+  table.matrix select:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(31,158,95,.18); }
+  table.matrix select:disabled { opacity:.5; cursor:default; }
+  .chandelays { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px 14px; }
+
   @media (max-width:760px){ .fgrid, .fgrid.c2 { grid-template-columns:1fr; } .tmpl { grid-template-columns:1fr; } }
 `;
   var ICONS2 = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -11426,25 +11478,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   <g id="cb-bsky"><path fill="currentColor" d="M12 10.8C10.9 8.6 8 5.2 5.3 4 3.4 3.1 2 3.6 2 5.8c0 2.2 1.2 7.2 1.9 8.2.7 1 2 .9 3.3.7-2.2.4-2.6 1.9-1.5 3.4C7.8 21 9.7 17.9 10.2 16.7c.3-.8.5-1.4.6-1.6.1.2.3.8.6 1.6.5 1.2 2.4 4.3 4.5 1.4 1.1-1.5.7-3-1.5-3.4 1.3.2 2.6.3 3.3-.7.7-1 1.9-6 1.9-8.2 0-2.2-1.4-2.7-3.3-1.8-2.7 1.2-5.6 4.6-6.7 6.8z"/></g>
   <g id="cb-substack"><path fill="currentColor" d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.539 24V10.812H1.46zM22.539 0H1.46v2.836h21.08V0z"/></g>
 </defs></svg>`;
+  var capOf = (id) => id === "substack" ? "manual" : channelCapability(id);
+  var isTileActive = (id) => capOf(id) === "auto" || id === "x";
   var TILE_CHANNELS = [
-    { id: "discord", name: "Discord", sub: "Featured", icon: "cb-discord", cls: "br-discord", active: true },
-    { id: "discord-category", name: "Discord", sub: "Category", icon: "cb-discord", cls: "br-discord", active: true },
-    { id: "reddit", name: "Reddit", sub: "Subreddit", icon: "cb-reddit", cls: "br-reddit", active: true },
-    { id: "devto", name: "dev.to", sub: "Org blog", icon: "cb-devto", cls: "br-devto", active: true },
-    { id: "x", name: "X", sub: "Building", icon: "cb-x", cls: "br-x", active: false },
-    { id: "linkedin", name: "LinkedIn", sub: "Building", icon: "cb-linkedin", cls: "br-li", active: false },
-    { id: "mastodon", name: "Mastodon", sub: "Building", icon: "cb-mastodon", cls: "br-masto", active: false },
-    { id: "bluesky", name: "Bluesky", sub: "Building", icon: "cb-bsky", cls: "br-bsky", active: false },
+    { id: "discord", name: "Discord", sub: "Featured", icon: "cb-discord", cls: "br-discord" },
+    { id: "discord-category", name: "Discord", sub: "Category", icon: "cb-discord", cls: "br-discord" },
+    { id: "reddit", name: "Reddit", sub: "Subreddit", icon: "cb-reddit", cls: "br-reddit" },
+    { id: "devto", name: "dev.to", sub: "Org blog", icon: "cb-devto", cls: "br-devto" },
+    { id: "x", name: "X", sub: "Manual", icon: "cb-x", cls: "br-x" },
+    { id: "linkedin", name: "LinkedIn", sub: "Building", icon: "cb-linkedin", cls: "br-li" },
+    { id: "mastodon", name: "Mastodon", sub: "", icon: "cb-mastodon", cls: "br-masto" },
+    { id: "bluesky", name: "Bluesky", sub: "", icon: "cb-bsky", cls: "br-bsky" },
     {
       id: "substack",
       name: "Substack",
       sub: "Manual only",
       icon: "cb-substack",
       cls: "br-substack",
-      active: false,
       note: "Substack has no public write API, so posts are cross-posted by hand. This card will never toggle on as built."
     }
-  ];
+  ].map((c) => ({ ...c, active: isTileActive(c.id) }));
+  var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
+  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", mastodon: "Mastodon", bluesky: "Bluesky", x: "X" };
+  var AUTO_MODE_LABEL = { off: "Off", on: "On", popular: "Popular" };
   var TMPL_TYPES = [
     { key: "share", nm: "Share", df: "reshare line" },
     { key: "post", nm: "Post", df: "article" },
@@ -11543,6 +11599,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!p) return "";
       const ready = p.requireApproval ? "hold" : Number(p.holdMinutes) > 0 ? "auto" : "now";
       const chips = PIPE_CHIPS.map((c) => c.soon || c.manual ? `<span class="chan soon"${c.title ? ` title="${esc(c.title)}"` : ""}><span class="cbx"></span>${esc(c.label)} <span class="tag">${c.manual ? "manual" : "building"}</span></span>` : `<span class="chan${p.channels?.[c.id] ? " on" : ""}" data-pipe-chan="${esc(c.id)}" role="checkbox" aria-checked="${p.channels?.[c.id] ? "true" : "false"}" tabindex="0"><span class="cbx"><svg viewBox="0 0 24 24"><use href="#c-check"/></svg></span>${esc(c.label)}</span>`).join("");
+      const cell = (type, ch) => {
+        const val = p.autoMatrix?.[type]?.[ch] ?? "off";
+        const opts = AUTO_MODES.map((m) => `<option value="${esc(m)}"${m === val ? " selected" : ""}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join("");
+        return `<td><select data-matrix-cell data-mtype="${esc(type)}" data-mchan="${esc(ch)}">${opts}</select></td>`;
+      };
+      const chTitle = (ch) => channelCapability(ch) === "manual" ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + " posts as a manual Social Queue task, not an automatic post.")}"` : "";
+      const matrixHead = `<tr><th class="rowh">Content type</th>${MATRIX_CHANNELS.map((ch) => `<th${chTitle(ch)}>${esc(MATRIX_CHAN_LABEL[ch] || ch)}</th>`).join("")}</tr>`;
+      const matrixRows = AUTO_TYPES.map((type) => `<tr><td class="rowh">${esc(MATRIX_TYPE_LABEL[type] || type)}</td>${MATRIX_CHANNELS.map((ch) => cell(type, ch)).join("")}</tr>`).join("");
+      const delays = AUTO_CHANNELS.map((ch) => {
+        const dv = p.channelHoldMinutes?.[ch];
+        const dval = dv === void 0 || dv === null ? "" : String(dv);
+        return `<div class="field"><label>${esc(MATRIX_CHAN_LABEL[ch] || ch)}</label>
+        <input class="ctrl" type="number" min="0" max="1440" data-chan-hold="${esc(ch)}" value="${esc(dval)}" placeholder="${esc(String(p.holdMinutes))}" /></div>`;
+      }).join("");
       return `<section class="card" id="sec-pipeline" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-pipe"/></svg></span>
         <div><h2>Syndication pipeline</h2><p>Changes go live on the next mirror sync. Flagged items always need approval.</p></div>
@@ -11568,6 +11638,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         </div>
         <div class="field" style="margin-top:18px"><label>Destinations</label>
           <div class="chgroup">${chips}</div></div>
+        <div class="field" style="margin-top:20px"><label>Auto-share by content type</label>
+          <div class="mtx-scroll"><table class="matrix"><thead>${matrixHead}</thead><tbody>${matrixRows}</tbody></table></div>
+          <span class="hint">X posts as a manual Social Queue task, not an automatic post.</span>
+          <span class="hint">Popular posts only when enough members engage (coming soon).</span></div>
+        <div class="field" style="margin-top:20px"><label>Per-channel delay (minutes)</label>
+          <div class="chandelays">${delays}</div>
+          <span class="hint">Blank uses the hold window above. A channel posts this many minutes after publish (or after approval).</span></div>
       </div>
       <div class="cardfoot"><span class="fmsg" data-fmsg></span>
         <button class="btn btn-ghost" type="button" data-discard="pipe">Discard</button>
@@ -11760,6 +11837,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           }
         });
       });
+      this.$$("[data-matrix-cell], [data-chan-hold]").forEach((el) => {
+        el.addEventListener("change", () => {
+          this._pipeDirty = true;
+          this._markDirty("sec-pipeline");
+        });
+        el.addEventListener("input", () => {
+          this._pipeDirty = true;
+          this._markDirty("sec-pipeline");
+        });
+      });
       this.on("[data-save-pipe]", "click", () => this._savePipeline());
       this.$$("[data-tile]").forEach((t) => t.addEventListener("click", () => {
         const id = t.dataset.tile;
@@ -11884,11 +11971,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       let holdMinutes = Number(this.$("[data-pipe-hold]")?.value ?? 60);
       if (!Number.isFinite(holdMinutes) || holdMinutes < 0) holdMinutes = 60;
       if (ready === "now") holdMinutes = 0;
+      const autoMatrix = {};
+      this.$$("[data-matrix-cell]").forEach((sel) => {
+        const type = sel.dataset.mtype;
+        const ch = sel.dataset.mchan;
+        if (!type || !ch) return;
+        (autoMatrix[type] ??= {})[ch] = sel.value;
+      });
+      const channelHoldMinutes = {};
+      this.$$("[data-chan-hold]").forEach((inp) => {
+        channelHoldMinutes[inp.dataset.chanHold] = inp.value === "" ? "" : Number(inp.value);
+      });
       this._run(() => this.client.setSyndicationSettings({
         enabled: this.$("[data-pipe-enabled]")?.value === "true",
         requireApproval: ready === "hold",
         holdMinutes,
-        channels
+        channels,
+        autoMatrix,
+        channelHoldMinutes
       }));
     }
     async _saveTemplates() {

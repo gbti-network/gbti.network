@@ -24,6 +24,8 @@ import { buildSyndicationItem, publicUrlFor } from './lib/content-syndication.mj
 import { reverseMembersIndex, createMentionResolver } from './lib/discord-mention.mjs';
 import { enqueueViaKvRest } from './lib/syndication-rest.mjs';
 import { flagText } from '../membership/moderation-flags.mjs'; // SOW-087: the moderation word-list gate
+import { loadSyndicationConfig } from '../membership/syndication-config.mjs'; // SOW-125: the auto-share matrix
+import { deliverChannelsForType } from '../membership/syndication-config-core.mjs'; // SOW-125: per-type gate
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -109,6 +111,12 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   });
   const siteOrigin = env.SITE_ORIGIN || 'https://gbti.network';
 
+  // SOW-125: the per-type-per-channel auto-share matrix. An item is only enqueued if its TYPE has at least one
+  // channel set to `on` (auto at publish) AND enabled. Shares default to OFF everywhere, so a share is skipped
+  // here (manual syndication is unaffected). Fail-open note: if the config cannot be read, `cfg` is the
+  // fail-closed default (shares off, the rest on for enabled channels), matching the documented behavior.
+  const cfg = deps.config ?? loadSyndicationConfig(root);
+
   // Build a publishable item from each added path (SOW-087: shares now enqueue here too, at publish time).
   // SOW-112: a permalink RENAME adds the file at its new path, which this diff-of-adds would announce as a
   // brand-new publish. A rename-generated redirectFrom entry has the canonical URL shape (legacy migration
@@ -124,6 +132,13 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
     if (!item) continue;
     if (Array.isArray(fm.redirectFrom) && fm.redirectFrom.some((e) => RENAME_MARK_RE.test(String(e || '').trim()))) {
       console.log(`  skip (a permalink rename, already announced at its original publish): ${rel}`);
+      continue;
+    }
+    // SOW-125: skip a type with NO channel set to deliver (`on`) — auto OR manual (e.g. shares by default).
+    // Nothing to auto-post AND nothing to enqueue as a manual task, so there is nothing to queue.
+    const deliverChannels = deliverChannelsForType(cfg, item.type);
+    if (deliverChannels.length === 0) {
+      console.log(`  skip (auto-share off for type "${item.type}" on every channel): ${rel}`);
       continue;
     }
     built.push({ item, fm, rel });

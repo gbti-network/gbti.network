@@ -9,7 +9,7 @@
 // client (the SOW-070 upgrade race).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck } from '../workspace-core.mjs';
-import { DEFAULT_STUB_TEMPLATES, DEFAULT_CHANNEL_STUB_TEMPLATES } from '../../../membership/syndication-config-core.mjs'; // SOW-088 Proposal A: the built-in stub defaults
+import { DEFAULT_STUB_TEMPLATES, DEFAULT_CHANNEL_STUB_TEMPLATES, CHANNEL_CAPABILITY, channelCapability, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES } from '../../../membership/syndication-config-core.mjs'; // SOW-088 stub defaults + SOW-125 capability/matrix
 import './gbti-syndication-tracker.mjs'; // SOW-088: the Publishing Activity datatable nests inside this workspace
 
 const AMBER = '#d8901a';
@@ -150,6 +150,20 @@ const CSS = `
   .note-inline { font-size:12.5px; color:var(--muted); line-height:1.5; margin-top:14px; padding-top:14px; border-top:1.5px solid var(--line); }
   .note-inline b { color:var(--fg); }
 
+  /* SOW-125: auto-share matrix + per-channel delays */
+  .mtx-scroll { overflow-x:auto; border:1.5px solid var(--line); border-radius:7px; }
+  table.matrix { border-collapse:collapse; width:100%; font-size:12px; }
+  table.matrix th, table.matrix td { border-bottom:1px solid var(--line); border-right:1px solid var(--line); padding:7px 9px; text-align:center; white-space:nowrap; }
+  table.matrix tr:last-child td { border-bottom:0; }
+  table.matrix th:last-child, table.matrix td:last-child { border-right:0; }
+  table.matrix thead th { font-family:var(--font-mono, monospace); font-size:10px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); font-weight:600; background:var(--hover); }
+  table.matrix th.rowh, table.matrix td.rowh { text-align:left; }
+  table.matrix td.rowh { font-weight:600; color:var(--fg); background:var(--hover); }
+  table.matrix select { width:100%; min-width:76px; box-sizing:border-box; background:var(--bg); border:1.5px solid var(--line); border-radius:6px; color:var(--fg); font:inherit; font-size:12px; padding:5px 6px; outline:none; }
+  table.matrix select:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(31,158,95,.18); }
+  table.matrix select:disabled { opacity:.5; cursor:default; }
+  .chandelays { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:12px 14px; }
+
   @media (max-width:760px){ .fgrid, .fgrid.c2 { grid-template-columns:1fr; } .tmpl { grid-template-columns:1fr; } }
 `;
 
@@ -173,21 +187,34 @@ const ICONS = `<svg width="0" height="0" style="position:absolute" aria-hidden="
   <g id="cb-substack"><path fill="currentColor" d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.539 24V10.812H1.46zM22.539 0H1.46v2.836h21.08V0z"/></g>
 </defs></svg>`;
 
-// The template-editing destinations (SOW-088). Active tiles have a working adapter; the rest render "soon".
-// Substack is MANUAL, not "building": it has no public write API and no prefill intent, so no adapter is
-// buildable and none is planned. Honest limits + the manual SOP: .data/ops/channel-ops/substack.md.
+// The template-editing destinations (SOW-088). SOW-125: `active` (editable) + the sub-label are DERIVED from
+// the single capability source, not hardcoded flags, so an `auto` channel (Mastodon, Bluesky) is editable
+// without a stale "building" tag. Substack is MANUAL, not "building" (no public write API and no prefill
+// intent, so no adapter is buildable and none is planned); LinkedIn is still `building`. Honest limits + the
+// manual SOP: .data/ops/channel-ops/substack.md.
+// capOf: Substack has no config flag, so it is a static `manual` tile; every other tile reads the shared map.
+const capOf = (id) => (id === 'substack' ? 'manual' : channelCapability(id));
+// A tile is editable when its adapter posts automatically (`auto`) OR it is X (manual-assist, but its template
+// still renders the Social Queue text). Substack (manual, no adapter/prefill) and LinkedIn (building) stay off.
+const isTileActive = (id) => capOf(id) === 'auto' || id === 'x';
 const TILE_CHANNELS = [
-  { id: 'discord', name: 'Discord', sub: 'Featured', icon: 'cb-discord', cls: 'br-discord', active: true },
-  { id: 'discord-category', name: 'Discord', sub: 'Category', icon: 'cb-discord', cls: 'br-discord', active: true },
-  { id: 'reddit', name: 'Reddit', sub: 'Subreddit', icon: 'cb-reddit', cls: 'br-reddit', active: true },
-  { id: 'devto', name: 'dev.to', sub: 'Org blog', icon: 'cb-devto', cls: 'br-devto', active: true },
-  { id: 'x', name: 'X', sub: 'Building', icon: 'cb-x', cls: 'br-x', active: false },
-  { id: 'linkedin', name: 'LinkedIn', sub: 'Building', icon: 'cb-linkedin', cls: 'br-li', active: false },
-  { id: 'mastodon', name: 'Mastodon', sub: 'Building', icon: 'cb-mastodon', cls: 'br-masto', active: false },
-  { id: 'bluesky', name: 'Bluesky', sub: 'Building', icon: 'cb-bsky', cls: 'br-bsky', active: false },
-  { id: 'substack', name: 'Substack', sub: 'Manual only', icon: 'cb-substack', cls: 'br-substack', active: false,
+  { id: 'discord', name: 'Discord', sub: 'Featured', icon: 'cb-discord', cls: 'br-discord' },
+  { id: 'discord-category', name: 'Discord', sub: 'Category', icon: 'cb-discord', cls: 'br-discord' },
+  { id: 'reddit', name: 'Reddit', sub: 'Subreddit', icon: 'cb-reddit', cls: 'br-reddit' },
+  { id: 'devto', name: 'dev.to', sub: 'Org blog', icon: 'cb-devto', cls: 'br-devto' },
+  { id: 'x', name: 'X', sub: 'Manual', icon: 'cb-x', cls: 'br-x' },
+  { id: 'linkedin', name: 'LinkedIn', sub: 'Building', icon: 'cb-linkedin', cls: 'br-li' },
+  { id: 'mastodon', name: 'Mastodon', sub: '', icon: 'cb-mastodon', cls: 'br-masto' },
+  { id: 'bluesky', name: 'Bluesky', sub: '', icon: 'cb-bsky', cls: 'br-bsky' },
+  { id: 'substack', name: 'Substack', sub: 'Manual only', icon: 'cb-substack', cls: 'br-substack',
     note: 'Substack has no public write API, so posts are cross-posted by hand. This card will never toggle on as built.' },
-];
+].map((c) => ({ ...c, active: isTileActive(c.id) }));
+
+// SOW-125: labels for the auto-share matrix (content types down the rows, deliverable channels across the top)
+// and the per-channel delay inputs.
+const MATRIX_TYPE_LABEL = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
+const MATRIX_CHAN_LABEL = { discord: 'Discord', 'discord-category': 'Discord cat', reddit: 'Reddit', devto: 'dev.to', mastodon: 'Mastodon', bluesky: 'Bluesky', x: 'X' };
+const AUTO_MODE_LABEL = { off: 'Off', on: 'On', popular: 'Popular' };
 const TMPL_TYPES = [
   { key: 'share', nm: 'Share', df: 'reshare line' },
   { key: 'post', nm: 'Post', df: 'article' },
@@ -297,6 +324,27 @@ class GbtiChannelMapManager extends GbtiElement {
     const chips = PIPE_CHIPS.map((c) => (c.soon || c.manual)
       ? `<span class="chan soon"${c.title ? ` title="${esc(c.title)}"` : ''}><span class="cbx"></span>${esc(c.label)} <span class="tag">${c.manual ? 'manual' : 'building'}</span></span>`
       : `<span class="chan${p.channels?.[c.id] ? ' on' : ''}" data-pipe-chan="${esc(c.id)}" role="checkbox" aria-checked="${p.channels?.[c.id] ? 'true' : 'false'}" tabindex="0"><span class="cbx"><svg viewBox="0 0 24 24"><use href="#c-check"/></svg></span>${esc(c.label)}</span>`).join('');
+    // SOW-125 (finding F12): every deliverable channel in MATRIX_CHANNELS (auto + the X manual-assist task) is
+    // an EDITABLE cell; the edit layer accepts a per-type X mode. An `on`/`popular` X cell enqueues a manual
+    // Social Queue task rather than an automatic post; `popular` is stored inert (engine TBD). The per-channel
+    // delay row stays auto-only (a manual task has no schedule).
+    const cell = (type, ch) => {
+      const val = p.autoMatrix?.[type]?.[ch] ?? 'off';
+      const opts = AUTO_MODES.map((m) => `<option value="${esc(m)}"${m === val ? ' selected' : ''}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join('');
+      return `<td><select data-matrix-cell data-mtype="${esc(type)}" data-mchan="${esc(ch)}">${opts}</select></td>`;
+    };
+    // A manual-assist channel (X today) gets a header title clarifying it is a manual Social Queue task.
+    const chTitle = (ch) => (channelCapability(ch) === 'manual' ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + ' posts as a manual Social Queue task, not an automatic post.')}"` : '');
+    const matrixHead = `<tr><th class="rowh">Content type</th>${MATRIX_CHANNELS.map((ch) => `<th${chTitle(ch)}>${esc(MATRIX_CHAN_LABEL[ch] || ch)}</th>`).join('')}</tr>`;
+    const matrixRows = AUTO_TYPES.map((type) => `<tr><td class="rowh">${esc(MATRIX_TYPE_LABEL[type] || type)}</td>${MATRIX_CHANNELS.map((ch) => cell(type, ch)).join('')}</tr>`).join('');
+    // SOW-125: per-channel delay overrides. Auto channels only (X has no schedule, it is a manual task). Blank
+    // means the override is unset, so the global hold window applies (shown as the placeholder). Zero is kept.
+    const delays = AUTO_CHANNELS.map((ch) => {
+      const dv = p.channelHoldMinutes?.[ch];
+      const dval = (dv === undefined || dv === null) ? '' : String(dv);
+      return `<div class="field"><label>${esc(MATRIX_CHAN_LABEL[ch] || ch)}</label>
+        <input class="ctrl" type="number" min="0" max="1440" data-chan-hold="${esc(ch)}" value="${esc(dval)}" placeholder="${esc(String(p.holdMinutes))}" /></div>`;
+    }).join('');
     return `<section class="card" id="sec-pipeline" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-pipe"/></svg></span>
         <div><h2>Syndication pipeline</h2><p>Changes go live on the next mirror sync. Flagged items always need approval.</p></div>
@@ -322,6 +370,13 @@ class GbtiChannelMapManager extends GbtiElement {
         </div>
         <div class="field" style="margin-top:18px"><label>Destinations</label>
           <div class="chgroup">${chips}</div></div>
+        <div class="field" style="margin-top:20px"><label>Auto-share by content type</label>
+          <div class="mtx-scroll"><table class="matrix"><thead>${matrixHead}</thead><tbody>${matrixRows}</tbody></table></div>
+          <span class="hint">X posts as a manual Social Queue task, not an automatic post.</span>
+          <span class="hint">Popular posts only when enough members engage (coming soon).</span></div>
+        <div class="field" style="margin-top:20px"><label>Per-channel delay (minutes)</label>
+          <div class="chandelays">${delays}</div>
+          <span class="hint">Blank uses the hold window above. A channel posts this many minutes after publish (or after approval).</span></div>
       </div>
       <div class="cardfoot"><span class="fmsg" data-fmsg></span>
         <button class="btn btn-ghost" type="button" data-discard="pipe">Discard</button>
@@ -501,6 +556,12 @@ class GbtiChannelMapManager extends GbtiElement {
       ch.addEventListener('click', flip);
       ch.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); } });
     });
+    // SOW-125: the auto-share matrix selects + per-channel delay inputs arm the same pipeline card (many
+    // elements, so $$ not the single-element $ list above).
+    this.$$('[data-matrix-cell], [data-chan-hold]').forEach((el) => {
+      el.addEventListener('change', () => { this._pipeDirty = true; this._markDirty('sec-pipeline'); });
+      el.addEventListener('input', () => { this._pipeDirty = true; this._markDirty('sec-pipeline'); });
+    });
     this.on('[data-save-pipe]', 'click', () => this._savePipeline());
 
     // Templates: tile switching keeps per-channel working copies; fields arm the card.
@@ -601,11 +662,24 @@ class GbtiChannelMapManager extends GbtiElement {
     let holdMinutes = Number(this.$('[data-pipe-hold]')?.value ?? 60);
     if (!Number.isFinite(holdMinutes) || holdMinutes < 0) holdMinutes = 60;
     if (ready === 'now') holdMinutes = 0;
+    // SOW-125: the auto-share matrix (auto channels only; X carries no data-matrix-cell and the edit layer
+    // rejects a manual channel), sent as the full { type: { channel: mode } } (the edit layer writes only the
+    // changed cells). Per-channel delays: an empty input sends '' to clear the override.
+    const autoMatrix = {};
+    this.$$('[data-matrix-cell]').forEach((sel) => {
+      const type = sel.dataset.mtype; const ch = sel.dataset.mchan;
+      if (!type || !ch) return;
+      (autoMatrix[type] ??= {})[ch] = sel.value;
+    });
+    const channelHoldMinutes = {};
+    this.$$('[data-chan-hold]').forEach((inp) => { channelHoldMinutes[inp.dataset.chanHold] = inp.value === '' ? '' : Number(inp.value); });
     this._run(() => this.client.setSyndicationSettings({
       enabled: this.$('[data-pipe-enabled]')?.value === 'true',
       requireApproval: ready === 'hold',
       holdMinutes,
       channels,
+      autoMatrix,
+      channelHoldMinutes,
     }));
   }
 

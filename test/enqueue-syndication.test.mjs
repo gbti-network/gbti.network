@@ -5,6 +5,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { main, toQueueInput } from '../scripts/enqueue-syndication.mjs';
+import { syndicationConfigFromParsed } from '../membership/syndication-config-core.mjs';
+
+// SOW-125: inject an explicit config so a test never depends on the live house/syndication-config.yml. Enable a
+// couple of auto channels; the default matrix (posts on, shares off) then drives the enqueue gate.
+const CFG_POSTS_ON = syndicationConfigFromParsed({ enabled: true, channels: { discord: true, 'discord-category': true } });
+// A config that ALSO auto-shares shares (share cell flipped on for discord).
+const CFG_SHARES_ON = syndicationConfigFromParsed({ enabled: true, channels: { discord: true, 'discord-category': true }, auto_matrix: { share: { discord: 'on' } } });
 
 function fakeKvFetch(store) {
   return async (url, opts = {}) => {
@@ -29,10 +36,11 @@ const FILES = {
   'members/alice/shares/s1.md': SHARE,
   'members/alice/profile.md': PROFILE,
 };
-const deps = (store) => ({
+const deps = (store, config = CFG_POSTS_ON) => ({
   readFile: (rel) => FILES[rel] ?? null,
   resolveMention: async (author) => `@${author}`,
   enqueueFetch: fakeKvFetch(store),
+  config, // SOW-125: the auto-share matrix that gates the enqueue
 });
 
 test('toQueueInput maps a published post to a metadata-only queue input (no body)', () => {
@@ -86,17 +94,28 @@ test('toQueueInput stamps moderation flags from title + blurb', () => {
   assert.deepEqual(clean.flags, []);
 });
 
-test('apply enqueues the published post AND the published share (draft excluded), as PENDING items', async () => {
+// SOW-125: with the DEFAULT matrix (shares off), a published share is SKIPPED at enqueue; the post still
+// enqueues. This is the fix for shares auto-posting to Bluesky. The draft is excluded as before.
+test('apply enqueues the post but SKIPS the share by default (shares off), as PENDING items', async () => {
   const store = new Map();
   const added = ['members/alice/posts/x/index.md', 'members/alice/posts/d/index.md', 'members/alice/shares/s1.md'];
   const r = await main({ argv: ['--apply'], env: { ...ENV, SYNDICATE_ADDED: added.join(',') }, deps: deps(store) });
-  assert.equal(r.enqueued, 2);
-  assert.deepEqual(r.inputs.map((i) => i.targetSlug).sort(), ['members/alice/posts/x', 'members/alice/shares/s1']);
+  assert.equal(r.enqueued, 1);
+  assert.deepEqual(r.inputs.map((i) => i.targetSlug), ['members/alice/posts/x']);
   const itemKeys = [...store.keys()].filter((k) => k.startsWith('synd:item:'));
-  assert.equal(itemKeys.length, 2);
-  const items = itemKeys.map((k) => JSON.parse(store.get(k)));
-  for (const item of items) assert.equal(item.status, 'pending'); // waits for superadmin approval, never auto-posts
-  const share = items.find((i) => i.source === 'share');
+  assert.equal(itemKeys.length, 1);
+  const item = JSON.parse(store.get(itemKeys[0]));
+  assert.equal(item.status, 'pending'); // waits for superadmin approval, never auto-posts
+  assert.equal(item.source, 'post');
+});
+
+// SOW-125: when the share cell is flipped ON, the share enqueues (proving the gate is the only thing stopping it).
+test('apply enqueues the share when its matrix cell is on', async () => {
+  const store = new Map();
+  const r = await main({ argv: ['--apply'], env: { ...ENV, SYNDICATE_ADDED: 'members/alice/shares/s1.md' }, deps: deps(store, CFG_SHARES_ON) });
+  assert.equal(r.enqueued, 1);
+  const share = JSON.parse(store.get([...store.keys()].find((k) => k.startsWith('synd:item:'))));
+  assert.equal(share.source, 'share');
   assert.equal(share.url, 'https://ext.com/x'); // the off-network link
   assert.equal(share.category, 'devops');
   assert.equal(share.authorName, 'Alice Q'); // from members/alice/profile.md
@@ -109,6 +128,16 @@ test('dry-run plans but writes nothing to KV', async () => {
   assert.equal(r.enqueued, 0);
   assert.equal(r.inputs.length, 1);
   assert.equal(store.size, 0);
+});
+
+// SOW-125: fail-closed. The default config (a missing/unreadable file normalizes to this) has NO channel enabled,
+// so deliverChannelsForType is empty for every type and NOTHING is enqueued -- nothing can auto-post by accident.
+test('a missing/unreadable syndication config enqueues nothing (fail-closed)', async () => {
+  const store = new Map();
+  const added = ['members/alice/posts/x/index.md', 'members/alice/shares/s1.md'];
+  const r = await main({ argv: ['--apply'], env: { ...ENV, SYNDICATE_ADDED: added.join(',') }, deps: deps(store, syndicationConfigFromParsed({})) });
+  assert.equal(r.enqueued, 0);
+  assert.equal([...store.keys()].filter((k) => k.startsWith('synd:item:')).length, 0);
 });
 
 // SOW-112: a permalink rename adds the new path, but it must never re-announce.
@@ -124,6 +153,7 @@ test('a renamed item (canonical-shaped redirectFrom) is skipped; a legacy-migrat
     readFile: (rel) => files[rel] ?? null,
     resolveMention: async () => null,
     enqueueFetch: fakeKvFetch(store),
+    config: CFG_POSTS_ON, // SOW-125: inject the config so the test never reads the live house/syndication-config.yml
   } });
   assert.deepEqual(r.inputs.map((i) => i.targetSlug), ['members/alice/posts/legacy']);
 });

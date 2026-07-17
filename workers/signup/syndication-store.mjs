@@ -12,7 +12,7 @@ import {
   buildQueueItem, dedupeKey, normalizeItem, isDue,
 } from '../../membership/syndication-queue.mjs';
 import {
-  syndicationConfigFromParsed, isSyndicationEnabled, holdMs, DEFAULT_SYNDICATION_CONFIG,
+  syndicationConfigFromParsed, isSyndicationEnabled, holdMs, earliestChannelHoldMs, DEFAULT_SYNDICATION_CONFIG,
 } from '../../membership/syndication-config-core.mjs';
 
 export const SYND_ITEM_KEY = (id) => `synd:item:${id}`;
@@ -101,7 +101,10 @@ export async function enqueue(env, input, { kv = env?.SIGNUP_KV, now = Date.now,
     }
   }
 
-  const item = buildQueueItem(input, { now, holdMs: holdMs(config) });
+  // SOW-125: seed availableAt from the item's EARLIEST auto-`on` channel (its min per-channel hold), so a
+  // channel with a shorter delay than the global hold actually posts early. The drain re-gates each channel on
+  // its own per-channel hold from the LIVE config; this only sets when the item first becomes drain-eligible.
+  const item = buildQueueItem(input, { now, holdMs: earliestChannelHoldMs(config, input?.source) });
   await putItem(kv, item);
   await kv.put(SYND_DEDUPE_KEY(key), item.id);
   await addToPending(kv, item.id);

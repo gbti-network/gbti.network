@@ -30,6 +30,40 @@ export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'link
 // as the pipeline switches; blank/missing overrides fall back to the shared `templates` map, then built-ins.
 export const TEMPLATE_CHANNELS = CHANNELS;
 
+// SOW-125: the SINGLE source of truth for a channel's delivery capability. `auto` = a built adapter the drain
+// posts to; `manual` = a built rendering but a human posts it by hand (X after its free tier, Social Queue);
+// `building` = no adapter yet. The admin tiles + pipeline chips + the auto-share matrix all derive from THIS,
+// so adding a future channel (or promoting one from building to auto) is a ONE-LINE change here. A channel not
+// listed defaults to `building`. Substack is intentionally absent from CHANNELS (no config flag); the UI adds
+// it as a static manual tile.
+export const CHANNEL_CAPABILITY = Object.freeze({
+  discord: 'auto',
+  'discord-category': 'auto',
+  reddit: 'auto',
+  devto: 'auto',
+  mastodon: 'auto', // SOW-123
+  bluesky: 'auto', // SOW-122
+  x: 'manual', // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
+  linkedin: 'building',
+});
+/** A channel's delivery capability (`auto` | `manual` | `building`); an unknown channel is `building`. */
+export function channelCapability(name) { return CHANNEL_CAPABILITY[name] ?? 'building'; }
+
+// SOW-125: the content types that can auto-share (distinct from TEMPLATE_TYPES, which also holds reddit-body
+// etc.). The auto-share MATRIX covers every DELIVERABLE channel (auto + manual), because the owner controls
+// on/off/popular per (type, channel) for every channel they see in the UI, including X (manual-assist). The
+// `auto` subset drives the drain's adapter posts + the per-channel delay; a `manual` channel that is `on`
+// enqueues a Social Queue task instead. `building` channels (no adapter, e.g. LinkedIn) are excluded.
+export const AUTO_TYPES = Object.freeze(['share', 'post', 'product', 'prompt']);
+export const AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === 'auto'));
+export const MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== 'building'));
+// The per-cell auto-share mode. `off` = never auto; `on` = auto-enqueue at publish; `popular` = enqueue only
+// when the member-activity tracker deems it popular (the ENGINE is a deferred SOW; `popular` is stored + inert
+// at publish time here, so nothing posts by surprise).
+export const AUTO_MODES = Object.freeze(['off', 'on', 'popular']);
+/** The fail-closed default cell for a type: shares OFF (the owner ask), every other type ON (today's behavior). */
+export function defaultAutoMode(type) { return type === 'share' ? 'off' : 'on'; }
+
 // SOW-087: how a share's topic category is suggested at compose time. `ai` = Workers AI with a keyword
 // fallback; `keyword` = the free keyword match only; `off` = no suggestion (the member picks by hand).
 export const CLASSIFY_MODES = Object.freeze(['ai', 'keyword', 'off']);
@@ -135,7 +169,22 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
   // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
   manual_assist_channels: Object.freeze([]),
+  // SOW-125: per-type-per-channel auto-share modes (off | on | popular). Layers on `channels` (a channel must
+  // also be enabled + have its secret). The default (an absent matrix) is shares OFF, every other type ON.
+  auto_matrix: buildDefaultAutoMatrix(),
+  // SOW-125: per-channel delay override in minutes (absent -> the global hold_minutes). Lets one channel post
+  // sooner/later than another for the same item.
+  channel_hold_minutes: Object.freeze({}),
 });
+
+// SOW-125: the fail-closed default matrix (shares off everywhere, every other type on for every deliverable
+// channel — auto + manual). Backward compatible: a post/product/prompt keeps auto-posting to its enabled auto
+// channels and keeps enqueuing an X manual task, while a share does neither.
+function buildDefaultAutoMatrix() {
+  const m = {};
+  for (const t of AUTO_TYPES) { m[t] = {}; for (const ch of MATRIX_CHANNELS) m[t][ch] = defaultAutoMode(t); Object.freeze(m[t]); }
+  return Object.freeze(m);
+}
 
 function asBool(v, fallback) {
   if (v === true || v === false) return v;
@@ -238,6 +287,40 @@ function normalizeManualAssist(raw) {
   return Object.freeze(out);
 }
 
+// SOW-125: coerce a cell to a known auto-share mode; anything else falls back to the type default.
+function asAutoMode(v, fallback) {
+  const s = typeof v === 'string' ? v.trim().toLowerCase() : '';
+  return AUTO_MODES.includes(s) ? s : fallback;
+}
+
+// SOW-125: normalize the per-type-per-channel matrix over the KNOWN types x auto channels only. An absent cell
+// (or absent matrix) falls back to defaultAutoMode(type) — shares off, the rest on — so an old config with no
+// matrix behaves as before EXCEPT shares stop auto-posting.
+function normalizeAutoMatrix(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const t of AUTO_TYPES) {
+    const row = src[t] && typeof src[t] === 'object' && !Array.isArray(src[t]) ? src[t] : {};
+    out[t] = {};
+    for (const ch of MATRIX_CHANNELS) out[t][ch] = asAutoMode(row[ch], defaultAutoMode(t));
+    Object.freeze(out[t]);
+  }
+  return Object.freeze(out);
+}
+
+// SOW-125: normalize the per-channel delay override. Only KNOWN channels with a finite value survive (as a
+// non-negative integer of minutes); an absent channel means "use the global hold_minutes".
+function normalizeChannelHoldMinutes(raw) {
+  const src = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const ch of CHANNELS) {
+    if (src[ch] === undefined || src[ch] === null || src[ch] === '') continue;
+    const n = Number(src[ch]);
+    if (Number.isFinite(n)) out[ch] = Math.max(0, Math.floor(n));
+  }
+  return Object.freeze(out);
+}
+
 /**
  * Normalize a parsed syndication-config.yml ({ syndication: {...} } or a bare {...}) into a validated config.
  * Unknown/missing keys fall back to DEFAULT_SYNDICATION_CONFIG. Never throws.
@@ -258,6 +341,8 @@ export function syndicationConfigFromParsed(parsed) {
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
     channels: normalizeChannels(raw.channels),
     manual_assist_channels: normalizeManualAssist(raw.manual_assist_channels), // SOW-121
+    auto_matrix: normalizeAutoMatrix(raw.auto_matrix), // SOW-125
+    channel_hold_minutes: normalizeChannelHoldMinutes(raw.channel_hold_minutes), // SOW-125
   });
 }
 
@@ -338,6 +423,61 @@ export function manualAssistChannels(cfg) {
   return Array.isArray(cfg?.manual_assist_channels) ? [...cfg.manual_assist_channels] : [];
 }
 
+/** SOW-125: the auto-share mode (`off` | `on` | `popular`) for a (type, channel). Falls back to the type
+ *  default (shares off, the rest on) for a known type + MATRIX channel; `off` for anything unknown. */
+export function autoModeFor(cfg, type, channel) {
+  const v = cfg?.auto_matrix?.[type]?.[channel];
+  if (AUTO_MODES.includes(v)) return v;
+  return AUTO_TYPES.includes(type) && MATRIX_CHANNELS.includes(channel) ? defaultAutoMode(type) : 'off';
+}
+
+/** SOW-125: is this (type, channel) set to deliver at publish time (`on`)? `popular` and `off` are not. For an
+ *  auto channel this drives an adapter post; for a manual channel it drives a Social Queue task. */
+export function isAutoOn(cfg, type, channel) {
+  return autoModeFor(cfg, type, channel) === 'on';
+}
+
+/** SOW-125: the AUTO (adapter-posted) channels a type publishes to — enabled AND `on` (still subject to secret
+ *  presence at drain time). Drives the drain's adapter loop + the earliest-hold seed. */
+export function autoChannelsForType(cfg, type) {
+  return AUTO_CHANNELS.filter((ch) => isChannelEnabled(cfg, ch) && isAutoOn(cfg, type, ch));
+}
+
+/** SOW-125: EVERY channel that will DELIVER this type at publish — an auto channel that is enabled + `on`, OR a
+ *  manual-assist channel that is `on` (delivered as a Social Queue task). Empty means the publish-time enqueue
+ *  skips the type entirely. This is the enqueue-eligibility set, so an X-only (manual) type still enqueues. */
+export function deliverChannelsForType(cfg, type) {
+  return MATRIX_CHANNELS.filter((ch) => isAutoOn(cfg, type, ch)
+    && (channelCapability(ch) === 'manual' ? isManualAssist(cfg, ch) : isChannelEnabled(cfg, ch)));
+}
+
+/** SOW-125: the hold window in ms for a specific channel — the per-channel override if set, else the global. */
+export function channelHoldMs(cfg, channel) {
+  const v = cfg?.channel_hold_minutes?.[channel];
+  if (v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v))) return Math.max(0, Math.floor(Number(v))) * 60_000;
+  return holdMs(cfg);
+}
+
+/** SOW-125: ONLY the EXPLICIT per-channel override in ms, or 0 when none — NO global fallback. Used in the
+ *  APPROVAL model: a superadmin approval is "post now", so a no-override channel gets a 0 delay from approval
+ *  (posts on the next tick), while an explicit override still staggers that channel from the approval time. The
+ *  global hold_minutes is the pre-approval cancel window there, NOT an additional post-approval delay. */
+export function explicitChannelHoldMs(cfg, channel) {
+  const v = cfg?.channel_hold_minutes?.[channel];
+  if (v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v))) return Math.max(0, Math.floor(Number(v))) * 60_000;
+  return 0;
+}
+
+/** SOW-125: the item-level hold for a TYPE = the MIN per-channel hold across its auto-`on` channels, so the item
+ *  becomes drain-eligible (availableAt) as soon as its EARLIEST channel is due. Falls back to the global hold
+ *  when the type has no on-channel (defensive; the enqueue script already skips such items). This makes a
+ *  per-channel override BELOW the global hold actually post early, so it is a true override, not just a floor. */
+export function earliestChannelHoldMs(cfg, type) {
+  const chans = autoChannelsForType(cfg, type);
+  if (!chans.length) return holdMs(cfg);
+  return Math.min(...chans.map((ch) => channelHoldMs(cfg, ch)));
+}
+
 /** The small, secret-free object reconcile writes to the KV mirror (synd:config) and the Worker reads back. */
 export function toSyndicationMirror(cfg) {
   const c = syndicationConfigFromParsed(cfg);
@@ -352,5 +492,16 @@ export function toSyndicationMirror(cfg) {
     const v = typeof rawTemplates[t] === 'string' ? rawTemplates[t].trim() : '';
     if (v) configured[t] = v;
   }
-  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels }, manual_assist_channels: [...c.manual_assist_channels] };
+  // SOW-125: like templates, carry the auto_matrix CONFIGURED-ONLY (never the folded-in defaults), so a future
+  // change to defaultAutoMode applies on deploy instead of being frozen into KV as if an admin had set it. Only
+  // cells the admin actually wrote (known type x MATRIX channel, a valid mode) survive; readers re-normalize.
+  const rawMatrix = raw.auto_matrix && typeof raw.auto_matrix === 'object' && !Array.isArray(raw.auto_matrix) ? raw.auto_matrix : {};
+  const configuredMatrix = {};
+  for (const t of AUTO_TYPES) {
+    const row = rawMatrix[t] && typeof rawMatrix[t] === 'object' && !Array.isArray(rawMatrix[t]) ? rawMatrix[t] : {};
+    const outRow = {};
+    for (const ch of MATRIX_CHANNELS) { const m = typeof row[ch] === 'string' ? row[ch].trim().toLowerCase() : ''; if (AUTO_MODES.includes(m)) outRow[ch] = m; }
+    if (Object.keys(outRow).length) configuredMatrix[t] = outRow;
+  }
+  return { enabled: c.enabled, require_approval: c.require_approval, hold_minutes: c.hold_minutes, upvote_threshold: c.upvote_threshold, classify: c.classify, templates: configured, channel_templates: JSON.parse(JSON.stringify(c.channel_templates)), stub_templates: { ...c.stub_templates }, channel_templates_stub: JSON.parse(JSON.stringify(c.channel_templates_stub)), news_engagement: { ...c.news_engagement }, channels: { ...c.channels }, manual_assist_channels: [...c.manual_assist_channels], auto_matrix: configuredMatrix, channel_hold_minutes: { ...c.channel_hold_minutes } };
 }

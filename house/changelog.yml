@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 25
+    date: 2026-07-16
+    type: build
+    title: Control auto-sharing per content type and per channel
+    notes:
+      - Auto-sharing is now controlled per content type on each channel (off, on, or popular), so a member share no longer auto-posts unless you turn it on.
+      - Added a per-channel delay so one channel can post sooner or later than another, and made the X, Mastodon, and Bluesky templates editable.
+
+  - version: 0.1.0
     build: 24
     date: 2026-07-16
     type: build

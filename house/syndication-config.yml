@@ -12,6 +12,8 @@ syndication:
   enabled: true
   require_approval: false
   hold_minutes: 60
+  # SOW-125: DEPRECATED and inert. The SOW-057 upvote trigger is retired (shares enqueue at publish per SOW-087,
+  # and default OFF per SOW-125). Left only so an old reader does not choke; it drives nothing. Remove when safe.
   upvote_threshold: 2
   classify: ai
   templates:
@@ -36,6 +38,25 @@ syndication:
   # OFF in `channels` above (auto-post and manual-assist are mutually exclusive).
   manual_assist_channels:
     - x
+  # SOW-125: per-type-per-channel auto-share. Each cell is off | on | popular. `on` = auto-share this content
+  # type to this channel at publish (an auto channel posts via its adapter; a manual channel, X, enqueues a
+  # Social Queue task). `off` = never. `popular` = only when the member-activity tracker deems it popular (the
+  # ENGINE is a future SOW; `popular` is stored and INERT at publish today, so nothing posts by surprise).
+  # A missing cell falls back to the code default: SHARES OFF everywhere, every other type ON. Only cells that
+  # differ from that default need to appear here. The full share row is written OFF explicitly so this file is
+  # self-documenting: a member share does NOT auto-post (it surprised us posting to Bluesky before SOW-125).
+  # Per-channel delay lives in `channel_hold_minutes` below (minutes from publish/approval; blank = hold_minutes).
+  auto_matrix:
+    share:
+      discord: off
+      discord-category: off
+      reddit: off
+      devto: off
+      mastodon: off
+      bluesky: off
+      x: off
+  # channel_hold_minutes:      # optional per-channel delay override in minutes (0..1440); absent = hold_minutes
+  #   bluesky: 120
   channel_templates:
     devto:
       devto-footer: "The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. \n\n---\n\n>Are you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\n>To follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}"

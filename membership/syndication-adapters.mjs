@@ -9,7 +9,7 @@ import { createMastodonAdapter } from '../clients/syndication/mastodon.mjs';
 import { createBlueskyAdapter } from '../clients/syndication/bluesky.mjs';
 import { createRedditAdapter } from '../clients/syndication/reddit.mjs'; // SOW-088: the Radle port
 import { createDevtoAdapter } from '../clients/syndication/devto.mjs'; // SOW-088: full-body crossposts to the GBTI org
-import { enabledChannelNames } from './syndication-config-core.mjs';
+import { enabledChannelNames, channelCapability } from './syndication-config-core.mjs';
 import { secretsPresent } from './syndication-channels.mjs';
 
 const FACTORIES = {
@@ -42,6 +42,11 @@ export function resolveAdapterRun({ cfg, env = {}, adapters = null, fetchImpl = 
   const ready = [];
   const skipped = [];
   for (const name of enabledChannelNames(cfg)) {
+    // SOW-125: hard-exclude any channel whose capability is NOT `auto` (manual/building), regardless of the
+    // `channels` flag or secrets. A manual channel (X) is delivered by the Social Queue, never auto-posted; a
+    // building channel has no working adapter. This is belt-and-suspenders behind the drain's matrix gate so a
+    // mistaken `channels: {x: true}` can never auto-post to a manual channel.
+    if (channelCapability(name) !== 'auto') continue;
     if (secretsPresent(env, name) && all[name]?.enabled?.()) ready.push(all[name]);
     else skipped.push(name);
   }

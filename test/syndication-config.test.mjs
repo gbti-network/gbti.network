@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_SYNDICATION_CONFIG, CHANNELS, syndicationConfigFromParsed, isSyndicationEnabled, holdMs,
   upvoteThreshold, isChannelEnabled, enabledChannelNames, toSyndicationMirror, classifyMode, templateFor, newsEngagement,
+  AUTO_TYPES, AUTO_CHANNELS, AUTO_MODES, channelCapability, autoModeFor, isAutoOn, autoChannelsForType, channelHoldMs, explicitChannelHoldMs, defaultAutoMode,
 } from '../membership/syndication-config.mjs';
 
 test('a missing/empty config fails closed to the safe defaults', () => {
@@ -56,14 +57,99 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
     stub_templates: {},
     channel_templates_stub: {},
     manual_assist_channels: [], // SOW-121
+    // SOW-125: the mirror carries the matrix CONFIGURED-ONLY (like templates), so an unconfigured config yields
+    // an empty matrix and code-default changes to defaultAutoMode track deploys instead of freezing into KV.
+    auto_matrix: {},
+    channel_hold_minutes: {}, // SOW-125: no per-channel overrides -> the global hold applies
   });
   // No surprise keys (no token/secret fields).
-  assert.deepEqual(Object.keys(m).sort(), ['channel_templates', 'channel_templates_stub', 'channels', 'classify', 'enabled', 'hold_minutes', 'manual_assist_channels', 'news_engagement', 'require_approval', 'stub_templates', 'templates', 'upvote_threshold']);
+  assert.deepEqual(Object.keys(m).sort(), ['auto_matrix', 'channel_hold_minutes', 'channel_templates', 'channel_templates_stub', 'channels', 'classify', 'enabled', 'hold_minutes', 'manual_assist_channels', 'news_engagement', 'require_approval', 'stub_templates', 'templates', 'upvote_threshold']);
 });
 
 test('DEFAULT_SYNDICATION_CONFIG is frozen and disabled', () => {
   assert.ok(Object.isFrozen(DEFAULT_SYNDICATION_CONFIG));
   assert.equal(DEFAULT_SYNDICATION_CONFIG.enabled, false);
+});
+
+// SOW-125: the per-type-per-channel auto-share matrix + per-channel delay.
+
+test('SOW-125: channelCapability derives auto/manual/building from the one map', () => {
+  assert.equal(channelCapability('discord'), 'auto');
+  assert.equal(channelCapability('bluesky'), 'auto');
+  assert.equal(channelCapability('mastodon'), 'auto');
+  assert.equal(channelCapability('x'), 'manual');
+  assert.equal(channelCapability('linkedin'), 'building');
+  assert.equal(channelCapability('nope'), 'building');
+  assert.ok(AUTO_CHANNELS.includes('bluesky') && !AUTO_CHANNELS.includes('x'));
+});
+
+test('SOW-125: the default matrix is shares off, every other type on, backward-compatible', () => {
+  const c = syndicationConfigFromParsed({}); // no matrix in the file
+  for (const ch of AUTO_CHANNELS) {
+    assert.equal(autoModeFor(c, 'share', ch), 'off');
+    for (const t of ['post', 'product', 'prompt']) assert.equal(autoModeFor(c, t, ch), 'on');
+  }
+  assert.equal(defaultAutoMode('share'), 'off');
+  assert.equal(defaultAutoMode('post'), 'on');
+});
+
+test('SOW-125: autoModeFor coerces an unknown cell to the type default; unknown type/channel is off', () => {
+  const c = syndicationConfigFromParsed({ auto_matrix: { post: { bluesky: 'bogus', discord: 'popular' } } });
+  assert.equal(autoModeFor(c, 'post', 'bluesky'), 'on'); // bogus -> default (post on)
+  assert.equal(autoModeFor(c, 'post', 'discord'), 'popular');
+  assert.equal(autoModeFor(c, 'share', 'bluesky'), 'off'); // default share off
+  assert.equal(autoModeFor(c, 'unknown', 'discord'), 'off');
+  assert.equal(autoModeFor(c, 'post', 'x'), 'on'); // SOW-125: x is a MANUAL matrix channel -> default on for post
+  assert.equal(autoModeFor(c, 'post', 'linkedin'), 'off'); // linkedin is BUILDING -> not a matrix channel -> off
+  assert.ok(AUTO_MODES.includes('popular'));
+});
+
+test('SOW-125: isAutoOn + autoChannelsForType respect the matrix AND the channel master', () => {
+  const c = syndicationConfigFromParsed({
+    channels: { discord: true, bluesky: true, mastodon: false },
+    auto_matrix: { post: { discord: 'on', bluesky: 'popular', mastodon: 'on' }, share: { discord: 'on' } },
+  });
+  assert.equal(isAutoOn(c, 'post', 'discord'), true);
+  assert.equal(isAutoOn(c, 'post', 'bluesky'), false); // popular is not "on" at publish
+  // discord enabled + on -> included; bluesky is popular (not on); mastodon is on but channel disabled.
+  assert.deepEqual(autoChannelsForType(c, 'post'), ['discord']);
+  assert.deepEqual(autoChannelsForType(c, 'share'), ['discord']); // share on for discord here (overrides default)
+  assert.deepEqual(autoChannelsForType(c, 'prompt'), ['discord', 'bluesky']); // default on -> both enabled channels
+});
+
+test('SOW-125: channelHoldMs uses the per-channel override, else the global hold', () => {
+  const c = syndicationConfigFromParsed({ hold_minutes: 60, channel_hold_minutes: { bluesky: 120, discord: 0 } });
+  assert.equal(channelHoldMs(c, 'bluesky'), 120 * 60_000);
+  assert.equal(channelHoldMs(c, 'discord'), 0);
+  assert.equal(channelHoldMs(c, 'reddit'), 60 * 60_000); // no override -> global
+  assert.deepEqual(c.channel_hold_minutes, { bluesky: 120, discord: 0 }); // unknown/absent dropped
+});
+
+test('SOW-125: explicitChannelHoldMs is the override-or-0 (NO global fallback), for the approval model', () => {
+  const c = syndicationConfigFromParsed({ hold_minutes: 60, channel_hold_minutes: { bluesky: 120, discord: 0 } });
+  assert.equal(explicitChannelHoldMs(c, 'bluesky'), 120 * 60_000); // explicit override
+  assert.equal(explicitChannelHoldMs(c, 'discord'), 0); // explicit 0
+  assert.equal(explicitChannelHoldMs(c, 'reddit'), 0); // NO override -> 0 (an approved item posts now), NOT the global hold
+  assert.equal(channelHoldMs(c, 'reddit'), 60 * 60_000); // contrast: channelHoldMs DOES fall back to the global
+});
+
+test('SOW-125: normalizeChannelHoldMinutes drops unknown, non-finite, and blank entries', () => {
+  const c = syndicationConfigFromParsed({ channel_hold_minutes: { bluesky: 120, discord: 0, myspace: 5, reddit: 'abc', linkedin: '' } });
+  assert.deepEqual(c.channel_hold_minutes, { bluesky: 120, discord: 0 }); // myspace (unknown), reddit (non-finite), linkedin (blank) dropped
+});
+
+test('SOW-125: the mirror round-trips a CONFIGURED matrix + channel_hold_minutes, defaults not frozen', () => {
+  // toSyndicationMirror takes the RAW parsed doc (as reconcile passes it), so it carries only the cells the admin
+  // actually wrote; syndicationConfigFromParsed then re-derives the defaults for every other cell.
+  const m = toSyndicationMirror({ syndication: { auto_matrix: { share: { discord: 'on' }, post: { bluesky: 'off' } }, channel_hold_minutes: { bluesky: 120 } } });
+  assert.deepEqual(m.auto_matrix, { share: { discord: 'on' }, post: { bluesky: 'off' } }); // configured-only
+  assert.deepEqual(m.channel_hold_minutes, { bluesky: 120 });
+  const back = syndicationConfigFromParsed(m);
+  assert.equal(autoModeFor(back, 'share', 'discord'), 'on'); // configured cell survives
+  assert.equal(autoModeFor(back, 'post', 'bluesky'), 'off'); // configured cell survives
+  assert.equal(autoModeFor(back, 'share', 'bluesky'), 'off'); // default share off (re-derived, not frozen)
+  assert.equal(autoModeFor(back, 'post', 'discord'), 'on'); // default post on (re-derived)
+  assert.equal(channelHoldMs(back, 'bluesky'), 120 * 60_000);
 });
 
 // SOW-087: the share category suggestion knob.
@@ -118,6 +204,34 @@ test('setSyndicationSettings patches only the supplied fields, validates hard, a
   assert.throws(() => setSyndicationSettings(doc, { holdMinutes: 9999 }, ctx), TemplateEditError);
   assert.throws(() => setSyndicationSettings(doc, { channels: { myspace: true } }, ctx), TemplateEditError);
   assert.throws(() => setSyndicationSettings(doc, { enabled: 'yes' }, ctx), TemplateEditError);
+});
+
+// SOW-125: the setSyndicationSettings edit writes the auto-share matrix + per-channel delay, validates hard,
+// only writes cells that differ from the effective value, and deletes a per-channel override on '' / null.
+test('setSyndicationSettings writes the auto-share matrix + per-channel delay, validated + idempotent', async () => {
+  const { setSyndicationSettings, TemplateEditError } = await import('../membership/syndication-template-edits.mjs');
+  const doc = { syndication: { enabled: true } };
+  const ctx = { now: '2026-07-16T00:00:00.000Z', actor: { githubId: '1', login: 'atwellpub' } };
+  // Turn a share on for bluesky (default off) and delay bluesky 120 min.
+  const r = setSyndicationSettings(doc, { autoMatrix: { share: { bluesky: 'on' } }, channelHoldMinutes: { bluesky: 120 } }, ctx);
+  assert.equal(r.changed, true);
+  assert.equal(r.next.syndication.auto_matrix.share.bluesky, 'on');
+  assert.equal(r.next.syndication.channel_hold_minutes.bluesky, 120);
+  // A cell matching the effective default is NOT written (post is on by default -> no-op).
+  assert.equal(setSyndicationSettings(r.next, { autoMatrix: { post: { bluesky: 'on' } } }, ctx).changed, false);
+  // '' / null deletes a per-channel override.
+  const cleared = setSyndicationSettings(r.next, { channelHoldMinutes: { bluesky: '' } }, ctx);
+  assert.equal(cleared.changed, true);
+  assert.equal(cleared.next.syndication.channel_hold_minutes.bluesky, undefined);
+  // SOW-125: x (a MANUAL channel) IS a valid matrix cell -> the per-type manual-task control (F12).
+  const xOn = setSyndicationSettings(doc, { autoMatrix: { post: { x: 'off' } } }, ctx); // post/x defaults on -> setting off is a change
+  assert.equal(xOn.changed, true);
+  assert.equal(xOn.next.syndication.auto_matrix.post.x, 'off');
+  // Hard validation: unknown type, BUILDING channel (linkedin has no adapter), bad mode, out-of-range delay.
+  assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { widget: { bluesky: 'on' } } }, ctx), TemplateEditError);
+  assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { post: { linkedin: 'on' } } }, ctx), TemplateEditError); // linkedin is building, not a matrix channel
+  assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { post: { bluesky: 'sometimes' } } }, ctx), TemplateEditError);
+  assert.throws(() => setSyndicationSettings(doc, { channelHoldMinutes: { bluesky: 99999 } }, ctx), TemplateEditError);
 });
 
 // SOW-088: reddit-body is a first-class template type (the Reddit post body / link-post first comment),

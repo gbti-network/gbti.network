@@ -20824,6 +20824,29 @@ function removeFlagTerm(doc, { list, term } = {}, ctx = {}) {
 // membership/syndication-config-core.mjs
 var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto"]);
 var TEMPLATE_CHANNELS = CHANNELS;
+var CHANNEL_CAPABILITY = Object.freeze({
+  discord: "auto",
+  "discord-category": "auto",
+  reddit: "auto",
+  devto: "auto",
+  mastodon: "auto",
+  // SOW-123
+  bluesky: "auto",
+  // SOW-122
+  x: "manual",
+  // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
+  linkedin: "building"
+});
+function channelCapability(name) {
+  return CHANNEL_CAPABILITY[name] ?? "building";
+}
+var AUTO_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
+var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
+var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
+var AUTO_MODES = Object.freeze(["off", "on", "popular"]);
+function defaultAutoMode(type) {
+  return type === "share" ? "off" : "on";
+}
 var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
 var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
 var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
@@ -20905,8 +20928,23 @@ var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
   // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
   // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
-  manual_assist_channels: Object.freeze([])
+  manual_assist_channels: Object.freeze([]),
+  // SOW-125: per-type-per-channel auto-share modes (off | on | popular). Layers on `channels` (a channel must
+  // also be enabled + have its secret). The default (an absent matrix) is shares OFF, every other type ON.
+  auto_matrix: buildDefaultAutoMatrix(),
+  // SOW-125: per-channel delay override in minutes (absent -> the global hold_minutes). Lets one channel post
+  // sooner/later than another for the same item.
+  channel_hold_minutes: Object.freeze({})
 });
+function buildDefaultAutoMatrix() {
+  const m = {};
+  for (const t of AUTO_TYPES) {
+    m[t] = {};
+    for (const ch of MATRIX_CHANNELS) m[t][ch] = defaultAutoMode(t);
+    Object.freeze(m[t]);
+  }
+  return Object.freeze(m);
+}
 function asBool(v, fallback) {
   if (v === true || v === false) return v;
   if (v === 1 || v === 0) return v === 1;
@@ -20993,6 +21031,31 @@ function normalizeManualAssist(raw) {
   }
   return Object.freeze(out);
 }
+function asAutoMode(v, fallback) {
+  const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+  return AUTO_MODES.includes(s) ? s : fallback;
+}
+function normalizeAutoMatrix(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const t of AUTO_TYPES) {
+    const row = src[t] && typeof src[t] === "object" && !Array.isArray(src[t]) ? src[t] : {};
+    out[t] = {};
+    for (const ch of MATRIX_CHANNELS) out[t][ch] = asAutoMode(row[ch], defaultAutoMode(t));
+    Object.freeze(out[t]);
+  }
+  return Object.freeze(out);
+}
+function normalizeChannelHoldMinutes(raw) {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const out = {};
+  for (const ch of CHANNELS) {
+    if (src[ch] === void 0 || src[ch] === null || src[ch] === "") continue;
+    const n = Number(src[ch]);
+    if (Number.isFinite(n)) out[ch] = Math.max(0, Math.floor(n));
+  }
+  return Object.freeze(out);
+}
 function syndicationConfigFromParsed(parsed) {
   const raw = parsed?.syndication ?? parsed ?? {};
   const d = DEFAULT_SYNDICATION_CONFIG;
@@ -21008,8 +21071,12 @@ function syndicationConfigFromParsed(parsed) {
     channel_templates_stub: normalizeChannelTemplates(raw.channel_templates_stub),
     news_engagement: normalizeNewsEngagement(raw.news_engagement),
     channels: normalizeChannels(raw.channels),
-    manual_assist_channels: normalizeManualAssist(raw.manual_assist_channels)
+    manual_assist_channels: normalizeManualAssist(raw.manual_assist_channels),
     // SOW-121
+    auto_matrix: normalizeAutoMatrix(raw.auto_matrix),
+    // SOW-125
+    channel_hold_minutes: normalizeChannelHoldMinutes(raw.channel_hold_minutes)
+    // SOW-125
   });
 }
 function newsEngagement(cfg) {
@@ -21115,7 +21182,7 @@ function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {}) {
   return { next: d, changed: true, audit: auditEntry6(ctx, t, { stub: isStub || void 0, template: value || null }) };
 }
 var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto"]);
-function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels } = {}, ctx = {}) {
+function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === "object" ? doc : {});
   if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};
   const cur = syndicationConfigFromParsed(doc);
@@ -21156,6 +21223,44 @@ function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, ch
         d.syndication.channels[name] = on;
         changed = true;
         (detail.channels ??= {})[name] = on;
+      }
+    }
+  }
+  if (autoMatrix !== void 0) {
+    if (!autoMatrix || typeof autoMatrix !== "object" || Array.isArray(autoMatrix)) throw new TemplateEditError("autoMatrix must be an object of { type: { channel: mode } }");
+    for (const [type, row] of Object.entries(autoMatrix)) {
+      if (!AUTO_TYPES.includes(type)) throw new TemplateEditError(`unknown auto-share type "${type}"`);
+      if (!row || typeof row !== "object" || Array.isArray(row)) throw new TemplateEditError(`autoMatrix.${type} must be an object of { channel: mode }`);
+      for (const [ch, mode] of Object.entries(row)) {
+        if (!MATRIX_CHANNELS.includes(ch)) throw new TemplateEditError(`"${ch}" is not an auto-share channel`);
+        if (!AUTO_MODES.includes(mode)) throw new TemplateEditError(`auto-share mode for ${type}/${ch} must be one of ${AUTO_MODES.join(", ")}`);
+        if ((cur.auto_matrix?.[type]?.[ch] ?? "off") !== mode) {
+          if (!d.syndication.auto_matrix || typeof d.syndication.auto_matrix !== "object") d.syndication.auto_matrix = {};
+          if (!d.syndication.auto_matrix[type] || typeof d.syndication.auto_matrix[type] !== "object") d.syndication.auto_matrix[type] = {};
+          d.syndication.auto_matrix[type][ch] = mode;
+          changed = true;
+          ((detail.auto_matrix ??= {})[type] ??= {})[ch] = mode;
+        }
+      }
+    }
+  }
+  if (channelHoldMinutes !== void 0) {
+    if (!channelHoldMinutes || typeof channelHoldMinutes !== "object" || Array.isArray(channelHoldMinutes)) throw new TemplateEditError("channelHoldMinutes must be an object of { channel: minutes }");
+    for (const [name, mins] of Object.entries(channelHoldMinutes)) {
+      if (!SYNDICATION_CHANNEL_NAMES.includes(name)) throw new TemplateEditError(`unknown channel "${name}"`);
+      const clear = mins === "" || mins === null;
+      let h = null;
+      if (!clear) {
+        h = Number(mins);
+        if (!Number.isInteger(h) || h < 0 || h > 1440) throw new TemplateEditError(`channelHoldMinutes.${name} must be an integer between 0 and 1440`);
+      }
+      const curVal = cur.channel_hold_minutes?.[name];
+      if (clear ? curVal !== void 0 : curVal !== h) {
+        if (!d.syndication.channel_hold_minutes || typeof d.syndication.channel_hold_minutes !== "object") d.syndication.channel_hold_minutes = {};
+        if (clear) delete d.syndication.channel_hold_minutes[name];
+        else d.syndication.channel_hold_minutes[name] = h;
+        changed = true;
+        (detail.channel_hold_minutes ??= {})[name] = clear ? null : h;
       }
     }
   }
@@ -21697,10 +21802,32 @@ async function getSyndicationSettings(ctx) {
   const cfg = syndicationConfigFromParsed(parsed);
   const channels = {};
   for (const name of SYNDICATION_CHANNEL_NAMES) channels[name] = Boolean(cfg.channels?.[name]);
-  return { settings: { enabled: cfg.enabled, requireApproval: cfg.require_approval, holdMinutes: cfg.hold_minutes, channels }, channelNames: [...SYNDICATION_CHANNEL_NAMES] };
+  const autoMatrix = {};
+  for (const t of AUTO_TYPES) {
+    autoMatrix[t] = {};
+    for (const ch of MATRIX_CHANNELS) autoMatrix[t][ch] = cfg.auto_matrix?.[t]?.[ch] ?? "off";
+  }
+  return {
+    settings: {
+      enabled: cfg.enabled,
+      requireApproval: cfg.require_approval,
+      holdMinutes: cfg.hold_minutes,
+      channels,
+      autoMatrix,
+      channelHoldMinutes: { ...cfg.channel_hold_minutes }
+    },
+    channelNames: [...SYNDICATION_CHANNEL_NAMES],
+    // SOW-125: matrixChannels (auto + manual) drive the matrix columns; autoChannels (auto-only) drive the
+    // per-channel delay inputs; capability lets the UI derive auto/manual/building from ONE source.
+    autoTypes: [...AUTO_TYPES],
+    matrixChannels: [...MATRIX_CHANNELS],
+    autoChannels: [...AUTO_CHANNELS],
+    autoModes: [...AUTO_MODES],
+    capability: { ...CHANNEL_CAPABILITY }
+  };
 }
-async function setSyndicationSettings2(ctx, { enabled, requireApproval, holdMinutes, channels } = {}) {
-  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setSyndicationSettings(parsed, { enabled, requireApproval, holdMinutes, channels }, actionCtx(ctx)), {
+async function setSyndicationSettings2(ctx, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes } = {}) {
+  return editHouseYaml(ctx, SYNDICATION_CONFIG_PATH, (parsed) => setSyndicationSettings(parsed, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes }, actionCtx(ctx)), {
     branch: "gbti/syndication-settings",
     message: "Set the syndication pipeline settings",
     title: "Set syndication settings",

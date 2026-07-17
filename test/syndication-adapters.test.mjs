@@ -79,12 +79,15 @@ test('an adapter with missing secrets reports enabled() false', () => {
   assert.equal(createXAdapter({ env: { X_API_KEY: 'only-one' } }).enabled(), false);
 });
 
-test('resolveAdapterRun splits ready (configured) vs skipped (enabled-but-no-secret)', () => {
-  const cfg = syndicationConfigFromParsed({ enabled: true, channels: { discord: true, x: true, mastodon: false } });
-  const env = { DISCORD_BOT_TOKEN: 't' }; // discord configured; x enabled-but-no-secret
+test('resolveAdapterRun splits ready (configured) vs skipped (enabled-but-no-secret); a manual channel is hard-excluded', () => {
+  // SOW-125: x is a MANUAL channel. Even flagged on in `channels` with a secret it must NEVER be auto-posted, so
+  // resolveAdapterRun hard-excludes it (belt-and-suspenders behind the drain's matrix gate). bluesky (auto) is
+  // enabled but has no secret -> skipped; discord (auto) is configured -> ready; mastodon is not enabled -> omitted.
+  const cfg = syndicationConfigFromParsed({ enabled: true, channels: { discord: true, x: true, bluesky: true, mastodon: false } });
+  const env = { DISCORD_BOT_TOKEN: 't' };
   const { ready, skipped } = resolveAdapterRun({ cfg, env });
   assert.deepEqual(ready.map((a) => a.name), ['discord']);
-  assert.deepEqual(skipped, ['x']); // mastodon is not enabled in cfg, so it is omitted
+  assert.deepEqual(skipped, ['bluesky']); // x excluded (manual), mastodon omitted (not enabled)
 });
 
 // SOW-087: the second Discord post, routed by the item's category via the KV-mirrored map.

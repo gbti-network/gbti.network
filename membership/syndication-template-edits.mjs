@@ -5,7 +5,7 @@
 //
 // SECURITY: this only COMPUTES the file edit. CODEOWNERS + the gate are the real boundary.
 
-import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement, syndicationConfigFromParsed } from './syndication-config-core.mjs';
+import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement, syndicationConfigFromParsed, AUTO_TYPES, MATRIX_CHANNELS, AUTO_MODES } from './syndication-config-core.mjs';
 
 export class TemplateEditError extends Error {}
 
@@ -126,7 +126,7 @@ export function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {
 // idempotent against the normalized current values.
 export const SYNDICATION_CHANNEL_NAMES = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky', 'reddit', 'devto']);
 
-export function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels } = {}, ctx = {}) {
+export function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === 'object' ? doc : {});
   if (!d.syndication || typeof d.syndication !== 'object' || Array.isArray(d.syndication)) d.syndication = {};
   const cur = syndicationConfigFromParsed(doc);
@@ -155,6 +155,49 @@ export function setSyndicationSettings(doc, { enabled, requireApproval, holdMinu
         d.syndication.channels[name] = on;
         changed = true;
         (detail.channels ??= {})[name] = on;
+      }
+    }
+  }
+  // SOW-125: the per-type-per-channel auto-share matrix ({ type: { channel: 'off'|'on'|'popular' } }). Only
+  // known auto types x auto channels + known modes survive; a cell that matches the current effective value is
+  // NOT written (keeps the file minimal, defaults track the code).
+  if (autoMatrix !== undefined) {
+    if (!autoMatrix || typeof autoMatrix !== 'object' || Array.isArray(autoMatrix)) throw new TemplateEditError('autoMatrix must be an object of { type: { channel: mode } }');
+    for (const [type, row] of Object.entries(autoMatrix)) {
+      if (!AUTO_TYPES.includes(type)) throw new TemplateEditError(`unknown auto-share type "${type}"`);
+      if (!row || typeof row !== 'object' || Array.isArray(row)) throw new TemplateEditError(`autoMatrix.${type} must be an object of { channel: mode }`);
+      for (const [ch, mode] of Object.entries(row)) {
+        if (!MATRIX_CHANNELS.includes(ch)) throw new TemplateEditError(`"${ch}" is not an auto-share channel`);
+        if (!AUTO_MODES.includes(mode)) throw new TemplateEditError(`auto-share mode for ${type}/${ch} must be one of ${AUTO_MODES.join(', ')}`);
+        if ((cur.auto_matrix?.[type]?.[ch] ?? 'off') !== mode) {
+          if (!d.syndication.auto_matrix || typeof d.syndication.auto_matrix !== 'object') d.syndication.auto_matrix = {};
+          if (!d.syndication.auto_matrix[type] || typeof d.syndication.auto_matrix[type] !== 'object') d.syndication.auto_matrix[type] = {};
+          d.syndication.auto_matrix[type][ch] = mode;
+          changed = true;
+          ((detail.auto_matrix ??= {})[type] ??= {})[ch] = mode;
+        }
+      }
+    }
+  }
+  // SOW-125: per-channel delay overrides in minutes ({ channel: minutes }). An empty string / null DELETES the
+  // override (falls back to the global hold). Only known channels; 0..1440.
+  if (channelHoldMinutes !== undefined) {
+    if (!channelHoldMinutes || typeof channelHoldMinutes !== 'object' || Array.isArray(channelHoldMinutes)) throw new TemplateEditError('channelHoldMinutes must be an object of { channel: minutes }');
+    for (const [name, mins] of Object.entries(channelHoldMinutes)) {
+      if (!SYNDICATION_CHANNEL_NAMES.includes(name)) throw new TemplateEditError(`unknown channel "${name}"`);
+      const clear = mins === '' || mins === null;
+      let h = null;
+      if (!clear) {
+        h = Number(mins);
+        if (!Number.isInteger(h) || h < 0 || h > 1440) throw new TemplateEditError(`channelHoldMinutes.${name} must be an integer between 0 and 1440`);
+      }
+      const curVal = cur.channel_hold_minutes?.[name];
+      if (clear ? curVal !== undefined : curVal !== h) {
+        if (!d.syndication.channel_hold_minutes || typeof d.syndication.channel_hold_minutes !== 'object') d.syndication.channel_hold_minutes = {};
+        if (clear) delete d.syndication.channel_hold_minutes[name];
+        else d.syndication.channel_hold_minutes[name] = h;
+        changed = true;
+        (detail.channel_hold_minutes ??= {})[name] = clear ? null : h;
       }
     }
   }

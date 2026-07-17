@@ -4,9 +4,9 @@
 // is honored because the item is re-read immediately before posting. A failed channel is retried next tick up to
 // MAX_DRAIN_ATTEMPTS, then the item is marked failed. Pure over an injected kv/now/fetch/adapters (unit-tested).
 
-import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue } from '../../membership/syndication-queue.mjs';
+import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue, channelDue } from '../../membership/syndication-queue.mjs';
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
-import { isSyndicationEnabled, requiresApproval, manualAssistChannels } from '../../membership/syndication-config-core.mjs';
+import { isSyndicationEnabled, requiresApproval, manualAssistChannels, isAutoOn, channelHoldMs, explicitChannelHoldMs } from '../../membership/syndication-config-core.mjs';
 import { renderChannelText } from '../../membership/syndication-render.mjs'; // SOW-121
 import { buildSocialTask } from '../../membership/social-queue.mjs'; // SOW-121
 import { putTask } from './social-queue-store.mjs'; // SOW-121
@@ -36,32 +36,65 @@ export async function drainSyndication(env, {
 
   let sent = 0;
   let failed = 0;
+  // SOW-125: a `ready` adapter is auto-`on` for THIS item's type. A `ready` channel set to off/popular for the
+  // type is recorded as a terminal skip (never posts). A per-channel hold that has not elapsed leaves the channel
+  // HOLDING for a later tick. The `channelHoldMs` is read from the LIVE config, so a mid-flight hold change applies.
+  const onFor = (item, name) => isAutoOn(cfg, item.source, name);
+  // SOW-125: the per-channel hold is mode-aware. In the APPROVAL model an approved item posts "now" (an explicit
+  // override still staggers from approval, but a no-override channel is 0 -> the next tick); in auto-hold mode the
+  // delay is the override or the global hold. `channelDue` uses the approvedAt baseline, so these compose.
+  const holdForChannel = (item, name) => (item.approvedAt ? explicitChannelHoldMs(cfg, name) : channelHoldMs(cfg, name));
+  const chDue = (item, name, nowMs) => channelDue(item, nowMs, holdForChannel(item, name));
   for (const stale of due) {
     // Fresh read to honor a cancel that landed since the list snapshot, and to claim against a cron overlap.
     // isDue re-checks eligibility on the fresh item (SOW-087: an approved FLAGGED item is due even when
     // require_approval is off, so a plain status compare would wrongly skip it).
     let item = await getItem(kv, stale.id);
     if (!item || !isDue(item, Number(now()), { requireApproval })) continue; // never post an unapproved/cancelled item
+
+    // SOW-125: what still needs doing this tick? A FULLY-SETTLED item (every matrix-on ready channel already
+    // sent/skipped) must still be claimed so it TERMINALIZES (it may have finished its last channel on a prior
+    // tick and only needs markSent). Otherwise, if nothing is actionable and some on-channels are merely HOLDING
+    // for their per-channel delay, skip the item WITHOUT claiming or burning an attempt (so a long-delayed
+    // channel does not exhaust maxAttempts while it waits).
+    const nowMs0 = Number(now());
+    const fullySettled = !ready.some((a) => onFor(item, a.name) && !channelDone(item, a.name));
+    const hasPostable = ready.some((a) => !channelDone(item, a.name) && onFor(item, a.name) && chDue(item, a.name, nowMs0));
+    const hasMatrixOff = ready.some((a) => !channelDone(item, a.name) && !onFor(item, a.name));
+    const hasUnconfigured = skipped.some((name) => !channelDone(item, name));
+    const hasManual = manualAssist.some((ch) => !item.perChannel?.[ch]); // an on manual task to create, or an off one to record
+    if (!fullySettled && !hasPostable && !hasMatrixOff && !hasUnconfigured && !hasManual) continue; // all remaining channels are holding
+
     item = markClaimed(item, { now });
     item = { ...item, attempts: (item.attempts || 0) + 1 };
     await putItem(kv, item);
+
+    let anyFail = false; // SOW-125: a channel (auto OR a manual-assist task write) that failed retryably this tick
 
     // Record config-enabled-but-unconfigured channels as skipped (not failed).
     for (const name of skipped) {
       if (!channelDone(item, name)) item = recordChannel(item, name, { status: 'skipped', reason: 'not configured', at: Number(now()) });
     }
 
-    // SOW-121: manual-assist channels (e.g. X after its free API tier was deprecated) are NEVER auto-posted.
-    // For each such channel not already tasked, render the SAME text an adapter would post and enqueue a
-    // Social Queue task (a superadmin posts it by hand). A 'queued-manual' per-channel marker records it and
-    // lets the item terminalize normally, with ZERO paid API calls. Fail-soft: a task write miss retries next tick.
+    // SOW-121 + SOW-125: manual-assist channels (e.g. X after its free API tier was deprecated) are NEVER
+    // auto-posted; an `on` one enqueues a Social Queue task a superadmin posts by hand. The SOW-125 matrix gates
+    // this per type: a manual channel set to off/popular for this item's type is recorded a terminal skip and
+    // no task is created (so a type the owner turned off never reaches the manual queue either). A 'queued-manual'
+    // marker records an on channel with ZERO paid API calls. Fail-soft: a task write miss retries next tick.
     for (const ch of manualAssist) {
       if (item.perChannel?.[ch]) continue; // already tasked/marked on a prior tick
+      if (!onFor(item, ch)) { item = recordChannel(item, ch, { status: 'skipped', reason: 'auto-off', at: Number(now()) }); continue; }
       try {
         const text = renderChannelText(cfg, item, ch);
         await putTask(kv, buildSocialTask({ item, channel: ch, text, trigger: 'auto', now: Number(now()) }));
         item = recordChannel(item, ch, { status: 'queued-manual', at: Number(now()) });
-      } catch { /* leave untasked; retried next tick */ }
+      } catch {
+        // SOW-125: the task write (or render) failed. Mark the item as having a retryable failure so it is NOT
+        // falsely terminalized 'sent' with the manual task lost (the settlement below only inspects the auto
+        // `ready` channels). It stays pending, the task write retries next tick, and a persistent failure
+        // terminalizes via maxAttempts instead of looping forever.
+        anyFail = true;
+      }
     }
 
     // SOW-088: a REAL author mention for the auto path too. The CI enqueue's DISCORD_MENTION_OVERRIDES map
@@ -71,9 +104,16 @@ export async function drainSyndication(env, {
       if (mention) item = { ...item, mention };
     }
 
-    let anyFail = false;
+    let holding = false; // SOW-125: an on-channel whose per-channel hold has not elapsed yet (retry, do not fail)
     for (const adapter of ready) {
-      if (channelDone(item, adapter.name)) continue; // already sent on a prior tick; never re-post
+      if (channelDone(item, adapter.name)) continue; // already sent/skipped on a prior tick; never re-post
+      // SOW-125 matrix gate: a channel set to off/popular for this item's type is a terminal skip (never posts).
+      if (!onFor(item, adapter.name)) {
+        item = recordChannel(item, adapter.name, { status: 'skipped', reason: 'auto-off', at: Number(now()) });
+        continue;
+      }
+      // SOW-125 per-channel delay: not yet past this channel's hold -> leave it for a later tick (never recorded).
+      if (!chDue(item, adapter.name, Number(now()))) { holding = true; continue; }
       let result;
       try {
         result = await adapter.post(item);
@@ -91,18 +131,27 @@ export async function drainSyndication(env, {
       }
     }
 
-    if (!anyFail) {
+    // SOW-125: the item is fully settled only when every on-channel is terminal (sent/skipped). A HOLDING channel
+    // (its per-channel delay has not elapsed) keeps the item pending for a later tick and is NOT a failure. A
+    // failed channel retries until maxAttempts. Priority: holding > fail-retry > success/fail-terminal.
+    const unsettled = ready.some((a) => onFor(item, a.name) && !channelDone(item, a.name));
+    if (!unsettled && !anyFail) {
       item = markSent(item, { now });
       await putItem(kv, item);
       await removeFromPending(kv, item.id);
       sent++;
+    } else if (holding) {
+      // At least one on-channel is still waiting for its delay: retry next tick, clear the claim so it can be
+      // re-claimed (and re-cancelled). Do NOT count this against maxAttempts (the wait is not a failure).
+      item = { ...item, claimedAt: null };
+      await putItem(kv, item);
     } else if ((item.attempts || 0) >= maxAttempts) {
       item = markFailed(item, { now });
       await putItem(kv, item);
       await removeFromPending(kv, item.id);
       failed++;
     } else {
-      // Leave pending for a retry next tick; clear the claim so it can be re-claimed (and re-cancelled).
+      // A retryable channel failure: leave pending, clear the claim.
       item = { ...item, claimedAt: null };
       await putItem(kv, item);
     }

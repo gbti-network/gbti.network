@@ -183,6 +183,19 @@ export function isDue(item, now = Date.now(), { requireApproval = false } = {}) 
   return Number(now) >= Number(item.availableAt);
 }
 
+/**
+ * SOW-125: is a SPECIFIC channel due to post for this item at `now`? The per-channel hold is measured from the
+ * BASELINE: `approvedAt` in approval mode (so a superadmin who approves at 3pm gets the staggered per-channel
+ * delays FROM 3pm, not from the long-ago enqueue), else `enqueuedAt` in the auto-hold mode. A channel with no
+ * override falls back to the global hold, so a default (0-override) channel posts immediately on approval. The
+ * MATRIX gate (off/on/popular) is applied by the drain, not here; this is only the timing.
+ */
+export function channelDue(item, now, holdMsForChannel) {
+  if (!item) return false;
+  const baseline = Number(item.approvedAt) || Number(item.enqueuedAt) || 0;
+  return Number(now) >= baseline + Math.max(0, Number(holdMsForChannel) || 0);
+}
+
 /** Partition the not-terminal items into { due, holding } at time `now`. Terminal items are excluded entirely. */
 export function planDrain(items, now = Date.now(), { requireApproval = false } = {}) {
   const due = [];
