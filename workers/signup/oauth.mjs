@@ -80,10 +80,12 @@ export async function githubRefreshToken({ clientId, clientSecret, refreshToken 
 
 /** Fetch the GitHub user. Returns { githubId, githubLogin }. github_id is the immutable primary key.
  *  GitHub intermittently rejects the Worker's egress with a TRANSIENT 403 (secondary rate limit) / 429 / 5xx,
- *  which read as "the token could not be verified" even though the token is fine. Retry those a couple times with
- *  a short backoff so a valid caller is not spuriously denied. A 401 (a genuinely bad/expired token) is NOT
- *  retried. On a final failure the thrown Error carries `.status` so the caller can surface the real code. */
-export async function githubFetchUser(accessToken, fetchImpl = globalThis.fetch, { retries = 2, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+ *  which read as "the token could not be verified" even though the token is fine. A caller that has NO fallback
+ *  (the admin gate) can opt in to a short bounded retry via `{ retries: 2 }`; the DEFAULT is 0 so the hot,
+ *  frequently-polled paths (the /membership/status oracle, content reads, the OAuth callback) are NOT silently
+ *  retried, which would add latency and amplify GitHub's secondary rate limit. A 401 (a genuinely bad/expired
+ *  token) is NEVER retried. On a final failure the thrown Error carries `.status` so the caller can surface it. */
+export async function githubFetchUser(accessToken, fetchImpl = globalThis.fetch, { retries = 0, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
   let lastStatus = 0;
   let lastText = '';
   for (let attempt = 0; attempt <= retries; attempt++) {

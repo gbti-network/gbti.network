@@ -443,8 +443,11 @@ async function ensureDirectoryForFilter() {
   finally { DIRECTORY_LOADING.delete(t); }
 }
 
-/** Load Shares once for any signed-in member (SOW-077). The op + mergeAll filter by tier: paid/trial see member +
- *  public shares, a free/banned reader sees PUBLIC shares only. Fail-closed to [] for a signed-out/unknown caller. */
+/** Load Shares for any caller and let the SERVER be the boundary (SOW-077 + the build-22 fix). The op + mergeAll
+ *  filter by tier: paid/trial see member + public shares; a free/banned/UNKNOWN reader gets PUBLIC shares only
+ *  (never a hard [] while membership is still resolving). May re-load: a membership upgrade re-fetches to fold in
+ *  the member stream, and a failed/non-array fetch leaves it unloaded so the next ensure retries. A truly
+ *  signed-out caller (no identity) simply gets no items. */
 async function loadShares() {
   // ALWAYS fetch: the SERVER is the visibility boundary (operations.listShares requires an identity, then returns
   // only PUBLIC shares to a non-paid/unknown session and the full stream to paid/trialing). Fetching while

@@ -47,12 +47,18 @@ export function hashtagFacets(text) {
   const s = String(text || '');
   const enc = new TextEncoder();
   const out = [];
-  const re = /#(\w+)/g;
+  // SOW-126 review fix: anchor to a hashtag boundary (start or whitespace) and require a NON-DIGIT, non-space
+  // first char, closer to Bluesky's own richtext tag rule. This avoids attaching a tag facet to a hex color
+  // (#FF0000), a mid-word '#' (foo#bar), or a pure numeric run from an interpolated title (#1). The /u flag +
+  // \p{L}\p{N} keeps a multibyte tag whole (#café) instead of truncating at the ASCII prefix. The '#' sits at
+  // m.index + the leading boundary length; the byte range starts there, not at the whitespace.
+  const re = /(^|\s)#([^\d\s#][^\s#]*)/gu;
   let m;
   while ((m = re.exec(s)) !== null) {
-    const byteStart = enc.encode(s.slice(0, m.index)).length;
-    const byteEnd = byteStart + enc.encode(m[0]).length;
-    out.push({ index: { byteStart, byteEnd }, features: [{ $type: 'app.bsky.richtext.facet#tag', tag: m[1] }] });
+    const hashAt = m.index + m[1].length; // skip the leading start/whitespace boundary
+    const byteStart = enc.encode(s.slice(0, hashAt)).length;
+    const byteEnd = byteStart + enc.encode(`#${m[2]}`).length;
+    out.push({ index: { byteStart, byteEnd }, features: [{ $type: 'app.bsky.richtext.facet#tag', tag: m[2] }] });
   }
   return out;
 }
@@ -117,7 +123,12 @@ export function createBlueskyAdapter({ env = {}, fetchImpl = globalThis.fetch, c
       }
       const json = await res.json().catch(() => ({}));
       const uri = json?.uri || null;
-      return { ok: true, id: uri, url: uri ? blueskyWebUrl(uri, env.BLUESKY_HANDLE) : null };
+      // SOW-126 review fix: build the web URL from the AUTHENTICATED session, not the raw env value. The
+      // createSession identifier may be a handle, an email, or a DID; the session returns the canonical handle
+      // (and the stable did already used as `repo`), so a provisioner who set BLUESKY_HANDLE to an email no
+      // longer yields a malformed profile URL. Prefer session.handle, fall back to the did, then the env value.
+      const webId = session.handle || session.did || env.BLUESKY_HANDLE;
+      return { ok: true, id: uri, url: uri ? blueskyWebUrl(uri, webId) : null };
     },
   };
 }

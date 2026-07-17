@@ -16,7 +16,7 @@ function fakeFetch({ authOk = true, postOk = true, uri = 'at://did:plc:abc/app.b
   const calls = [];
   const fetchImpl = async (url, opts) => {
     calls.push({ url, opts });
-    if (url.includes('createSession')) return authOk ? { ok: true, json: async () => ({ accessJwt: 'jwt', did: 'did:plc:abc' }) } : { ok: false, status: 401, json: async () => ({ message: 'bad password' }) };
+    if (url.includes('createSession')) return authOk ? { ok: true, json: async () => ({ accessJwt: 'jwt', did: 'did:plc:abc', handle: 'gbti.bsky.social' }) } : { ok: false, status: 401, json: async () => ({ message: 'bad password' }) };
     if (url.includes('resolveHandle')) return resolveOk ? { ok: true, json: async () => ({ did: resolveDid }) } : { ok: false, status: 400, json: async () => ({}) };
     return postOk ? { ok: true, json: async () => ({ uri }) } : { ok: false, status: 400, json: async () => ({ message: 'record too long' }) };
   };
@@ -139,6 +139,21 @@ test('hashtagFacets makes each #tag a tag facet at the right byte range', () => 
   assert.equal(f[0].index.byteEnd, 6 + '#AI'.length);
   assert.equal(f[1].features[0].tag, 'ClaudeCode');
   assert.deepEqual(hashtagFacets('no tags here'), []);
+});
+
+// SOW-126 review fix: hashtagFacets must anchor to a hashtag boundary + a non-digit first char, and keep a
+// multibyte tag whole, so it does not tag a mid-word '#' or a pure-numeric run, and does not truncate an
+// accented tag. (A hex-looking '#FF0000' starts with a letter, so it is a syntactically valid tag and is kept.)
+test('hashtagFacets: boundary + non-digit-first + unicode-whole', () => {
+  assert.deepEqual(hashtagFacets('foo#bar').map((x) => x.features[0].tag), []); // mid-word '#' -> no boundary, not a tag
+  assert.deepEqual(hashtagFacets('Top 10: #1 tip').map((x) => x.features[0].tag), []); // pure numeric -> not a tag
+  assert.deepEqual(hashtagFacets('a #1a b').map((x) => x.features[0].tag), []); // digit-first -> not a tag (stricter than Bluesky, safe)
+  const cafe = hashtagFacets('love #café today');
+  assert.equal(cafe.length, 1);
+  assert.equal(cafe[0].features[0].tag, 'café'); // multibyte kept whole (not truncated to 'caf')
+  const enc = new TextEncoder();
+  assert.equal(cafe[0].index.byteStart, enc.encode('love ').length); // byte range starts at the '#', not the space
+  assert.equal(cafe[0].index.byteEnd, cafe[0].index.byteStart + enc.encode('#café').length);
 });
 
 test('a post with hashtags AND a mention carries both, ordered by byte offset', async () => {

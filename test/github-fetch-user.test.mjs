@@ -18,12 +18,18 @@ test('githubFetchUser: returns the user on a 200', async () => {
   assert.equal(calls, 1);
 });
 
-test('githubFetchUser: a transient 403 is retried then succeeds', async () => {
+test('githubFetchUser: a transient 403 is retried then succeeds (retries opt-in)', async () => {
   let calls = 0;
   const fetchImpl = async () => { calls++; return calls < 2 ? jsonRes(403, 'rate limited') : jsonRes(200, { id: 5, login: 'x' }); };
-  const u = await githubFetchUser('tok', fetchImpl, { sleep: noSleep });
+  const u = await githubFetchUser('tok', fetchImpl, { retries: 2, sleep: noSleep });
   assert.equal(u.githubId, '5');
   assert.equal(calls, 2);
+});
+
+test('githubFetchUser: the DEFAULT is no retry (hot paths are not silently retried)', async () => {
+  let calls = 0;
+  const fetchImpl = async () => { calls++; return jsonRes(403, 'rate limited'); };
+  await assert.rejects(() => githubFetchUser('tok', fetchImpl, { sleep: noSleep }), (e) => { assert.equal(calls, 1); assert.equal(e.status, 403); return true; });
 });
 
 test('githubFetchUser: a persistent 403 throws carrying the real status', async () => {

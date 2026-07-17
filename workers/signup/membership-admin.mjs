@@ -32,7 +32,9 @@ async function resolveCaller(request, env, { fetchImpl = globalThis.fetch, fetch
   if (!token) return fail(401, 'unauthorized', 'a GitHub bearer token is required');
 
   let user;
-  try { user = await fetchUser(token, fetchImpl); }
+  // SOW-126 review fix: the admin gate is RARE and fails closed with a hard 401 (no fallback), so it explicitly
+  // opts IN to the bounded transient retry (403/429/5xx). Hot paths keep the retries=0 default.
+  try { user = await fetchUser(token, fetchImpl, { retries: 2 }); }
   catch (e) {
     // Surface GitHub's real status so a transient rate-limit (403/429/5xx, retried in githubFetchUser) is not
     // confused with a genuinely bad token (401). Never echo the response body (it can carry sensitive detail).
