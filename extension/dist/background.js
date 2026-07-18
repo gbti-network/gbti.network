@@ -18964,6 +18964,20 @@ async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fe
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `operation failed (${res.status})`);
   return data;
 }
+async function getCouponUsage({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase9(signupBase) + "/membership/admin/coupon-usage", {
+    method: "GET",
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `coupon usage request failed (${res.status})`);
+  return { usage: data?.usage ?? {}, configFresh: data?.configFresh ?? false };
+}
 async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase9(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
@@ -20085,6 +20099,24 @@ async function listDiscordChannels(ctx) {
   const token = ctx.store?.get?.("githubToken");
   const channels = await getDiscordChannels({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   return { channels };
+}
+async function getCouponUsageOp(ctx) {
+  await requireAdmin(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  if (!token) throw new OperationError("not-authenticated", "sign in first");
+  try {
+    return await getCouponUsage({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new OperationError("admin-op-failed", err?.message || "could not read coupon usage");
+  }
+}
+async function refreshCouponUntil(ctx) {
+  const token = ctx.store?.get?.("githubToken");
+  if (!token) return { couponUntil: null };
+  const { status, couponUntil } = await fetchStripeStatus({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  if (status === "unknown") throw new OperationError("oracle-unreachable", "the membership oracle did not answer");
+  ctx.store?.set?.({ couponUntil: couponUntil ?? null });
+  return { couponUntil: couponUntil ?? null };
 }
 async function triggerAdminOp2(ctx, { action, params } = {}) {
   await requireAdmin(ctx);
@@ -21672,6 +21704,17 @@ async function setNewsSourceEnabled(ctx, { id, enabled } = {}) {
     { branch: `gbti/news-source-${on ? "enable" : "disable"}-${sid}`, message: `${on ? "Enable" : "Disable"} news source ${id}`, title: `${on ? "Enable" : "Disable"} news source: ${id}`, noopMsg: `news source already ${on ? "enabled" : "disabled"}: ${id}` }
   );
 }
+var COUPONS_PATH = "house/coupons.yml";
+async function getCouponPool(ctx) {
+  const raw = await ctx.reader?.readFile?.(COUPONS_PATH) || "";
+  let parsed;
+  try {
+    parsed = index_vite_proxy_tmp_default.load(raw) || {};
+  } catch {
+    parsed = {};
+  }
+  return { coupons: Array.isArray(parsed.coupons) ? parsed.coupons : [] };
+}
 var QUOTES_PATH = "house/quotes.yml";
 var quoteSlug = (text) => slugOf(String(text || "").slice(0, 40)) || "quote";
 async function getQuotePool(ctx) {
@@ -22068,6 +22111,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/content-channel-pool") return ok(await getContentChannelPool(ctx));
     if (pathname === "/api/moderation-flag-pool") return ok(await getModerationFlagPool(ctx));
     if (pathname === "/api/syndication-template-pool") return ok(await getSyndicationTemplatePool(ctx));
+    if (pathname === "/api/coupon-pool") return ok(await getCouponPool(ctx));
     if (pathname === "/api/news-engagement") return ok(await getNewsEngagementSettings(ctx));
     if (pathname === "/api/content-engagement") return ok(await getContentEngagementSettings(ctx));
     if (pathname === "/api/syndication-settings") return ok(await getSyndicationSettings(ctx));
@@ -22186,6 +22230,10 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await listDiscordChannels(ctx));
       case "/api/admin-ops":
         return ok(await triggerAdminOp2(ctx, body ?? {}));
+      case "/api/coupon-usage":
+        return ok(await getCouponUsageOp(ctx));
+      case "/api/coupon-refresh":
+        return ok(await refreshCouponUntil(ctx));
       case "/api/pr-status": {
         const n = Number(query.number);
         if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");

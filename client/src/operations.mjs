@@ -8,7 +8,7 @@
 
 import { buildContentFile, flipContentStatus, buildShareFile, shareId as makeShareId, buildCommentFile, commentId as makeCommentId, serializeContentFile, parseContentFile, contentPath, ContentValidationError, byCommentOldest } from './content-ops.mjs';
 import { publishContent, publishFiles, commitToBranchOnFork, branchName } from './publish.mjs';
-import { canPublish, canStageDrafts, isBlockedFromPublishing, canSeeNews, canFollow, canSave, canBrowse, canSeeShares } from './membership.mjs';
+import { canPublish, canStageDrafts, isBlockedFromPublishing, canSeeNews, canFollow, canSave, canBrowse, canSeeShares, fetchStripeStatus } from './membership.mjs';
 import { splitMemberMarkdown, encAssetFor, encryptViaWorker, decryptViaWorker, MemberContentLockedError } from './member-content.mjs';
 import {
   getActivity as workerGetActivity, setFavorite as workerSetFavorite, createCollection as workerCreateCollection,
@@ -1567,6 +1567,22 @@ export async function getCouponUsageOp(ctx) {
   } catch (err) {
     throw new OperationError('admin-op-failed', err?.message || 'could not read coupon usage');
   }
+}
+
+/** SOW-119 QA: re-verify the coupon grant against the live status oracle just before the expiry popup
+ *  shows. The store's couponUntil is seeded at sign-in and never re-resolved while membership stays paid,
+ *  so a member who converted to a real subscription mid-grant would keep the stale date (and the nag)
+ *  until a re-login. The oracle suppresses couponUntil for Stripe-paid, so one fresh read both corrects
+ *  the store and answers "is the grant still the paid source?". An unreachable oracle throws WITHOUT
+ *  touching the store (the popup skips that page load and retries on the next); the store is rewritten
+ *  only when the oracle actually answered. */
+export async function refreshCouponUntil(ctx) {
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) return { couponUntil: null };
+  const { status, couponUntil } = await fetchStripeStatus({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  if (status === 'unknown') throw new OperationError('oracle-unreachable', 'the membership oracle did not answer');
+  ctx.store?.set?.({ couponUntil: couponUntil ?? null });
+  return { couponUntil: couponUntil ?? null };
 }
 
 export async function triggerAdminOp(ctx, { action, params } = {}) {

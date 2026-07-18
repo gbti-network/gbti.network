@@ -38,14 +38,26 @@ export function expiryPopupDecision({ until, dismissedAt = null, now = Date.now(
   return { show: true, daysLeft };
 }
 
-/** The popup copy pieces, derived once so the shell stays markup-only. */
-export function expiryPopupCopy(daysLeft, until) {
+/** The popup copy pieces, derived once so the shell stays markup-only. Calendar-aware: ceil(remaining/24h)
+ *  reports 1 for the whole final day, so "tomorrow" must come from the LOCAL calendar-date distance, not the
+ *  count ("ends today" on the last day, "ends tomorrow" only when the end date is the next date). `count` is
+ *  the same calendar distance for the big numeral (0 on the last day), falling back to daysLeft when the
+ *  grant date does not parse. */
+export function expiryPopupCopy(daysLeft, until, now = Date.now()) {
   const date = new Date(until);
-  const dateLabel = Number.isNaN(date.getTime())
+  const bad = Number.isNaN(date.getTime());
+  const dateLabel = bad
     ? ''
     : date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-  const headline = daysLeft === 1
-    ? 'Your complimentary membership ends tomorrow'
-    : `Your complimentary membership ends in ${daysLeft} days`;
-  return { headline, dateLabel };
+  let calDays = daysLeft;
+  if (!bad) {
+    const startOfDay = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); };
+    calDays = Math.round((startOfDay(date) - startOfDay(now)) / DAY_MS); // Math.round absorbs DST hour drift
+  }
+  const headline = calDays <= 0
+    ? 'Your complimentary membership ends today'
+    : calDays === 1
+      ? 'Your complimentary membership ends tomorrow'
+      : `Your complimentary membership ends in ${calDays} days`;
+  return { headline, dateLabel, count: Math.max(0, calDays) };
 }

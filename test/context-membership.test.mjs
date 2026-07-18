@@ -25,3 +25,16 @@ test('membership() stays sync and reads the cache', () => {
   const ctx = buildContext(fakeStore({ membership: 'trialing' }));
   assert.equal(ctx.membership(), 'trialing');
 });
+
+test('membershipResolved: the heal seeds couponUntil from the oracle (and clears a stale one)', async () => {
+  // SOW-119 QA: this seed site used to drop couponUntil (the one host left behind), so the npm host's
+  // /api/status could report a coupon end date for a member who had converted to a real subscription.
+  const store = fakeStore({ membership: 'unknown', githubToken: 'tok', identity: { githubId: '7', login: 'x' }, couponUntil: '2026-01-01T00:00:00.000Z' });
+  const ctx = buildContext(store);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ status: 'paid', couponUntil: null }) });
+  try {
+    assert.equal(await ctx.membershipResolved(), 'paid');
+    assert.equal(store._m.get('couponUntil'), null, 'the stale coupon date is overwritten by the heal');
+  } finally { globalThis.fetch = realFetch; }
+});

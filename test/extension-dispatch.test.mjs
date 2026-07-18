@@ -314,3 +314,41 @@ test('SOW-111: the news-engagement settings read is public; the write is superad
   const adminOnly = await dispatch(ctxFor({ repo: adminRepo(), files: { ...files, 'house/roles.yml': 'admins:\n  - github_id: "1"\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'news-engagement-set', openThreshold: 5 } });
   assert.equal(adminOnly.status, 403);
 });
+
+test('SOW-119 QA: /api/coupon-pool is routed (the extension Coupons card was 404ing to "No coupons yet")', async () => {
+  const files = { 'house/coupons.yml': 'coupons:\n  - code: CODEABLEYEAR\n    freeDays: 365\n    active: true\n' };
+  const r = await dispatch(ctxFor({ identity: null, token: null, files }), { pathname: '/api/coupon-pool' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.coupons[0].code, 'CODEABLEYEAR');
+});
+
+test('SOW-119 QA: /api/coupon-refresh rewrites the cached couponUntil from the live oracle', async () => {
+  const data = { githubToken: 'tok', couponUntil: '2027-01-01T00:00:00.000Z' };
+  const store = { get: (k) => data[k] ?? null, set: (patch) => Object.assign(data, patch) };
+  // The oracle answers Stripe-paid (couponUntil suppressed): the stale grant date must be CLEARED.
+  const ctx = { ...ctxFor(), store, fetch: async () => ({ ok: true, json: async () => ({ status: 'paid', couponUntil: null }) }) };
+  const r = await dispatch(ctx, { pathname: '/api/coupon-refresh' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.couponUntil, null);
+  assert.equal(data.couponUntil, null, 'the stale store value is cleared');
+});
+
+test('SOW-119 QA: /api/coupon-refresh leaves the store untouched when the oracle is unreachable', async () => {
+  const data = { githubToken: 'tok', couponUntil: '2027-01-01T00:00:00.000Z' };
+  const store = { get: (k) => data[k] ?? null, set: (patch) => Object.assign(data, patch) };
+  const ctx = { ...ctxFor(), store, fetch: async () => { throw new Error('oracle down'); } };
+  const r = await dispatch(ctx, { pathname: '/api/coupon-refresh' });
+  assert.equal(r.status, 400);
+  assert.equal(data.couponUntil, '2027-01-01T00:00:00.000Z', 'a transient outage must not wipe a real grant');
+});
+
+test('SOW-119 QA: /api/coupon-refresh reports a still-live grant (and keeps the store fresh)', async () => {
+  const until = '2027-06-01T00:00:00.000Z';
+  const data = { githubToken: 'tok', couponUntil: '2027-01-01T00:00:00.000Z' };
+  const store = { get: (k) => data[k] ?? null, set: (patch) => Object.assign(data, patch) };
+  const ctx = { ...ctxFor(), store, fetch: async () => ({ ok: true, json: async () => ({ status: 'paid', couponUntil: until }) }) };
+  const r = await dispatch(ctx, { pathname: '/api/coupon-refresh' });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.couponUntil, until);
+  assert.equal(data.couponUntil, until);
+});

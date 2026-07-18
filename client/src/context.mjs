@@ -64,7 +64,7 @@ export function buildContext(store) {
       if (!token || !id?.githubId) return 'unknown';
       if (!membershipFlight) {
         membershipFlight = resolveMembership({ githubId: String(id.githubId), token, signupBase: SIGNUP_BASE, readFile: (p) => reader.readFile(p) })
-          .then(({ stripeStatus, membership }) => { store.set({ stripeStatus, membership }); return membership ?? 'unknown'; })
+          .then(({ stripeStatus, membership, couponUntil }) => { store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null }); return membership ?? 'unknown'; })
           .catch(() => 'unknown')
           .finally(() => { membershipFlight = null; });
       }

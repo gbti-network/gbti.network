@@ -15900,11 +15900,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     return { show: true, daysLeft };
   }
-  function expiryPopupCopy(daysLeft, until) {
+  function expiryPopupCopy(daysLeft, until, now = Date.now()) {
     const date = new Date(until);
-    const dateLabel = Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" });
-    const headline = daysLeft === 1 ? "Your complimentary membership ends tomorrow" : `Your complimentary membership ends in ${daysLeft} days`;
-    return { headline, dateLabel };
+    const bad = Number.isNaN(date.getTime());
+    const dateLabel = bad ? "" : date.toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" });
+    let calDays = daysLeft;
+    if (!bad) {
+      const startOfDay = (t) => {
+        const d = new Date(t);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+      };
+      calDays = Math.round((startOfDay(date) - startOfDay(now)) / DAY_MS);
+    }
+    const headline = calDays <= 0 ? "Your complimentary membership ends today" : calDays === 1 ? "Your complimentary membership ends tomorrow" : `Your complimentary membership ends in ${calDays} days`;
+    return { headline, dateLabel, count: Math.max(0, calDays) };
   }
 
   // membership/devlog-core.mjs
@@ -16644,29 +16654,35 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true });
         return;
       }
-      maybeShowExpiryPopup(status);
+      maybeShowExpiryPopup(status).catch(() => {
+      });
     });
     return { ico, loadShellAccount: () => loadShellAccount(root) };
   }
   var EXPIRY_DISMISS_KEY = "gbti-expiry-dismissed";
-  function maybeShowExpiryPopup(status) {
-    const until = status?.couponUntil;
-    if (!until || document.querySelector(".expiry-modal")) return;
+  async function maybeShowExpiryPopup(status) {
+    const cachedUntil = status?.couponUntil;
+    if (!cachedUntil || document.querySelector(".expiry-modal")) return;
     let dismissedAt = null;
     try {
       dismissedAt = JSON.parse(localStorage.getItem(EXPIRY_DISMISS_KEY) || "null")?.at ?? null;
     } catch {
       dismissedAt = null;
     }
+    if (!expiryPopupDecision({ until: cachedUntil, dismissedAt, now: Date.now() }).show) return;
+    const fresh = await api("/api/coupon-refresh");
+    const until = fresh && !fresh.error ? fresh.couponUntil : null;
+    if (!until) return;
     const { show, daysLeft } = expiryPopupDecision({ until, dismissedAt, now: Date.now() });
     if (!show) return;
-    const { headline, dateLabel } = expiryPopupCopy(daysLeft, until);
+    if (document.querySelector(".nt-welcome-overlay")) return;
+    const { headline, dateLabel, count } = expiryPopupCopy(daysLeft, until, Date.now());
     const overlay = document.createElement("div");
     overlay.className = "compose-modal expiry-modal";
     overlay.innerHTML = `<div class="compose-panel expiry-panel">
     <div class="compose-head"><b>Membership</b><button class="compose-x" type="button" aria-label="Close">${ico("x")}</button></div>
     <div class="expiry-body">
-      <div class="expiry-count">${daysLeft}</div>
+      <div class="expiry-count">${count}</div>
       <h2>${headline}</h2>
       ${dateLabel ? `<p class="expiry-date">Your complimentary year runs through <b>${dateLabel}</b>.</p>` : ""}
       <p class="expiry-note">Becoming a paying member keeps your profile, articles, products, and prompts
@@ -16685,7 +16701,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       document.removeEventListener("keydown", onEsc);
     };
     const onEsc = (e) => {
-      if (e.key === "Escape") dismiss();
+      if (e.key === "Escape" && !document.querySelector(".nt-welcome-overlay")) dismiss();
     };
     document.addEventListener("keydown", onEsc);
     overlay.addEventListener("click", (e) => {

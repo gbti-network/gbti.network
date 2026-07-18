@@ -52,11 +52,21 @@ test('a never-dismissed member shows immediately inside the window', () => {
   assert.equal(expiryPopupDecision({ until: untilInDays(3), dismissedAt: null, now: NOW }).show, true);
 });
 
-test('expiryPopupCopy shapes the headline + date', () => {
-  const one = expiryPopupCopy(1, untilInDays(1));
-  assert.equal(one.headline, 'Your complimentary membership ends tomorrow');
-  const many = expiryPopupCopy(12, untilInDays(12));
+test('expiryPopupCopy is calendar-aware: today / tomorrow / N days', () => {
+  // Local-constructed dates so the calendar assertions hold in any test-runner timezone.
+  const morning = new Date(2026, 7, 1, 9, 0).getTime();
+  const today = expiryPopupCopy(1, new Date(2026, 7, 1, 15, 0), morning); // ends 3pm the SAME day
+  assert.equal(today.headline, 'Your complimentary membership ends today');
+  assert.equal(today.count, 0);
+  const tomorrow = expiryPopupCopy(2, new Date(2026, 7, 2, 15, 0), morning); // 30h out: ceil says 2, the calendar says tomorrow
+  assert.equal(tomorrow.headline, 'Your complimentary membership ends tomorrow');
+  assert.equal(tomorrow.count, 1);
+  const many = expiryPopupCopy(12, new Date(2026, 7, 13, 15, 0), morning);
   assert.ok(many.headline.includes('12 days'));
+  assert.equal(many.count, 12);
   assert.ok(many.dateLabel.length > 0);
-  assert.equal(expiryPopupCopy(2, 'garbage').dateLabel, '');
+  const bad = expiryPopupCopy(2, 'garbage', morning); // unparseable date: fall back to the ceil count
+  assert.equal(bad.dateLabel, '');
+  assert.equal(bad.count, 2);
+  assert.ok(bad.headline.includes('2 days'));
 });

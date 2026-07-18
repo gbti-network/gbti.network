@@ -613,7 +613,7 @@ export function initShell({ active = null, nav = 'feed' } = {}) {
   // it (data-unauth hides the rest). Kept off the synchronous path so initShell's return shape is unchanged.
   loadShellAccount(root).then((status) => {
     if (!status) { mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true }); return; }
-    maybeShowExpiryPopup(status); // SOW-119 QA: the coupon-expiry countdown (all shell pages)
+    maybeShowExpiryPopup(status).catch(() => {}); // SOW-119 QA: the coupon-expiry countdown (all shell pages)
   });
   return { ico, loadShellAccount: () => loadShellAccount(root) };
 }
@@ -623,22 +623,36 @@ export function initShell({ active = null, nav = 'feed' } = {}) {
 // at most once per cooldown (7 days, collapsing to daily in the final week; the pure decision lives in
 // client-ui/src/membership-expiry.mjs). Every close path persists the dismissal instant, so the cadence
 // re-derives instead of sleeping through the deadline. The CTA is the established outbound membership
-// deep-link (there is no in-extension checkout by design).
+// deep-link (there is no in-extension checkout by design). Before nagging it re-verifies the grant against
+// the live oracle (/api/coupon-refresh), so a member who converted to a real subscription is never nagged
+// off a stale cached date.
 const EXPIRY_DISMISS_KEY = 'gbti-expiry-dismissed';
-function maybeShowExpiryPopup(status) {
-  const until = status?.couponUntil;
-  if (!until || document.querySelector('.expiry-modal')) return;
+async function maybeShowExpiryPopup(status) {
+  const cachedUntil = status?.couponUntil;
+  if (!cachedUntil || document.querySelector('.expiry-modal')) return;
   let dismissedAt = null;
   try { dismissedAt = JSON.parse(localStorage.getItem(EXPIRY_DISMISS_KEY) || 'null')?.at ?? null; } catch { dismissedAt = null; }
+  if (!expiryPopupDecision({ until: cachedUntil, dismissedAt, now: Date.now() }).show) return;
+  // The CACHED date says nag; re-verify against the live oracle first. couponUntil is seeded at sign-in and
+  // never re-resolved while membership stays paid, so a member who already converted to a real subscription
+  // would otherwise be nagged until a re-login. The recheck rewrites the store from the oracle (which
+  // suppresses couponUntil for Stripe-paid); an error answer leaves the store untouched and defers the
+  // popup to the next page load.
+  const fresh = await api('/api/coupon-refresh');
+  const until = fresh && !fresh.error ? fresh.couponUntil : null;
+  if (!until) return;
   const { show, daysLeft } = expiryPopupDecision({ until, dismissedAt, now: Date.now() });
   if (!show) return;
-  const { headline, dateLabel } = expiryPopupCopy(daysLeft, until);
+  // The first-run welcome overlay (newtab, z-1200) paints opaque ABOVE this popup; mounted beneath it, an
+  // Escape meant for the welcome would burn a snooze on a popup the member never saw. Defer to the next load.
+  if (document.querySelector('.nt-welcome-overlay')) return;
+  const { headline, dateLabel, count } = expiryPopupCopy(daysLeft, until, Date.now());
   const overlay = document.createElement('div');
   overlay.className = 'compose-modal expiry-modal';
   overlay.innerHTML = `<div class="compose-panel expiry-panel">
     <div class="compose-head"><b>Membership</b><button class="compose-x" type="button" aria-label="Close">${ico('x')}</button></div>
     <div class="expiry-body">
-      <div class="expiry-count">${daysLeft}</div>
+      <div class="expiry-count">${count}</div>
       <h2>${headline}</h2>
       ${dateLabel ? `<p class="expiry-date">Your complimentary year runs through <b>${dateLabel}</b>.</p>` : ''}
       <p class="expiry-note">Becoming a paying member keeps your profile, articles, products, and prompts
@@ -653,7 +667,9 @@ function maybeShowExpiryPopup(status) {
     overlay.remove();
     document.removeEventListener('keydown', onEsc);
   };
-  const onEsc = (e) => { if (e.key === 'Escape') dismiss(); };
+  // Ignore Escape while a welcome overlay covers the popup (it can mount after us): that keypress belongs
+  // to the welcome, and honoring it would record a dismissal the member never saw.
+  const onEsc = (e) => { if (e.key === 'Escape' && !document.querySelector('.nt-welcome-overlay')) dismiss(); };
   document.addEventListener('keydown', onEsc);
   overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); }); // nothing in-progress to lose
   overlay.querySelector('.compose-x')?.addEventListener('click', dismiss);
