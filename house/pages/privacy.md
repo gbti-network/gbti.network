@@ -15,7 +15,7 @@ _Last updated: July 18th 2026_
 
 ## 1. Who we are
 
-The GBTI Network is operated by **Gethsemane LLC** ("GBTI", "we", "our", or "us"), a limited liability company based in Dothan, Alabama, USA. For the personal data described here, Gethsemane LLC is the data controller. If you have a question about your data, email us at [opportunities@gbti.network](mailto:opportunities@gbti.network) or [contact us](/contact/).
+The GBTI Network is operated by **Gethsemane LLC** ("GBTI", "we", "our", or "us"), a United States limited liability company. For the personal data described here, Gethsemane LLC is the data controller. If you have a question about your data, email us at [opportunities+contact@gbti.network](mailto:opportunities+contact@gbti.network) or [contact us](/contact/).
 
 ## 2. The public content repository (please read this first)
 

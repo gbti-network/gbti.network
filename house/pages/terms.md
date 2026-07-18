@@ -11,7 +11,7 @@ redirectFrom: ["/terms/"]
 
 # Terms of Service
 
-The GBTI Network is operated by **Gethsemane LLC**, a limited liability company based in Dothan, Alabama, USA ("GBTI", "we", "us"). Please read these Terms of Service carefully before accessing or using GBTI products and services. By using the service, you agree to these terms.
+The GBTI Network is operated by **Gethsemane LLC**, a United States limited liability company ("GBTI", "we", "us"). Please read these Terms of Service carefully before accessing or using GBTI products and services. By using the service, you agree to these terms.
 
 ## Usage License
 
@@ -83,6 +83,6 @@ These terms are governed by the laws of the State of Alabama, USA, without regar
 
 ## Contact
 
-Gethsemane LLC, Dothan, Alabama, USA. For questions about these terms, email [opportunities@gbti.network](mailto:opportunities@gbti.network).
+Gethsemane LLC, United States. For questions about these terms, email [opportunities+contact@gbti.network](mailto:opportunities+contact@gbti.network).
 
 Thank you for reading.

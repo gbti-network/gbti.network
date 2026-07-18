@@ -11,7 +11,7 @@ redirectFrom: ["/refund-policy/"]
 
 # Refund Policy
 
-Thank you for being part of the GBTI Network, operated by Gethsemane LLC (Dothan, Alabama, USA). This page explains how membership billing, cancellation, and refunds work. It sits alongside our [Terms of Service](/terms/).
+Thank you for being part of the GBTI Network, operated by Gethsemane LLC (United States). This page explains how membership billing, cancellation, and refunds work. It sits alongside our [Terms of Service](/terms/).
 
 ## Membership and billing
 
