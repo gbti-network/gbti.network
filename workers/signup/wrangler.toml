@@ -180,6 +180,11 @@ DISCORD_CHANNEL_PRODUCTS = "1516431096789733456"
 DISCORD_CHANNEL_PROMPTS = "1516430200940789842"
 DISCORD_CHANNEL_SHARES = "1084632127657746452"
 
+# SOW-123: the Mastodon auto channel posts to the brand account @gbti on mastodon.social. This origin is
+# NON-SECRET; the MASTODON_ACCESS_TOKEN (write:statuses) is the secret, set via `wrangler secret put`. The
+# adapter requires BOTH to be present (secretsPresent), so setting this alone posts nothing.
+MASTODON_BASE_URL = "https://mastodon.social"
+
 # Custom domain: attach signup.gbti.network to this production worker. wrangler provisions the domain + the
 # managed DNS record on the gbti.network zone (same account) on deploy. This is the host the client/extension
 # call (SIGNUP_BASE = https://signup.gbti.network).
