@@ -18066,16 +18066,16 @@ function isBlockedFromPublishing(membership) {
   return NON_PUBLISHABLE.has(membership);
 }
 async function fetchStripeStatus({ token, signupBase, fetch = globalThis.fetch } = {}) {
-  if (!token || !signupBase) return "unknown";
+  if (!token || !signupBase) return { status: "unknown", couponUntil: null };
   try {
     const res = await fetch(`${String(signupBase).replace(/\/$/, "")}/membership/status`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) return "unknown";
+    if (!res.ok) return { status: "unknown", couponUntil: null };
     const data = await res.json();
-    return data?.status ?? "unknown";
+    return { status: data?.status ?? "unknown", couponUntil: data?.couponUntil ?? null };
   } catch {
-    return "unknown";
+    return { status: "unknown", couponUntil: null };
   }
 }
 async function readSafe(readFile, p) {
@@ -18087,11 +18087,20 @@ async function readSafe(readFile, p) {
   }
 }
 async function resolveMembership({ githubId, token, signupBase, readFile, fetch = globalThis.fetch, now = Date.now() } = {}) {
-  const stripeStatus = await fetchStripeStatus({ token, signupBase, fetch });
+  const { status: stripeStatus, couponUntil: workerCouponUntil } = await fetchStripeStatus({ token, signupBase, fetch });
   const roles = rolesFromText(await readSafe(readFile, "house/roles.yml"));
   const banned = bannedIdsFromText(await readSafe(readFile, "house/bans.yml"));
   const grandfathers = grandfathersFromText(await readSafe(readFile, "house/grandfathered.yml"));
-  return { stripeStatus, membership: effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now }) };
+  const membership = effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now });
+  let couponUntil = membership === "banned" ? null : workerCouponUntil ?? null;
+  if (!couponUntil && membership === "paid" && stripeStatus !== "paid") {
+    const entry = grandfathers.get(String(githubId));
+    if (entry?.until && String(entry.reason ?? "").startsWith("coupon:")) {
+      const until = new Date(entry.until);
+      if (!Number.isNaN(until.getTime()) && now < until.getTime()) couponUntil = until.toISOString();
+    }
+  }
+  return { stripeStatus, membership, couponUntil };
 }
 
 // membership/devlog-core.mjs
@@ -18464,6 +18473,8 @@ function getStatus(ctx2) {
     repoPath: ctx2.store?.get("repoPath") ?? null,
     mcpEnabled: ctx2.store?.get("mcpEnabled") ?? null,
     membership,
+    couponUntil: ctx2.store?.get("couponUntil") ?? null,
+    // SOW-119 QA: the coupon-grant end date (the expiry countdown)
     canPublish: canPublish(membership),
     canStageDrafts: canStageDrafts(membership),
     // SOW-082: Save-draft is trial+paid (broader than canPublish)
@@ -19140,8 +19151,8 @@ async function confirmDeviceLogin(ctx2, {
   const overridesReadable = readFile && readFile("house/roles.yml") != null;
   if (overridesReadable) {
     try {
-      const { stripeStatus, membership } = await resolveMembershipImpl({ githubId: user.id, token, signupBase, readFile, fetch });
-      ctx2.store.set({ stripeStatus, membership });
+      const { stripeStatus, membership, couponUntil } = await resolveMembershipImpl({ githubId: user.id, token, signupBase, readFile, fetch });
+      ctx2.store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null });
     } catch {
       ctx2.store.set({ membership: "unknown" });
     }

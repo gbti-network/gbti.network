@@ -4638,6 +4638,32 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     await rawDel(types2.map((t) => wbKey(memberKey, t)));
   }
 
+  // client-ui/src/membership-expiry.mjs
+  var DAY_MS = 24 * 60 * 60 * 1e3;
+  var EXPIRY_POPUP_START_DAYS = 28;
+  var EXPIRY_SNOOZE_DAYS = 7;
+  var EXPIRY_FINAL_STRETCH_DAYS = 7;
+  function expiryPopupDecision({ until, dismissedAt = null, now = Date.now() } = {}) {
+    if (!until) return { show: false, daysLeft: null };
+    const end = until instanceof Date ? until.getTime() : new Date(until).getTime();
+    if (!Number.isFinite(end) || Number.isNaN(end)) return { show: false, daysLeft: null };
+    if (now >= end) return { show: false, daysLeft: null };
+    const daysLeft = Math.ceil((end - now) / DAY_MS);
+    if (daysLeft > EXPIRY_POPUP_START_DAYS) return { show: false, daysLeft };
+    const cooldownDays = daysLeft <= EXPIRY_FINAL_STRETCH_DAYS ? 1 : EXPIRY_SNOOZE_DAYS;
+    const dismissed = Number(dismissedAt);
+    if (Number.isFinite(dismissed) && dismissed > 0 && now - dismissed < cooldownDays * DAY_MS) {
+      return { show: false, daysLeft };
+    }
+    return { show: true, daysLeft };
+  }
+  function expiryPopupCopy(daysLeft, until) {
+    const date = new Date(until);
+    const dateLabel = Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(void 0, { year: "numeric", month: "long", day: "numeric" });
+    const headline = daysLeft === 1 ? "Your complimentary membership ends tomorrow" : `Your complimentary membership ends in ${daysLeft} days`;
+    return { headline, dateLabel };
+  }
+
   // extension/src/shell.mjs
   var SITE5 = "https://gbti.network";
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
@@ -5286,9 +5312,61 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     wireCompose(root);
     wireDrawer(root);
     loadShellAccount(root).then((status) => {
-      if (!status) mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true });
+      if (!status) {
+        mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true });
+        return;
+      }
+      maybeShowExpiryPopup(status);
     });
     return { ico, loadShellAccount: () => loadShellAccount(root) };
+  }
+  var EXPIRY_DISMISS_KEY = "gbti-expiry-dismissed";
+  function maybeShowExpiryPopup(status) {
+    const until = status?.couponUntil;
+    if (!until || document.querySelector(".expiry-modal")) return;
+    let dismissedAt = null;
+    try {
+      dismissedAt = JSON.parse(localStorage.getItem(EXPIRY_DISMISS_KEY) || "null")?.at ?? null;
+    } catch {
+      dismissedAt = null;
+    }
+    const { show, daysLeft } = expiryPopupDecision({ until, dismissedAt, now: Date.now() });
+    if (!show) return;
+    const { headline, dateLabel } = expiryPopupCopy(daysLeft, until);
+    const overlay = document.createElement("div");
+    overlay.className = "compose-modal expiry-modal";
+    overlay.innerHTML = `<div class="compose-panel expiry-panel">
+    <div class="compose-head"><b>Membership</b><button class="compose-x" type="button" aria-label="Close">${ico("x")}</button></div>
+    <div class="expiry-body">
+      <div class="expiry-count">${daysLeft}</div>
+      <h2>${headline}</h2>
+      ${dateLabel ? `<p class="expiry-date">Your complimentary year runs through <b>${dateLabel}</b>.</p>` : ""}
+      <p class="expiry-note">Becoming a paying member keeps your profile, articles, products, and prompts
+        published, your Discord access open, and your revenue share active. Nothing bills automatically;
+        if you do nothing, your work simply unpublishes at the end and comes back whenever you join.</p>
+      <a class="expiry-cta" href="https://gbti.network/membership/" target="_blank" rel="noopener">Become a paying member</a>
+      <button class="expiry-later" type="button">Remind me later</button>
+    </div>
+  </div>`;
+    const dismiss = () => {
+      try {
+        localStorage.setItem(EXPIRY_DISMISS_KEY, JSON.stringify({ at: Date.now() }));
+      } catch {
+      }
+      overlay.remove();
+      document.removeEventListener("keydown", onEsc);
+    };
+    const onEsc = (e) => {
+      if (e.key === "Escape") dismiss();
+    };
+    document.addEventListener("keydown", onEsc);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) dismiss();
+    });
+    overlay.querySelector(".compose-x")?.addEventListener("click", dismiss);
+    overlay.querySelector(".expiry-later")?.addEventListener("click", dismiss);
+    overlay.querySelector(".expiry-cta")?.addEventListener("click", dismiss);
+    document.body.appendChild(overlay);
   }
 
   // client-ui/src/feed-route.mjs
@@ -10828,7 +10906,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-quote-manager", GbtiQuoteManager);
 
   // client-ui/src/elements/gbti-coupon-manager.mjs
-  var INVITE_PATH = "/codeable-invite/?t=";
+  var INVITE_PATH = "/codeable-invite/?coupon=";
   var CSS21 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
@@ -10877,10 +10955,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const u = await this.client.couponUsage();
         this._usage = u?.usage || {};
-        this._links = u?.links || {};
       } catch {
         this._usage = {};
-        this._links = {};
       }
       this._loading = false;
       this.render();
@@ -10904,8 +10980,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const rows = this._coupons.map((c) => {
         const code = String(c.code || "").toUpperCase();
         const u = this._usage[code] || { count: 0, redemptions: [] };
-        const token = this._links[code];
-        const link = token ? `${this._siteBase()}${INVITE_PATH}${token}` : "";
+        const link = `${this._siteBase()}${INVITE_PATH}${encodeURIComponent(code)}`;
         const reds = (u.redemptions || []).slice(0, 8).map((r) => `<li>${esc(r.login || r.githubId)} · ${esc(String(r.redeemedAt || "").slice(0, 10))} → ${esc(String(r.until || "").slice(0, 10))}</li>`).join("");
         return `<li class="c${c.active === false ? " off" : ""}" data-code="${esc(code)}">
         <div class="crow">
@@ -10913,9 +10988,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           <span class="meta">${esc(String(c.freeDays))} free day${Number(c.freeDays) === 1 ? "" : "s"}${c.maxRedemptions != null ? ` · max ${esc(String(c.maxRedemptions))}` : " · unlimited"}${c.note ? ` · ${esc(c.note)}` : ""}</span>
           <span class="sp"></span>
           <button class="lk" data-toggle="${esc(code)}">${c.active === false ? "Activate" : "Deactivate"}</button>
-          <button class="lk" data-rotate="${esc(code)}">${token ? "Regenerate link" : "Create link"}</button>
         </div>
-        ${link ? `<div class="linkrow"><input readonly value="${esc(link)}" aria-label="Invite link for ${esc(code)}" /><button class="lk" data-copy="${esc(link)}">Copy</button></div>` : ""}
+        <div class="linkrow"><input readonly value="${esc(link)}" aria-label="Share URL for ${esc(code)}" /><button class="lk" data-copy="${esc(link)}">Copy</button></div>
         <div class="use">Redemptions: <b>${esc(String(u.count ?? 0))}</b>${u.max != null ? ` of ${esc(String(u.max))}` : ""}</div>
         ${reds ? `<ul class="reds">${reds}</ul>` : ""}
       </li>`;
@@ -10934,7 +11008,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     `);
       this.$("[data-add]")?.addEventListener("click", () => this._add());
       this.$$("[data-toggle]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.toggle)));
-      this.$$("[data-rotate]").forEach((b) => b.addEventListener("click", () => this._rotate(b.dataset.rotate)));
       this.$$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
         try {
           await navigator.clipboard.writeText(b.dataset.copy);
@@ -10961,9 +11034,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const cur = this._coupons.find((c) => String(c.code).toUpperCase() === code);
       const next = cur?.active === false;
       await this._run(() => this.client.updateCoupon({ code, patch: { active: next } }), `${code} ${next ? "activated" : "deactivated"}`);
-    }
-    async _rotate(code) {
-      await this._run(() => this.client.rotateCouponLink({ code }), `New invite link for ${code} (old links are dead)`);
     }
     async _run(fn, okMsg) {
       try {
@@ -16663,8 +16733,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-119
       couponUsage: () => request("GET", "/api/coupon-usage"),
       // SOW-119: per-coupon KV usage + invite links
-      rotateCouponLink: ({ code }) => request("POST", "/api/coupon-link-rotate", { code }),
-      // SOW-119
       quotePool: () => request("GET", "/api/quote-pool"),
       // SOW-063 P3: the splash quote pool { quotes } for the manager
       contentChannelPool: () => request("GET", "/api/content-channel-pool"),

@@ -294,3 +294,17 @@ html[data-unauth] .splash-pattern { display: none !important; }
    editing area or its gutter. The class is toggled by gbti-workspace when it mounts <gbti-content-editor>. */
 body.gbti-editing .nt-main { background: #f4f2ef; }
 [data-theme="dark"] body.gbti-editing .nt-main { background: #18161d; }
+
+/* ===================== SOW-119 QA: the coupon-expiry countdown popup ===================== */
+/* Reuses the .compose-modal overlay (backdrop + z-120, below the SOW-048 gate at 250). */
+.expiry-panel { max-width: 440px; }
+.expiry-body { padding: 22px 24px 26px; text-align: center; }
+.expiry-count { font-family: var(--f-display); font-weight: 800; font-size: 52px; line-height: 1; color: var(--green); }
+.expiry-body h2 { font-family: var(--f-display); font-weight: 700; font-size: 20px; color: var(--fg); margin: 10px 0 6px; }
+.expiry-date { font-size: 13.5px; color: var(--fg-soft); margin: 0 0 10px; }
+.expiry-date b { color: var(--fg); }
+.expiry-note { font-size: 13px; line-height: 1.55; color: var(--fg-mute); margin: 0 0 18px; }
+.expiry-cta { display: block; background: var(--green); color: #fff; font-weight: 700; font-size: 14.5px; border-radius: 9px; padding: 12px 16px; text-decoration: none; }
+.expiry-cta:hover { filter: brightness(1.06); }
+.expiry-later { display: block; width: 100%; margin-top: 10px; background: none; border: 0; color: var(--fg-mute); font: inherit; font-size: 12.5px; cursor: pointer; }
+.expiry-later:hover { color: var(--fg); }

@@ -29,7 +29,7 @@ test('verifies the token -> github_id and returns the Stripe-derived status (can
   });
   assert.equal(r.status, 200);
   // No SIGNUP_KV on ENV -> readCanCurate fails closed to false; the status itself is unaffected.
-  assert.deepEqual(r.body, { ok: true, github_id: '1', login: 'alice', status: 'paid', canCurate: false });
+  assert.deepEqual(r.body, { ok: true, github_id: '1', login: 'alice', status: 'paid', canCurate: false, couponUntil: null }); // SOW-119 QA: the grant end date field (null for Stripe-paid)
 });
 
 test('SOW-046 C: canCurate is true for a roles.yml curator (read from the fresh KV overrides mirror)', async () => {

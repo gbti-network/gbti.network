@@ -18000,16 +18000,16 @@ function isBlockedFromPublishing(membership) {
   return NON_PUBLISHABLE.has(membership);
 }
 async function fetchStripeStatus({ token, signupBase, fetch: fetch2 = globalThis.fetch } = {}) {
-  if (!token || !signupBase) return "unknown";
+  if (!token || !signupBase) return { status: "unknown", couponUntil: null };
   try {
     const res = await fetch2(`${String(signupBase).replace(/\/$/, "")}/membership/status`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) return "unknown";
+    if (!res.ok) return { status: "unknown", couponUntil: null };
     const data = await res.json();
-    return data?.status ?? "unknown";
+    return { status: data?.status ?? "unknown", couponUntil: data?.couponUntil ?? null };
   } catch {
-    return "unknown";
+    return { status: "unknown", couponUntil: null };
   }
 }
 async function readSafe(readFile, p) {
@@ -18021,11 +18021,20 @@ async function readSafe(readFile, p) {
   }
 }
 async function resolveMembership({ githubId, token, signupBase, readFile, fetch: fetch2 = globalThis.fetch, now = Date.now() } = {}) {
-  const stripeStatus = await fetchStripeStatus({ token, signupBase, fetch: fetch2 });
+  const { status: stripeStatus, couponUntil: workerCouponUntil } = await fetchStripeStatus({ token, signupBase, fetch: fetch2 });
   const roles = rolesFromText(await readSafe(readFile, "house/roles.yml"));
   const banned = bannedIdsFromText(await readSafe(readFile, "house/bans.yml"));
   const grandfathers = grandfathersFromText(await readSafe(readFile, "house/grandfathered.yml"));
-  return { stripeStatus, membership: effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now }) };
+  const membership = effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now });
+  let couponUntil = membership === "banned" ? null : workerCouponUntil ?? null;
+  if (!couponUntil && membership === "paid" && stripeStatus !== "paid") {
+    const entry = grandfathers.get(String(githubId));
+    if (entry?.until && String(entry.reason ?? "").startsWith("coupon:")) {
+      const until = new Date(entry.until);
+      if (!Number.isNaN(until.getTime()) && now < until.getTime()) couponUntil = until.toISOString();
+    }
+  }
+  return { stripeStatus, membership, couponUntil };
 }
 
 // membership/devlog-core.mjs
@@ -18139,6 +18148,11 @@ function buildExtContext(store) {
     membership() {
       return store.get("membership") ?? "unknown";
     },
+    /** SOW-119 QA: the coupon-grant end date (ISO) cached at login/resolution; null when the paid status
+     *  is not coupon-sourced. Drives the extension expiry countdown. */
+    couponUntil() {
+      return store.get("couponUntil") ?? null;
+    },
     /** SOW-089 fix: membership was resolved ONLY at login, so one failed resolution left the session
      *  'unknown' FOREVER and every fail-closed gate (member comment bodies, the members-only thread,
      *  shares) locked a paid member out until a re-login. This self-heals: an unknown cache with a live
@@ -18158,8 +18172,8 @@ function buildExtContext(store) {
       }
       if (!membershipFlight) {
         devlog("membership", "resolving via oracle + house overrides");
-        membershipFlight = resolveMembership({ githubId: String(id.githubId), token: t, signupBase: SIGNUP_BASE, readFile: (p) => this.reader.readFile(p) }).then(({ stripeStatus, membership }) => {
-          store.set({ stripeStatus, membership });
+        membershipFlight = resolveMembership({ githubId: String(id.githubId), token: t, signupBase: SIGNUP_BASE, readFile: (p) => this.reader.readFile(p) }).then(({ stripeStatus, membership, couponUntil }) => {
+          store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null });
           devlog("membership", "resolved", { stripeStatus, membership: membership ?? "unknown" });
           return membership ?? "unknown";
         }).catch((e) => {
@@ -22033,6 +22047,8 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         role,
         authenticated: live,
         membership,
+        couponUntil: ctx.couponUntil?.() ?? null,
+        // SOW-119 QA: the coupon-grant end date (the expiry countdown)
         canPublish: membership === "paid",
         canStageDrafts: canStageDrafts(membership),
         // SOW-082: Save-draft is trial+paid (broader than canPublish)
@@ -22339,8 +22355,8 @@ async function handleLogin(store) {
   });
   try {
     const reader = createGithubReader({ upstream: UPSTREAM, token: accessToken });
-    const { stripeStatus, membership } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE2, readFile: (p) => reader.readFile(p) });
-    store.set({ stripeStatus, membership });
+    const { stripeStatus, membership, couponUntil } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE2, readFile: (p) => reader.readFile(p) });
+    store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null });
   } catch {
   }
   return { ok: true, login: u.login };

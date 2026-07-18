@@ -5840,7 +5840,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-quote-manager", GbtiQuoteManager);
 
   // client-ui/src/elements/gbti-coupon-manager.mjs
-  var INVITE_PATH = "/codeable-invite/?t=";
+  var INVITE_PATH = "/codeable-invite/?coupon=";
   var CSS15 = `
   :host { display:block; }
   .head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:0 0 12px; }
@@ -5889,10 +5889,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const u = await this.client.couponUsage();
         this._usage = u?.usage || {};
-        this._links = u?.links || {};
       } catch {
         this._usage = {};
-        this._links = {};
       }
       this._loading = false;
       this.render();
@@ -5916,8 +5914,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const rows = this._coupons.map((c) => {
         const code = String(c.code || "").toUpperCase();
         const u = this._usage[code] || { count: 0, redemptions: [] };
-        const token = this._links[code];
-        const link = token ? `${this._siteBase()}${INVITE_PATH}${token}` : "";
+        const link = `${this._siteBase()}${INVITE_PATH}${encodeURIComponent(code)}`;
         const reds = (u.redemptions || []).slice(0, 8).map((r) => `<li>${esc(r.login || r.githubId)} · ${esc(String(r.redeemedAt || "").slice(0, 10))} → ${esc(String(r.until || "").slice(0, 10))}</li>`).join("");
         return `<li class="c${c.active === false ? " off" : ""}" data-code="${esc(code)}">
         <div class="crow">
@@ -5925,9 +5922,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           <span class="meta">${esc(String(c.freeDays))} free day${Number(c.freeDays) === 1 ? "" : "s"}${c.maxRedemptions != null ? ` · max ${esc(String(c.maxRedemptions))}` : " · unlimited"}${c.note ? ` · ${esc(c.note)}` : ""}</span>
           <span class="sp"></span>
           <button class="lk" data-toggle="${esc(code)}">${c.active === false ? "Activate" : "Deactivate"}</button>
-          <button class="lk" data-rotate="${esc(code)}">${token ? "Regenerate link" : "Create link"}</button>
         </div>
-        ${link ? `<div class="linkrow"><input readonly value="${esc(link)}" aria-label="Invite link for ${esc(code)}" /><button class="lk" data-copy="${esc(link)}">Copy</button></div>` : ""}
+        <div class="linkrow"><input readonly value="${esc(link)}" aria-label="Share URL for ${esc(code)}" /><button class="lk" data-copy="${esc(link)}">Copy</button></div>
         <div class="use">Redemptions: <b>${esc(String(u.count ?? 0))}</b>${u.max != null ? ` of ${esc(String(u.max))}` : ""}</div>
         ${reds ? `<ul class="reds">${reds}</ul>` : ""}
       </li>`;
@@ -5946,7 +5942,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     `);
       this.$("[data-add]")?.addEventListener("click", () => this._add());
       this.$$("[data-toggle]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.toggle)));
-      this.$$("[data-rotate]").forEach((b) => b.addEventListener("click", () => this._rotate(b.dataset.rotate)));
       this.$$("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
         try {
           await navigator.clipboard.writeText(b.dataset.copy);
@@ -5973,9 +5968,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const cur = this._coupons.find((c) => String(c.code).toUpperCase() === code);
       const next = cur?.active === false;
       await this._run(() => this.client.updateCoupon({ code, patch: { active: next } }), `${code} ${next ? "activated" : "deactivated"}`);
-    }
-    async _rotate(code) {
-      await this._run(() => this.client.rotateCouponLink({ code }), `New invite link for ${code} (old links are dead)`);
     }
     async _run(fn, okMsg) {
       try {
@@ -15364,8 +15356,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // SOW-119
       couponUsage: () => request("GET", "/api/coupon-usage"),
       // SOW-119: per-coupon KV usage + invite links
-      rotateCouponLink: ({ code }) => request("POST", "/api/coupon-link-rotate", { code }),
-      // SOW-119
       quotePool: () => request("GET", "/api/quote-pool"),
       // SOW-063 P3: the splash quote pool { quotes } for the manager
       contentChannelPool: () => request("GET", "/api/content-channel-pool"),

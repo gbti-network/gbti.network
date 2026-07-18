@@ -11,6 +11,7 @@ import '../../client-ui/src/elements/gbti-social-queue.mjs'; // SOW-121: the ava
 import '../../client-ui/src/elements/gbti-debug-panel.mjs'; // SOW-124: the superadmin Debug panel (devlog viewer)
 import '../../client-ui/src/elements/gbti-welcome.mjs'; // SOW-048: dual-purposed as the forced-sign-in login splash
 import { wbCacheSet } from '../../client-ui/src/workbench-cache.mjs'; // SOW-073 P5: warm the workbench cache from the create-recent prefetch
+import { expiryPopupDecision, expiryPopupCopy } from '../../client-ui/src/membership-expiry.mjs'; // SOW-119 QA: the coupon-expiry countdown
 import { devlog, devlogFlagOn, setDevlogFlag } from './devlog.mjs'; // SOW-124: the page realm's devlog + the shared flag
 
 const SITE = 'https://gbti.network';
@@ -610,6 +611,53 @@ export function initShell({ active = null, nav = 'feed' } = {}) {
   wireDrawer(root);
   // SOW-048: gate AFTER the status round-trip. Signed in -> the app stays; signed out -> the login splash overlays
   // it (data-unauth hides the rest). Kept off the synchronous path so initShell's return shape is unchanged.
-  loadShellAccount(root).then((status) => { if (!status) mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true }); });
+  loadShellAccount(root).then((status) => {
+    if (!status) { mountAuthGate(root, { expired: _lastStatus?.sessionExpired === true }); return; }
+    maybeShowExpiryPopup(status); // SOW-119 QA: the coupon-expiry countdown (all shell pages)
+  });
   return { ico, loadShellAccount: () => loadShellAccount(root) };
+}
+
+// SOW-119 QA (2026-07-18): the coupon-expiry countdown popup. Shows for a member whose PAID status is a
+// coupon grant (the status oracle emits couponUntil only then), inside the final EXPIRY_POPUP_START_DAYS,
+// at most once per cooldown (7 days, collapsing to daily in the final week; the pure decision lives in
+// client-ui/src/membership-expiry.mjs). Every close path persists the dismissal instant, so the cadence
+// re-derives instead of sleeping through the deadline. The CTA is the established outbound membership
+// deep-link (there is no in-extension checkout by design).
+const EXPIRY_DISMISS_KEY = 'gbti-expiry-dismissed';
+function maybeShowExpiryPopup(status) {
+  const until = status?.couponUntil;
+  if (!until || document.querySelector('.expiry-modal')) return;
+  let dismissedAt = null;
+  try { dismissedAt = JSON.parse(localStorage.getItem(EXPIRY_DISMISS_KEY) || 'null')?.at ?? null; } catch { dismissedAt = null; }
+  const { show, daysLeft } = expiryPopupDecision({ until, dismissedAt, now: Date.now() });
+  if (!show) return;
+  const { headline, dateLabel } = expiryPopupCopy(daysLeft, until);
+  const overlay = document.createElement('div');
+  overlay.className = 'compose-modal expiry-modal';
+  overlay.innerHTML = `<div class="compose-panel expiry-panel">
+    <div class="compose-head"><b>Membership</b><button class="compose-x" type="button" aria-label="Close">${ico('x')}</button></div>
+    <div class="expiry-body">
+      <div class="expiry-count">${daysLeft}</div>
+      <h2>${headline}</h2>
+      ${dateLabel ? `<p class="expiry-date">Your complimentary year runs through <b>${dateLabel}</b>.</p>` : ''}
+      <p class="expiry-note">Becoming a paying member keeps your profile, articles, products, and prompts
+        published, your Discord access open, and your revenue share active. Nothing bills automatically;
+        if you do nothing, your work simply unpublishes at the end and comes back whenever you join.</p>
+      <a class="expiry-cta" href="https://gbti.network/membership/" target="_blank" rel="noopener">Become a paying member</a>
+      <button class="expiry-later" type="button">Remind me later</button>
+    </div>
+  </div>`;
+  const dismiss = () => {
+    try { localStorage.setItem(EXPIRY_DISMISS_KEY, JSON.stringify({ at: Date.now() })); } catch { /* no storage */ }
+    overlay.remove();
+    document.removeEventListener('keydown', onEsc);
+  };
+  const onEsc = (e) => { if (e.key === 'Escape') dismiss(); };
+  document.addEventListener('keydown', onEsc);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) dismiss(); }); // nothing in-progress to lose
+  overlay.querySelector('.compose-x')?.addEventListener('click', dismiss);
+  overlay.querySelector('.expiry-later')?.addEventListener('click', dismiss);
+  overlay.querySelector('.expiry-cta')?.addEventListener('click', dismiss); // following the CTA also stops the nagging
+  document.body.appendChild(overlay);
 }
