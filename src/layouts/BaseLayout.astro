@@ -24,6 +24,8 @@ interface Props {
   ogType?: string;
   /** When true, emit <meta name="robots" content="noindex"> (auth shells, stubs). */
   noindex?: boolean;
+  /** When true, omit the site Header/Footer chrome (standalone landing pages that carry their own). */
+  bare?: boolean;
 }
 
 const {
@@ -32,6 +34,7 @@ const {
   ogImage,
   ogType = 'website',
   noindex = false,
+  bare = false,
 } = Astro.props;
 
 const siteName = 'The GBTI Network';
@@ -94,11 +97,11 @@ const ogImageUrl = new URL(ogImage || DEFAULT_OG_IMAGE, Astro.site).href;
       >Skip to content</a
     >
     <IconSprite />
-    <Header />
+    {!bare && <Header />}
     <main id="main" class="flex-1">
       <slot />
     </main>
-    <Footer />
+    {!bare && <Footer />}
     <SigninModal />
     <ReferralCapture />
     <TouchTracker />
