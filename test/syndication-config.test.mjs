@@ -6,7 +6,7 @@ import {
   DEFAULT_SYNDICATION_CONFIG, CHANNELS, syndicationConfigFromParsed, isSyndicationEnabled, holdMs,
   upvoteThreshold, isChannelEnabled, enabledChannelNames, toSyndicationMirror, classifyMode, templateFor, newsEngagement,
   AUTO_TYPES, AUTO_CHANNELS, AUTO_MODES, channelCapability, autoModeFor, isAutoOn, autoChannelsForType, channelHoldMs, explicitChannelHoldMs, defaultAutoMode,
-  contentEngagement, popularChannelsForType, CONTENT_ENGAGEMENT_SIGNALS,
+  contentEngagement, popularChannelsForType, CONTENT_ENGAGEMENT_SIGNALS, deliverChannelsForType,
 } from '../membership/syndication-config.mjs';
 
 test('a missing/empty config fails closed to the safe defaults', () => {
@@ -113,7 +113,8 @@ test('SOW-125: channelCapability derives auto/manual/building from the one map',
   assert.equal(channelCapability('bluesky'), 'auto');
   assert.equal(channelCapability('mastodon'), 'auto');
   assert.equal(channelCapability('x'), 'manual');
-  assert.equal(channelCapability('linkedin'), 'building');
+  assert.equal(channelCapability('linkedin'), 'manual'); // SOW-127: LinkedIn is now manual-assist
+  assert.equal(channelCapability('nope'), 'building'); // an unknown channel defaults to building
   assert.equal(channelCapability('nope'), 'building');
   assert.ok(AUTO_CHANNELS.includes('bluesky') && !AUTO_CHANNELS.includes('x'));
 });
@@ -135,7 +136,8 @@ test('SOW-125: autoModeFor coerces an unknown cell to the type default; unknown 
   assert.equal(autoModeFor(c, 'share', 'bluesky'), 'off'); // default share off
   assert.equal(autoModeFor(c, 'unknown', 'discord'), 'off');
   assert.equal(autoModeFor(c, 'post', 'x'), 'on'); // SOW-125: x is a MANUAL matrix channel -> default on for post
-  assert.equal(autoModeFor(c, 'post', 'linkedin'), 'off'); // linkedin is BUILDING -> not a matrix channel -> off
+  assert.equal(autoModeFor(c, 'post', 'linkedin'), 'on'); // SOW-127: linkedin is a MANUAL matrix channel -> default on for post
+  assert.equal(autoModeFor(c, 'post', 'nope'), 'off'); // an unknown (building) channel is not a matrix channel -> off
   assert.ok(AUTO_MODES.includes('popular'));
 });
 
@@ -262,9 +264,9 @@ test('setSyndicationSettings writes the auto-share matrix + per-channel delay, v
   const xOn = setSyndicationSettings(doc, { autoMatrix: { post: { x: 'off' } } }, ctx); // post/x defaults on -> setting off is a change
   assert.equal(xOn.changed, true);
   assert.equal(xOn.next.syndication.auto_matrix.post.x, 'off');
-  // Hard validation: unknown type, BUILDING channel (linkedin has no adapter), bad mode, out-of-range delay.
+  // Hard validation: unknown type, a non-matrix (building/unknown) channel, bad mode, out-of-range delay.
   assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { widget: { bluesky: 'on' } } }, ctx), TemplateEditError);
-  assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { post: { linkedin: 'on' } } }, ctx), TemplateEditError); // linkedin is building, not a matrix channel
+  assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { post: { myspace: 'on' } } }, ctx), TemplateEditError); // myspace is not a matrix channel
   assert.throws(() => setSyndicationSettings(doc, { autoMatrix: { post: { bluesky: 'sometimes' } } }, ctx), TemplateEditError);
   assert.throws(() => setSyndicationSettings(doc, { channelHoldMinutes: { bluesky: 99999 } }, ctx), TemplateEditError);
 });
@@ -341,7 +343,8 @@ test('stub templates: the resolution chain and the mirror', async () => {
   const empty = syndicationConfigFromParsed({});
   assert.equal(templateFor(empty, 'post', 'discord', { stub: true }), DEFAULT_CHANNEL_STUB_TEMPLATES.discord.post, 'per-channel built-in');
   assert.equal(templateFor(empty, 'post', 'x', { stub: true }), DEFAULT_CHANNEL_STUB_TEMPLATES.x.post, 'SOW-120: X has its own per-channel built-in stub');
-  assert.equal(templateFor(empty, 'post', 'linkedin', { stub: true }), DEFAULT_STUB_TEMPLATES.post, 'shared built-in for channels without their own');
+  assert.equal(templateFor(empty, 'post', 'linkedin', { stub: true }), DEFAULT_CHANNEL_STUB_TEMPLATES.linkedin.post, 'SOW-127: LinkedIn now has its own per-channel built-in stub');
+  assert.equal(templateFor(empty, 'post', 'someunknown', { stub: true }), DEFAULT_STUB_TEMPLATES.post, 'shared built-in for a channel without its own');
   assert.equal(templateFor(empty, 'devto-intro', 'devto', { stub: true }), templateFor(empty, 'devto-intro', 'devto'), 'no stub built-in -> the public chain');
   const cfg = syndicationConfigFromParsed({ syndication: {
     stub_templates: { post: 'Shared stub {title}' },
@@ -366,4 +369,15 @@ test('setTemplate stub=true targets the stub maps with the same semantics', asyn
   assert.equal(b.next.syndication.channel_templates_stub, undefined, 'empty deletes the override');
   const c = setTemplate({}, { type: 'post', template: 'Shared stub', stub: true }, ctx);
   assert.deepEqual(c.next.syndication.stub_templates, { post: 'Shared stub' });
+});
+
+// SOW-127: LinkedIn is a MANUAL-assist matrix channel. It delivers (as a Social Queue task) when its cell is on
+// AND it is in manual_assist_channels, and it is EXCLUDED from the auto adapter run (no LinkedIn API used).
+test('SOW-127: LinkedIn is manual-assist -> delivers a post as a Social Queue task, excluded from auto', () => {
+  const c = syndicationConfigFromParsed({ enabled: true, channels: { discord: true }, manual_assist_channels: ['linkedin'] });
+  assert.equal(channelCapability('linkedin'), 'manual');
+  // default matrix: post on for every matrix channel incl linkedin; a post delivers to linkedin (manual) + discord (auto on).
+  assert.ok(deliverChannelsForType(c, 'post').includes('linkedin'));
+  // a share is off by default -> no linkedin task.
+  assert.deepEqual(autoChannelsForType(c, 'post').includes('linkedin'), false); // autoChannels is auto-only; linkedin is manual
 });

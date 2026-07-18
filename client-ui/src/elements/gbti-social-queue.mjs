@@ -10,7 +10,15 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { socialIcon } from '../social-icons.mjs';
 
 // The free web composer for a manual-assist channel (X opens the intent composer, pre-filled).
-const composeUrl = (channel, text) => (channel === 'x' ? `https://twitter.com/intent/tweet?text=${encodeURIComponent(String(text || ''))}` : null);
+// SOW-121/127: the free web composer for a manual-assist channel, pre-filled with the rendered text. X uses
+// its intent composer; LinkedIn opens the feed share composer with the text (LinkedIn no longer guarantees a
+// text prefill, so the "Copy" button is the reliable fallback: copy, then paste into the composer).
+const composeUrl = (channel, text) => {
+  const t = encodeURIComponent(String(text || ''));
+  if (channel === 'x') return `https://twitter.com/intent/tweet?text=${t}`;
+  if (channel === 'linkedin') return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
+  return null;
+};
 const CH_LABEL = { x: 'X', discord: 'Discord', 'discord-category': 'Discord', reddit: 'Reddit', devto: 'dev.to', linkedin: 'LinkedIn', mastodon: 'Mastodon', bluesky: 'Bluesky' };
 const CH_ICON = { x: 'x', discord: 'discord', 'discord-category': 'discord', reddit: 'reddit', devto: 'devto', linkedin: 'linkedin', mastodon: 'mastodon', bluesky: 'bluesky' };
 const SRC_LABEL = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };

@@ -20874,7 +20874,10 @@ var CHANNEL_CAPABILITY = Object.freeze({
   // SOW-122
   x: "manual",
   // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
-  linkedin: "building"
+  linkedin: "manual"
+  // SOW-127: manual-assist until Community Management API access is granted (business
+  // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
+  // superadmin posts it by hand through the free LinkedIn composer. No LinkedIn API token is used.
 });
 function channelCapability(name) {
   return CHANNEL_CAPABILITY[name] ?? "building";
@@ -20940,6 +20943,8 @@ var DISCORD_CAT_SHARE_STUB = '{member-discord-username} shared a link in {catego
 var REDDIT_TITLE_STUB = "{title} (a members-only {content-type} from the GBTI Network)";
 var X_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
 var X_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
+var LINKEDIN_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Join the co-op to unlock it. {url}';
+var LINKEDIN_SHARE_STUB = '{fullName} shared a members-only find on the GBTI Network: "{title}". Join to open it. {url}';
 var BLUESKY_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it.';
 var BLUESKY_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it.';
 var MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
@@ -20951,6 +20956,8 @@ var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
   devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
+  linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
+  // SOW-127
   bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
   mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB })
 });

@@ -44,7 +44,9 @@ export const CHANNEL_CAPABILITY = Object.freeze({
   mastodon: 'auto', // SOW-123
   bluesky: 'auto', // SOW-122
   x: 'manual', // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
-  linkedin: 'building',
+  linkedin: 'manual', // SOW-127: manual-assist until Community Management API access is granted (business
+  // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
+  // superadmin posts it by hand through the free LinkedIn composer. No LinkedIn API token is used.
 });
 /** A channel's delivery capability (`auto` | `manual` | `building`); an unknown channel is `building`. */
 export function channelCapability(name) { return CHANNEL_CAPABILITY[name] ?? 'building'; }
@@ -148,6 +150,9 @@ const REDDIT_TITLE_STUB = '{title} (a members-only {content-type} from the GBTI 
 // share posts the destination directly; a members post/product/prompt invites the reader to unlock it.
 const X_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
 const X_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
+// SOW-127: LinkedIn is long-form (a 3000-char cap), so its stub reads as a full sentence.
+const LINKEDIN_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Join the co-op to unlock it. {url}';
+const LINKEDIN_SHARE_STUB = '{fullName} shared a members-only find on the GBTI Network: "{title}". Join to open it. {url}';
 // SOW-122: Bluesky stubs omit {url} because the adapter attaches an external embed card for the link.
 const BLUESKY_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it.';
 const BLUESKY_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it.';
@@ -161,6 +166,7 @@ export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
   devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
+  linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }), // SOW-127
   bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
   mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB }),
 });

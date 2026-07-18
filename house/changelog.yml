@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 27
+    date: 2026-07-17
+    type: build
+    title: LinkedIn joins the Social Queue for manual posting
+    notes:
+      - LinkedIn is now a manual-assist channel: the system renders the post and queues it to the Social Queue for a superadmin to post by hand, since LinkedIn API access is pending.
+      - Its templates are editable and it appears in the auto-share matrix like the other channels.
+
+  - version: 0.1.0
     build: 26
     date: 2026-07-17
     type: build

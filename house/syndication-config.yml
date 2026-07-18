@@ -38,6 +38,10 @@ syndication:
   # OFF in `channels` above (auto-post and manual-assist are mutually exclusive).
   manual_assist_channels:
     - x
+    # SOW-127: LinkedIn is manual-assist until Community Management API access is granted (the Development Tier
+    # request was denied: "business verification failed"; a vetting appeal is pending). The system renders the
+    # post and queues it to the Social Queue; a superadmin posts it by hand through the free LinkedIn composer.
+    - linkedin
   # SOW-125: per-type-per-channel auto-share. Each cell is off | on | popular. `on` = auto-share this content
   # type to this channel at publish (an auto channel posts via its adapter; a manual channel, X, enqueues a
   # Social Queue task). `off` = never. `popular` = only when the member-activity tracker deems it popular (the
@@ -83,3 +87,11 @@ syndication:
       product: 'New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       prompt: 'New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       share: '{member-mastodon-handle} shared: "{title}" {url} {category-hashtag} {tags-hashtags}'
+    # SOW-127: the LinkedIn message. LinkedIn is long-form (3000 chars) and plain-text @-mentions are not
+    # clickable, so it credits the author by {fullName} and carries the link + hashtags. A superadmin posts it
+    # by hand from the Social Queue (Assist opens the LinkedIn composer; Copy pastes the text).
+    linkedin:
+      post: 'New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url} {category-hashtag} {tags-hashtags}'
+      product: 'New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url} {category-hashtag} {tags-hashtags}'
+      prompt: 'New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url} {category-hashtag} {tags-hashtags}'
+      share: '{fullName} shared: "{title}"\n\n{short-description}\n\n{url} {category-hashtag} {tags-hashtags}'
