@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 28
+    date: 2026-07-18
+    type: build
+    title: The legal pages name the operating business
+    notes:
+      - The Privacy, Terms, and Contact pages now name Gethsemane LLC as the operator, based in Dothan, Alabama, USA, with a business email at opportunities@gbti.network.
+      - Terms gained a Governing Law section, and the footer now links the Privacy Policy.
+
+  - version: 0.1.0
     build: 27
     date: 2026-07-17
     type: build

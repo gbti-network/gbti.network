@@ -5,13 +5,13 @@ slug: terms
 status: published
 visibility: public
 description: "The terms for using the GBTI Network: membership ($150 per year with a 90-day limited-access trial), publishing through the public repository, the referral and contribution revenue share, the personal invite commission, payments through Stripe, refunds, and the community Code of Conduct."
-updatedAt: 2026-06-27
+updatedAt: 2026-07-18
 redirectFrom: ["/terms/"]
 ---
 
 # Terms of Service
 
-Please read these Terms of Service carefully before accessing or using GBTI products and services. By using the service, you agree to these terms.
+The GBTI Network is operated by **Gethsemane LLC**, a limited liability company based in Dothan, Alabama, USA ("GBTI", "we", "us"). Please read these Terms of Service carefully before accessing or using GBTI products and services. By using the service, you agree to these terms.
 
 ## Usage License
 
@@ -76,5 +76,13 @@ As a member of the GBTI community, you are expected to conduct yourself in a pro
 ## Reserved rights
 
 GBTI may change these terms of service. GBTI reserves the right to refuse or discontinue service to any user. GBTI is not liable for damages or inconveniences arising from the use of GBTI products or services, or from interactions between GBTI members. Where liability cannot be excluded under applicable law, it is limited to the maximum extent that law permits.
+
+## Governing law
+
+These terms are governed by the laws of the State of Alabama, USA, without regard to its conflict-of-law provisions.
+
+## Contact
+
+Gethsemane LLC, Dothan, Alabama, USA. For questions about these terms, email [opportunities@gbti.network](mailto:opportunities@gbti.network).
 
 Thank you for reading.

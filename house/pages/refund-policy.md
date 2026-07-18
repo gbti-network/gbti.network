@@ -5,13 +5,13 @@ slug: refund-policy
 status: published
 visibility: public
 description: "How GBTI Network membership billing, cancellation, and refunds work: a 90-day no-card trial, $150 per year through Stripe, cancel any time to stop renewal, and the refund stance for fees already paid."
-updatedAt: 2026-06-09
+updatedAt: 2026-07-18
 redirectFrom: ["/refund-policy/"]
 ---
 
 # Refund Policy
 
-Thank you for being part of the GBTI Network. This page explains how membership billing, cancellation, and refunds work. It sits alongside our [Terms of Service](/terms/).
+Thank you for being part of the GBTI Network, operated by Gethsemane LLC (Dothan, Alabama, USA). This page explains how membership billing, cancellation, and refunds work. It sits alongside our [Terms of Service](/terms/).
 
 ## Membership and billing
 

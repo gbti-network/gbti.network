@@ -5,17 +5,17 @@ slug: privacy
 status: published
 visibility: public
 description: "How the GBTI Network collects, uses, and protects your data. Covers the public content repository, the membership registry (Stripe), the processors we rely on, your rights including erasure, and the honest limits of deleting content from a public repository."
-updatedAt: 2026-06-09
+updatedAt: 2026-07-18
 redirectFrom: ["/privacy/"]
 ---
 
 # Privacy Policy
 
-_Last updated: June 9th 2026_
+_Last updated: July 18th 2026_
 
 ## 1. Who we are
 
-The GBTI Network ("GBTI", "we", "our", or "us") operates this website and the related membership community. For the personal data described here, GBTI is the data controller. If you have a question about your data, please [contact us](/contact/).
+The GBTI Network is operated by **Gethsemane LLC** ("GBTI", "we", "our", or "us"), a limited liability company based in Dothan, Alabama, USA. For the personal data described here, Gethsemane LLC is the data controller. If you have a question about your data, email us at [opportunities@gbti.network](mailto:opportunities@gbti.network) or [contact us](/contact/).
 
 ## 2. The public content repository (please read this first)
 

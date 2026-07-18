@@ -5,10 +5,10 @@ slug: referral-terms
 status: published
 visibility: public
 description: "How the GBTI Network revenue-share works: the content that brings a member in earns 30 percent, the content that closes the signup earns 10 percent, a fixed 5 percent collaboration pool is shared automatically, and a personal invite link earns a flat 10 percent lifetime commission from the platform share, all on a 90-day settlement hold, paid by Stripe Connect."
-updatedAt: 2026-06-27
+updatedAt: 2026-07-18
 ---
 
-The GBTI Network shares revenue with the members whose content brings new paying members in, the members who improve or discuss that content, and the members who personally invite someone who joins. The distribution is fixed and automatic. Content owners do not choose it. This page states the terms. By participating you agree to them. These terms are forward-looking program terms, and they are subject to final review before the program is activated. We may update these terms, and any change applies to revenue distributed after the change takes effect.
+The GBTI Network, operated by Gethsemane LLC (Dothan, Alabama, USA), shares revenue with the members whose content brings new paying members in, the members who improve or discuss that content, and the members who personally invite someone who joins. The distribution is fixed and automatic. Content owners do not choose it. This page states the terms. By participating you agree to them. These terms are forward-looking program terms, and they are subject to final review before the program is activated. We may update these terms, and any change applies to revenue distributed after the change takes effect.
 
 ## What you earn
 
