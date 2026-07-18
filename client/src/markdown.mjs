@@ -14,6 +14,10 @@ function escapeHtml(s) {
 function inline(escaped) {
   let t = escaped;
   t = t.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`);
+  // Images BEFORE links (the syntaxes nest). Alt may be empty (![](...)). Accepted srcs: absolute http(s),
+  // site-absolute /..., and repo-relative ./... (the reader pre-resolves relatives to a CDN URL; an
+  // unresolved relative still renders as an img and fails visibly rather than as literal markdown text).
+  t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)\)/g, (_m, alt, src) => `<img src="${src}" alt="${alt}" loading="lazy">`);
   t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
   t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');

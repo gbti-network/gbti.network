@@ -1195,6 +1195,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/assets.mjs
   var SITE = "https://gbti.network";
+  var CONTENT_REPO = "gbti-network/gbti.network";
+  function resolveMarkdownAssets(markdown, itemPath, repo = CONTENT_REPO) {
+    const md = String(markdown ?? "");
+    const folder2 = String(itemPath || "").replace(/\/[^/]*$/, "").replace(/^\/+/, "");
+    if (!folder2) return md;
+    return md.replace(
+      /(!\[[^\]]*\]\()(\.\/)([^\s)]+\))/g,
+      (_m, pre, _dot, rest) => `${pre}https://cdn.jsdelivr.net/gh/${repo}@main/${folder2}/${rest}`
+    );
+  }
   function resolveAsset(thumb, site = SITE) {
     if (!thumb || typeof thumb !== "string") return null;
     if (/^https?:\/\//.test(thumb)) return thumb;
@@ -1749,7 +1759,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "discussions", label: "Discussions" }
   ];
   var TYPE_LABEL = { post: "Article", product: "Product", prompt: "Prompt", profile: "Profile" };
-  var CONTENT_REPO = "gbti-network/gbti.network";
+  var CONTENT_REPO2 = "gbti-network/gbti.network";
   var RAIL_SCHEMA = {
     post: [
       { title: "Details", open: true, keys: ["visibility", "excerpt", "categories", "tags"] },
@@ -1906,7 +1916,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (/^https?:\/\//.test(s) || /^\/_astro\//.test(s) || s.startsWith("//")) return resolveAsset(s) || s;
       if (this.itemPath) {
         const folder2 = String(this.itemPath).replace(/\/index\.md$/, "").replace(/^\/+/, "");
-        return `https://cdn.jsdelivr.net/gh/${CONTENT_REPO}@main/${folder2}/${s.replace(/^\.?\/+/, "")}`;
+        return `https://cdn.jsdelivr.net/gh/${CONTENT_REPO2}@main/${folder2}/${s.replace(/^\.?\/+/, "")}`;
       }
       return resolveAsset(s) || "";
     }
@@ -14680,6 +14690,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         const { frontmatter, body } = await this.client.readItem({ path: it.path });
         this._rawBody = typeof body === "string" ? body : null;
+        this._itemPath = it.path;
         this._fmCategories = Array.isArray(frontmatter?.categories) ? frontmatter.categories : null;
         this._fm = frontmatter ?? null;
         return await this._body(it.visibility, body, frontmatter?.encryptedBody);
@@ -14712,11 +14723,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     // Render the public body via preview, then append the members part (decrypt -> preview) or a locked notice.
     async _body(visibility, publicBody, encPath) {
-      let html = publicBody ? (await this.client.preview({ body: publicBody }))?.html ?? "" : "";
+      const resolve = (md) => resolveMarkdownAssets(md, this._itemPath);
+      let html = publicBody ? (await this.client.preview({ body: resolve(publicBody) }))?.html ?? "" : "";
       if (encPath) {
         try {
           const { text } = await this.client.decrypt({ encPath });
-          html += (await this.client.preview({ body: text }))?.html ?? "";
+          html += (await this.client.preview({ body: resolve(text) }))?.html ?? "";
         } catch (err) {
           const locked = err?.code === "membership-required" || err?.code === "not-authenticated";
           html += locked ? lockNotice("This part") : `<p class="muted">Could not load the members-only part right now.</p>`;

@@ -13,7 +13,7 @@
 // revealed on inspection), and the discussion thread beneath it. Fenced code blocks upgrade into code cards with
 // a language label + Copy button.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { resolveAsset } from '../assets.mjs';
+import { resolveAsset, resolveMarkdownAssets } from '../assets.mjs';
 import './gbti-discussion.mjs'; // SOW-041: the always-open discussion, now mounted inside the author drawer
 import './gbti-upvote.mjs'; // SOW-057: the share upvote control
 import './gbti-favorite.mjs'; // SOW-013/064: favorite + add-to-collection on the reader meta line
@@ -292,6 +292,9 @@ class GbtiReader extends GbtiElement {
       // SOW-090: keep the RAW markdown so "Copy prompt" copies the canonical source (matching the public
       // site's prompt Copy, which always yields the raw markdown regardless of the active view).
       this._rawBody = typeof body === 'string' ? body : null;
+      // Repo-relative image srcs (./images/x.webp) only mean something inside the repo; the site build
+      // resolves them itself, but THIS reader renders raw markdown, so resolve them to jsDelivr here.
+      this._itemPath = it.path;
       // SOW-088: the RAW taxonomy path (categoryLabels alone cannot drive channel routing) + the whole
       // frontmatter for the deep-link metadata backfill.
       this._fmCategories = Array.isArray(frontmatter?.categories) ? frontmatter.categories : null;
@@ -325,11 +328,12 @@ class GbtiReader extends GbtiElement {
 
   // Render the public body via preview, then append the members part (decrypt -> preview) or a locked notice.
   async _body(visibility, publicBody, encPath) {
-    let html = publicBody ? ((await this.client.preview({ body: publicBody }))?.html ?? '') : '';
+    const resolve = (md) => resolveMarkdownAssets(md, this._itemPath);
+    let html = publicBody ? ((await this.client.preview({ body: resolve(publicBody) }))?.html ?? '') : '';
     if (encPath) {
       try {
         const { text } = await this.client.decrypt({ encPath });
-        html += (await this.client.preview({ body: text }))?.html ?? '';
+        html += (await this.client.preview({ body: resolve(text) }))?.html ?? '';
       } catch (err) {
         const locked = err?.code === 'membership-required' || err?.code === 'not-authenticated';
         html += locked ? lockNotice('This part') : `<p class="muted">Could not load the members-only part right now.</p>`;
