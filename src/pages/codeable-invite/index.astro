@@ -5,9 +5,9 @@
 // html[data-theme] with the design's surface palette mapped onto local vars. Unlisted by design: noindex
 // meta + excluded from the sitemap (astro.config.mjs filter).
 //
-// The SOW-119 mechanics are unchanged underneath the new skin: a shared link may carry ?t=<token>, which
-// resolves against the Worker (GET /membership/coupon-link) and locks the coupon chip to the resolved code
-// (the design's "applied" state); with no token the chip is a hand-editable field (manual entry at signup).
+// The SOW-119 mechanics under the skin, per the 2026-07-18 QA feedback: NO secret token links. A shared
+// link carries a plain visible ?coupon=CODEABLEYEAR, which prefills the chip (still editable, applied
+// badge while it matches); with no param the chip is a hand-editable field (manual entry at signup).
 // The CTA is the same Turnstile-gated /signup/start flow as /membership/, plus the coupon parameter.
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { REF_COOKIE, REF_VIA_COOKIE } from '../../lib/referral';
@@ -263,19 +263,18 @@ const year = new Date().getFullYear();
     var input = document.getElementById('ci-coupon');
     var chip = document.querySelector('[data-coupon-chip]');
     var applied = document.querySelector('[data-coupon-applied]');
-    var t = new URLSearchParams(location.search).get('t');
-    if (t && input) {
-      fetch(signupBase + '/membership/coupon-link?t=' + encodeURIComponent(t))
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) {
-          if (d && d.code) {
-            input.value = d.code;
-            input.readOnly = true;
-            chip.classList.add('locked');
-            if (applied) applied.hidden = false;
-          }
-        })
-        .catch(function () { /* manual entry stays available */ });
+    // A visible ?coupon=CODE prefills the chip (QA 2026-07-18: no secret token links). The field stays
+    // editable; the applied badge shows while the value matches the shared code.
+    var shared = (new URLSearchParams(location.search).get('coupon') || '').trim().toUpperCase();
+    function syncApplied() {
+      var match = shared && input && input.value.trim().toUpperCase() === shared;
+      chip.classList.toggle('locked', Boolean(match));
+      if (applied) applied.hidden = !match;
+    }
+    if (shared && /^[A-Z0-9]{3,32}$/.test(shared) && input) {
+      input.value = shared;
+      syncApplied();
+      input.addEventListener('input', syncApplied);
     }
 
     var btn = document.getElementById('signup-go');

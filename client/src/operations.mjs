@@ -35,7 +35,7 @@ import yaml from 'js-yaml';
 import { rolesFromParsed, roleOf, isAdminRole } from '../../membership/overrides-core.mjs';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
 import { filterActivity } from '../../membership/member-activity.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow, getSocialQueue as workerGetSocialQueue, socialQueueAction as workerSocialQueueAction, getCouponUsage as workerGetCouponUsage, rotateCouponLink as workerRotateCouponLink } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getSyndicationQueue as workerGetSyndicationQueue, cancelSyndication as workerCancelSyndication, approveSyndication as workerApproveSyndication, getSyndicateNow as workerGetSyndicateNow, syndicateNow as workerSyndicateNow, getSocialQueue as workerGetSocialQueue, socialQueueAction as workerSocialQueueAction, getCouponUsage as workerGetCouponUsage } from './member-admin-client.mjs';
 
 export const CLIENT_VERSION = '0.1.0';
 
@@ -1555,7 +1555,8 @@ export async function listDiscordChannels(ctx) {
   return { channels };
 }
 
-/** SOW-119: per-coupon usage + invite links (the Worker is the authority; admin-gated there). */
+/** SOW-119: per-coupon usage (the Worker is the authority; admin-gated there). Sharing is the plain
+ *  visible /codeable-invite/?coupon=<CODE> URL since the 2026-07-18 QA feedback; no link state exists. */
 export async function getCouponUsageOp(ctx) {
   await requireAdmin(ctx);
   const token = ctx.store?.get?.('githubToken');
@@ -1564,18 +1565,6 @@ export async function getCouponUsageOp(ctx) {
     return await workerGetCouponUsage({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
   } catch (err) {
     throw new OperationError('admin-op-failed', err?.message || 'could not read coupon usage');
-  }
-}
-
-/** SOW-119: mint or rotate a coupon's shareable invite-link token. */
-export async function rotateCouponLinkOp(ctx, { code } = {}) {
-  await requireAdmin(ctx);
-  const token = ctx.store?.get?.('githubToken');
-  if (!token) throw new OperationError('not-authenticated', 'sign in first');
-  try {
-    return await workerRotateCouponLink({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, code });
-  } catch (err) {
-    throw new OperationError('admin-op-failed', err?.message || 'could not rotate the coupon link');
   }
 }
 

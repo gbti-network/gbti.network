@@ -1,12 +1,13 @@
 // <gbti-coupon-manager> (SOW-119): the superadmin coupon manager. The CONFIG half is git-native: coupons
 // live in house/coupons.yml and every edit opens an auto-merged house PR (the SOW-038 governance model;
 // CODEOWNERS + the SOW-005 gate are the real boundary), going live at the next coupons:config mirror sync.
-// The RUNTIME half (redemption counts + the shareable invite link) is Worker/KV via the admin endpoints.
+// The RUNTIME half (redemption counts) is Worker/KV via the admin usage endpoint; the share URL is the
+// plain visible /codeable-invite/?coupon=<CODE> (QA 2026-07-18: no minted token links).
 // Inert in public (no injected client). Host-agnostic. A sibling of <gbti-news-source-manager>.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck } from '../workspace-core.mjs';
 
-const INVITE_PATH = '/codeable-invite/?t=';
+const INVITE_PATH = '/codeable-invite/?coupon=';
 
 const CSS = `
   :host { display:block; }
@@ -49,8 +50,7 @@ class GbtiCouponManager extends GbtiElement {
     try {
       const u = await this.client.couponUsage();
       this._usage = u?.usage || {};
-      this._links = u?.links || {};
-    } catch { this._usage = {}; this._links = {}; }
+    } catch { this._usage = {}; }
     this._loading = false;
     this.render();
   }
@@ -67,8 +67,9 @@ class GbtiCouponManager extends GbtiElement {
     const rows = this._coupons.map((c) => {
       const code = String(c.code || '').toUpperCase();
       const u = this._usage[code] || { count: 0, redemptions: [] };
-      const token = this._links[code];
-      const link = token ? `${this._siteBase()}${INVITE_PATH}${token}` : '';
+      // The share URL is the plain visible coupon param (QA 2026-07-18: no secret token links). Static,
+      // derived, nothing to mint or rotate; deactivating the coupon is what kills the URL.
+      const link = `${this._siteBase()}${INVITE_PATH}${encodeURIComponent(code)}`;
       const reds = (u.redemptions || []).slice(0, 8).map((r) =>
         `<li>${esc(r.login || r.githubId)} · ${esc(String(r.redeemedAt || '').slice(0, 10))} → ${esc(String(r.until || '').slice(0, 10))}</li>`).join('');
       return `<li class="c${c.active === false ? ' off' : ''}" data-code="${esc(code)}">
@@ -77,9 +78,8 @@ class GbtiCouponManager extends GbtiElement {
           <span class="meta">${esc(String(c.freeDays))} free day${Number(c.freeDays) === 1 ? '' : 's'}${c.maxRedemptions != null ? ` · max ${esc(String(c.maxRedemptions))}` : ' · unlimited'}${c.note ? ` · ${esc(c.note)}` : ''}</span>
           <span class="sp"></span>
           <button class="lk" data-toggle="${esc(code)}">${c.active === false ? 'Activate' : 'Deactivate'}</button>
-          <button class="lk" data-rotate="${esc(code)}">${token ? 'Regenerate link' : 'Create link'}</button>
         </div>
-        ${link ? `<div class="linkrow"><input readonly value="${esc(link)}" aria-label="Invite link for ${esc(code)}" /><button class="lk" data-copy="${esc(link)}">Copy</button></div>` : ''}
+        <div class="linkrow"><input readonly value="${esc(link)}" aria-label="Share URL for ${esc(code)}" /><button class="lk" data-copy="${esc(link)}">Copy</button></div>
         <div class="use">Redemptions: <b>${esc(String(u.count ?? 0))}</b>${u.max != null ? ` of ${esc(String(u.max))}` : ''}</div>
         ${reds ? `<ul class="reds">${reds}</ul>` : ''}
       </li>`;
@@ -100,7 +100,6 @@ class GbtiCouponManager extends GbtiElement {
 
     this.$('[data-add]')?.addEventListener('click', () => this._add());
     this.$$('[data-toggle]').forEach((b) => b.addEventListener('click', () => this._toggle(b.dataset.toggle)));
-    this.$$('[data-rotate]').forEach((b) => b.addEventListener('click', () => this._rotate(b.dataset.rotate)));
     this.$$('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy'; }, 1500); } catch { /* clipboard denied */ }
     }));
@@ -118,10 +117,6 @@ class GbtiCouponManager extends GbtiElement {
     const cur = this._coupons.find((c) => String(c.code).toUpperCase() === code);
     const next = cur?.active === false;
     await this._run(() => this.client.updateCoupon({ code, patch: { active: next } }), `${code} ${next ? 'activated' : 'deactivated'}`);
-  }
-
-  async _rotate(code) {
-    await this._run(() => this.client.rotateCouponLink({ code }), `New invite link for ${code} (old links are dead)`);
   }
 
   async _run(fn, okMsg) {

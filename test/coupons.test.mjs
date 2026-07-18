@@ -9,7 +9,6 @@ import {
   redemptionUntil,
   redemptionKey,
   redemptionCountKey,
-  couponLinkKey,
   validateCoupons,
   toCouponsMirror,
 } from '../membership/coupons.mjs';
@@ -68,7 +67,6 @@ test('redemptionUntil adds freeDays in UTC and fails closed on junk', () => {
 test('KV key helpers normalize the code', () => {
   assert.equal(redemptionKey('codeableyear', '1367750'), 'redemption:CODEABLEYEAR:1367750');
   assert.equal(redemptionCountKey('codeableyear'), 'redemptions:CODEABLEYEAR');
-  assert.equal(couponLinkKey(' tok123 '), 'coupon-link:tok123');
 });
 
 test('validateCoupons flags structural problems and accepts the shipped file shape', () => {

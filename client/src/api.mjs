@@ -57,7 +57,6 @@ import {
   getSocialQueue,
   socialQueueAction,
   getCouponUsageOp,
-  rotateCouponLinkOp,
 } from './operations.mjs';
 import { getSettings, updateSettings, getBilling, getReferral } from './settings-ops.mjs';
 import { fieldsFor } from './form-fields.mjs';
@@ -212,7 +211,6 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'POST' && pathname === '/api/admin-ops') return run(() => triggerAdminOp(ctx, body ?? {})); // SOW-038 P3: reconcile/E2E trigger
   if (method === 'GET' && pathname === '/api/coupon-pool') return run(() => getCouponPool(ctx)); // SOW-119: the coupon registry
   if (method === 'GET' && pathname === '/api/coupon-usage') return run(() => getCouponUsageOp(ctx)); // SOW-119: KV usage + links (Worker-gated)
-  if (method === 'POST' && pathname === '/api/coupon-link-rotate') return run(() => rotateCouponLinkOp(ctx, body ?? {})); // SOW-119
 
   // Role-gated admin/superadmin actions (the operations enforce the capability; the gate is authoritative).
   if (method === 'POST' && pathname === '/api/admin') {

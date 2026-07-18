@@ -49,14 +49,13 @@ import { verifyTurnstile, rateLimit } from './abuse.mjs';
 import { runSignup } from './signup.mjs';
 import { resolveCustomerId, createCheckout } from './checkout.mjs';
 import { validateCouponParam } from './coupons.mjs'; // SOW-119
-import { couponLinkKey } from '../../membership/coupons.mjs'; // SOW-119: the shareable link token -> code
 import { startOnboarding } from './connect.mjs';
 import { verifyStripeSignature, isDuplicateEvent, markEventSeen, handleStripeEvent } from './webhook.mjs';
 import { membershipStatus } from './membership-status.mjs';
 import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
 import { membershipAdminStatuses } from './membership-admin.mjs';
 import { membershipAdminOps } from './membership-admin-ops.mjs';
-import { membershipCouponUsage, membershipCouponLinkRotate } from './membership-coupons-admin.mjs'; // SOW-119
+import { membershipCouponUsage } from './membership-coupons-admin.mjs'; // SOW-119
 import { membershipDiscordChannels } from './membership-discord-channels.mjs'; // SOW-100: channel names for the categories workspace
 import { handleActivity } from './membership-activity.mjs';
 import { handleTouch, SESSION_RE } from './membership-touches.mjs'; // SOW-059 P1b/P1c: touch capture + session binding
@@ -644,14 +643,6 @@ export default {
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }
-      if (pathname === '/membership/admin/coupon-link-rotate') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'POST') {
-          const r = await membershipCouponLinkRotate(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
-
       // SOW-023: the member follow graph (subscriptions) in the deletable edge store. Signed-in, non-banned
       // (the FREE tier, SOW-060; authorizeMember denies banned), per-member, private, ERASABLE. Per-token body, so
       // never cached and varied on the bearer.
@@ -869,20 +860,6 @@ export default {
         if (method === 'POST') {
           const r = await handleSyndicateNow(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
-        }
-      }
-
-      // SOW-119: resolve a shareable coupon-link token to its coupon code, for the invite page's pre-attached
-      // field. Public by design (the token IS the secret; regenerating it kills leaked URLs); returns only the
-      // code, never usage data. An unknown/rotated token is a 404 the page treats as "manual entry".
-      if (pathname === '/membership/coupon-link') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
-        if (method === 'GET') {
-          const t = String(url.searchParams.get('t') || '').trim();
-          const code = t && /^[A-Za-z0-9_-]{8,64}$/.test(t) ? await env.SIGNUP_KV.get(couponLinkKey(t)) : null;
-          const headers = { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store' };
-          if (!code) return json({ error: 'not_found' }, 404, headers);
-          return json({ ok: true, code }, 200, headers);
         }
       }
 

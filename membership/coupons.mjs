@@ -79,11 +79,6 @@ export function redemptionKey(code, githubId) {
 export function redemptionCountKey(code) {
   return `redemptions:${normalizeCouponCode(code)}`;
 }
-/** The KV key for a shareable invite-link token (token -> code). */
-export function couponLinkKey(token) {
-  return `coupon-link:${String(token ?? '').trim()}`;
-}
-
 /** Structural validation for CI. An absent config (null) is valid. Returns an array of error strings. */
 export function validateCoupons(parsed, { file = 'coupons.yml' } = {}) {
   const errors = [];

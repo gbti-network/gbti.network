@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { addCouponEdit, updateCouponEdit, CouponEditError } from '../membership/coupon-edits.mjs';
-import { membershipCouponUsage, membershipCouponLinkRotate } from '../workers/signup/membership-coupons-admin.mjs';
+import { membershipCouponUsage } from '../workers/signup/membership-coupons-admin.mjs';
 
 const CTX = { actor: { githubId: '2002207', login: 'atwellpub' }, now: new Date('2026-07-15T12:00:00.000Z') };
 const POOL = { coupons: [{ code: 'CODEABLEYEAR', freeDays: 365, active: true, note: '', maxRedemptions: null, expiresAt: null }] };
@@ -55,12 +55,11 @@ const okAuth = async () => ({ ok: true, githubId: '2002207' });
 const noAuth = async () => ({ ok: false, status: 403, body: { error: 'forbidden' } });
 const req = (body) => new Request('https://x/y', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-test('membershipCouponUsage denies before reading and aggregates counts + links', async () => {
+test('membershipCouponUsage denies before reading and aggregates counts', async () => {
   const kv = fakeKv({
     'coupons:config': MIRROR,
     'redemption:CODEABLEYEAR:42': JSON.stringify({ code: 'CODEABLEYEAR', login: 'octo', redeemedAt: NOW.toISOString(), until: '2027-07-15T12:00:00.000Z' }),
     'redemptions:CODEABLEYEAR': '1',
-    'coupon-link-for:CODEABLEYEAR': 'tok123abc',
   });
   const denied = await membershipCouponUsage(new Request('https://x/y'), { SIGNUP_KV: kv }, { authorize: noAuth });
   assert.equal(denied.status, 403);
@@ -69,21 +68,5 @@ test('membershipCouponUsage denies before reading and aggregates counts + links'
   assert.equal(r.status, 200);
   assert.equal(r.body.usage.CODEABLEYEAR.count, 1);
   assert.equal(r.body.usage.CODEABLEYEAR.redemptions[0].login, 'octo');
-  assert.equal(r.body.links.CODEABLEYEAR, 'tok123abc');
 });
 
-test('membershipCouponLinkRotate mints a token, kills the old link, 404s an unknown code', async () => {
-  const kv = fakeKv({ 'coupons:config': MIRROR, 'coupon-link-for:CODEABLEYEAR': 'oldtok', 'coupon-link:oldtok': 'CODEABLEYEAR' });
-  let n = 0;
-  const randomUUID = () => `new-token-${++n}-abcdef1234567890`;
-  const r = await membershipCouponLinkRotate(req({ code: 'codeableyear' }), { SIGNUP_KV: kv }, { authorize: okAuth, now: NOW, randomUUID });
-  assert.equal(r.status, 200);
-  assert.equal(r.body.rotated, true);
-  const token = r.body.token;
-  assert.equal(kv.store.get(`coupon-link:${token}`), 'CODEABLEYEAR');
-  assert.equal(kv.store.get('coupon-link-for:CODEABLEYEAR'), token);
-  assert.equal(kv.store.has('coupon-link:oldtok'), false); // the leaked URL is dead
-
-  const missing = await membershipCouponLinkRotate(req({ code: 'NOPE' }), { SIGNUP_KV: kv }, { authorize: okAuth, now: NOW, randomUUID });
-  assert.equal(missing.status, 404);
-});

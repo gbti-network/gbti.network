@@ -54,7 +54,8 @@ export async function triggerAdminOp({ token, signupBase, fetch = globalThis.fet
   return data;
 }
 
-/** SOW-119: per-coupon usage (counts + redemption records) + current invite-link tokens (admin-gated). */
+/** SOW-119: per-coupon usage (counts + redemption records), admin-gated. Sharing needs no server state
+ *  since the 2026-07-18 QA feedback: the share URL is the plain visible /codeable-invite/?coupon=<CODE>. */
 export async function getCouponUsage({ token, signupBase, fetch = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError('not signed in');
   const res = await fetch(trimBase(signupBase) + '/membership/admin/coupon-usage', {
@@ -64,21 +65,7 @@ export async function getCouponUsage({ token, signupBase, fetch = globalThis.fet
   let data = null;
   try { data = await res.json(); } catch { /* ignore */ }
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `coupon usage request failed (${res.status})`);
-  return { usage: data?.usage ?? {}, links: data?.links ?? {}, configFresh: data?.configFresh ?? false };
-}
-
-/** SOW-119: mint or rotate the shareable invite-link token for a coupon (admin-gated; the old link dies). */
-export async function rotateCouponLink({ token, signupBase, fetch = globalThis.fetch, code }) {
-  if (!token || !signupBase) throw new AdminClientError('not signed in');
-  const res = await fetch(trimBase(signupBase) + '/membership/admin/coupon-link-rotate', {
-    method: 'POST',
-    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
-  });
-  let data = null;
-  try { data = await res.json(); } catch { /* ignore */ }
-  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `link rotate failed (${res.status})`);
-  return data;
+  return { usage: data?.usage ?? {}, configFresh: data?.configFresh ?? false };
 }
 
 /** SOW-058: the superadmin syndication queue (admin-gated read) -> { pending, sent, cancelled, failed }. */
