@@ -142,16 +142,18 @@ export function isBlockedFromPublishing(membership) {
  * client fails OPEN to the gate rather than wrongly blocking a paid member when the oracle is unreachable.
  */
 export async function fetchStripeStatus({ token, signupBase, fetch = globalThis.fetch } = {}) {
-  if (!token || !signupBase) return 'unknown';
+  if (!token || !signupBase) return { status: 'unknown', couponUntil: null };
   try {
     const res = await fetch(`${String(signupBase).replace(/\/$/, '')}/membership/status`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return 'unknown';
+    if (!res.ok) return { status: 'unknown', couponUntil: null };
     const data = await res.json();
-    return data?.status ?? 'unknown';
+    // SOW-119 QA: couponUntil is the grant end date the oracle emits ONLY when the paid signal is a coupon
+    // grant (never for a real subscription); it drives the extension expiry countdown.
+    return { status: data?.status ?? 'unknown', couponUntil: data?.couponUntil ?? null };
   } catch {
-    return 'unknown';
+    return { status: 'unknown', couponUntil: null };
   }
 }
 
@@ -171,9 +173,23 @@ async function readSafe(readFile, p) {
  * injected fetch + readFile, so it is unit-tested with fakes.
  */
 export async function resolveMembership({ githubId, token, signupBase, readFile, fetch = globalThis.fetch, now = Date.now() } = {}) {
-  const stripeStatus = await fetchStripeStatus({ token, signupBase, fetch });
+  const { status: stripeStatus, couponUntil: workerCouponUntil } = await fetchStripeStatus({ token, signupBase, fetch });
   const roles = rolesFromText(await readSafe(readFile, 'house/roles.yml'));
   const banned = bannedIdsFromText(await readSafe(readFile, 'house/bans.yml'));
   const grandfathers = grandfathersFromText(await readSafe(readFile, 'house/grandfathered.yml'));
-  return { stripeStatus, membership: effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now }) };
+  const membership = effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now });
+  // SOW-119 QA: the coupon-grant end date, for the extension expiry countdown. The ORACLE value is trusted
+  // whenever emitted: the Worker only sends couponUntil when the coupon grant IS the paid source (its
+  // status then reads 'paid' from the fast path, so the client cannot re-derive the distinction). The git
+  // grant this resolver already parsed is the fallback for the folded-in case when the oracle stayed
+  // silent, and it only applies while the grant is what makes the member paid.
+  let couponUntil = membership === 'banned' ? null : (workerCouponUntil ?? null);
+  if (!couponUntil && membership === 'paid' && stripeStatus !== 'paid') {
+    const entry = grandfathers.get(String(githubId));
+    if (entry?.until && String(entry.reason ?? '').startsWith('coupon:')) {
+      const until = new Date(entry.until);
+      if (!Number.isNaN(until.getTime()) && now < until.getTime()) couponUntil = until.toISOString();
+    }
+  }
+  return { stripeStatus, membership, couponUntil };
 }

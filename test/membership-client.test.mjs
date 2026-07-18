@@ -73,13 +73,15 @@ test('override parsers tolerate missing/garbage text and read the github_id list
 });
 
 // ---- fetchStripeStatus: injected oracle, fails open on any error ----
-test('fetchStripeStatus returns the oracle status, or unknown on any failure', async () => {
+test('fetchStripeStatus returns the oracle body ({ status, couponUntil }), failing open on any error', async () => {
   const ok = await fetchStripeStatus({ token: 't', signupBase: 'https://s', fetch: async () => ({ ok: true, json: async () => ({ status: 'trialing' }) }) });
-  assert.equal(ok, 'trialing');
-  assert.equal(await fetchStripeStatus({ token: 't', signupBase: 'https://s', fetch: async () => ({ ok: false }) }), 'unknown');
-  assert.equal(await fetchStripeStatus({ token: 't', signupBase: 'https://s', fetch: async () => { throw new Error('net'); } }), 'unknown');
-  assert.equal(await fetchStripeStatus({ token: '', signupBase: 'https://s' }), 'unknown'); // no token -> no call
-  assert.equal(await fetchStripeStatus({ token: 't', signupBase: '' }), 'unknown'); // no base -> no call
+  assert.deepEqual(ok, { status: 'trialing', couponUntil: null });
+  const withUntil = await fetchStripeStatus({ token: 't', signupBase: 'https://s', fetch: async () => ({ ok: true, json: async () => ({ status: 'paid', couponUntil: '2027-07-18T00:00:00.000Z' }) }) });
+  assert.deepEqual(withUntil, { status: 'paid', couponUntil: '2027-07-18T00:00:00.000Z' });
+  assert.deepEqual(await fetchStripeStatus({ token: 't', signupBase: 'https://s', fetch: async () => ({ ok: false }) }), { status: 'unknown', couponUntil: null });
+  assert.deepEqual(await fetchStripeStatus({ token: 't', signupBase: 'https://s', fetch: async () => { throw new Error('net'); } }), { status: 'unknown', couponUntil: null });
+  assert.deepEqual(await fetchStripeStatus({ token: '', signupBase: 'https://s' }), { status: 'unknown', couponUntil: null }); // no token -> no call
+  assert.deepEqual(await fetchStripeStatus({ token: 't', signupBase: '' }), { status: 'unknown', couponUntil: null }); // no base -> no call
 });
 
 test('resolveMembership combines the oracle status with the reader overrides', async () => {
@@ -91,13 +93,43 @@ test('resolveMembership combines the oracle status with the reader overrides', a
   const readFile = (p) => files[p] ?? null;
   const fetch = async () => ({ ok: true, json: async () => ({ status: 'trialing' }) });
   // a plain trial member stays trial
-  assert.deepEqual(await resolveMembership({ githubId: '1', token: 't', signupBase: 'https://s', readFile, fetch }), { stripeStatus: 'trialing', membership: 'trialing' });
+  assert.deepEqual(await resolveMembership({ githubId: '1', token: 't', signupBase: 'https://s', readFile, fetch }), { stripeStatus: 'trialing', membership: 'trialing', couponUntil: null });
   // staff -> paid despite the trial Stripe status
   assert.equal((await resolveMembership({ githubId: '99', token: 't', signupBase: 'https://s', readFile, fetch })).membership, 'paid');
   // grandfathered -> paid
   assert.equal((await resolveMembership({ githubId: '88', token: 't', signupBase: 'https://s', readFile, fetch })).membership, 'paid');
   // banned -> banned
   assert.equal((await resolveMembership({ githubId: '77', token: 't', signupBase: 'https://s', readFile, fetch })).membership, 'banned');
+});
+
+test('resolveMembership carries couponUntil only when the coupon grant IS the paid source', async () => {
+  const until = '2027-07-01T00:00:00.000Z';
+  const files = {
+    'house/roles.yml': '',
+    'house/bans.yml': '',
+    'house/grandfathered.yml': `grandfathered:\n  - github_id: "55"\n    reason: coupon:CODEABLEYEAR\n    until: "${until}"\n  - github_id: "66"\n    reason: complimentary access\n    until: null\n`,
+  };
+  const readFile = (p) => files[p] ?? null;
+  const oracle = (status, couponUntil = null) => async () => ({ ok: true, json: async () => ({ status, couponUntil }) });
+  const now = new Date('2026-08-01T00:00:00.000Z').getTime();
+  // git coupon grant + non-paid Stripe -> paid with couponUntil from the parsed grant
+  const viaGit = await resolveMembership({ githubId: '55', token: 't', signupBase: 'https://s', readFile, fetch: oracle('none'), now });
+  assert.deepEqual(viaGit, { stripeStatus: 'none', membership: 'paid', couponUntil: until });
+  // the oracle value wins when present (the pre-fold-in KV window)
+  const viaOracle = await resolveMembership({ githubId: '55', token: 't', signupBase: 'https://s', readFile, fetch: oracle('paid', until), now });
+  assert.equal(viaOracle.couponUntil, until);
+  // a REAL Stripe subscription suppresses the countdown even with a grant on file... but note the oracle
+  // itself never emits couponUntil for a Stripe-paid member; simulate that contract:
+  const stripePaid = await resolveMembership({ githubId: '55', token: 't', signupBase: 'https://s', readFile, fetch: oracle('paid'), now });
+  assert.equal(stripePaid.couponUntil, null);
+  // a non-coupon grandfather (permanent comp) has no countdown
+  const comp = await resolveMembership({ githubId: '66', token: 't', signupBase: 'https://s', readFile, fetch: oracle('none'), now });
+  assert.equal(comp.membership, 'paid');
+  assert.equal(comp.couponUntil, null);
+  // an EXPIRED grant date yields no countdown
+  const late = new Date('2027-08-01T00:00:00.000Z').getTime();
+  const expired = await resolveMembership({ githubId: '55', token: 't', signupBase: 'https://s', readFile, fetch: oracle('none'), now: late });
+  assert.equal(expired.couponUntil, null);
 });
 
 // ---- the operations.publish choke point ----

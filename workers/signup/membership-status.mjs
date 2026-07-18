@@ -10,7 +10,7 @@
 import { githubFetchUser } from './oauth.mjs';
 import { deriveStatus } from '../../membership/derive-status.mjs';
 import { createStripeClient } from '../../clients/stripe.mjs';
-import { rolesFromParsed, roleOf, curatorsFromParsed, isCurator, canCurateNews } from '../../membership/overrides-core.mjs';
+import { rolesFromParsed, roleOf, curatorsFromParsed, isCurator, canCurateNews, grandfathersFromParsed } from '../../membership/overrides-core.mjs';
 import { OVERRIDES_KV_KEY, MAX_OVERRIDES_AGE_MS } from './membership-content.mjs';
 import { recordUsage } from './analytics.mjs'; // SOW-061: usage analytics seam
 import { readCouponGrant } from './coupons.mjs'; // SOW-119: the coupon fast-path grant
@@ -62,16 +62,30 @@ export async function membershipStatus(request, env, { fetchImpl = globalThis.fe
 
   // deriveStatus already fails closed to 'none' on any lookup error, so a Stripe outage never default-opens.
   let status = await deriveStatus(user.githubId, stripe);
+  const stripePaid = status === 'paid';
   // SOW-119: the coupon fast-path. A fresh redemption reports as paid so the client unlocks immediately
   // (the durable git grant lands at the next reconcile). The client still folds its own overrides on top,
   // so a ban keeps outranking this exactly as it outranks a real subscription.
-  if (status !== 'paid') {
+  let couponUntil = null;
+  if (!stripePaid) {
     const grant = await readCouponGrant(env.SIGNUP_KV, String(user.githubId), now);
-    if (grant) status = 'paid';
+    if (grant) { status = 'paid'; couponUntil = grant.until ?? null; }
   }
   const mirror = await readFreshMirror(env, now); // one read, reused for the curator hint + the analytics bucket
+  // SOW-119 QA: the grant end date also resolves from the folded-in git grant (the mirror grandfather entry
+  // with a coupon: reason), covering a lost/expired KV record. Suppressed when Stripe itself is paid, so the
+  // countdown only reaches members whose paid status IS the coupon grant.
+  if (!stripePaid && !couponUntil) {
+    const entry = mirror?.grandfathered && typeof mirror.grandfathered === 'object'
+      ? grandfathersFromParsed(mirror.grandfathered).get(String(user.githubId))
+      : null;
+    if (entry?.until && String(entry.reason ?? '').startsWith('coupon:')) {
+      const until = new Date(entry.until);
+      if (!Number.isNaN(until.getTime()) && now.getTime() < until.getTime()) couponUntil = until.toISOString();
+    }
+  }
   const canCurate = computeCanCurate(mirror, String(user.githubId)); // SOW-046 C: UI hint only; the Worker re-checks on publish
   // SOW-061: record the EFFECTIVE tier bucket (ban > staff > grandfather > Stripe), so the cohort matches the gate.
   recordUsage(env, { tier: usageBucket(status, { githubId: String(user.githubId), overrides: overridesFromMirror(mirror), now }), event: 'status_check', request });
-  return { status: 200, body: { ok: true, github_id: user.githubId, login: user.githubLogin || null, status, canCurate } };
+  return { status: 200, body: { ok: true, github_id: user.githubId, login: user.githubLogin || null, status, canCurate, couponUntil } };
 }

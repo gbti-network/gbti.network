@@ -40,6 +40,11 @@ export function buildExtContext(store) {
     membership() {
       return store.get('membership') ?? 'unknown';
     },
+    /** SOW-119 QA: the coupon-grant end date (ISO) cached at login/resolution; null when the paid status
+     *  is not coupon-sourced. Drives the extension expiry countdown. */
+    couponUntil() {
+      return store.get('couponUntil') ?? null;
+    },
     /** SOW-089 fix: membership was resolved ONLY at login, so one failed resolution left the session
      *  'unknown' FOREVER and every fail-closed gate (member comment bodies, the members-only thread,
      *  shares) locked a paid member out until a re-login. This self-heals: an unknown cache with a live
@@ -54,7 +59,7 @@ export function buildExtContext(store) {
       if (!membershipFlight) {
         devlog('membership', 'resolving via oracle + house overrides');
         membershipFlight = resolveMembership({ githubId: String(id.githubId), token: t, signupBase: SIGNUP_BASE, readFile: (p) => this.reader.readFile(p) })
-          .then(({ stripeStatus, membership }) => { store.set({ stripeStatus, membership }); devlog('membership', 'resolved', { stripeStatus, membership: membership ?? 'unknown' }); return membership ?? 'unknown'; })
+          .then(({ stripeStatus, membership, couponUntil }) => { store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null }); devlog('membership', 'resolved', { stripeStatus, membership: membership ?? 'unknown' }); return membership ?? 'unknown'; })
           .catch((e) => { devlog('membership', 'resolve failed, fail-closed to unknown', { error: e?.message }); return 'unknown'; })
           .finally(() => { membershipFlight = null; });
       }

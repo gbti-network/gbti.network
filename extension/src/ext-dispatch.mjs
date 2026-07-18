@@ -71,6 +71,7 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         role,
         authenticated: live,
         membership,
+        couponUntil: ctx.couponUntil?.() ?? null, // SOW-119 QA: the coupon-grant end date (the expiry countdown)
         canPublish: membership === 'paid',
         canStageDrafts: canStageDrafts(membership), // SOW-082: Save-draft is trial+paid (broader than canPublish)
         // SOW-060: free-tier perks (browse / news / save / follow) need only a signed-in identity, not paid.

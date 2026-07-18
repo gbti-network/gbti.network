@@ -65,8 +65,8 @@ async function handleLogin(store) {
   // the gate). The reader reads the public house/*.yml overrides; the Worker supplies the Stripe-derived status.
   try {
     const reader = createGithubReader({ upstream: UPSTREAM, token: accessToken });
-    const { stripeStatus, membership } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE, readFile: (p) => reader.readFile(p) });
-    store.set({ stripeStatus, membership });
+    const { stripeStatus, membership, couponUntil } = await resolveMembership({ githubId: String(u.id), token: accessToken, signupBase: SIGNUP_BASE, readFile: (p) => reader.readFile(p) });
+    store.set({ stripeStatus, membership, couponUntil: couponUntil ?? null }); // SOW-119 QA: drives the expiry countdown
   } catch {
     // leave membership unset (treated as 'unknown')
   }

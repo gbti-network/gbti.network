@@ -171,3 +171,43 @@ test('membership-status reports paid for a fresh coupon grant (Stripe says none)
   assert.equal(r.status, 200);
   assert.equal(r.body.status, 'paid');
 });
+
+test('membership-status emits couponUntil for a KV grant, a mirror grant, and never for Stripe-paid', async () => {
+  const until = '2027-07-15T12:00:00.000Z';
+  const overridesMirror = (grand) => JSON.stringify({
+    generatedAt: NOW.toISOString(), roles: {}, bans: { bans: [] }, grandfathered: { grandfathered: grand },
+  });
+  const base = (kv, stripe) => membershipStatus(
+    new Request('https://signup.example/membership/status', { headers: { Authorization: 'Bearer tok' } }),
+    { STRIPE_SECRET_KEY: 'sk_test', SIGNUP_KV: kv },
+    {
+      fetchImpl: async () => { throw new Error('no network'); },
+      makeStripe: () => stripe,
+      fetchUser: async () => ({ githubId: 777, githubLogin: 'couponer' }),
+      now: NOW,
+    },
+  );
+  const stripeNone = { async searchCustomerByGithubId() { throw new Error('none'); } };
+
+  // KV fast-path grant -> paid + couponUntil
+  const kvGrant = fakeKv({ [couponGrantKey('777')]: JSON.stringify({ code: 'CODEABLEYEAR', redeemedAt: NOW.toISOString(), until }) });
+  const a = await base(kvGrant, stripeNone);
+  assert.equal(a.body.status, 'paid');
+  assert.equal(a.body.couponUntil, until);
+
+  // No KV record, folded-in mirror grant with a coupon: reason -> paid comes from the CLIENT overrides
+  // fold, but the ORACLE still reports the until (status itself stays non-paid here: Stripe none)
+  const kvMirror = fakeKv({ 'overrides:mirror': overridesMirror([{ github_id: '777', reason: 'coupon:CODEABLEYEAR', until }]) });
+  const b = await base(kvMirror, stripeNone);
+  assert.equal(b.body.couponUntil, until);
+
+  // A non-coupon grandfather entry emits nothing
+  const kvComp = fakeKv({ 'overrides:mirror': overridesMirror([{ github_id: '777', reason: 'complimentary access', until: null }]) });
+  const c = await base(kvComp, stripeNone);
+  assert.equal(c.body.couponUntil, null);
+
+  // An expired mirror grant emits nothing
+  const kvExpired = fakeKv({ 'overrides:mirror': overridesMirror([{ github_id: '777', reason: 'coupon:CODEABLEYEAR', until: '2026-01-01T00:00:00.000Z' }]) });
+  const d = await base(kvExpired, stripeNone);
+  assert.equal(d.body.couponUntil, null);
+});

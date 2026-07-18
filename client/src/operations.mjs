@@ -73,6 +73,7 @@ export function getStatus(ctx) {
     repoPath: ctx.store?.get('repoPath') ?? null,
     mcpEnabled: ctx.store?.get('mcpEnabled') ?? null,
     membership,
+    couponUntil: ctx.store?.get('couponUntil') ?? null, // SOW-119 QA: the coupon-grant end date (the expiry countdown)
     canPublish: canPublish(membership),
     canStageDrafts: canStageDrafts(membership), // SOW-082: Save-draft is trial+paid (broader than canPublish)
     // SOW-060: the free-tier perks (browse / news / save / follow) need only a signed-in identity, not paid.
