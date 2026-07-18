@@ -17,5 +17,3 @@ We would love to hear from you.
 - **Social:** find us on the channels linked in the footer.
 
 The GBTI Network is operated by Gethsemane LLC, a United States company.
-
-A contact form will return in a later phase. For now, reach out by email, Discord, or GitHub.
