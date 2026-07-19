@@ -30,17 +30,17 @@ Determined to change his fate, Mitsuda mustered the courage to confront Square�
 
  **“I told Sakaguchi-san that I would quit if I couldn’t compose music,”** recalled Mitsuda. **“I was young and reckless, but I needed to follow my passion.”**
 
-Impressed by his determination, Sakaguchi assigned him to **Chrono Trigger**, a highly anticipated project that would become a cornerstone in gaming history. [1](#footnotes)
+Impressed by his determination, Sakaguchi assigned him to **Chrono Trigger**, a highly anticipated project that would become a cornerstone in gaming history.[^1]
 
 ## A Dream Project
 
-Chrono Trigger was no ordinary project. Dubbed the **“Dream Project,”** it brought together an all-star team, including Dragon Quest creator [Yuji Horii](https://en.wikipedia.org/wiki/Yuji_Horii), Dragon Ball artist [Akira Toriyama](https://en.wikipedia.org/wiki/Akira_Toriyama), and Final Fantasy talents like [Hironobu Sakaguchi](https://en.wikipedia.org/wiki/Hironobu_Sakaguchi). The pressure to deliver a groundbreaking game was immense. Mitsuda felt this weight acutely. [2](#footnotes)
+Chrono Trigger was no ordinary project. Dubbed the **“Dream Project,”** it brought together an all-star team, including Dragon Quest creator [Yuji Horii](https://en.wikipedia.org/wiki/Yuji_Horii), Dragon Ball artist [Akira Toriyama](https://en.wikipedia.org/wiki/Akira_Toriyama), and Final Fantasy talents like [Hironobu Sakaguchi](https://en.wikipedia.org/wiki/Hironobu_Sakaguchi). The pressure to deliver a groundbreaking game was immense. Mitsuda felt this weight acutely.[^2]
 
 “I was surrounded by legends,” he said. “I knew I had to create something extraordinary to stand alongside their work.”
 
-Mitsuda immersed himself in the project, often working late into the night. Mitsuda even moved his bed into the office and slept in the studio to maximize his working hours. [3](#footnotes)
+Mitsuda immersed himself in the project, often working late into the night. Mitsuda even moved his bed into the office and slept in the studio to maximize his working hours.[^3]
 
-To craft the game’s unique soundscape, Mitsuda drew inspiration from various sources, including world music and his own dreams. [4](#footnotes)
+To craft the game’s unique soundscape, Mitsuda drew inspiration from various sources, including world music and his own dreams.[^4]
 
 “I wanted to create music that players had never heard before” – “Sometimes, melodies would come to me in my sleep, and I’d rush to write them down.”
 
@@ -52,7 +52,7 @@ In the above track, _Schala’s Theme_, there is an an ethereal quality, signify
 
 ### Hard Drive Failure
 
-Midway through development, disaster struck. A hard drive crash resulted in the loss of around 40 completed tracks. [5](#footnotes)
+Midway through development, disaster struck. A hard drive crash resulted in the loss of around 40 completed tracks.[^5]
 
 **“It was devastating,”** Mitsuda lamented. **“Months of work vanished in an instant.”**
 
@@ -62,7 +62,7 @@ Mitsuda began reconstructing the lost pieces from memory.
 
 ### Life and health; against a deadline.
 
-The mounting stress against a production deadline took a toll on Mitsuda’s health. He began experiencing severe stomach pains, later diagnosed as stomach ulcers.[6](#footnotes) He was known to have caughing fits at the office that would include blood. He continued to push himself until he collapsed and was hospitalized.
+The mounting stress against a production deadline took a toll on Mitsuda’s health. He began experiencing severe stomach pains, later diagnosed as stomach ulcers.[^6] He was known to have caughing fits at the office that would include blood. He continued to push himself until he collapsed and was hospitalized.
 
 Mitsuda needed a helping hand and , [Nobuo Uematsu](https://en.wikipedia.org/wiki/Nobuo_Uematsu), known for his work on the _Final Fantasy_ series, stepped in to complete the remaining tracks, hoping to relieve the deadline pressure that Mitsuda was experiencing.
 
@@ -79,7 +79,7 @@ This would lead to two great composures contributing to one of the greatest RPGs
 
 **“I was amazed by what Mitsuda had accomplished,”** Uematsu said. **“He poured his heart into the music, and I wanted to honor that.”** – Nobuo Uematsu
 
-Uematsu composed ten tracks, including “[Underground Sewer](https://www.youtube.com/watch?v=ldMCo4Aj7fA)” and “[People Who Threw Away the Will to Live,](https://www.youtube.com/watch?v=jLozZBiSJmw)” ensuring the project stayed on schedule. [7](#footnotes)
+Uematsu composed ten tracks, including “[Underground Sewer](https://www.youtube.com/watch?v=ldMCo4Aj7fA)” and “[People Who Threw Away the Will to Live,](https://www.youtube.com/watch?v=jLozZBiSJmw)” ensuring the project stayed on schedule.[^7]
 
 ![YouTube video thumbnail](https://img.youtube.com/vi/ldMCo4Aj7fA/maxresdefault.jpg)
 
@@ -235,7 +235,7 @@ CjxmaWd1cmUgY2xhc3M9IndwLWJsb2NrLWVtYmVkIGlzLXR5cGUtdmlkZW8gaXMtcHJvdmlkZXIteW91
 
 ### Global Recognition and Performances of _Chrono Trigger_‘s Music
 
-Musicians worldwide celebrate the _Chrono Trigger_ soundtrack through concerts, cover performances, and online tributes. Organizations like the [Video Game Orchestra](https://www.vgo-online.com/) and _[Distant Worlds](https://ffdistantworlds.com/)_ have arranged _Chrono Trigger_ pieces for live performances, blending orchestral sounds with the original game’s melodies. [\[6\]](#footnotes)
+Musicians worldwide celebrate the _Chrono Trigger_ soundtrack through concerts, cover performances, and online tributes. Organizations like the [Video Game Orchestra](https://www.vgo-online.com/) and _[Distant Worlds](https://ffdistantworlds.com/)_ have arranged _Chrono Trigger_ pieces for live performances, blending orchestral sounds with the original game’s melodies.[^6]
 
 Musicians of all kinds, from classical to chiptune, continue to remix and reinterpret _Chrono Trigger_’s score.
 
@@ -272,15 +272,14 @@ CjxmaWd1cmUgY2xhc3M9IndwLWJsb2NrLWVtYmVkIGlzLXR5cGUtdmlkZW8gaXMtcHJvdmlkZXIteW91
 
 If you are a musician and have covered music from the Chrono Trigger OST, please feel free to share it with us using the connected subreddit post. Your comments there will appear here for others to see.
 
-**Footnotes:**
 
--   Parish, Jeremy. “Yasunori Mitsuda on Composing the Timeless Music of Chrono Trigger.” USgamer, 25 Mar. 2014.
--   [Jeriaska. “Interview: Yasunori Mitsuda Discusses Chrono Trigger Soundtrack.” 1UP, 16 Dec. 2008.](https://www.chronocompendium.com/Term/January_28,_2008_-_1UP_Interview_with_Yasunori_Mitsuda.html)
--   Kalata, Kurt. “Chrono Trigger: Behind the Scenes.” Hardcore Gaming 101, 22 Oct. 2010.
--   Sheffield, Brandon. “Sampling the Sound: Yasunori Mitsuda’s Musical Dreamscapes.” Gamasutra, 21 Jul. 2009.
--   Schweitzer, Ben. “The Influence of Chrono Trigger’s Soundtrack on Game Music.” Game Music Online, 12 Feb. 2015.
--   Parkin, Simon. “The Making of Chrono Trigger.” Eurogamer, 7 Feb. 2011.
--   Mackey, Bob. “Nobuo Uematsu on Working with Mitsuda.” 1UP, 14 May 2008.
+[^1]: Parish, Jeremy. “Yasunori Mitsuda on Composing the Timeless Music of Chrono Trigger.” USgamer, 25 Mar. 2014.
+[^2]: [Jeriaska. “Interview: Yasunori Mitsuda Discusses Chrono Trigger Soundtrack.” 1UP, 16 Dec. 2008.](https://www.chronocompendium.com/Term/January_28,_2008_-_1UP_Interview_with_Yasunori_Mitsuda.html)
+[^3]: Kalata, Kurt. “Chrono Trigger: Behind the Scenes.” Hardcore Gaming 101, 22 Oct. 2010.
+[^4]: Sheffield, Brandon. “Sampling the Sound: Yasunori Mitsuda’s Musical Dreamscapes.” Gamasutra, 21 Jul. 2009.
+[^5]: Schweitzer, Ben. “The Influence of Chrono Trigger’s Soundtrack on Game Music.” Game Music Online, 12 Feb. 2015.
+[^6]: Parkin, Simon. “The Making of Chrono Trigger.” Eurogamer, 7 Feb. 2011.
+[^7]: Mackey, Bob. “Nobuo Uematsu on Working with Mitsuda.” 1UP, 14 May 2008.
 
 **Editor notes:**
 

@@ -15,7 +15,7 @@ redirectFrom: ["/ai/introducing-our-new-wordpress-perplexity-ai-plugin/"]
 
 As content creators, writers worldwide consistently ask themselves how they can help their readers learn more about a concept without going into an excessive explanation that risks the flow of their message _(and the average reader’s attention)_.
 
-Writers struggle with using hyperlinks effectively because excessive linking can harm both readability and SEO [1](#footnotes) performance.
+Writers struggle with using hyperlinks effectively because excessive linking can harm both readability and SEO[^1] performance.
 
 While they may _italicize_ or **bold text** for emphasis, this approach doesn’t provide context or allow readers to explore topics in depth. To compensate, they invent systems like [footnotes](https://gbti.network/ai/chicago-style-footnoting-in-ai-generated-content/) but constantly worry whether their notes are too long or too short to adequately explain a subject.
 
@@ -39,13 +39,13 @@ All we need to do on our end is decide which AI service we are going to offer to
   
 **Why Perplexity AI?**
 
-We wanted to select an AI service that was not gatekept by user accounts or paywalls. We wanted something similar to Google that accepted query-based search but with the computational power of a large language model. Perplexity was the natural choice for this _pilot_ [2](#footnotes).
+We wanted to select an AI service that was not gatekept by user accounts or paywalls. We wanted something similar to Google that accepted query-based search but with the computational power of a large language model. Perplexity was the natural choice for this _pilot_[^2].
 
 > We knew a feature like this was something that someone would build eventually, and we were surprised when we did not find it or see anyone else doing it. So we built it ourself.
 
 Our _**WordPress Perplexity Plugin**_ (link at the bottom of the article) addressed our goals through a streamlined _text-selection-lookup-me_chanism.
 
-At the time of writing this article we have already installed this tool on this website and it should be active now; however, _**the current implementation only works on non-mobile devices**_ [3](#footnotes). So if you are on your desktop then please, go ahead and give it a try!
+At the time of writing this article we have already installed this tool on this website and it should be active now; however, _**the current implementation only works on non-mobile devices**_[^3]. So if you are on your desktop then please, go ahead and give it a try!
 
 _Highlight some text  
 Click the Perplexity button to open Perplexity in a new tab  
@@ -78,8 +78,7 @@ Development and maintenance is handled by our members here at the [GBTI Network]
 
 We hope you enjoy this plugin! If you need help installing it, or would like something similar built for your platform, [please let us know](https://gbti.network/hire/wordpress-developers/)! We can help arrange talent very quickly for your small and large projects alike.
 
-## Notes & References
 
-1.  **Search Engine Optimization (SEO)** is the process of improving a website’s visibility in search engines.
-2.  **A** _**pilot program**_ is a small test run before full implementation.
-3.  Unfortunately, we have experienced technical difficulty in getting queries to pass from browser to the mobile Perplexity app on iOS. We ideally want this feature to work for mobile devices, too, and it should, but until we have a work around we need to leave it enabled for Desktops only.
+[^1]: **Search Engine Optimization (SEO)** is the process of improving a website’s visibility in search engines.
+[^2]: **A** _**pilot program**_ is a small test run before full implementation.
+[^3]: Unfortunately, we have experienced technical difficulty in getting queries to pass from browser to the mobile Perplexity app on iOS. We ideally want this feature to work for mobile devices, too, and it should, but until we have a work around we need to leave it enabled for Desktops only.

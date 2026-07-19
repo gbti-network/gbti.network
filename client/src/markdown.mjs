@@ -10,10 +10,49 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+// GFM footnote ids: alnum/dash/underscore only, so an id can never carry markdown punctuation (which the
+// later bold/italic passes would rewrite inside the emitted attributes) or need attribute escaping.
+const FN_ID = '[A-Za-z0-9_-]+';
+
+// Pre-scan for footnote DEFINITION ids (skipping fenced code), so references convert only when their
+// definition exists: like remark-gfm on the site, [^9] with no [^9]: line stays literal text, and
+// [^word](url) falls through to the normal link rule.
+function collectFootnoteIds(lines) {
+  const ids = new Set();
+  let fence = 0;
+  for (const line of lines) {
+    const f = /^(`{3,})(.*)$/.exec(line);
+    if (f) {
+      if (!fence) fence = f[1].length;
+      else if (f[1].length >= fence && !f[2].trim()) fence = 0;
+      continue;
+    }
+    if (fence) continue;
+    const d = new RegExp(`^\\[\\^(${FN_ID})\\]:`).exec(line);
+    if (d) ids.add(d[1]);
+  }
+  return ids;
+}
+
 // Inline formatting. Input is ALREADY HTML-escaped, so only markdown punctuation remains to transform.
-function inline(escaped) {
+// `fn` = { ids, counts } footnote state threaded from renderMarkdown (null when footnotes are off).
+function inline(escaped, fn = null) {
   let t = escaped;
-  t = t.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`);
+  // Code spans first, as PLACEHOLDERS: their content must stay literal for every later rule (a `[^1]` or
+  // `**x**` inside backticks is being quoted, not used). Restored after all other passes.
+  const codes = [];
+  t = t.replace(/`([^`]+)`/g, (_m, c) => { codes.push(c); return `\uE000${codes.length - 1}\uE001`; });
+  // GFM footnote references [^1] -> a superscript anchor down to the definition (the site build renders the
+  // same syntax via remark-gfm; this keeps the reader/preview in step). Repeat references get GFM's
+  // disambiguated ids (fnref-1, fnref-1-2, ...), so the definition's back arrows can return to each.
+  if (fn) {
+    t = t.replace(new RegExp(`\\[\\^(${FN_ID})\\](?!:)`, 'g'), (m, id) => {
+      if (!fn.ids.has(id)) return m;
+      const n = (fn.counts.get(id) ?? 0) + 1;
+      fn.counts.set(id, n);
+      return `<sup class="md-fnref"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ''}">${id}</a></sup>`;
+    });
+  }
   // Images BEFORE links (the syntaxes nest). Alt may be empty (![](...)). Accepted srcs: absolute http(s),
   // site-absolute /..., and repo-relative ./... (the reader pre-resolves relatives to a CDN URL; an
   // unresolved relative still renders as an img and fails visibly rather than as literal markdown text).
@@ -21,6 +60,7 @@ function inline(escaped) {
   t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`);
   t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ''}</code>`);
   return t;
 }
 
@@ -36,12 +76,12 @@ function codeOpen(lang) {
 // provider iframe instead of a code block; everything else stays a normal code block. HTML is still escaped, and the
 // iframe src is a NORMALIZED provider URL (never author HTML), so no author script executes.
 const CALLOUT_VARIANTS = ['info', 'note', 'warning', 'tip'];
-function renderFence(lang, buf) {
+function renderFence(lang, buf, fn = null) {
   const info = String(lang || '').trim().split(/\s+/);
   const body = buf.join('\n');
   if (info[0] === 'callout') {
     const v = CALLOUT_VARIANTS.includes(info[1]) ? info[1] : 'note';
-    const html = body.split('\n').map((l) => inline(escapeHtml(l))).join('<br/>');
+    const html = body.split('\n').map((l) => inline(escapeHtml(l), fn)).join('<br/>');
     return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
   }
   if (info[0] === 'embed') {
@@ -62,6 +102,8 @@ export function renderMarkdown(md) {
   let codeLang = '';
   let listType = null;
   let listBuf = [];
+  const footnotes = []; // GFM footnote definitions, rendered as one section at the end (like the site build)
+  const fn = { ids: collectFootnoteIds(lines), counts: new Map() }; // known def ids + per-id reference counts
   const flushList = () => {
     if (listType) {
       out.push(`<${listType}>${listBuf.join('')}</${listType}>`);
@@ -78,17 +120,29 @@ export function renderMarkdown(md) {
       if (!inCode) { inCode = true; codeBuf = []; codeFence = fence[1].length; codeLang = fence[2]; i++; continue; }
       // CommonMark: a fence closes only on a fence of >= the OPENING length with no info string, so a
       // ````markdown block can carry ``` fences as CONTENT (the /ci skill prompt broke on this).
-      if (fence[1].length >= codeFence && !fence[2].trim()) { inCode = false; flushList(); out.push(renderFence(codeLang, codeBuf)); codeLang = ''; i++; continue; }
+      if (fence[1].length >= codeFence && !fence[2].trim()) { inCode = false; flushList(); out.push(renderFence(codeLang, codeBuf, fn)); codeLang = ''; i++; continue; }
       codeBuf.push(line); i++; continue;
     }
     if (inCode) { codeBuf.push(line); i++; continue; }
 
+    // A GFM footnote definition ([^1]: text, continuations indented 4+ spaces). Collected, not emitted in
+    // place: the rendered section belongs at the document end, matching the authoritative site render.
+    const def = new RegExp(`^\\[\\^(${FN_ID})\\]:\\s?(.*)$`).exec(line);
+    if (def) {
+      flushList();
+      const parts = [def[2].trim()];
+      i++;
+      while (i < lines.length && /^ {4,}\S/.test(lines[i])) { parts.push(lines[i].trim()); i++; }
+      footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn)).join('<br/>') });
+      continue;
+    }
+
     const esc = escapeHtml(line);
     let m;
-    if ((m = /^(#{1,6})\s+(.*)$/.exec(esc))) { flushList(); out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); i++; continue; }
-    if (/^\s*[-*]\s+/.test(line)) { if (listType !== 'ul') { flushList(); listType = 'ul'; } listBuf.push(`<li>${inline(escapeHtml(line.replace(/^\s*[-*]\s+/, '')))}</li>`); i++; continue; }
-    if (/^\s*\d+\.\s+/.test(line)) { if (listType !== 'ol') { flushList(); listType = 'ol'; } listBuf.push(`<li>${inline(escapeHtml(line.replace(/^\s*\d+\.\s+/, '')))}</li>`); i++; continue; }
-    if (/^\s*>\s?/.test(line)) { flushList(); out.push(`<blockquote>${inline(escapeHtml(line.replace(/^\s*>\s?/, '')))}</blockquote>`); i++; continue; }
+    if ((m = /^(#{1,6})\s+(.*)$/.exec(esc))) { flushList(); out.push(`<h${m[1].length}>${inline(m[2], fn)}</h${m[1].length}>`); i++; continue; }
+    if (/^\s*[-*]\s+/.test(line)) { if (listType !== 'ul') { flushList(); listType = 'ul'; } listBuf.push(`<li>${inline(escapeHtml(line.replace(/^\s*[-*]\s+/, '')), fn)}</li>`); i++; continue; }
+    if (/^\s*\d+\.\s+/.test(line)) { if (listType !== 'ol') { flushList(); listType = 'ol'; } listBuf.push(`<li>${inline(escapeHtml(line.replace(/^\s*\d+\.\s+/, '')), fn)}</li>`); i++; continue; }
+    if (/^\s*>\s?/.test(line)) { flushList(); out.push(`<blockquote>${inline(escapeHtml(line.replace(/^\s*>\s?/, '')), fn)}</blockquote>`); i++; continue; }
     if (/^\s*(---|\*\*\*)\s*$/.test(line)) { flushList(); out.push('<hr/>'); i++; continue; }
     if (/^\s*$/.test(line)) { flushList(); i++; continue; }
 
@@ -96,13 +150,27 @@ export function renderMarkdown(md) {
     flushList();
     const para = [esc];
     i++;
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,6})\s|^\s*[-*]\s|^\s*\d+\.\s|^```|^\s*>/.test(lines[i])) {
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i])) {
       para.push(escapeHtml(lines[i]));
       i++;
     }
-    out.push(`<p>${inline(para.join(' '))}</p>`);
+    out.push(`<p>${inline(para.join(' '), fn)}</p>`);
   }
   flushList();
-  if (inCode) out.push(renderFence(codeLang, codeBuf));
+  if (inCode) out.push(renderFence(codeLang, codeBuf, fn));
+  // The footnote section: only REFERENCED definitions render (GFM drops the rest), with one back arrow per
+  // reference occurrence (matching the disambiguated fnref ids), so every jump down has a jump back.
+  const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
+  if (referenced.length) {
+    const items = referenced
+      .map((f) => {
+        const n = fn.counts.get(f.id);
+        const backs = Array.from({ length: n }, (_v, k) =>
+          `<a class="md-fn-back" href="#fnref-${f.id}${k ? `-${k + 1}` : ''}" aria-label="Back to reference${k ? ` ${k + 1}` : ''}">&#8617;${k ? `<sup>${k + 1}</sup>` : ''}</a>`).join(' ');
+        return `<li id="fn-${f.id}">${f.html} ${backs}</li>`;
+      })
+      .join('');
+    out.push(`<section class="md-footnotes"><h2>Footnotes</h2><ol>${items}</ol></section>`);
+  }
   return out.join('\n');
 }

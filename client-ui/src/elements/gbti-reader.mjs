@@ -126,6 +126,12 @@ const CSS = `
   .body .md-callout-tip { border-color:rgba(31,158,95,.35); background:rgba(31,158,95,.1); } .body .md-callout-tip::before { background:var(--accent); }
   .body .md-embed { position:relative; margin:0 0 1.2em; aspect-ratio:16/9; border-radius:10px; overflow:hidden; background:#000; }
   .body .md-embed iframe { width:100%; height:100%; border:0; }
+  /* GFM footnotes: superscript refs jump to the end-of-article list; the back arrow returns. */
+  .body sup.md-fnref { line-height:0; } .body sup.md-fnref a { text-decoration:none; font-weight:600; padding:0 1px; }
+  .body .md-footnotes { margin-top:28px; padding-top:12px; border-top:1px solid var(--line); font-size:.87em; color:var(--muted); }
+  .body .md-footnotes h2 { font-size:1.05em; margin:0 0 .6em; }
+  .body .md-footnotes li { margin:0 0 .55em; }
+  .body .md-fn-back { text-decoration:none; margin-left:4px; }
 
   /* SOW-050: code cards (built from <pre> in _enhanceCode) — a header bar with the language + a Copy button, a
      dark, horizontally-scrollable body that preserves whitespace. */
@@ -482,7 +488,24 @@ class GbtiReader extends GbtiElement {
       : '';
 
     this.set(this.css(CSS) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || '')}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);
-    if (resolved) { this._enhanceCode(); this._wireFollow(it); this._wireCopyAll(); }
+    if (resolved) { this._enhanceCode(); this._wireFollow(it); this._wireCopyAll(); this._wireFootnotes(); }
+  }
+
+  // GFM footnote anchors live inside this shadow root, where the browser's own fragment navigation cannot
+  // reach, so #-links (ref -> definition, back arrow -> ref) route to a local scroll instead. Delegated on
+  // the article body; each render builds a fresh body, so no duplicate listeners accumulate.
+  _wireFootnotes() {
+    const body = this.$('.body');
+    if (!body) return;
+    body.addEventListener('click', (e) => {
+      const a = e.target?.closest?.('a');
+      const href = a?.getAttribute?.('href') || '';
+      if (!href.startsWith('#')) return;
+      const target = this.root.getElementById(href.slice(1));
+      if (!target) return; // an unknown fragment keeps its default behavior (never a swallowed click)
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   // SOW-050: upgrade each <pre> code block into a code card (language label + Copy button). Idempotent per render.

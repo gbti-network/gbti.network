@@ -85,7 +85,7 @@ This started as a personal “what if” project, but I’m surprised by how muc
 
 I’m already thinking about v2 features: maybe saturation animations, or sharpness/blur transitions.
 
-I’ve also been exploring support for modern animation formats like **WebP animations**[3](#footnotes) and **AVIF animations**, which offer superior compression and quality. However, implementing these has proven surprisingly challenging in browser environments:
+I’ve also been exploring support for modern animation formats like **WebP animations**[^3] and **AVIF animations**, which offer superior compression and quality. However, implementing these has proven surprisingly challenging in browser environments:
 
 -   **WebP animation encoding** requires [libwebp](https://developers.google.com/speed/webp), which needs compilation to WebAssembly using Emscripten
 -   **AVIF animation support** is even more complex, requiring [libavif](https://github.com/AOMediaCodec/libavif) compilation and only has partial browser support for animations (currently just Chrome)
@@ -114,14 +114,13 @@ A wild _Snape_ appears on the dance floor:
 
 The below example reminds me of a character we might see out of the Dragon Ball series. Who even is this guy? Great colors though.
 
-These eyes[1](#footnotes) have seen a lot of love:
+These eyes[^1] have seen a lot of love:
 
-And a night cityscape[2](#footnotes) to conclude examples:
+And a night cityscape[^2] to conclude examples:
 
 Thanks for reading and we hope you enjoy this novelty tool we’ve created! Have fun and if you create something cool, [upload it to giphy](http://giphy.com/upload/) and share it with us in the comments below!
 
-## Footnotes / References
 
-1.  The Guess Who – These Eyes – [https://www.youtube.com/watch?v=xcLdbsrSngA](https://www.youtube.com/watch?v=xcLdbsrSngA&list=RDxcLdbsrSngA&start_radio=1)
-2.  Brassica – New Jam City –[https://www.youtube.com/watch?v=F1Lcfjk3\_i8](https://www.youtube.com/watch?v=F1Lcfjk3_i8)
-3.  Why WebP is the best format for performance [https://performance.startumproject.com/why-webp-is-the-best-image-format-for-performance/](https://performance.startumproject.com/why-webp-is-the-best-image-format-for-performance/)
+[^1]: The Guess Who – These Eyes – [https://www.youtube.com/watch?v=xcLdbsrSngA](https://www.youtube.com/watch?v=xcLdbsrSngA&list=RDxcLdbsrSngA&start_radio=1)
+[^2]: Brassica – New Jam City –[https://www.youtube.com/watch?v=F1Lcfjk3\_i8](https://www.youtube.com/watch?v=F1Lcfjk3_i8)
+[^3]: Why WebP is the best format for performance [https://performance.startumproject.com/why-webp-is-the-best-image-format-for-performance/](https://performance.startumproject.com/why-webp-is-the-best-image-format-for-performance/)

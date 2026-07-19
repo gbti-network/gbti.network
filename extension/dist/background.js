@@ -20368,13 +20368,43 @@ function embedUrl(v) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 }
-function inline(escaped) {
+var FN_ID = "[A-Za-z0-9_-]+";
+function collectFootnoteIds(lines) {
+  const ids = /* @__PURE__ */ new Set();
+  let fence = 0;
+  for (const line of lines) {
+    const f2 = /^(`{3,})(.*)$/.exec(line);
+    if (f2) {
+      if (!fence) fence = f2[1].length;
+      else if (f2[1].length >= fence && !f2[2].trim()) fence = 0;
+      continue;
+    }
+    if (fence) continue;
+    const d = new RegExp(`^\\[\\^(${FN_ID})\\]:`).exec(line);
+    if (d) ids.add(d[1]);
+  }
+  return ids;
+}
+function inline(escaped, fn = null) {
   let t = escaped;
-  t = t.replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`);
+  const codes = [];
+  t = t.replace(/`([^`]+)`/g, (_m, c) => {
+    codes.push(c);
+    return `${codes.length - 1}`;
+  });
+  if (fn) {
+    t = t.replace(new RegExp(`\\[\\^(${FN_ID})\\](?!:)`, "g"), (m, id) => {
+      if (!fn.ids.has(id)) return m;
+      const n = (fn.counts.get(id) ?? 0) + 1;
+      fn.counts.set(id, n);
+      return `<sup class="md-fnref"><a href="#fn-${id}" id="fnref-${id}${n > 1 ? `-${n}` : ""}">${id}</a></sup>`;
+    });
+  }
   t = t.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\.?\/[^\s)]+)\)/g, (_m, alt, src) => `<img src="${src}" alt="${alt}" loading="lazy">`);
   t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, txt, url2) => `<a href="${url2}" target="_blank" rel="noopener">${txt}</a>`);
   t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+  t = t.replace(/\uE000(\d+)\uE001/g, (_m, i) => `<code>${codes[Number(i)] ?? ""}</code>`);
   return t;
 }
 function codeOpen(lang) {
@@ -20382,12 +20412,12 @@ function codeOpen(lang) {
   return tag ? `<pre><code class="language-${tag}" data-lang="${tag}">` : "<pre><code>";
 }
 var CALLOUT_VARIANTS = ["info", "note", "warning", "tip"];
-function renderFence(lang, buf) {
+function renderFence(lang, buf, fn = null) {
   const info = String(lang || "").trim().split(/\s+/);
   const body = buf.join("\n");
   if (info[0] === "callout") {
     const v = CALLOUT_VARIANTS.includes(info[1]) ? info[1] : "note";
-    const html = body.split("\n").map((l) => inline(escapeHtml(l))).join("<br/>");
+    const html = body.split("\n").map((l) => inline(escapeHtml(l), fn)).join("<br/>");
     return `<div class="md-callout md-callout-${v}"><div class="md-callout-body">${html}</div></div>`;
   }
   if (info[0] === "embed") {
@@ -20407,6 +20437,8 @@ function renderMarkdown(md) {
   let codeLang = "";
   let listType = null;
   let listBuf = [];
+  const footnotes = [];
+  const fn = { ids: collectFootnoteIds(lines), counts: /* @__PURE__ */ new Map() };
   const flushList = () => {
     if (listType) {
       out.push(`<${listType}>${listBuf.join("")}</${listType}>`);
@@ -20430,7 +20462,7 @@ function renderMarkdown(md) {
       if (fence[1].length >= codeFence && !fence[2].trim()) {
         inCode = false;
         flushList();
-        out.push(renderFence(codeLang, codeBuf));
+        out.push(renderFence(codeLang, codeBuf, fn));
         codeLang = "";
         i++;
         continue;
@@ -20444,11 +20476,23 @@ function renderMarkdown(md) {
       i++;
       continue;
     }
+    const def = new RegExp(`^\\[\\^(${FN_ID})\\]:\\s?(.*)$`).exec(line);
+    if (def) {
+      flushList();
+      const parts = [def[2].trim()];
+      i++;
+      while (i < lines.length && /^ {4,}\S/.test(lines[i])) {
+        parts.push(lines[i].trim());
+        i++;
+      }
+      footnotes.push({ id: def[1], html: parts.map((p) => inline(escapeHtml(p), fn)).join("<br/>") });
+      continue;
+    }
     const esc2 = escapeHtml(line);
     let m;
     if (m = /^(#{1,6})\s+(.*)$/.exec(esc2)) {
       flushList();
-      out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`);
+      out.push(`<h${m[1].length}>${inline(m[2], fn)}</h${m[1].length}>`);
       i++;
       continue;
     }
@@ -20457,7 +20501,7 @@ function renderMarkdown(md) {
         flushList();
         listType = "ul";
       }
-      listBuf.push(`<li>${inline(escapeHtml(line.replace(/^\s*[-*]\s+/, "")))}</li>`);
+      listBuf.push(`<li>${inline(escapeHtml(line.replace(/^\s*[-*]\s+/, "")), fn)}</li>`);
       i++;
       continue;
     }
@@ -20466,13 +20510,13 @@ function renderMarkdown(md) {
         flushList();
         listType = "ol";
       }
-      listBuf.push(`<li>${inline(escapeHtml(line.replace(/^\s*\d+\.\s+/, "")))}</li>`);
+      listBuf.push(`<li>${inline(escapeHtml(line.replace(/^\s*\d+\.\s+/, "")), fn)}</li>`);
       i++;
       continue;
     }
     if (/^\s*>\s?/.test(line)) {
       flushList();
-      out.push(`<blockquote>${inline(escapeHtml(line.replace(/^\s*>\s?/, "")))}</blockquote>`);
+      out.push(`<blockquote>${inline(escapeHtml(line.replace(/^\s*>\s?/, "")), fn)}</blockquote>`);
       i++;
       continue;
     }
@@ -20490,14 +20534,23 @@ function renderMarkdown(md) {
     flushList();
     const para = [esc2];
     i++;
-    while (i < lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,6})\s|^\s*[-*]\s|^\s*\d+\.\s|^```|^\s*>/.test(lines[i])) {
+    while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i])) {
       para.push(escapeHtml(lines[i]));
       i++;
     }
-    out.push(`<p>${inline(para.join(" "))}</p>`);
+    out.push(`<p>${inline(para.join(" "), fn)}</p>`);
   }
   flushList();
-  if (inCode) out.push(renderFence(codeLang, codeBuf));
+  if (inCode) out.push(renderFence(codeLang, codeBuf, fn));
+  const referenced = footnotes.filter((f2) => (fn.counts.get(f2.id) ?? 0) > 0);
+  if (referenced.length) {
+    const items = referenced.map((f2) => {
+      const n = fn.counts.get(f2.id);
+      const backs = Array.from({ length: n }, (_v, k) => `<a class="md-fn-back" href="#fnref-${f2.id}${k ? `-${k + 1}` : ""}" aria-label="Back to reference${k ? ` ${k + 1}` : ""}">&#8617;${k ? `<sup>${k + 1}</sup>` : ""}</a>`).join(" ");
+      return `<li id="fn-${f2.id}">${f2.html} ${backs}</li>`;
+    }).join("");
+    out.push(`<section class="md-footnotes"><h2>Footnotes</h2><ol>${items}</ol></section>`);
+  }
   return out.join("\n");
 }
 

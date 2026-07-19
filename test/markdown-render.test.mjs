@@ -81,3 +81,49 @@ test('a 4-backtick fence carries ``` fences as CONTENT (the /ci skill prompt reg
   assert.match(html, /<p>Outro<\/p>/);
   assert.ok(!/<p>[^<]*echo hi/.test(html), 'inner code never leaks into a paragraph');
 });
+
+test('reader: GFM footnote refs render superscript anchors; defs collect into an end section', () => {
+  const md = 'Alpha[^1] and beta[^2].\n\n[^1]: First note with [a link](https://x.com).\n[^2]: Second note:  \n    **Song - Title**, extra line\n\n_The end._';
+  const html = renderMarkdown(md);
+  assert.match(html, /Alpha<sup class="md-fnref"><a href="#fn-1" id="fnref-1">1<\/a><\/sup>/);
+  assert.ok(html.indexOf('md-footnotes') > html.indexOf('The end.'), 'the footnote section renders at the document end');
+  assert.match(html, /<li id="fn-1">First note with <a href="https:\/\/x\.com"/);
+  assert.match(html, /<li id="fn-2">Second note:<br\/><strong>Song - Title<\/strong>, extra line/);
+  assert.match(html, /<a class="md-fn-back" href="#fnref-1"/);
+  assert.doesNotMatch(html, /\[\^1\]/); // no literal footnote syntax leaks into the output
+});
+
+test('reader: a footnote ref inside a blockquote works; a def-less document emits no section', () => {
+  const quoted = renderMarkdown('> Wise words.[^3]\n\n[^3]: The source.');
+  assert.match(quoted, /<blockquote>Wise words\.<sup class="md-fnref"><a href="#fn-3"/);
+  assert.doesNotMatch(renderMarkdown('Plain text, no footnotes.'), /md-footnotes/);
+});
+
+test('reader: repeated refs get disambiguated ids and per-occurrence back arrows; the def renders once', () => {
+  const html = renderMarkdown('One[^6] and again[^6].\n\n[^6]: Shared source.');
+  assert.equal((html.match(/href="#fn-6"/g) || []).length, 2);
+  assert.match(html, /id="fnref-6"/);
+  assert.match(html, /id="fnref-6-2"/); // the second occurrence, like remark-gfm
+  assert.equal((html.match(/<li id="fn-6">/g) || []).length, 1);
+  assert.match(html, /href="#fnref-6"/);
+  assert.match(html, /href="#fnref-6-2"/); // a back arrow per occurrence
+});
+
+test('reader: a ref with no matching definition stays literal, like remark-gfm', () => {
+  const html = renderMarkdown('A typo ref[^9] here.\n\n[^1]: Unrelated.');
+  assert.match(html, /A typo ref\[\^9\] here\./);
+  assert.doesNotMatch(html, /#fn-9/);
+});
+
+test('reader: an unreferenced definition is dropped from the section, like remark-gfm', () => {
+  const html = renderMarkdown('Uses[^1].\n\n[^1]: Kept.\n[^2]: Orphaned.');
+  assert.match(html, /<li id="fn-1">Kept\./);
+  assert.doesNotMatch(html, /Orphaned/);
+});
+
+test('reader: footnote-looking text inside a code span or a link stays untouched', () => {
+  const inCode = renderMarkdown('Write `[^1]` to cite.\n\n[^1]: Real def, referenced[^1].');
+  assert.match(inCode, /<code>\[\^1\]<\/code>/); // the quoted syntax is not a live anchor
+  const asLink = renderMarkdown('[^caret](https://example.com/caret)');
+  assert.match(asLink, /<a href="https:\/\/example\.com\/caret"[^>]*>\^caret<\/a>/); // no def -> the link rule wins
+});
