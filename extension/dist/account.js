@@ -12800,7 +12800,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)} · ${esc(d.slug)}${d.pendingSlug ? ` (renames to ${esc(d.pendingSlug)} on publish)` : ""}</span></span><span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${d.pendingSlug ? `<span class="tag">rename pending</span>` : ""}${bad}${vis}<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
     }
     _wireBody() {
-      this.on("[data-profile]", "click", () => this._openItem(this._profile?.path, "profile"));
+      this.on("[data-profile]", "click", () => {
+        if (typeof chrome !== "undefined" && chrome.runtime?.id && typeof location !== "undefined") {
+          location.href = "profile.html";
+          return;
+        }
+        this._openItem(this._profile?.path, "profile");
+      });
       if (this._tab === "drafts") {
         const drafts = this._drafts || [];
         this.$$("[data-draft-edit]").forEach((b) => b.addEventListener("click", () => this._openDraft(drafts[Number(b.dataset.draftEdit)])));
@@ -13816,7 +13822,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     mastodon: "M23.268 5.313c-.35-2.578-2.617-4.61-5.304-5.004C17.51.242 15.792 0 11.813 0h-.03c-3.98 0-4.835.242-5.288.309C3.882.692 1.496 2.518.917 5.127.64 6.412.61 7.837.661 9.143c.074 1.874.088 3.745.26 5.611.118 1.24.325 2.47.62 3.68.55 2.237 2.777 4.098 4.96 4.857 2.336.792 4.849.923 7.256.38.265-.061.527-.132.786-.213.585-.184 1.27-.39 1.774-.753a.057.057 0 0 0 .023-.043v-1.809a.052.052 0 0 0-.02-.041.053.053 0 0 0-.046-.01 20.282 20.282 0 0 1-4.709.545c-2.73 0-3.463-1.284-3.674-1.818a5.593 5.593 0 0 1-.319-1.433.053.053 0 0 1 .066-.054c1.517.363 3.072.546 4.632.546.376 0 .75 0 1.125-.01 1.57-.044 3.224-.124 4.768-.422.038-.008.077-.015.11-.024 2.435-.464 4.753-1.92 4.989-5.604.008-.145.03-1.52.03-1.67.002-.512.167-3.63-.024-5.545zm-3.748 9.195h-2.561V8.29c0-1.309-.55-1.976-1.67-1.976-1.23 0-1.846.79-1.846 2.35v3.403h-2.546V8.663c0-1.56-.617-2.35-1.848-2.35-1.112 0-1.668.668-1.67 1.977v6.218H4.822V8.102c0-1.31.337-2.35 1.011-3.12.696-.77 1.608-1.164 2.74-1.164 1.311 0 2.302.5 2.962 1.498l.638 1.06.638-1.06c.66-.999 1.65-1.498 2.96-1.498 1.13 0 2.043.395 2.74 1.164.675.77 1.012 1.81 1.012 3.12z",
     discord: "M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z",
     linkedin: LINKEDIN_PATH,
-    website: WEBSITE_PATH
+    website: WEBSITE_PATH,
+    // SOW-129: the comprehensive set (inlined from the same simple-icons package the site uses).
+    instagram: "M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077",
+    threads: "M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.964-.065-1.19.408-2.285 1.33-3.082.88-.76 2.119-1.207 3.583-1.291a13.853 13.853 0 0 1 3.02.142c-.126-.742-.375-1.332-.75-1.757-.513-.586-1.308-.883-2.359-.89h-.029c-.844 0-1.992.232-2.721 1.32L7.734 7.847c.98-1.454 2.568-2.256 4.478-2.256h.044c3.194.02 5.097 1.975 5.287 5.388.108.046.216.094.321.142 1.49.7 2.58 1.761 3.154 3.07.797 1.82.871 4.79-1.548 7.158-1.85 1.81-4.094 2.628-7.277 2.65Zm1.003-11.69c-.242 0-.487.007-.739.021-1.836.103-2.98.946-2.916 2.143.067 1.256 1.452 1.839 2.784 1.767 1.224-.065 2.818-.543 3.086-3.71a10.5 10.5 0 0 0-2.215-.221z",
+    tiktok: "M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z",
+    twitch: "M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z",
+    facebook: "M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z",
+    dailydev: "M18.29 5.706a1.405 1.405 0 0 0-1.987 0L4.716 17.296l1.324-2.65-2.65-2.649 3.312-3.311 2.65 2.65 1.986-1.988-3.642-3.642a1.405 1.405 0 0 0-1.987 0L.411 11.004a1.404 1.404 0 0 0 0 1.987l4.305 4.304.993.993a1.405 1.405 0 0 0 1.987 0L19.285 6.7l-.993-.994Zm-.332 3.647 2.65 2.65-4.306 4.305a1.404 1.404 0 1 0 1.986 1.986l5.299-5.298a1.404 1.404 0 0 0 0-1.987l-4.305-4.304-1.324 2.648Z",
+    producthunt: "M13.604 8.4h-3.405V12h3.405c.995 0 1.801-.806 1.801-1.801 0-.993-.805-1.799-1.801-1.799zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 14.4h-3.405V18H7.801V6h5.804c2.319 0 4.2 1.88 4.2 4.199 0 2.321-1.881 4.201-4.201 4.201z",
+    rumble: "M14.4528 13.5458c.8064-.6542.9297-1.8381.2756-2.6445a1.8802 1.8802 0 0 0-.2756-.2756 21.2127 21.2127 0 0 0-4.3121-2.776c-1.066-.51-2.256.2-2.4261 1.414a23.5226 23.5226 0 0 0-.14 5.5021c.116 1.23 1.292 1.964 2.372 1.492a19.6285 19.6285 0 0 0 4.5062-2.704v-.008zm6.9322-5.4002c2.0335 2.228 2.0396 5.637.014 7.8723A26.1487 26.1487 0 0 1 8.2946 23.846c-2.6848.6713-5.4168-.914-6.1662-3.5781-1.524-5.2002-1.3-11.0803.17-16.3045.772-2.744 3.3521-4.4661 6.0102-3.832 4.9242 1.174 9.5443 4.196 13.0764 8.0121v.002z"
   };
   function socialIcon(key, size = 15) {
     const d = SOCIAL_ICON_PATHS[String(key || "").toLowerCase()];
@@ -14448,6 +14463,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   var lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE13}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
+  var prettyRole = (s) => String(s || "").split(/[-_]/).filter(Boolean).map((w) => w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   var _directory = null;
   function loadDirectory() {
     if (_directory) return _directory;
@@ -14463,7 +14479,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     ["devto", "DEV", "https://dev.to/"],
     ["reddit", "Reddit", "https://reddit.com/user/"],
     ["mastodon", "Mastodon", ""],
-    ["linkedin", "LinkedIn", "https://linkedin.com/in/"]
+    ["linkedin", "LinkedIn", "https://linkedin.com/in/"],
+    // SOW-129: the comprehensive set.
+    ["instagram", "Instagram", "https://www.instagram.com/"],
+    ["threads", "Threads", "https://www.threads.net/@"],
+    ["tiktok", "TikTok", "https://www.tiktok.com/@"],
+    ["twitch", "Twitch", "https://www.twitch.tv/"],
+    ["facebook", "Facebook", "https://www.facebook.com/"],
+    ["dailydev", "daily.dev", "https://app.daily.dev/"],
+    ["producthunt", "Product Hunt", "https://www.producthunt.com/@"],
+    ["rumble", "Rumble", "https://rumble.com/user/"]
   ];
   function linkUrl(value, base) {
     const v = String(value || "").trim();
@@ -14579,6 +14604,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .author .follow { display:inline-flex; align-items:center; justify-content:center; gap:6px; margin-top:14px; width:100%; font:inherit; font-size:13px; font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; text-decoration:none; }
   .author .follow.on { background:transparent; color:var(--fg); border-color:var(--line); }
   .author .follow.muted { background:transparent; color:var(--muted); border-color:var(--line); cursor:default; }
+  .author .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+  .author .tag { font-size:11.5px; font-weight:600; line-height:1; padding:5px 9px; border-radius:999px; border:1px solid var(--line); color:var(--muted); }
+  .author .tag.role { color:var(--fg); border-color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, transparent); }
   .author .socials { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; }
   .author .soc { position:relative; width:30px; height:30px; flex:none; display:inline-flex; align-items:center; justify-content:center; color:var(--muted); background:var(--hover); border:1px solid var(--line); border-radius:8px; text-decoration:none; }
   .author .soc:hover, .author .soc:focus-visible { color:var(--accent); border-color:var(--accent); outline:none; }
@@ -14774,7 +14802,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         chips.push(`<span class="soc discord" tabindex="0" role="img" aria-label="Discord: ${esc(handle)}">${socialIcon("discord")}<span class="tip" role="tooltip">Discord: ${esc(handle)}</span></span>`);
       }
       const socials = chips.length ? `<div class="socials">${chips.join("")}</div>` : "";
-      return `<div class="author"><div class="a-top"><span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span><div>${it.type === "share" ? '<div class="a-shared">Shared by</div>' : ""}<div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>${note}${follow}${socials}</div>`;
+      const tagPills = [];
+      for (const r of Array.isArray(e.roles) ? e.roles : []) tagPills.push(`<span class="tag role">${esc(prettyRole(r))}</span>`);
+      for (const s of Array.isArray(e.skills) ? e.skills : []) tagPills.push(`<span class="tag skill">${esc(String(s))}</span>`);
+      const tags = tagPills.length ? `<div class="tags">${tagPills.join("")}</div>` : "";
+      return `<div class="author"><div class="a-top"><span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span><div>${it.type === "share" ? '<div class="a-shared">Shared by</div>' : ""}<div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>${note}${follow}${tags}${socials}</div>`;
     }
     render() {
       const it = this._item;
@@ -16062,6 +16094,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-052: the WorkBench rail glyphs.
     bookmark: '<path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
     users: '<circle cx="9" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 6.2a3 3 0 0 1 0 5.6M16.5 13.5a5.5 5.5 0 0 1 4 5.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+    user: '<circle cx="12" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 19.5a7 7 0 0 1 14 0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+    // SOW-129: Profile rail glyph
     gear: '<circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M19.4 13a7.8 7.8 0 0 0 0-2l1.7-1.3-1.7-3-2 .8a7.6 7.6 0 0 0-1.7-1l-.3-2.1H10l-.3 2.1a7.6 7.6 0 0 0-1.7 1l-2-.8-1.7 3L6 11a7.8 7.8 0 0 0 0 2l-1.7 1.3 1.7 3 2-.8a7.6 7.6 0 0 0 1.7 1l.3 2.1h3.6l.3-2.1a7.6 7.6 0 0 0 1.7-1l2 .8 1.7-3z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
     pr: '<circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="6" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="18" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M6 8.2v7.6M18 15.8V11a4 4 0 0 0-4-4h-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     // SOW-052: the "Network" rail item (back to the co-op feed) — connected nodes.
@@ -16112,6 +16146,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "subs", href: "workspace.html#tab=subs", ico: "users", nm: "Following", sub: "Members, channels, topics" },
     { key: "earnings", href: "workspace.html#tab=earnings", ico: "coin", nm: "Earnings", sub: "Referrals + rewards" },
     { div: true },
+    { key: "profile", href: "profile.html", ico: "user", nm: "Profile", sub: "Your public profile" },
+    // SOW-129
     { key: "settings", href: "account.html", ico: "gear", nm: "Settings", sub: "Membership + account" },
     { key: "admin", href: "admin.html", ico: "lock", nm: "Admin tools", sub: "Moderation", adminOnly: true }
   ];
@@ -16145,6 +16181,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <div class="me-head" data-me-head></div>
         <div class="me-sep" role="separator"></div>
         <a class="mi" role="menuitem" href="workspace.html">WorkBench</a>
+        <a class="mi" role="menuitem" href="profile.html">Profile</a>
         <a class="mi" role="menuitem" href="account.html">Settings</a>
         <a class="mi" role="menuitem" href="admin.html" data-admin-only hidden>Admin tools</a>
         <button class="mi" role="menuitem" type="button" data-social-queue data-super-only hidden>Social Queue</button>

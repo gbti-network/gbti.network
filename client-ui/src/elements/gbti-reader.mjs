@@ -43,6 +43,9 @@ const TYPE_LABEL = { post: 'Article', product: 'Product', prompt: 'Prompt', shar
 const dateStr = (ms) => { try { return ms ? new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : ''; } catch { return ''; } };
 const lockNotice = (what) => `<div class="locked">${esc(what)} is for members. <a href="${SITE}/membership/" target="_blank" rel="noopener">Become a member</a> to unlock.</div>`;
 
+// SOW-129: humanize a role slug for the author card (mcp-developer -> "MCP Developer"). Short tokens uppercase.
+const prettyRole = (s) => String(s || '').split(/[-_]/).filter(Boolean).map((w) => (w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(' ');
+
 // SOW-050: the member directory (/members-index.json) carries the author drawer's avatar/name/headline/links. It
 // is small + public (CORS *), so fetch it once per page and cache the promise across reader opens.
 let _directory = null;
@@ -68,6 +71,15 @@ const SOCIALS = [
   ['reddit', 'Reddit', 'https://reddit.com/user/'],
   ['mastodon', 'Mastodon', ''],
   ['linkedin', 'LinkedIn', 'https://linkedin.com/in/'],
+  // SOW-129: the comprehensive set.
+  ['instagram', 'Instagram', 'https://www.instagram.com/'],
+  ['threads', 'Threads', 'https://www.threads.net/@'],
+  ['tiktok', 'TikTok', 'https://www.tiktok.com/@'],
+  ['twitch', 'Twitch', 'https://www.twitch.tv/'],
+  ['facebook', 'Facebook', 'https://www.facebook.com/'],
+  ['dailydev', 'daily.dev', 'https://app.daily.dev/'],
+  ['producthunt', 'Product Hunt', 'https://www.producthunt.com/@'],
+  ['rumble', 'Rumble', 'https://rumble.com/user/'],
 ];
 function linkUrl(value, base) {
   const v = String(value || '').trim();
@@ -184,6 +196,9 @@ const CSS = `
   .author .follow { display:inline-flex; align-items:center; justify-content:center; gap:6px; margin-top:14px; width:100%; font:inherit; font-size:13px; font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; text-decoration:none; }
   .author .follow.on { background:transparent; color:var(--fg); border-color:var(--line); }
   .author .follow.muted { background:transparent; color:var(--muted); border-color:var(--line); cursor:default; }
+  .author .tags { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+  .author .tag { font-size:11.5px; font-weight:600; line-height:1; padding:5px 9px; border-radius:999px; border:1px solid var(--line); color:var(--muted); }
+  .author .tag.role { color:var(--fg); border-color:var(--accent); background:color-mix(in srgb, var(--accent) 10%, transparent); }
   .author .socials { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; }
   .author .soc { position:relative; width:30px; height:30px; flex:none; display:inline-flex; align-items:center; justify-content:center; color:var(--muted); background:var(--hover); border:1px solid var(--line); border-radius:8px; text-decoration:none; }
   .author .soc:hover, .author .soc:focus-visible { color:var(--accent); border-color:var(--accent); outline:none; }
@@ -410,10 +425,15 @@ class GbtiReader extends GbtiElement {
       chips.push(`<span class="soc discord" tabindex="0" role="img" aria-label="Discord: ${esc(handle)}">${socialIcon('discord')}<span class="tip" role="tooltip">Discord: ${esc(handle)}</span></span>`);
     }
     const socials = chips.length ? `<div class="socials">${chips.join('')}</div>` : '';
+    // SOW-129: public roles (specialty badges) + skills (tags), carried on the members-index entry. No location.
+    const tagPills = [];
+    for (const r of (Array.isArray(e.roles) ? e.roles : [])) tagPills.push(`<span class="tag role">${esc(prettyRole(r))}</span>`);
+    for (const s of (Array.isArray(e.skills) ? e.skills : [])) tagPills.push(`<span class="tag skill">${esc(String(s))}</span>`);
+    const tags = tagPills.length ? `<div class="tags">${tagPills.join('')}</div>` : '';
     return `<div class="author"><div class="a-top">`
       + `<span class="a-av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`
       + `<div>${it.type === 'share' ? '<div class="a-shared">Shared by</div>' : ''}<div class="a-name">${esc(name)}</div><div class="a-user">@${esc(it.author)}</div></div></div>`
-      + `${note}${follow}${socials}</div>`;
+      + `${note}${follow}${tags}${socials}</div>`;
   }
 
   render() {

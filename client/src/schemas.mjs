@@ -74,6 +74,15 @@ const socialLinks = z
     mastodon: z.string().optional(),
     linkedin: z.string().optional(),
     discord: z.string().optional(),
+    // SOW-129: the comprehensive set (kept in sync with src/content.config.ts).
+    instagram: z.string().optional(),
+    threads: z.string().optional(),
+    tiktok: z.string().optional(),
+    twitch: z.string().optional(),
+    facebook: z.string().optional(),
+    dailydev: z.string().optional(),
+    producthunt: z.string().optional(),
+    rumble: z.string().optional(),
   })
   .partial();
 

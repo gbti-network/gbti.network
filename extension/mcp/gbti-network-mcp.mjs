@@ -17045,7 +17045,16 @@ var socialLinks = external_exports.object({
   reddit: external_exports.string().optional(),
   mastodon: external_exports.string().optional(),
   linkedin: external_exports.string().optional(),
-  discord: external_exports.string().optional()
+  discord: external_exports.string().optional(),
+  // SOW-129: the comprehensive set (kept in sync with src/content.config.ts).
+  instagram: external_exports.string().optional(),
+  threads: external_exports.string().optional(),
+  tiktok: external_exports.string().optional(),
+  twitch: external_exports.string().optional(),
+  facebook: external_exports.string().optional(),
+  dailydev: external_exports.string().optional(),
+  producthunt: external_exports.string().optional(),
+  rumble: external_exports.string().optional()
 }).partial();
 var postSchema = external_exports.object({
   type: external_exports.literal("post").default("post"),

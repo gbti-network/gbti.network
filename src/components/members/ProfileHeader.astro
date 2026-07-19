@@ -11,6 +11,12 @@ const d = profile.data;
 
 const socials = Object.entries(d.links ?? {})
   .filter(([k, v]) => ICON_PATHS[k] && typeof v === 'string' && /^https?:\/\//.test(v)) as [string, string][];
+
+// SOW-129: humanize a role slug for display (mcp-developer -> "MCP Developer"). Short tokens uppercase.
+const pretty = (s: string) =>
+  s.split(/[-_]/).filter(Boolean).map((w) => (w.length <= 3 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1))).join(' ');
+const roles = d.roles ?? [];
+const skills = d.skills ?? [];
 ---
 <header class="band-sm dark relative overflow-hidden">
   <Container class="relative flex flex-col items-center gap-8 sm:flex-row sm:items-start sm:gap-12">
@@ -30,6 +36,24 @@ const socials = Object.entries(d.links ?? {})
       </div>
       {d.headline && <p class="lead">{d.headline}</p>}
       <slot />
+      {(roles.length > 0 || skills.length > 0) && (
+        <div class="mt-2 flex flex-col items-center gap-2 sm:items-start">
+          {roles.length > 0 && (
+            <div class="flex flex-wrap justify-center gap-2 sm:justify-start">
+              {roles.map((r) => (
+                <span style="padding:.28rem .66rem;border-radius:999px;border:1.5px solid var(--line-dark-2);color:#fff;font-size:.82rem;font-weight:600">{pretty(r)}</span>
+              ))}
+            </div>
+          )}
+          {skills.length > 0 && (
+            <div class="flex flex-wrap justify-center gap-2 sm:justify-start">
+              {skills.map((s) => (
+                <span style="padding:.24rem .6rem;border-radius:999px;border:1.5px solid var(--line-dark-2);color:var(--on-dark-soft);font-size:.8rem">{s}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {socials.length > 0 && (
         <div class="mt-2 flex flex-wrap justify-center gap-3 sm:justify-start">
           {socials.map(([k, v]) => (

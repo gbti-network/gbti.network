@@ -8,7 +8,7 @@
 
 // The public social link keys we surface (the profile schema's links subset). Discord is included by design so the
 // reader can reveal the author's Discord handle on inspection.
-const LINK_KEYS = ['github', 'website', 'x', 'bluesky', 'youtube', 'devto', 'reddit', 'mastodon', 'linkedin', 'discord'];
+const LINK_KEYS = ['github', 'website', 'x', 'bluesky', 'youtube', 'devto', 'reddit', 'mastodon', 'linkedin', 'discord', 'instagram', 'threads', 'tiktok', 'twitch', 'facebook', 'dailydev', 'producthunt', 'rumble'];
 
 /** Parse a lowercase github login from a profile links.github value (a URL or a bare handle), else undefined. */
 function githubLoginFromLinks(github) {
@@ -34,13 +34,17 @@ function publicLinks(links) {
  * @param {{ data: { username:string, displayName?:string, avatar?:string, headline?:string, tier?:string, links?:Record<string,string> } }[]} profiles
  *   ALREADY filtered to public + directory profiles by the caller.
  * @param {(login?:string)=>(string|undefined)} [avatarFallback]  github avatar by login, for profiles without a gravatar.
- * @returns {{ username:string, displayName:string, avatar:string|null, headline:string|null, tier:string, links?:Record<string,string> }[]}
+ * @returns {{ username:string, displayName:string, avatar:string|null, headline:string|null, tier:string, links?:Record<string,string>, roles?:string[], skills?:string[] }[]}
  */
 export function buildMembersDirectory(profiles, avatarFallback = () => undefined) {
   return (profiles || []).map((p) => {
     const d = p.data || {};
     const login = githubLoginFromLinks(d.links?.github) || d.username;
     const links = publicLinks(d.links);
+    // SOW-129: carry the PUBLIC roles + skills too (rendered on the profile + the reader author card, owner
+    // decision 2026-07-19). Still NO location (kept off the public surfaces).
+    const roles = Array.isArray(d.roles) ? d.roles.filter((r) => typeof r === 'string' && r.trim()).map((r) => r.trim()) : [];
+    const skills = Array.isArray(d.skills) ? d.skills.filter((s) => typeof s === 'string' && s.trim()).map((s) => s.trim()) : [];
     return {
       username: d.username,
       displayName: d.displayName || d.username,
@@ -48,6 +52,8 @@ export function buildMembersDirectory(profiles, avatarFallback = () => undefined
       headline: d.headline || null,
       tier: d.tier || 'trial',
       ...(links ? { links } : {}),
+      ...(roles.length ? { roles } : {}),
+      ...(skills.length ? { skills } : {}),
     };
   });
 }

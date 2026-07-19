@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 30
+    date: 2026-07-19
+    type: build
+    title: Manage your profile and social links in the extension
+    notes:
+      - Added a Profile page in the WorkBench where you edit your display name, headline, bio, skills, and specialties, and add social links across a comprehensive set of platforms with branded icons.
+      - Your stored handles now credit you automatically when your content is shared to X, Bluesky, and Mastodon. Skills and specialties show on your public profile.
+
+  - version: 0.1.0
     build: 29
     date: 2026-07-18
     type: build

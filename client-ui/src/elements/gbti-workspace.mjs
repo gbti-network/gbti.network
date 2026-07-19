@@ -648,7 +648,12 @@ class GbtiWorkspace extends GbtiElement {
   }
 
   _wireBody() {
-    this.on('[data-profile]', 'click', () => this._openItem(this._profile?.path, 'profile'));
+    // SOW-129: in the extension, "Edit profile" opens the dedicated Profile page; the npm CMS (no profile.html)
+    // falls back to the generic content editor opening the profile item in place.
+    this.on('[data-profile]', 'click', () => {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.id && typeof location !== 'undefined') { location.href = 'profile.html'; return; }
+      this._openItem(this._profile?.path, 'profile');
+    });
     if (this._tab === 'drafts') {
       const drafts = this._drafts || [];
       this.$$('[data-draft-edit]').forEach((b) => b.addEventListener('click', () => this._openDraft(drafts[Number(b.dataset.draftEdit)])));
