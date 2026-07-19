@@ -16845,6 +16845,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     document.body.appendChild(overlay);
   }
 
+  // client-ui/src/profile-fields.mjs
+  var AVATAR_HOSTS = /(^|\.)githubusercontent\.com$|^github\.com$|(^|\.)gravatar\.com$/i;
+  function isSanctionedAvatar(url) {
+    const v = String(url == null ? "" : url).trim();
+    if (!v) return true;
+    let u;
+    try {
+      u = new URL(v);
+    } catch {
+      return false;
+    }
+    return u.protocol === "https:" && AVATAR_HOSTS.test(u.hostname);
+  }
+  var githubAvatarUrl = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
+
   // client-ui/src/elements/gbti-profile-editor.mjs
   var SITE16 = "https://gbti.network";
   var STATUS_LABEL2 = {
@@ -16878,6 +16893,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .fld input[type=text], .fld input[type=url], .fld textarea, .lv input { width:100%; box-sizing:border-box; font:inherit; font-size:14px; padding:10px 12px; border:1.5px solid var(--line); border-radius:9px; background:var(--bg, var(--panel)); color:var(--fg); }
   .fld input:focus, .fld textarea:focus, .lv input:focus { outline:none; border-color:var(--accent); }
   .fld textarea { min-height:120px; resize:vertical; line-height:1.55; font-family:var(--font-mono, ui-monospace, monospace); }
+  /* avatar field: preview + input */
+  .avrow { display:flex; gap:14px; align-items:flex-start; }
+  .avprev { width:64px; height:64px; flex:none; border-radius:50%; object-fit:cover; border:1.5px solid var(--line); background:var(--hover); }
+  .avfield { flex:1; min-width:0; }
+  .averr { color:#b3261e; font-size:12.5px; margin-top:5px; min-height:14px; }
   /* segmented toggle */
   .seg { display:inline-flex; background:var(--hover); border:1.5px solid var(--line); border-radius:9px; padding:3px; gap:2px; }
   .seg .segbtn { border:0; background:transparent; font:inherit; font-weight:600; font-size:14px; padding:7px 16px; border-radius:6px; color:var(--muted); cursor:pointer; }
@@ -17038,9 +17058,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="body">
         <div class="fld"><label for="pf-name">Display name</label><div class="d">Your name as it shows on your profile and cards.</div><input id="pf-name" type="text" data-field="displayName" value="${esc(m.displayName)}" maxlength="80" /></div>
         <div class="fld"><label for="pf-headline">Headline</label><div class="d">A short line under your name (a role, a company, or a tagline).</div><input id="pf-headline" type="text" data-field="headline" value="${esc(m.headline)}" maxlength="120" /></div>
-        <div class="fld"><label for="pf-avatar">Avatar URL</label><div class="d">A link to your avatar image. Leave blank to use your GitHub avatar.</div><input id="pf-avatar" type="url" data-field="avatar" value="${esc(m.avatar)}" placeholder="https://…" /></div>
+        <div class="fld"><label for="pf-avatar">Avatar</label><div class="d">Your profile picture. Leave blank to use your GitHub avatar, or paste a Gravatar image URL. Other image hosts are not allowed.</div>
+          <div class="avrow">
+            <img class="avprev" data-avatar-preview alt="Avatar preview" src="${esc(this._avatarSrc(m.avatar))}" />
+            <div class="avfield">
+              <input id="pf-avatar" type="url" data-field="avatar" data-avatar-input value="${esc(m.avatar)}" placeholder="Blank = GitHub avatar, or https://gravatar.com/avatar/…" />
+              <div class="averr" data-avatar-err></div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>`;
+    }
+    // The preview src: the entered avatar when it is a sanctioned https URL, else the member's GitHub avatar default.
+    _avatarSrc(v) {
+      const val = String(v || "").trim();
+      if (val && isSanctionedAvatar(val)) return val;
+      return githubAvatarUrl(this._login);
     }
     _bio(m) {
       return `<section class="sec">
@@ -17168,6 +17202,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         delete this._model.links[b.dataset.rmLink];
         this.render();
       }));
+      const avInput = this.$("[data-avatar-input]");
+      const avPrev = this.$("[data-avatar-preview]");
+      const avErr = this.$("[data-avatar-err]");
+      if (avInput) avInput.addEventListener("input", () => {
+        const v = avInput.value.trim();
+        const bad = v && !isSanctionedAvatar(v);
+        if (avErr) avErr.textContent = bad ? "Use your GitHub or Gravatar image only. Other hosts are not allowed." : "";
+        if (avPrev) avPrev.src = this._avatarSrc(bad ? "" : v);
+      });
+      if (avPrev) avPrev.addEventListener("error", () => {
+        const fb = githubAvatarUrl(this._login);
+        if (fb && avPrev.getAttribute("src") !== fb) avPrev.src = fb;
+      });
       this.$("[data-save]")?.addEventListener("click", () => this._save());
     }
     _buildInput() {
@@ -17186,7 +17233,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         visibility: m.visibility || "public"
       };
       if ((m.headline || "").trim()) input.headline = m.headline.trim();
-      if ((m.avatar || "").trim()) input.avatar = m.avatar.trim();
+      if ((m.avatar || "").trim() && isSanctionedAvatar(m.avatar.trim())) input.avatar = m.avatar.trim();
       if ((m.location || "").trim()) input.location = m.location.trim();
       if (Object.keys(links).length) input.links = links;
       return input;
@@ -17194,6 +17241,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _save() {
       if (this._saving || !this._model) return;
       this._gather();
+      const av = (this._model.avatar || "").trim();
+      if (av && !isSanctionedAvatar(av)) {
+        this._msg = "Your avatar must be a GitHub or Gravatar image URL. Please fix it before saving.";
+        this._msgKind = "err";
+        this.render();
+        return;
+      }
       this._saving = true;
       this._msg = "";
       this._msgKind = "";

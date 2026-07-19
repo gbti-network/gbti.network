@@ -9,6 +9,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { isImageGenTarget } from '../client/src/image-models.mjs';
+import { isSanctionedAvatar } from '../client-ui/src/profile-fields.mjs'; // SOW-129: the avatar host allowlist (shared)
 import { membersIndexFromParsed, overrideConsistencyErrors } from '../membership/overrides-core.mjs';
 import { validateNewsChannels } from '../membership/news-channels.mjs'; // SOW-043: the news-category -> Discord channel map
 import { validateCoupons } from '../membership/coupons.mjs'; // SOW-119: the coupon registry
@@ -118,6 +119,7 @@ const field = (txt, key) => {
   const m = new RegExp(`^${key}:\\s*"?([^"\\n]+?)"?\\s*$`, 'm').exec(txt);
   return m ? m[1].trim() : null;
 };
+
 
 /** Parse the leading YAML frontmatter block, or null. Never throws (malformed YAML => null, build catches it). */
 function frontmatter(txt) {
@@ -239,8 +241,11 @@ if (has(membersDir)) {
     if (has(path.join(base, 'applets'))) errors.push(`members/${user}/applets/: applets are a superadmin-only content type (SOW-022); members link out from a product instead`);
     const profile = path.join(base, 'profile.md');
     if (has(profile)) {
-      const u = field(fs.readFileSync(profile, 'utf8'), 'username');
+      const ptxt = fs.readFileSync(profile, 'utf8');
+      const u = field(ptxt, 'username');
       if (u && u !== user) errors.push(`members/${user}/profile.md: username "${u}" must equal the folder name "${user}"`);
+      const av = field(ptxt, 'avatar');
+      if (!isSanctionedAvatar(av)) errors.push(`members/${user}/profile.md: avatar "${av}" must be an https GitHub or Gravatar image URL; external image links are not allowed (SOW-129).`);
     }
     const comments = path.join(base, 'comments');
     if (has(comments)) for (const c of fs.readdirSync(comments)) if (c.endsWith('.md')) checkContent(path.join(comments, c), user, 'comment');

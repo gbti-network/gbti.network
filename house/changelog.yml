@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 31
+    date: 2026-07-19
+    type: build
+    title: Profile avatar preview, restricted to GitHub and Gravatar
+    notes:
+      - The Profile page now shows a live avatar preview as you edit.
+      - Avatar images are limited to your GitHub avatar or a Gravatar; other image hosts are not allowed, enforced in the editor and at publish.
+
+  - version: 0.1.0
     build: 30
     date: 2026-07-19
     type: build
