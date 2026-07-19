@@ -3,10 +3,10 @@
 // selection), renders toggle chips, and persists each toggle via client.setPrefs({ categories }). Emits
 // 'topics-change' with the new selection. Inert without a signed-in client (shows the vocabulary, persists nothing).
 import { GbtiElement, define, esc } from '../base.mjs';
-import { topicsFromJson, toggleTopic, selectedTopics, filterTopics, groupTopics } from '../topic-picker-core.mjs';
+import { topicsFromJson, toggleTopic, selectedTopics, filterTopics, groupTopics, selectAllTopics } from '../topic-picker-core.mjs';
 
 const SITE = 'https://gbti.network';
-const MAX_TOPICS = 40; // SOW-080: mirrors membership/member-prefs.mjs MAX_CATEGORIES (the Worker truncates beyond this)
+const MAX_TOPICS = 200; // SOW-080: mirrors membership/member-prefs.mjs MAX_CATEGORIES (the Worker truncates beyond this)
 
 const CSS = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -14,6 +14,9 @@ const CSS = `
   .srch { flex:1; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
   .srch:focus { outline:none; border-color:var(--accent); }
   .cnt { flex:none; font-size:12px; color:var(--muted); white-space:nowrap; }
+  .mini { flex:none; font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; padding:7px 11px; cursor:pointer; white-space:nowrap; }
+  .mini:hover { color:var(--fg); border-color:var(--accent); }
   .grp { margin:14px 0 8px; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
   .grp:first-child { margin-top:0; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
@@ -56,6 +59,8 @@ class GbtiTopicPicker extends GbtiElement {
       <div class="bar">
         <input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" />
         <span class="cnt" data-cnt></span>
+        <button class="mini" data-all type="button">Select all</button>
+        <button class="mini" data-clear type="button">Clear</button>
       </div>
       <div class="list" data-list></div>`);
     const srch = this.$('.srch');
@@ -63,6 +68,10 @@ class GbtiTopicPicker extends GbtiElement {
       srch.value = this._query;
       srch.addEventListener('input', () => { this._query = srch.value; this._renderChips(); });
     }
+    // Select all works on the FILTERED view when a query is active (so "select every AI topic" composes with
+    // the search box); with no query it selects the whole vocabulary. Both persist as ONE setPrefs call.
+    this.on('[data-all]', 'click', () => this._setSelection(selectAllTopics(this._selected, filterTopics(this._topics, this._query), MAX_TOPICS)));
+    this.on('[data-clear]', 'click', () => this._setSelection([]));
     this._renderChips();
   }
 
@@ -86,8 +95,12 @@ class GbtiTopicPicker extends GbtiElement {
     this.$$('[data-topic]').forEach((b) => b.addEventListener('click', () => this._toggle(b.dataset.topic)));
   }
 
-  async _toggle(key) {
-    const next = toggleTopic(this._selected, key);
+  _toggle(key) {
+    return this._setSelection(toggleTopic(this._selected, key));
+  }
+
+  /** Apply + persist a whole selection (a single toggle, Select all, or Clear) as one setPrefs call. */
+  async _setSelection(next) {
     this._selected = next;
     this._renderChips(); // optimistic; preserves the search box + focus
     this.dispatchEvent(new CustomEvent('topics-change', { detail: { topics: [...next] }, bubbles: true, composed: true }));

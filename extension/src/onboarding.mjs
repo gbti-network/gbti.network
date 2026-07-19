@@ -96,7 +96,9 @@ function mount() {
     const w = document.createElement('gbti-welcome');
     w.addEventListener('gbti:welcome-done', () => {
       try { localStorage.setItem('gbti-welcome-seen', '1'); } catch { /* no storage */ } // SOW-029: don't re-show on the new tab
-      window.location.href = chrome.runtime.getURL('newtab.html');
+      // Land on the Profile page (not the home feed): the welcome banner + the staged-socials prefill greet
+      // them there, so the flow ends with the profile getting filled out.
+      window.location.href = chrome.runtime.getURL('profile.html') + '?welcome=1';
     });
     const shell = document.querySelector('main.shell');
     if (shell) { shell.style.gridTemplateColumns = '1fr'; shell.replaceChildren(w); }

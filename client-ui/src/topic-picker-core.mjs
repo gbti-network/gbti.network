@@ -53,3 +53,14 @@ export function toggleTopic(selection, key) {
 export function selectedTopics(categories) {
   return [...new Set((Array.isArray(categories) ? categories : []).filter((k) => typeof k === 'string' && k))];
 }
+
+/** Select every topic in `pool` (the filtered view, or the whole vocabulary), merged AFTER the current
+ *  selection so existing picks keep priority under the cap. Returns a NEW de-duped key array. */
+export function selectAllTopics(selection, pool, cap = Infinity) {
+  const cur = selectedTopics(selection);
+  const keys = (Array.isArray(pool) ? pool : [])
+    .map((t) => t && t.key)
+    .filter((k) => typeof k === 'string' && k);
+  const merged = [...new Set([...cur, ...keys])];
+  return Number.isFinite(cap) && cap > 0 ? merged.slice(0, cap) : merged;
+}

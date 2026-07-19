@@ -15,6 +15,14 @@
     .hub-h { font-family: var(--f-display); font-weight: 800; font-size: 24px; letter-spacing: -.02em; margin: 0; }
     .hub-sub { color: var(--fg-mute); font-size: 14px; margin: 4px 0 0; }
     gbti-profile-editor { display: block; max-width: 720px; margin: 0 auto; }
+    /* The welcome-flow landing banner (?welcome=1, mounted by profile.mjs). */
+    .welcome-banner { display: flex; align-items: flex-start; gap: 14px; max-width: 720px; margin: 0 auto 18px;
+      padding: 14px 16px; border: 1.5px solid rgba(31, 158, 95, .45); border-radius: 12px;
+      background: rgba(31, 158, 95, .08); color: var(--fg); font-size: 14px; line-height: 1.55; }
+    .welcome-banner b { color: var(--brand, #1f9e5f); }
+    .welcome-banner button { flex: none; margin-left: auto; font: inherit; font-size: 18px; line-height: 1;
+      color: var(--fg-mute); background: transparent; border: 0; cursor: pointer; padding: 0 2px; }
+    .welcome-banner button:hover { color: var(--fg); }
   </style>
 </head>
 <body>

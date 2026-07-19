@@ -7715,6 +7715,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function selectedTopics(categories) {
     return [...new Set((Array.isArray(categories) ? categories : []).filter((k) => typeof k === "string" && k))];
   }
+  function selectAllTopics(selection, pool, cap = Infinity) {
+    const cur = selectedTopics(selection);
+    const keys = (Array.isArray(pool) ? pool : []).map((t) => t && t.key).filter((k) => typeof k === "string" && k);
+    const merged = [.../* @__PURE__ */ new Set([...cur, ...keys])];
+    return Number.isFinite(cap) && cap > 0 ? merged.slice(0, cap) : merged;
+  }
 
   // client-ui/src/share-post-core.mjs
   function authorFromPath(path) {
@@ -11362,15 +11368,120 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/discord.mjs
   var DISCORD_LINK_URL = "https://signup.gbti.network/discord/link/start";
 
+  // client-ui/src/social-icons.mjs
+  var LINKEDIN_PATH = "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z";
+  var WEBSITE_PATH = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z";
+  var SOCIAL_ICON_PATHS = {
+    github: "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12",
+    x: "M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z",
+    bluesky: "M5.202 2.857C7.954 4.922 10.913 9.11 12 11.358c1.087-2.247 4.046-6.436 6.798-8.501C20.783 1.366 24 .213 24 3.883c0 .732-.42 6.156-.667 7.037-.856 3.061-3.978 3.842-6.755 3.37 4.854.826 6.089 3.562 3.422 6.299-5.065 5.196-7.28-1.304-7.847-2.97-.104-.305-.152-.448-.153-.327 0-.121-.05.022-.153.327-.568 1.666-2.782 8.166-7.847 2.97-2.667-2.737-1.432-5.473 3.422-6.3-2.777.473-5.899-.308-6.755-3.369C.42 10.04 0 4.615 0 3.883c0-3.67 3.217-2.517 5.202-1.026",
+    youtube: "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
+    devto: "M7.42 10.05c-.18-.16-.46-.23-.84-.23H6l.02 2.44.04 2.45.56-.02c.41 0 .63-.07.83-.26.24-.24.26-.36.26-2.2 0-1.91-.02-1.96-.29-2.18zM0 4.94v14.12h24V4.94H0zM8.56 15.3c-.44.58-1.06.77-2.53.77H4.71V8.53h1.4c1.67 0 2.16.18 2.6.9.27.43.29.6.32 2.57.05 2.23-.02 2.73-.47 3.3zm5.09-5.47h-2.47v1.77h1.52v1.28l-.72.04-.75.03v1.77l1.22.03 1.2.04v1.28h-1.6c-1.53 0-1.6-.01-1.87-.3l-.3-.28v-3.16c0-3.02.01-3.18.25-3.48.23-.31.25-.31 1.88-.31h1.64v1.3zm4.68 5.45c-.17.43-.64.79-1 .79-.18 0-.45-.15-.67-.39-.32-.32-.45-.63-.82-2.08l-.9-3.39-.45-1.67h.76c.4 0 .75.02.75.05 0 .06 1.16 4.54 1.26 4.83.04.15.32-.7.73-2.3l.66-2.52.74-.04c.4-.02.73 0 .73.04 0 .14-1.67 6.38-1.8 6.68z",
+    reddit: "M12 0C5.373 0 0 5.373 0 12c0 3.314 1.343 6.314 3.515 8.485l-2.286 2.286C.775 23.225 1.097 24 1.738 24H12c6.627 0 12-5.373 12-12S18.627 0 12 0Zm4.388 3.199c1.104 0 1.999.895 1.999 1.999 0 1.105-.895 2-1.999 2-.946 0-1.739-.657-1.947-1.539v.002c-1.147.162-2.032 1.15-2.032 2.341v.007c1.776.067 3.4.567 4.686 1.363.473-.363 1.064-.58 1.707-.58 1.547 0 2.802 1.254 2.802 2.802 0 1.117-.655 2.081-1.601 2.531-.088 3.256-3.637 5.876-7.997 5.876-4.361 0-7.905-2.617-7.998-5.87-.954-.447-1.614-1.415-1.614-2.538 0-1.548 1.255-2.802 2.803-2.802.645 0 1.239.218 1.712.585 1.275-.79 2.881-1.291 4.64-1.365v-.01c0-1.663 1.263-3.034 2.88-3.207.188-.911.993-1.595 1.959-1.595Zm-8.085 8.376c-.784 0-1.459.78-1.506 1.797-.047 1.016.64 1.429 1.426 1.429.786 0 1.371-.369 1.418-1.385.047-1.017-.553-1.841-1.338-1.841Zm7.406 0c-.786 0-1.385.824-1.338 1.841.047 1.017.634 1.385 1.418 1.385.785 0 1.473-.413 1.426-1.429-.046-1.017-.721-1.797-1.506-1.797Zm-3.703 4.013c-.974 0-1.907.048-2.77.135-.147.015-.241.168-.183.305.483 1.154 1.622 1.964 2.953 1.964 1.33 0 2.47-.81 2.953-1.964.057-.137-.037-.29-.184-.305-.863-.087-1.795-.135-2.769-.135Z",
+    mastodon: "M23.268 5.313c-.35-2.578-2.617-4.61-5.304-5.004C17.51.242 15.792 0 11.813 0h-.03c-3.98 0-4.835.242-5.288.309C3.882.692 1.496 2.518.917 5.127.64 6.412.61 7.837.661 9.143c.074 1.874.088 3.745.26 5.611.118 1.24.325 2.47.62 3.68.55 2.237 2.777 4.098 4.96 4.857 2.336.792 4.849.923 7.256.38.265-.061.527-.132.786-.213.585-.184 1.27-.39 1.774-.753a.057.057 0 0 0 .023-.043v-1.809a.052.052 0 0 0-.02-.041.053.053 0 0 0-.046-.01 20.282 20.282 0 0 1-4.709.545c-2.73 0-3.463-1.284-3.674-1.818a5.593 5.593 0 0 1-.319-1.433.053.053 0 0 1 .066-.054c1.517.363 3.072.546 4.632.546.376 0 .75 0 1.125-.01 1.57-.044 3.224-.124 4.768-.422.038-.008.077-.015.11-.024 2.435-.464 4.753-1.92 4.989-5.604.008-.145.03-1.52.03-1.67.002-.512.167-3.63-.024-5.545zm-3.748 9.195h-2.561V8.29c0-1.309-.55-1.976-1.67-1.976-1.23 0-1.846.79-1.846 2.35v3.403h-2.546V8.663c0-1.56-.617-2.35-1.848-2.35-1.112 0-1.668.668-1.67 1.977v6.218H4.822V8.102c0-1.31.337-2.35 1.011-3.12.696-.77 1.608-1.164 2.74-1.164 1.311 0 2.302.5 2.962 1.498l.638 1.06.638-1.06c.66-.999 1.65-1.498 2.96-1.498 1.13 0 2.043.395 2.74 1.164.675.77 1.012 1.81 1.012 3.12z",
+    discord: "M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z",
+    linkedin: LINKEDIN_PATH,
+    website: WEBSITE_PATH,
+    // SOW-129: the comprehensive set (inlined from the same simple-icons package the site uses).
+    instagram: "M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077",
+    threads: "M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.964-.065-1.19.408-2.285 1.33-3.082.88-.76 2.119-1.207 3.583-1.291a13.853 13.853 0 0 1 3.02.142c-.126-.742-.375-1.332-.75-1.757-.513-.586-1.308-.883-2.359-.89h-.029c-.844 0-1.992.232-2.721 1.32L7.734 7.847c.98-1.454 2.568-2.256 4.478-2.256h.044c3.194.02 5.097 1.975 5.287 5.388.108.046.216.094.321.142 1.49.7 2.58 1.761 3.154 3.07.797 1.82.871 4.79-1.548 7.158-1.85 1.81-4.094 2.628-7.277 2.65Zm1.003-11.69c-.242 0-.487.007-.739.021-1.836.103-2.98.946-2.916 2.143.067 1.256 1.452 1.839 2.784 1.767 1.224-.065 2.818-.543 3.086-3.71a10.5 10.5 0 0 0-2.215-.221z",
+    tiktok: "M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z",
+    twitch: "M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z",
+    facebook: "M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z",
+    dailydev: "M18.29 5.706a1.405 1.405 0 0 0-1.987 0L4.716 17.296l1.324-2.65-2.65-2.649 3.312-3.311 2.65 2.65 1.986-1.988-3.642-3.642a1.405 1.405 0 0 0-1.987 0L.411 11.004a1.404 1.404 0 0 0 0 1.987l4.305 4.304.993.993a1.405 1.405 0 0 0 1.987 0L19.285 6.7l-.993-.994Zm-.332 3.647 2.65 2.65-4.306 4.305a1.404 1.404 0 1 0 1.986 1.986l5.299-5.298a1.404 1.404 0 0 0 0-1.987l-4.305-4.304-1.324 2.648Z",
+    producthunt: "M13.604 8.4h-3.405V12h3.405c.995 0 1.801-.806 1.801-1.801 0-.993-.805-1.799-1.801-1.799zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 14.4h-3.405V18H7.801V6h5.804c2.319 0 4.2 1.88 4.2 4.199 0 2.321-1.881 4.201-4.201 4.201z",
+    rumble: "M14.4528 13.5458c.8064-.6542.9297-1.8381.2756-2.6445a1.8802 1.8802 0 0 0-.2756-.2756 21.2127 21.2127 0 0 0-4.3121-2.776c-1.066-.51-2.256.2-2.4261 1.414a23.5226 23.5226 0 0 0-.14 5.5021c.116 1.23 1.292 1.964 2.372 1.492a19.6285 19.6285 0 0 0 4.5062-2.704v-.008zm6.9322-5.4002c2.0335 2.228 2.0396 5.637.014 7.8723A26.1487 26.1487 0 0 1 8.2946 23.846c-2.6848.6713-5.4168-.914-6.1662-3.5781-1.524-5.2002-1.3-11.0803.17-16.3045.772-2.744 3.3521-4.4661 6.0102-3.832 4.9242 1.174 9.5443 4.196 13.0764 8.0121v.002z"
+  };
+  function socialIcon(key, size = 15) {
+    const d = SOCIAL_ICON_PATHS[String(key || "").toLowerCase()];
+    if (!d) return "";
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="currentColor"><path d="${d}"/></svg>`;
+  }
+  var SOCIAL_KEYS = [
+    "github",
+    "website",
+    "x",
+    "bluesky",
+    "mastodon",
+    "linkedin",
+    "youtube",
+    "discord",
+    "reddit",
+    "devto",
+    "instagram",
+    "threads",
+    "tiktok",
+    "twitch",
+    "facebook",
+    "dailydev",
+    "producthunt",
+    "rumble"
+  ];
+  var SOCIAL_LABELS = {
+    github: "GitHub",
+    website: "Website",
+    x: "X",
+    bluesky: "Bluesky",
+    mastodon: "Mastodon",
+    linkedin: "LinkedIn",
+    youtube: "YouTube",
+    discord: "Discord",
+    reddit: "Reddit",
+    devto: "Dev.to",
+    instagram: "Instagram",
+    threads: "Threads",
+    tiktok: "TikTok",
+    twitch: "Twitch",
+    facebook: "Facebook",
+    dailydev: "daily.dev",
+    producthunt: "Product Hunt",
+    rumble: "Rumble"
+  };
+  var SOCIAL_URL_BASE = {
+    github: "https://github.com/",
+    x: "https://x.com/",
+    bluesky: "https://bsky.app/profile/",
+    youtube: "https://www.youtube.com/@",
+    devto: "https://dev.to/",
+    reddit: "https://www.reddit.com/user/",
+    linkedin: "https://www.linkedin.com/in/",
+    instagram: "https://www.instagram.com/",
+    threads: "https://www.threads.net/@",
+    tiktok: "https://www.tiktok.com/@",
+    twitch: "https://www.twitch.tv/",
+    facebook: "https://www.facebook.com/",
+    dailydev: "https://app.daily.dev/",
+    producthunt: "https://www.producthunt.com/@",
+    rumble: "https://rumble.com/user/"
+  };
+  function buildSocialUrl(key, raw) {
+    const value = String(raw == null ? "" : raw).trim();
+    if (!value) return "";
+    const k = String(key || "").toLowerCase();
+    if (/^https?:\/\//i.test(value)) return value;
+    if (k === "discord") return value;
+    if (k === "website") return "https://" + value.replace(/^\/+/, "");
+    const handle = value.replace(/^@+/, "");
+    if (k === "mastodon") {
+      const m = handle.match(/^([^@\s]+)@([^@\s]+)$/);
+      return m ? `https://${m[2]}/@${m[1]}` : value;
+    }
+    const base = SOCIAL_URL_BASE[k];
+    return base ? base + handle : value;
+  }
+
   // client-ui/src/elements/gbti-topic-picker.mjs
   var SITE7 = "https://gbti.network";
-  var MAX_TOPICS = 40;
+  var MAX_TOPICS = 200;
   var CSS28 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .bar { display:flex; align-items:center; gap:10px; margin:0 0 12px; }
   .srch { flex:1; min-width:0; font:inherit; font-size:13px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:8px 12px; }
   .srch:focus { outline:none; border-color:var(--accent); }
   .cnt { flex:none; font-size:12px; color:var(--muted); white-space:nowrap; }
+  .mini { flex:none; font:inherit; font-size:12.5px; font-weight:600; color:var(--muted); background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; padding:7px 11px; cursor:pointer; white-space:nowrap; }
+  .mini:hover { color:var(--fg); border-color:var(--accent); }
   .grp { margin:14px 0 8px; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); }
   .grp:first-child { margin-top:0; }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
@@ -11423,6 +11534,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="bar">
         <input type="search" class="srch" placeholder="Filter topics" aria-label="Filter topics" />
         <span class="cnt" data-cnt></span>
+        <button class="mini" data-all type="button">Select all</button>
+        <button class="mini" data-clear type="button">Clear</button>
       </div>
       <div class="list" data-list></div>`);
       const srch = this.$(".srch");
@@ -11433,6 +11546,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._renderChips();
         });
       }
+      this.on("[data-all]", "click", () => this._setSelection(selectAllTopics(this._selected, filterTopics(this._topics, this._query), MAX_TOPICS)));
+      this.on("[data-clear]", "click", () => this._setSelection([]));
       this._renderChips();
     }
     _renderChips() {
@@ -11450,8 +11565,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       this.$$("[data-topic]").forEach((b) => b.addEventListener("click", () => this._toggle(b.dataset.topic)));
     }
-    async _toggle(key) {
-      const next = toggleTopic(this._selected, key);
+    _toggle(key) {
+      return this._setSelection(toggleTopic(this._selected, key));
+    }
+    /** Apply + persist a whole selection (a single toggle, Select all, or Clear) as one setPrefs call. */
+    async _setSelection(next) {
       this._selected = next;
       this._renderChips();
       this.dispatchEvent(new CustomEvent("topics-change", { detail: { topics: [...next] }, bubbles: true, composed: true }));
@@ -11474,9 +11592,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var SITE8 = "https://gbti.network";
   var PAGE_SIZE = 10;
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
-  var STEPS = ["discord", "subreddit", "follow", "topics"];
+  var STEPS = ["discord", "subreddit", "socials", "follow", "topics"];
   var SUBREDDIT_URL = "https://www.reddit.com/r/GBTI_network";
   var SUBREDDIT_OPENED_KEY = "gbti-welcome-subreddit-opened";
+  var GBTI_CHANNELS = [
+    ["x", "X", "https://x.com/gbti_network"],
+    ["bluesky", "Bluesky", "https://bsky.app/profile/gbti.bsky.social"],
+    ["youtube", "YouTube", "https://www.youtube.com/@gbti_network"],
+    ["github", "GitHub", "https://github.com/gbti-network"],
+    ["devto", "Dev.to", "https://dev.to/gbti"],
+    ["dailydev", "daily.dev", "https://dly.to/zfCriM6JfRF"],
+    ["mastodon", "Mastodon", "https://mastodon.social/@gbti"],
+    ["linkedin", "LinkedIn", "https://www.linkedin.com/company/gbti-network/posts"]
+  ];
+  var SOCIALS_STAGE_KEY = "gbti-welcome-socials";
+  var SOCIAL_STARTERS = ["x", "bluesky", "mastodon", "linkedin", "youtube", "website"];
+  var SOCIAL_HIDDEN = /* @__PURE__ */ new Set(["github", "discord"]);
   var lc3 = (s) => String(s || "").toLowerCase();
   var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
@@ -11519,6 +11650,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .pager .pg { font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .note { color:var(--muted); font-size:12.5px; line-height:1.5; margin:0; }
   .note a { color:var(--accent); }
+  /* The GBTI channels grid (the Follow GBTI step). */
+  .chans { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .chan { display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:var(--fg);
+    background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:7px 13px; text-decoration:none; }
+  .chan:hover { color:var(--accent); border-color:var(--accent); }
+  /* The socials step rows + the add-more picker. */
+  .srow { display:flex; align-items:center; gap:10px; margin:0 0 9px; }
+  .srow .sico { flex:none; width:30px; height:30px; display:grid; place-items:center; color:var(--muted);
+    background:var(--hover); border:1px solid var(--line); border-radius:8px; }
+  .srow input { flex:1; min-width:0; font:inherit; font-size:13.5px; color:var(--fg); background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; padding:9px 12px; }
+  .srow input:focus { outline:none; border-color:var(--accent); }
+  .addmore { font:inherit; font-size:13px; font-weight:600; color:var(--accent); background:transparent;
+    border:1px dashed var(--line); border-radius:9px; padding:8px 13px; cursor:pointer; margin-top:2px; }
+  .addmore:hover { border-color:var(--accent); }
+  .pkrow { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+  .pk { display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:12.5px; font-weight:600;
+    color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 11px; cursor:pointer; }
+  .pk:hover { color:var(--fg); border-color:var(--accent); }
   .done { width:100%; box-sizing:border-box; margin-top:6px; padding:12px; }
   .loading { color:var(--muted); text-align:center; padding:30px 0; }
   /* SOW-041 stepper: a step indicator + a bottom nav bar (Back / Continue / I am all set). */
@@ -11630,6 +11780,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
         this._discordJoined = false;
       }
+      try {
+        const raw = JSON.parse(localStorage.getItem(SOCIALS_STAGE_KEY) || "null");
+        this._socialDraft = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+      } catch {
+        this._socialDraft = {};
+      }
       this._loaded = true;
       this.render();
     }
@@ -11684,7 +11840,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (this._step < 0) this._step = 0;
       if (this._step > STEPS.length - 1) this._step = STEPS.length - 1;
       const step = STEPS[this._step];
-      const card = step === "discord" ? this._discordCard() : step === "subreddit" ? this._subredditCard() : step === "topics" ? this._topicsCard() : this._followCard();
+      const card = step === "discord" ? this._discordCard() : step === "subreddit" ? this._subredditCard() : step === "socials" ? this._socialsCard() : step === "topics" ? this._topicsCard() : this._followCard();
       const isLast = this._step >= STEPS.length - 1;
       const nav = `<div class="stepnav">
       ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
@@ -11732,6 +11888,27 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           }
           this.render();
         });
+      } else if (step === "socials") {
+        this.$$("[data-social-key]").forEach((inp) => inp.addEventListener("input", () => {
+          const k = inp.dataset.socialKey;
+          if (inp.value.trim()) this._socialDraft[k] = inp.value;
+          else delete this._socialDraft[k];
+          try {
+            localStorage.setItem(SOCIALS_STAGE_KEY, JSON.stringify(this._socialDraft));
+          } catch {
+          }
+        }));
+        this.on("[data-social-more]", "click", () => {
+          this._socialsMore = !this._socialsMore;
+          this.render();
+        });
+        this.$$("[data-social-add]").forEach((b) => b.addEventListener("click", () => {
+          const k = b.dataset.socialAdd;
+          if (!(k in this._socialDraft)) this._socialDraft[k] = "";
+          this._socialsMore = false;
+          this.render();
+          this.$(`[data-social-key="${k}"]`)?.focus();
+        }));
       } else {
         this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.getAttribute("data-follow"))));
         this.on("[data-prev]", "click", () => {
@@ -11772,8 +11949,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <gbti-topic-picker></gbti-topic-picker>
     </div>`;
     }
-    // SOW-088: the subreddit step — member content syndicates to r/GBTI_network; following keeps a member in
-    // the loop off-network. Fully skippable (the stepper's Continue advances without action).
+    // SOW-088: the Follow GBTI step — member content syndicates to r/GBTI_network first, and the network's
+    // other channels carry the syndicated posts too, so this lists every channel (the site footer's set).
+    // Fully skippable (the stepper's Continue advances without action).
     _subredditCard() {
       let opened = false;
       try {
@@ -11781,11 +11959,36 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
         opened = false;
       }
+      const chans = GBTI_CHANNELS.map(([k, label, url]) => `<a class="chan" href="${esc(url)}" target="_blank" rel="noopener">${socialIcon(k, 14)}${esc(label)}</a>`).join("");
       return `<div class="card">
-      <h3>${redditIco} Follow us on Reddit</h3>
-      <p class="sub">Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network, so joining it is an easy way to keep up with the co-op from your Reddit feed. Open it and hit Join, or skip; you can find the link in the site footer any time.</p>
+      <h3>${redditIco} Follow GBTI</h3>
+      <p class="sub">Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network, so joining it is the easiest way to keep up with the co-op from your feed. Open it and hit Join, or skip; every link lives in the site footer any time.</p>
       <button class="btn" data-subreddit-open type="button">${opened ? "Open r/GBTI_network again" : "Open r/GBTI_network"}</button>
       ${opened ? `<p class="note">Opened. Hit Join over there, then Continue here.</p>` : ""}
+      <p class="note" style="margin-top:14px">We are on your other networks too; follow GBTI wherever you already spend time:</p>
+      <div class="chans">${chans}</div>
+    </div>`;
+    }
+    // The socials step: collect the member's handles across the platform set. Raw values stage locally
+    // (SOCIALS_STAGE_KEY) and the profile editor consumes them into profile.md on the profile page, so the
+    // one real save happens through the normal publish pipeline. Fully skippable.
+    _socialsCard() {
+      const draft = this._socialDraft || {};
+      const visible = [.../* @__PURE__ */ new Set([...SOCIAL_STARTERS, ...Object.keys(draft)])].filter((k) => SOCIAL_KEYS.includes(k) && !SOCIAL_HIDDEN.has(k));
+      const rows = visible.map((k) => `<div class="srow">
+      <span class="sico" aria-hidden="true">${socialIcon(k, 15)}</span>
+      <input type="text" data-social-key="${esc(k)}" value="${esc(draft[k] || "")}"
+        placeholder="${esc(SOCIAL_LABELS[k] || k)}: @handle or full URL" aria-label="${esc(SOCIAL_LABELS[k] || k)}" />
+    </div>`).join("");
+      const rest = SOCIAL_KEYS.filter((k) => !visible.includes(k) && !SOCIAL_HIDDEN.has(k));
+      const picker = this._socialsMore && rest.length ? `<div class="pkrow">${rest.map((k) => `<button type="button" class="pk" data-social-add="${esc(k)}">${socialIcon(k, 14)}${esc(SOCIAL_LABELS[k] || k)}</button>`).join("")}</div>` : "";
+      const more = rest.length ? `<button type="button" class="addmore" data-social-more>${this._socialsMore ? "Close" : "+ More platforms"}</button>` : "";
+      return `<div class="card">
+      <h3>${megaIco} Your socials</h3>
+      <p class="sub">Tell us where else you publish. When your work syndicates to a GBTI channel, the handle you list for that platform is mentioned automatically in the post (X, Bluesky, and Mastodon today), pointing readers back to you. You review and save these on your profile at the end.</p>
+      ${rows}
+      ${more}
+      ${picker}
     </div>`;
     }
     _followCard() {
@@ -13808,108 +14011,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   };
   define("gbti-news-reader", GbtiNewsReader);
-
-  // client-ui/src/social-icons.mjs
-  var LINKEDIN_PATH = "M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z";
-  var WEBSITE_PATH = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z";
-  var SOCIAL_ICON_PATHS = {
-    github: "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12",
-    x: "M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z",
-    bluesky: "M5.202 2.857C7.954 4.922 10.913 9.11 12 11.358c1.087-2.247 4.046-6.436 6.798-8.501C20.783 1.366 24 .213 24 3.883c0 .732-.42 6.156-.667 7.037-.856 3.061-3.978 3.842-6.755 3.37 4.854.826 6.089 3.562 3.422 6.299-5.065 5.196-7.28-1.304-7.847-2.97-.104-.305-.152-.448-.153-.327 0-.121-.05.022-.153.327-.568 1.666-2.782 8.166-7.847 2.97-2.667-2.737-1.432-5.473 3.422-6.3-2.777.473-5.899-.308-6.755-3.369C.42 10.04 0 4.615 0 3.883c0-3.67 3.217-2.517 5.202-1.026",
-    youtube: "M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z",
-    devto: "M7.42 10.05c-.18-.16-.46-.23-.84-.23H6l.02 2.44.04 2.45.56-.02c.41 0 .63-.07.83-.26.24-.24.26-.36.26-2.2 0-1.91-.02-1.96-.29-2.18zM0 4.94v14.12h24V4.94H0zM8.56 15.3c-.44.58-1.06.77-2.53.77H4.71V8.53h1.4c1.67 0 2.16.18 2.6.9.27.43.29.6.32 2.57.05 2.23-.02 2.73-.47 3.3zm5.09-5.47h-2.47v1.77h1.52v1.28l-.72.04-.75.03v1.77l1.22.03 1.2.04v1.28h-1.6c-1.53 0-1.6-.01-1.87-.3l-.3-.28v-3.16c0-3.02.01-3.18.25-3.48.23-.31.25-.31 1.88-.31h1.64v1.3zm4.68 5.45c-.17.43-.64.79-1 .79-.18 0-.45-.15-.67-.39-.32-.32-.45-.63-.82-2.08l-.9-3.39-.45-1.67h.76c.4 0 .75.02.75.05 0 .06 1.16 4.54 1.26 4.83.04.15.32-.7.73-2.3l.66-2.52.74-.04c.4-.02.73 0 .73.04 0 .14-1.67 6.38-1.8 6.68z",
-    reddit: "M12 0C5.373 0 0 5.373 0 12c0 3.314 1.343 6.314 3.515 8.485l-2.286 2.286C.775 23.225 1.097 24 1.738 24H12c6.627 0 12-5.373 12-12S18.627 0 12 0Zm4.388 3.199c1.104 0 1.999.895 1.999 1.999 0 1.105-.895 2-1.999 2-.946 0-1.739-.657-1.947-1.539v.002c-1.147.162-2.032 1.15-2.032 2.341v.007c1.776.067 3.4.567 4.686 1.363.473-.363 1.064-.58 1.707-.58 1.547 0 2.802 1.254 2.802 2.802 0 1.117-.655 2.081-1.601 2.531-.088 3.256-3.637 5.876-7.997 5.876-4.361 0-7.905-2.617-7.998-5.87-.954-.447-1.614-1.415-1.614-2.538 0-1.548 1.255-2.802 2.803-2.802.645 0 1.239.218 1.712.585 1.275-.79 2.881-1.291 4.64-1.365v-.01c0-1.663 1.263-3.034 2.88-3.207.188-.911.993-1.595 1.959-1.595Zm-8.085 8.376c-.784 0-1.459.78-1.506 1.797-.047 1.016.64 1.429 1.426 1.429.786 0 1.371-.369 1.418-1.385.047-1.017-.553-1.841-1.338-1.841Zm7.406 0c-.786 0-1.385.824-1.338 1.841.047 1.017.634 1.385 1.418 1.385.785 0 1.473-.413 1.426-1.429-.046-1.017-.721-1.797-1.506-1.797Zm-3.703 4.013c-.974 0-1.907.048-2.77.135-.147.015-.241.168-.183.305.483 1.154 1.622 1.964 2.953 1.964 1.33 0 2.47-.81 2.953-1.964.057-.137-.037-.29-.184-.305-.863-.087-1.795-.135-2.769-.135Z",
-    mastodon: "M23.268 5.313c-.35-2.578-2.617-4.61-5.304-5.004C17.51.242 15.792 0 11.813 0h-.03c-3.98 0-4.835.242-5.288.309C3.882.692 1.496 2.518.917 5.127.64 6.412.61 7.837.661 9.143c.074 1.874.088 3.745.26 5.611.118 1.24.325 2.47.62 3.68.55 2.237 2.777 4.098 4.96 4.857 2.336.792 4.849.923 7.256.38.265-.061.527-.132.786-.213.585-.184 1.27-.39 1.774-.753a.057.057 0 0 0 .023-.043v-1.809a.052.052 0 0 0-.02-.041.053.053 0 0 0-.046-.01 20.282 20.282 0 0 1-4.709.545c-2.73 0-3.463-1.284-3.674-1.818a5.593 5.593 0 0 1-.319-1.433.053.053 0 0 1 .066-.054c1.517.363 3.072.546 4.632.546.376 0 .75 0 1.125-.01 1.57-.044 3.224-.124 4.768-.422.038-.008.077-.015.11-.024 2.435-.464 4.753-1.92 4.989-5.604.008-.145.03-1.52.03-1.67.002-.512.167-3.63-.024-5.545zm-3.748 9.195h-2.561V8.29c0-1.309-.55-1.976-1.67-1.976-1.23 0-1.846.79-1.846 2.35v3.403h-2.546V8.663c0-1.56-.617-2.35-1.848-2.35-1.112 0-1.668.668-1.67 1.977v6.218H4.822V8.102c0-1.31.337-2.35 1.011-3.12.696-.77 1.608-1.164 2.74-1.164 1.311 0 2.302.5 2.962 1.498l.638 1.06.638-1.06c.66-.999 1.65-1.498 2.96-1.498 1.13 0 2.043.395 2.74 1.164.675.77 1.012 1.81 1.012 3.12z",
-    discord: "M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z",
-    linkedin: LINKEDIN_PATH,
-    website: WEBSITE_PATH,
-    // SOW-129: the comprehensive set (inlined from the same simple-icons package the site uses).
-    instagram: "M7.0301.084c-1.2768.0602-2.1487.264-2.911.5634-.7888.3075-1.4575.72-2.1228 1.3877-.6652.6677-1.075 1.3368-1.3802 2.127-.2954.7638-.4956 1.6365-.552 2.914-.0564 1.2775-.0689 1.6882-.0626 4.947.0062 3.2586.0206 3.6671.0825 4.9473.061 1.2765.264 2.1482.5635 2.9107.308.7889.72 1.4573 1.388 2.1228.6679.6655 1.3365 1.0743 2.1285 1.38.7632.295 1.6361.4961 2.9134.552 1.2773.056 1.6884.069 4.9462.0627 3.2578-.0062 3.668-.0207 4.9478-.0814 1.28-.0607 2.147-.2652 2.9098-.5633.7889-.3086 1.4578-.72 2.1228-1.3881.665-.6682 1.0745-1.3378 1.3795-2.1284.2957-.7632.4966-1.636.552-2.9124.056-1.2809.0692-1.6898.063-4.948-.0063-3.2583-.021-3.6668-.0817-4.9465-.0607-1.2797-.264-2.1487-.5633-2.9117-.3084-.7889-.72-1.4568-1.3876-2.1228C21.2982 1.33 20.628.9208 19.8378.6165 19.074.321 18.2017.1197 16.9244.0645 15.6471.0093 15.236-.005 11.977.0014 8.718.0076 8.31.0215 7.0301.0839m.1402 21.6932c-1.17-.0509-1.8053-.2453-2.2287-.408-.5606-.216-.96-.4771-1.3819-.895-.422-.4178-.6811-.8186-.9-1.378-.1644-.4234-.3624-1.058-.4171-2.228-.0595-1.2645-.072-1.6442-.079-4.848-.007-3.2037.0053-3.583.0607-4.848.05-1.169.2456-1.805.408-2.2282.216-.5613.4762-.96.895-1.3816.4188-.4217.8184-.6814 1.3783-.9003.423-.1651 1.0575-.3614 2.227-.4171 1.2655-.06 1.6447-.072 4.848-.079 3.2033-.007 3.5835.005 4.8495.0608 1.169.0508 1.8053.2445 2.228.408.5608.216.96.4754 1.3816.895.4217.4194.6816.8176.9005 1.3787.1653.4217.3617 1.056.4169 2.2263.0602 1.2655.0739 1.645.0796 4.848.0058 3.203-.0055 3.5834-.061 4.848-.051 1.17-.245 1.8055-.408 2.2294-.216.5604-.4763.96-.8954 1.3814-.419.4215-.8181.6811-1.3783.9-.4224.1649-1.0577.3617-2.2262.4174-1.2656.0595-1.6448.072-4.8493.079-3.2045.007-3.5825-.006-4.848-.0608M16.953 5.5864A1.44 1.44 0 1 0 18.39 4.144a1.44 1.44 0 0 0-1.437 1.4424M5.8385 12.012c.0067 3.4032 2.7706 6.1557 6.173 6.1493 3.4026-.0065 6.157-2.7701 6.1506-6.1733-.0065-3.4032-2.771-6.1565-6.174-6.1498-3.403.0067-6.156 2.771-6.1496 6.1738M8 12.0077a4 4 0 1 1 4.008 3.9921A3.9996 3.9996 0 0 1 8 12.0077",
-    threads: "M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.361-.218-3.259-.801-1.063-.689-1.685-1.74-1.752-2.964-.065-1.19.408-2.285 1.33-3.082.88-.76 2.119-1.207 3.583-1.291a13.853 13.853 0 0 1 3.02.142c-.126-.742-.375-1.332-.75-1.757-.513-.586-1.308-.883-2.359-.89h-.029c-.844 0-1.992.232-2.721 1.32L7.734 7.847c.98-1.454 2.568-2.256 4.478-2.256h.044c3.194.02 5.097 1.975 5.287 5.388.108.046.216.094.321.142 1.49.7 2.58 1.761 3.154 3.07.797 1.82.871 4.79-1.548 7.158-1.85 1.81-4.094 2.628-7.277 2.65Zm1.003-11.69c-.242 0-.487.007-.739.021-1.836.103-2.98.946-2.916 2.143.067 1.256 1.452 1.839 2.784 1.767 1.224-.065 2.818-.543 3.086-3.71a10.5 10.5 0 0 0-2.215-.221z",
-    tiktok: "M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z",
-    twitch: "M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z",
-    facebook: "M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z",
-    dailydev: "M18.29 5.706a1.405 1.405 0 0 0-1.987 0L4.716 17.296l1.324-2.65-2.65-2.649 3.312-3.311 2.65 2.65 1.986-1.988-3.642-3.642a1.405 1.405 0 0 0-1.987 0L.411 11.004a1.404 1.404 0 0 0 0 1.987l4.305 4.304.993.993a1.405 1.405 0 0 0 1.987 0L19.285 6.7l-.993-.994Zm-.332 3.647 2.65 2.65-4.306 4.305a1.404 1.404 0 1 0 1.986 1.986l5.299-5.298a1.404 1.404 0 0 0 0-1.987l-4.305-4.304-1.324 2.648Z",
-    producthunt: "M13.604 8.4h-3.405V12h3.405c.995 0 1.801-.806 1.801-1.801 0-.993-.805-1.799-1.801-1.799zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 14.4h-3.405V18H7.801V6h5.804c2.319 0 4.2 1.88 4.2 4.199 0 2.321-1.881 4.201-4.201 4.201z",
-    rumble: "M14.4528 13.5458c.8064-.6542.9297-1.8381.2756-2.6445a1.8802 1.8802 0 0 0-.2756-.2756 21.2127 21.2127 0 0 0-4.3121-2.776c-1.066-.51-2.256.2-2.4261 1.414a23.5226 23.5226 0 0 0-.14 5.5021c.116 1.23 1.292 1.964 2.372 1.492a19.6285 19.6285 0 0 0 4.5062-2.704v-.008zm6.9322-5.4002c2.0335 2.228 2.0396 5.637.014 7.8723A26.1487 26.1487 0 0 1 8.2946 23.846c-2.6848.6713-5.4168-.914-6.1662-3.5781-1.524-5.2002-1.3-11.0803.17-16.3045.772-2.744 3.3521-4.4661 6.0102-3.832 4.9242 1.174 9.5443 4.196 13.0764 8.0121v.002z"
-  };
-  function socialIcon(key, size = 15) {
-    const d = SOCIAL_ICON_PATHS[String(key || "").toLowerCase()];
-    if (!d) return "";
-    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true" fill="currentColor"><path d="${d}"/></svg>`;
-  }
-  var SOCIAL_KEYS = [
-    "github",
-    "website",
-    "x",
-    "bluesky",
-    "mastodon",
-    "linkedin",
-    "youtube",
-    "discord",
-    "reddit",
-    "devto",
-    "instagram",
-    "threads",
-    "tiktok",
-    "twitch",
-    "facebook",
-    "dailydev",
-    "producthunt",
-    "rumble"
-  ];
-  var SOCIAL_LABELS = {
-    github: "GitHub",
-    website: "Website",
-    x: "X",
-    bluesky: "Bluesky",
-    mastodon: "Mastodon",
-    linkedin: "LinkedIn",
-    youtube: "YouTube",
-    discord: "Discord",
-    reddit: "Reddit",
-    devto: "Dev.to",
-    instagram: "Instagram",
-    threads: "Threads",
-    tiktok: "TikTok",
-    twitch: "Twitch",
-    facebook: "Facebook",
-    dailydev: "daily.dev",
-    producthunt: "Product Hunt",
-    rumble: "Rumble"
-  };
-  var SOCIAL_URL_BASE = {
-    github: "https://github.com/",
-    x: "https://x.com/",
-    bluesky: "https://bsky.app/profile/",
-    youtube: "https://www.youtube.com/@",
-    devto: "https://dev.to/",
-    reddit: "https://www.reddit.com/user/",
-    linkedin: "https://www.linkedin.com/in/",
-    instagram: "https://www.instagram.com/",
-    threads: "https://www.threads.net/@",
-    tiktok: "https://www.tiktok.com/@",
-    twitch: "https://www.twitch.tv/",
-    facebook: "https://www.facebook.com/",
-    dailydev: "https://app.daily.dev/",
-    producthunt: "https://www.producthunt.com/@",
-    rumble: "https://rumble.com/user/"
-  };
-  function buildSocialUrl(key, raw) {
-    const value = String(raw == null ? "" : raw).trim();
-    if (!value) return "";
-    const k = String(key || "").toLowerCase();
-    if (/^https?:\/\//i.test(value)) return value;
-    if (k === "discord") return value;
-    if (k === "website") return "https://" + value.replace(/^\/+/, "");
-    const handle = value.replace(/^@+/, "");
-    if (k === "mastodon") {
-      const m = handle.match(/^([^@\s]+)@([^@\s]+)$/);
-      return m ? `https://${m[2]}/@${m[1]}` : value;
-    }
-    const base = SOCIAL_URL_BASE[k];
-    return base ? base + handle : value;
-  }
 
   // membership/syndication-format.mjs
   var TYPE_LABEL5 = { post: "article", product: "product", prompt: "prompt", share: "link" };
@@ -16859,6 +16960,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return u.protocol === "https:" && AVATAR_HOSTS.test(u.hostname);
   }
   var githubAvatarUrl = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
+  function mergeStagedLinks(links, staged, allowed = null) {
+    const out = { ...links || {} };
+    if (!staged || typeof staged !== "object" || Array.isArray(staged)) return out;
+    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+    for (const [k, v] of Object.entries(staged)) {
+      if (ok && !ok.has(k)) continue;
+      if (typeof v !== "string" || !v.trim()) continue;
+      if (typeof out[k] === "string" && out[k].trim() !== "") continue;
+      out[k] = v.trim();
+    }
+    return out;
+  }
 
   // client-ui/src/elements/gbti-profile-editor.mjs
   var SITE16 = "https://gbti.network";
@@ -16981,6 +17094,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         this._fm = fm;
         this._model = this._modelFromFm(fm, body);
+        try {
+          const staged = JSON.parse(localStorage.getItem("gbti-welcome-socials") || "null");
+          if (staged) {
+            this._model.links = mergeStagedLinks(this._model.links, staged, SOCIAL_KEYS);
+            localStorage.removeItem("gbti-welcome-socials");
+          }
+        } catch {
+        }
       } catch {
       }
       this._loaded = true;
@@ -17279,6 +17400,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // extension/src/profile.mjs
   mountPageClient();
   initShell({ active: "profile", nav: "workbench" });
+  if (new URLSearchParams(location.search).get("welcome") === "1") {
+    const b = document.createElement("div");
+    b.className = "welcome-banner";
+    b.innerHTML = `<div><b>Welcome to the co-op!</b> Finish your profile so members and readers can find you:
+    a short bio, an avatar, your specialties, and your social links. Any handles you added during the
+    welcome are already filled in below; hit Save to publish them. Handles are mentioned automatically when
+    your work is shared to the matching GBTI channel.</div>
+    <button type="button" aria-label="Dismiss">&times;</button>`;
+    b.querySelector("button").addEventListener("click", () => {
+      b.remove();
+      history.replaceState(null, "", location.pathname);
+    });
+    const main = document.querySelector(".nt-main");
+    const editor = main?.querySelector("gbti-profile-editor");
+    if (main && editor) main.insertBefore(b, editor);
+  }
   document.addEventListener("gbti:request-signout", async () => {
     try {
       await chrome.runtime.sendMessage({ type: "signout" });

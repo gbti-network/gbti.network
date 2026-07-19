@@ -5,7 +5,7 @@
 
 export class PrefsError extends Error {}
 
-const MAX_CATEGORIES = 40;
+const MAX_CATEGORIES = 200; // raised from 40 for the topic picker's Select all (the vocabulary is 85 topics today)
 const MAX_CHANNELS = 300;
 // A category label or a news source id (both config-defined in the news worker): a bounded token set so a stored
 // pref can never smuggle anything unexpected into a query or the UI.

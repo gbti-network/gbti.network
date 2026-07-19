@@ -8,7 +8,7 @@
 // (no client -> a sign-in nudge). Publishing is PAID-ONLY (SOW-011): a non-paid member stages to their fork.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS, buildSocialUrl } from '../social-icons.mjs';
-import { isSanctionedAvatar, githubAvatarUrl } from '../profile-fields.mjs'; // SOW-129: the avatar host allowlist
+import { isSanctionedAvatar, githubAvatarUrl, mergeStagedLinks } from '../profile-fields.mjs'; // SOW-129: the avatar host allowlist + the welcome-socials prefill
 
 const SITE = 'https://gbti.network';
 
@@ -124,6 +124,16 @@ class GbtiProfileEditor extends GbtiElement {
       }
       this._fm = fm;
       this._model = this._modelFromFm(fm, body);
+      // Consume the welcome flow's staged social handles (gbti-welcome-socials) into any UNSET link fields,
+      // so the member reviews and saves them once through the normal publish pipeline. An existing profile
+      // value always wins; the staged key clears on consume.
+      try {
+        const staged = JSON.parse(localStorage.getItem('gbti-welcome-socials') || 'null');
+        if (staged) {
+          this._model.links = mergeStagedLinks(this._model.links, staged, SOCIAL_KEYS);
+          localStorage.removeItem('gbti-welcome-socials');
+        }
+      } catch { /* no storage or junk JSON: nothing to prefill */ }
     } catch { /* render whatever resolved */ }
     this._loaded = true; this._loading = false;
     this.render();

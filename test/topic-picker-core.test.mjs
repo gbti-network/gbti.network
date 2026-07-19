@@ -1,7 +1,7 @@
 // SOW-054 Phase 3/5: the pure followed-topics picker helpers.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { topicsFromJson, toggleTopic, selectedTopics, filterTopics, groupTopics } from '../client-ui/src/topic-picker-core.mjs';
+import { topicsFromJson, toggleTopic, selectedTopics, filterTopics, groupTopics, selectAllTopics } from '../client-ui/src/topic-picker-core.mjs';
 
 test('topicsFromJson: clean list; drops malformed; label falls back to key', () => {
   assert.deepEqual(topicsFromJson({ topics: [{ key: 'ai', label: 'AI' }, { key: 'devops', label: 'DevOps' }] }),
@@ -55,4 +55,16 @@ test('groupTopics: first-seen group order, ungrouped bucket last; a flat list ->
   assert.deepEqual(grouped[0].topics.map((t) => t.key), ['ai', 'devops']);
   // a fully flat list -> a single ungrouped bucket (backward-compatible)
   assert.deepEqual(groupTopics(LIST), [{ group: '', topics: LIST }]);
+});
+
+test('selectAllTopics: merges the pool after the current selection, de-duped, capped', () => {
+  const pool = [{ key: 'ai' }, { key: 'devops' }, { key: 'gaming' }];
+  assert.deepEqual(selectAllTopics([], pool), ['ai', 'devops', 'gaming']);
+  // the current selection keeps priority under the cap
+  assert.deepEqual(selectAllTopics(['gaming'], pool, 2), ['gaming', 'ai']);
+  // de-dupes against the current selection; junk pool entries drop
+  assert.deepEqual(selectAllTopics(['ai'], [{ key: 'ai' }, { key: '' }, null, { key: 'css' }]), ['ai', 'css']);
+  // composes with a filtered pool (the picker passes filterTopics output)
+  const filtered = filterTopics([{ key: 'ai', label: 'AI' }, { key: 'aws', label: 'AWS' }, { key: 'css', label: 'CSS' }], 'a');
+  assert.deepEqual(selectAllTopics([], filtered), ['ai', 'aws']);
 });

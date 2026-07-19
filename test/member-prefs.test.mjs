@@ -52,3 +52,10 @@ test('publicFavorites: defaults false, normalizes strictly, applies as a boolean
   assert.equal(applyPrefs(on, { categories: ['ai'] }).publicFavorites, true);
   assert.throws(() => applyPrefs(null, { publicFavorites: 'on' }), PrefsError);
 });
+
+test('applyPrefs: the categories cap is 200 (raised for the topic picker Select all; 85 topics today)', () => {
+  const many = Array.from({ length: 250 }, (_v, i) => `topic-${i}`);
+  const p = applyPrefs({}, { categories: many });
+  assert.equal(p.categories.length, 200);
+  assert.equal(p.categories[0], 'topic-0');
+});

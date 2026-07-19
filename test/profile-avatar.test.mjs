@@ -2,7 +2,7 @@
 // only come from a GitHub avatar or a Gravatar (https), never an arbitrary external image host. Pure, DOM-free.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isSanctionedAvatar, githubAvatarUrl } from '../client-ui/src/profile-fields.mjs';
+import { isSanctionedAvatar, githubAvatarUrl, mergeStagedLinks } from '../client-ui/src/profile-fields.mjs';
 
 test('isSanctionedAvatar allows empty (the GitHub default)', () => {
   assert.equal(isSanctionedAvatar(''), true);
@@ -43,4 +43,21 @@ test('githubAvatarUrl builds the default avatar for a login, empty without one',
   assert.equal(githubAvatarUrl('atwellpub'), 'https://github.com/atwellpub.png?size=128');
   assert.equal(githubAvatarUrl(''), '');
   assert.equal(githubAvatarUrl(null), '');
+});
+
+test('mergeStagedLinks: fills only unset keys, respects the allowlist, drops junk', () => {
+  const links = { x: 'https://x.com/me', mastodon: '' };
+  const staged = { x: '@stale', mastodon: '@me@hachyderm.io', bluesky: ' me.bsky.social ', bogus: '@nope', tiktok: 42 };
+  const merged = mergeStagedLinks(links, staged, ['x', 'mastodon', 'bluesky', 'tiktok']);
+  assert.equal(merged.x, 'https://x.com/me'); // the existing profile value wins
+  assert.equal(merged.mastodon, '@me@hachyderm.io'); // empty counts as unset
+  assert.equal(merged.bluesky, 'me.bsky.social'); // trimmed
+  assert.ok(!('bogus' in merged)); // not in the allowlist
+  assert.ok(!('tiktok' in merged)); // non-string value dropped
+});
+
+test('mergeStagedLinks: tolerates junk staged payloads and a missing allowlist', () => {
+  assert.deepEqual(mergeStagedLinks({ x: 'a' }, null), { x: 'a' });
+  assert.deepEqual(mergeStagedLinks({ x: 'a' }, ['not', 'an', 'object']), { x: 'a' });
+  assert.deepEqual(mergeStagedLinks(null, { x: '@me' }), { x: '@me' });
 });

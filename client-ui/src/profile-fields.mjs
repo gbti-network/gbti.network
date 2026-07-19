@@ -15,3 +15,19 @@ export function isSanctionedAvatar(url) {
 }
 
 export const githubAvatarUrl = (login) => (login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : '');
+
+/** Merge the welcome flow's staged social handles into a profile's links, filling ONLY unset keys (an
+ *  existing profile value always wins). `staged` is the parsed gbti-welcome-socials object (or null);
+ *  `allowed` restricts which keys may land (pass SOCIAL_KEYS). Junk values are dropped. Pure. */
+export function mergeStagedLinks(links, staged, allowed = null) {
+  const out = { ...(links || {}) };
+  if (!staged || typeof staged !== 'object' || Array.isArray(staged)) return out;
+  const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+  for (const [k, v] of Object.entries(staged)) {
+    if (ok && !ok.has(k)) continue;
+    if (typeof v !== 'string' || !v.trim()) continue;
+    if (typeof out[k] === 'string' && out[k].trim() !== '') continue;
+    out[k] = v.trim();
+  }
+  return out;
+}

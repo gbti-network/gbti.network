@@ -9,6 +9,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { phaseLabel, shuffle, excludeSelf, paginate } from '../welcome-core.mjs';
 import { DISCORD_LINK_URL } from '../discord.mjs';
+import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS } from '../social-icons.mjs'; // the channels grid + the socials step
 import './gbti-topic-picker.mjs'; // SOW-054: the followed-topics step control
 
 const SITE = 'https://gbti.network';
@@ -16,10 +17,33 @@ const PAGE_SIZE = 10;
 const DISCORD_DONE_KEY = 'gbti-welcome-discord-joined';
 // The welcome flow is a stepper: one to-do per screen (SOW-029 originally showed them stacked). SOW-054 adds the
 // 'topics' step (follow content topics, drives the feed + news default); keep this list as the single source of step order.
-const STEPS = ['discord', 'subreddit', 'follow', 'topics']; // SOW-088: the subreddit follow step rides after Discord
+// The 'socials' step collects the member's own handles (staged locally; saved for real on the profile page).
+const STEPS = ['discord', 'subreddit', 'socials', 'follow', 'topics']; // SOW-088: the subreddit follow step rides after Discord
 
 const SUBREDDIT_URL = 'https://www.reddit.com/r/GBTI_network'; // matches src/lib/social.ts (the site footer)
 const SUBREDDIT_OPENED_KEY = 'gbti-welcome-subreddit-opened'; // best-effort (Reddit has no link-status callback)
+
+// GBTI's own channels (mirrors src/lib/social.ts, the site footer; the extension cannot import site TS).
+// Discord is absent on purpose: connecting it is step 1.
+const GBTI_CHANNELS = [
+  ['x', 'X', 'https://x.com/gbti_network'],
+  ['bluesky', 'Bluesky', 'https://bsky.app/profile/gbti.bsky.social'],
+  ['youtube', 'YouTube', 'https://www.youtube.com/@gbti_network'],
+  ['github', 'GitHub', 'https://github.com/gbti-network'],
+  ['devto', 'Dev.to', 'https://dev.to/gbti'],
+  ['dailydev', 'daily.dev', 'https://dly.to/zfCriM6JfRF'],
+  ['mastodon', 'Mastodon', 'https://mastodon.social/@gbti'],
+  ['linkedin', 'LinkedIn', 'https://www.linkedin.com/company/gbti-network/posts'],
+];
+
+// The socials step: raw handles stage here until the profile page's editor consumes them into profile.md
+// (mergeStagedLinks in profile-fields.mjs), so the ONE save runs through the real publish pipeline.
+const SOCIALS_STAGE_KEY = 'gbti-welcome-socials';
+// Shown by default: the syndication-mentioned platforms first (X / Bluesky / Mastodon get automatic handle
+// mentions today), then the common presence links. GitHub is implicit (they signed in with it) and Discord
+// connects in step 1, so neither is collected here.
+const SOCIAL_STARTERS = ['x', 'bluesky', 'mastodon', 'linkedin', 'youtube', 'website'];
+const SOCIAL_HIDDEN = new Set(['github', 'discord']);
 
 const lc = (s) => String(s || '').toLowerCase();
 const check = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -65,6 +89,25 @@ const CSS = `
   .pager .pg { font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .note { color:var(--muted); font-size:12.5px; line-height:1.5; margin:0; }
   .note a { color:var(--accent); }
+  /* The GBTI channels grid (the Follow GBTI step). */
+  .chans { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .chan { display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:var(--fg);
+    background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:7px 13px; text-decoration:none; }
+  .chan:hover { color:var(--accent); border-color:var(--accent); }
+  /* The socials step rows + the add-more picker. */
+  .srow { display:flex; align-items:center; gap:10px; margin:0 0 9px; }
+  .srow .sico { flex:none; width:30px; height:30px; display:grid; place-items:center; color:var(--muted);
+    background:var(--hover); border:1px solid var(--line); border-radius:8px; }
+  .srow input { flex:1; min-width:0; font:inherit; font-size:13.5px; color:var(--fg); background:var(--panel);
+    border:1px solid var(--line); border-radius:8px; padding:9px 12px; }
+  .srow input:focus { outline:none; border-color:var(--accent); }
+  .addmore { font:inherit; font-size:13px; font-weight:600; color:var(--accent); background:transparent;
+    border:1px dashed var(--line); border-radius:9px; padding:8px 13px; cursor:pointer; margin-top:2px; }
+  .addmore:hover { border-color:var(--accent); }
+  .pkrow { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+  .pk { display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:12.5px; font-weight:600;
+    color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 11px; cursor:pointer; }
+  .pk:hover { color:var(--fg); border-color:var(--accent); }
   .done { width:100%; box-sizing:border-box; margin-top:6px; padding:12px; }
   .loading { color:var(--muted); text-align:center; padding:30px 0; }
   /* SOW-041 stepper: a step indicator + a bottom nav bar (Back / Continue / I am all set). */
@@ -165,6 +208,11 @@ class GbtiWelcome extends GbtiElement {
       this._follows = null; // unavailable -> the follow card shows a retry, not an upgrade notice
     }
     try { this._discordJoined = localStorage.getItem(DISCORD_DONE_KEY) === '1'; } catch { this._discordJoined = false; }
+    // The socials step's staged draft (survives a mid-flow abandon; consumed by the profile editor).
+    try {
+      const raw = JSON.parse(localStorage.getItem(SOCIALS_STAGE_KEY) || 'null');
+      this._socialDraft = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    } catch { this._socialDraft = {}; }
     this._loaded = true;
     this.render();
   }
@@ -218,7 +266,7 @@ class GbtiWelcome extends GbtiElement {
     if (this._step < 0) this._step = 0;
     if (this._step > STEPS.length - 1) this._step = STEPS.length - 1;
     const step = STEPS[this._step];
-    const card = step === 'discord' ? this._discordCard() : step === 'subreddit' ? this._subredditCard() : step === 'topics' ? this._topicsCard() : this._followCard();
+    const card = step === 'discord' ? this._discordCard() : step === 'subreddit' ? this._subredditCard() : step === 'socials' ? this._socialsCard() : step === 'topics' ? this._topicsCard() : this._followCard();
     const isLast = this._step >= STEPS.length - 1;
     const nav = `<div class="stepnav">
       ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
@@ -260,6 +308,21 @@ class GbtiWelcome extends GbtiElement {
         try { localStorage.setItem(SUBREDDIT_OPENED_KEY, '1'); } catch { /* private mode */ }
         this.render();
       });
+    } else if (step === 'socials') {
+      // Persist on input, no re-render (a re-render would steal focus mid-typing). Empty clears the key.
+      this.$$('[data-social-key]').forEach((inp) => inp.addEventListener('input', () => {
+        const k = inp.dataset.socialKey;
+        if (inp.value.trim()) this._socialDraft[k] = inp.value; else delete this._socialDraft[k];
+        try { localStorage.setItem(SOCIALS_STAGE_KEY, JSON.stringify(this._socialDraft)); } catch { /* private mode */ }
+      }));
+      this.on('[data-social-more]', 'click', () => { this._socialsMore = !this._socialsMore; this.render(); });
+      this.$$('[data-social-add]').forEach((b) => b.addEventListener('click', () => {
+        const k = b.dataset.socialAdd;
+        if (!(k in this._socialDraft)) this._socialDraft[k] = '';
+        this._socialsMore = false;
+        this.render();
+        this.$(`[data-social-key="${k}"]`)?.focus();
+      }));
     } else {
       // Follow toggles + paging (the pager's Back/More is within the list, distinct from the step Back).
       this.$$('[data-follow]').forEach((b) => b.addEventListener('click', () => this._toggleFollow(b.getAttribute('data-follow'))));
@@ -303,16 +366,48 @@ class GbtiWelcome extends GbtiElement {
     </div>`;
   }
 
-  // SOW-088: the subreddit step — member content syndicates to r/GBTI_network; following keeps a member in
-  // the loop off-network. Fully skippable (the stepper's Continue advances without action).
+  // SOW-088: the Follow GBTI step — member content syndicates to r/GBTI_network first, and the network's
+  // other channels carry the syndicated posts too, so this lists every channel (the site footer's set).
+  // Fully skippable (the stepper's Continue advances without action).
   _subredditCard() {
     let opened = false;
     try { opened = localStorage.getItem(SUBREDDIT_OPENED_KEY) === '1'; } catch { opened = false; }
+    const chans = GBTI_CHANNELS
+      .map(([k, label, url]) => `<a class="chan" href="${esc(url)}" target="_blank" rel="noopener">${socialIcon(k, 14)}${esc(label)}</a>`)
+      .join('');
     return `<div class="card">
-      <h3>${redditIco} Follow us on Reddit</h3>
-      <p class="sub">Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network, so joining it is an easy way to keep up with the co-op from your Reddit feed. Open it and hit Join, or skip; you can find the link in the site footer any time.</p>
+      <h3>${redditIco} Follow GBTI</h3>
+      <p class="sub">Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network, so joining it is the easiest way to keep up with the co-op from your feed. Open it and hit Join, or skip; every link lives in the site footer any time.</p>
       <button class="btn" data-subreddit-open type="button">${opened ? 'Open r/GBTI_network again' : 'Open r/GBTI_network'}</button>
       ${opened ? `<p class="note">Opened. Hit Join over there, then Continue here.</p>` : ''}
+      <p class="note" style="margin-top:14px">We are on your other networks too; follow GBTI wherever you already spend time:</p>
+      <div class="chans">${chans}</div>
+    </div>`;
+  }
+
+  // The socials step: collect the member's handles across the platform set. Raw values stage locally
+  // (SOCIALS_STAGE_KEY) and the profile editor consumes them into profile.md on the profile page, so the
+  // one real save happens through the normal publish pipeline. Fully skippable.
+  _socialsCard() {
+    const draft = this._socialDraft || {};
+    const visible = [...new Set([...SOCIAL_STARTERS, ...Object.keys(draft)])]
+      .filter((k) => SOCIAL_KEYS.includes(k) && !SOCIAL_HIDDEN.has(k));
+    const rows = visible.map((k) => `<div class="srow">
+      <span class="sico" aria-hidden="true">${socialIcon(k, 15)}</span>
+      <input type="text" data-social-key="${esc(k)}" value="${esc(draft[k] || '')}"
+        placeholder="${esc(SOCIAL_LABELS[k] || k)}: @handle or full URL" aria-label="${esc(SOCIAL_LABELS[k] || k)}" />
+    </div>`).join('');
+    const rest = SOCIAL_KEYS.filter((k) => !visible.includes(k) && !SOCIAL_HIDDEN.has(k));
+    const picker = this._socialsMore && rest.length
+      ? `<div class="pkrow">${rest.map((k) => `<button type="button" class="pk" data-social-add="${esc(k)}">${socialIcon(k, 14)}${esc(SOCIAL_LABELS[k] || k)}</button>`).join('')}</div>`
+      : '';
+    const more = rest.length ? `<button type="button" class="addmore" data-social-more>${this._socialsMore ? 'Close' : '+ More platforms'}</button>` : '';
+    return `<div class="card">
+      <h3>${megaIco} Your socials</h3>
+      <p class="sub">Tell us where else you publish. When your work syndicates to a GBTI channel, the handle you list for that platform is mentioned automatically in the post (X, Bluesky, and Mastodon today), pointing readers back to you. You review and save these on your profile at the end.</p>
+      ${rows}
+      ${more}
+      ${picker}
     </div>`;
   }
 
