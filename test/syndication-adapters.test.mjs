@@ -79,15 +79,16 @@ test('an adapter with missing secrets reports enabled() false', () => {
   assert.equal(createXAdapter({ env: { X_API_KEY: 'only-one' } }).enabled(), false);
 });
 
-test('resolveAdapterRun splits ready (configured) vs skipped (enabled-but-no-secret); a manual channel is hard-excluded', () => {
-  // SOW-125: x is a MANUAL channel. Even flagged on in `channels` with a secret it must NEVER be auto-posted, so
-  // resolveAdapterRun hard-excludes it (belt-and-suspenders behind the drain's matrix gate). bluesky (auto) is
-  // enabled but has no secret -> skipped; discord (auto) is configured -> ready; mastodon is not enabled -> omitted.
-  const cfg = syndicationConfigFromParsed({ enabled: true, channels: { discord: true, x: true, bluesky: true, mastodon: false } });
+test('resolveAdapterRun splits ready (secrets) vs skipped (enabled-but-no-secret); a manual channel is hard-excluded', () => {
+  // SOW-131: enablement is MATRIX-DERIVED. The default matrix enables every auto channel (post/product/prompt on),
+  // so with only DISCORD_BOT_TOKEN present, discord + discord-category are ready (they share the bot token) and the
+  // other auto channels are enabled-but-secretless -> skipped. x + linkedin are MANUAL -> hard-excluded (never
+  // auto-posted), belt-and-suspenders behind the matrix gate.
+  const cfg = syndicationConfigFromParsed({ enabled: true });
   const env = { DISCORD_BOT_TOKEN: 't' };
   const { ready, skipped } = resolveAdapterRun({ cfg, env });
-  assert.deepEqual(ready.map((a) => a.name), ['discord']);
-  assert.deepEqual(skipped, ['bluesky']); // x excluded (manual), mastodon omitted (not enabled)
+  assert.deepEqual(ready.map((a) => a.name).sort(), ['discord', 'discord-category']);
+  assert.deepEqual(skipped.sort(), ['bluesky', 'devto', 'mastodon', 'reddit']);
 });
 
 // SOW-087: the second Discord post, routed by the item's category via the KV-mirrored map.
@@ -120,16 +121,17 @@ test('discord-category adapter is a clean skip for an unmapped/absent category o
 });
 
 test('resolveAdapterRun readies discord-category off the same bot token and hands it the channel map', async () => {
-  const cfg = syndicationConfigFromParsed({ syndication: { enabled: true, channels: { 'discord-category': true } } });
+  // SOW-131: the default matrix enables the auto channels; discord + discord-category ready off the shared bot token.
+  const cfg = syndicationConfigFromParsed({ syndication: { enabled: true } });
   const channelMap = { channels: [{ category: 'ai', channelId: '555' }] };
   const calls = [];
   const fetchImpl = async (url, opts) => { calls.push({ url, opts }); return { ok: true, status: 200, text: async () => JSON.stringify({ id: 'm9', channel_id: '555' }) }; };
-  const { ready, skipped } = resolveAdapterRun({ cfg, env: { DISCORD_BOT_TOKEN: 't' }, fetchImpl, channelMap });
-  assert.deepEqual(ready.map((a) => a.name), ['discord-category']);
-  assert.deepEqual(skipped, []);
-  const r = await ready[0].post({ ...item, category: 'ai' });
+  const { ready } = resolveAdapterRun({ cfg, env: { DISCORD_BOT_TOKEN: 't' }, fetchImpl, channelMap });
+  assert.deepEqual(ready.map((a) => a.name).sort(), ['discord', 'discord-category']);
+  const dc = ready.find((a) => a.name === 'discord-category');
+  const r = await dc.post({ ...item, category: 'ai' });
   assert.equal(r.ok, true);
-  assert.ok(calls[0].url.includes('/channels/555/messages'));
+  assert.ok(calls.some((c) => c.url.includes('/channels/555/messages')));
 });
 
 // SOW-088: the LinkedIn adapter targets the versioned Posts API and posts a rich article card.

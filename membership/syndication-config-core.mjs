@@ -11,8 +11,10 @@
 //                      cancel during this window. Coerced to a non-negative integer.
 //   upvote_threshold   SOW-057: distinct non-author members required to enqueue a share (default 2). Coerced
 //                      to an integer >= 1; a smaller/invalid value falls back to the default (never below 1).
-//   channels           per-channel master switches. Default false. A channel still also requires its secret
-//                      to be present at drain time (a flag-on channel with no secret is recorded "skipped").
+//   channels           DEPRECATED (SOW-131): the legacy per-channel master switches. No longer a delivery gate:
+//                      channel enablement is now MATRIX-DERIVED (a channel is on iff the auto-share matrix routes
+//                      any content type to it). Kept in the schema/mirror for backward compatibility, but unread
+//                      for delivery. A channel still requires its secret at drain time (else recorded "skipped").
 //
 // The config carries NO secrets; channel API tokens live only in the Worker secret store. Reconcile mirrors the
 // normalized config (minus nothing sensitive) to the KV key `synd:config` so the Worker reads the live values
@@ -447,14 +449,17 @@ export function templateFor(cfg, source, channel, { stub = false, channelOnly = 
   return typeof t === 'string' && t.trim() ? t.trim() : (DEFAULT_TEMPLATES[source] ?? null);
 }
 
-/** Is a given channel switched on in config? (Its secret presence is checked separately at drain time.) */
+/** SOW-131: MATRIX-DERIVED channel enablement. A channel is "enabled" iff the auto-share matrix routes ANY content
+ *  type to it (any cell not `off`, i.e. `on` or `popular`). The legacy per-channel `channels` master switch is no
+ *  longer a gate (the matrix is the single source of truth); its secret presence is still checked at drain time. */
 export function isChannelEnabled(cfg, name) {
-  return cfg?.channels?.[name] === true;
+  return MATRIX_CHANNELS.includes(name) && AUTO_TYPES.some((t) => autoModeFor(cfg, t, name) !== 'off');
 }
 
-/** The list of channel names switched on in config (still subject to secret presence at drain time). */
+/** SOW-131: the channel names the matrix routes to (any cell not `off`); still subject to secret presence at drain
+ *  time. Drives resolveAdapterRun. Only MATRIX (non-building) channels can be enabled. */
 export function enabledChannelNames(cfg) {
-  return CHANNELS.filter((name) => isChannelEnabled(cfg, name));
+  return MATRIX_CHANNELS.filter((name) => isChannelEnabled(cfg, name));
 }
 
 /** SOW-121: is this channel manual-assist (never auto-posted; enqueues a Social Queue task instead)? */
@@ -481,26 +486,27 @@ export function isAutoOn(cfg, type, channel) {
   return autoModeFor(cfg, type, channel) === 'on';
 }
 
-/** SOW-125: the AUTO (adapter-posted) channels a type publishes to — enabled AND `on` (still subject to secret
- *  presence at drain time). Drives the drain's adapter loop + the earliest-hold seed. */
+/** SOW-125: the AUTO (adapter-posted) channels a type publishes to — matrix cell `on` (still subject to secret
+ *  presence at drain time). SOW-131: matrix-only, no separate `channels` gate. Drives the earliest-hold seed. */
 export function autoChannelsForType(cfg, type) {
-  return AUTO_CHANNELS.filter((ch) => isChannelEnabled(cfg, ch) && isAutoOn(cfg, type, ch));
+  return AUTO_CHANNELS.filter((ch) => isAutoOn(cfg, type, ch));
 }
 
-/** SOW-125: EVERY channel that will DELIVER this type at publish — an auto channel that is enabled + `on`, OR a
- *  manual-assist channel that is `on` (delivered as a Social Queue task). Empty means the publish-time enqueue
- *  skips the type entirely. This is the enqueue-eligibility set, so an X-only (manual) type still enqueues. */
+/** SOW-125: EVERY channel that will DELIVER this type at publish — an auto channel whose cell is `on`, OR a
+ *  manual-assist channel whose cell is `on` (delivered as a Social Queue task). SOW-131: matrix-only, so an auto
+ *  channel needs only its matrix cell `on` (no separate `channels` switch); a manual channel also needs to be in
+ *  manual_assist. Empty means the publish-time enqueue skips the type. */
 export function deliverChannelsForType(cfg, type) {
   return MATRIX_CHANNELS.filter((ch) => isAutoOn(cfg, type, ch)
-    && (channelCapability(ch) === 'manual' ? isManualAssist(cfg, ch) : isChannelEnabled(cfg, ch)));
+    && (channelCapability(ch) === 'manual' ? isManualAssist(cfg, ch) : true));
 }
 
-/** SOW-126: the channels a type would deliver to WHEN PROMOTED as popular — matrix cell `popular` AND the
- *  channel is wired (an auto channel enabled, or a manual channel in manual_assist). The engagement engine
- *  enqueues a promoted item with `trigger:'popular'` to exactly this set; a plain publish never hits it. */
+/** SOW-126: the channels a type would deliver to WHEN PROMOTED as popular — matrix cell `popular` (a manual
+ *  channel must also be in manual_assist). SOW-131: matrix-only. The engagement engine enqueues a promoted item
+ *  with `trigger:'popular'` to exactly this set; a plain publish never hits it. */
 export function popularChannelsForType(cfg, type) {
   return MATRIX_CHANNELS.filter((ch) => autoModeFor(cfg, type, ch) === 'popular'
-    && (channelCapability(ch) === 'manual' ? isManualAssist(cfg, ch) : isChannelEnabled(cfg, ch)));
+    && (channelCapability(ch) === 'manual' ? isManualAssist(cfg, ch) : true));
 }
 
 /** SOW-125: the hold window in ms for a specific channel — the per-channel override if set, else the global. */

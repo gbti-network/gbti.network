@@ -35,14 +35,20 @@ test('hold_minutes coerces to a non-negative integer; threshold never drops belo
   assert.equal(upvoteThreshold(syndicationConfigFromParsed({ upvote_threshold: '3' })), 3);
 });
 
-test('channel switches accept yes/on/1 string forms and default false', () => {
-  const c = syndicationConfigFromParsed({ channels: { discord: 'on', x: 'yes', linkedin: 1, mastodon: 'off' } });
-  assert.equal(isChannelEnabled(c, 'discord'), true);
-  assert.equal(isChannelEnabled(c, 'x'), true);
-  assert.equal(isChannelEnabled(c, 'linkedin'), true);
-  assert.equal(isChannelEnabled(c, 'mastodon'), false);
-  assert.equal(isChannelEnabled(c, 'bluesky'), false); // missing -> default false
-  assert.deepEqual(enabledChannelNames(c).sort(), ['discord', 'linkedin', 'x']);
+test('SOW-131: isChannelEnabled + enabledChannelNames are MATRIX-DERIVED (any cell not off), not the channels flag', () => {
+  // mastodon: every cell explicitly off -> disabled. Everything else uses the default matrix (post/product/prompt
+  // on), so it is enabled. bluesky: a `popular` share cell also counts as enabled.
+  const c = syndicationConfigFromParsed({ auto_matrix: {
+    post: { mastodon: 'off' }, product: { mastodon: 'off' }, prompt: { mastodon: 'off' }, share: { mastodon: 'off', bluesky: 'popular' },
+  } });
+  assert.equal(isChannelEnabled(c, 'discord'), true);   // default post/product/prompt on
+  assert.equal(isChannelEnabled(c, 'mastodon'), false);  // every cell off
+  assert.equal(isChannelEnabled(c, 'bluesky'), true);    // popular counts as enabled
+  // Only mastodon is off; every other MATRIX channel is default-enabled.
+  assert.deepEqual(enabledChannelNames(c).sort(), ['bluesky', 'devto', 'discord', 'discord-category', 'linkedin', 'reddit', 'x']);
+  // The legacy `channels` flag no longer gates enablement: channels:false but matrix on -> enabled.
+  const flagged = syndicationConfigFromParsed({ channels: { reddit: false }, auto_matrix: { post: { reddit: 'on' } } });
+  assert.equal(isChannelEnabled(flagged, 'reddit'), true);
 });
 
 test('toSyndicationMirror returns the secret-free shape for KV', () => {
@@ -94,15 +100,14 @@ test('SOW-126: contentEngagement normalizes fail-closed (disabled, opens-on, tie
   assert.equal(contentEngagement(syndicationConfigFromParsed({ content_engagement: { tier: 'martian', threshold: 0 } })).tier, 'signed-in');
 });
 
-test('SOW-126: popularChannelsForType returns only channels whose cell is popular AND wired', () => {
+test('SOW-126/131: popularChannelsForType returns channels whose cell is popular (matrix-only; manual needs manual_assist)', () => {
   const c = syndicationConfigFromParsed({
-    channels: { discord: true, bluesky: true, mastodon: false },
     manual_assist_channels: ['x'],
     auto_matrix: { share: { discord: 'popular', bluesky: 'on', mastodon: 'popular', x: 'popular' } },
   });
-  // discord: popular + enabled -> in. bluesky: on (not popular) -> out. mastodon: popular but disabled -> out.
-  // x: popular + manual-assist -> in (a promoted popular manual task).
-  assert.deepEqual(popularChannelsForType(c, 'share').sort(), ['discord', 'x']);
+  // discord: popular auto -> in. bluesky: on (not popular) -> out. mastodon: popular auto -> IN (SOW-131: no
+  // channels gate). x: popular + manual-assist -> in (a promoted popular manual task).
+  assert.deepEqual(popularChannelsForType(c, 'share').sort(), ['discord', 'mastodon', 'x']);
   assert.deepEqual(popularChannelsForType(c, 'post'), []); // post defaults on everywhere, no popular cells
 });
 
@@ -141,17 +146,20 @@ test('SOW-125: autoModeFor coerces an unknown cell to the type default; unknown 
   assert.ok(AUTO_MODES.includes('popular'));
 });
 
-test('SOW-125: isAutoOn + autoChannelsForType respect the matrix AND the channel master', () => {
+test('SOW-125/131: isAutoOn + autoChannelsForType are MATRIX-ONLY (no channels gate)', () => {
   const c = syndicationConfigFromParsed({
-    channels: { discord: true, bluesky: true, mastodon: false },
-    auto_matrix: { post: { discord: 'on', bluesky: 'popular', mastodon: 'on' }, share: { discord: 'on' } },
+    auto_matrix: {
+      post: { discord: 'on', 'discord-category': 'off', bluesky: 'popular', mastodon: 'on', reddit: 'off', devto: 'off' },
+      share: { discord: 'on' },
+    },
   });
   assert.equal(isAutoOn(c, 'post', 'discord'), true);
   assert.equal(isAutoOn(c, 'post', 'bluesky'), false); // popular is not "on" at publish
-  // discord enabled + on -> included; bluesky is popular (not on); mastodon is on but channel disabled.
-  assert.deepEqual(autoChannelsForType(c, 'post'), ['discord']);
-  assert.deepEqual(autoChannelsForType(c, 'share'), ['discord']); // share on for discord here (overrides default)
-  assert.deepEqual(autoChannelsForType(c, 'prompt'), ['discord', 'bluesky']); // default on -> both enabled channels
+  // post: discord + mastodon on, bluesky popular, the rest explicitly off -> only the on cells deliver (no channels gate).
+  assert.deepEqual(autoChannelsForType(c, 'post').sort(), ['discord', 'mastodon']);
+  assert.deepEqual(autoChannelsForType(c, 'share'), ['discord']); // share on for discord only (overrides default off)
+  // prompt: the default matrix is on for every AUTO channel, so all deliver.
+  assert.deepEqual(autoChannelsForType(c, 'prompt').sort(), ['bluesky', 'devto', 'discord', 'discord-category', 'mastodon', 'reddit']);
 });
 
 test('SOW-125: channelHoldMs uses the per-channel override, else the global hold', () => {

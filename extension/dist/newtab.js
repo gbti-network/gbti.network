@@ -11783,22 +11783,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "prompt", nm: "Prompt", df: "prompt" }
   ];
   var VARS = ["{memberdiscord}", "{member-discord-username}", "{fullName}", "{author}", "{title}", "{url}", "{category}", "{content-type}", "{author-note}", "{author-note-italic}", "{member-url}", "{short-description}"];
-  var PIPE_CHIPS = [
-    { id: "discord", label: "Discord · featured" },
-    { id: "discord-category", label: "Discord · category" },
-    { id: "reddit", label: "Reddit" },
-    { id: "devto", label: "dev.to" },
-    { id: "x", label: "X", soon: true },
-    { id: "linkedin", label: "LinkedIn", soon: true },
-    { id: "mastodon", label: "Mastodon", soon: true },
-    { id: "bluesky", label: "Bluesky", soon: true },
-    {
-      id: "substack",
-      label: "Substack",
-      manual: true,
-      title: "Manual only: Substack has no public write API and no prefill share intent, so it cannot join the automated pipeline. Cross-post by hand (channel-ops/substack.md)."
-    }
-  ];
   var GbtiChannelMapManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -11878,7 +11862,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const p = this._pipeline;
       if (!p) return "";
       const ready = p.requireApproval ? "hold" : Number(p.holdMinutes) > 0 ? "auto" : "now";
-      const chips = PIPE_CHIPS.map((c) => c.soon || c.manual ? `<span class="chan soon"${c.title ? ` title="${esc(c.title)}"` : ""}><span class="cbx"></span>${esc(c.label)} <span class="tag">${c.manual ? "manual" : "building"}</span></span>` : `<span class="chan${p.channels?.[c.id] ? " on" : ""}" data-pipe-chan="${esc(c.id)}" role="checkbox" aria-checked="${p.channels?.[c.id] ? "true" : "false"}" tabindex="0"><span class="cbx"><svg viewBox="0 0 24 24"><use href="#c-check"/></svg></span>${esc(c.label)}</span>`).join("");
       const cell = (type, ch) => {
         const val = p.autoMatrix?.[type]?.[ch] ?? "off";
         const opts = AUTO_MODES.map((m) => `<option value="${esc(m)}"${m === val ? " selected" : ""}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join("");
@@ -11916,8 +11899,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
             <div class="sfxwrap"><input class="ctrl" type="number" min="0" max="1440" value="${esc(String(p.holdMinutes))}" data-pipe-hold /><span class="sfx">minutes</span></div>
             <span class="hint">The cancel window before an item auto-posts.</span></div>
         </div>
-        <div class="field" style="margin-top:18px"><label>Destinations</label>
-          <div class="chgroup">${chips}</div></div>
         <div class="field" style="margin-top:20px"><label>Auto-share by content type</label>
           <div class="mtx-scroll"><table class="matrix"><thead>${matrixHead}</thead><tbody>${matrixRows}</tbody></table></div>
           <span class="hint">X posts as a manual Social Queue task, not an automatic post.</span>
@@ -12142,21 +12123,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           });
         }
       });
-      this.$$("[data-pipe-chan]").forEach((ch) => {
-        const flip = () => {
-          ch.classList.toggle("on");
-          ch.setAttribute("aria-checked", ch.classList.contains("on") ? "true" : "false");
-          this._pipeDirty = true;
-          this._markDirty("sec-pipeline");
-        };
-        ch.addEventListener("click", flip);
-        ch.addEventListener("keydown", (e) => {
-          if (e.key === " " || e.key === "Enter") {
-            e.preventDefault();
-            flip();
-          }
-        });
-      });
       this.$$("[data-matrix-cell], [data-chan-hold]").forEach((el) => {
         el.addEventListener("change", () => {
           this._pipeDirty = true;
@@ -12312,10 +12278,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       });
     }
     async _savePipeline() {
-      const channels = {};
-      this.$$("[data-pipe-chan]").forEach((c) => {
-        channels[c.dataset.pipeChan] = c.classList.contains("on");
-      });
       const ready = this.$("[data-pipe-ready]")?.value || "auto";
       let holdMinutes = Number(this.$("[data-pipe-hold]")?.value ?? 60);
       if (!Number.isFinite(holdMinutes) || holdMinutes < 0) holdMinutes = 60;
@@ -12335,7 +12297,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         enabled: this.$("[data-pipe-enabled]")?.value === "true",
         requireApproval: ready === "hold",
         holdMinutes,
-        channels,
         autoMatrix,
         channelHoldMinutes
       }));

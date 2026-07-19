@@ -222,20 +222,8 @@ const TMPL_TYPES = [
   { key: 'prompt', nm: 'Prompt', df: 'prompt' },
 ];
 const VARS = ['{memberdiscord}', '{member-discord-username}', '{fullName}', '{author}', '{title}', '{url}', '{category}', '{content-type}', '{author-note}', '{author-note-italic}', '{member-url}', '{short-description}'];
-// The pipeline destination chips: adapters that exist are toggleable; the rest read "building", except
-// Substack, which reads "manual" (no public API means no adapter will ever make it toggleable).
-const PIPE_CHIPS = [
-  { id: 'discord', label: 'Discord · featured' },
-  { id: 'discord-category', label: 'Discord · category' },
-  { id: 'reddit', label: 'Reddit' },
-  { id: 'devto', label: 'dev.to' },
-  { id: 'x', label: 'X', soon: true },
-  { id: 'linkedin', label: 'LinkedIn', soon: true },
-  { id: 'mastodon', label: 'Mastodon', soon: true },
-  { id: 'bluesky', label: 'Bluesky', soon: true },
-  { id: 'substack', label: 'Substack', manual: true,
-    title: 'Manual only: Substack has no public write API and no prefill share intent, so it cannot join the automated pipeline. Cross-post by hand (channel-ops/substack.md).' },
-];
+// SOW-131: the DESTINATIONS checkbox chips (PIPE_CHIPS) were removed. Channel enablement is matrix-derived, so
+// the auto-share matrix is the single control; the channel's readiness (secrets) is still checked at drain time.
 
 class GbtiChannelMapManager extends GbtiElement {
   connectedCallback() { super.connectedCallback?.(); }
@@ -326,9 +314,8 @@ class GbtiChannelMapManager extends GbtiElement {
     const p = this._pipeline;
     if (!p) return '';
     const ready = p.requireApproval ? 'hold' : (Number(p.holdMinutes) > 0 ? 'auto' : 'now');
-    const chips = PIPE_CHIPS.map((c) => (c.soon || c.manual)
-      ? `<span class="chan soon"${c.title ? ` title="${esc(c.title)}"` : ''}><span class="cbx"></span>${esc(c.label)} <span class="tag">${c.manual ? 'manual' : 'building'}</span></span>`
-      : `<span class="chan${p.channels?.[c.id] ? ' on' : ''}" data-pipe-chan="${esc(c.id)}" role="checkbox" aria-checked="${p.channels?.[c.id] ? 'true' : 'false'}" tabindex="0"><span class="cbx"><svg viewBox="0 0 24 24"><use href="#c-check"/></svg></span>${esc(c.label)}</span>`).join('');
+    // SOW-131: the DESTINATIONS checkboxes were removed. Channel enablement is now matrix-derived (a channel is
+    // on iff the auto-share matrix routes any type to it), so the matrix below is the single source of truth.
     // SOW-125 (finding F12): every deliverable channel in MATRIX_CHANNELS (auto + the X manual-assist task) is
     // an EDITABLE cell; the edit layer accepts a per-type X mode. An `on`/`popular` X cell enqueues a manual
     // Social Queue task rather than an automatic post; `popular` is stored inert (engine TBD). The per-channel
@@ -373,8 +360,6 @@ class GbtiChannelMapManager extends GbtiElement {
             <div class="sfxwrap"><input class="ctrl" type="number" min="0" max="1440" value="${esc(String(p.holdMinutes))}" data-pipe-hold /><span class="sfx">minutes</span></div>
             <span class="hint">The cancel window before an item auto-posts.</span></div>
         </div>
-        <div class="field" style="margin-top:18px"><label>Destinations</label>
-          <div class="chgroup">${chips}</div></div>
         <div class="field" style="margin-top:20px"><label>Auto-share by content type</label>
           <div class="mtx-scroll"><table class="matrix"><thead>${matrixHead}</thead><tbody>${matrixRows}</tbody></table></div>
           <span class="hint">X posts as a manual Social Queue task, not an automatic post.</span>
@@ -598,11 +583,7 @@ class GbtiChannelMapManager extends GbtiElement {
       const el = this.$(sel);
       if (el) { el.addEventListener('change', () => { this._pipeDirty = true; this._markDirty('sec-pipeline'); }); el.addEventListener('input', () => { this._pipeDirty = true; this._markDirty('sec-pipeline'); }); }
     });
-    this.$$('[data-pipe-chan]').forEach((ch) => {
-      const flip = () => { ch.classList.toggle('on'); ch.setAttribute('aria-checked', ch.classList.contains('on') ? 'true' : 'false'); this._pipeDirty = true; this._markDirty('sec-pipeline'); };
-      ch.addEventListener('click', flip);
-      ch.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); } });
-    });
+    // SOW-131: the DESTINATIONS checkboxes were removed; the matrix is the single source of truth.
     // SOW-125: the auto-share matrix selects + per-channel delay inputs arm the same pipeline card (many
     // elements, so $$ not the single-element $ list above).
     this.$$('[data-matrix-cell], [data-chan-hold]').forEach((el) => {
@@ -715,8 +696,7 @@ class GbtiChannelMapManager extends GbtiElement {
   }
 
   async _savePipeline() {
-    const channels = {};
-    this.$$('[data-pipe-chan]').forEach((c) => { channels[c.dataset.pipeChan] = c.classList.contains('on'); });
+    // SOW-131: no more DESTINATIONS checkboxes; the matrix drives channel enablement, so `channels` is not sent.
     const ready = this.$('[data-pipe-ready]')?.value || 'auto';
     let holdMinutes = Number(this.$('[data-pipe-hold]')?.value ?? 60);
     if (!Number.isFinite(holdMinutes) || holdMinutes < 0) holdMinutes = 60;
@@ -736,7 +716,6 @@ class GbtiChannelMapManager extends GbtiElement {
       enabled: this.$('[data-pipe-enabled]')?.value === 'true',
       requireApproval: ready === 'hold',
       holdMinutes,
-      channels,
       autoMatrix,
       channelHoldMinutes,
     }));

@@ -117,6 +117,15 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   // fail-closed default (shares off, the rest on for enabled channels), matching the documented behavior.
   const cfg = deps.config ?? loadSyndicationConfig(root);
 
+  // SOW-131: the master switch is the fail-closed gate (default false). Nothing enqueues while syndication is
+  // off, and a missing/unreadable config normalizes to enabled:false, so it enqueues nothing. Previously the
+  // fail-closed behavior leaned on the per-channel `channels` flags (all false by default); those are gone now
+  // that channel enablement is matrix-derived, so the master switch carries the invariant.
+  if (!cfg?.enabled) {
+    console.log('enqueue-syndication: syndication is off (master switch); nothing to enqueue.');
+    return { enqueued: 0, inputs: [] };
+  }
+
   // Build a publishable item from each added path (SOW-087: shares now enqueue here too, at publish time).
   // SOW-112: a permalink RENAME adds the file at its new path, which this diff-of-adds would announce as a
   // brand-new publish. A rename-generated redirectFrom entry has the canonical URL shape (legacy migration

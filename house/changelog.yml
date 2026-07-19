@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 32
+    date: 2026-07-19
+    type: build
+    title: Syndication is matrix-only (the Destinations checkboxes are gone)
+    notes:
+      - The syndication admin no longer has a separate Destinations row. The auto-share matrix (plus the master switch and a channel having its secrets) is now the single control for what posts where.
+      - Setting a content type to On for a provisioned channel now actually posts, instead of being silently blocked by a second checkbox. To pause a channel, set its column to Off.
+
+  - version: 0.1.0
     build: 31
     date: 2026-07-19
     type: build
