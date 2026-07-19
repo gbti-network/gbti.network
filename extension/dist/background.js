@@ -16999,7 +16999,22 @@ var socialLinks = external_exports.object({
   facebook: external_exports.string().optional(),
   dailydev: external_exports.string().optional(),
   producthunt: external_exports.string().optional(),
-  rumble: external_exports.string().optional()
+  rumble: external_exports.string().optional(),
+  // SOW-131: audio, publishing, dev, and creator platforms (kept in sync with src/content.config.ts).
+  soundcloud: external_exports.string().optional(),
+  mixcloud: external_exports.string().optional(),
+  spotify: external_exports.string().optional(),
+  bandcamp: external_exports.string().optional(),
+  wordpress: external_exports.string().optional(),
+  substack: external_exports.string().optional(),
+  medium: external_exports.string().optional(),
+  hashnode: external_exports.string().optional(),
+  peerlist: external_exports.string().optional(),
+  gitlab: external_exports.string().optional(),
+  stackoverflow: external_exports.string().optional(),
+  patreon: external_exports.string().optional(),
+  kofi: external_exports.string().optional(),
+  telegram: external_exports.string().optional()
 }).partial();
 var postSchema = external_exports.object({
   type: external_exports.literal("post").default("post"),

@@ -83,6 +83,21 @@ const socialLinks = z
     dailydev: z.string().optional(),
     producthunt: z.string().optional(),
     rumble: z.string().optional(),
+    // SOW-131: audio, publishing, dev, and creator platforms (kept in sync with src/content.config.ts).
+    soundcloud: z.string().optional(),
+    mixcloud: z.string().optional(),
+    spotify: z.string().optional(),
+    bandcamp: z.string().optional(),
+    wordpress: z.string().optional(),
+    substack: z.string().optional(),
+    medium: z.string().optional(),
+    hashnode: z.string().optional(),
+    peerlist: z.string().optional(),
+    gitlab: z.string().optional(),
+    stackoverflow: z.string().optional(),
+    patreon: z.string().optional(),
+    kofi: z.string().optional(),
+    telegram: z.string().optional(),
   })
   .partial();
 

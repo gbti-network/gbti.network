@@ -8,7 +8,7 @@
 
 // The public social link keys we surface (the profile schema's links subset). Discord is included by design so the
 // reader can reveal the author's Discord handle on inspection.
-const LINK_KEYS = ['github', 'website', 'x', 'bluesky', 'youtube', 'devto', 'reddit', 'mastodon', 'linkedin', 'discord', 'instagram', 'threads', 'tiktok', 'twitch', 'facebook', 'dailydev', 'producthunt', 'rumble'];
+const LINK_KEYS = ['github', 'website', 'x', 'bluesky', 'youtube', 'devto', 'reddit', 'mastodon', 'linkedin', 'discord', 'instagram', 'threads', 'tiktok', 'twitch', 'facebook', 'dailydev', 'producthunt', 'rumble', 'soundcloud', 'mixcloud', 'spotify', 'bandcamp', 'wordpress', 'substack', 'medium', 'hashnode', 'peerlist', 'gitlab', 'stackoverflow', 'patreon', 'kofi', 'telegram'];
 
 /** Parse a lowercase github login from a profile links.github value (a URL or a bare handle), else undefined. */
 function githubLoginFromLinks(github) {

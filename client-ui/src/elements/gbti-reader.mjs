@@ -80,6 +80,21 @@ const SOCIALS = [
   ['dailydev', 'daily.dev', 'https://app.daily.dev/'],
   ['producthunt', 'Product Hunt', 'https://www.producthunt.com/@'],
   ['rumble', 'Rumble', 'https://rumble.com/user/'],
+  // SOW-131: audio, publishing, dev, and creator platforms.
+  ['soundcloud', 'SoundCloud', 'https://soundcloud.com/'],
+  ['mixcloud', 'Mixcloud', 'https://www.mixcloud.com/'],
+  ['spotify', 'Spotify', ''],
+  ['bandcamp', 'Bandcamp', ''],
+  ['wordpress', 'WordPress', 'https://profiles.wordpress.org/'],
+  ['substack', 'Substack', 'https://substack.com/@'],
+  ['medium', 'Medium', 'https://medium.com/@'],
+  ['hashnode', 'Hashnode', 'https://hashnode.com/@'],
+  ['peerlist', 'Peerlist', 'https://peerlist.io/'],
+  ['gitlab', 'GitLab', 'https://gitlab.com/'],
+  ['stackoverflow', 'Stack Overflow', ''],
+  ['patreon', 'Patreon', 'https://www.patreon.com/'],
+  ['kofi', 'Ko-fi', 'https://ko-fi.com/'],
+  ['telegram', 'Telegram', 'https://t.me/'],
 ];
 function linkUrl(value, base) {
   const v = String(value || '').trim();

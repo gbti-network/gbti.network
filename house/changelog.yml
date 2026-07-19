@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 33
+    date: 2026-07-19
+    type: build
+    title: More profile social platforms (SoundCloud, Substack, GitLab, and more)
+    notes:
+      - The profile social-links picker now covers 32 platforms, adding SoundCloud, Mixcloud, Spotify, Bandcamp, WordPress, Substack, Medium, Hashnode, Peerlist, GitLab, Stack Overflow, Patreon, Ko-fi, and Telegram.
+      - Each has its branded icon and renders on your public profile.
+
+  - version: 0.1.0
     build: 32
     date: 2026-07-19
     type: build
