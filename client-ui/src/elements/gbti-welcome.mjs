@@ -381,7 +381,7 @@ class GbtiWelcome extends GbtiElement {
       <a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">Open ${esc(label)}</a>
     </div>`).join('');
     return `
-      <p class="lead">Follow GBTI where you already spend time. Reddit comes first: that is where member content lands.</p>
+      <p class="lead">Please follow all of the properties below to help support the growth of the network. We will be syndicating member content, including yours, through these channels.</p>
       <div class="chanscroll">
         <div class="card chan-card">
           <h3>${redditIco} Reddit</h3>
