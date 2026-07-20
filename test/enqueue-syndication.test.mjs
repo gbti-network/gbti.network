@@ -157,3 +157,10 @@ test('a renamed item (canonical-shaped redirectFrom) is skipped; a legacy-migrat
   } });
   assert.deepEqual(r.inputs.map((i) => i.targetSlug), ['members/alice/posts/legacy']);
 });
+
+test('apply enqueues the share when its only deliverable cell is on-manual (the queue route)', async () => {
+  const cfg = syndicationConfigFromParsed({ enabled: true, auto_matrix: { share: { discord: 'on-manual' } } });
+  const store = new Map();
+  const r = await main({ argv: ['--apply'], env: { ...ENV, SYNDICATE_ADDED: 'members/alice/shares/s1.md' }, deps: deps(store, cfg) });
+  assert.equal(r.enqueued, 1, 'an on-manual cell delivers (as a Social Queue task at drain time)');
+});

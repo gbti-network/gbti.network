@@ -6259,7 +6259,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var AUTO_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
   var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
   var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
-  var AUTO_MODES = Object.freeze(["off", "on", "popular"]);
+  var AUTO_MODES = Object.freeze(["off", "on", "on-manual", "popular"]);
   function defaultAutoMode(type) {
     return type === "share" ? "off" : "on";
   }
@@ -6572,8 +6572,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   ].map((c) => ({ ...c, active: isTileActive(c.id) }));
   var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
-  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", mastodon: "Mastodon", bluesky: "Bluesky", x: "X" };
-  var AUTO_MODE_LABEL = { off: "Off", on: "On", popular: "Popular" };
+  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", mastodon: "Mastodon", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn" };
+  var AUTO_MODE_LABEL = { off: "Off", on: "On-Automatic", "on-manual": "On-Manual", popular: "Popular" };
   var TMPL_TYPES = [
     { key: "share", nm: "Share", df: "reshare line" },
     { key: "post", nm: "Post", df: "article" },
@@ -6704,10 +6704,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const ready = p.requireApproval ? "hold" : Number(p.holdMinutes) > 0 ? "auto" : "now";
       const cell = (type, ch) => {
         const val = p.autoMatrix?.[type]?.[ch] ?? "off";
-        const opts = AUTO_MODES.map((m) => `<option value="${esc(m)}"${m === val ? " selected" : ""}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join("");
+        const modes = AUTO_MODES.filter((m) => !(m === "on" && channelCapability(ch) === "manual"));
+        const opts = modes.map((m) => `<option value="${esc(m)}"${m === val ? " selected" : ""}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join("");
         return `<td><select data-matrix-cell data-mtype="${esc(type)}" data-mchan="${esc(ch)}">${opts}</select></td>`;
       };
-      const chTitle = (ch) => channelCapability(ch) === "manual" ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + " posts as a manual Social Queue task, not an automatic post.")}"` : "";
+      const chTitle = (ch) => channelCapability(ch) === "manual" ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + " cannot post automatically; On-Manual queues a Social Queue task a superadmin posts by hand.")}"` : "";
       const matrixHead = `<tr><th class="rowh">Content type</th>${MATRIX_CHANNELS.map((ch) => `<th${chTitle(ch)}>${esc(MATRIX_CHAN_LABEL[ch] || ch)}</th>`).join("")}</tr>`;
       const matrixRows = AUTO_TYPES.map((type) => `<tr><td class="rowh">${esc(MATRIX_TYPE_LABEL[type] || type)}</td>${MATRIX_CHANNELS.map((ch) => cell(type, ch)).join("")}</tr>`).join("");
       const delays = AUTO_CHANNELS.map((ch) => {
@@ -6741,8 +6742,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         </div>
         <div class="field" style="margin-top:20px"><label>Auto-share by content type</label>
           <div class="mtx-scroll"><table class="matrix"><thead>${matrixHead}</thead><tbody>${matrixRows}</tbody></table></div>
-          <span class="hint">X posts as a manual Social Queue task, not an automatic post.</span>
-          <span class="hint">Popular posts only when enough members engage (coming soon).</span></div>
+          <span class="hint">On-Manual sends a channel's posts to the Social Queue for superadmin review before anything goes out. X and LinkedIn cannot post automatically, so On-Manual is their only deliverable mode.</span>
+          <span class="hint">Popular posts only after enough members engage with the item.</span></div>
         <div class="field" style="margin-top:20px"><label>Per-channel delay (minutes)</label>
           <div class="chandelays">${delays}</div>
           <span class="hint">Blank uses the hold window above. A channel posts this many minutes after publish (or after approval).</span></div>

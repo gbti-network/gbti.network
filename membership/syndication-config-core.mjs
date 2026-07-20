@@ -61,10 +61,12 @@ export function channelCapability(name) { return CHANNEL_CAPABILITY[name] ?? 'bu
 export const AUTO_TYPES = Object.freeze(['share', 'post', 'product', 'prompt']);
 export const AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === 'auto'));
 export const MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== 'building'));
-// The per-cell auto-share mode. `off` = never auto; `on` = auto-enqueue at publish; `popular` = enqueue only
-// when the member-activity tracker deems it popular (the ENGINE is a deferred SOW; `popular` is stored + inert
-// at publish time here, so nothing posts by surprise).
-export const AUTO_MODES = Object.freeze(['off', 'on', 'popular']);
+// The per-cell auto-share mode. `off` = never; `on` = On-Automatic (auto-enqueue at publish; the adapter
+// posts after the hold); `on-manual` = On-Manual (enqueue at publish, but deliver as a superadmin Social
+// Queue task for review instead of an adapter post; the ONLY deliverable mode for a `manual`-capability
+// channel, and available on ANY channel the owner wants moderated); `popular` = enqueue only when the
+// member-activity tracker deems it popular (the engine promotes with trigger:'popular').
+export const AUTO_MODES = Object.freeze(['off', 'on', 'on-manual', 'popular']);
 /** The fail-closed default cell for a type: shares OFF (the owner ask), every other type ON (today's behavior). */
 export function defaultAutoMode(type) { return type === 'share' ? 'off' : 'on'; }
 
@@ -342,7 +344,13 @@ function normalizeAutoMatrix(raw) {
   for (const t of AUTO_TYPES) {
     const row = src[t] && typeof src[t] === 'object' && !Array.isArray(src[t]) ? src[t] : {};
     out[t] = {};
-    for (const ch of MATRIX_CHANNELS) out[t][ch] = asAutoMode(row[ch], defaultAutoMode(t));
+    for (const ch of MATRIX_CHANNELS) {
+      let m = asAutoMode(row[ch], defaultAutoMode(t));
+      // A `manual`-capability channel (x, linkedin) cannot auto-post: `on` coerces to `on-manual`, so an
+      // old config/mirror keeps exactly its prior behavior (X/LinkedIn `on` already delivered as tasks).
+      if (m === 'on' && channelCapability(ch) === 'manual') m = 'on-manual';
+      out[t][ch] = m;
+    }
     Object.freeze(out[t]);
   }
   return Object.freeze(out);
@@ -462,22 +470,39 @@ export function enabledChannelNames(cfg) {
   return MATRIX_CHANNELS.filter((name) => isChannelEnabled(cfg, name));
 }
 
-/** SOW-121: is this channel manual-assist (never auto-posted; enqueues a Social Queue task instead)? */
+/** SOW-121, DEPRECATED for routing: `manual_assist_channels` no longer decides where a post goes (the
+ *  matrix cell `on-manual` does, and `CHANNEL_CAPABILITY` says which channels can never auto-post). Kept
+ *  parsed + exported only so old configs/mirrors and any straggler reader do not break. */
 export function isManualAssist(cfg, name) {
   return Array.isArray(cfg?.manual_assist_channels) && cfg.manual_assist_channels.includes(name);
 }
 
-/** SOW-121: the manual-assist channel names (a copy). */
+/** SOW-121, DEPRECATED for routing (see isManualAssist). */
 export function manualAssistChannels(cfg) {
   return Array.isArray(cfg?.manual_assist_channels) ? [...cfg.manual_assist_channels] : [];
 }
 
-/** SOW-125: the auto-share mode (`off` | `on` | `popular`) for a (type, channel). Falls back to the type
- *  default (shares off, the rest on) for a known type + MATRIX channel; `off` for anything unknown. */
+/** Is this (type, channel) routed to the Social Queue (`on-manual`)? A superadmin reviews the rendered
+ *  post there and sends it (one click for an auto-capability channel, by hand for x/linkedin). */
+export function isManualMode(cfg, type, channel) {
+  return autoModeFor(cfg, type, channel) === 'on-manual';
+}
+
+/** Every channel whose cell is `on-manual` for this type (any capability). Drives the drain's task loop. */
+export function manualQueueChannelsForType(cfg, type) {
+  return MATRIX_CHANNELS.filter((ch) => isManualMode(cfg, type, ch));
+}
+
+/** SOW-125: the auto-share mode (`off` | `on` | `on-manual` | `popular`) for a (type, channel). Falls back
+ *  to the type default (shares off, the rest on) for a known type + MATRIX channel; `off` for anything
+ *  unknown. The capability coercion applies HERE too (not only in normalize), so a raw un-normalized config
+ *  can never report `on` for a `manual`-capability channel. */
 export function autoModeFor(cfg, type, channel) {
   const v = cfg?.auto_matrix?.[type]?.[channel];
-  if (AUTO_MODES.includes(v)) return v;
-  return AUTO_TYPES.includes(type) && MATRIX_CHANNELS.includes(channel) ? defaultAutoMode(type) : 'off';
+  const m = AUTO_MODES.includes(v)
+    ? v
+    : (AUTO_TYPES.includes(type) && MATRIX_CHANNELS.includes(channel) ? defaultAutoMode(type) : 'off');
+  return m === 'on' && channelCapability(channel) === 'manual' ? 'on-manual' : m;
 }
 
 /** SOW-125: is this (type, channel) set to deliver at publish time (`on`)? `popular` and `off` are not. For an
@@ -492,21 +517,22 @@ export function autoChannelsForType(cfg, type) {
   return AUTO_CHANNELS.filter((ch) => isAutoOn(cfg, type, ch));
 }
 
-/** SOW-125: EVERY channel that will DELIVER this type at publish — an auto channel whose cell is `on`, OR a
- *  manual-assist channel whose cell is `on` (delivered as a Social Queue task). SOW-131: matrix-only, so an auto
- *  channel needs only its matrix cell `on` (no separate `channels` switch); a manual channel also needs to be in
- *  manual_assist. Empty means the publish-time enqueue skips the type. */
+/** SOW-125: EVERY channel that will DELIVER this type at publish — cell `on` (an auto-capability adapter
+ *  post) OR cell `on-manual` (a Social Queue task, any capability). Routing is matrix-only: neither the
+ *  legacy `channels` switches nor `manual_assist_channels` gate this. Empty = the publish-time enqueue
+ *  skips the type. */
 export function deliverChannelsForType(cfg, type) {
-  return MATRIX_CHANNELS.filter((ch) => isAutoOn(cfg, type, ch)
-    && (channelCapability(ch) === 'manual' ? isManualAssist(cfg, ch) : true));
+  return MATRIX_CHANNELS.filter((ch) => {
+    const m = autoModeFor(cfg, type, ch);
+    return (m === 'on' && channelCapability(ch) === 'auto') || m === 'on-manual';
+  });
 }
 
-/** SOW-126: the channels a type would deliver to WHEN PROMOTED as popular — matrix cell `popular` (a manual
- *  channel must also be in manual_assist). SOW-131: matrix-only. The engagement engine enqueues a promoted item
- *  with `trigger:'popular'` to exactly this set; a plain publish never hits it. */
+/** SOW-126: the channels a type would deliver to WHEN PROMOTED as popular — matrix cell `popular` (any
+ *  capability; the drain routes by capability: adapter post vs Social Queue task). The engagement engine
+ *  enqueues a promoted item with `trigger:'popular'` to exactly this set; a plain publish never hits it. */
 export function popularChannelsForType(cfg, type) {
-  return MATRIX_CHANNELS.filter((ch) => autoModeFor(cfg, type, ch) === 'popular'
-    && (channelCapability(ch) === 'manual' ? isManualAssist(cfg, ch) : true));
+  return MATRIX_CHANNELS.filter((ch) => autoModeFor(cfg, type, ch) === 'popular');
 }
 
 /** SOW-125: the hold window in ms for a specific channel — the per-channel override if set, else the global. */

@@ -3723,6 +3723,149 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     telegram: "Telegram"
   };
 
+  // membership/syndication-config-core.mjs
+  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto"]);
+  var CHANNEL_CAPABILITY = Object.freeze({
+    discord: "auto",
+    "discord-category": "auto",
+    reddit: "auto",
+    devto: "auto",
+    mastodon: "auto",
+    // SOW-123
+    bluesky: "auto",
+    // SOW-122
+    x: "manual",
+    // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
+    linkedin: "manual"
+    // SOW-127: manual-assist until Community Management API access is granted (business
+    // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
+    // superadmin posts it by hand through the free LinkedIn composer. No LinkedIn API token is used.
+  });
+  function channelCapability(name) {
+    return CHANNEL_CAPABILITY[name] ?? "building";
+  }
+  var AUTO_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
+  var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
+  var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
+  var AUTO_MODES = Object.freeze(["off", "on", "on-manual", "popular"]);
+  function defaultAutoMode(type) {
+    return type === "share" ? "off" : "on";
+  }
+  var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
+  var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
+  var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
+    enabled: false,
+    // fail-closed: nothing auto-posts until the owner flips it in house/syndication-config.yml
+    open_threshold: 2,
+    // distinct members opening the detail view before the item auto-posts
+    tier: "paid",
+    // whose engagement counts (owner-toggleable in the admin Channels tab)
+    comment_autopost: true
+    // one comment posts immediately (deliberate engagement)
+  });
+  var CONTENT_ENGAGEMENT_SIGNALS = Object.freeze(["opens", "favorites", "upvotes", "comments"]);
+  var DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
+    enabled: false,
+    threshold: 3,
+    // distinct engaged members before a `popular` item promotes (tunable; the network is small)
+    tier: "signed-in",
+    // whose engagement counts (any non-banned signed-in member by default)
+    signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false })
+    // opens = the owner's chosen counter
+  });
+  var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"]);
+  var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
+  var DEFAULT_REDDIT_BODY = "{short-description}";
+  var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
+  var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
+  var DEFAULT_REDDIT_COMMENT = "Shared to the community by GBTI Network member {fullName}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
+  var DEFAULT_TEMPLATES = Object.freeze({
+    share: DEFAULT_FORMAT,
+    post: DEFAULT_FORMAT,
+    product: DEFAULT_FORMAT,
+    prompt: DEFAULT_FORMAT,
+    "reddit-body": DEFAULT_REDDIT_BODY,
+    "reddit-comment": DEFAULT_REDDIT_COMMENT,
+    "devto-intro": DEFAULT_DEVTO_INTRO,
+    "devto-footer": DEFAULT_DEVTO_FOOTER
+  });
+  var STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
+  var DEFAULT_STUB_TEMPLATES = Object.freeze({
+    share: STUB_FORMAT,
+    post: STUB_FORMAT,
+    product: STUB_FORMAT,
+    prompt: STUB_FORMAT,
+    "reddit-body": "{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}",
+    "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish."
+  });
+  var DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it on gbti.network. {url}';
+  var DISCORD_SHARE_STUB = '{member-discord-username} shared the following link: "{title}" {url}';
+  var DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
+  var DISCORD_CAT_SHARE_STUB = '{member-discord-username} shared a link in {category}: "{title}" {url}';
+  var REDDIT_TITLE_STUB = "{title} (a members-only {content-type} from the GBTI Network)";
+  var X_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+  var X_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
+  var LINKEDIN_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Join the co-op to unlock it. {url}';
+  var LINKEDIN_SHARE_STUB = '{fullName} shared a members-only find on the GBTI Network: "{title}". Join to open it. {url}';
+  var BLUESKY_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it.';
+  var BLUESKY_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it.';
+  var MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+  var MASTODON_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
+  var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
+    discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
+    "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
+    reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+    // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
+    devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+    x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
+    linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
+    // SOW-127
+    bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
+    mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB })
+  });
+  var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
+    enabled: false,
+    require_approval: true,
+    // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
+    hold_minutes: 60,
+    upvote_threshold: 2,
+    classify: "ai",
+    // SOW-087: the share category suggestion mode
+    templates: DEFAULT_TEMPLATES,
+    // SOW-087: per-type Discord templates (missing/empty type = its default)
+    channel_templates: Object.freeze({}),
+    // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
+    stub_templates: Object.freeze({}),
+    // SOW-088 Proposal A: the shared MEMBERS-stub set (configured only)
+    channel_templates_stub: Object.freeze({}),
+    // SOW-088 Proposal A: per-channel stub overrides
+    news_engagement: DEFAULT_NEWS_ENGAGEMENT,
+    // SOW-111: engagement-triggered news auto-share
+    content_engagement: DEFAULT_CONTENT_ENGAGEMENT,
+    // SOW-126: engagement-triggered content auto-share (the `popular` engine)
+    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
+    // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
+    // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
+    // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
+    // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
+    manual_assist_channels: Object.freeze([]),
+    // SOW-125: per-type-per-channel auto-share modes (off | on | popular). Layers on `channels` (a channel must
+    // also be enabled + have its secret). The default (an absent matrix) is shares OFF, every other type ON.
+    auto_matrix: buildDefaultAutoMatrix(),
+    // SOW-125: per-channel delay override in minutes (absent -> the global hold_minutes). Lets one channel post
+    // sooner/later than another for the same item.
+    channel_hold_minutes: Object.freeze({})
+  });
+  function buildDefaultAutoMatrix() {
+    const m = {};
+    for (const t of AUTO_TYPES) {
+      m[t] = {};
+      for (const ch of MATRIX_CHANNELS) m[t][ch] = defaultAutoMode(t);
+      Object.freeze(m[t]);
+    }
+    return Object.freeze(m);
+  }
+
   // client-ui/src/elements/gbti-social-queue.mjs
   var composeUrl = (channel, text) => {
     const t = encodeURIComponent(String(text || ""));
@@ -3873,7 +4016,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const nPending = (this._data.pending || []).length, nDone = (this._data.done || []).length, nAuto = (this._auto || []).length;
       const tabBtn = (k, label, n) => `<button class="tab ${this._tab === k ? "on" : ""}" data-tab="${k}" type="button">${label}<span class="n">${n}</span></button>`;
-      const hint = this._tab === "todo" ? "These would have auto-posted to a pay-to-post channel. Click Assist to open the free web composer with the text ready, post it by hand, then mark it Done." : this._tab === "manual" ? "Posts you have already sent by hand." : "Posts the system sent automatically (Discord, dev.to, and other free channels).";
+      const hint = this._tab === "todo" ? "Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on X and LinkedIn, Assist opens the free web composer (or Copy the text), post it by hand, then mark it Done." : this._tab === "manual" ? "Posts completed from this queue (Post now or by hand)." : "Posts the system sent automatically (the On-Automatic channels).";
       const filtered = this._filtered();
       const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
       if (this._page >= pages) this._page = pages - 1;
@@ -3925,6 +4068,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.$$("[data-copy]").forEach((b) => b.addEventListener("click", () => this._copy(b.dataset.copy)));
       this.$$("[data-done]").forEach((b) => b.addEventListener("click", () => this._action("done", b.dataset.done)));
       this.$$("[data-del]").forEach((b) => b.addEventListener("click", () => this._action("delete", b.dataset.del)));
+      this.$$("[data-post]").forEach((b) => b.addEventListener("click", () => this._action("post", b.dataset.post)));
     }
     _shell(inner) {
       return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div><div class="body">${inner}</div>`;
@@ -3939,12 +4083,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<span class="chip ${status === "sent" ? "sent" : status === "failed" ? "failed" : ""}${big ? " big" : ""}">${socialIcon(CH_ICON[channel] || channel, big ? 14 : 12)}${esc(CH_LABEL[channel] || channel)}${status ? ` ${esc(status)}` : ""}</span>`;
     }
     _todoRow(t) {
+      const label = CH_LABEL[t.channel] || t.channel;
       const url = composeUrl(t.channel, t.text);
-      const assist = url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(CH_LABEL[t.channel] || t.channel)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
+      const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
       return `<div class="task">
       <div class="top"><span class="src">${esc(SRC_LABEL[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc(fmtDate(t.createdAt)) : ""}</span></div>
       <div class="txt">${esc(t.text || "")}</div>
-      <div class="acts">${assist}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy</button><button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
+      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy</button><button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
     </div>`;
     }
     _doneRow(t) {
@@ -3982,11 +4127,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _action(action, id) {
       if (!id) return;
       if (action === "delete" && typeof confirm === "function" && !confirm("Delete this item from the Social Queue?")) return;
+      if (action === "post") {
+        const t = this._byId(id);
+        const label = t ? CH_LABEL[t.channel] || t.channel : "the channel";
+        if (typeof confirm === "function" && !confirm(`Post this to ${label} now? The reviewed text above is exactly what goes out.`)) return;
+      }
       this._busy = true;
       this.render();
       try {
         await this.client.socialQueueAction({ action, id });
-        this._msg = action === "done" ? "Marked done." : "Deleted.";
+        this._msg = action === "done" ? "Marked done." : action === "post" ? "Posted." : "Deleted.";
         await this.load();
       } catch (e) {
         this._msg = e?.message || "Action failed.";
@@ -11495,149 +11645,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-syndication-tracker", GbtiSyndicationTracker);
 
-  // membership/syndication-config-core.mjs
-  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto"]);
-  var CHANNEL_CAPABILITY = Object.freeze({
-    discord: "auto",
-    "discord-category": "auto",
-    reddit: "auto",
-    devto: "auto",
-    mastodon: "auto",
-    // SOW-123
-    bluesky: "auto",
-    // SOW-122
-    x: "manual",
-    // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
-    linkedin: "manual"
-    // SOW-127: manual-assist until Community Management API access is granted (business
-    // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
-    // superadmin posts it by hand through the free LinkedIn composer. No LinkedIn API token is used.
-  });
-  function channelCapability(name) {
-    return CHANNEL_CAPABILITY[name] ?? "building";
-  }
-  var AUTO_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
-  var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
-  var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
-  var AUTO_MODES = Object.freeze(["off", "on", "popular"]);
-  function defaultAutoMode(type) {
-    return type === "share" ? "off" : "on";
-  }
-  var CLASSIFY_MODES = Object.freeze(["ai", "keyword", "off"]);
-  var NEWS_ENGAGEMENT_TIERS = Object.freeze(["paid", "paid-trial", "signed-in"]);
-  var DEFAULT_NEWS_ENGAGEMENT = Object.freeze({
-    enabled: false,
-    // fail-closed: nothing auto-posts until the owner flips it in house/syndication-config.yml
-    open_threshold: 2,
-    // distinct members opening the detail view before the item auto-posts
-    tier: "paid",
-    // whose engagement counts (owner-toggleable in the admin Channels tab)
-    comment_autopost: true
-    // one comment posts immediately (deliberate engagement)
-  });
-  var CONTENT_ENGAGEMENT_SIGNALS = Object.freeze(["opens", "favorites", "upvotes", "comments"]);
-  var DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
-    enabled: false,
-    threshold: 3,
-    // distinct engaged members before a `popular` item promotes (tunable; the network is small)
-    tier: "signed-in",
-    // whose engagement counts (any non-banned signed-in member by default)
-    signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false })
-    // opens = the owner's chosen counter
-  });
-  var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"]);
-  var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
-  var DEFAULT_REDDIT_BODY = "{short-description}";
-  var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
-  var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
-  var DEFAULT_REDDIT_COMMENT = "Shared to the community by GBTI Network member {fullName}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
-  var DEFAULT_TEMPLATES = Object.freeze({
-    share: DEFAULT_FORMAT,
-    post: DEFAULT_FORMAT,
-    product: DEFAULT_FORMAT,
-    prompt: DEFAULT_FORMAT,
-    "reddit-body": DEFAULT_REDDIT_BODY,
-    "reddit-comment": DEFAULT_REDDIT_COMMENT,
-    "devto-intro": DEFAULT_DEVTO_INTRO,
-    "devto-footer": DEFAULT_DEVTO_FOOTER
-  });
-  var STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
-  var DEFAULT_STUB_TEMPLATES = Object.freeze({
-    share: STUB_FORMAT,
-    post: STUB_FORMAT,
-    product: STUB_FORMAT,
-    prompt: STUB_FORMAT,
-    "reddit-body": "{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}",
-    "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish."
-  });
-  var DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it on gbti.network. {url}';
-  var DISCORD_SHARE_STUB = '{member-discord-username} shared the following link: "{title}" {url}';
-  var DISCORD_CAT_STUB = 'A members-only {content-type} landed in {category}: "{title}" by {member-discord-username}. {url}';
-  var DISCORD_CAT_SHARE_STUB = '{member-discord-username} shared a link in {category}: "{title}" {url}';
-  var REDDIT_TITLE_STUB = "{title} (a members-only {content-type} from the GBTI Network)";
-  var X_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
-  var X_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
-  var LINKEDIN_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Join the co-op to unlock it. {url}';
-  var LINKEDIN_SHARE_STUB = '{fullName} shared a members-only find on the GBTI Network: "{title}". Join to open it. {url}';
-  var BLUESKY_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it.';
-  var BLUESKY_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it.';
-  var MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
-  var MASTODON_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
-  var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
-    discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
-    "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
-    reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
-    // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
-    devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
-    x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
-    linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
-    // SOW-127
-    bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
-    mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB })
-  });
-  var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
-    enabled: false,
-    require_approval: true,
-    // SOW-058: opt-IN by default — NOTHING posts until a superadmin approves it
-    hold_minutes: 60,
-    upvote_threshold: 2,
-    classify: "ai",
-    // SOW-087: the share category suggestion mode
-    templates: DEFAULT_TEMPLATES,
-    // SOW-087: per-type Discord templates (missing/empty type = its default)
-    channel_templates: Object.freeze({}),
-    // SOW-088: per-channel template OVERRIDES (channel -> type -> template)
-    stub_templates: Object.freeze({}),
-    // SOW-088 Proposal A: the shared MEMBERS-stub set (configured only)
-    channel_templates_stub: Object.freeze({}),
-    // SOW-088 Proposal A: per-channel stub overrides
-    news_engagement: DEFAULT_NEWS_ENGAGEMENT,
-    // SOW-111: engagement-triggered news auto-share
-    content_engagement: DEFAULT_CONTENT_ENGAGEMENT,
-    // SOW-126: engagement-triggered content auto-share (the `popular` engine)
-    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
-    // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
-    // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
-    // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
-    // `channels` (the two are mutually exclusive: auto-post vs manual-assist).
-    manual_assist_channels: Object.freeze([]),
-    // SOW-125: per-type-per-channel auto-share modes (off | on | popular). Layers on `channels` (a channel must
-    // also be enabled + have its secret). The default (an absent matrix) is shares OFF, every other type ON.
-    auto_matrix: buildDefaultAutoMatrix(),
-    // SOW-125: per-channel delay override in minutes (absent -> the global hold_minutes). Lets one channel post
-    // sooner/later than another for the same item.
-    channel_hold_minutes: Object.freeze({})
-  });
-  function buildDefaultAutoMatrix() {
-    const m = {};
-    for (const t of AUTO_TYPES) {
-      m[t] = {};
-      for (const ch of MATRIX_CHANNELS) m[t][ch] = defaultAutoMode(t);
-      Object.freeze(m[t]);
-    }
-    return Object.freeze(m);
-  }
-
   // client-ui/src/elements/gbti-channel-map-manager.mjs
   var AMBER = "#d8901a";
   var CSS23 = `
@@ -11832,8 +11839,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   ].map((c) => ({ ...c, active: isTileActive(c.id) }));
   var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
-  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", mastodon: "Mastodon", bluesky: "Bluesky", x: "X" };
-  var AUTO_MODE_LABEL = { off: "Off", on: "On", popular: "Popular" };
+  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", mastodon: "Mastodon", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn" };
+  var AUTO_MODE_LABEL = { off: "Off", on: "On-Automatic", "on-manual": "On-Manual", popular: "Popular" };
   var TMPL_TYPES = [
     { key: "share", nm: "Share", df: "reshare line" },
     { key: "post", nm: "Post", df: "article" },
@@ -11964,10 +11971,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const ready = p.requireApproval ? "hold" : Number(p.holdMinutes) > 0 ? "auto" : "now";
       const cell = (type, ch) => {
         const val = p.autoMatrix?.[type]?.[ch] ?? "off";
-        const opts = AUTO_MODES.map((m) => `<option value="${esc(m)}"${m === val ? " selected" : ""}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join("");
+        const modes = AUTO_MODES.filter((m) => !(m === "on" && channelCapability(ch) === "manual"));
+        const opts = modes.map((m) => `<option value="${esc(m)}"${m === val ? " selected" : ""}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join("");
         return `<td><select data-matrix-cell data-mtype="${esc(type)}" data-mchan="${esc(ch)}">${opts}</select></td>`;
       };
-      const chTitle = (ch) => channelCapability(ch) === "manual" ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + " posts as a manual Social Queue task, not an automatic post.")}"` : "";
+      const chTitle = (ch) => channelCapability(ch) === "manual" ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + " cannot post automatically; On-Manual queues a Social Queue task a superadmin posts by hand.")}"` : "";
       const matrixHead = `<tr><th class="rowh">Content type</th>${MATRIX_CHANNELS.map((ch) => `<th${chTitle(ch)}>${esc(MATRIX_CHAN_LABEL[ch] || ch)}</th>`).join("")}</tr>`;
       const matrixRows = AUTO_TYPES.map((type) => `<tr><td class="rowh">${esc(MATRIX_TYPE_LABEL[type] || type)}</td>${MATRIX_CHANNELS.map((ch) => cell(type, ch)).join("")}</tr>`).join("");
       const delays = AUTO_CHANNELS.map((ch) => {
@@ -12001,8 +12009,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         </div>
         <div class="field" style="margin-top:20px"><label>Auto-share by content type</label>
           <div class="mtx-scroll"><table class="matrix"><thead>${matrixHead}</thead><tbody>${matrixRows}</tbody></table></div>
-          <span class="hint">X posts as a manual Social Queue task, not an automatic post.</span>
-          <span class="hint">Popular posts only when enough members engage (coming soon).</span></div>
+          <span class="hint">On-Manual sends a channel's posts to the Social Queue for superadmin review before anything goes out. X and LinkedIn cannot post automatically, so On-Manual is their only deliverable mode.</span>
+          <span class="hint">Popular posts only after enough members engage with the item.</span></div>
         <div class="field" style="margin-top:20px"><label>Per-channel delay (minutes)</label>
           <div class="chandelays">${delays}</div>
           <span class="hint">Blank uses the hold window above. A channel posts this many minutes after publish (or after approval).</span></div>

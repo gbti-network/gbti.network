@@ -5,7 +5,7 @@
 //
 // SECURITY: this only COMPUTES the file edit. CODEOWNERS + the gate are the real boundary.
 
-import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement, CONTENT_ENGAGEMENT_SIGNALS, contentEngagement, syndicationConfigFromParsed, AUTO_TYPES, MATRIX_CHANNELS, AUTO_MODES } from './syndication-config-core.mjs';
+import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement, CONTENT_ENGAGEMENT_SIGNALS, contentEngagement, syndicationConfigFromParsed, AUTO_TYPES, MATRIX_CHANNELS, AUTO_MODES, channelCapability } from './syndication-config-core.mjs';
 
 export class TemplateEditError extends Error {}
 
@@ -223,6 +223,11 @@ export function setSyndicationSettings(doc, { enabled, requireApproval, holdMinu
       for (const [ch, mode] of Object.entries(row)) {
         if (!MATRIX_CHANNELS.includes(ch)) throw new TemplateEditError(`"${ch}" is not an auto-share channel`);
         if (!AUTO_MODES.includes(mode)) throw new TemplateEditError(`auto-share mode for ${type}/${ch} must be one of ${AUTO_MODES.join(', ')}`);
+        // A manual-capability channel (x, linkedin) cannot post automatically: the API refuses `on` outright
+        // (the UI never offers it) instead of silently coercing, so the stored file always says what happens.
+        if (mode === 'on' && channelCapability(ch) === 'manual') {
+          throw new TemplateEditError(`${ch} cannot post automatically; use on-manual (the Social Queue)`);
+        }
         if ((cur.auto_matrix?.[type]?.[ch] ?? 'off') !== mode) {
           if (!d.syndication.auto_matrix || typeof d.syndication.auto_matrix !== 'object') d.syndication.auto_matrix = {};
           if (!d.syndication.auto_matrix[type] || typeof d.syndication.auto_matrix[type] !== 'object') d.syndication.auto_matrix[type] = {};

@@ -140,8 +140,8 @@ test('SOW-125: autoModeFor coerces an unknown cell to the type default; unknown 
   assert.equal(autoModeFor(c, 'post', 'discord'), 'popular');
   assert.equal(autoModeFor(c, 'share', 'bluesky'), 'off'); // default share off
   assert.equal(autoModeFor(c, 'unknown', 'discord'), 'off');
-  assert.equal(autoModeFor(c, 'post', 'x'), 'on'); // SOW-125: x is a MANUAL matrix channel -> default on for post
-  assert.equal(autoModeFor(c, 'post', 'linkedin'), 'on'); // SOW-127: linkedin is a MANUAL matrix channel -> default on for post
+  assert.equal(autoModeFor(c, 'post', 'x'), 'on-manual'); // a MANUAL channel's default `on` coerces to on-manual
+  assert.equal(autoModeFor(c, 'post', 'linkedin'), 'on-manual'); // SOW-127: same coercion for LinkedIn
   assert.equal(autoModeFor(c, 'post', 'nope'), 'off'); // an unknown (building) channel is not a matrix channel -> off
   assert.ok(AUTO_MODES.includes('popular'));
 });
@@ -388,4 +388,37 @@ test('SOW-127: LinkedIn is manual-assist -> delivers a post as a Social Queue ta
   assert.ok(deliverChannelsForType(c, 'post').includes('linkedin'));
   // a share is off by default -> no linkedin task.
   assert.deepEqual(autoChannelsForType(c, 'post').includes('linkedin'), false); // autoChannels is auto-only; linkedin is manual
+});
+
+test('On-Manual: the vocabulary, coercion, delivery, and the queue set', async () => {
+  const { manualQueueChannelsForType, isManualMode, toSyndicationMirror } = await import('../membership/syndication-config-core.mjs');
+  assert.ok(AUTO_MODES.includes('on-manual'));
+  // An auto-capability channel accepts on-manual and routes to the queue set, not the adapter set.
+  const c = syndicationConfigFromParsed({ auto_matrix: {
+    post: { bluesky: 'on-manual', discord: 'on', mastodon: 'off', x: 'off', linkedin: 'off', 'discord-category': 'off', reddit: 'off', devto: 'off' },
+  } });
+  assert.equal(autoModeFor(c, 'post', 'bluesky'), 'on-manual');
+  assert.ok(isManualMode(c, 'post', 'bluesky'));
+  assert.deepEqual(manualQueueChannelsForType(c, 'post'), ['bluesky']);
+  assert.deepEqual(deliverChannelsForType(c, 'post').sort(), ['bluesky', 'discord']); // on + on-manual both deliver
+  // The legacy `on` on a manual channel coerces and still delivers (as a queue task).
+  const legacy = syndicationConfigFromParsed({ auto_matrix: { post: { x: 'on', linkedin: 'off', discord: 'off', 'discord-category': 'off', reddit: 'off', devto: 'off', mastodon: 'off', bluesky: 'off' } } });
+  assert.equal(autoModeFor(legacy, 'post', 'x'), 'on-manual');
+  assert.deepEqual(deliverChannelsForType(legacy, 'post'), ['x']);
+  assert.deepEqual(manualQueueChannelsForType(legacy, 'post'), ['x']);
+  // The mirror carries a configured on-manual cell verbatim (readers re-normalize).
+  const mirror = toSyndicationMirror({ syndication: { auto_matrix: { post: { bluesky: 'on-manual' } } } });
+  assert.equal(mirror.auto_matrix.post.bluesky, 'on-manual');
+});
+
+test('setSyndicationSettings: on-manual accepted anywhere; `on` rejected for a manual-capability channel', async () => {
+  const { setSyndicationSettings, TemplateEditError: TErr } = await import('../membership/syndication-template-edits.mjs');
+  const ctx = { login: 'root', githubId: '1' };
+  const r = setSyndicationSettings({}, { autoMatrix: { post: { bluesky: 'on-manual', x: 'on-manual' } } }, ctx);
+  assert.equal(r.changed, true);
+  assert.equal(r.next.syndication.auto_matrix.post.bluesky, 'on-manual');
+  // x's EFFECTIVE default is already on-manual (the coerced `on`), so the idempotent writer skips the cell.
+  assert.equal(r.next.syndication.auto_matrix.post.x, undefined);
+  assert.throws(() => setSyndicationSettings({}, { autoMatrix: { post: { x: 'on' } } }, ctx), TErr);
+  assert.throws(() => setSyndicationSettings({}, { autoMatrix: { post: { linkedin: 'on' } } }, ctx), TErr);
 });

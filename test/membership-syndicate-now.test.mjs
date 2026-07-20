@@ -82,23 +82,27 @@ test('POST validations: unknown destination, missing template/channel, missing s
   assert.equal((await handleSyndicateNow(req({ destination: 'discord', item: ITEM, template: '' }), { SIGNUP_KV: kv }, deps)).status, 400);
   assert.equal((await handleSyndicateNow(req({ destination: 'discord', item: ITEM, template: 'x' }), { ...ENV_DISCORD, SIGNUP_KV: kv }, deps)).status, 400); // no channelId
   assert.equal((await handleSyndicateNow(req({ destination: 'discord', item: ITEM, template: 'x', channelId: '111222333444555666' }), { SIGNUP_KV: kv }, deps)).status, 409); // no bot token
-  assert.equal((await handleSyndicateNow(req({ destination: 'x', item: ITEM, template: 'x' }), { SIGNUP_KV: kv }, deps)).status, 409); // no X secrets
+  // X is MANUAL capability: it always queues to the Social Queue (no secrets involved), never 409s.
+  const xr = await handleSyndicateNow(req({ destination: 'x', item: ITEM, template: 'x' }), { SIGNUP_KV: kv }, deps);
+  assert.equal(xr.status, 200);
+  assert.equal(xr.body.queued, true);
   assert.equal((await handleSyndicateNow(req({ destination: 'discord', item: { ...ITEM, source: 'page' }, template: 'x', channelId: '111222333444555666' }), { ...ENV_DISCORD, SIGNUP_KV: kv }, deps)).status, 400); // bad type
 });
 
 test('POST text adapter: receives the pre-rendered override; a failed post records failed + 502', async () => {
+  // An AUTO-capability text channel (mastodon): X/LinkedIn are manual capability and always queue instead.
   const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
   const seen = [];
-  const adapters = { x: { name: 'x', enabled: () => true, post: async (it) => { seen.push(it.textOverride); return { ok: true, id: 't1', url: 'https://x.com/t1' }; } } };
-  const env = { X_API_KEY: 'k', X_API_SECRET: 's', X_ACCESS_TOKEN: 'a', X_ACCESS_SECRET: 'a2', SIGNUP_KV: kv };
-  const ok = await handleSyndicateNow(req({ destination: 'x', item: ITEM, template: '{title} {url}' }), env, { kv, authorize: superadmin, adapters });
+  const adapters = { mastodon: { name: 'mastodon', enabled: () => true, post: async (it) => { seen.push(it.textOverride); return { ok: true, id: 't1', url: 'https://m.social/t1' }; } } };
+  const env = { MASTODON_BASE_URL: 'https://m.social', MASTODON_ACCESS_TOKEN: 'a', SIGNUP_KV: kv };
+  const ok = await handleSyndicateNow(req({ destination: 'mastodon', item: ITEM, template: '{title} {url}' }), env, { kv, authorize: superadmin, adapters });
   assert.equal(ok.status, 200);
   assert.match(seen[0], /^CI Skill https:/);
-  const failing = { x: { name: 'x', enabled: () => true, post: async () => ({ ok: false, error: 'rate limited' }) } };
-  const bad = await handleSyndicateNow(req({ destination: 'x', item: ITEM, template: '{title}' }), env, { kv, authorize: superadmin, adapters: failing });
+  const failing = { mastodon: { name: 'mastodon', enabled: () => true, post: async () => ({ ok: false, error: 'rate limited' }) } };
+  const bad = await handleSyndicateNow(req({ destination: 'mastodon', item: ITEM, template: '{title}' }), env, { kv, authorize: superadmin, adapters: failing });
   assert.equal(bad.status, 502);
   const failedRec = [...kv.store.keys()].filter((k) => k.startsWith('synd:item:')).map((k) => JSON.parse(kv.store.get(k))).find((r) => r.status === 'failed');
-  assert.equal(failedRec.channels.x.status, 'failed');
+  assert.equal(failedRec.channels.mastodon.status, 'failed');
 });
 
 // SOW-088 follow-ups: the author's REAL Discord mention resolves via github login -> github_id -> the

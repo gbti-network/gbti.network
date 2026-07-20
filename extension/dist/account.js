@@ -6224,7 +6224,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var AUTO_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
   var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
   var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
-  var AUTO_MODES = Object.freeze(["off", "on", "popular"]);
+  var AUTO_MODES = Object.freeze(["off", "on", "on-manual", "popular"]);
   function defaultAutoMode(type) {
     return type === "share" ? "off" : "on";
   }
@@ -6537,8 +6537,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   ].map((c) => ({ ...c, active: isTileActive(c.id) }));
   var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
-  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", mastodon: "Mastodon", bluesky: "Bluesky", x: "X" };
-  var AUTO_MODE_LABEL = { off: "Off", on: "On", popular: "Popular" };
+  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", mastodon: "Mastodon", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn" };
+  var AUTO_MODE_LABEL = { off: "Off", on: "On-Automatic", "on-manual": "On-Manual", popular: "Popular" };
   var TMPL_TYPES = [
     { key: "share", nm: "Share", df: "reshare line" },
     { key: "post", nm: "Post", df: "article" },
@@ -6669,10 +6669,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const ready = p.requireApproval ? "hold" : Number(p.holdMinutes) > 0 ? "auto" : "now";
       const cell = (type, ch) => {
         const val = p.autoMatrix?.[type]?.[ch] ?? "off";
-        const opts = AUTO_MODES.map((m) => `<option value="${esc(m)}"${m === val ? " selected" : ""}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join("");
+        const modes = AUTO_MODES.filter((m) => !(m === "on" && channelCapability(ch) === "manual"));
+        const opts = modes.map((m) => `<option value="${esc(m)}"${m === val ? " selected" : ""}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join("");
         return `<td><select data-matrix-cell data-mtype="${esc(type)}" data-mchan="${esc(ch)}">${opts}</select></td>`;
       };
-      const chTitle = (ch) => channelCapability(ch) === "manual" ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + " posts as a manual Social Queue task, not an automatic post.")}"` : "";
+      const chTitle = (ch) => channelCapability(ch) === "manual" ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + " cannot post automatically; On-Manual queues a Social Queue task a superadmin posts by hand.")}"` : "";
       const matrixHead = `<tr><th class="rowh">Content type</th>${MATRIX_CHANNELS.map((ch) => `<th${chTitle(ch)}>${esc(MATRIX_CHAN_LABEL[ch] || ch)}</th>`).join("")}</tr>`;
       const matrixRows = AUTO_TYPES.map((type) => `<tr><td class="rowh">${esc(MATRIX_TYPE_LABEL[type] || type)}</td>${MATRIX_CHANNELS.map((ch) => cell(type, ch)).join("")}</tr>`).join("");
       const delays = AUTO_CHANNELS.map((ch) => {
@@ -6706,8 +6707,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         </div>
         <div class="field" style="margin-top:20px"><label>Auto-share by content type</label>
           <div class="mtx-scroll"><table class="matrix"><thead>${matrixHead}</thead><tbody>${matrixRows}</tbody></table></div>
-          <span class="hint">X posts as a manual Social Queue task, not an automatic post.</span>
-          <span class="hint">Popular posts only when enough members engage (coming soon).</span></div>
+          <span class="hint">On-Manual sends a channel's posts to the Social Queue for superadmin review before anything goes out. X and LinkedIn cannot post automatically, so On-Manual is their only deliverable mode.</span>
+          <span class="hint">Popular posts only after enough members engage with the item.</span></div>
         <div class="field" style="margin-top:20px"><label>Per-channel delay (minutes)</label>
           <div class="chandelays">${delays}</div>
           <span class="hint">Blank uses the hold window above. A channel posts this many minutes after publish (or after approval).</span></div>
@@ -15936,7 +15937,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const nPending = (this._data.pending || []).length, nDone = (this._data.done || []).length, nAuto = (this._auto || []).length;
       const tabBtn = (k, label, n) => `<button class="tab ${this._tab === k ? "on" : ""}" data-tab="${k}" type="button">${label}<span class="n">${n}</span></button>`;
-      const hint = this._tab === "todo" ? "These would have auto-posted to a pay-to-post channel. Click Assist to open the free web composer with the text ready, post it by hand, then mark it Done." : this._tab === "manual" ? "Posts you have already sent by hand." : "Posts the system sent automatically (Discord, dev.to, and other free channels).";
+      const hint = this._tab === "todo" ? "Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on X and LinkedIn, Assist opens the free web composer (or Copy the text), post it by hand, then mark it Done." : this._tab === "manual" ? "Posts completed from this queue (Post now or by hand)." : "Posts the system sent automatically (the On-Automatic channels).";
       const filtered = this._filtered();
       const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE2));
       if (this._page >= pages) this._page = pages - 1;
@@ -15988,6 +15989,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.$$("[data-copy]").forEach((b) => b.addEventListener("click", () => this._copy(b.dataset.copy)));
       this.$$("[data-done]").forEach((b) => b.addEventListener("click", () => this._action("done", b.dataset.done)));
       this.$$("[data-del]").forEach((b) => b.addEventListener("click", () => this._action("delete", b.dataset.del)));
+      this.$$("[data-post]").forEach((b) => b.addEventListener("click", () => this._action("post", b.dataset.post)));
     }
     _shell(inner) {
       return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div><div class="body">${inner}</div>`;
@@ -16002,12 +16004,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return `<span class="chip ${status === "sent" ? "sent" : status === "failed" ? "failed" : ""}${big ? " big" : ""}">${socialIcon(CH_ICON[channel] || channel, big ? 14 : 12)}${esc(CH_LABEL[channel] || channel)}${status ? ` ${esc(status)}` : ""}</span>`;
     }
     _todoRow(t) {
+      const label = CH_LABEL[t.channel] || t.channel;
       const url = composeUrl(t.channel, t.text);
-      const assist = url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(CH_LABEL[t.channel] || t.channel)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
+      const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
       return `<div class="task">
       <div class="top"><span class="src">${esc(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc(fmtDate(t.createdAt)) : ""}</span></div>
       <div class="txt">${esc(t.text || "")}</div>
-      <div class="acts">${assist}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy</button><button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
+      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy</button><button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
     </div>`;
     }
     _doneRow(t) {
@@ -16045,11 +16048,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _action(action, id) {
       if (!id) return;
       if (action === "delete" && typeof confirm === "function" && !confirm("Delete this item from the Social Queue?")) return;
+      if (action === "post") {
+        const t = this._byId(id);
+        const label = t ? CH_LABEL[t.channel] || t.channel : "the channel";
+        if (typeof confirm === "function" && !confirm(`Post this to ${label} now? The reviewed text above is exactly what goes out.`)) return;
+      }
       this._busy = true;
       this.render();
       try {
         await this.client.socialQueueAction({ action, id });
-        this._msg = action === "done" ? "Marked done." : "Deleted.";
+        this._msg = action === "done" ? "Marked done." : action === "post" ? "Posted." : "Deleted.";
         await this.load();
       } catch (e) {
         this._msg = e?.message || "Action failed.";

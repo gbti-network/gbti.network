@@ -8,6 +8,7 @@
 // gbti-social-close for the overlay to catch.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { socialIcon } from '../social-icons.mjs';
+import { channelCapability } from '../../../membership/syndication-config-core.mjs'; // Post now is auto-capability only
 
 // The free web composer for a manual-assist channel (X opens the intent composer, pre-filled).
 // SOW-121/127: the free web composer for a manual-assist channel, pre-filled with the rendered text. X uses
@@ -132,8 +133,8 @@ class GbtiSocialQueue extends GbtiElement {
     const nPending = (this._data.pending || []).length, nDone = (this._data.done || []).length, nAuto = (this._auto || []).length;
     const tabBtn = (k, label, n) => `<button class="tab ${this._tab === k ? 'on' : ''}" data-tab="${k}" type="button">${label}<span class="n">${n}</span></button>`;
     const hint = this._tab === 'todo'
-      ? 'These would have auto-posted to a pay-to-post channel. Click Assist to open the free web composer with the text ready, post it by hand, then mark it Done.'
-      : this._tab === 'manual' ? 'Posts you have already sent by hand.' : 'Posts the system sent automatically (Discord, dev.to, and other free channels).';
+      ? 'Posts held for your review. On a channel the system can post to, Post now sends the text below through the adapter; on X and LinkedIn, Assist opens the free web composer (or Copy the text), post it by hand, then mark it Done.'
+      : this._tab === 'manual' ? 'Posts completed from this queue (Post now or by hand).' : 'Posts the system sent automatically (the On-Automatic channels).';
 
     const filtered = this._filtered();
     const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -173,6 +174,7 @@ class GbtiSocialQueue extends GbtiElement {
     this.$$('[data-copy]').forEach((b) => b.addEventListener('click', () => this._copy(b.dataset.copy)));
     this.$$('[data-done]').forEach((b) => b.addEventListener('click', () => this._action('done', b.dataset.done)));
     this.$$('[data-del]').forEach((b) => b.addEventListener('click', () => this._action('delete', b.dataset.del)));
+    this.$$('[data-post]').forEach((b) => b.addEventListener('click', () => this._action('post', b.dataset.post)));
   }
 
   _shell(inner) { return `<div class="hd"><h2>Social Queue</h2><button class="x" data-close type="button" aria-label="Close">✕</button></div><div class="body">${inner}</div>`; }
@@ -181,14 +183,20 @@ class GbtiSocialQueue extends GbtiElement {
   _chip(channel, status, big) { return `<span class="chip ${status === 'sent' ? 'sent' : status === 'failed' ? 'failed' : ''}${big ? ' big' : ''}">${socialIcon(CH_ICON[channel] || channel, big ? 14 : 12)}${esc(CH_LABEL[channel] || channel)}${status ? ` ${esc(status)}` : ''}</span>`; }
 
   _todoRow(t) {
+    // The primary action depends on the channel's capability: an AUTO channel (an On-Manual matrix cell put
+    // it here for review) posts through its adapter with one click; a MANUAL channel (x, linkedin) opens the
+    // free web composer (Assist) or falls back to Copy, and a human marks it done.
+    const label = CH_LABEL[t.channel] || t.channel;
     const url = composeUrl(t.channel, t.text);
-    const assist = url
-      ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(CH_LABEL[t.channel] || t.channel)}</button>`
-      : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
+    const primary = channelCapability(t.channel) === 'auto'
+      ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>`
+      : url
+        ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>`
+        : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
     return `<div class="task">
       <div class="top"><span class="src">${esc(SRC_LABEL[t.source] || t.source || '')}</span>${this._chip(t.channel, '', true)}<span class="ti">${esc(t.title || t.itemId || '(untitled)')}</span><span class="when">${t.createdAt ? esc(fmtDate(t.createdAt)) : ''}</span></div>
       <div class="txt">${esc(t.text || '')}</div>
-      <div class="acts">${assist}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy</button><button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
+      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy</button><button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
     </div>`;
   }
   _doneRow(t) {
@@ -215,8 +223,13 @@ class GbtiSocialQueue extends GbtiElement {
   async _action(action, id) {
     if (!id) return;
     if (action === 'delete' && typeof confirm === 'function' && !confirm('Delete this item from the Social Queue?')) return;
+    if (action === 'post') {
+      const t = this._byId(id);
+      const label = t ? (CH_LABEL[t.channel] || t.channel) : 'the channel';
+      if (typeof confirm === 'function' && !confirm(`Post this to ${label} now? The reviewed text above is exactly what goes out.`)) return;
+    }
     this._busy = true; this.render();
-    try { await this.client.socialQueueAction({ action, id }); this._msg = action === 'done' ? 'Marked done.' : 'Deleted.'; await this.load(); }
+    try { await this.client.socialQueueAction({ action, id }); this._msg = action === 'done' ? 'Marked done.' : action === 'post' ? 'Posted.' : 'Deleted.'; await this.load(); }
     catch (e) { this._msg = e?.message || 'Action failed.'; }
     finally { this._busy = false; this.render(); }
   }

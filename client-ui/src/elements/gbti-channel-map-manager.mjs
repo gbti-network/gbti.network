@@ -213,8 +213,8 @@ const TILE_CHANNELS = [
 // SOW-125: labels for the auto-share matrix (content types down the rows, deliverable channels across the top)
 // and the per-channel delay inputs.
 const MATRIX_TYPE_LABEL = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
-const MATRIX_CHAN_LABEL = { discord: 'Discord', 'discord-category': 'Discord cat', reddit: 'Reddit', devto: 'dev.to', mastodon: 'Mastodon', bluesky: 'Bluesky', x: 'X' };
-const AUTO_MODE_LABEL = { off: 'Off', on: 'On', popular: 'Popular' };
+const MATRIX_CHAN_LABEL = { discord: 'Discord', 'discord-category': 'Discord cat', reddit: 'Reddit', devto: 'dev.to', mastodon: 'Mastodon', bluesky: 'Bluesky', x: 'X', linkedin: 'LinkedIn' };
+const AUTO_MODE_LABEL = { off: 'Off', on: 'On-Automatic', 'on-manual': 'On-Manual', popular: 'Popular' };
 const TMPL_TYPES = [
   { key: 'share', nm: 'Share', df: 'reshare line' },
   { key: 'post', nm: 'Post', df: 'article' },
@@ -360,17 +360,18 @@ class GbtiChannelMapManager extends GbtiElement {
     const ready = p.requireApproval ? 'hold' : (Number(p.holdMinutes) > 0 ? 'auto' : 'now');
     // SOW-131: the DESTINATIONS checkboxes were removed. Channel enablement is now matrix-derived (a channel is
     // on iff the auto-share matrix routes any type to it), so the matrix below is the single source of truth.
-    // SOW-125 (finding F12): every deliverable channel in MATRIX_CHANNELS (auto + the X manual-assist task) is
-    // an EDITABLE cell; the edit layer accepts a per-type X mode. An `on`/`popular` X cell enqueues a manual
-    // Social Queue task rather than an automatic post; `popular` is stored inert (engine TBD). The per-channel
-    // delay row stays auto-only (a manual task has no schedule).
+    // Cell modes: Off | On-Automatic (adapter posts after the hold) | On-Manual (a superadmin Social Queue task
+    // for review; the queue's Post now sends it) | Popular (engagement-gated, engine TBD). A MANUAL-capability
+    // channel (X, LinkedIn) cannot post automatically, so its select never offers On-Automatic. The per-channel
+    // delay row stays auto-only (a queued manual task has no schedule).
     const cell = (type, ch) => {
       const val = p.autoMatrix?.[type]?.[ch] ?? 'off';
-      const opts = AUTO_MODES.map((m) => `<option value="${esc(m)}"${m === val ? ' selected' : ''}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join('');
+      const modes = AUTO_MODES.filter((m) => !(m === 'on' && channelCapability(ch) === 'manual'));
+      const opts = modes.map((m) => `<option value="${esc(m)}"${m === val ? ' selected' : ''}>${esc(AUTO_MODE_LABEL[m] || m)}</option>`).join('');
       return `<td><select data-matrix-cell data-mtype="${esc(type)}" data-mchan="${esc(ch)}">${opts}</select></td>`;
     };
-    // A manual-assist channel (X today) gets a header title clarifying it is a manual Social Queue task.
-    const chTitle = (ch) => (channelCapability(ch) === 'manual' ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + ' posts as a manual Social Queue task, not an automatic post.')}"` : '');
+    // A manual-capability channel (X, LinkedIn) gets a header title clarifying it cannot post automatically.
+    const chTitle = (ch) => (channelCapability(ch) === 'manual' ? ` title="${esc((MATRIX_CHAN_LABEL[ch] || ch) + ' cannot post automatically; On-Manual queues a Social Queue task a superadmin posts by hand.')}"` : '');
     const matrixHead = `<tr><th class="rowh">Content type</th>${MATRIX_CHANNELS.map((ch) => `<th${chTitle(ch)}>${esc(MATRIX_CHAN_LABEL[ch] || ch)}</th>`).join('')}</tr>`;
     const matrixRows = AUTO_TYPES.map((type) => `<tr><td class="rowh">${esc(MATRIX_TYPE_LABEL[type] || type)}</td>${MATRIX_CHANNELS.map((ch) => cell(type, ch)).join('')}</tr>`).join('');
     // SOW-125: per-channel delay overrides. Auto channels only (X has no schedule, it is a manual task). Blank
@@ -406,8 +407,8 @@ class GbtiChannelMapManager extends GbtiElement {
         </div>
         <div class="field" style="margin-top:20px"><label>Auto-share by content type</label>
           <div class="mtx-scroll"><table class="matrix"><thead>${matrixHead}</thead><tbody>${matrixRows}</tbody></table></div>
-          <span class="hint">X posts as a manual Social Queue task, not an automatic post.</span>
-          <span class="hint">Popular posts only when enough members engage (coming soon).</span></div>
+          <span class="hint">On-Manual sends a channel's posts to the Social Queue for superadmin review before anything goes out. X and LinkedIn cannot post automatically, so On-Manual is their only deliverable mode.</span>
+          <span class="hint">Popular posts only after enough members engage with the item.</span></div>
         <div class="field" style="margin-top:20px"><label>Per-channel delay (minutes)</label>
           <div class="chandelays">${delays}</div>
           <span class="hint">Blank uses the hold window above. A channel posts this many minutes after publish (or after approval).</span></div>
@@ -742,9 +743,10 @@ class GbtiChannelMapManager extends GbtiElement {
     let holdMinutes = Number(this.$('[data-pipe-hold]')?.value ?? 60);
     if (!Number.isFinite(holdMinutes) || holdMinutes < 0) holdMinutes = 60;
     if (ready === 'now') holdMinutes = 0;
-    // SOW-125: the auto-share matrix (auto channels only; X carries no data-matrix-cell and the edit layer
-    // rejects a manual channel), sent as the full { type: { channel: mode } } (the edit layer writes only the
-    // changed cells). Per-channel delays: an empty input sends '' to clear the override.
+    // SOW-125: the auto-share matrix, sent as the full { type: { channel: mode } } over EVERY matrix channel
+    // (X/LinkedIn included; their selects offer off | on-manual | popular, never On-Automatic, and the edit
+    // layer rejects `on` for them). The edit layer writes only cells that differ from the effective value.
+    // Per-channel delays: an empty input sends '' to clear the override.
     const autoMatrix = {};
     this.$$('[data-matrix-cell]').forEach((sel) => {
       const type = sel.dataset.mtype; const ch = sel.dataset.mchan;

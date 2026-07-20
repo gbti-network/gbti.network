@@ -239,10 +239,12 @@ export function recordChannel(item, channel, result) {
   return { ...item, perChannel: { ...item.perChannel, [String(channel)]: result } };
 }
 
-/** Has this channel already reached a terminal, non-retryable result (sent or skipped)? */
+/** Has this channel already reached a terminal, non-retryable result? `sent` and `skipped` always were;
+ *  `queued-manual` (handed to the Social Queue) is terminal too, so an auto-capability channel routed
+ *  On-Manual is never revisited by the adapter loop (which would overwrite the marker as skipped). */
 export function channelDone(item, channel) {
   const r = item?.perChannel?.[channel];
-  return Boolean(r) && (r.status === 'sent' || r.status === 'skipped');
+  return Boolean(r) && (r.status === 'sent' || r.status === 'skipped' || r.status === 'queued-manual');
 }
 
 /** The subset of the candidate channels that still need an attempt (not already sent/skipped). */

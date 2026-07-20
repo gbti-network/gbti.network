@@ -21009,7 +21009,7 @@ function channelCapability(name) {
 var AUTO_TYPES = Object.freeze(["share", "post", "product", "prompt"]);
 var AUTO_CHANNELS = Object.freeze(CHANNELS.filter((c) => CHANNEL_CAPABILITY[c] === "auto"));
 var MATRIX_CHANNELS = Object.freeze(CHANNELS.filter((c) => channelCapability(c) !== "building"));
-var AUTO_MODES = Object.freeze(["off", "on", "popular"]);
+var AUTO_MODES = Object.freeze(["off", "on", "on-manual", "popular"]);
 function defaultAutoMode(type) {
   return type === "share" ? "off" : "on";
 }
@@ -21237,7 +21237,11 @@ function normalizeAutoMatrix(raw) {
   for (const t of AUTO_TYPES) {
     const row = src[t] && typeof src[t] === "object" && !Array.isArray(src[t]) ? src[t] : {};
     out[t] = {};
-    for (const ch of MATRIX_CHANNELS) out[t][ch] = asAutoMode(row[ch], defaultAutoMode(t));
+    for (const ch of MATRIX_CHANNELS) {
+      let m = asAutoMode(row[ch], defaultAutoMode(t));
+      if (m === "on" && channelCapability(ch) === "manual") m = "on-manual";
+      out[t][ch] = m;
+    }
     Object.freeze(out[t]);
   }
   return Object.freeze(out);
@@ -21483,6 +21487,9 @@ function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, ch
       for (const [ch, mode] of Object.entries(row)) {
         if (!MATRIX_CHANNELS.includes(ch)) throw new TemplateEditError(`"${ch}" is not an auto-share channel`);
         if (!AUTO_MODES.includes(mode)) throw new TemplateEditError(`auto-share mode for ${type}/${ch} must be one of ${AUTO_MODES.join(", ")}`);
+        if (mode === "on" && channelCapability(ch) === "manual") {
+          throw new TemplateEditError(`${ch} cannot post automatically; use on-manual (the Social Queue)`);
+        }
         if ((cur.auto_matrix?.[type]?.[ch] ?? "off") !== mode) {
           if (!d.syndication.auto_matrix || typeof d.syndication.auto_matrix !== "object") d.syndication.auto_matrix = {};
           if (!d.syndication.auto_matrix[type] || typeof d.syndication.auto_matrix[type] !== "object") d.syndication.auto_matrix[type] = {};

@@ -6,7 +6,7 @@
 
 import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue, channelDue } from '../../membership/syndication-queue.mjs';
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
-import { isSyndicationEnabled, requiresApproval, manualAssistChannels, isAutoOn, autoModeFor, channelHoldMs, explicitChannelHoldMs } from '../../membership/syndication-config-core.mjs';
+import { isSyndicationEnabled, requiresApproval, isAutoOn, autoModeFor, channelHoldMs, explicitChannelHoldMs, MATRIX_CHANNELS, channelCapability } from '../../membership/syndication-config-core.mjs';
 import { renderChannelText } from '../../membership/syndication-render.mjs'; // SOW-121
 import { buildSocialTask } from '../../membership/social-queue.mjs'; // SOW-121
 import { putTask } from './social-queue-store.mjs'; // SOW-121
@@ -32,7 +32,17 @@ export async function drainSyndication(env, {
   // SOW-087: the category -> channel map feeds the discord-category adapter (null = category posts no-op).
   const channelMap = await readContentChannels(kv);
   const { ready, skipped } = resolveAdapterRun({ cfg, env, adapters, fetchImpl, channelMap });
-  const manualAssist = manualAssistChannels(cfg); // SOW-121: channels that enqueue a manual task instead of posting
+  // The channels this ITEM hands to the Social Queue: a normal trigger delivers every `on-manual` cell
+  // (any capability; the owner's per-channel moderation gate); a `popular` promotion delivers its `popular`
+  // cells on manual-capability channels only (an auto-capability popular cell posts via its adapter).
+  const manualTaskOn = (item, ch) => (item?.trigger === 'popular'
+    ? autoModeFor(cfg, item.source, ch) === 'popular' && channelCapability(ch) === 'manual'
+    : autoModeFor(cfg, item.source, ch) === 'on-manual');
+  // The channels the manual loop VISITS for this item: every manual-capability channel (so an off/popular
+  // cell still records its terminal skip, exactly as before) plus any auto-capability channel routed
+  // `on-manual` for this item's type.
+  const manualCandidates = (item) => MATRIX_CHANNELS.filter((ch) => channelCapability(ch) === 'manual'
+    || autoModeFor(cfg, item.source, ch) === 'on-manual');
 
   let sent = 0;
   let failed = 0;
@@ -68,7 +78,7 @@ export async function drainSyndication(env, {
     const hasPostable = ready.some((a) => !channelDone(item, a.name) && onFor(item, a.name) && chDue(item, a.name, nowMs0));
     const hasMatrixOff = ready.some((a) => !channelDone(item, a.name) && !onFor(item, a.name));
     const hasUnconfigured = skipped.some((name) => !channelDone(item, name));
-    const hasManual = manualAssist.some((ch) => !item.perChannel?.[ch]); // an on manual task to create, or an off one to record
+    const hasManual = manualCandidates(item).some((ch) => !item.perChannel?.[ch]); // a task to create, or a terminal skip to record
     if (!fullySettled && !hasPostable && !hasMatrixOff && !hasUnconfigured && !hasManual) continue; // all remaining channels are holding
 
     item = markClaimed(item, { now });
@@ -77,21 +87,28 @@ export async function drainSyndication(env, {
 
     let anyFail = false; // SOW-125: a channel (auto OR a manual-assist task write) that failed retryably this tick
 
-    // Record config-enabled-but-unconfigured channels as skipped (not failed).
+    // Record config-enabled-but-unconfigured channels as skipped (not failed). An ON-MANUAL channel is
+    // exempt: its Social Queue review task needs NO adapter secrets (Copy/Assist/done work without them,
+    // and the queue's Post now answers not-configured on its own), so it falls through to the task loop.
     for (const name of skipped) {
+      if (manualTaskOn(item, name)) continue;
       if (!channelDone(item, name)) item = recordChannel(item, name, { status: 'skipped', reason: 'not configured', at: Number(now()) });
     }
 
-    // SOW-121 + SOW-125: manual-assist channels (e.g. X after its free API tier was deprecated) are NEVER
-    // auto-posted; an `on` one enqueues a Social Queue task a superadmin posts by hand. The SOW-125 matrix gates
-    // this per type: a manual channel set to off/popular for this item's type is recorded a terminal skip and
-    // no task is created (so a type the owner turned off never reaches the manual queue either). A 'queued-manual'
-    // marker records an on channel with ZERO paid API calls. Fail-soft: a task write miss retries next tick.
-    for (const ch of manualAssist) {
+    // SOW-121 + SOW-125: the Social Queue loop. A manual-capability channel (x, linkedin) NEVER auto-posts;
+    // its deliverable cell (`on-manual`, incl. a coerced legacy `on`) enqueues a Social Queue task a
+    // superadmin posts by hand. An AUTO-capability channel routed `on-manual` enqueues the same task for
+    // review (the queue's Post now sends it through the adapter). A candidate whose cell does not deliver
+    // for this item's type/trigger records a terminal skip so the tracker stays truthful. A 'queued-manual'
+    // marker means ZERO API calls happened. Fail-soft: a task write miss retries next tick.
+    for (const ch of manualCandidates(item)) {
       if (item.perChannel?.[ch]) continue; // already tasked/marked on a prior tick
-      if (!onFor(item, ch)) { item = recordChannel(item, ch, { status: 'skipped', reason: 'auto-off', at: Number(now()) }); continue; }
+      if (!manualTaskOn(item, ch)) { item = recordChannel(item, ch, { status: 'skipped', reason: 'auto-off', at: Number(now()) }); continue; }
       try {
-        const text = renderChannelText(cfg, item, ch);
+        // A manual-capability channel keeps its channel-only template chain (X/LinkedIn are whole-message
+        // channels with explicit templates); an AUTO channel routed on-manual also falls back to the SHARED
+        // templates, so the reviewed text tracks what the automatic path would have posted.
+        const text = renderChannelText(cfg, item, ch, { channelOnly: channelCapability(ch) === 'manual' });
         await putTask(kv, buildSocialTask({ item, channel: ch, text, trigger: 'auto', now: Number(now()) }));
         item = recordChannel(item, ch, { status: 'queued-manual', at: Number(now()) });
       } catch {
@@ -114,8 +131,11 @@ export async function drainSyndication(env, {
     for (const adapter of ready) {
       if (channelDone(item, adapter.name)) continue; // already sent/skipped on a prior tick; never re-post
       // SOW-125 matrix gate: a channel set to off/popular for this item's type is a terminal skip (never posts).
+      // An ON-MANUAL channel is NOT stamped here: it belongs to the Social Queue loop above, and its only way
+      // to be un-recorded at this point is a FAILED task write, which must retry next tick (a terminal
+      // auto-off stamp would kill that retry and misreport a cell the owner set on-manual).
       if (!onFor(item, adapter.name)) {
-        item = recordChannel(item, adapter.name, { status: 'skipped', reason: 'auto-off', at: Number(now()) });
+        if (!manualTaskOn(item, adapter.name)) item = recordChannel(item, adapter.name, { status: 'skipped', reason: 'auto-off', at: Number(now()) });
         continue;
       }
       // SOW-125 per-channel delay: not yet past this channel's hold -> leave it for a later tick (never recorded).

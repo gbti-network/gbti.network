@@ -10,6 +10,19 @@
  * superadmin (manual) created it. Only PUBLIC metadata + the already-rendered text ride along (a members-only
  * item is rendered as its stub upstream), so there is no body-leak risk.
  */
+// The queue-item fields a task snapshots so the queue's "Post now" can drive the channel adapter with the
+// same inputs the drain would have used (category/tags/handles/image feed the per-channel renderers). The
+// queue item is public-safe by construction (no bodies; the author note is public-only and capped).
+const ITEM_SNAPSHOT_KEYS = Object.freeze(['id', 'source', 'targetType', 'targetSlug', 'author', 'authorName',
+  'authorDiscord', 'authorX', 'authorBluesky', 'authorMastodon', 'tags', 'authorNote', 'title', 'blurb',
+  'url', 'image', 'category', 'categoryPath', 'membersOnly', 'visibility', 'trigger', 'shortDescription', 'mention']);
+
+function itemSnapshot(item) {
+  const out = {};
+  for (const k of ITEM_SNAPSHOT_KEYS) if (item?.[k] !== undefined) out[k] = item[k];
+  return out;
+}
+
 export function buildSocialTask({ item = {}, channel, text, trigger = 'auto', now } = {}) {
   const at = Number(now) || 0;
   const itemId = item.id ? String(item.id) : null;
@@ -22,6 +35,7 @@ export function buildSocialTask({ item = {}, channel, text, trigger = 'auto', no
     title: item.title || null,
     url: item.url || null,
     text: String(text || ''),
+    item: itemSnapshot(item),
     trigger: trigger === 'manual' ? 'manual' : 'auto',
     createdAt: at,
     status: 'pending',

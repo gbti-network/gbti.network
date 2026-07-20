@@ -36,7 +36,7 @@ test('store: put/get/list/delete round-trips a task', async () => {
 });
 
 test('drain: a manual-assist channel enqueues a task and NEVER calls an adapter', async () => {
-  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: { discord: false }, manual_assist_channels: ['x'] } });
+  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: { discord: false }, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'alice/hello', title: 'Hello World', url: 'https://gbti.network/articles/hello/', visibility: 'public' }, { kv, now: at(0) });
   // An adapter set that would THROW if X were ever posted (it must not be).
@@ -55,7 +55,7 @@ test('drain: a manual-assist channel enqueues a task and NEVER calls an adapter'
 });
 
 test('drain: does not re-task a channel already queued-manual on a prior tick', async () => {
-  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: {}, manual_assist_channels: ['x'] } });
+  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: {}, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/b', title: 'T', url: 'https://e.com/x', visibility: 'public' }, { kv, now: at(0) });
   await drainSyndication({}, { kv, now: at(AFTER_HOLD), adapters: {} });
@@ -108,4 +108,48 @@ test('endpoint POST: done stamps + delete removes; superadmin only', async () =>
   assert.equal(await getTask(kv, 'a::x'), null);
   assert.equal((await handleSocialQueueAction(req({ action: 'done', id: 'z' }), { SIGNUP_KV: kv }, { kv, authorize: async () => ({ ok: true, role: 'moderator' }) })).status, 403);
   assert.equal((await handleSocialQueueAction(req({ action: 'bogus', id: 'a::x' }), { SIGNUP_KV: kv }, { kv, authorize: superAuth })).status, 400);
+});
+
+test('endpoint POST action=post: the adapter posts the reviewed text and the task completes', async () => {
+  const kv = fakeKV();
+  await putTask(kv, { id: 'a::bluesky', itemId: 'a', channel: 'bluesky', source: 'post', title: 'T', url: 'https://e.com/t',
+    text: 'Reviewed text', item: { source: 'post', targetSlug: 'a/x', title: 'T', url: 'https://e.com/t' }, status: 'pending', createdAt: 1 });
+  const calls = [];
+  const adapters = { bluesky: { name: 'bluesky', enabled: () => true, post: async (i) => { calls.push(i); return { ok: true, id: 'p1', url: 'https://bsky.app/p1' }; } } };
+  const res = await handleSocialQueueAction(req({ action: 'post', id: 'a::bluesky' }),
+    { SIGNUP_KV: kv, BLUESKY_HANDLE: 'h', BLUESKY_APP_PASSWORD: 'p' }, { kv, now: at(9), authorize: superAuth, adapters });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.posted, true);
+  assert.equal(res.body.postedUrl, 'https://bsky.app/p1');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].textOverride, 'Reviewed text'); // the reviewed text is exactly what posts
+  assert.equal(calls[0].targetSlug, 'a/x'); // the task's item snapshot feeds the adapter
+  const done = await getTask(kv, 'a::bluesky');
+  assert.equal(done.status, 'done');
+  assert.equal(done.postedVia, 'adapter');
+  assert.equal(done.postedUrl, 'https://bsky.app/p1');
+});
+
+test('endpoint POST action=post: manual-capability channels, missing secrets, and failures are refused', async () => {
+  const kv = fakeKV();
+  await putTask(kv, { id: 'a::x', channel: 'x', text: 't', status: 'pending', createdAt: 1 });
+  await putTask(kv, { id: 'a::bluesky', channel: 'bluesky', text: 't', status: 'pending', createdAt: 1 });
+  await putTask(kv, { id: 'b::bluesky', channel: 'bluesky', text: 't', status: 'done', doneAt: 2 });
+  // x cannot post automatically, ever
+  const rx = await handleSocialQueueAction(req({ action: 'post', id: 'a::x' }), { SIGNUP_KV: kv }, { kv, authorize: superAuth });
+  assert.equal(rx.status, 400);
+  // a missing secret is a clear not-configured answer, the task stays pending
+  const rs = await handleSocialQueueAction(req({ action: 'post', id: 'a::bluesky' }), { SIGNUP_KV: kv }, { kv, authorize: superAuth });
+  assert.equal(rs.status, 409);
+  assert.equal((await getTask(kv, 'a::bluesky')).status, 'pending');
+  // an adapter failure leaves the task pending and reports the error
+  const failing = { bluesky: { name: 'bluesky', enabled: () => true, post: async () => ({ ok: false, error: 'boom' }) } };
+  const rf = await handleSocialQueueAction(req({ action: 'post', id: 'a::bluesky' }),
+    { SIGNUP_KV: kv, BLUESKY_HANDLE: 'h', BLUESKY_APP_PASSWORD: 'p' }, { kv, authorize: superAuth, adapters: failing });
+  assert.equal(rf.status, 502);
+  assert.equal((await getTask(kv, 'a::bluesky')).status, 'pending');
+  // a done task cannot re-post
+  const rd = await handleSocialQueueAction(req({ action: 'post', id: 'b::bluesky' }),
+    { SIGNUP_KV: kv, BLUESKY_HANDLE: 'h', BLUESKY_APP_PASSWORD: 'p' }, { kv, authorize: superAuth });
+  assert.equal(rd.status, 400);
 });

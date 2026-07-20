@@ -238,7 +238,7 @@ test('SOW-125: per-channel delay posts a short-hold channel first and holds a lo
 
 test('SOW-125: a type set off for a manual-assist channel creates no Social Queue task', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'off' } } } }) });
+    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'off', linkedin: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
   await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk([]) });
   const item = await getItem(kv, r.id);
@@ -250,7 +250,7 @@ test('SOW-125: a type set off for a manual-assist channel creates no Social Queu
 
 test('SOW-125: a type set on for a manual-assist channel DOES enqueue a Social Queue task', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on' } } } }) });
+    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on', linkedin: 'off' } } } }) });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv, now: at(0) });
   await drainSyndication(env(), { kv, now: at(AFTER_HOLD), adapters: discordOk([]) });
   const item = await getItem(kv, r.id);
@@ -299,7 +299,7 @@ test('SOW-125: an approved item staggers an EXPLICIT per-channel override from t
 // 'sent' with the task lost; it retries, and a persistent failure fails out via maxAttempts.
 test('SOW-125: a manual-assist task write failure does not falsely mark the item sent (retries, then fails out)', async () => {
   const base = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
-    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on' } } } }) });
+    channels: { discord: true }, manual_assist_channels: ['x'], auto_matrix: { post: { discord: 'on', x: 'on', linkedin: 'off' } } } }) });
   const throwing = { store: base.store, get: base.get.bind(base), delete: base.delete.bind(base), list: base.list.bind(base),
     put: async (k, v) => { if (String(k).startsWith('social:task:')) throw new Error('kv down'); return base.put(k, v); } };
   const r = await enqueue({ SIGNUP_KV: throwing }, { source: 'post', targetSlug: 'a/x', url: 'https://ex.com', visibility: 'public' }, { kv: throwing, now: at(0) });
@@ -368,4 +368,66 @@ test('SOW-126: on+popular type -> publish hits only on, popular promotion hits o
   assert.equal(promoted.perChannel.bluesky.status, 'sent');
   assert.equal(promoted.perChannel.discord.reason, 'auto-off');
   assert.equal(promoted.status, 'sent');
+});
+
+test('On-Manual: an AUTO-capability channel set on-manual queues a task, never posts, and settles', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
+    auto_matrix: { post: { discord: 'on', bluesky: 'on-manual', 'discord-category': 'off', reddit: 'off', devto: 'off', mastodon: 'off', x: 'off', linkedin: 'off' } } } }) });
+  const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', title: 'T', url: 'https://ex.com/t', visibility: 'public' }, { kv, now: at(0) });
+  const dCalls = [];
+  const adapters = {
+    discord: { name: 'discord', enabled: () => true, post: async (i) => { dCalls.push(i); return { ok: true, id: 'd1' }; } },
+    bluesky: { name: 'bluesky', enabled: () => true, post: async () => { throw new Error('an on-manual channel must never auto-post'); } },
+  };
+  const out = await drainSyndication({ DISCORD_BOT_TOKEN: 't', BLUESKY_HANDLE: 'h', BLUESKY_APP_PASSWORD: 'p' }, { kv, now: at(AFTER_HOLD), adapters });
+  assert.equal(out.drained, 1);
+  const item = await getItem(kv, r.id);
+  assert.equal(item.status, 'sent'); // queued-manual is terminal for the channel; the item settles
+  assert.equal(item.perChannel.discord.status, 'sent');
+  assert.equal(item.perChannel.bluesky.status, 'queued-manual');
+  assert.equal(dCalls.length, 1);
+  const taskKeys = [...kv.store.keys()].filter((k) => k.startsWith('social:task:'));
+  assert.equal(taskKeys.length, 1, 'one bluesky review task created');
+  assert.ok(taskKeys[0].includes('::bluesky'));
+});
+
+test('On-Manual: a transient task-write failure retries next tick (never stamped auto-off by the adapter loop)', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
+    auto_matrix: { post: { discord: 'on', bluesky: 'on-manual', 'discord-category': 'off', reddit: 'off', devto: 'off', mastodon: 'off', x: 'off', linkedin: 'off' } } } }) });
+  let failTaskPuts = 1; // the first social:task write throws (a KV blip), then recovers
+  const realPut = kv.put.bind(kv);
+  kv.put = async (key, value) => {
+    if (key.startsWith('social:task:') && failTaskPuts > 0) { failTaskPuts--; throw new Error('kv blip'); }
+    return realPut(key, value);
+  };
+  const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', title: 'T', url: 'https://ex.com/t', visibility: 'public' }, { kv, now: at(0) });
+  const dCalls = [];
+  const adapters = {
+    discord: { name: 'discord', enabled: () => true, post: async (i) => { dCalls.push(i); return { ok: true, id: 'd1' }; } },
+    bluesky: { name: 'bluesky', enabled: () => true, post: async () => { throw new Error('an on-manual channel must never auto-post'); } },
+  };
+  const bskyEnv = { DISCORD_BOT_TOKEN: 't', BLUESKY_HANDLE: 'h', BLUESKY_APP_PASSWORD: 'p' };
+  await drainSyndication(bskyEnv, { kv, now: at(AFTER_HOLD), adapters });
+  let item = await getItem(kv, r.id);
+  assert.ok(!item.perChannel?.bluesky, 'the failed task write leaves NO terminal marker (the retry must survive)');
+  assert.notEqual(item.status, 'sent');
+  // Next tick: the write succeeds, the task exists, the item settles.
+  await drainSyndication(bskyEnv, { kv, now: at(AFTER_HOLD + 60_000), adapters });
+  item = await getItem(kv, r.id);
+  assert.equal(item.perChannel.bluesky.status, 'queued-manual');
+  assert.equal(item.status, 'sent');
+  assert.equal([...kv.store.keys()].filter((k) => k.startsWith('social:task:')).length, 1);
+  assert.equal(dCalls.length, 1, 'discord posted exactly once across both ticks');
+});
+
+test('On-Manual: an AUTO channel with NO secrets still queues its review task (no not-configured stamp)', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
+    auto_matrix: { post: { bluesky: 'on-manual', discord: 'off', 'discord-category': 'off', reddit: 'off', devto: 'off', mastodon: 'off', x: 'off', linkedin: 'off' } } } }) });
+  const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/x', title: 'T', url: 'https://ex.com/t', visibility: 'public' }, { kv, now: at(0) });
+  const out = await drainSyndication({}, { kv, now: at(AFTER_HOLD), adapters: {} }); // zero secrets anywhere
+  assert.equal(out.drained, 1);
+  const item = await getItem(kv, r.id);
+  assert.equal(item.perChannel.bluesky.status, 'queued-manual', 'a review task needs no adapter secrets');
+  assert.equal([...kv.store.keys()].filter((k) => k.startsWith('social:task:')).length, 1);
+  assert.equal(item.status, 'sent');
 });

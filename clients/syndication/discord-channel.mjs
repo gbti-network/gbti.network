@@ -62,7 +62,8 @@ export function createDiscordAdapter({ env = {}, fetchImpl = globalThis.fetch, c
     async post(item) {
       const channelId = env[CHANNEL_ENV[item.source]] || null;
       if (!channelId) return { ok: false, error: `no Discord channel configured for ${item.source}` };
-      return postToChannel(channelId, item, { env, fetchImpl, client, cfg, templateChannel: 'discord' });
+      // The Social Queue's Post now rides item.textOverride (the superadmin-reviewed text must be what posts).
+      return postToChannel(channelId, item, { env, fetchImpl, client, cfg, templateChannel: 'discord', textOverride: item.textOverride ?? null });
     },
   };
 }
@@ -80,7 +81,7 @@ export function createDiscordCategoryAdapter({ env = {}, fetchImpl = globalThis.
       if (!mapped) return { ok: true, skipped: true, reason: item.category ? `no channel mapped for category "${item.category}"` : 'no category on the item' };
       // Misconfiguration guard: the category channel equals the per-type channel; never double-post one channel.
       if (mapped === (env[CHANNEL_ENV[item.source]] || null)) return { ok: true, skipped: true, reason: 'the category channel equals the per-type channel' };
-      return postToChannel(mapped, item, { env, fetchImpl, client, cfg, templateChannel: 'discord-category' });
+      return postToChannel(mapped, item, { env, fetchImpl, client, cfg, templateChannel: 'discord-category', textOverride: item.textOverride ?? null });
     },
   };
 }

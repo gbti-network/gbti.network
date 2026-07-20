@@ -7,12 +7,12 @@ import { templateFor } from './syndication-config-core.mjs';
 import { renderTemplate, buildChannelText } from './syndication-format.mjs';
 import { channelLimit } from './syndication-channels.mjs';
 
-export function renderChannelText(cfg, item = {}, channel, { textOverride } = {}) {
+export function renderChannelText(cfg, item = {}, channel, { textOverride, channelOnly = true } = {}) {
   const limit = channelLimit(channel);
   if (typeof textOverride === 'string' && textOverride.trim()) return textOverride.slice(0, limit);
   const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
   const text = cfg
-    ? renderTemplate(templateFor(cfg, item.source, channel, { stub: stubish, channelOnly: true }) || '{title} {url}', item, { limit })
+    ? renderTemplate(templateFor(cfg, item.source, channel, { stub: stubish, channelOnly }) || '{title} {url}', item, { limit })
     : buildChannelText(item, { limit });
   return String(text || '').slice(0, limit);
 }
