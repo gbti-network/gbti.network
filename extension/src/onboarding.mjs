@@ -111,6 +111,7 @@ function mount() {
       // them there, so the flow ends with the profile getting filled out.
       window.location.href = chrome.runtime.getURL('profile.html') + '?welcome=1';
     });
+    w.style.cssText = 'display:block; padding:5vh 16px;'; // breathing room around the two-pane welcome panel
     const shell = document.querySelector('main.shell');
     if (shell) { shell.style.gridTemplateColumns = '1fr'; shell.replaceChildren(w); }
     else { (document.getElementById('app') || document.body).replaceChildren(w); }

@@ -11709,126 +11709,234 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-welcome.mjs
   var SITE8 = "https://gbti.network";
-  var PAGE_SIZE = 10;
+  var PAGE_SIZE = 12;
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
-  var STEPS = ["discord", "subreddit", "socials", "follow", "topics"];
-  var FOLLOW_SLIDES = [
-    ["reddit", "Reddit", "https://www.reddit.com/r/GBTI_network", "Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network. Open it and hit Join.", "r/GBTI_network"],
+  var CHAN_FOLLOWED_KEY = "gbti-welcome-chan-followed";
+  var STEPS = [
+    { key: "discord", label: "Discord", sub: "Join the community", heading: "Connect Discord" },
+    { key: "subreddit", label: "Follow", sub: "Network channels", heading: "Follow the channels" },
+    { key: "socials", label: "Socials", sub: "Your handles", heading: "Add your socials" },
+    { key: "follow", label: "Members", sub: "People to follow", heading: "Follow members" },
+    { key: "topics", label: "Topics", sub: "Tune your feed", heading: "Follow topics" }
+  ];
+  var DONE_HEADING = "You are all set";
+  var GBTI_CHANNELS = [
+    ["reddit", "Reddit", "https://www.reddit.com/r/GBTI_network", "Member articles, products, and prompts syndicate to our community subreddit. Open it and hit Join.", "r/GBTI_network"],
     ["x", "X", "https://x.com/gbti_network", "Syndicated member work and network updates, as they publish.", "@gbti_network"],
     ["bluesky", "Bluesky", "https://bsky.app/profile/gbti.bsky.social", "The same syndicated stream on Bluesky.", "@gbti.bsky.social"],
+    ["mastodon", "Mastodon", "https://mastodon.social/@gbti", "The syndicated stream on the fediverse.", "@gbti@mastodon.social"],
     ["youtube", "YouTube", "https://www.youtube.com/@gbti_network", "Video sessions and walkthroughs from the network.", "@gbti_network"],
     ["github", "GitHub", "https://github.com/gbti-network", "The public content repo and our open source work.", "gbti-network"],
     ["devto", "Dev.to", "https://dev.to/gbti", "Member articles crossposted to the GBTI organization on DEV.", "@gbti"],
     ["dailydev", "daily.dev", "https://dly.to/zfCriM6JfRF", "Follow the GBTI squad inside your daily.dev feed.", "GBTI squad"],
-    ["mastodon", "Mastodon", "https://mastodon.social/@gbti", "The syndicated stream on the fediverse.", "@gbti@mastodon.social"],
-    ["linkedin", "LinkedIn", "https://www.linkedin.com/company/gbti-network/posts", "Network updates and member work on LinkedIn.", "gbti-network"]
+    ["linkedin", "LinkedIn", "https://www.linkedin.com/company/gbti-network/posts", "Network updates and member work on LinkedIn.", "GBTI Network"]
   ];
   var SOCIALS_STAGE_KEY = "gbti-welcome-socials";
   var SOCIAL_STARTERS = ["x", "bluesky", "mastodon", "linkedin", "youtube", "website"];
   var SOCIAL_HIDDEN = /* @__PURE__ */ new Set(["github", "discord"]);
+  var AV_COLORS = ["#1f9e5f", "#c98a2b", "#5a8ad6", "#9b6fd0", "#d0715f", "#3fa88a", "#c85b8e"];
+  var avColor = (name) => {
+    let h = 0;
+    for (const c of String(name || "?")) h = h * 31 + c.charCodeAt(0) >>> 0;
+    return AV_COLORS[h % AV_COLORS.length];
+  };
   var lc3 = (s) => String(s || "").toLowerCase();
   var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  var discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
+  var discordIco = `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
-  var megaIco = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4z" fill="currentColor"/></svg>`;
   var CSS29 = `
-  :host { display:block; font-family:var(--font-body); color:var(--fg); padding:32px 28px; max-width:680px; margin:0 auto; }
+  :host { display:block; font-family:var(--font-body); color:var(--fg);
+    /* The design handoff's dark palette (the extension default). */
+    --wf-surface:#232029; --wf-panel:#2a2731; --wf-panel2:#302c37; --wf-raise:#35313d;
+    --wf-line:rgba(255,255,255,.085); --wf-line2:rgba(255,255,255,.16);
+    --wf-fg:#f3f2f0; --wf-soft:#bdbac4; --wf-mute:#847f8d; --wf-faint:#5c5865;
+    --wf-green:#1f9e5f; --wf-greenfg:#5fd49a; --wf-greendim:rgba(31,158,95,.16);
+  }
+  :host-context([data-theme="light"]) {
+    --wf-surface:#efece6; --wf-panel:#ffffff; --wf-panel2:#f6f3ee; --wf-raise:#ece7df;
+    --wf-line:rgba(30,24,38,.10); --wf-line2:rgba(30,24,38,.18);
+    --wf-fg:#241f2c; --wf-soft:#4f4a58; --wf-mute:#837e8c; --wf-faint:#a9a4b0;
+    --wf-green:#1f9e5f; --wf-greenfg:#157a48; --wf-greendim:rgba(31,158,95,.12);
+  }
+  @keyframes wf-in { from { opacity:0; transform:translateY(14px) scale(.985); } to { opacity:1; transform:none; } }
+  @keyframes wf-fade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+
+  /* THE PANEL: a two-pane modal (rail + main) on the 7px house radius. */
+  .wf { display:flex; width:100%; max-width:1080px; margin:0 auto; height:min(72vh, 640px); min-height:480px;
+    background:var(--wf-surface); border:1px solid var(--wf-line); border-radius:7px; overflow:hidden;
+    box-shadow:0 50px 130px -30px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.25);
+    animation:wf-in .34s cubic-bezier(.2,.8,.2,1) both; color:var(--wf-fg); }
+  .rail { width:264px; flex:none; background:var(--wf-panel); border-right:1.5px solid var(--wf-line);
+    padding:26px 20px; display:flex; flex-direction:column; box-sizing:border-box; }
+  .brand { display:inline-flex; align-items:center; gap:9px; }
+  .brand .mark { width:30px; height:30px; border-radius:7px; background:var(--wf-green); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; font-size:14px; }
+  .brand b { font-family:var(--font-display); font-size:15px; font-weight:600; color:var(--wf-fg); line-height:1; }
+  .railhead { font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--wf-mute); margin:22px 0 12px; }
+  .rsteps { display:flex; flex-direction:column; gap:2px; flex:1; min-height:0; }
+  .rstep { display:flex; align-items:center; gap:12px; padding:10px 11px; border-radius:7px;
+    border:1.5px solid transparent; background:none; cursor:pointer; width:100%; font:inherit; text-align:left; transition:.12s; }
+  .rstep.active { border-color:var(--wf-line); background:var(--wf-panel2); }
+  .rstep .circ { width:26px; height:26px; flex:none; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-family:var(--font-mono); font-weight:600; font-size:11px;
+    background:var(--wf-raise); color:var(--wf-faint); box-sizing:border-box; }
+  .rstep.done .circ { background:var(--wf-green); color:#fff; }
+  .rstep.active .circ { background:var(--wf-greendim); color:var(--wf-greenfg); border:1.5px solid var(--wf-green); }
+  .rstep .rl { display:flex; flex-direction:column; line-height:1.2; min-width:0; }
+  .rstep .rl b { font-size:13.5px; font-weight:600; color:var(--wf-soft); }
+  .rstep.done .rl b, .rstep.active .rl b { color:var(--wf-fg); }
+  .rstep .rl span { font-size:11px; color:var(--wf-mute); }
+  .themebtn { display:inline-flex; align-items:center; justify-content:center; gap:8px; font:inherit; font-weight:600;
+    font-size:12px; color:var(--wf-soft); background:var(--wf-panel2); border:1.5px solid var(--wf-line);
+    border-radius:7px; padding:9px 13px; cursor:pointer; margin-top:16px; }
+  .themebtn:hover { color:var(--wf-fg); border-color:var(--wf-line2); }
+
+  .main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .top { padding:24px 34px 0; }
+  .eyebrow { font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--wf-greenfg); display:flex; align-items:center; gap:10px; }
+  .phasepill { font-family:var(--font-body); font-size:10px; font-weight:700; letter-spacing:.05em;
+    color:var(--wf-mute); background:var(--wf-panel2); border:1px solid var(--wf-line); border-radius:999px; padding:2px 9px; }
+  .heads { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-top:5px; }
+  .heads h2 { font-family:var(--font-display); font-size:25px; font-weight:600; letter-spacing:-.01em; margin:0; color:var(--wf-fg); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-transform:none; }
+  .stepmono { font-family:var(--font-mono); font-size:11px; font-weight:600; letter-spacing:.1em; color:var(--wf-mute); white-space:nowrap; }
+  .bar { height:4px; background:var(--wf-panel2); border-radius:99px; overflow:hidden; margin-top:15px; }
+  .bar i { display:block; height:100%; background:var(--wf-green); border-radius:99px; transition:width .3s; }
+  .content { flex:1; min-height:0; overflow-y:auto; padding:22px 34px; }
+  .stepin { animation:wf-fade .3s ease both; }
+  .foot { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 34px;
+    border-top:1.5px solid var(--wf-line); background:var(--wf-surface); }
+  .footr { display:flex; align-items:center; gap:10px; }
+  .gbtn { font:inherit; font-weight:600; font-size:13px; color:var(--wf-soft); background:var(--wf-raise);
+    border:1.5px solid var(--wf-line); border-radius:7px; padding:11px 18px; cursor:pointer; }
+  .gbtn:hover { color:var(--wf-fg); border-color:var(--wf-line2); }
+  .gbtn.off { color:var(--wf-faint); background:none; border-color:transparent; cursor:default; opacity:.5; }
+  .skipbtn { font:inherit; font-weight:600; font-size:13px; color:var(--wf-mute); background:none; border:none; cursor:pointer; padding:10px 8px; }
+  .skipbtn:hover { color:var(--wf-soft); }
+  .pbtn { font:inherit; font-weight:600; font-size:13.5px; color:#fff; background:var(--wf-green);
+    border:1.5px solid transparent; border-radius:7px; padding:11px 24px; cursor:pointer; }
+  .pbtn:hover { filter:brightness(1.07); }
+  .pbtn[disabled] { opacity:.55; cursor:default; }
+
+  /* Step content shared. */
+  .intro { font-size:14px; line-height:1.6; color:var(--wf-soft); max-width:64ch; margin:0 0 16px; }
+  .ico-tile { flex:none; border-radius:7px; background:var(--wf-raise); border:1.5px solid var(--wf-line);
+    display:flex; align-items:center; justify-content:center; color:var(--wf-fg); box-sizing:border-box; }
+  .callout { display:flex; gap:9px; font-size:12.5px; line-height:1.5; color:var(--wf-mute);
+    background:var(--wf-panel2); border:1.5px solid var(--wf-line); border-radius:7px; padding:11px 13px; margin-top:16px; }
+  .callout .gl { color:var(--wf-faint); flex:none; }
+  .sbtn { font:inherit; font-weight:600; font-size:12.5px; color:#fff; background:var(--wf-green);
+    border:1.5px solid transparent; border-radius:7px; padding:7px 15px; cursor:pointer; flex:none; transition:.12s; }
+  .sbtn.on { color:var(--wf-soft); background:var(--wf-raise); border-color:var(--wf-line); }
+
+  /* Discord step. */
+  .dhead { display:flex; align-items:center; gap:13px; margin-bottom:16px; }
+  .dhead .ico-tile { width:46px; height:46px; }
+  .dhead h3 { font-family:var(--font-display); font-size:20px; font-weight:600; margin:0; line-height:1.1; color:var(--wf-fg); }
+  .dhead p { font-size:12.5px; color:var(--wf-mute); margin:2px 0 0; }
+  .dbtn { display:inline-flex; align-items:center; gap:8px; font:inherit; font-weight:600; font-size:13.5px;
+    color:#fff; background:var(--wf-green); border:1.5px solid transparent; border-radius:7px; padding:11px 18px; cursor:pointer; }
+  .dbtn.on, .dbtn[disabled] { color:var(--wf-soft); background:var(--wf-raise); border-color:var(--wf-line); cursor:default; }
+
+  /* Channels grid. */
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(238px, 1fr)); gap:12px; }
+  .pcard { display:flex; flex-direction:column; gap:11px; padding:14px; background:var(--wf-panel2);
+    border:1.5px solid var(--wf-line); border-radius:7px; box-sizing:border-box; }
+  .pcard .ph { display:flex; align-items:center; gap:10px; min-width:0; }
+  .pcard .ico-tile { width:34px; height:34px; }
+  .pcard .pn { min-width:0; }
+  .pcard .pn b { display:block; font-size:14px; font-weight:600; color:var(--wf-fg); line-height:1.1; }
+  .pcard .pn span { display:block; font-family:var(--font-mono); font-size:11.5px; color:var(--wf-mute);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pcard .pd { font-size:12.5px; line-height:1.5; color:var(--wf-soft); flex:1; }
+  .pcard .sbtn { align-self:flex-start; }
+
+  /* Socials step. */
+  .srow { display:flex; align-items:center; gap:11px; margin:0 0 10px; max-width:560px; }
+  .srow .ico-tile { width:40px; height:40px; }
+  .srow input { flex:1; min-width:0; font:inherit; font-size:14px; color:var(--wf-fg); background:var(--wf-panel2);
+    border:1.5px solid var(--wf-line); border-radius:7px; padding:10px 13px; outline:none; box-sizing:border-box; }
+  .srow input:focus { border-color:var(--wf-green); }
+  .addmore { align-self:flex-start; font:inherit; font-weight:600; font-size:12.5px; color:var(--wf-greenfg);
+    background:none; border:none; cursor:pointer; padding:2px 0; }
+  .pkrow { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+  .pk { display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:12.5px; font-weight:600;
+    color:var(--wf-soft); background:var(--wf-panel2); border:1.5px solid var(--wf-line); border-radius:999px; padding:6px 11px; cursor:pointer; }
+  .pk:hover { color:var(--wf-fg); border-color:var(--wf-green); }
+
+  /* Members grid. */
+  .mtop { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .mtop .intro { margin:0; max-width:54ch; }
+  .mcount { font-family:var(--font-mono); font-size:11px; color:var(--wf-mute); white-space:nowrap; }
+  .mgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:10px; }
+  .mcard { display:flex; align-items:center; gap:12px; padding:11px 13px; background:var(--wf-panel2);
+    border:1.5px solid var(--wf-line); border-radius:7px; box-sizing:border-box; }
+  .mav { width:36px; height:36px; flex:none; border-radius:50%; color:#fff; display:grid; place-items:center;
+    font-weight:700; font-size:13px; overflow:hidden; position:relative; }
+  .mav img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .mi { flex:1; min-width:0; }
+  .mi b { display:block; font-size:13.5px; font-weight:600; color:var(--wf-fg); line-height:1.15; }
+  .mi span { display:block; color:var(--wf-mute); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pager { display:flex; align-items:center; justify-content:space-between; margin-top:13px; }
+  .pager button { font:inherit; font-weight:600; font-size:12.5px; color:var(--wf-soft); background:var(--wf-raise);
+    border:1.5px solid var(--wf-line); border-radius:7px; padding:7px 14px; cursor:pointer; }
+  .pager button[disabled] { opacity:.4; cursor:default; }
+  .pager .pg { font-family:var(--font-mono); font-size:11px; color:var(--wf-mute); }
+  .note { color:var(--wf-mute); font-size:12.5px; line-height:1.5; margin:0; }
+
+  /* Done state. */
+  .donewrap { display:flex; flex-direction:column; align-items:center; text-align:center; gap:14px; padding:24px 12px; }
+  .donecheck { width:56px; height:56px; border-radius:50%; background:var(--wf-greendim); color:var(--wf-greenfg);
+    display:flex; align-items:center; justify-content:center; font-size:26px; }
+  .donewrap h3 { font-family:var(--font-display); font-size:22px; font-weight:600; margin:0; color:var(--wf-fg); }
+  .donewrap p { margin:0; font-size:14px; line-height:1.6; color:var(--wf-soft); max-width:44ch; }
+  .stats { display:flex; gap:22px; margin-top:4px; }
+  .stat { text-align:center; }
+  .stat b { display:block; font-family:var(--font-mono); font-weight:700; font-size:20px; color:var(--wf-greenfg); }
+  .stat span { display:block; font-family:var(--font-mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--wf-mute); }
+
+  /* Small screens: the rail collapses to a horizontal step strip. */
+  @media (max-width: 860px) {
+    .wf { flex-direction:column; height:auto; min-height:0; max-height:none; }
+    .rail { width:100%; flex-direction:row; align-items:center; gap:10px; padding:12px 14px; border-right:0; border-bottom:1.5px solid var(--wf-line); }
+    .brand b, .railhead, .themebtn { display:none; }
+    .rsteps { flex-direction:row; overflow-x:auto; gap:4px; }
+    .rstep { padding:7px 9px; }
+    .rstep .rl span { display:none; }
+    .top, .content, .foot { padding-left:18px; padding-right:18px; }
+    .content { max-height:60vh; }
+  }
+
+  /* SOW-048: the forced-sign-in (login splash) mode + the loading state (token-styled, not the modal). */
+  .splashwrap { max-width:680px; margin:0 auto; padding:32px 28px; }
   .head { text-align:center; margin-bottom:22px; }
   .head .ic { display:inline-grid; place-items:center; }
-  .phase { display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
-    color:var(--accent); background:var(--hover); border-radius:999px; padding:3px 11px; margin:10px 0 0; }
   .head h2 { font-family:var(--font-display); font-size:24px; margin:8px 0 6px; }
   .head p { color:var(--muted); margin:0 auto; max-width:46ch; line-height:1.5; }
-  .up { display:inline-block; margin-top:10px; font-size:13px; font-weight:700; color:var(--accent); text-decoration:underline; }
   .card { border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:0 0 14px; background:var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
-  .card h3 { font-family:var(--font-display); font-size:16px; margin:0 0 4px; display:flex; align-items:center; gap:8px; }
-  .card .sub { color:var(--muted); font-size:13px; margin:0 0 13px; line-height:1.5; }
   .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:0; border-radius:9px;
     background:var(--brand); color:#fff; text-decoration:none; font:inherit; font-weight:700; font-size:14px; padding:10px 16px; cursor:pointer; }
   .btn:hover { background:var(--brand-dark); color:#fff; }
-  .check { display:flex; align-items:center; gap:9px; margin-top:12px; font-size:13.5px; color:var(--fg); cursor:pointer; user-select:none; }
-  .check input { width:17px; height:17px; accent-color:var(--brand); cursor:pointer; }
-  ul.members { list-style:none; margin:6px 0 0; padding:0; }
-  .m { display:flex; align-items:center; gap:12px; padding:9px 0; border-top:1px solid var(--line); }
-  .av { flex:none; width:38px; height:38px; border-radius:50%; background:var(--hover); color:var(--muted);
-    display:grid; place-items:center; font-weight:700; overflow:hidden; position:relative; }
-  .av img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .mi { flex:1; min-width:0; } .mi b { display:block; font-size:14px; }
-  .mi span { display:block; color:var(--muted); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .fbtn { flex:none; border:1.5px solid var(--brand); background:var(--brand); color:#fff; border-radius:8px;
-    font:inherit; font-weight:700; font-size:13px; padding:6px 13px; cursor:pointer; }
-  .fbtn:hover { background:var(--brand-dark); border-color:var(--brand-dark); }
-  .fbtn.on { background:transparent; color:var(--accent); }
-  /* "Following" hover: a soft on-brand green fill (inviting), not an alarming red unfollow signal. */
-  .fbtn.on:hover { background:var(--hover); border-color:var(--brand-dark); color:var(--brand-dark); }
-  .pager { display:flex; align-items:center; justify-content:space-between; margin-top:13px; }
-  .pager button { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; font:inherit; font-size:13px; padding:6px 12px; cursor:pointer; }
-  .pager button[disabled] { opacity:.4; cursor:default; }
-  .pager .pg { font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
-  .note { color:var(--muted); font-size:12.5px; line-height:1.5; margin:0; }
-  .note a { color:var(--accent); }
-  /* The Follow GBTI step: a slider, one platform per slide. Logo + name + our handle left, the follow
-     button right. 7px is the house radius. */
-  .chan-slide { border-radius:7px; }
-  .chan-slide .btn { border-radius:7px; }
-  .chan-row { display:flex; align-items:center; justify-content:space-between; gap:14px; }
-  .chan-id { display:inline-flex; align-items:center; gap:10px; font-size:15.5px; font-weight:700; min-width:0; }
-  .chan-handle { color:var(--muted); font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .chan-slide .sub { margin:10px 0 0; }
-  .dots { display:flex; gap:6px; justify-content:center; margin-top:14px; }
-  .dots i { width:7px; height:7px; border-radius:50%; background:var(--line); }
-  .dots i.on { background:var(--accent); }
-  .lead { color:var(--muted); font-size:13px; line-height:1.5; margin:0 0 12px; }
-  /* The socials step rows + the add-more picker. */
-  .srow { display:flex; align-items:center; gap:10px; margin:0 0 9px; }
-  .srow .sico { flex:none; width:30px; height:30px; display:grid; place-items:center; color:var(--muted);
-    background:var(--hover); border:1px solid var(--line); border-radius:8px; }
-  .srow input { flex:1; min-width:0; font:inherit; font-size:13.5px; color:var(--fg); background:var(--panel);
-    border:1px solid var(--line); border-radius:8px; padding:9px 12px; }
-  .srow input:focus { outline:none; border-color:var(--accent); }
-  .addmore { font:inherit; font-size:13px; font-weight:600; color:var(--accent); background:transparent;
-    border:1px dashed var(--line); border-radius:9px; padding:8px 13px; cursor:pointer; margin-top:2px; }
-  .addmore:hover { border-color:var(--accent); }
-  .pkrow { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
-  .pk { display:inline-flex; align-items:center; gap:6px; font:inherit; font-size:12.5px; font-weight:600;
-    color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 11px; cursor:pointer; }
-  .pk:hover { color:var(--fg); border-color:var(--accent); }
-  .done { width:100%; box-sizing:border-box; margin-top:6px; padding:12px; }
-  .loading { color:var(--muted); text-align:center; padding:30px 0; }
-  /* SOW-041 stepper: a step indicator + a bottom nav bar (Back / Continue / I am all set). */
-  .stepind { display:block; text-align:center; font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:0 0 14px; }
-  .stepnav { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:6px; }
-  .stepnav .grow { flex:1; }
   .btn.ghost { background:transparent; color:var(--fg-soft); border:1.5px solid var(--line); }
   .btn.ghost:hover { background:var(--hover); color:var(--fg); border-color:var(--line-2); }
-  /* SOW-048: the forced-sign-in (login splash) mode. */
   .btn.signin { width:100%; box-sizing:border-box; padding:13px; font-size:15px; }
+  .splashwrap .note { color:var(--muted); }
+  .splashwrap .note a { color:var(--accent); }
   .codebox { text-align:center; }
   .codebox .sub { color:var(--muted); font-size:13.5px; margin:0 0 8px; }
   .codeval { display:flex; align-items:center; justify-content:center; gap:10px; margin:8px 0 14px; flex-wrap:wrap; }
   .codeval code { font-family:var(--font-mono, monospace); font-size:22px; font-weight:700; letter-spacing:.14em; background:var(--hover); border:1px solid var(--line); border-radius:8px; padding:8px 14px; }
   .codeval .btn { padding:8px 13px; font-size:13px; }
+  .loading { color:var(--muted); text-align:center; padding:30px 0; }
 `;
   var GbtiWelcome = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
       this._page = 1;
       this._step = 0;
-      this._chanIdx = 0;
+      this._done = false;
       this.load();
-    }
-    /** Advance (+1) or back (-1): the Follow GBTI slider consumes the move first, then the stepper. */
-    _advanceChanOrStep(dir) {
-      if (STEPS[this._step] === "subreddit") {
-        const next = (this._chanIdx ?? 0) + dir;
-        if (next >= 0 && next < FOLLOW_SLIDES.length) {
-          this._chanIdx = next;
-          this.render();
-          return;
-        }
-      }
-      this._step += dir;
-      this.render();
     }
     disconnectedCallback() {
       super.disconnectedCallback?.();
@@ -11871,7 +11979,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         localStorage.setItem(DISCORD_DONE_KEY, "1");
       } catch {
       }
-      if (STEPS[this._step] === "discord" && this._step < STEPS.length - 1) this._step++;
+      if (STEPS[this._step]?.key === "discord" && this._step < STEPS.length - 1) this._step++;
       this.render();
     }
     _stopDiscordPoll() {
@@ -11914,9 +12022,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._follows = null;
       }
       try {
+        const p = await this.client?.getPrefs?.();
+        this._topicsCount = Array.isArray(p?.categories) ? p.categories.length : 0;
+      } catch {
+        this._topicsCount = 0;
+      }
+      try {
         this._discordJoined = localStorage.getItem(DISCORD_DONE_KEY) === "1";
       } catch {
         this._discordJoined = false;
+      }
+      try {
+        const raw = JSON.parse(localStorage.getItem(CHAN_FOLLOWED_KEY) || "[]");
+        this._chanFollowed = new Set(Array.isArray(raw) ? raw : []);
+      } catch {
+        this._chanFollowed = /* @__PURE__ */ new Set();
       }
       try {
         const raw = JSON.parse(localStorage.getItem(SOCIALS_STAGE_KEY) || "null");
@@ -11946,7 +12066,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
            <p class="note" style="margin-top:12px">Waiting for you to authorize&hellip;</p>
          </div>` : `<button class="btn signin" data-auth-signin type="button">${githubIco} Sign in with GitHub</button>`;
       const expired = this.hasAttribute("expired") ? `<p class="note" style="margin:0 0 12px; color:var(--accent)">Your session expired. Please sign in again to pick up where you left off.</p>` : "";
-      this.set(this.css(CSS29) + `
+      this.set(this.css(CSS29) + `<div class="splashwrap">
       <div class="head">
         <span class="ic">${check2}</span>
         <h2>Sign in to GBTI Network</h2>
@@ -11955,7 +12075,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="card">
         ${expired}${action}
         <p class="note" style="margin-top:14px">New here? <a href="${SITE8}/membership/" target="_blank" rel="noopener">Become a member</a> &mdash; the trial is free.</p>
-      </div>`);
+      </div></div>`);
       this.on("[data-auth-signin]", "click", () => this.emit("gbti:welcome-signin"));
       this.on("[data-copy]", "click", () => {
         try {
@@ -11964,9 +12084,46 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
       });
     }
+    _goto(i) {
+      this._stopDiscordPoll();
+      this._done = false;
+      this._step = Math.min(Math.max(i, 0), STEPS.length - 1);
+      this.render();
+    }
+    _next() {
+      this._stopDiscordPoll();
+      if (this._step >= STEPS.length - 1) this._done = true;
+      else this._step++;
+      this.render();
+    }
+    _back() {
+      this._stopDiscordPoll();
+      if (this._done) this._done = false;
+      else if (this._step > 0) this._step--;
+      this.render();
+    }
+    _railHtml() {
+      const rows = STEPS.map((s, i) => {
+        const isDone = this._done || this._step > i;
+        const isActive = !this._done && this._step === i;
+        const cls = `rstep${isDone ? " done" : ""}${isActive ? " active" : ""}`;
+        const mark = isDone ? "&#10003;" : String(i + 1);
+        return `<button class="${cls}" data-goto="${i}" type="button">
+        <span class="circ">${mark}</span>
+        <span class="rl"><b>${esc(s.label)}</b><span>${esc(s.sub)}</span></span>
+      </button>`;
+      }).join("");
+      const dark = (typeof document !== "undefined" && document.documentElement.getAttribute("data-theme")) !== "light";
+      return `<aside class="rail">
+      <span class="brand"><span class="mark">G</span><b>GBTI Network</b></span>
+      <span class="railhead">Get set up</span>
+      <div class="rsteps">${rows}</div>
+      <button class="themebtn" data-theme-flip type="button">${dark ? "&#9728; Light mode" : "&#9790; Dark mode"}</button>
+    </aside>`;
+    }
     render() {
       if (!this._loaded) {
-        this.set(this.css(CSS29) + `<p class="loading">Setting up your welcome...</p>`);
+        this.set(this.css(CSS29) + `<div class="splashwrap"><p class="loading">Setting up your welcome...</p></div>`);
         return;
       }
       if (this._authGate && !this._authenticated) {
@@ -11974,36 +12131,49 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const ph = phaseLabel(this._membership);
-      const up = ph.upgrade ? `<a class="up" href="${SITE8}/membership/" target="_blank" rel="noopener">Upgrade to publish</a>` : "";
-      if (this._step < 0) this._step = 0;
-      if (this._step > STEPS.length - 1) this._step = STEPS.length - 1;
-      const step = STEPS[this._step];
-      const card = step === "discord" ? this._discordCard() : step === "subreddit" ? this._subredditCard() : step === "socials" ? this._socialsCard() : step === "topics" ? this._topicsCard() : this._followCard();
+      const phase = ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "";
+      this._step = Math.min(Math.max(this._step, 0), STEPS.length - 1);
+      const step = STEPS[this._step].key;
+      const heading = this._done ? DONE_HEADING : STEPS[this._step].heading;
+      const stepText = this._done ? "COMPLETE" : `STEP ${this._step + 1} OF ${STEPS.length}`;
+      const progress = this._done ? 100 : Math.round(this._step / STEPS.length * 100 + 12);
+      const card = this._done ? this._doneCard() : step === "discord" ? this._discordCard() : step === "subreddit" ? this._channelsCard() : step === "socials" ? this._socialsCard() : step === "topics" ? this._topicsCard() : this._membersCard();
       const isLast = this._step >= STEPS.length - 1;
-      const nav = `<div class="stepnav">
-      ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
-      ${isLast ? `<button class="btn done" data-done type="button">I am all set</button>` : step === "subreddit" ? `<button class="btn ghost" data-step-next type="button">Skip</button>` : `<button class="btn" data-step-next type="button">Continue &rarr;</button>`}
-    </div>`;
-      this.set(this.css(CSS29) + `
-      <div class="head">
-        <span class="ic">${check2}</span>
-        <div class="phase">${esc(ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "Welcome")}</div>
-        <h2>${esc(ph.title)}</h2>
-        <p>${esc(ph.body)}</p>
-        ${up}
+      const backOff = this._step === 0 && !this._done;
+      const showSkip = !this._done && this._step >= 1 && this._step <= 3;
+      const footR = this._done ? `<button class="gbtn" data-review type="button">Review steps</button>
+         <button class="pbtn" data-done type="button">Go to your profile</button>` : `${showSkip ? `<button class="skipbtn" data-step-next type="button">Skip</button>` : ""}
+         <button class="pbtn" data-step-next type="button">${isLast ? "I am all set" : "Continue &rarr;"}</button>`;
+      this.set(this.css(CSS29) + `<div class="wf">
+      ${this._railHtml()}
+      <div class="main">
+        <div class="top">
+          <div class="eyebrow">Welcome${phase ? `<span class="phasepill">${esc(phase)}</span>` : ""}</div>
+          <div class="heads"><h2>${esc(heading)}</h2><span class="stepmono">${esc(stepText)}</span></div>
+          <div class="bar"><i style="width:${progress}%"></i></div>
+        </div>
+        <div class="content"><div class="stepin">${card}</div></div>
+        <div class="foot">
+          <button class="gbtn${backOff ? " off" : ""}" data-step-back type="button" ${backOff ? "disabled" : ""}>&larr; Back</button>
+          <div class="footr">${footR}</div>
+        </div>
       </div>
-      <span class="stepind">Step ${this._step + 1} of ${STEPS.length}</span>
-      ${card}
-      ${nav}`);
-      this.on("[data-step-next]", "click", () => {
-        this._stopDiscordPoll();
-        this._advanceChanOrStep(1);
-      });
-      this.on("[data-step-back]", "click", () => {
-        this._stopDiscordPoll();
-        this._advanceChanOrStep(-1);
-      });
+    </div>`);
+      this.$$("[data-goto]").forEach((b) => b.addEventListener("click", () => this._goto(Number(b.dataset.goto))));
+      this.$$("[data-step-next]").forEach((b) => b.addEventListener("click", () => this._next()));
+      this.on("[data-step-back]", "click", () => this._back());
+      this.on("[data-review]", "click", () => this._goto(0));
       this.on("[data-done]", "click", () => this.emit("gbti:welcome-done"));
+      this.on("[data-theme-flip]", "click", () => {
+        const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        try {
+          localStorage.setItem("gbti-theme", next);
+        } catch {
+        }
+        this.render();
+      });
+      if (this._done) return;
       if (step === "discord") {
         this.on("[data-discord-connect]", "click", async () => {
           let url = DISCORD_LINK_URL;
@@ -12016,11 +12186,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._startDiscordPoll();
         });
       } else if (step === "subreddit") {
-        this.on("[data-chan-follow]", "click", () => {
-          const [, , url] = FOLLOW_SLIDES[this._chanIdx ?? 0];
-          window.open(url, "_blank", "noopener");
-          this._advanceChanOrStep(1);
-        });
+        this.$$("[data-chan-open]").forEach((b) => b.addEventListener("click", () => {
+          const key = b.dataset.chanOpen;
+          const chan = GBTI_CHANNELS.find(([k]) => k === key);
+          if (!chan) return;
+          window.open(chan[2], "_blank", "noopener");
+          this._chanFollowed.add(key);
+          try {
+            localStorage.setItem(CHAN_FOLLOWED_KEY, JSON.stringify([...this._chanFollowed]));
+          } catch {
+          }
+          this.render();
+        }));
       } else if (step === "socials") {
         this.$$("[data-social-key]").forEach((inp) => inp.addEventListener("input", () => {
           const k = inp.dataset.socialKey;
@@ -12042,6 +12219,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this.render();
           this.$(`[data-social-key="${k}"]`)?.focus();
         }));
+      } else if (step === "topics") {
+        this.$("gbti-topic-picker")?.addEventListener("topics-change", (e) => {
+          this._topicsCount = Array.isArray(e.detail?.topics) ? e.detail.topics.length : this._topicsCount;
+        });
       } else {
         this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.getAttribute("data-follow"))));
         this.on("[data-prev]", "click", () => {
@@ -12052,55 +12233,39 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._page++;
           this.render();
         });
-        this.$$(".av img").forEach((img) => img.addEventListener("error", () => img.remove(), { once: true }));
+        this.$$(".mav img").forEach((img) => img.addEventListener("error", () => img.remove(), { once: true }));
       }
     }
     _discordCard() {
-      if (this._discordJoined) {
-        return `<div class="card">
-        <h3>${discordIco} Connect Discord</h3>
-        <p class="sub">Your Discord is connected and you have the member role in the server.</p>
-        <p class="note" style="display:flex;align-items:center;gap:7px;color:var(--accent);font-weight:700">${check2} Discord connected</p>
-      </div>`;
-      }
-      const body = this._discordWaiting ? `<button class="btn" data-discord-connect type="button" disabled>${discordIco} Waiting for Discord&hellip;</button>
-         <p class="note" style="margin-top:12px">Finish the Discord sign-in in the new tab. This step continues on its own once you are connected.</p>` : `<button class="btn" data-discord-connect type="button">${discordIco} Connect Discord account</button>
-         <p class="note" style="margin-top:12px">A new tab opens for Discord sign-in. When you finish, you land in the server and this step continues automatically.</p>`;
-      return `<div class="card">
-      <h3>${discordIco} Connect Discord</h3>
-      <p class="sub">The community is the heart of the co-op: weekly sessions, help, and the people you build with. Connect your Discord to join the server and get your member role.</p>
-      ${body}
-    </div>`;
-    }
-    // SOW-054: the Topics step. The shared <gbti-topic-picker> fetches the vocabulary + the member's current
-    // selection and self-persists each toggle via setPrefs; the step is skippable (an empty selection = the feed and
-    // news show everything, the current default).
-    _topicsCard() {
-      return `<div class="card">
-      <h3>${megaIco} Follow topics</h3>
-      <p class="sub">Pick the topics you care about. Your activity feed and news default to them, and you can change this any time in Settings. Skip to see everything.</p>
-      <gbti-topic-picker></gbti-topic-picker>
-    </div>`;
-    }
-    // SOW-088: the Follow GBTI step — a slider, one platform per slide. The one primary button per slide is
-    // "Follow on <platform>" (all the same color, right of the logo + name row): it opens the channel in a
-    // new tab and advances the slider. The bottom nav's Continue reads Skip here (advance without opening),
-    // so the flow stays fully skippable; Back walks the slides before it walks the steps.
-    _subredditCard() {
-      const i = Math.min(Math.max(this._chanIdx ?? 0, 0), FOLLOW_SLIDES.length - 1);
-      this._chanIdx = i;
-      const [k, label, , blurb, handle] = FOLLOW_SLIDES[i];
-      const dots = FOLLOW_SLIDES.map((_s, j) => `<i class="${j === i ? "on" : ""}"></i>`).join("");
+      const joined = this._discordJoined;
+      const btn = joined ? `<button class="dbtn on" type="button" disabled>&#10003; Discord connected</button>` : this._discordWaiting ? `<button class="dbtn" data-discord-connect type="button" disabled>Waiting for Discord&hellip;</button>` : `<button class="dbtn" data-discord-connect type="button">Connect Discord account</button>`;
+      const callout = joined ? `<div class="callout"><span class="gl">&#8250;</span><span>Your Discord is connected and you have the member role in the server.</span></div>` : `<div class="callout"><span class="gl">&#8250;</span><span>A new tab opens for Discord sign-in. When you finish, you land in the server and this step continues automatically.</span></div>`;
       return `
-      <p class="lead">Please follow all of the properties below to help support the growth of the network. We will be syndicating member content, including yours, through these channels.</p>
-      <div class="card chan-slide">
-        <div class="chan-row">
-          <span class="chan-id">${socialIcon(k, 18)}<b>${esc(label)}</b>${handle ? `<span class="chan-handle">${esc(handle)}</span>` : ""}</span>
-          <button class="btn" data-chan-follow type="button">Follow on ${esc(label)}</button>
+      <div class="dhead">
+        <span class="ico-tile">${discordIco}</span>
+        <div><h3>Connect Discord</h3><p>The heartbeat of the co-op</p></div>
+      </div>
+      <p class="intro" style="max-width:58ch">The community is where the co-op actually happens: weekly sessions, real help, and the people you build alongside. Connect Discord to join the server and claim your member role.</p>
+      ${btn}
+      ${callout}`;
+    }
+    // The Follow GBTI channels grid (the design handoff's platform cards). Follow opens the channel in a new
+    // tab and flips the card to a followed state (local memory).
+    _channelsCard() {
+      const cards = GBTI_CHANNELS.map(([k, label, , blurb, handle]) => {
+        const on = this._chanFollowed?.has(k);
+        return `<div class="pcard">
+        <div class="ph">
+          <span class="ico-tile">${socialIcon(k, 19)}</span>
+          <div class="pn"><b>${esc(label)}</b><span>${esc(handle)}</span></div>
         </div>
-        <p class="sub">${esc(blurb)}</p>
-        <div class="dots">${dots}</div>
+        <div class="pd">${esc(blurb)}</div>
+        <button class="sbtn${on ? " on" : ""}" data-chan-open="${esc(k)}" type="button">${on ? "&#10003; Following" : "Follow"}</button>
       </div>`;
+      }).join("");
+      return `
+      <p class="intro">Please follow the network's channels to help member content travel. We syndicate everyone's articles, prompts, and products through these, including yours.</p>
+      <div class="grid">${cards}</div>`;
     }
     // The socials step: collect the member's handles across the platform set. Raw values stage locally
     // (SOCIALS_STAGE_KEY) and the profile editor consumes them into profile.md on the profile page, so the
@@ -12109,55 +12274,75 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const draft = this._socialDraft || {};
       const visible = [.../* @__PURE__ */ new Set([...SOCIAL_STARTERS, ...Object.keys(draft)])].filter((k) => SOCIAL_KEYS.includes(k) && !SOCIAL_HIDDEN.has(k));
       const rows = visible.map((k) => `<div class="srow">
-      <span class="sico" aria-hidden="true">${socialIcon(k, 15)}</span>
+      <span class="ico-tile" aria-hidden="true">${socialIcon(k, 19)}</span>
       <input type="text" data-social-key="${esc(k)}" value="${esc(draft[k] || "")}"
         placeholder="${esc(SOCIAL_LABELS[k] || k)}: @handle or full URL" aria-label="${esc(SOCIAL_LABELS[k] || k)}" />
     </div>`).join("");
       const rest = SOCIAL_KEYS.filter((k) => !visible.includes(k) && !SOCIAL_HIDDEN.has(k));
       const picker = this._socialsMore && rest.length ? `<div class="pkrow">${rest.map((k) => `<button type="button" class="pk" data-social-add="${esc(k)}">${socialIcon(k, 14)}${esc(SOCIAL_LABELS[k] || k)}</button>`).join("")}</div>` : "";
       const more = rest.length ? `<button type="button" class="addmore" data-social-more>${this._socialsMore ? "Close" : "+ More platforms"}</button>` : "";
-      return `<div class="card">
-      <h3>${megaIco} Your socials</h3>
-      <p class="sub">Tell us where else you publish. When your work syndicates to a GBTI channel, the handle you list for that platform is mentioned automatically in the post (X, Bluesky, and Mastodon today), pointing readers back to you. You review and save these on your profile at the end.</p>
+      return `
+      <p class="intro">Tell us where else you publish. When your work syndicates to a GBTI channel, the handle you list is mentioned automatically, pointing readers back to you. You review and save these on your profile at the end.</p>
       ${rows}
       ${more}
-      ${picker}
-    </div>`;
+      ${picker}`;
     }
-    _followCard() {
-      const note = `<p class="note">Following a member alerts you when they publish new articles, prompts, and products (in your Following feed).</p>`;
+    // SOW-054: the Topics step. The shared <gbti-topic-picker> fetches the vocabulary + the member's current
+    // selection and self-persists each toggle via setPrefs; the step is skippable (an empty selection = the feed
+    // and news show everything, the current default).
+    _topicsCard() {
+      return `
+      <p class="intro">Pick the topics you care about. Your activity feed and news default to them, and you can change this any time in Settings. Skip to see everything.</p>
+      <gbti-topic-picker></gbti-topic-picker>`;
+    }
+    _membersCard() {
+      const intro = `<p class="intro">Following a member alerts you when they publish new articles, prompts, and products in your feed.</p>`;
       if (this._follows === null) {
-        return `<div class="card"><h3>${megaIco} Follow members</h3>
-        <p class="sub">We could not load your follow list right now. This is a temporary problem on our side.</p>${note}
-        <p class="note" style="margin-top:10px">Try again shortly, or follow members any time from a member profile.</p></div>`;
+        return `${intro}<p class="note">We could not load your follow list right now. This is a temporary problem on our side. Try again shortly, or follow members any time from a member profile.</p>`;
       }
       if (!this._members) {
-        return `<div class="card"><h3>${megaIco} Follow members</h3>
-        <p class="sub">We could not load the member directory right now. You can follow members any time from a member profile.</p>${note}</div>`;
+        return `${intro}<p class="note">We could not load the member directory right now. You can follow members any time from a member profile.</p>`;
       }
       if (this._members.length === 0) {
-        return `<div class="card"><h3>${megaIco} Follow members</h3>
-        <p class="sub">No members to show yet. Check back as the co-op grows.</p>${note}</div>`;
+        return `${intro}<p class="note">No members to show yet. Check back as the co-op grows.</p>`;
       }
       const { page, pages, items } = paginate2(this._members, this._page, PAGE_SIZE);
       this._page = page;
-      const rows = items.map((m) => this._row(m)).join("");
+      const cards = items.map((m) => this._memberCard(m)).join("");
       const pager = pages > 1 ? `<div class="pager"><button data-prev type="button" ${page <= 1 ? "disabled" : ""}>Back</button>
          <span class="pg">Page ${page} of ${pages}</span>
          <button data-next type="button" ${page >= pages ? "disabled" : ""}>More</button></div>` : "";
-      return `<div class="card"><h3>${megaIco} Follow members</h3>${note}<ul class="members">${rows}</ul>${pager}</div>`;
+      const count = this._follows?.size ?? 0;
+      return `
+      <div class="mtop">${intro}<span class="mcount">${count} following</span></div>
+      <div class="mgrid">${cards}</div>
+      ${pager}`;
     }
-    _row(m) {
+    _memberCard(m) {
       const u = lc3(m.username);
       const followed = this._follows.has(u);
-      const initial = esc((m.displayName || m.username || "?").trim().charAt(0).toUpperCase());
-      const av = m.avatar ? `<span class="ini">${initial}</span><img src="${esc(m.avatar)}" alt="" />` : `<span class="ini">${initial}</span>`;
+      const name = m.displayName || m.username || "?";
+      const initial = esc(String(name).trim().charAt(0).toUpperCase());
+      const av = `<span class="mav" style="background:${avColor(name)}">${initial}${m.avatar ? `<img src="${esc(m.avatar)}" alt="" />` : ""}</span>`;
       const sub = m.headline ? `<span>${esc(m.headline)}</span>` : "";
-      return `<li class="m">
-      <span class="av">${av}</span>
-      <span class="mi"><b>${esc(m.displayName || m.username)}</b>${sub}</span>
-      <button class="fbtn ${followed ? "on" : ""}" data-follow="${esc(u)}" type="button">${followed ? "Following" : "Follow"}</button>
-    </li>`;
+      return `<div class="mcard">
+      ${av}
+      <span class="mi"><b>${esc(name)}</b>${sub}</span>
+      <button class="sbtn${followed ? " on" : ""}" data-follow="${esc(u)}" type="button">${followed ? "&#10003; Following" : "Follow"}</button>
+    </div>`;
+    }
+    _doneCard() {
+      const follows = this._follows?.size ?? 0;
+      const topics = this._topicsCount ?? 0;
+      return `<div class="donewrap">
+      <span class="donecheck">&#10003;</span>
+      <h3>${esc(DONE_HEADING)}</h3>
+      <p>Welcome to the co-op. Your channels are followed, your handles are saved, and your feed is tuned. Time to publish.</p>
+      <div class="stats">
+        <div class="stat"><b>${follows}</b><span>Following</span></div>
+        <div class="stat"><b>${topics}</b><span>Topics</span></div>
+      </div>
+    </div>`;
     }
     async _toggleFollow(username) {
       const u = lc3(username);

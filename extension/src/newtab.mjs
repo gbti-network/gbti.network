@@ -569,7 +569,7 @@ function maybeShowWelcome(signedIn) {
   overlay.className = 'nt-welcome-overlay';
   overlay.style.cssText = 'position:fixed; inset:0; z-index:1200; overflow:auto; background:var(--bg,#0d1117); display:flex; justify-content:center; padding:48px 16px;';
   const w = document.createElement('gbti-welcome');
-  w.style.cssText = 'width:100%; max-width:560px;';
+  w.style.cssText = 'width:100%; max-width:1080px; align-self:center;'; // the redesigned two-pane welcome panel
   // Finish on the Profile page (banner + staged-socials prefill), matching the onboarding-wizard path.
   w.addEventListener('gbti:welcome-done', () => { window.location.href = chrome.runtime.getURL('profile.html') + '?welcome=1'; });
   overlay.appendChild(w);
