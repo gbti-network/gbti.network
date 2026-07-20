@@ -11610,9 +11610,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var PAGE_SIZE = 10;
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
   var STEPS = ["discord", "subreddit", "socials", "follow", "topics"];
-  var SUBREDDIT_URL = "https://www.reddit.com/r/GBTI_network";
-  var SUBREDDIT_OPENED_KEY = "gbti-welcome-subreddit-opened";
-  var GBTI_CHANNELS = [
+  var FOLLOW_SLIDES = [
+    ["reddit", "Reddit", "https://www.reddit.com/r/GBTI_network", "Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network. Open it and hit Join."],
     ["x", "X", "https://x.com/gbti_network", "Syndicated member work and network updates, as they publish."],
     ["bluesky", "Bluesky", "https://bsky.app/profile/gbti.bsky.social", "The same syndicated stream on Bluesky."],
     ["youtube", "YouTube", "https://www.youtube.com/@gbti_network", "Video sessions and walkthroughs from the network."],
@@ -11629,7 +11628,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var check2 = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--brand)"/><path d="M7 12.5l3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   var discordIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M19.3 5.4A17 17 0 0 0 15.1 4l-.3.5c1.4.4 2 .8 2.8 1.3a11 11 0 0 0-8.9 0c.8-.5 1.5-.9 2.8-1.3L11.2 4A17 17 0 0 0 7 5.4C4.3 9.3 3.6 13.1 3.9 16.8a16 16 0 0 0 4.8 2.4l.6-1c-.5-.2-1-.5-1.6-.9l.4-.3a11 11 0 0 0 9.6 0l.4.3c-.5.4-1 .7-1.6.9l.6 1a16 16 0 0 0 4.8-2.4c.4-4.3-.6-8-2.6-11.4zM9.6 14.5c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8zm4.8 0c-.9 0-1.6-.8-1.6-1.8s.7-1.8 1.6-1.8 1.6.8 1.6 1.8-.7 1.8-1.6 1.8z"/></svg>`;
   var githubIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49l-.01-1.7c-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.34 9.34 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9l-.01 2.81c0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>`;
-  var redditIco = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M14.5 15.4c.1.1.1.3 0 .4-.7.7-1.8.8-2.5.8s-1.8-.1-2.5-.8c-.1-.1-.1-.3 0-.4s.3-.1.4 0c.5.5 1.4.6 2.1.6s1.6-.1 2.1-.6c.1-.1.3-.1.4 0zM10.2 12.6c0-.6-.5-1.1-1.1-1.1S8 12 8 12.6s.5 1.1 1.1 1.1 1.1-.5 1.1-1.1zm4.7-1.1c-.6 0-1.1.5-1.1 1.1s.5 1.1 1.1 1.1 1.1-.5 1.1-1.1-.5-1.1-1.1-1.1zM22 12c0 5.5-4.5 10-10 10S2 17.5 2 12 6.5 2 12 2s10 4.5 10 10zm-4.6-1.6c-.4 0-.8.2-1.1.4-1-.7-2.4-1.2-3.9-1.2l.8-3.5 2.5.6c0 .6.5 1.1 1.1 1.1s1.1-.5 1.1-1.1-.5-1.2-1.1-1.2c-.4 0-.8.3-1 .6l-2.7-.6c-.2 0-.3.1-.4.2l-.8 3.9c-1.5.1-2.9.5-3.9 1.2-.3-.3-.7-.4-1.1-.4-1.6 0-2.1 2.1-.7 2.9v.4c0 2.2 2.6 4 5.8 4s5.8-1.8 5.8-4v-.4c1.4-.8.9-2.9-.4-2.9z"/></svg>`;
   var megaIco = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4z" fill="currentColor"/></svg>`;
   var CSS29 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); padding:32px 28px; max-width:680px; margin:0 auto; }
@@ -11667,12 +11665,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .pager .pg { font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .note { color:var(--muted); font-size:12.5px; line-height:1.5; margin:0; }
   .note a { color:var(--accent); }
-  /* The Follow GBTI step: one stacked card per channel, scrolling when the list does not fit. */
-  .chanscroll { max-height:min(48vh, 440px); overflow-y:auto; padding-right:4px; }
-  .chan-card { padding:13px 16px; margin:0 0 10px; }
-  .chan-card h3 { font-size:14.5px; margin:0 0 3px; }
-  .chan-card .sub { margin:0 0 10px; font-size:12.5px; }
-  .chan-card .btn { padding:7px 14px; font-size:13px; }
+  /* The Follow GBTI step: a slider, one platform per slide. Logo + name left, the follow button right. */
+  .chan-row { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .chan-id { display:inline-flex; align-items:center; gap:10px; font-size:15.5px; font-weight:700; min-width:0; }
+  .chan-slide .sub { margin:10px 0 0; }
+  .dots { display:flex; gap:6px; justify-content:center; margin-top:14px; }
+  .dots i { width:7px; height:7px; border-radius:50%; background:var(--line); }
+  .dots i.on { background:var(--accent); }
   .lead { color:var(--muted); font-size:13px; line-height:1.5; margin:0 0 12px; }
   /* The socials step rows + the add-more picker. */
   .srow { display:flex; align-items:center; gap:10px; margin:0 0 9px; }
@@ -11709,7 +11708,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       super.connectedCallback?.();
       this._page = 1;
       this._step = 0;
+      this._chanIdx = 0;
       this.load();
+    }
+    /** Advance (+1) or back (-1): the Follow GBTI slider consumes the move first, then the stepper. */
+    _advanceChanOrStep(dir) {
+      if (STEPS[this._step] === "subreddit") {
+        const next = (this._chanIdx ?? 0) + dir;
+        if (next >= 0 && next < FOLLOW_SLIDES.length) {
+          this._chanIdx = next;
+          this.render();
+          return;
+        }
+      }
+      this._step += dir;
+      this.render();
     }
     disconnectedCallback() {
       super.disconnectedCallback?.();
@@ -11863,7 +11876,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const isLast = this._step >= STEPS.length - 1;
       const nav = `<div class="stepnav">
       ${this._step > 0 ? `<button class="btn ghost" data-step-back type="button">&larr; Back</button>` : '<span class="grow"></span>'}
-      ${isLast ? `<button class="btn done" data-done type="button">I am all set</button>` : `<button class="btn" data-step-next type="button">Continue &rarr;</button>`}
+      ${isLast ? `<button class="btn done" data-done type="button">I am all set</button>` : step === "subreddit" ? `<button class="btn ghost" data-step-next type="button">Skip</button>` : `<button class="btn" data-step-next type="button">Continue &rarr;</button>`}
     </div>`;
       this.set(this.css(CSS29) + `
       <div class="head">
@@ -11878,13 +11891,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ${nav}`);
       this.on("[data-step-next]", "click", () => {
         this._stopDiscordPoll();
-        this._step++;
-        this.render();
+        this._advanceChanOrStep(1);
       });
       this.on("[data-step-back]", "click", () => {
         this._stopDiscordPoll();
-        this._step--;
-        this.render();
+        this._advanceChanOrStep(-1);
       });
       this.on("[data-done]", "click", () => this.emit("gbti:welcome-done"));
       if (step === "discord") {
@@ -11899,13 +11910,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._startDiscordPoll();
         });
       } else if (step === "subreddit") {
-        this.on("[data-subreddit-open]", "click", () => {
-          window.open(SUBREDDIT_URL, "_blank", "noopener");
-          try {
-            localStorage.setItem(SUBREDDIT_OPENED_KEY, "1");
-          } catch {
-          }
-          this.render();
+        this.on("[data-chan-follow]", "click", () => {
+          const [, , url] = FOLLOW_SLIDES[this._chanIdx ?? 0];
+          window.open(url, "_blank", "noopener");
+          this._advanceChanOrStep(1);
         });
       } else if (step === "socials") {
         this.$$("[data-social-key]").forEach((inp) => inp.addEventListener("input", () => {
@@ -11968,32 +11976,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <gbti-topic-picker></gbti-topic-picker>
     </div>`;
     }
-    // SOW-088: the Follow GBTI step — member content syndicates to r/GBTI_network first, and the network's
-    // other channels carry the syndicated posts too, so every channel gets its own stacked card (Reddit
-    // leads with its Join emphasis; the list scrolls when it does not fit). Fully skippable (the stepper's
-    // Continue advances without action).
+    // SOW-088: the Follow GBTI step — a slider, one platform per slide. The one primary button per slide is
+    // "Follow on <platform>" (all the same color, right of the logo + name row): it opens the channel in a
+    // new tab and advances the slider. The bottom nav's Continue reads Skip here (advance without opening),
+    // so the flow stays fully skippable; Back walks the slides before it walks the steps.
     _subredditCard() {
-      let opened = false;
-      try {
-        opened = localStorage.getItem(SUBREDDIT_OPENED_KEY) === "1";
-      } catch {
-        opened = false;
-      }
-      const cards = GBTI_CHANNELS.map(([k, label, url, blurb]) => `<div class="card chan-card">
-      <h3>${socialIcon(k, 16)} ${esc(label)}</h3>
-      <p class="sub">${esc(blurb)}</p>
-      <a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">Open ${esc(label)}</a>
-    </div>`).join("");
+      const i = Math.min(Math.max(this._chanIdx ?? 0, 0), FOLLOW_SLIDES.length - 1);
+      this._chanIdx = i;
+      const [k, label, , blurb] = FOLLOW_SLIDES[i];
+      const dots = FOLLOW_SLIDES.map((_s, j) => `<i class="${j === i ? "on" : ""}"></i>`).join("");
       return `
       <p class="lead">Please follow all of the properties below to help support the growth of the network. We will be syndicating member content, including yours, through these channels.</p>
-      <div class="chanscroll">
-        <div class="card chan-card">
-          <h3>${redditIco} Reddit</h3>
-          <p class="sub">Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network, so joining it is the easiest way to keep up with the co-op from your feed. Open it and hit Join.</p>
-          <button class="btn" data-subreddit-open type="button">${opened ? "Open r/GBTI_network again" : "Open r/GBTI_network"}</button>
-          ${opened ? `<p class="note" style="margin-top:9px">Opened. Hit Join over there, then Continue here.</p>` : ""}
+      <div class="card chan-slide">
+        <div class="chan-row">
+          <span class="chan-id">${socialIcon(k, 18)}<b>${esc(label)}</b></span>
+          <button class="btn" data-chan-follow type="button">Follow on ${esc(label)}</button>
         </div>
-        ${cards}
+        <p class="sub">${esc(blurb)}</p>
+        <div class="dots">${dots}</div>
       </div>`;
     }
     // The socials step: collect the member's handles across the platform set. Raw values stage locally
