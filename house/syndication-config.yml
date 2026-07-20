@@ -26,8 +26,6 @@ syndication:
   enabled: true
   require_approval: false
   hold_minutes: 60
-  # SOW-125: DEPRECATED and inert. The SOW-057 upvote trigger is retired (shares enqueue at publish per SOW-087,
-  # and default OFF per SOW-125). Left only so an old reader does not choke; it drives nothing. Remove when safe.
   upvote_threshold: 2
   classify: ai
   templates:
@@ -46,22 +44,19 @@ syndication:
     bluesky: true
     reddit: false
     devto: false
-  # DEPRECATED for routing (see the header note); kept only so an old reader parses.
   manual_assist_channels:
     - x
     - linkedin
-  # The per-type-per-channel auto-share matrix; the cell-mode legend lives in the HEADER comment (the only
-  # block an admin settings save preserves). Only cells differing from the code default need to appear.
   auto_matrix:
     share:
-      discord: off
-      discord-category: off
-      reddit: off
-      devto: off
-      mastodon: off
-      bluesky: off
-      x: off
-      linkedin: off
+      discord: 'off'
+      discord-category: 'off'
+      reddit: 'off'
+      devto: 'off'
+      mastodon: 'off'
+      bluesky: 'off'
+      x: 'off'
+      linkedin: 'off'
     post:
       x: on-manual
       linkedin: on-manual
@@ -71,39 +66,72 @@ syndication:
     prompt:
       x: on-manual
       linkedin: on-manual
-  # channel_hold_minutes:      # optional per-channel delay override in minutes (0..1440); absent = hold_minutes
-  #   bluesky: 120
   channel_templates:
     devto:
-      devto-footer: "The resource shared in this post is a new {content-type} published by GBTI Network member {fullName}. \n\n---\n\n>Are you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\n>To follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}"
-    # SOW-120: the X default message. {member-x-handle} resolves to the author's X @handle (from their
-    # profile links.x) when present, else their full name. The URL sits before the hashtags so a 280-char
-    # trim clips a trailing hashtag, never the link (X auto-cards the URL). A members-only item ignores this
-    # and uses the X stub instead.
+      devto-footer: >-
+        The resource shared in this post is a new {content-type} published by GBTI Network member
+        {fullName}. 
+
+
+        ---
+
+
+        >Are you a writer, musician, or product developer? We would love to support your work on the
+        GBTI Network. For more information about how to join our community visit
+        https://gbti.network
+
+
+        >To follow {fullName}'s work more closely, consider joining our network and subscribing to
+        them directly: {member-url}
     x:
       post: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       product: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       prompt: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       share: '{member-x-handle} shared: "{title}" {url} {category-hashtag} {tags-hashtags}'
-    # SOW-122: the Bluesky default message. It OMITS {url} because the adapter attaches an external embed
-    # card (a clickable link preview); the AT protocol does not auto-link a bare URL in post text.
     bluesky:
       post: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
       product: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
       prompt: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
       share: '{member-bluesky-handle} shared: "{title}" {category-hashtag} {tags-hashtags}'
-    # SOW-123: the Mastodon default message. Mastodon auto-links the {url}, auto-tags the #hashtags, and
-    # resolves the @user@instance mention natively, so they all ride in the text (no facets).
     mastodon:
-      post: 'New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
-      product: 'New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
-      prompt: 'New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      post: >-
+        New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag}
+        {tags-hashtags}
+      product: >-
+        New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag}
+        {tags-hashtags}
+      prompt: >-
+        New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag}
+        {tags-hashtags}
       share: '{member-mastodon-handle} shared: "{title}" {url} {category-hashtag} {tags-hashtags}'
-    # SOW-127: the LinkedIn message. LinkedIn is long-form (3000 chars) and plain-text @-mentions are not
-    # clickable, so it credits the author by {fullName} and carries the link + hashtags. A superadmin posts it
-    # by hand from the Social Queue (Assist opens the LinkedIn composer; Copy pastes the text).
     linkedin:
-      post: 'New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url} {category-hashtag} {tags-hashtags}'
-      product: 'New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url} {category-hashtag} {tags-hashtags}'
-      prompt: 'New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url} {category-hashtag} {tags-hashtags}'
-      share: '{fullName} shared: "{title}"\n\n{short-description}\n\n{url} {category-hashtag} {tags-hashtags}'
+      post: >-
+        New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url}
+        {category-hashtag} {tags-hashtags}
+      product: >-
+        New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url}
+        {category-hashtag} {tags-hashtags}
+      prompt: >-
+        New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url}
+        {category-hashtag} {tags-hashtags}
+      share: >-
+        {fullName} shared: "{title}"\n\n{short-description}\n\n{url} {category-hashtag}
+        {tags-hashtags}
+    reddit:
+      reddit-comment: >-
+        Shared to the community by GBTI Network member {member-reddit-handle}. 
+
+
+        "{author-note-italic}"
+
+
+        ---
+
+
+        Are you a writer, musician, or product developer? We would love to support your work on the
+        GBTI Network. For more information about how to join our community visit
+        https://gbti.network
+
+
+        To follow {fullName}'s work more closely, consider joining our network and subscribing to
+        them directly: {member-url}
