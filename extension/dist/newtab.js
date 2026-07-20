@@ -15657,6 +15657,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-syndicate-now.mjs
   var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
+  var LOCAL_SENDS_KEY = "gbti-synd-local-sends";
+  var LOCAL_SENDS_MAX_AGE = 7 * 24 * 60 * 60 * 1e3;
+  var localSendsAll = () => {
+    try {
+      const a = JSON.parse(localStorage.getItem(LOCAL_SENDS_KEY) || "[]");
+      return Array.isArray(a) ? a : [];
+    } catch {
+      return [];
+    }
+  };
+  var localSendsSave = (list) => {
+    try {
+      localStorage.setItem(LOCAL_SENDS_KEY, JSON.stringify(list.slice(-50)));
+    } catch {
+    }
+  };
   var CSS38 = `
   :host { display:block; }
   .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
@@ -15772,10 +15788,34 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const key = `${this._item().source}:${this._item().targetSlug}`;
         const prior = [...queue?.sent ?? [], ...queue?.failed ?? []].filter((it) => (it.id || "").startsWith(key + "#"));
         this._prior = prior.filter((it) => it.status === "sent");
+        this._mergeLocalSends(key);
       } catch (err) {
         this._err = err?.message || "Could not load the syndication destinations.";
       }
       this.render();
+    }
+    /** Merge the locally-remembered sends for this item into _prior (KV list-lag cover, see LOCAL_SENDS_KEY);
+     *  a local entry the tracker now carries is pruned, so the memory converges to the server record. */
+    _mergeLocalSends(key) {
+      const now = Date.now();
+      const all = localSendsAll().filter((s) => s && typeof s === "object" && now - (s.at || 0) < LOCAL_SENDS_MAX_AGE);
+      const mine = all.filter((s) => s.key === key);
+      if (!mine.length) {
+        localSendsSave(all);
+        return;
+      }
+      const covered = (s) => (this._prior || []).some((rec) => {
+        const at = rec.sentAt || rec.enqueuedAt || 0;
+        const dests = new Set(Object.keys(rec.channels || {}).map((k) => k.split(":")[0].replace(/^discord-forward$/, "discord")));
+        return dests.has(s.dest) && at >= (s.at || 0) - 12e4;
+      });
+      const still = [];
+      for (const s of mine) {
+        if (covered(s)) continue;
+        still.push(s);
+        this._prior = [...this._prior || [], { status: "sent", sentAt: s.at, trigger: "manual", manualBy: "local", channels: { [s.dest]: { status: "sent" } } }];
+      }
+      localSendsSave([...all.filter((s) => s.key !== key), ...still]);
     }
     _modalHtml() {
       const body = !this._info && !this._err ? `<p class="sub"><span class="spin"></span>Loading destinations…</p>` : this._err && !this._info ? `<p class="err">${esc(this._err)}</p>` : this._step === "dest" ? this._destHtml() : this._composeHtml();
@@ -16118,6 +16158,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         this._result = await this.client.syndicateNow(payload);
         this._prior = [...this._prior || [], { status: "sent", sentAt: Date.now(), trigger: "manual", channels: { [this._dest]: { status: "sent" } } }];
+        localSendsSave([...localSendsAll(), { key: `${item.source}:${item.targetSlug}`, dest: this._dest, at: Date.now() }]);
       } catch (err) {
         this._err = err?.message || "The post failed.";
       }

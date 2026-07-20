@@ -15,6 +15,16 @@ import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
 
 const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', mastodon: 'Mastodon' };
 
+// Cloudflare KV's list() is eventually consistent, so a JUST-posted record can be missing from the tracker
+// read for a minute or more (hit live 2026-07-20: a fresh Reddit post showed no badge on reopen while the
+// older Discord sends did). Successful sends are remembered locally too and merged into the history until
+// the tracker carries them, so the destination badge and the prior-send warning always reflect a post that
+// just happened. Entries prune themselves once covered, or after seven days.
+const LOCAL_SENDS_KEY = 'gbti-synd-local-sends';
+const LOCAL_SENDS_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+const localSendsAll = () => { try { const a = JSON.parse(localStorage.getItem(LOCAL_SENDS_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch { return []; } };
+const localSendsSave = (list) => { try { localStorage.setItem(LOCAL_SENDS_KEY, JSON.stringify(list.slice(-50))); } catch { /* private mode */ } };
+
 const CSS = `
   :host { display:block; }
   .snbtn { display:block; width:100%; font:inherit; font-weight:700; font-size:13px; padding:9px 14px; border:1.5px solid var(--line); border-radius:0; background:var(--panel); color:var(--fg); cursor:pointer; margin:0 0 14px; }
@@ -104,10 +114,32 @@ class GbtiSyndicateNow extends GbtiElement {
       const key = `${this._item().source}:${this._item().targetSlug}`;
       const prior = [...(queue?.sent ?? []), ...(queue?.failed ?? [])].filter((it) => (it.id || '').startsWith(key + '#'));
       this._prior = prior.filter((it) => it.status === 'sent');
+      this._mergeLocalSends(key);
     } catch (err) {
       this._err = err?.message || 'Could not load the syndication destinations.';
     }
     this.render();
+  }
+
+  /** Merge the locally-remembered sends for this item into _prior (KV list-lag cover, see LOCAL_SENDS_KEY);
+   *  a local entry the tracker now carries is pruned, so the memory converges to the server record. */
+  _mergeLocalSends(key) {
+    const now = Date.now();
+    const all = localSendsAll().filter((s) => s && typeof s === 'object' && now - (s.at || 0) < LOCAL_SENDS_MAX_AGE);
+    const mine = all.filter((s) => s.key === key);
+    if (!mine.length) { localSendsSave(all); return; }
+    const covered = (s) => (this._prior || []).some((rec) => {
+      const at = rec.sentAt || rec.enqueuedAt || 0;
+      const dests = new Set(Object.keys(rec.channels || {}).map((k) => k.split(':')[0].replace(/^discord-forward$/, 'discord')));
+      return dests.has(s.dest) && at >= (s.at || 0) - 120000;
+    });
+    const still = [];
+    for (const s of mine) {
+      if (covered(s)) continue; // the tracker caught up; drop the local copy
+      still.push(s);
+      this._prior = [...(this._prior || []), { status: 'sent', sentAt: s.at, trigger: 'manual', manualBy: 'local', channels: { [s.dest]: { status: 'sent' } } }];
+    }
+    localSendsSave([...all.filter((s) => s.key !== key), ...still]);
   }
 
   _modalHtml() {
@@ -483,6 +515,8 @@ class GbtiSyndicateNow extends GbtiElement {
       }
       this._result = await this.client.syndicateNow(payload);
       this._prior = [...(this._prior || []), { status: 'sent', sentAt: Date.now(), trigger: 'manual', channels: { [this._dest]: { status: 'sent' } } }];
+      // Remember the send locally so a reopened modal badges it even while the KV list lags the write.
+      localSendsSave([...localSendsAll(), { key: `${item.source}:${item.targetSlug}`, dest: this._dest, at: Date.now() }]);
     } catch (err) {
       this._err = err?.message || 'The post failed.';
     }
