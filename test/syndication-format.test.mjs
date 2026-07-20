@@ -1,7 +1,7 @@
 // SOW-058: the pure message formatter. Sanitization, truncation, URL preservation, no body leak.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom } from '../membership/syndication-format.mjs';
+import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom, redditHandleFrom } from '../membership/syndication-format.mjs';
 
 test('sanitizeMentions neutralizes @mentions and Discord mass-ping tokens', () => {
   assert.ok(!/@everyone/.test(sanitizeMentions('hey @everyone')));
@@ -212,4 +212,25 @@ test('{member-mastodon-handle}: the fediverse @user@instance when present, else 
   assert.equal(withM, '@propertunity@mastodon.social');
   const noM = renderTemplate('{member-mastodon-handle}', { author: 'x', authorName: 'Shane Taylor' }, { limit: 200 });
   assert.equal(noM, 'Shane Taylor');
+});
+
+test('redditHandleFrom parses URLs, u/ forms, bare names, and rejects junk', () => {
+  assert.equal(redditHandleFrom('https://www.reddit.com/user/atwellpub'), 'atwellpub');
+  assert.equal(redditHandleFrom('https://reddit.com/u/Some_User?ref=1'), 'Some_User');
+  assert.equal(redditHandleFrom('https://old.reddit.com/user/dash-name/'), 'dash-name');
+  assert.equal(redditHandleFrom('u/atwellpub'), 'atwellpub');
+  assert.equal(redditHandleFrom('/u/atwellpub'), 'atwellpub');
+  assert.equal(redditHandleFrom('@atwellpub'), 'atwellpub');
+  assert.equal(redditHandleFrom('atwellpub'), 'atwellpub');
+  assert.equal(redditHandleFrom('ab'), ''); // too short
+  assert.equal(redditHandleFrom('has spaces'), '');
+  assert.equal(redditHandleFrom('https://reddit.com/r/GBTI_network'), ''); // a subreddit is not a user
+  assert.equal(redditHandleFrom(''), '');
+});
+
+test('{member-reddit-handle}: u/name when the profile lists one, else the full name', () => {
+  const item = { source: 'post', author: 'alice', authorName: 'Alice Q', authorReddit: 'https://reddit.com/user/alice_q' };
+  assert.equal(renderTemplate('By {member-reddit-handle}.', item), 'By u/alice_q.');
+  assert.equal(renderTemplate('By {member-reddit-handle}.', { ...item, authorReddit: null }), 'By Alice Q.');
+  assert.equal(renderTemplate('By {member-reddit-handle}.', { ...item, authorReddit: 'not a handle!!' }), 'By Alice Q.');
 });

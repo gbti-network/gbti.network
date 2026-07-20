@@ -287,7 +287,9 @@ test('reddit-body: default template, config override, and the admin edit path', 
   assert.equal(DEFAULT_TEMPLATES['reddit-body'], '{short-description}'); // the description under the title
   // side-quest 2026-07-16: the first comment credits the member via {short-description} (which shares carry),
   // NOT {author-note-italic} (a posts-only intro that blanked the comment for shares).
-  assert.match(DEFAULT_TEMPLATES['reddit-comment'], /\{fullName\}[\s\S]*\{short-description\}[\s\S]*\{member-url\}/);
+  // The first comment now credits the member's Reddit username first ({member-reddit-handle} renders
+  // u/name, falling back to the full name), matching X/Bluesky/Mastodon.
+  assert.match(DEFAULT_TEMPLATES['reddit-comment'], /\{member-reddit-handle\}[\s\S]*\{short-description\}[\s\S]*\{member-url\}/);
   assert.ok(!/\{author-note/.test(DEFAULT_TEMPLATES['reddit-comment']), 'no author-note dependency, so it fires for a share');
   assert.equal(templateFor(syndicationConfigFromParsed({}), 'reddit-body'), DEFAULT_TEMPLATES['reddit-body']);
   const cfg = syndicationConfigFromParsed({ syndication: { templates: { 'reddit-body': 'Custom {author-note}' } } });

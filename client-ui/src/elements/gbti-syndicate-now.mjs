@@ -82,6 +82,7 @@ class GbtiSyndicateNow extends GbtiElement {
       authorX: d.gbtiX || undefined, // SOW-120: the public profile X handle ({member-x-handle})
       authorBluesky: d.gbtiBluesky || undefined, // SOW-122: the public profile Bluesky handle ({member-bluesky-handle})
       authorMastodon: d.gbtiMastodon || undefined, // SOW-123: the public profile Mastodon handle ({member-mastodon-handle})
+      authorReddit: d.gbtiReddit || undefined, // the public profile Reddit username ({member-reddit-handle})
       tags: d.gbtiTags ? d.gbtiTags.split(',').map((t) => t.trim()).filter(Boolean) : undefined, // SOW-120: {tags-hashtags}
       authorNote: this._authorNote || undefined, // SOW-088 {author-note}: the from-the-author intro comment
       visibility: d.gbtiVisibility === 'members' ? 'members' : 'public', // SOW-088 Proposal A: drives the STUB template set

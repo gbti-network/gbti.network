@@ -76,6 +76,20 @@ export function mastodonHandleFrom(value) {
 }
 
 /**
+ * Extract a Reddit username from a profile value. Accepts a reddit.com/user/<name> (or /u/<name>) URL, a
+ * bare "u/name", "/u/name", "@name", or a bare "name"; returns '' for anything implausible (Reddit
+ * usernames are 3-20 chars of letters/digits/underscore/hyphen). Pure.
+ */
+export function redditHandleFrom(value) {
+  let s = String(value || '').trim();
+  if (!s) return '';
+  const m = s.match(/^https?:\/\/(?:www\.|old\.)?reddit\.com\/u(?:ser)?\/([^/?#]+)/i);
+  if (m) s = m[1];
+  s = s.replace(/^\/?u\//i, '').replace(/^@/, '').trim();
+  return /^[A-Za-z0-9_-]{3,20}$/.test(s) ? s : '';
+}
+
+/**
  * SOW-120 follow-up: normalize a free-form tag or category label into a single hashtag token. Splits on any
  * non-alphanumeric run, capitalizes the first letter of each part (so a multi-word label survives as one
  * token and a single word keeps its casing, preserving acronyms), and prefixes '#'. Returns '' when nothing
@@ -125,6 +139,7 @@ function hashtagList(labels) {
  *   {member-x-handle}  the member's X handle as @handle (from profile links.x), else the full name (SOW-120)
  *   {member-bluesky-handle}  the member's Bluesky handle as @handle (from profile links.bluesky), else the full name (SOW-122)
  *   {member-mastodon-handle}  the member's Mastodon @user@instance (from profile links.mastodon), else the full name (SOW-123)
+ *   {member-reddit-handle}  the member's Reddit username as u/name (from profile links.reddit), else the full name
  *   {category-hashtag}  the category as a single hashtag, e.g. #DevOps (SOW-120)
  *   {tags-hashtags}   the item's tags as hashtags, e.g. #AI #Prompts (SOW-120)
  *   {hashtags}       the category plus the tags, de-duplicated, as one hashtag set (SOW-120)
@@ -180,6 +195,9 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
     // SOW-123: {member-mastodon-handle} = the member's Mastodon @user@instance (from profile links.mastodon),
     // else the full name. Mastodon renders @user@instance in status text as a native mention (no facet).
     membermastodonhandle: mastodonHandleFrom(item.authorMastodon) ? `@${mastodonHandleFrom(item.authorMastodon)}` : fullName,
+    // {member-reddit-handle} = the member's Reddit username as u/name (from profile links.reddit), else the
+    // full name. Reddit renders u/name as a profile link natively; redditHandleFrom strictly validates.
+    memberreddithandle: redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName,
     categoryhashtag: toHashtag(item.category),
     tagshashtags: hashtagList(item.tags),
     hashtags: hashtagList([item.category, ...(Array.isArray(item.tags) ? item.tags : [])]),

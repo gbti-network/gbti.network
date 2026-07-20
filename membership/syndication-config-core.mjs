@@ -118,7 +118,9 @@ const DEFAULT_DEVTO_FOOTER = '---\n\nAre you a writer, musician, or product deve
 // (which BOTH content items and SHARES carry) rather than {author-note-italic} (a posts/products/prompts-only
 // intro), so it also fires for a share; the popup's _redditStored guard blanks a comment that references the
 // author note when none exists, which is why a share got no crediting comment before.
-const DEFAULT_REDDIT_COMMENT = 'Shared to the community by GBTI Network member {fullName}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
+// The first comment credits the member's Reddit username when their profile lists one ({member-reddit-handle}
+// renders u/name, which Reddit links natively), falling back to the full name, matching X/Bluesky/Mastodon.
+const DEFAULT_REDDIT_COMMENT = 'Shared to the community by GBTI Network member {member-reddit-handle}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
   post: DEFAULT_FORMAT,

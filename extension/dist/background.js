@@ -21040,7 +21040,7 @@ var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}:
 var DEFAULT_REDDIT_BODY = "{short-description}";
 var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
 var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
-var DEFAULT_REDDIT_COMMENT = "Shared to the community by GBTI Network member {fullName}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
+var DEFAULT_REDDIT_COMMENT = "Shared to the community by GBTI Network member {member-reddit-handle}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
 var DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_FORMAT,
   post: DEFAULT_FORMAT,

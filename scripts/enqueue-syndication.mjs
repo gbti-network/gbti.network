@@ -72,7 +72,7 @@ export function categoryOf(item, fm) {
 }
 
 /** Map a buildSyndicationItem result + its frontmatter to a buildQueueItem INPUT (metadata only, never the body). */
-export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = null, authorDiscord = null, authorX = null, authorBluesky = null, authorMastodon = null, moderation = null }) {
+export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = null, authorDiscord = null, authorX = null, authorBluesky = null, authorMastodon = null, authorReddit = null, moderation = null }) {
   const title = item.title;
   const blurb = (fm.shortDescription || fm.excerpt || fm.description || '').toString().trim() || null;
   return {
@@ -85,6 +85,7 @@ export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = 
     authorX: authorX || null, // SOW-120: the public profile X handle, feeds {member-x-handle}
     authorBluesky: authorBluesky || null, // SOW-122: the public profile Bluesky handle, feeds {member-bluesky-handle}
     authorMastodon: authorMastodon || null, // SOW-123: the public profile Mastodon handle, feeds {member-mastodon-handle}
+    authorReddit: authorReddit || null, // the public profile Reddit username, feeds {member-reddit-handle}
     tags: Array.isArray(fm.tags) ? fm.tags.filter((t) => typeof t === 'string') : null, // SOW-120: feeds {tags-hashtags}
     title,
     blurb,
@@ -191,6 +192,8 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
   const resolveAuthorBluesky = deps.resolveAuthorBluesky ?? ((author) => readProfileFm(author)?.links?.bluesky || null);
   // SOW-123: the profile's PUBLIC Mastodon handle feeds {member-mastodon-handle}.
   const resolveAuthorMastodon = deps.resolveAuthorMastodon ?? ((author) => readProfileFm(author)?.links?.mastodon || null);
+  // The profile's PUBLIC Reddit username feeds {member-reddit-handle} (the Reddit first comment credits it).
+  const resolveAuthorReddit = deps.resolveAuthorReddit ?? ((author) => readProfileFm(author)?.links?.reddit || null);
 
   const inputs = [];
   for (const b of built) {
@@ -203,6 +206,7 @@ export async function main({ argv = process.argv.slice(2), root = ROOT, env = pr
       authorX: resolveAuthorX(b.item.author),
       authorBluesky: resolveAuthorBluesky(b.item.author),
       authorMastodon: resolveAuthorMastodon(b.item.author),
+      authorReddit: resolveAuthorReddit(b.item.author),
       moderation,
     }));
   }
