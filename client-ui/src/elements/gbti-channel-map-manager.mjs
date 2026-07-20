@@ -678,7 +678,10 @@ class GbtiChannelMapManager extends GbtiElement {
       const tier = this.$('[data-eng-tier]')?.value || 'paid';
       const commentAutopost = this.$('[data-eng-comment]')?.value === 'true';
       if (!Number.isInteger(openThreshold) || openThreshold < 1) { this._msg = 'The member threshold must be a whole number of 1 or more.'; this.render(); return; }
-      this._run(() => this.client.setNewsEngagement({ enabled, openThreshold, tier, commentAutopost }));
+      this._saveOptimistic(
+        () => this.client.setNewsEngagement({ enabled, openThreshold, tier, commentAutopost }),
+        () => { this._engDirty = false; if (this._engagement) { this._engagement.enabled = enabled; this._engagement.open_threshold = openThreshold; this._engagement.tier = tier; this._engagement.comment_autopost = commentAutopost; } },
+      );
     });
 
     // SOW-126: Content auto-share. The Enable/threshold/tier controls + the signal chips arm the card.
@@ -750,13 +753,23 @@ class GbtiChannelMapManager extends GbtiElement {
     });
     const channelHoldMinutes = {};
     this.$$('[data-chan-hold]').forEach((inp) => { channelHoldMinutes[inp.dataset.chanHold] = inp.value === '' ? '' : Number(inp.value); });
-    this._run(() => this.client.setSyndicationSettings({
-      enabled: this.$('[data-pipe-enabled]')?.value === 'true',
-      requireApproval: ready === 'hold',
-      holdMinutes,
-      autoMatrix,
-      channelHoldMinutes,
-    }));
+    const enabled = this.$('[data-pipe-enabled]')?.value === 'true';
+    const requireApproval = ready === 'hold';
+    // SOW-132: optimistic — reflect the SAVED matrix + settings so they stay visible (a git reload reads the
+    // pre-merge file and reverts the matrix to the stored defaults).
+    this._saveOptimistic(
+      () => this.client.setSyndicationSettings({ enabled, requireApproval, holdMinutes, autoMatrix, channelHoldMinutes }),
+      () => {
+        this._pipeDirty = false;
+        if (this._pipeline) {
+          this._pipeline.enabled = enabled;
+          this._pipeline.requireApproval = requireApproval;
+          this._pipeline.holdMinutes = holdMinutes;
+          this._pipeline.autoMatrix = autoMatrix;
+          this._pipeline.channelHoldMinutes = { ...channelHoldMinutes };
+        }
+      },
+    );
   }
 
   // SOW-126: read the content-engagement card back and save it (mirrors the news _save-eng handler).
@@ -767,7 +780,10 @@ class GbtiChannelMapManager extends GbtiElement {
     const signals = {};
     this.$$('[data-ceng-signal]').forEach((ch) => { signals[ch.dataset.cengSignal] = ch.classList.contains('on'); });
     if (!Number.isInteger(threshold) || threshold < 1) { this._msg = 'The member threshold must be a whole number of 1 or more.'; this.render(); return; }
-    this._run(() => this.client.setContentEngagementSettings({ enabled, threshold, tier, signals }));
+    this._saveOptimistic(
+      () => this.client.setContentEngagementSettings({ enabled, threshold, tier, signals }),
+      () => { this._contentEngDirty = false; if (this._contentEng) { this._contentEng.enabled = enabled; this._contentEng.threshold = threshold; this._contentEng.tier = tier; this._contentEng.signals = { ...signals }; } },
+    );
   }
 
   async _saveTemplates() {
@@ -806,15 +822,31 @@ class GbtiChannelMapManager extends GbtiElement {
     this.render();
   }
 
+  _ackMsg(r) {
+    return r?.noop ? 'No change (already in that state).'
+      : (r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : 'Done.');
+  }
+
+  // SOW-132: save a settings card WITHOUT a git reload. On success `apply(r)` reflects the saved values into the
+  // local state so they stay visible; a full reload (readYaml) reads the file BEFORE the superadmin auto-merge PR
+  // lands and reverts the just-edited values to the stored defaults (the matrix "reset to zero on save" report).
+  // git + the mirror catch up in the background.
+  async _saveOptimistic(fn, apply) {
+    this._busy = true; this._msg = ''; this.render();
+    let r = null;
+    try { r = await fn(); }
+    catch (e) { this._busy = false; this._msg = e?.message || 'That edit failed.'; this.render(); return; }
+    this._busy = false;
+    try { apply(r); } catch { /* leave the state as-is */ }
+    this._msg = this._ackMsg(r);
+    this.render();
+  }
+
+  // Used by the immediate word-list add/remove ops, which DO want the fresh list read back.
   async _run(fn) {
     this._busy = true; this._msg = ''; this.render();
-    try {
-      const r = await fn();
-      this._msg = r?.noop ? 'No change (already in that state).'
-        : (r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : 'Done.');
-    } catch (e) {
-      this._msg = e?.message || 'That edit failed.';
-    }
+    try { this._msg = this._ackMsg(await fn()); }
+    catch (e) { this._msg = e?.message || 'That edit failed.'; }
     this._busy = false;
     this._loaded = false;
     this.render();

@@ -7026,7 +7026,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this.render();
           return;
         }
-        this._run(() => this.client.setNewsEngagement({ enabled, openThreshold, tier, commentAutopost }));
+        this._saveOptimistic(
+          () => this.client.setNewsEngagement({ enabled, openThreshold, tier, commentAutopost }),
+          () => {
+            this._engDirty = false;
+            if (this._engagement) {
+              this._engagement.enabled = enabled;
+              this._engagement.open_threshold = openThreshold;
+              this._engagement.tier = tier;
+              this._engagement.comment_autopost = commentAutopost;
+            }
+          }
+        );
       });
       ["[data-ceng-enabled]", "[data-ceng-threshold]", "[data-ceng-tier]"].forEach((sel) => {
         const el = this.$(sel);
@@ -7125,13 +7136,21 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.$$("[data-chan-hold]").forEach((inp) => {
         channelHoldMinutes[inp.dataset.chanHold] = inp.value === "" ? "" : Number(inp.value);
       });
-      this._run(() => this.client.setSyndicationSettings({
-        enabled: this.$("[data-pipe-enabled]")?.value === "true",
-        requireApproval: ready === "hold",
-        holdMinutes,
-        autoMatrix,
-        channelHoldMinutes
-      }));
+      const enabled = this.$("[data-pipe-enabled]")?.value === "true";
+      const requireApproval = ready === "hold";
+      this._saveOptimistic(
+        () => this.client.setSyndicationSettings({ enabled, requireApproval, holdMinutes, autoMatrix, channelHoldMinutes }),
+        () => {
+          this._pipeDirty = false;
+          if (this._pipeline) {
+            this._pipeline.enabled = enabled;
+            this._pipeline.requireApproval = requireApproval;
+            this._pipeline.holdMinutes = holdMinutes;
+            this._pipeline.autoMatrix = autoMatrix;
+            this._pipeline.channelHoldMinutes = { ...channelHoldMinutes };
+          }
+        }
+      );
     }
     // SOW-126: read the content-engagement card back and save it (mirrors the news _save-eng handler).
     _saveContentEngagement() {
@@ -7147,7 +7166,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.render();
         return;
       }
-      this._run(() => this.client.setContentEngagementSettings({ enabled, threshold, tier, signals }));
+      this._saveOptimistic(
+        () => this.client.setContentEngagementSettings({ enabled, threshold, tier, signals }),
+        () => {
+          this._contentEngDirty = false;
+          if (this._contentEng) {
+            this._contentEng.enabled = enabled;
+            this._contentEng.threshold = threshold;
+            this._contentEng.tier = tier;
+            this._contentEng.signals = { ...signals };
+          }
+        }
+      );
     }
     async _saveTemplates() {
       this._captureTmpl();
@@ -7190,13 +7220,41 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._msg = r && !r.noop ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? "" : "s"} saved${r.prNumber ? `; ${submitAck({ prNumber: r.prNumber, autoMerge: false })}` : ""}` : "No changes.";
       this.render();
     }
+    _ackMsg(r) {
+      return r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
+    }
+    // SOW-132: save a settings card WITHOUT a git reload. On success `apply(r)` reflects the saved values into the
+    // local state so they stay visible; a full reload (readYaml) reads the file BEFORE the superadmin auto-merge PR
+    // lands and reverts the just-edited values to the stored defaults (the matrix "reset to zero on save" report).
+    // git + the mirror catch up in the background.
+    async _saveOptimistic(fn, apply) {
+      this._busy = true;
+      this._msg = "";
+      this.render();
+      let r = null;
+      try {
+        r = await fn();
+      } catch (e) {
+        this._busy = false;
+        this._msg = e?.message || "That edit failed.";
+        this.render();
+        return;
+      }
+      this._busy = false;
+      try {
+        apply(r);
+      } catch {
+      }
+      this._msg = this._ackMsg(r);
+      this.render();
+    }
+    // Used by the immediate word-list add/remove ops, which DO want the fresh list read back.
     async _run(fn) {
       this._busy = true;
       this._msg = "";
       this.render();
       try {
-        const r = await fn();
-        this._msg = r?.noop ? "No change (already in that state)." : r?.prNumber ? submitAck({ prNumber: r.prNumber, autoMerge: false }) : "Done.";
+        this._msg = this._ackMsg(await fn());
       } catch (e) {
         this._msg = e?.message || "That edit failed.";
       }

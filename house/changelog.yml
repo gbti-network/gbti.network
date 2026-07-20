@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 35
+    date: 2026-07-19
+    type: build
+    title: Saving the auto-share matrix keeps your values
+    notes:
+      - Saving the Pipeline (auto-share matrix, hold window) and the News/Content auto-share cards now keeps your edited values on screen instead of reverting them to defaults for a moment while the change merges.
+      - This applies the same instant-save treatment the templates got in the previous build to the rest of the syndication settings.
+
+  - version: 0.1.0
     build: 34
     date: 2026-07-19
     type: build
