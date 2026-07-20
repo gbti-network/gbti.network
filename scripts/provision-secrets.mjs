@@ -60,6 +60,12 @@ const REGISTRY = [
   // SOW-123: the Mastodon syndication destination (free, a normal auto channel). Worker-only.
   { name: 'MASTODON_BASE_URL', targets: ['worker'], kind: 'var', optional: true, note: 'The brand instance origin, e.g. https://mastodon.social. NON-SECRET; may live in wrangler.toml [env.production.vars].' },
   { name: 'MASTODON_ACCESS_TOKEN', targets: ['worker'], optional: true, note: 'A Mastodon Development-app access token with write:statuses (instance Settings > Development).' },
+  // SOW-133: the Chrome Web Store Publish API credentials for the publish-extension Action (Actions secrets, not
+  // the Worker). One-time Google Cloud OAuth setup in .data/ops/extension-ops/chrome-web-store.md. Optional: the
+  // publish script skips cleanly when unset.
+  { name: 'CWS_CLIENT_ID', targets: ['actions'], optional: true, note: 'Chrome Web Store OAuth client id (Google Cloud project, Chrome Web Store API enabled).' },
+  { name: 'CWS_CLIENT_SECRET', targets: ['actions'], optional: true, note: 'The OAuth client secret paired with CWS_CLIENT_ID.' },
+  { name: 'CWS_REFRESH_TOKEN', targets: ['actions'], optional: true, note: 'A refresh token for the publisher account (gbti.labs), obtained once via the OAuth consent flow.' },
 ];
 
 // ---- safe local env parsing (values are read but NEVER printed) ----

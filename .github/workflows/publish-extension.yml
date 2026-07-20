@@ -1,0 +1,51 @@
+name: Publish extension to the Chrome Web Store
+
+# SOW-133: push a new extension BUILD to the Chrome Web Store via the Publish API. MANUAL by design
+# (workflow_dispatch): the owner clicks Run when they want a new package live, because a code change re-enters
+# review. It rebuilds the package from source, then uploads + publishes (or just uploads for a dashboard review).
+#
+# INERT until the CWS OAuth credentials are set as Actions secrets (CWS_CLIENT_ID, CWS_CLIENT_SECRET,
+# CWS_REFRESH_TOKEN). Without them the script skips cleanly. The API does NOT manage the store listing
+# (screenshots, marquee, description) — upload those in the dashboard. Setup: .data/ops/extension-ops/chrome-web-store.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'publish (upload + go live), upload-only (upload a draft to review in the dashboard), or check (verify creds only)'
+        type: choice
+        default: publish
+        options: [publish, upload-only, check]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-extension
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      # Rebuild the package from source so we publish exactly what is committed (four-dir build + drift guard).
+      - name: Build + package the extension
+        run: npm run build:extension && node scripts/check-extension.mjs
+      - name: Publish to the Chrome Web Store
+        run: |
+          case "${{ inputs.mode }}" in
+            check) node scripts/publish-cws.mjs --check ;;
+            upload-only) node scripts/publish-cws.mjs --upload-only ;;
+            *) node scripts/publish-cws.mjs ;;
+          esac
+        env:
+          CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+          # The live item id is a non-secret constant (defaulted in the script); override here only if it changes.
+          CWS_APP_ID: "iffjdmifgnjgkdjoodapjciddibmifka"
