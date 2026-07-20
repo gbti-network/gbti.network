@@ -93,6 +93,17 @@ function mount() {
     // SOW-029: if the new tab already showed the welcome (flag set on show), do not re-show it -> go straight home.
     let seen = false; try { seen = localStorage.getItem('gbti-welcome-seen') === '1'; } catch { /* no storage */ }
     if (seen) { window.location.href = chrome.runtime.getURL('newtab.html'); return; }
+    // The setup wizard PAGE is light by design (SOW-026: no data-theme, so its V3 tokens stay light), but the
+    // WELCOME takeover is a member surface and must honor the member's theme like every other page. Resolve it
+    // exactly like theme-init.mjs (dark default, 'system' follows the OS) and stamp it at takeover, with a
+    // matching page background so the light chrome never bleeds through behind the dark cards.
+    let theme = 'dark';
+    try {
+      const t = localStorage.getItem('gbti-theme');
+      theme = t === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : (t === 'light' ? 'light' : 'dark');
+    } catch { /* default dark */ }
+    document.documentElement.setAttribute('data-theme', theme);
+    if (theme === 'dark') { document.body.style.background = '#0d1117'; document.body.style.color = '#e6edf3'; }
     const w = document.createElement('gbti-welcome');
     w.addEventListener('gbti:welcome-done', () => {
       try { localStorage.setItem('gbti-welcome-seen', '1'); } catch { /* no storage */ } // SOW-029: don't re-show on the new tab

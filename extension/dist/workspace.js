@@ -11569,14 +11569,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var SUBREDDIT_URL = "https://www.reddit.com/r/GBTI_network";
   var SUBREDDIT_OPENED_KEY = "gbti-welcome-subreddit-opened";
   var GBTI_CHANNELS = [
-    ["x", "X", "https://x.com/gbti_network"],
-    ["bluesky", "Bluesky", "https://bsky.app/profile/gbti.bsky.social"],
-    ["youtube", "YouTube", "https://www.youtube.com/@gbti_network"],
-    ["github", "GitHub", "https://github.com/gbti-network"],
-    ["devto", "Dev.to", "https://dev.to/gbti"],
-    ["dailydev", "daily.dev", "https://dly.to/zfCriM6JfRF"],
-    ["mastodon", "Mastodon", "https://mastodon.social/@gbti"],
-    ["linkedin", "LinkedIn", "https://www.linkedin.com/company/gbti-network/posts"]
+    ["x", "X", "https://x.com/gbti_network", "Syndicated member work and network updates, as they publish."],
+    ["bluesky", "Bluesky", "https://bsky.app/profile/gbti.bsky.social", "The same syndicated stream on Bluesky."],
+    ["youtube", "YouTube", "https://www.youtube.com/@gbti_network", "Video sessions and walkthroughs from the network."],
+    ["github", "GitHub", "https://github.com/gbti-network", "The public content repo and our open source work."],
+    ["devto", "Dev.to", "https://dev.to/gbti", "Member articles crossposted to the GBTI organization on DEV."],
+    ["dailydev", "daily.dev", "https://dly.to/zfCriM6JfRF", "Follow the GBTI squad inside your daily.dev feed."],
+    ["mastodon", "Mastodon", "https://mastodon.social/@gbti", "The syndicated stream on the fediverse."],
+    ["linkedin", "LinkedIn", "https://www.linkedin.com/company/gbti-network/posts", "Network updates and member work on LinkedIn."]
   ];
   var SOCIALS_STAGE_KEY = "gbti-welcome-socials";
   var SOCIAL_STARTERS = ["x", "bluesky", "mastodon", "linkedin", "youtube", "website"];
@@ -11623,11 +11623,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .pager .pg { font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .note { color:var(--muted); font-size:12.5px; line-height:1.5; margin:0; }
   .note a { color:var(--accent); }
-  /* The GBTI channels grid (the Follow GBTI step). */
-  .chans { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
-  .chan { display:inline-flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:var(--fg);
-    background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:7px 13px; text-decoration:none; }
-  .chan:hover { color:var(--accent); border-color:var(--accent); }
+  /* The Follow GBTI step: one stacked card per channel, scrolling when the list does not fit. */
+  .chanscroll { max-height:min(48vh, 440px); overflow-y:auto; padding-right:4px; }
+  .chan-card { padding:13px 16px; margin:0 0 10px; }
+  .chan-card h3 { font-size:14.5px; margin:0 0 3px; }
+  .chan-card .sub { margin:0 0 10px; font-size:12.5px; }
+  .chan-card .btn { padding:7px 14px; font-size:13px; }
+  .lead { color:var(--muted); font-size:13px; line-height:1.5; margin:0 0 12px; }
   /* The socials step rows + the add-more picker. */
   .srow { display:flex; align-items:center; gap:10px; margin:0 0 9px; }
   .srow .sico { flex:none; width:30px; height:30px; display:grid; place-items:center; color:var(--muted);
@@ -11923,8 +11925,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     </div>`;
     }
     // SOW-088: the Follow GBTI step — member content syndicates to r/GBTI_network first, and the network's
-    // other channels carry the syndicated posts too, so this lists every channel (the site footer's set).
-    // Fully skippable (the stepper's Continue advances without action).
+    // other channels carry the syndicated posts too, so every channel gets its own stacked card (Reddit
+    // leads with its Join emphasis; the list scrolls when it does not fit). Fully skippable (the stepper's
+    // Continue advances without action).
     _subredditCard() {
       let opened = false;
       try {
@@ -11932,15 +11935,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch {
         opened = false;
       }
-      const chans = GBTI_CHANNELS.map(([k, label, url]) => `<a class="chan" href="${esc(url)}" target="_blank" rel="noopener">${socialIcon(k, 14)}${esc(label)}</a>`).join("");
-      return `<div class="card">
-      <h3>${redditIco} Follow GBTI</h3>
-      <p class="sub">Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network, so joining it is the easiest way to keep up with the co-op from your feed. Open it and hit Join, or skip; every link lives in the site footer any time.</p>
-      <button class="btn" data-subreddit-open type="button">${opened ? "Open r/GBTI_network again" : "Open r/GBTI_network"}</button>
-      ${opened ? `<p class="note">Opened. Hit Join over there, then Continue here.</p>` : ""}
-      <p class="note" style="margin-top:14px">We are on your other networks too; follow GBTI wherever you already spend time:</p>
-      <div class="chans">${chans}</div>
-    </div>`;
+      const cards = GBTI_CHANNELS.map(([k, label, url, blurb]) => `<div class="card chan-card">
+      <h3>${socialIcon(k, 16)} ${esc(label)}</h3>
+      <p class="sub">${esc(blurb)}</p>
+      <a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">Open ${esc(label)}</a>
+    </div>`).join("");
+      return `
+      <p class="lead">Follow GBTI where you already spend time. Reddit comes first: that is where member content lands.</p>
+      <div class="chanscroll">
+        <div class="card chan-card">
+          <h3>${redditIco} Reddit</h3>
+          <p class="sub">Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network, so joining it is the easiest way to keep up with the co-op from your feed. Open it and hit Join.</p>
+          <button class="btn" data-subreddit-open type="button">${opened ? "Open r/GBTI_network again" : "Open r/GBTI_network"}</button>
+          ${opened ? `<p class="note" style="margin-top:9px">Opened. Hit Join over there, then Continue here.</p>` : ""}
+        </div>
+        ${cards}
+      </div>`;
     }
     // The socials step: collect the member's handles across the platform set. Raw values stage locally
     // (SOCIALS_STAGE_KEY) and the profile editor consumes them into profile.md on the profile page, so the
