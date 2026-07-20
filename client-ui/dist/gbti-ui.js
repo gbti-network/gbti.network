@@ -6581,9 +6581,53 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "prompt", nm: "Prompt", df: "prompt" }
   ];
   var VARS = ["{memberdiscord}", "{member-discord-username}", "{fullName}", "{author}", "{title}", "{url}", "{category}", "{content-type}", "{author-note}", "{author-note-italic}", "{member-url}", "{short-description}"];
+  var SYND_TABS = [
+    { id: "activity", nm: "Publishing Activity", ic: "c-kanban", build: "activity" },
+    { id: "pipeline", nm: "Pipeline", ic: "c-pipe", build: "pipeline" },
+    { id: "templates", nm: "Templates", ic: "c-tmpl", build: "templates" },
+    { id: "news", nm: "News auto-share", ic: "c-share", build: "news" },
+    { id: "content", nm: "Content auto-share", ic: "c-share", build: "content" },
+    { id: "words", nm: "Word lists", ic: "c-shield", build: "words" }
+  ];
+  var SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
+  var SYND_SUB_KEY = "gbti-synd-sub";
+  var TMPL_KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"];
   var GbtiChannelMapManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
+    }
+    // SOW-132: the EFFECTIVE template value for a (channel, key): a channel override, else the shared map, else the
+    // built-in default. Extracted from load() so _saveTemplates can recompute a field after an optimistic write.
+    _effPub(ch, k) {
+      return this._channelTemplates?.[ch]?.[k] ?? this._templates?.[k] ?? "";
+    }
+    _effStub(ch, k) {
+      return this._channelTemplatesStub?.[ch]?.[k] ?? this._stubTemplates?.[k] ?? DEFAULT_CHANNEL_STUB_TEMPLATES[ch]?.[k] ?? DEFAULT_STUB_TEMPLATES[k] ?? this._effPub(ch, k);
+    }
+    // SOW-132: read the deep-linked sub-tab from the URL hash (`sub=<id>`, alongside the admin `tab=syndication`),
+    // else localStorage, else the first tab. Write it back with history.replaceState so it does NOT fire hashchange
+    // (which would make admin.mjs re-mount the syndication group).
+    _readSubTab() {
+      try {
+        const m = /(?:^|[#&])sub=([a-z-]+)/.exec(typeof location !== "undefined" ? location.hash || "" : "");
+        if (m && SYND_TAB_IDS.includes(m[1])) return m[1];
+        const stored = localStorage.getItem(SYND_SUB_KEY);
+        if (stored && SYND_TAB_IDS.includes(stored)) return stored;
+      } catch {
+      }
+      return "activity";
+    }
+    _writeSubTab(id) {
+      try {
+        localStorage.setItem(SYND_SUB_KEY, id);
+      } catch {
+      }
+      try {
+        const parts = (location.hash || "").replace(/^#/, "").split("&").filter((p) => p && !/^sub=/.test(p));
+        parts.push(`sub=${id}`);
+        history.replaceState(null, "", `${location.pathname}${location.search}#${parts.join("&")}`);
+      } catch {
+      }
     }
     async load() {
       if (!this.client) {
@@ -6613,16 +6657,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._pipeline = pipeline?.settings || null;
         this._work = {};
         this._base = {};
-        const KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"];
-        const effPub = (ch, k) => this._channelTemplates[ch]?.[k] ?? this._templates?.[k] ?? "";
-        const effStub = (ch, k) => this._channelTemplatesStub[ch]?.[k] ?? this._stubTemplates?.[k] ?? DEFAULT_CHANNEL_STUB_TEMPLATES[ch]?.[k] ?? DEFAULT_STUB_TEMPLATES[k] ?? effPub(ch, k);
         for (const ch of TILE_CHANNELS.filter((c) => c.active).map((c) => c.id)) {
           for (const vis of ["pub", "stub"]) {
             const key = `${vis}:${ch}`;
             this._work[key] = {};
             this._base[key] = {};
-            for (const k of KEYS) {
-              const eff = vis === "stub" ? effStub(ch, k) : effPub(ch, k);
+            for (const k of TMPL_KEYS) {
+              const eff = vis === "stub" ? this._effStub(ch, k) : this._effPub(ch, k);
               this._work[key][k] = eff;
               this._base[key][k] = eff;
             }
@@ -6633,8 +6674,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._pipeDirty = false;
         this._engDirty = false;
         this._contentEngDirty = false;
-        this._curCh = this._curCh && this._work[this._curCh] ? this._curCh : "discord";
+        this._curCh = this._curCh && this._work[`pub:${this._curCh}`] ? this._curCh : "discord";
         this._termTab = this._termTab || Object.keys(this._lists)[0] || "political";
+        this._activeTab = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : this._readSubTab();
         this._loaded = true;
       } catch {
         this._loaded = false;
@@ -6859,23 +6901,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this.set(this.css(CSS17) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
         return;
       }
+      const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : "activity";
+      const tabs = SYND_TABS.map((t) => `<a data-tab="${t.id}" role="tab"${t.id === active ? ' class="on" aria-selected="true"' : ' aria-selected="false"'}><svg viewBox="0 0 24 24"><use href="#${t.ic}"/></svg>${esc(t.nm)}</a>`).join("");
+      const builders = {
+        activity: () => this._activityCard(),
+        pipeline: () => this._pipelineCard(),
+        templates: () => this._templatesCard(),
+        news: () => this._autoshareCard(),
+        content: () => this._contentEngagementCard(),
+        words: () => this._wordlistsCard()
+      };
+      const section = (builders[active] || builders.activity)();
       this.set(this.css(CSS17) + ICONS2 + `<div class="${this._busy ? "busy" : ""}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
-      <nav class="subnav" data-subnav>
-        <a data-go="sec-activity" class="on"><svg viewBox="0 0 24 24"><use href="#c-kanban"/></svg>Publishing Activity</a>
-        <a data-go="sec-pipeline"><svg viewBox="0 0 24 24"><use href="#c-pipe"/></svg>Pipeline</a>
-        <a data-go="sec-templates"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg>Templates</a>
-        <a data-go="sec-autoshare"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg>News auto-share</a>
-        <a data-go="sec-content-autoshare"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg>Content auto-share</a>
-        <a data-go="sec-words"><svg viewBox="0 0 24 24"><use href="#c-shield"/></svg>Word lists</a>
-      </nav>
+      <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
-      ${this._activityCard()}
-      ${this._pipelineCard()}
-      ${this._templatesCard()}
-      ${this._autoshareCard()}
-      ${this._contentEngagementCard()}
-      ${this._wordlistsCard()}
+      ${section}
     </div>`);
       this._wire();
     }
@@ -6894,20 +6935,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (m && on) m.textContent = "";
     }
     _wire() {
-      const links = this.$$("[data-go]");
-      links.forEach((a) => a.addEventListener("click", () => {
-        this.$(`#${a.dataset.go}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      this.$$("[data-tab]").forEach((a) => a.addEventListener("click", () => {
+        const id = a.dataset.tab;
+        if (!SYND_TAB_IDS.includes(id) || id === this._activeTab) return;
+        this._activeTab = id;
+        this._writeSubTab(id);
+        this.render();
       }));
-      const secs = this.$$("[data-sec]");
-      if (this._spy) window.removeEventListener("scroll", this._spy);
-      this._spy = () => {
-        let idx = 0;
-        secs.forEach((s, i) => {
-          if (s.getBoundingClientRect().top <= 130) idx = i;
-        });
-        links.forEach((a, i) => a.classList.toggle("on", i === idx));
-      };
-      window.addEventListener("scroll", this._spy, { passive: true });
       ["[data-pipe-enabled]", "[data-pipe-ready]", "[data-pipe-hold]"].forEach((sel) => {
         const el = this.$(sel);
         if (el) {
@@ -7133,9 +7167,27 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       } catch (e) {
         err = e?.message || "Could not save the templates.";
       }
-      this._msg = err || (r && !r.noop ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? "" : "s"} saved${r.prNumber ? `; ${submitAck({ prNumber: r.prNumber, autoMerge: false })}` : ""}` : "No changes.");
       this._busy = false;
-      this._loaded = false;
+      if (err) {
+        this._msg = err;
+        this.render();
+        return;
+      }
+      for (const e of edits) {
+        const map = e.stub ? this._channelTemplatesStub ??= {} : this._channelTemplates ??= {};
+        if (e.template) {
+          (map[e.channel] ??= {})[e.type] = e.template;
+        } else if (map[e.channel]) {
+          delete map[e.channel][e.type];
+          if (!Object.keys(map[e.channel]).length) delete map[e.channel];
+        }
+        const wk = `${e.stub ? "stub" : "pub"}:${e.channel}`;
+        const eff = e.stub ? this._effStub(e.channel, e.type) : this._effPub(e.channel, e.type);
+        if (this._work[wk]) this._work[wk][e.type] = eff;
+        if (this._base[wk]) this._base[wk][e.type] = eff;
+      }
+      this._tmplDirty = /* @__PURE__ */ new Set();
+      this._msg = r && !r.noop ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? "" : "s"} saved${r.prNumber ? `; ${submitAck({ prNumber: r.prNumber, autoMerge: false })}` : ""}` : "No changes.";
       this.render();
     }
     async _run(fn) {

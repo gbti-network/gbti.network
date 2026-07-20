@@ -16,6 +16,15 @@
 # version bump or notable build, and to keep extension/manifest.json version and src/lib/extension.ts in sync.
 entries:
   - version: 0.1.0
+    build: 34
+    date: 2026-07-19
+    type: build
+    title: Syndication admin is now tabbed, and saving keeps your place
+    notes:
+      - The syndication sub-sections (Publishing Activity, Pipeline, Templates, and the rest) are now tabs that show one section at a time, with the active tab deep-linked in the URL so a reload or shared link reopens it.
+      - Saving a template now keeps you on the same tab, channel, and visibility set, with your edit shown immediately instead of jumping back to the top and flashing the old value.
+
+  - version: 0.1.0
     build: 33
     date: 2026-07-19
     type: build

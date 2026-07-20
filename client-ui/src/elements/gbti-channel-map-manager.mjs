@@ -225,8 +225,56 @@ const VARS = ['{memberdiscord}', '{member-discord-username}', '{fullName}', '{au
 // SOW-131: the DESTINATIONS checkbox chips (PIPE_CHIPS) were removed. Channel enablement is matrix-derived, so
 // the auto-share matrix is the single control; the channel's readiness (secrets) is still checked at drain time.
 
+// SOW-132: the sub-sections are TABS (only the active one renders). Each maps to one card builder. The active tab
+// is deep-linked in the URL hash as `sub=<id>` (coexisting with the admin page's `tab=syndication`) + mirrored to
+// localStorage, so a reload, a shared link, or a post-save reload lands on the same section.
+const SYND_TABS = [
+  { id: 'activity', nm: 'Publishing Activity', ic: 'c-kanban', build: 'activity' },
+  { id: 'pipeline', nm: 'Pipeline', ic: 'c-pipe', build: 'pipeline' },
+  { id: 'templates', nm: 'Templates', ic: 'c-tmpl', build: 'templates' },
+  { id: 'news', nm: 'News auto-share', ic: 'c-share', build: 'news' },
+  { id: 'content', nm: 'Content auto-share', ic: 'c-share', build: 'content' },
+  { id: 'words', nm: 'Word lists', ic: 'c-shield', build: 'words' },
+];
+const SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
+const SYND_SUB_KEY = 'gbti-synd-sub';
+// The template keys a channel's working copy tracks (the four content types + the Reddit/dev.to sub-templates).
+const TMPL_KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer', 'devto-stub'];
+
 class GbtiChannelMapManager extends GbtiElement {
   connectedCallback() { super.connectedCallback?.(); }
+
+  // SOW-132: the EFFECTIVE template value for a (channel, key): a channel override, else the shared map, else the
+  // built-in default. Extracted from load() so _saveTemplates can recompute a field after an optimistic write.
+  _effPub(ch, k) { return this._channelTemplates?.[ch]?.[k] ?? this._templates?.[k] ?? ''; }
+  _effStub(ch, k) {
+    return this._channelTemplatesStub?.[ch]?.[k]
+      ?? this._stubTemplates?.[k]
+      ?? DEFAULT_CHANNEL_STUB_TEMPLATES[ch]?.[k]
+      ?? DEFAULT_STUB_TEMPLATES[k]
+      ?? this._effPub(ch, k);
+  }
+
+  // SOW-132: read the deep-linked sub-tab from the URL hash (`sub=<id>`, alongside the admin `tab=syndication`),
+  // else localStorage, else the first tab. Write it back with history.replaceState so it does NOT fire hashchange
+  // (which would make admin.mjs re-mount the syndication group).
+  _readSubTab() {
+    try {
+      const m = /(?:^|[#&])sub=([a-z-]+)/.exec(typeof location !== 'undefined' ? location.hash || '' : '');
+      if (m && SYND_TAB_IDS.includes(m[1])) return m[1];
+      const stored = localStorage.getItem(SYND_SUB_KEY);
+      if (stored && SYND_TAB_IDS.includes(stored)) return stored;
+    } catch { /* storage/URL blocked */ }
+    return 'activity';
+  }
+  _writeSubTab(id) {
+    try { localStorage.setItem(SYND_SUB_KEY, id); } catch { /* ignore */ }
+    try {
+      const parts = (location.hash || '').replace(/^#/, '').split('&').filter((p) => p && !/^sub=/.test(p));
+      parts.push(`sub=${id}`);
+      history.replaceState(null, '', `${location.pathname}${location.search}#${parts.join('&')}`);
+    } catch { /* ignore */ }
+  }
 
   async load() {
     if (!this.client) { this.render(); return; }
@@ -261,19 +309,12 @@ class GbtiChannelMapManager extends GbtiElement {
       // stub -> the built-in stub defaults -> the public effective value).
       this._work = {};
       this._base = {};
-      const KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer', 'devto-stub'];
-      const effPub = (ch, k) => this._channelTemplates[ch]?.[k] ?? this._templates?.[k] ?? '';
-      const effStub = (ch, k) => this._channelTemplatesStub[ch]?.[k]
-        ?? this._stubTemplates?.[k]
-        ?? DEFAULT_CHANNEL_STUB_TEMPLATES[ch]?.[k]
-        ?? DEFAULT_STUB_TEMPLATES[k]
-        ?? effPub(ch, k);
       for (const ch of TILE_CHANNELS.filter((c) => c.active).map((c) => c.id)) {
         for (const vis of ['pub', 'stub']) {
           const key = `${vis}:${ch}`;
           this._work[key] = {}; this._base[key] = {};
-          for (const k of KEYS) {
-            const eff = vis === 'stub' ? effStub(ch, k) : effPub(ch, k);
+          for (const k of TMPL_KEYS) {
+            const eff = vis === 'stub' ? this._effStub(ch, k) : this._effPub(ch, k);
             this._work[key][k] = eff; this._base[key][k] = eff;
           }
         }
@@ -283,8 +324,11 @@ class GbtiChannelMapManager extends GbtiElement {
       this._pipeDirty = false;
       this._engDirty = false;
       this._contentEngDirty = false;
-      this._curCh = this._curCh && this._work[this._curCh] ? this._curCh : 'discord';
+      // SOW-132: preserve the editing state across a (re)load. NOTE: _work is keyed `pub:<ch>` so the validity
+      // check must use that key (the old `this._work[this._curCh]` was always undefined -> reset to discord).
+      this._curCh = this._curCh && this._work[`pub:${this._curCh}`] ? this._curCh : 'discord';
       this._termTab = this._termTab || Object.keys(this._lists)[0] || 'political';
+      this._activeTab = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : this._readSubTab();
       this._loaded = true;
     } catch {
       this._loaded = false;
@@ -529,23 +573,21 @@ class GbtiChannelMapManager extends GbtiElement {
       this.set(this.css(CSS) + (this._msg ? `<p class="msg">${esc(this._msg)}</p>` : `<p class="muted">Loading the channel settings...</p>`));
       return;
     }
+    // SOW-132: tabs — render ONLY the active section, so switching tabs shows one section at a time and a
+    // save-triggered reload stays put (no scroll jump). The nested <gbti-syndication-tracker> mounts only on
+    // Activity.
+    const active = SYND_TAB_IDS.includes(this._activeTab) ? this._activeTab : 'activity';
+    const tabs = SYND_TABS.map((t) => `<a data-tab="${t.id}" role="tab"${t.id === active ? ' class="on" aria-selected="true"' : ' aria-selected="false"'}><svg viewBox="0 0 24 24"><use href="#${t.ic}"/></svg>${esc(t.nm)}</a>`).join('');
+    const builders = {
+      activity: () => this._activityCard(), pipeline: () => this._pipelineCard(), templates: () => this._templatesCard(),
+      news: () => this._autoshareCard(), content: () => this._contentEngagementCard(), words: () => this._wordlistsCard(),
+    };
+    const section = (builders[active] || builders.activity)();
     this.set(this.css(CSS) + ICONS + `<div class="${this._busy ? 'busy' : ''}">
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ''}
-      <nav class="subnav" data-subnav>
-        <a data-go="sec-activity" class="on"><svg viewBox="0 0 24 24"><use href="#c-kanban"/></svg>Publishing Activity</a>
-        <a data-go="sec-pipeline"><svg viewBox="0 0 24 24"><use href="#c-pipe"/></svg>Pipeline</a>
-        <a data-go="sec-templates"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg>Templates</a>
-        <a data-go="sec-autoshare"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg>News auto-share</a>
-        <a data-go="sec-content-autoshare"><svg viewBox="0 0 24 24"><use href="#c-share"/></svg>Content auto-share</a>
-        <a data-go="sec-words"><svg viewBox="0 0 24 24"><use href="#c-shield"/></svg>Word lists</a>
-      </nav>
+      <nav class="subnav" data-subnav role="tablist">${tabs}</nav>
       <p class="intro">Publishing activity, syndication templates, news auto-share, and moderation word lists. The category-to-channel map lives in <b>Categories</b> — ${this._mapCount ?? 0} categories mapped.</p>
-      ${this._activityCard()}
-      ${this._pipelineCard()}
-      ${this._templatesCard()}
-      ${this._autoshareCard()}
-      ${this._contentEngagementCard()}
-      ${this._wordlistsCard()}
+      ${section}
     </div>`);
     this._wire();
   }
@@ -564,19 +606,15 @@ class GbtiChannelMapManager extends GbtiElement {
   }
 
   _wire() {
-    // Subnav: smooth-scroll + scrollspy on the window scroll (the shadow content scrolls with the page).
-    const links = this.$$('[data-go]');
-    links.forEach((a) => a.addEventListener('click', () => {
-      this.$(`#${a.dataset.go}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // SOW-132: tabs — clicking a tab switches the active section, deep-links it (sub=<id> via replaceState so the
+    // admin group is not re-mounted), and re-renders. Only the active section is in the DOM.
+    this.$$('[data-tab]').forEach((a) => a.addEventListener('click', () => {
+      const id = a.dataset.tab;
+      if (!SYND_TAB_IDS.includes(id) || id === this._activeTab) return;
+      this._activeTab = id;
+      this._writeSubTab(id);
+      this.render();
     }));
-    const secs = this.$$('[data-sec]');
-    if (this._spy) window.removeEventListener('scroll', this._spy);
-    this._spy = () => {
-      let idx = 0;
-      secs.forEach((s, i) => { if (s.getBoundingClientRect().top <= 130) idx = i; });
-      links.forEach((a, i) => a.classList.toggle('on', i === idx));
-    };
-    window.addEventListener('scroll', this._spy, { passive: true });
 
     // Pipeline: any control edit arms the card.
     ['[data-pipe-enabled]', '[data-pipe-ready]', '[data-pipe-hold]'].forEach((sel) => {
@@ -745,11 +783,26 @@ class GbtiChannelMapManager extends GbtiElement {
     let err = null; let r = null;
     try { r = await this.client.setSyndicationTemplates({ edits }); }
     catch (e) { err = e?.message || 'Could not save the templates.'; }
-    this._msg = err || (r && !r.noop
-      ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? '' : 's'} saved${r.prNumber ? `; ${submitAck({ prNumber: r.prNumber, autoMerge: false })}` : ''}`
-      : 'No changes.');
     this._busy = false;
-    this._loaded = false; // reload the committed values
+    if (err) { this._msg = err; this.render(); return; }
+    // SOW-132: reflect the saved values OPTIMISTICALLY, and DO NOT reload from git. The save opens a superadmin
+    // auto-merge PR; a full reload (readYaml) reads the file BEFORE the merge lands, which flashed the OLD value
+    // and made the edit look lost. Instead bake each saved edit into the local override maps + the working
+    // baseline, recompute the effective field value, and clear dirty. The stays-put render keeps the current tab,
+    // channel, and visibility. git + the mirror catch up in the background.
+    for (const e of edits) {
+      const map = e.stub ? (this._channelTemplatesStub ??= {}) : (this._channelTemplates ??= {});
+      if (e.template) { (map[e.channel] ??= {})[e.type] = e.template; }
+      else if (map[e.channel]) { delete map[e.channel][e.type]; if (!Object.keys(map[e.channel]).length) delete map[e.channel]; }
+      const wk = `${e.stub ? 'stub' : 'pub'}:${e.channel}`;
+      const eff = e.stub ? this._effStub(e.channel, e.type) : this._effPub(e.channel, e.type);
+      if (this._work[wk]) this._work[wk][e.type] = eff;
+      if (this._base[wk]) this._base[wk][e.type] = eff;
+    }
+    this._tmplDirty = new Set();
+    this._msg = (r && !r.noop)
+      ? `${r.count ?? edits.length} template${(r.count ?? edits.length) === 1 ? '' : 's'} saved${r.prNumber ? `; ${submitAck({ prNumber: r.prNumber, autoMerge: false })}` : ''}`
+      : 'No changes.';
     this.render();
   }
 
