@@ -5016,7 +5016,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       </div>`;
       }).join("");
       return `
-      <p class="intro">Please follow the network's channels to help member content travel. We syndicate everyone's articles, prompts, and products through these, including yours.</p>
+      <p class="intro">Please follow the network's channels to help member content travel. We syndicate everyone's articles, prompts, and products through these, including yours. Following these channels will help build the network's reach.</p>
       <div class="grid">${cards}</div>`;
     }
     // The socials step: collect the member's handles across the platform set. Raw values stage locally

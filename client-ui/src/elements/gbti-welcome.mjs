@@ -574,7 +574,7 @@ class GbtiWelcome extends GbtiElement {
       </div>`;
     }).join('');
     return `
-      <p class="intro">Please follow the network's channels to help member content travel. We syndicate everyone's articles, prompts, and products through these, including yours.</p>
+      <p class="intro">Please follow the network's channels to help member content travel. We syndicate everyone's articles, prompts, and products through these, including yours. Following these channels will help build the network's reach.</p>
       <div class="grid">${cards}</div>`;
   }
 
