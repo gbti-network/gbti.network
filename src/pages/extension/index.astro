@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import { EXTENSION, extensionZipUrl } from '../../lib/extension';
+import { EXTENSION, extensionZipUrl, extensionIsListed } from '../../lib/extension';
 
 // SOW-019: the extension install/download page (design "GBTI Extension Install — Guided", claude.ai/design
 // handoff). A guided walkthrough: hero + download, a what-it-does trio, the five unpacked-install steps as a
@@ -13,7 +13,7 @@ const feats = [
   { icon: 'i-publish', title: 'Publish through the network', body: 'Save a draft or publish straight to the network. Your changes go through the same review flow as everyone else.' },
 ];
 const faqs = [
-  { q: 'How do I update it?', a: 'While it is an unpacked extension, download the latest ZIP, unzip it over the old folder, and click Reload on the extensions page. Once the Chrome Web Store listing is live, updates happen on their own.' },
+  { q: 'How do I update it?', a: 'If you installed from the Chrome Web Store, updates happen on their own, there is nothing to do. If you loaded the unpacked ZIP, download the latest ZIP, unzip it over the old folder, and click Reload on the extensions page.' },
   { q: 'Is my GitHub sign-in safe?', a: 'Yes. Sign-in happens between your browser and GitHub. Your token is stored locally by the extension and never sent to GBTI servers.' },
   { q: 'It did not load, what went wrong?', a: 'Two things to check: Developer mode needs to be on, and you need to select the unzipped folder, not the ZIP file itself. If the folder has a manifest.json at its top level, you picked the right one.' },
   { q: 'Do I need to be a member?', a: 'The extension is free to install, and anyone can browse. But active GBTI membership is required to participate: publishing articles, products, and prompts, sharing URLs that earn referral revenue, commenting, joining the member directory, reading member-only content, and the other network benefits all require it. Without the right privileges, the gate blocks those actions. The trial lets you read the community and stage drafts; a paid membership unlocks publishing and the rest.' },
@@ -39,7 +39,7 @@ const mcpPrompt = [
 ---
 <BaseLayout
   title="Install the GBTI extension"
-  description="Download the GBTI Network browser extension and load it as an unpacked extension to sign in, edit your work in place, and publish through the network."
+  description="Install the GBTI Network browser extension from the Chrome Web Store in one click, or download the ZIP and load it unpacked. Sign in, edit your work in place, and publish through the network."
 >
   <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
     <g id="i-dl"><path d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
@@ -100,10 +100,13 @@ const mcpPrompt = [
       <span class="chip chip-green"><span class="chip-dot"></span> Free · v{EXTENSION.version}</span>
       <h1 class="h1 mt20">Install the GBTI extension</h1>
       <p class="lead">The extension is how you sign in, edit your work in place, and publish through the network. It runs in your browser and keeps your GitHub sign-in on your own machine.</p>
-      <div class="dl-row">
-        <a class="btn btn-primary btn-lg" href={extensionZipUrl} download><svg viewBox="0 0 24 24" width="19" height="19"><use href="#i-dl"/></svg> Download the extension</a>
-        <span class="dl-sub">ZIP · load unpacked</span>
+      <div class="dl-btns">
+        {extensionIsListed && (
+          <a class="btn btn-primary btn-lg" href={EXTENSION.webStoreUrl} target="_blank" rel="noopener"><span class="blogo blogo-chrome"></span> Add to Chrome</a>
+        )}
+        <a class={`btn btn-lg ${extensionIsListed ? 'btn-ghost' : 'btn-primary'}`} href={extensionZipUrl} download><svg viewBox="0 0 24 24" width="19" height="19"><use href="#i-dl"/></svg> Download unpacked</a>
       </div>
+      <p class="dl-sub">{extensionIsListed ? 'The Chrome Web Store install is one click and updates on its own. The unpacked ZIP is for developers or browsers without the store.' : 'ZIP · load unpacked'}</p>
       <div class="browsers hero-browsers">
         <span class="bchip"><span class="blogo blogo-chrome"></span> Chrome</span>
         <span class="bchip">
@@ -121,7 +124,9 @@ const mcpPrompt = [
             <path fill="#fff" d="M24 13l5.5 2.6-1.2 7.4 3 3-7.3 5-7.3-5 3-3-1.2-7.4z" opacity=".96"/>
             <path fill="#f8521e" d="M24 22l2.2 3.2-2.2 1.6-2.2-1.6z"/>
           </svg></span> Brave</span>
-        <span class="bchip soon"><span class="d"></span> Chrome Web Store soon</span>
+        {extensionIsListed
+          ? <a class="bchip bchip-live" href={EXTENSION.webStoreUrl} target="_blank" rel="noopener"><span class="d"></span> On the Chrome Web Store</a>
+          : <span class="bchip soon"><span class="d"></span> Chrome Web Store soon</span>}
       </div>
     </div>
   </section>
@@ -190,9 +195,9 @@ const mcpPrompt = [
   <section class="band tint" id="install">
     <div class="wrap">
       <div class="sec-head center">
-        <p class="eyebrow">Install · about a minute</p>
+        <p class="eyebrow">Advanced · unpacked install</p>
         <h2 class="h2 mt12">Load it as an unpacked extension</h2>
-        <p class="lead">You do this once. The extension keeps working after that. When the Chrome Web Store listing is live, updates become automatic and these steps go away.</p>
+        <p class="lead">Most people should use the Add to Chrome button above: it installs in one click and updates on its own. These manual steps are for developers, or for browsers without the Chrome Web Store. You download the ZIP and load it as an unpacked extension.</p>
       </div>
 
       <div class="steps mt40">
@@ -374,7 +379,9 @@ const mcpPrompt = [
       <h2 class="h2" style="color:#fff">Edit and publish your work in place</h2>
       <p class="lead" style="max-width:560px;margin:16px auto 0">Install the free extension, then sign in to start drafting and publishing through the GBTI Network.</p>
       <div class="hero-c-cta">
-        <a class="btn btn-primary btn-lg" href={extensionZipUrl} download>Download the extension</a>
+        {extensionIsListed
+          ? <a class="btn btn-primary btn-lg" href={EXTENSION.webStoreUrl} target="_blank" rel="noopener">Add to Chrome</a>
+          : <a class="btn btn-primary btn-lg" href={extensionZipUrl} download>Download the extension</a>}
         <a class="btn btn-ghost btn-lg" href="/membership/">See membership</a>
       </div>
     </div>
@@ -385,8 +392,10 @@ const mcpPrompt = [
     .ext-hero { padding: 72px 0 80px; text-align: center; background: radial-gradient(120% 120% at 50% -20%, var(--paper) 0%, var(--paper-2) 70%); }
     .ext-hero .wrap { max-width: 880px; }
     .ext-hero .lead { max-width: 600px; margin: 18px auto 0; }
-    .dl-row { display: inline-flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 32px; }
-    .dl-sub { font-family: var(--f-mono); font-size: 13px; color: var(--fg-mute); }
+    .dl-btns { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; margin-top: 32px; }
+    .dl-btns .blogo-chrome { width: 18px; height: 18px; }
+    .dl-sub { font-size: 13.5px; color: var(--fg-mute); max-width: 520px; margin: 14px auto 0; line-height: 1.6; }
+    .bchip-live { text-decoration: none; }
     .hero-browsers { margin-top: 40px; justify-content: center; }
 
     /* ---- browser support chips ---- */
