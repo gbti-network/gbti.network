@@ -554,7 +554,7 @@ class GbtiWelcome extends GbtiElement {
         <span class="ico-tile">${discordIco}</span>
         <div><h3>Connect Discord</h3><p>The heartbeat of the co-op</p></div>
       </div>
-      <p class="intro" style="max-width:58ch">The community is where the co-op actually happens: weekly sessions, real help, and the people you build alongside. Connect Discord to join the server and claim your member role.</p>
+      <p class="intro" style="max-width:58ch">Announcements and agile discussions frequently occur here, and it is the best place to network in real time with network members. Connect Discord to join the server and claim your member role.</p>
       ${btn}
       ${callout}`;
   }
