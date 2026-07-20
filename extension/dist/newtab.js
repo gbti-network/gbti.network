@@ -4315,15 +4315,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var DISCORD_DONE_KEY = "gbti-welcome-discord-joined";
   var STEPS = ["discord", "subreddit", "socials", "follow", "topics"];
   var FOLLOW_SLIDES = [
-    ["reddit", "Reddit", "https://www.reddit.com/r/GBTI_network", "Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network. Open it and hit Join."],
-    ["x", "X", "https://x.com/gbti_network", "Syndicated member work and network updates, as they publish."],
-    ["bluesky", "Bluesky", "https://bsky.app/profile/gbti.bsky.social", "The same syndicated stream on Bluesky."],
-    ["youtube", "YouTube", "https://www.youtube.com/@gbti_network", "Video sessions and walkthroughs from the network."],
-    ["github", "GitHub", "https://github.com/gbti-network", "The public content repo and our open source work."],
-    ["devto", "Dev.to", "https://dev.to/gbti", "Member articles crossposted to the GBTI organization on DEV."],
-    ["dailydev", "daily.dev", "https://dly.to/zfCriM6JfRF", "Follow the GBTI squad inside your daily.dev feed."],
-    ["mastodon", "Mastodon", "https://mastodon.social/@gbti", "The syndicated stream on the fediverse."],
-    ["linkedin", "LinkedIn", "https://www.linkedin.com/company/gbti-network/posts", "Network updates and member work on LinkedIn."]
+    ["reddit", "Reddit", "https://www.reddit.com/r/GBTI_network", "Member articles, products, and prompts syndicate to our community subreddit, r/GBTI_network. Open it and hit Join.", "r/GBTI_network"],
+    ["x", "X", "https://x.com/gbti_network", "Syndicated member work and network updates, as they publish.", "@gbti_network"],
+    ["bluesky", "Bluesky", "https://bsky.app/profile/gbti.bsky.social", "The same syndicated stream on Bluesky.", "@gbti.bsky.social"],
+    ["youtube", "YouTube", "https://www.youtube.com/@gbti_network", "Video sessions and walkthroughs from the network.", "@gbti_network"],
+    ["github", "GitHub", "https://github.com/gbti-network", "The public content repo and our open source work.", "gbti-network"],
+    ["devto", "Dev.to", "https://dev.to/gbti", "Member articles crossposted to the GBTI organization on DEV.", "@gbti"],
+    ["dailydev", "daily.dev", "https://dly.to/zfCriM6JfRF", "Follow the GBTI squad inside your daily.dev feed.", "GBTI squad"],
+    ["mastodon", "Mastodon", "https://mastodon.social/@gbti", "The syndicated stream on the fediverse.", "@gbti@mastodon.social"],
+    ["linkedin", "LinkedIn", "https://www.linkedin.com/company/gbti-network/posts", "Network updates and member work on LinkedIn.", "gbti-network"]
   ];
   var SOCIALS_STAGE_KEY = "gbti-welcome-socials";
   var SOCIAL_STARTERS = ["x", "bluesky", "mastodon", "linkedin", "youtube", "website"];
@@ -4369,9 +4369,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .pager .pg { font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .note { color:var(--muted); font-size:12.5px; line-height:1.5; margin:0; }
   .note a { color:var(--accent); }
-  /* The Follow GBTI step: a slider, one platform per slide. Logo + name left, the follow button right. */
+  /* The Follow GBTI step: a slider, one platform per slide. Logo + name + our handle left, the follow
+     button right. 7px is the house radius. */
+  .chan-slide { border-radius:7px; }
+  .chan-slide .btn { border-radius:7px; }
   .chan-row { display:flex; align-items:center; justify-content:space-between; gap:14px; }
   .chan-id { display:inline-flex; align-items:center; gap:10px; font-size:15.5px; font-weight:700; min-width:0; }
+  .chan-handle { color:var(--muted); font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .chan-slide .sub { margin:10px 0 0; }
   .dots { display:flex; gap:6px; justify-content:center; margin-top:14px; }
   .dots i { width:7px; height:7px; border-radius:50%; background:var(--line); }
@@ -4687,13 +4691,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _subredditCard() {
       const i = Math.min(Math.max(this._chanIdx ?? 0, 0), FOLLOW_SLIDES.length - 1);
       this._chanIdx = i;
-      const [k, label, , blurb] = FOLLOW_SLIDES[i];
+      const [k, label, , blurb, handle] = FOLLOW_SLIDES[i];
       const dots = FOLLOW_SLIDES.map((_s, j) => `<i class="${j === i ? "on" : ""}"></i>`).join("");
       return `
       <p class="lead">Please follow all of the properties below to help support the growth of the network. We will be syndicating member content, including yours, through these channels.</p>
       <div class="card chan-slide">
         <div class="chan-row">
-          <span class="chan-id">${socialIcon(k, 18)}<b>${esc(label)}</b></span>
+          <span class="chan-id">${socialIcon(k, 18)}<b>${esc(label)}</b>${handle ? `<span class="chan-handle">${esc(handle)}</span>` : ""}</span>
           <button class="btn" data-chan-follow type="button">Follow on ${esc(label)}</button>
         </div>
         <p class="sub">${esc(blurb)}</p>
