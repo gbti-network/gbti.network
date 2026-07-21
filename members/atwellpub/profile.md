@@ -22,4 +22,4 @@ type: profile
 username: atwellpub
 ---
 
-Avid product developer and founding member of the GBTI network. With a long background in developing products for markets, Hudson has built, marketed and maintained a number of plugins, mods, and extensions.
+Avid product developer and founding member of the GBTI network. With a long background in developing products for markets, Hudson has built, marketed and maintained a number of commercial and open source projects.
