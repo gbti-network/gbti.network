@@ -1,8 +1,25 @@
 // SOW-029: pure helpers for the post-setup welcome view (<gbti-welcome>). Node-free so `node --test` imports
 // them directly without a DOM; the component is the only DOM consumer. Keep this dependency-light.
 
-/** Map the effective membership status to the welcome-banner phase. NEVER throws (unknown -> neutral). */
-export function phaseLabel(membership) {
+/** Map the effective membership status to the welcome-banner phase. NEVER throws (unknown -> neutral).
+ *  SOW-119 QA (2026-07-21): a coupon member's oracle status is 'paid' (publishing is unlocked), but the
+ *  welcome banner must not claim they PAID. When couponUntil marks a live coupon grant, the phase says the
+ *  free period plainly and names its end date. An absent, expired, or malformed couponUntil falls through
+ *  to the plain paid banner (the oracle only emits couponUntil when the coupon IS the paid source). */
+export function phaseLabel(membership, { couponUntil = null, now = Date.now() } = {}) {
+  if (membership === 'paid' && couponUntil) {
+    const until = new Date(couponUntil);
+    if (!Number.isNaN(until.getTime()) && until.getTime() > now) {
+      const end = until.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      return {
+        phase: 'coupon',
+        title: 'Your free membership period is active',
+        body: `Your coupon covers full membership through ${end}: your profile, posts, products, and prompts publish under your name. No card is on file and nothing bills automatically.`,
+        upgrade: false,
+        until: until.toISOString(),
+      };
+    }
+  }
   switch (membership) {
     case 'paid':
       return { phase: 'paid', title: 'You are a paid member', body: 'Your profile, posts, products, and prompts publish under your name. Welcome to the co-op.', upgrade: false };

@@ -16,6 +16,24 @@ test('phaseLabel maps paid/trialing and never throws (unknown + lapsed -> neutra
   }
 });
 
+// SOW-119 QA (2026-07-21): a coupon member is oracle-paid but did NOT pay. A live couponUntil reframes the
+// banner as the free membership period with its end date; expired/malformed grants fall through to plain paid.
+test('phaseLabel: a live coupon grant reframes paid as the free membership period', () => {
+  const now = new Date('2026-07-21T12:00:00Z').valueOf();
+  const r = phaseLabel('paid', { couponUntil: '2027-07-21T12:00:00Z', now });
+  assert.equal(r.phase, 'coupon');
+  assert.equal(r.upgrade, false);
+  assert.match(r.title, /free membership period/i);
+  assert.match(r.body, /July 21, 2027/, 'names the end date');
+  assert.match(r.body, /nothing bills automatically/i);
+  // expired or malformed grants fall through to the plain paid banner
+  assert.equal(phaseLabel('paid', { couponUntil: '2026-01-01T00:00:00Z', now }).phase, 'paid');
+  assert.equal(phaseLabel('paid', { couponUntil: 'not-a-date', now }).phase, 'paid');
+  assert.equal(phaseLabel('paid', { couponUntil: null, now }).phase, 'paid');
+  // couponUntil never upgrades a non-paid status
+  assert.equal(phaseLabel('trialing', { couponUntil: '2027-07-21T12:00:00Z', now }).phase, 'trial');
+});
+
 test('shuffle is a permutation (no drops/dupes), deterministic for a fixed rng, and pure', () => {
   const list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   const seq = [0.1, 0.9, 0.3, 0.7, 0.5, 0.2, 0.8, 0.4, 0.6, 0.05];

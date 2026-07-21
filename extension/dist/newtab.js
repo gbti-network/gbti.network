@@ -4326,7 +4326,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-debug-panel", GbtiDebugPanel);
 
   // client-ui/src/welcome-core.mjs
-  function phaseLabel(membership) {
+  function phaseLabel(membership, { couponUntil = null, now = Date.now() } = {}) {
+    if (membership === "paid" && couponUntil) {
+      const until = new Date(couponUntil);
+      if (!Number.isNaN(until.getTime()) && until.getTime() > now) {
+        const end = until.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+        return {
+          phase: "coupon",
+          title: "Your free membership period is active",
+          body: `Your coupon covers full membership through ${end}: your profile, posts, products, and prompts publish under your name. No card is on file and nothing bills automatically.`,
+          upgrade: false,
+          until: until.toISOString()
+        };
+      }
+    }
     switch (membership) {
       case "paid":
         return { phase: "paid", title: "You are a paid member", body: "Your profile, posts, products, and prompts publish under your name. Welcome to the co-op.", upgrade: false };
@@ -4578,6 +4591,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .top { padding:24px 34px 0; }
   .eyebrow { font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.16em;
     text-transform:uppercase; color:var(--wf-greenfg); display:flex; align-items:center; gap:10px; }
+  .couponline { margin:2px 0 10px; font-size:12.5px; line-height:1.5; color:var(--muted); }
   .phasepill { font-family:var(--font-body); font-size:10px; font-weight:700; letter-spacing:.05em;
     color:var(--wf-mute); background:var(--wf-panel2); border:1px solid var(--wf-line); border-radius:999px; padding:2px 9px; }
   .heads { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-top:5px; }
@@ -4777,9 +4791,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         s = await this.client?.status?.();
         this._membership = s?.membership ?? "unknown";
+        this._couponUntil = s?.couponUntil ?? null;
         this._own = lc(s?.identity?.username || s?.identity?.login);
       } catch {
         this._membership = "unknown";
+        this._couponUntil = null;
         this._own = "";
       }
       this._authenticated = Boolean(s?.authenticated && (s?.identity?.login || s?.identity?.username));
@@ -4926,8 +4942,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._renderSignedOut();
         return;
       }
-      const ph = phaseLabel(this._membership);
-      const phase = ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "";
+      const ph = phaseLabel(this._membership, { couponUntil: this._couponUntil });
+      const phase = ph.phase === "coupon" ? "Free membership period" : ph.phase === "paid" ? "Paid membership" : ph.phase === "trial" ? "Trial phase" : "";
       this._step = Math.min(Math.max(this._step, 0), STEPS.length - 1);
       const step = STEPS[this._step].key;
       const heading = this._done ? DONE_HEADING : STEPS[this._step].heading;
@@ -4946,6 +4962,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <div class="top">
           <div class="eyebrow">Welcome${phase ? `<span class="phasepill">${esc(phase)}</span>` : ""}</div>
           <div class="heads"><h2>${esc(heading)}</h2><span class="stepmono">${esc(stepText)}</span></div>
+          ${ph.phase === "coupon" ? `<p class="couponline">${esc(ph.body)}</p>` : ""}
           <div class="bar"><i style="width:${progress}%"></i></div>
         </div>
         <div class="content"><div class="stepin">${card}</div></div>

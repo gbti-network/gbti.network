@@ -115,6 +115,7 @@ const CSS = `
   .top { padding:24px 34px 0; }
   .eyebrow { font-family:var(--font-mono); font-size:10.5px; font-weight:600; letter-spacing:.16em;
     text-transform:uppercase; color:var(--wf-greenfg); display:flex; align-items:center; gap:10px; }
+  .couponline { margin:2px 0 10px; font-size:12.5px; line-height:1.5; color:var(--muted); }
   .phasepill { font-family:var(--font-body); font-size:10px; font-weight:700; letter-spacing:.05em;
     color:var(--wf-mute); background:var(--wf-panel2); border:1px solid var(--wf-line); border-radius:999px; padding:2px 9px; }
   .heads { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-top:5px; }
@@ -306,9 +307,11 @@ class GbtiWelcome extends GbtiElement {
     try {
       s = await this.client?.status?.();
       this._membership = s?.membership ?? 'unknown';
+      this._couponUntil = s?.couponUntil ?? null; // SOW-119 QA: a live coupon grant reframes the paid banner
       this._own = lc(s?.identity?.username || s?.identity?.login);
     } catch {
       this._membership = 'unknown';
+      this._couponUntil = null;
       this._own = '';
     }
     this._authenticated = Boolean(s?.authenticated && (s?.identity?.login || s?.identity?.username));
@@ -452,8 +455,8 @@ class GbtiWelcome extends GbtiElement {
   render() {
     if (!this._loaded) { this.set(this.css(CSS) + `<div class="splashwrap"><p class="loading">Setting up your welcome...</p></div>`); return; }
     if (this._authGate && !this._authenticated) { this._renderSignedOut(); return; } // SOW-048 login splash
-    const ph = phaseLabel(this._membership);
-    const phase = ph.phase === 'paid' ? 'Paid membership' : ph.phase === 'trial' ? 'Trial phase' : '';
+    const ph = phaseLabel(this._membership, { couponUntil: this._couponUntil });
+    const phase = ph.phase === 'coupon' ? 'Free membership period' : ph.phase === 'paid' ? 'Paid membership' : ph.phase === 'trial' ? 'Trial phase' : '';
     this._step = Math.min(Math.max(this._step, 0), STEPS.length - 1);
     const step = STEPS[this._step].key;
     const heading = this._done ? DONE_HEADING : STEPS[this._step].heading;
@@ -479,6 +482,7 @@ class GbtiWelcome extends GbtiElement {
         <div class="top">
           <div class="eyebrow">Welcome${phase ? `<span class="phasepill">${esc(phase)}</span>` : ''}</div>
           <div class="heads"><h2>${esc(heading)}</h2><span class="stepmono">${esc(stepText)}</span></div>
+          ${ph.phase === 'coupon' ? `<p class="couponline">${esc(ph.body)}</p>` : ''}
           <div class="bar"><i style="width:${progress}%"></i></div>
         </div>
         <div class="content"><div class="stepin">${card}</div></div>
