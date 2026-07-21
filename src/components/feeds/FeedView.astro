@@ -1,0 +1,163 @@
+---
+// sow-131: the shared /feeds/ page body. One component renders all six narrows (All / Network /
+// Articles / Products / Prompts / Shares): a tab row over the narrows, the visibility chips + the
+// persisted detailed/compact density toggle (the prompts-directory pattern), the ?tag= drilldown
+// banner (the homepage trending tags link here), the aggregate members-only-shares locked card (no
+// share titles ever; the SOW-136 build guard stays strict), a condensed in-feed join CTA, and the
+// shared FeedList ladder. Filtering is client-side over data-visibility / data-tags; while a filter
+// is active the ladder flattens (all chunks visible, pagers hidden) and restores on clear.
+import FeedList from './FeedList.astro';
+import { matchesNarrow, sortByNewest } from '../../lib/home-feed.mjs';
+import type { FeedItem } from '../../lib/feed-items';
+import type { AvatarIndex } from '../../lib/avatars';
+import { FIRST_TOUCH_PCT, TRIAL_DAYS_SITE, MEMBERSHIP_PRICE_LABEL, BILLING_PERIOD } from '../../lib/membership';
+
+interface Props {
+  narrow: 'all' | 'network' | 'articles' | 'products' | 'prompts' | 'shares';
+  items: FeedItem[]; // the full normalized set; this component narrows it
+  avatarIndex: AvatarIndex;
+  membersShareCount: number;
+}
+const { narrow, items, avatarIndex, membersShareCount } = Astro.props;
+
+const TABS: { key: Props['narrow']; label: string; href: string }[] = [
+  { key: 'all', label: 'All', href: '/feeds/' },
+  { key: 'network', label: 'Network', href: '/feeds/network/' },
+  { key: 'articles', label: 'Articles', href: '/feeds/articles/' },
+  { key: 'products', label: 'Products', href: '/feeds/products/' },
+  { key: 'prompts', label: 'Prompts', href: '/feeds/prompts/' },
+  { key: 'shares', label: 'Shares', href: '/feeds/shares/' },
+];
+const SUB: Record<Props['narrow'], string> = {
+  all: 'Everything, including member shares',
+  network: 'From the GBTI Network itself',
+  articles: 'Member articles',
+  products: 'Member products, tools & plugins',
+  prompts: 'Reusable AI prompts from members',
+  shares: 'Links members are sharing',
+};
+const narrowed = sortByNewest(items.filter((it) => matchesNarrow(it, narrow))) as FeedItem[];
+const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersShareCount > 0;
+const hasMembersRows = narrowed.some((it) => it.stub);
+---
+<div class="wrap feedwrap feed-page" data-feedview data-view="detailed">
+  <div class="feed-lab"><span class="dot"></span><span class="t">The Feed</span><span class="rule"></span><span class="more">{SUB[narrow]}</span></div>
+
+  <nav class="feed-tabs" aria-label="Feed views">
+    {TABS.map((t) => (
+      <a href={t.href} class:list={['feed-tab', t.key === narrow && 'on']} aria-current={t.key === narrow ? 'page' : undefined}>{t.label}</a>
+    ))}
+  </nav>
+
+  <div class="feed-toolbar">
+    {hasMembersRows && (
+      <div class="feed-vis" role="group" aria-label="Visibility filter">
+        <button type="button" class="chip filter on" data-vis="all" aria-pressed="true">All</button>
+        <button type="button" class="chip filter" data-vis="public" aria-pressed="false">Public</button>
+        <button type="button" class="chip filter" data-vis="members" aria-pressed="false">Members only</button>
+      </div>
+    )}
+    <span class="feed-tb-sp"></span>
+    <div class="view-toggle" role="group" aria-label="Density">
+      <button type="button" class="vt-btn on" data-feedview-density="detailed" aria-pressed="true"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-list"/></svg> Detailed</button>
+      <button type="button" class="vt-btn" data-feedview-density="compact" aria-pressed="false"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-grid"/></svg> Compact</button>
+    </div>
+  </div>
+
+  <div class="feed-tag-banner" data-tag-banner hidden>
+    <span>Filtered by <b data-tag-label></b></span>
+    <a href={TABS.find((t) => t.key === narrow)!.href} data-tag-clear>Clear</a>
+  </div>
+
+  {showLockedShares && (
+    <aside class="feed-locked-shares" aria-label="Member-only shares">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-lock"/></svg>
+      <span><b>{membersShareCount} member-only share{membersShareCount === 1 ? '' : 's'}</b> {membersShareCount === 1 ? 'is' : 'are'} in the member stream.</span>
+      <a href="/membership/" class="link">Join to see {membersShareCount === 1 ? 'it' : 'them'}</a>
+    </aside>
+  )}
+
+  <FeedList items={narrowed} avatarIndex={avatarIndex} ctaAfter={4}>
+    <div slot="cta" class="feed-cta-inner">
+      <div>
+        <div class="fc-t">Join the co-op</div>
+        <p class="fc-d">Publish articles, products &amp; prompts, build with peers in a private Discord, and earn up to {FIRST_TOUCH_PCT} from members your work brings in.</p>
+      </div>
+      <div class="fc-a">
+        <a href="/membership/" class="btn btn-primary">Start your free trial</a>
+        <span class="fc-n">{MEMBERSHIP_PRICE_LABEL}/{BILLING_PERIOD} after · {TRIAL_DAYS_SITE}-day trial · no card required</span>
+      </div>
+    </div>
+  </FeedList>
+
+  <p class="feed-empty" data-feed-empty hidden>Nothing here matches the current filter.</p>
+</div>
+
+<script>
+  // Per-view chrome: visibility chips, the ?tag= drilldown, and the persisted density toggle. While a
+  // filter is active the ladder flattens (chunks all visible via .feed-flat CSS, pagers hidden); when
+  // the filter clears, the chunk/pager hidden attributes are untouched, so the ladder state restores.
+  document.querySelectorAll<HTMLElement>('[data-feedview]').forEach((view) => {
+    const list = view.querySelector<HTMLElement>('[data-feedlist]');
+    if (!list) return;
+    const rows = Array.from(list.querySelectorAll<HTMLElement>('[data-fi]'));
+    const empty = view.querySelector<HTMLElement>('[data-feed-empty]');
+    const banner = view.querySelector<HTMLElement>('[data-tag-banner]');
+    const bannerLabel = view.querySelector<HTMLElement>('[data-tag-label]');
+    const visBtns = Array.from(view.querySelectorAll<HTMLButtonElement>('[data-vis]'));
+
+    let vis = 'all';
+    let tag = '';
+
+    function apply() {
+      const filtered = vis !== 'all' || !!tag;
+      view.classList.toggle('feed-flat', filtered);
+      let shown = 0;
+      rows.forEach((r) => {
+        let ok = true;
+        if (vis !== 'all') ok = r.getAttribute('data-visibility') === vis;
+        if (ok && tag) ok = (' ' + (r.getAttribute('data-tags') || '') + ' ').includes(' ' + tag + ' ');
+        r.hidden = filtered && !ok;
+        if (!r.hidden) shown++;
+      });
+      if (empty) empty.hidden = !(filtered && shown === 0);
+      if (banner) banner.hidden = !tag;
+      if (bannerLabel) bannerLabel.textContent = tag ? '#' + tag : '';
+    }
+
+    visBtns.forEach((b) => b.addEventListener('click', () => {
+      vis = b.getAttribute('data-vis') || 'all';
+      visBtns.forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); });
+      apply();
+    }));
+
+    view.querySelector('[data-tag-clear]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      tag = '';
+      history.replaceState(null, '', location.pathname);
+      apply();
+    });
+
+    // Deep links: /feeds/?tag=x (the homepage trending-tag chips) and ?vis=public|members.
+    const params = new URLSearchParams(location.search);
+    const qTag = (params.get('tag') || '').trim().toLowerCase();
+    if (qTag) tag = qTag;
+    const qVis = params.get('vis');
+    if (qVis === 'public' || qVis === 'members') {
+      const b = visBtns.find((x) => x.getAttribute('data-vis') === qVis);
+      if (b) { vis = qVis; visBtns.forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); }); }
+    }
+    apply();
+
+    // Density: detailed (default) / compact, persisted like the prompts directory view toggle.
+    const KEY = 'gbti-feed-view';
+    const dBtns = Array.from(view.querySelectorAll<HTMLButtonElement>('[data-feedview-density]'));
+    function setDensity(v: string) {
+      view.setAttribute('data-view', v);
+      dBtns.forEach((x) => { const on = x.getAttribute('data-feedview-density') === v; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); });
+      try { localStorage.setItem(KEY, v); } catch { /* private mode */ }
+    }
+    dBtns.forEach((b) => b.addEventListener('click', () => setDensity(b.getAttribute('data-feedview-density') || 'detailed')));
+    try { if (localStorage.getItem(KEY) === 'compact') setDensity('compact'); } catch { /* private mode */ }
+  });
+</script>

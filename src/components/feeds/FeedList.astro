@@ -1,0 +1,111 @@
+---
+// sow-131: the shared feed list. Server-renders the items in page CHUNKS with a ladder pager row
+// after every chunk except the last (only chunk 1 + its pager start visible). Clicking Next converts
+// the clicked pager into an empty separator box of the same dimensions (owner directive, 2026-07-21),
+// reveals the next chunk below it, and reveals that chunk's own pager below the new items. Earlier
+// pages stay on screen, so the ladder has no Prev. JS only toggles hidden + swaps classes; nothing is
+// built in the DOM. Rows carry data-visibility + data-tags so the /feeds/ chrome (FeedView) can filter
+// them client-side; when a filter is active FeedView flattens the ladder (all chunks shown, pagers +
+// separators hidden) and restores it on clear.
+import Avatar from '../Avatar.astro';
+import FavoriteButton from '../FavoriteButton.astro';
+import UpvoteButton from '../UpvoteButton.astro';
+import { authorDisplay, authorHref } from '../../lib/authors';
+import { authorItem } from '../../lib/avatars';
+import type { AvatarIndex } from '../../lib/avatars';
+import type { FeedItem } from '../../lib/feed-items';
+import { chunkPages, relativeTime } from '../../lib/home-feed.mjs';
+
+interface Props {
+  items: FeedItem[];
+  avatarIndex: AvatarIndex;
+  pageSize?: number;
+  /** Insert the condensed join CTA after this row index inside chunk 1 (omit for none). */
+  ctaAfter?: number;
+}
+const { items, avatarIndex, pageSize = 10, ctaAfter } = Astro.props;
+
+const chunks = chunkPages(items, pageSize) as FeedItem[][];
+const pages = chunks.length;
+const NOW = Date.now();
+const kindLabel: Record<string, string> = { article: 'article', product: 'product', prompt: 'prompt' };
+const tagsAttr = (it: FeedItem) => (it.tags ?? []).map((t) => String(t).trim().toLowerCase()).filter(Boolean).join(' ');
+---
+<div class="feed-list" data-feedlist>
+  {chunks.map((chunk, ci) => (
+    <>
+      <div class="feed-chunk" data-chunk={ci} hidden={ci > 0}>
+        {chunk.map((it, ri) => (
+          <>
+            <article
+              class:list={['feed-item', !it.cover && 'nocover']}
+              data-fi
+              data-visibility={it.stub ? 'members' : 'public'}
+              data-tags={tagsAttr(it)}
+            >
+              <div class="feed-main">
+                <div class="feed-meta">
+                  <Avatar item={authorItem(it.author, avatarIndex)} class="av" size={26} />
+                  <span class="tmeta"><a class="who" href={authorHref(it.author)}>{authorDisplay(it.author)}</a><span class="dotsep"></span>{relativeTime(it.date, NOW)}</span>
+                  {it.kind === 'share'
+                    ? <span class="kind-tag kt-share">shared{it.srcDomain ? ` · ${it.srcDomain}` : ''}</span>
+                    : <span class={`kind-tag kt-${it.kind}`}>{kindLabel[it.kind]}</span>}
+                  {it.stub && <span class="kind-tag kt-members">members</span>}
+                </div>
+                <h2 class="feed-title">
+                  {it.href
+                    ? <a href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener' : undefined}>{it.title}</a>
+                    : it.title}
+                </h2>
+                {it.excerpt && <p class="feed-ex">{it.excerpt}</p>}
+                <div class="feed-foot">
+                  {it.kind === 'share'
+                    ? <UpvoteButton targetSlug={it.slug} size="sm" />
+                    : !it.stub && <FavoriteButton targetType={it.targetType as 'post' | 'product' | 'prompt'} targetSlug={it.slug} count={it.favorites} size="sm" />}
+                  <span class="rx rx-static"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-chat"/></svg> {it.comments}<span class="sr-only"> comments</span></span>
+                  <span class="fsp"></span>
+                </div>
+              </div>
+              {it.cover && (it.href
+                ? <a class="feed-cover" href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener' : undefined} aria-hidden="true" tabindex="-1"><img src={it.cover} alt="" loading="lazy" decoding="async" /></a>
+                : <span class="feed-cover"><img src={it.cover} alt="" loading="lazy" decoding="async" /></span>)}
+            </article>
+            {ci === 0 && ctaAfter !== undefined && ri === ctaAfter && (
+              <aside class="feed-cta" aria-label="Join the GBTI Network">
+                <slot name="cta" />
+              </aside>
+            )}
+          </>
+        ))}
+      </div>
+      {ci < pages - 1 && (
+        <nav class="pager" data-ladder data-chunk={ci} aria-label="Load more feed items" hidden={ci > 0}>
+          <span class="pos">{ci + 1} / {pages}</span>
+          <button type="button" data-ladder-next>Next <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-arrow"/></svg></button>
+        </nav>
+      )}
+    </>
+  ))}
+</div>
+
+<script>
+  // The ladder: consume the clicked pager (same-dimension empty separator box), reveal the next chunk
+  // and its pager. Delegated per list so multiple feed lists on one site share one bundled handler.
+  document.querySelectorAll<HTMLElement>('[data-feedlist]').forEach((list) => {
+    list.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('[data-ladder-next]');
+      if (!btn) return;
+      const pager = btn.closest<HTMLElement>('[data-ladder]');
+      if (!pager) return;
+      const i = Number(pager.dataset.chunk);
+      pager.classList.add('pager-done');
+      pager.replaceChildren();
+      pager.removeAttribute('aria-label');
+      pager.setAttribute('aria-hidden', 'true');
+      const nextChunk = list.querySelector<HTMLElement>(`.feed-chunk[data-chunk="${i + 1}"]`);
+      if (nextChunk) nextChunk.hidden = false;
+      const nextPager = list.querySelector<HTMLElement>(`[data-ladder][data-chunk="${i + 1}"]`);
+      if (nextPager) nextPager.hidden = false;
+    });
+  });
+</script>

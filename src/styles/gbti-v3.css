@@ -911,3 +911,75 @@ a.who:hover { color: var(--fg); }
   .feed-item { grid-template-columns: 1fr; }
   .feed-cover { width: 100%; height: 180px; }
 }
+
+/* ---------- sow-131: /feeds/ views + the ladder pager ---------- */
+/* The ladder pager: interleaved between page chunks; a consumed pager becomes an empty separator box
+   with the SAME dimensions (owner directive). min-height pins the row height across the swap. */
+.pager { margin: 34px 0; min-height: 34px; }
+.pager-done { border: 1.5px solid var(--line); border-radius: var(--r); background: transparent; }
+/* While a tag/visibility filter is active the ladder flattens: every chunk shows, pagers + separators
+   hide. Chunk/pager hidden attributes are untouched so clearing the filter restores the ladder. */
+.feed-flat .feed-chunk[hidden] { display: block; }
+.feed-flat .pager, .feed-flat .pager-done { display: none; }
+
+/* narrow tabs */
+.feed-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+.feed-tab { font-family: var(--f-mono); font-size: 12.5px; font-weight: 600; color: var(--fg-soft);
+  border: 1.5px solid var(--line-2); border-radius: 999px; padding: 6px 14px; background: var(--paper); }
+.feed-tab:hover { border-color: var(--ink); color: var(--fg); }
+.feed-tab.on { border-color: var(--green); color: var(--green-700); background: var(--green-tint); }
+
+/* toolbar: visibility chips + density toggle */
+.feed-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 2px; }
+.feed-vis { display: flex; gap: 8px; }
+.feed-toolbar .filter { cursor: pointer; }
+.feed-tb-sp { flex: 1; }
+.feed-page .view-toggle { display: inline-flex; border: 1.5px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
+.feed-page .vt-btn { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: 12px; font-weight: 600;
+  color: var(--fg-soft); background: var(--paper); border: 0; padding: 7px 12px; cursor: pointer; }
+.feed-page .vt-btn + .vt-btn { border-left: 1.5px solid var(--line-2); }
+.feed-page .vt-btn.on { background: var(--green-tint); color: var(--green-700); }
+
+/* compact density: dense rows, no excerpt/cover */
+.feed-page[data-view="compact"] .feed-ex,
+.feed-page[data-view="compact"] .feed-cover { display: none; }
+.feed-page[data-view="compact"] .feed-item { grid-template-columns: 1fr; padding: 15px 0; }
+.feed-page[data-view="compact"] .feed-title { font-size: 17px; }
+.feed-page[data-view="compact"] .feed-meta { margin-bottom: 8px; }
+.feed-page[data-view="compact"] .feed-foot { margin-top: 10px; }
+
+/* tag drilldown banner */
+.feed-tag-banner { display: flex; align-items: center; gap: 12px; margin: 12px 0 2px; padding: 10px 14px;
+  border: 1.5px solid var(--green-tint-2); border-radius: var(--r); background: var(--green-tint);
+  font-size: 14px; color: var(--fg); }
+.feed-tag-banner[hidden] { display: none; }
+.feed-tag-banner b { color: var(--green-700); }
+.feed-tag-banner a { font-family: var(--f-mono); font-size: 12px; font-weight: 600; color: var(--fg-soft); margin-left: auto; }
+.feed-tag-banner a:hover { color: var(--fg); }
+
+/* the aggregate members-only-shares card (no share titles ever; see check-build-secrets) */
+.feed-locked-shares { display: flex; align-items: center; gap: 10px; margin: 14px 0 2px; padding: 12px 16px;
+  border: 1.5px solid var(--line); border-radius: var(--r); background: var(--paper); font-size: 14px; color: var(--fg-soft); }
+.feed-locked-shares svg { color: var(--fg-mute); flex: none; }
+.feed-locked-shares b { color: var(--fg); }
+.feed-locked-shares .link { margin-left: auto; white-space: nowrap; }
+
+/* the in-feed join CTA (feeds pages only; the homepage has the sidebar join card) */
+.feed-cta { border: 1.5px solid var(--green-tint-2); border-radius: var(--r-lg); background: linear-gradient(160deg, var(--green-tint), var(--paper) 82%);
+  padding: 20px 22px; margin: 26px 0; }
+[data-theme="dark"] .feed-cta { background: linear-gradient(160deg, rgba(31,158,95,.16), var(--paper) 82%); }
+.feed-cta-inner { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.feed-cta-inner > div:first-child { flex: 1; min-width: 240px; }
+.feed-cta .fc-t { font-family: var(--f-display); font-weight: 800; font-size: 19px; color: var(--fg); }
+.feed-cta .fc-d { font-size: 14px; color: var(--fg-soft); line-height: 1.5; margin-top: 6px; }
+.feed-cta .fc-a { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.feed-cta .fc-n { font-family: var(--f-mono); font-size: 10.5px; color: var(--fg-mute); text-align: center; }
+/* Members (paid or trialing, via the SOW-030 presentation signal) see neither join surface. */
+html.is-gbti-member-active .feed-cta,
+html.is-gbti-member-active .feed-locked-shares { display: none; }
+
+/* trending-tag chips are links now (the /feeds/?tag= drilldown) */
+a.tag:hover { border-color: var(--ink); color: var(--ink); }
+
+.feed-empty { font-family: var(--f-mono); font-size: 13px; color: var(--fg-mute); text-align: center; margin: 30px 0; }
+.feed-empty[hidden] { display: none; }

@@ -1,0 +1,24 @@
+---
+// sow-131: the five narrowed feed views. /feeds/ (All) is index.astro; each narrow filters the same
+// normalized item set through matchesNarrow inside FeedView.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FeedView from '../../components/feeds/FeedView.astro';
+import { loadFeedItems } from '../../lib/feed-items';
+
+export function getStaticPaths() {
+  return [
+    { params: { narrow: 'network' }, props: { title: 'Network Feed', description: 'What the GBTI Network itself is publishing: house articles, products, and prompts, newest first.' } },
+    { params: { narrow: 'articles' }, props: { title: 'Articles Feed', description: 'Member articles across the GBTI Network, newest first.' } },
+    { params: { narrow: 'products' }, props: { title: 'Products Feed', description: 'Member products, tools, and plugins across the GBTI Network, newest first.' } },
+    { params: { narrow: 'prompts' }, props: { title: 'Prompts Feed', description: 'Reusable AI prompts from GBTI Network members, newest first.' } },
+    { params: { narrow: 'shares' }, props: { title: 'Shares Feed', description: 'Links and finds GBTI Network members are sharing publicly, newest first.' } },
+  ];
+}
+const { narrow } = Astro.params as { narrow: 'network' | 'articles' | 'products' | 'prompts' | 'shares' };
+const { title, description } = Astro.props;
+
+const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadFeedItems();
+---
+<BaseLayout title={title} description={description}>
+  <FeedView narrow={narrow} items={[...contentItems, ...shareItems]} avatarIndex={avatarIndex} membersShareCount={membersShareCount} />
+</BaseLayout>

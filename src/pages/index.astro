@@ -1,123 +1,28 @@
 ---
 // SOW-136: the feed homepage, built from the "GBTI Homepage.html" Claude Design handoff. A magazine
 // feed over real content: New & Popular (ranked by favorites + comments), The Feed (articles,
-// products, prompts, and PUBLIC member shares, newest first, paged client-side), and a sidebar
-// (join card, the Shop Talk live card, members worth following, trending tags). The previous
-// marketing homepage is archived unindexed at /home/v1/.
+// products, prompts, and PUBLIC member shares, newest first, revealed by the shared ladder pager),
+// and a sidebar (join card, the Shop Talk live card, members worth following, trending tags that
+// drill into /feeds/?tag=). The item builders + the feed list are shared with the sow-131 /feeds/
+// views (src/lib/feed-items.ts + src/components/feeds/FeedList.astro). The previous marketing
+// homepage is archived unindexed at /home/v1/.
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { getCollection } from 'astro:content';
 import Avatar from '../components/Avatar.astro';
 import FavoriteButton from '../components/FavoriteButton.astro';
-import UpvoteButton from '../components/UpvoteButton.astro';
-import { isPublic, isListed, isStub, catalogHref } from '../lib/content';
+import FeedList from '../components/feeds/FeedList.astro';
 import { authorDisplay, authorHref } from '../lib/authors';
-import { buildAvatarIndex, authorItem } from '../lib/avatars';
-import { favoriteCount } from '../lib/favorites';
-import { upvoteCount } from '../lib/upvotes';
-import { commentThreadCount } from '../lib/comments';
-import { resolveThumb } from '../lib/index-thumb';
-import { imageFieldOf } from '../lib/content-index.mjs';
-import { feedTime, sortByNewest, isPublicShare, rankNewAndPopular, aggregateTags, relativeTime, readMinutes, decodeEntities } from '../lib/home-feed.mjs';
+import { loadFeedItems } from '../lib/feed-items';
+import { sortByNewest, rankNewAndPopular, aggregateTags, relativeTime } from '../lib/home-feed.mjs';
 import { TRIAL_DAYS_SITE, FIRST_TOUCH_PCT, MEMBERSHIP_PRICE_LABEL, BILLING_PERIOD } from '../lib/membership';
 
-const comments = await getCollection('comment');
-const posts = (await getCollection('post')).filter(isListed);
-// SOW-022: applets list among products; their cards link to the running tool via catalogHref.
-const products = [...(await getCollection('product')), ...(await getCollection('applet'))].filter(isListed);
-const prompts = (await getCollection('prompt')).filter(isListed);
-// The scoped SOW-018 reversal (sow-131 election): ONLY published + visibility:public shares, fail closed.
-const shares = (await getCollection('share')).filter((s) => isPublicShare(s.data));
-const profiles = (await getCollection('profile')).filter(isPublic).filter((p) => p.data.username !== 'gbti');
-const avatarIndex = buildAvatarIndex(profiles);
-
-// One normalized item per entry. `targetType` keys favorites/comments; `kind` labels the card.
-type FeedItem = {
-  kind: 'article' | 'product' | 'prompt' | 'share';
-  targetType: 'post' | 'product' | 'prompt' | 'share';
-  slug: string; // the favorites/upvotes/comments key: content slug, or "<author>/<id>" for a share
-  title: string;
-  href: string | null;
-  external: boolean;
-  author: string;
-  date: number;
-  excerpt?: string;
-  stub: boolean;
-  favorites: number;
-  upvotes: number;
-  comments: number;
-  tags: string[];
-  thumb: string | null; // small square (always resolvable, branded fallback)
-  cover: string | null; // wide feed cover (only when the item has a real image)
-  srcDomain?: string; // share: the shared link's hostname
-  read?: number; // article: minutes
-};
-
-async function contentItem(entry: any, kind: 'article' | 'product' | 'prompt'): Promise<FeedItem> {
-  const d = entry.data;
-  const tt: 'post' | 'product' | 'prompt' = kind === 'article' ? 'post' : kind === 'prompt' ? 'prompt' : 'product';
-  const hasImage = !!imageFieldOf(d, tt);
-  const thumbs = await resolveThumb(d, tt);
-  return {
-    kind,
-    targetType: tt,
-    slug: d.slug,
-    title: d.title,
-    href: kind === 'article' ? `/articles/${d.slug}/` : kind === 'prompt' ? `/prompts/${d.slug}/` : catalogHref(entry),
-    external: false,
-    author: d.author,
-    date: feedTime(d),
-    excerpt: d.excerpt ?? d.shortDescription,
-    stub: isStub(entry),
-    favorites: favoriteCount(tt, d.slug),
-    upvotes: 0,
-    comments: commentThreadCount(comments, tt, d.slug, d.author),
-    tags: d.tags ?? [],
-    thumb: thumbs.thumb,
-    cover: hasImage ? thumbs.thumbCard : null,
-    read: kind === 'article' ? readMinutes(entry.body) : undefined,
-  };
-}
-
-function shareItem(entry: any): FeedItem {
-  const d = entry.data;
-  const slug = `${d.author}/${d.id}`;
-  let srcDomain: string | undefined;
-  try { srcDomain = d.url ? new URL(d.url).hostname.replace(/^www\./, '') : undefined; } catch { srcDomain = undefined; }
-  return {
-    kind: 'share',
-    targetType: 'share',
-    slug,
-    title: decodeEntities(d.title ?? d.shortDescription ?? 'Shared a link'),
-    href: d.url ?? null, // no /shares/ routes until SOW-094; a share clicks through to its source
-    external: true,
-    author: d.author,
-    date: feedTime(d),
-    excerpt: d.title && d.shortDescription ? decodeEntities(d.shortDescription) : undefined,
-    stub: false,
-    favorites: 0,
-    upvotes: upvoteCount(slug),
-    comments: commentThreadCount(comments, 'share', slug, d.author),
-    tags: d.tags ?? [],
-    thumb: typeof d.image === 'string' && d.image ? d.image : null,
-    cover: typeof d.image === 'string' && d.image ? d.image : null,
-    srcDomain,
-  };
-}
-
-const contentItems: FeedItem[] = [
-  ...(await Promise.all(posts.map((p) => contentItem(p, 'article')))),
-  ...(await Promise.all(products.map((p) => contentItem(p, 'product')))),
-  ...(await Promise.all(prompts.map((p) => contentItem(p, 'prompt')))),
-];
-const shareItems = shares.map(shareItem);
+const { contentItems, shareItems, profiles, avatarIndex } = await loadFeedItems();
 
 // New & Popular: member content only (no shares), favorites x3 + comments x2, newest breaks ties.
 const np = rankNewAndPopular(contentItems, 6);
 const npCols = [np.filter((_, i) => i % 2 === 0), np.filter((_, i) => i % 2 === 1)];
 
-// The Feed: everything, newest first. All items render (SEO); the pager reveals 10 at a time.
+// The Feed: everything, newest first. All items render (SEO); the ladder pager reveals 10 at a time.
 const feed = sortByNewest([...contentItems, ...shareItems]);
-const FEED_PAGE_SIZE = 10;
 
 // Members worth following: directory opt-ins, ranked by their most recent published activity.
 const latestByAuthor = new Map<string, number>();
@@ -130,6 +35,7 @@ function roleLine(p: any): string {
   return p.data.headline || [...(p.data.roles ?? []), ...(p.data.skills ?? [])].slice(0, 2).join(' · ') || 'GBTI member';
 }
 
+// Trending tags drill into the feed tag view (sow-131): /feeds/?tag=<tag>.
 const tags = aggregateTags([...contentItems, ...shareItems], 9);
 
 // Build-time "now" for relative times (the site redeploys on every push, so drift stays small).
@@ -155,11 +61,6 @@ const SHOPTALK = {
 const kindLabel: Record<string, string> = { article: 'article', product: 'product', prompt: 'prompt' };
 ---
 <BaseLayout title="Publish your work. Build with peers. Share the revenue." description={`A creator network powered by Git. Publish articles, products, and prompts, build with peers, and earn from the members your work brings in. Start a ${TRIAL_DAYS_SITE}-day limited-access trial, no card required.`}>
-
-<!-- page-local icons the shared sprite does not carry -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <g id="ico-arrowL"><path d="M19 12H6M11 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>
-</defs></svg>
 
 <div class="wrap feedwrap">
 
@@ -196,44 +97,8 @@ const kindLabel: Record<string, string> = { article: 'article', product: 'produc
   <!-- ============ FEED + SIDEBAR ============ -->
   <div class="feed-layout">
     <main aria-label="The network feed">
-      <div class="feed-lab" id="feed"><span class="dot"></span><span class="t">The Feed</span><span class="rule"></span><span class="more">Everything, including member shares</span></div>
-      <div class="feed-list" data-feed>
-        {feed.map((it, i) => (
-          <article class:list={['feed-item', !it.cover && 'nocover']} data-fi hidden={i >= FEED_PAGE_SIZE}>
-            <div class="feed-main">
-              <div class="feed-meta">
-                <Avatar item={authorItem(it.author, avatarIndex)} class="av" size={26} />
-                <span class="tmeta"><a class="who" href={authorHref(it.author)}>{authorDisplay(it.author)}</a><span class="dotsep"></span>{relativeTime(it.date, NOW)}</span>
-                {it.kind === 'share'
-                  ? <span class="kind-tag kt-share">shared{it.srcDomain ? ` · ${it.srcDomain}` : ''}</span>
-                  : <span class={`kind-tag kt-${it.kind}`}>{kindLabel[it.kind]}</span>}
-                {it.stub && <span class="kind-tag kt-members">members</span>}
-              </div>
-              <h2 class="feed-title">
-                {it.href
-                  ? <a href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener' : undefined}>{it.title}</a>
-                  : it.title}
-              </h2>
-              {it.excerpt && <p class="feed-ex">{it.excerpt}</p>}
-              <div class="feed-foot">
-                {it.kind === 'share'
-                  ? <UpvoteButton targetSlug={it.slug} size="sm" />
-                  : !it.stub && <FavoriteButton targetType={it.targetType as 'post' | 'product' | 'prompt'} targetSlug={it.slug} count={it.favorites} size="sm" />}
-                <span class="rx rx-static"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-chat"/></svg> {it.comments}<span class="sr-only"> comments</span></span>
-                <span class="fsp"></span>
-              </div>
-            </div>
-            {it.cover && (it.href
-              ? <a class="feed-cover" href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener' : undefined} aria-hidden="true" tabindex="-1"><img src={it.cover} alt="" loading="lazy" decoding="async" /></a>
-              : <span class="feed-cover"><img src={it.cover} alt="" loading="lazy" decoding="async" /></span>)}
-          </article>
-        ))}
-      </div>
-      <nav class="pager" data-pager aria-label="Feed pages" hidden={feed.length <= FEED_PAGE_SIZE}>
-        <button type="button" data-prev disabled><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-arrowL"/></svg> Prev</button>
-        <span class="pos" data-pos>1 / {Math.max(1, Math.ceil(feed.length / FEED_PAGE_SIZE))}</span>
-        <button type="button" data-next>Next <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-arrow"/></svg></button>
-      </nav>
+      <div class="feed-lab" id="feed"><span class="dot"></span><span class="t">The Feed</span><span class="rule"></span><a class="more" href="/feeds/">Everything, including member shares</a></div>
+      <FeedList items={feed} avatarIndex={avatarIndex} />
     </main>
 
     <aside class="side">
@@ -277,12 +142,12 @@ const kindLabel: Record<string, string> = { article: 'article', product: 'produc
         </div>
       </div>
 
-      <!-- trending tags -->
+      <!-- trending tags (drill into the feed tag view) -->
       {tags.length > 0 && (
         <div class="card side-card">
           <div class="side-h">Trending tags</div>
           <div class="tags">
-            {tags.map((t) => <span class="tag">#{t.tag} <b>{t.count}</b></span>)}
+            {tags.map((t) => <a class="tag" href={`/feeds/?tag=${encodeURIComponent(t.tag)}`}>#{t.tag} <b>{t.count}</b></a>)}
           </div>
         </div>
       )}
@@ -290,41 +155,17 @@ const kindLabel: Record<string, string> = { article: 'article', product: 'produc
   </div>
 </div>
 
-<script is:inline define:vars={{ pageSize: FEED_PAGE_SIZE }}>
-  // Client-side feed pager (the prompts-directory pattern): every item is in the HTML; JS reveals one
-  // page at a time. Also stamps the Shop Talk date chip with the next Saturday so it never goes stale.
+<script is:inline>
+  // The Shop Talk live card: stamp the next Saturday's date chip, and make the calendar CTA
+  // membership-aware (owner directive): a visitor goes to the join page; a signed-in member (the
+  // SOW-030 extension identity signal, presentation-only, untrusted) gets the Google Calendar add
+  // link. The feed ladder pager lives in the shared FeedList component.
   (function () {
-    var items = Array.prototype.slice.call(document.querySelectorAll('[data-feed] [data-fi]'));
-    var pager = document.querySelector('[data-pager]');
-    if (pager && items.length > pageSize) {
-      var prev = pager.querySelector('[data-prev]');
-      var next = pager.querySelector('[data-next]');
-      var pos = pager.querySelector('[data-pos]');
-      var pages = Math.max(1, Math.ceil(items.length / pageSize));
-      var page = 0;
-      function apply(scroll) {
-        items.forEach(function (el, i) { el.hidden = i < page * pageSize || i >= (page + 1) * pageSize; });
-        if (pos) pos.textContent = (page + 1) + ' / ' + pages;
-        if (prev) prev.disabled = page <= 0;
-        if (next) next.disabled = page >= pages - 1;
-        if (scroll) {
-          var lab = document.getElementById('feed');
-          if (lab) lab.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      }
-      if (prev) prev.addEventListener('click', function () { if (page > 0) { page--; apply(true); } });
-      if (next) next.addEventListener('click', function () { if (page < pages - 1) { page++; apply(true); } });
-      apply(false);
-    }
-
-    // Next Saturday's day-of-month for the live card's date chip (today counts when it is Saturday).
     var d = new Date();
     d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
     var chip = document.querySelector('[data-shoptalk-day]');
     if (chip) chip.textContent = String(d.getDate());
 
-    // Membership-aware calendar CTA: a visitor goes to the join page; a signed-in member (the SOW-030
-    // extension identity signal, presentation-only, untrusted) gets the Google Calendar add link.
     var cta = document.querySelector('[data-shoptalk-cta]');
     if (cta) {
       var calUrl = cta.getAttribute('data-calendar-url');

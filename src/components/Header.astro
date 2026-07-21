@@ -2,11 +2,19 @@
 // Shared site header (SOW-010 V3). Brand + flat nav + light/dark toggle + sign-in, in the V3 design
 // language (classes from gbti-v3.css). Token-driven, so it works in both themes. Replaces the legacy
 // dark mega-menu. The icon sprite is rendered once in BaseLayout.
+// sow-131: the top nav is compressed to Feeds (a dropdown over the six feed views) + the two
+// standalone pages. The directories (/articles/, /products/, /prompts/) keep their URLs and footer
+// links; the feed views are the primary browse surface.
+const feedsMenu = [
+  { label: 'All', href: '/feeds/' },
+  { label: 'Network', href: '/feeds/network/' },
+  { label: 'Articles', href: '/feeds/articles/' },
+  { label: 'Products', href: '/feeds/products/' },
+  { label: 'Prompts', href: '/feeds/prompts/' },
+  { label: 'Shares', href: '/feeds/shares/' },
+];
 const nav = [
-  { label: 'Products', href: '/products/' },
-  { label: 'Prompts', href: '/prompts/' },
   { label: 'Revenue Model', href: '/revenue-model/' },
-  { label: 'Blog', href: '/articles/' },
   { label: 'Get Extension', href: '/extension/' },
 ];
 ---
@@ -18,6 +26,15 @@ const nav = [
     </a>
 
     <nav class="nav" aria-label="Primary">
+      <div class="nav-drop" data-dropdown>
+        <button type="button" class="nav-drop-btn" data-dropdown-btn aria-haspopup="true" aria-expanded="false">
+          Feeds
+          <svg class="nav-drop-caret" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+        <div class="head-menu nav-drop-menu" data-dropdown-menu role="menu" hidden>
+          {feedsMenu.map((i) => <a class="hm-item" role="menuitem" href={i.href}>{i.label}</a>)}
+        </div>
+      </div>
       {nav.map((i) => <a href={i.href}>{i.label}</a>)}
     </nav>
 
@@ -63,6 +80,8 @@ const nav = [
 
   <nav class="head-mobile" data-mobile-menu hidden aria-label="Mobile">
     <div class="wrap">
+      <span class="m-group">Feeds</span>
+      {feedsMenu.map((i) => <a href={i.href} class="m-sub">{i.label}</a>)}
       {nav.map((i) => <a href={i.href}>{i.label}</a>)}
       <a href="/membership/" class="m-join">Sign in / Join</a>
     </div>
@@ -80,6 +99,19 @@ const nav = [
   .head-mobile a { padding: 11px 0; font-weight: 500; color: var(--fg-soft); border-bottom: 1px solid var(--line); }
   .head-mobile a:last-child { border-bottom: 0; }
   .head-mobile .m-join { color: var(--green-700); font-weight: 600; }
+  .head-mobile .m-group { display: block; padding: 11px 0 4px; font-family: var(--f-mono); font-size: 11px;
+    letter-spacing: .12em; text-transform: uppercase; color: var(--fg-mute); }
+  .head-mobile .m-sub { padding-left: 14px; }
+  /* sow-131: the Feeds nav dropdown. Reuses the account menu's panel/item styles (.head-menu/.hm-item,
+     below) with a left-anchored panel; the trigger matches the flat .nav link typography. */
+  .nav-drop { position: relative; }
+  .nav-drop-btn { display: inline-flex; align-items: center; gap: 5px; background: transparent; border: 0;
+    padding: 0; cursor: pointer; font: inherit; font-size: 15.5px; font-weight: 500; color: var(--fg-soft);
+    transition: color .15s; white-space: nowrap; }
+  .nav-drop-btn:hover, .nav-drop-btn[aria-expanded="true"] { color: var(--fg); }
+  .nav-drop-caret { color: var(--fg-mute); transition: transform .15s ease; }
+  .nav-drop-btn[aria-expanded="true"] .nav-drop-caret { transform: rotate(180deg); }
+  .nav-drop-menu { left: 0; right: auto; min-width: 170px; }
   /* SOW-030/036: the signed-in account control (avatar + @login + caret) and its dropdown menu. Hidden until the
      extension signal arrives; when shown it replaces the "Sign in" button (toggled in the script below). */
   .head-me-wrap { position: relative; }
@@ -219,5 +251,26 @@ const nav = [
   burger?.addEventListener('click', () => {
     const open = menu?.toggleAttribute('hidden');
     burger.setAttribute('aria-expanded', String(open === false));
+  });
+
+  // sow-131: generic nav dropdown wiring (the Feeds menu): toggle, outside-click, Esc, focus-first.
+  // The account menu above keeps its own wiring (it is entangled with the identity signal).
+  document.querySelectorAll('[data-dropdown]').forEach((dd) => {
+    const btn = dd.querySelector<HTMLButtonElement>('[data-dropdown-btn]');
+    const panel = dd.querySelector<HTMLElement>('[data-dropdown-menu]');
+    if (!btn || !panel) return;
+    const close = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (panel.hidden) {
+        panel.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+        panel.querySelector<HTMLElement>('.hm-item')?.focus();
+      } else {
+        close();
+      }
+    });
+    document.addEventListener('click', (e) => { if (!panel.hidden && !dd.contains(e.target as Node)) close(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) { close(); btn.focus(); } });
   });
 </script>

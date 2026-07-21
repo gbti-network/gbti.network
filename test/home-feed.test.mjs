@@ -2,7 +2,7 @@
 // SOW-018 reversal), the New & Popular ranking, tag aggregation, and relative time.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { feedTime, sortByNewest, isPublicShare, rankNewAndPopular, aggregateTags, relativeTime, readMinutes, decodeEntities } from '../src/lib/home-feed.mjs';
+import { feedTime, sortByNewest, isPublicShare, rankNewAndPopular, aggregateTags, relativeTime, readMinutes, decodeEntities, matchesNarrow, chunkPages } from '../src/lib/home-feed.mjs';
 
 test('decodeEntities resolves numeric + common named entities in scraped share metadata', () => {
   assert.equal(decodeEntities('WordPress Down &#8211; SQL Injection'), 'WordPress Down – SQL Injection');
@@ -95,4 +95,26 @@ test('relativeTime buckets minutes, hours, days, months, years', () => {
   assert.equal(at('2024-07-21T12:00:00Z'), '2y ago');
   assert.equal(relativeTime(undefined, now), '');
   assert.equal(relativeTime(new Date('2026-07-22T12:00:00Z'), now), 'just now'); // clock skew clamps to zero
+});
+
+// sow-131: the public feed narrows + the ladder pager's page chunking.
+test('matchesNarrow maps the six narrows and fails closed on unknown values', () => {
+  const art = { kind: 'article', author: 'alice' };
+  const house = { kind: 'prompt', author: 'gbti' };
+  const share = { kind: 'share', author: 'alice' };
+  assert.equal(matchesNarrow(art, 'all'), true);
+  assert.equal(matchesNarrow(art, 'articles'), true);
+  assert.equal(matchesNarrow(art, 'products'), false);
+  assert.equal(matchesNarrow(house, 'network'), true);
+  assert.equal(matchesNarrow(art, 'network'), false);
+  assert.equal(matchesNarrow(share, 'shares'), true);
+  assert.equal(matchesNarrow(share, 'nope'), false);
+  assert.equal(matchesNarrow(undefined, 'articles'), false);
+});
+
+test('chunkPages splits into fixed-size pages with a short tail', () => {
+  const items = [1, 2, 3, 4, 5, 6, 7];
+  assert.deepEqual(chunkPages(items, 3), [[1, 2, 3], [4, 5, 6], [7]]);
+  assert.deepEqual(chunkPages([], 3), []);
+  assert.deepEqual(chunkPages([1], 5), [[1]]);
 });

@@ -83,6 +83,33 @@ export function aggregateTags(items, n = 9) {
     .slice(0, n);
 }
 
+/** The six public feed narrows (sow-131): route segment -> predicate over a normalized feed item. */
+export const FEED_NARROWS = ['all', 'network', 'articles', 'products', 'prompts', 'shares'];
+
+/**
+ * Does a feed item belong to a narrow? `all` = everything; `network` = the network's own output
+ * (house content, author `gbti`); the rest match the item's kind. Unknown narrows match nothing
+ * (fail closed).
+ */
+export function matchesNarrow(item, narrow) {
+  switch (narrow) {
+    case 'all': return true;
+    case 'network': return item?.author === 'gbti';
+    case 'articles': return item?.kind === 'article';
+    case 'products': return item?.kind === 'product';
+    case 'prompts': return item?.kind === 'prompt';
+    case 'shares': return item?.kind === 'share';
+    default: return false;
+  }
+}
+
+/** Split items into page chunks of `size` (the ladder pager renders one pager row per chunk). */
+export function chunkPages(items, size = 10) {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
 /** Estimated reading time in whole minutes (220 wpm), minimum 1. 0 for an empty/absent body. */
 export function readMinutes(text) {
   const words = String(text ?? '').trim().split(/\s+/).filter(Boolean).length;

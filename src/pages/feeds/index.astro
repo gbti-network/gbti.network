@@ -1,0 +1,11 @@
+---
+// sow-131: the public feed, All view. The five narrows live at /feeds/<narrow>/ ([narrow].astro).
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FeedView from '../../components/feeds/FeedView.astro';
+import { loadFeedItems } from '../../lib/feed-items';
+
+const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadFeedItems();
+---
+<BaseLayout title="The Feed" description="Everything the GBTI Network is shipping and sharing: member articles, products, prompts, and public shares, newest first.">
+  <FeedView narrow="all" items={[...contentItems, ...shareItems]} avatarIndex={avatarIndex} membersShareCount={membersShareCount} />
+</BaseLayout>
