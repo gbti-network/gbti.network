@@ -103,3 +103,24 @@ test('a network error after sign-in fails closed (reachedGithub false, nothing a
   assert.equal(r.reachedGithub, false);
   assert.equal(r.forkReady, false);
 });
+
+// The stale-installation trap (2026-07-21): the browser HTTP cache (GitHub max-age=60) + GitHub's ETag/304
+// layer kept serving a fixed "all repositories" grant for minutes while the wizard polled. Every probe read
+// must opt out of both: cache:'no-store' and an empty If-None-Match.
+test('every probe read is cache-busted (no-store + empty If-None-Match)', async () => {
+  const inits = [];
+  const fetch = async (url, init) => {
+    inits.push({ url, init });
+    if (url.includes('/user/installations/77/repositories')) return okJson({ repositories: [{ full_name: 'alice/gbti.network' }] });
+    if (url.includes('/user/installations')) return okJson({ installations: [{ id: 77, app_slug: 'gbti-network', account: { login: 'alice' }, repository_selection: 'selected' }] });
+    if (url.includes('/repos/alice/gbti.network')) return okJson({ fork: true, parent: { full_name: 'gbti-network/gbti.network' } });
+    return okJson({ login: 'alice', id: 1 });
+  };
+  const r = await probeReadiness({ token: 't', appSlug: SLUG, upstream: UP, fetch });
+  assert.equal(r.installReady, true);
+  assert.equal(inits.length, 4, 'user + fork + installations + installation repos');
+  for (const { url, init } of inits) {
+    assert.equal(init?.cache, 'no-store', `${url} must skip the browser HTTP cache`);
+    assert.equal(init?.headers?.['If-None-Match'], '', `${url} must opt out of GitHub 304 caching`);
+  }
+});

@@ -18634,31 +18634,32 @@ async function workerContentOpened({ token, signupBase, fetch: fetch2 = globalTh
 
 // client/src/github-app-probe.mjs
 var GH = "https://api.github.com";
-var ghHeaders = (token) => ({ Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "gbti-network" });
+var ghHeaders = (token) => ({ Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "gbti-network", "If-None-Match": "" });
+var ghInit = (token) => ({ headers: ghHeaders(token), cache: "no-store" });
 var repoName = (login, upstream) => `${String(login).toLowerCase()}/${upstream.split("/")[1]}`;
 async function getAuthedUser({ token, fetch: fetch2 = globalThis.fetch }) {
-  const res = await fetch2(`${GH}/user`, { headers: ghHeaders(token) });
+  const res = await fetch2(`${GH}/user`, ghInit(token));
   if (res.status === 401) return null;
   if (!res.ok) throw new Error(`github /user ${res.status}`);
   const u = await res.json();
   return { login: String(u.login), githubId: String(u.id) };
 }
 async function forkReady({ token, login, upstream, fetch: fetch2 = globalThis.fetch }) {
-  const res = await fetch2(`${GH}/repos/${repoName(login, upstream)}`, { headers: ghHeaders(token) });
+  const res = await fetch2(`${GH}/repos/${repoName(login, upstream)}`, ghInit(token));
   if (!res.ok) return false;
   const r = await res.json();
   return r.fork === true && String(r.parent?.full_name || "").toLowerCase() === upstream.toLowerCase();
 }
 async function appInstallStatus({ token, login, appSlug, upstream, fetch: fetch2 = globalThis.fetch }) {
   const fork = repoName(login, upstream);
-  const res = await fetch2(`${GH}/user/installations`, { headers: ghHeaders(token) });
+  const res = await fetch2(`${GH}/user/installations`, ghInit(token));
   if (!res.ok) return { installed: false, allRepos: false };
   const data = await res.json();
   const insts = (data.installations || []).filter((i) => String(i.app_slug || "").toLowerCase() === appSlug.toLowerCase());
   const inst = insts.find((i) => String(i.account?.login || "").toLowerCase() === String(login).toLowerCase()) || insts[0];
   if (!inst) return { installed: false, allRepos: false };
   if (inst.repository_selection === "all") return { installed: false, allRepos: true };
-  const rres = await fetch2(`${GH}/user/installations/${inst.id}/repositories?per_page=100`, { headers: ghHeaders(token) });
+  const rres = await fetch2(`${GH}/user/installations/${inst.id}/repositories?per_page=100`, ghInit(token));
   if (!rres.ok) return { installed: false, allRepos: false };
   const rd = await rres.json();
   const has = (rd.repositories || []).some((r) => String(r.full_name || "").toLowerCase() === fork);

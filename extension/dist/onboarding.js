@@ -11293,7 +11293,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     font:inherit; font-weight:700; font-size:14px; padding:11px 14px; cursor:pointer; }
   .btn:hover { background:var(--brand-dark); color:#fff; }
   .btn svg { flex:none; }
-  .again { display:block; margin-top:8px; text-align:right; font-size:12px; color:var(--accent); background:none; border:0; cursor:pointer; }
+  .again { display:block; margin-top:8px; text-align:right; font-size:12px; color:var(--accent); background:none; border:0; cursor:pointer; margin-left:auto; }
+  .again[disabled] { opacity:.6; cursor:default; }
   .code { display:inline-flex; align-items:center; gap:8px; margin:2px 0 10px; font-family:ui-monospace,monospace; font-size:18px; font-weight:700; letter-spacing:.06em; background:var(--hover); padding:7px 11px; border-radius:8px; }
   .copy { font-family:var(--font-body); font-size:11px; font-weight:600; letter-spacing:0; border:1px solid var(--line); background:var(--panel); color:var(--accent); border-radius:6px; padding:3px 8px; cursor:pointer; }
   .copy:hover { border-color:var(--accent); }
@@ -11341,15 +11342,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._code = code ? { code, url } : null;
       this.render();
     }
-    /** Re-probe durable GitHub state and re-render. Never advances on an error (the probe returns reachedGithub:false). */
-    async refresh() {
+    /** Re-probe durable GitHub state and re-render. Never advances on an error (the probe returns reachedGithub:false).
+     *  A manual check (the Check again button) gets visible feedback: the button flips to "Checking...", and when the
+     *  probe returns unchanged we say so instead of silently re-rendering the same card (which reads as a dead click). */
+    async refresh({ manual = false } = {}) {
       if (this._busy) return;
       this._busy = true;
+      if (manual) {
+        this._checking = true;
+        this.render();
+      }
+      const sig = (s) => s ? [s.signedIn, s.forkReady, s.installReady, s.allReposGrant, s.activeStep].join("|") : "";
+      const before = sig(this._status);
       try {
         const s = await this.client?.onboardingStatus?.();
         if (s) {
           const becameReady = s.ready && !(this._status && this._status.ready);
           this._status = s;
+          this._staleNote = manual && !s.ready && sig(s) === before;
           if (s.signedIn) this._code = null;
           if (s.ready) {
             this._stopPolling();
@@ -11360,6 +11370,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._status = { ...this._status || {}, reachedGithub: false };
       } finally {
         this._busy = false;
+        this._checking = false;
         this.render();
       }
     }
@@ -11391,7 +11402,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       <div class="bar"><i style="width:${Math.round(nDone / 3 * 100)}%"></i></div>
       <ul>${rows}</ul>
       <p class="foot${reached ? "" : " err"}">${reached ? "Reached GitHub just now." : "We could not reach GitHub. Trying again."}</p>`);
-      this.on("[data-again]", "click", () => this.refresh());
+      this.on("[data-again]", "click", () => this.refresh({ manual: true }));
       this.on("[data-signin]", "click", () => this.emit("gbti:onboarding-signin"));
       const copy = this.$("[data-copy]");
       if (copy) copy.addEventListener("click", () => {
@@ -11412,7 +11423,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const eye = `<svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 5c-5 0-8.5 4.5-9 7 0.5 2.5 4 7 9 7s8.5-4.5 9-7c-.5-2.5-4-7-9-7zm0 11a4 4 0 110-8 4 4 0 010 8z" fill="currentColor"/></svg>`;
       const why = `<p class="why">${esc(meta.why || "")}</p>`;
       const see = `<p class="see">${eye}<span>${esc(meta.preview || "")}</span></p>`;
-      const again = `<button class="again" data-again type="button">Check again</button>`;
+      const again = `<button class="again" data-again type="button"${this._checking ? " disabled" : ""}>${this._checking ? "Checking..." : "Check again"}</button>${this._staleNote && !this._checking ? `<p class="note">Checked just now, no change yet. GitHub can take a minute to reflect updates, and this step re-checks itself every few seconds.</p>` : ""}`;
       if (id === "signin") {
         const verifyUrl = this._code?.url || "https://github.com/login/device";
         const shield = `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor"><path d="M8 0c.265 0 .529.06.77.179l5.5 2.75A1.75 1.75 0 0 1 15 4.493v3.32c0 4.142-2.957 6.83-6.66 7.998a1.12 1.12 0 0 1-.68 0C3.957 14.643 1 11.955 1 7.813v-3.32a1.75 1.75 0 0 1 .73-1.564l5.5-2.75A1.71 1.71 0 0 1 8 0Zm3.28 6.53a.75.75 0 0 0-1.06-1.06L7.25 8.44 5.78 6.97a.75.75 0 0 0-1.06 1.06l2 2a.75.75 0 0 0 1.06 0Z"/></svg>`;

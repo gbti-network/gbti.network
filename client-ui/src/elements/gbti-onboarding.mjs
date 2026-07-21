@@ -44,7 +44,8 @@ const CSS = `
     font:inherit; font-weight:700; font-size:14px; padding:11px 14px; cursor:pointer; }
   .btn:hover { background:var(--brand-dark); color:#fff; }
   .btn svg { flex:none; }
-  .again { display:block; margin-top:8px; text-align:right; font-size:12px; color:var(--accent); background:none; border:0; cursor:pointer; }
+  .again { display:block; margin-top:8px; text-align:right; font-size:12px; color:var(--accent); background:none; border:0; cursor:pointer; margin-left:auto; }
+  .again[disabled] { opacity:.6; cursor:default; }
   .code { display:inline-flex; align-items:center; gap:8px; margin:2px 0 10px; font-family:ui-monospace,monospace; font-size:18px; font-weight:700; letter-spacing:.06em; background:var(--hover); padding:7px 11px; border-radius:8px; }
   .copy { font-family:var(--font-body); font-size:11px; font-weight:600; letter-spacing:0; border:1px solid var(--line); background:var(--panel); color:var(--accent); border-radius:6px; padding:3px 8px; cursor:pointer; }
   .copy:hover { border-color:var(--accent); }
@@ -82,15 +83,21 @@ class GbtiOnboarding extends GbtiElement {
   /** The host (which runs the device flow) feeds the user code in so the sign-in card can show it. */
   setCode(code, url) { this._code = code ? { code, url } : null; this.render(); }
 
-  /** Re-probe durable GitHub state and re-render. Never advances on an error (the probe returns reachedGithub:false). */
-  async refresh() {
+  /** Re-probe durable GitHub state and re-render. Never advances on an error (the probe returns reachedGithub:false).
+   *  A manual check (the Check again button) gets visible feedback: the button flips to "Checking...", and when the
+   *  probe returns unchanged we say so instead of silently re-rendering the same card (which reads as a dead click). */
+  async refresh({ manual = false } = {}) {
     if (this._busy) return;
     this._busy = true;
+    if (manual) { this._checking = true; this.render(); }
+    const sig = (s) => (s ? [s.signedIn, s.forkReady, s.installReady, s.allReposGrant, s.activeStep].join('|') : '');
+    const before = sig(this._status);
     try {
       const s = await this.client?.onboardingStatus?.();
       if (s) {
         const becameReady = s.ready && !(this._status && this._status.ready);
         this._status = s;
+        this._staleNote = manual && !s.ready && sig(s) === before;
         if (s.signedIn) this._code = null; // the device code is spent once we are signed in
         if (s.ready) { this._stopPolling(); if (becameReady) this.emit('gbti:onboarding-ready', { login: s.login }); }
         else this._startPolling();
@@ -99,6 +106,7 @@ class GbtiOnboarding extends GbtiElement {
       this._status = { ...(this._status || {}), reachedGithub: false };
     } finally {
       this._busy = false;
+      this._checking = false;
       this.render();
     }
   }
@@ -136,7 +144,7 @@ class GbtiOnboarding extends GbtiElement {
       <ul>${rows}</ul>
       <p class="foot${reached ? '' : ' err'}">${reached ? 'Reached GitHub just now.' : 'We could not reach GitHub. Trying again.'}</p>`);
 
-    this.on('[data-again]', 'click', () => this.refresh());
+    this.on('[data-again]', 'click', () => this.refresh({ manual: true }));
     this.on('[data-signin]', 'click', () => this.emit('gbti:onboarding-signin'));
     const copy = this.$('[data-copy]');
     if (copy) copy.addEventListener('click', () => { try { navigator.clipboard?.writeText?.(this._code?.code || ''); copy.textContent = 'Copied'; } catch { /* clipboard blocked */ } });
@@ -148,7 +156,11 @@ class GbtiOnboarding extends GbtiElement {
     const eye = `<svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 5c-5 0-8.5 4.5-9 7 0.5 2.5 4 7 9 7s8.5-4.5 9-7c-.5-2.5-4-7-9-7zm0 11a4 4 0 110-8 4 4 0 010 8z" fill="currentColor"/></svg>`;
     const why = `<p class="why">${esc(meta.why || '')}</p>`;
     const see = `<p class="see">${eye}<span>${esc(meta.preview || '')}</span></p>`;
-    const again = `<button class="again" data-again type="button">Check again</button>`;
+    const again = `<button class="again" data-again type="button"${this._checking ? ' disabled' : ''}>${this._checking ? 'Checking...' : 'Check again'}</button>${
+      this._staleNote && !this._checking
+        ? `<p class="note">Checked just now, no change yet. GitHub can take a minute to reflect updates, and this step re-checks itself every few seconds.</p>`
+        : ''
+    }`;
     if (id === 'signin') {
       const verifyUrl = this._code?.url || 'https://github.com/login/device';
       // Plain-language decode of GitHub's "Act on your behalf" authorize line, which alarms members out of context.
