@@ -63,10 +63,10 @@ const features: [string, string][] = [
     <section class="b-sec">
       <div class="b-sect-t"><h2>Primary lockups</h2><span class="n">mark plus wordmark</span></div>
       <div class="b-grid g2">
-        <div class="tile"><div class="stage bg-paper"><div class="lockup"><img class="mk" src={MARK('ink')} alt="GBTI mark" /><span class="word"><span class="wm">GBTI</span><span class="tag">Network</span></span></div></div><div class="cap"><span>Horizontal, primary</span><span class="sw">ink on paper</span></div></div>
-        <div class="tile"><div class="stage bg-ink on-dark"><div class="lockup"><img class="mk" src={MARK('white')} alt="GBTI mark" /><span class="word"><span class="wm">GBTI</span><span class="tag">Network</span></span></div></div><div class="cap"><span>Horizontal, reversed</span><span class="sw">white on ink</span></div></div>
-        <div class="tile"><div class="stage bg-paper"><div class="lockup stack"><img class="mk" src={MARK('ink')} alt="GBTI mark" /><span class="word"><span class="wm">GBTI</span><span class="tag">Network</span></span></div></div><div class="cap"><span>Stacked</span><span class="sw">ink on paper</span></div></div>
-        <div class="tile"><div class="stage bg-green on-dark"><div class="lockup"><img class="mk" src={MARK('white')} alt="GBTI mark" /><span class="word"><span class="wm">GBTI</span><span class="tag">Network</span></span></div></div><div class="cap"><span>Horizontal, on green</span><span class="sw">white on brand</span></div></div>
+        <div class="tile"><div class="stage bg-paper"><div class="lockup"><img class="mk" src={MARK('ink')} alt="GBTI mark" /><span class="word"><span class="wm">GBTI</span><span class="net">Network</span></span></div></div><div class="cap"><span>Horizontal, primary</span><span class="sw">ink on paper</span></div></div>
+        <div class="tile"><div class="stage bg-ink on-dark"><div class="lockup"><img class="mk" src={MARK('white')} alt="GBTI mark" /><span class="word"><span class="wm">GBTI</span><span class="net">Network</span></span></div></div><div class="cap"><span>Horizontal, reversed</span><span class="sw">white on ink</span></div></div>
+        <div class="tile"><div class="stage bg-paper"><div class="lockup stack"><img class="mk" src={MARK('ink')} alt="GBTI mark" /><span class="word"><span class="wm">GBTI</span><span class="net">Network</span></span></div></div><div class="cap"><span>Stacked</span><span class="sw">ink on paper</span></div></div>
+        <div class="tile"><div class="stage bg-green on-dark"><div class="lockup"><img class="mk" src={MARK('white')} alt="GBTI mark" /><span class="word"><span class="wm">GBTI</span><span class="net">Network</span></span></div></div><div class="cap"><span>Horizontal, on green</span><span class="sw">white on brand</span></div></div>
       </div>
     </section>
 
@@ -247,15 +247,15 @@ const features: [string, string][] = [
   .bg-tint { background: #e9f6ef; }
   /* The word/tag inside a fixed-paper stage must stay ink even in dark mode (the stage does not flip). */
   .bg-paper .word .wm { color: #25232b; }
-  .bg-paper .word .tag { color: #6c6976; }
+  .bg-paper .word .net { color: #6c6976; }
 
   .lockup { display: flex; align-items: center; gap: 14px; }
   .lockup .mk { height: 46px; width: auto; display: block; }
   .word { display: flex; flex-direction: column; line-height: 1; }
   .word .wm { font-family: var(--f-display); font-weight: 700; font-size: 34px; letter-spacing: -0.01em; color: var(--ink); }
-  .word .tag { font-family: var(--f-mono); font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--fg-mute); margin-top: 1px; }
+  .word .net { font-family: var(--f-mono); font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--fg-mute); margin-top: 1px; }
   .on-dark .word .wm { color: #fff; }
-  .on-dark .word .tag { color: rgba(255,255,255,.72); }
+  .on-dark .word .net { color: rgba(255,255,255,.72); }
   .lockup.stack { flex-direction: column; gap: 14px; }
   .lockup.stack .mk { height: 64px; }
   .lockup.stack .word { align-items: center; }
