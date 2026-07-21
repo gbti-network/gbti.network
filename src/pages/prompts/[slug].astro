@@ -12,7 +12,7 @@ import Avatar from '../../components/Avatar.astro';
 import ContentMeta from '../../components/ContentMeta.astro';
 import ContentActions from '../../components/ContentActions.astro';
 import ContentFooter from '../../components/ContentFooter.astro';
-import { hasPublicPage, isStub } from '../../lib/content';
+import { hasPublicPage, isPublic, isStub } from '../../lib/content';
 import { authorDisplay, authorHref, authorAvatar } from '../../lib/authors';
 import { breadcrumb, categoryLabel } from '../../lib/taxonomy';
 import { favoriteCount } from '../../lib/favorites';
@@ -33,7 +33,13 @@ const rawBody = (prompt.body ?? '').trim(); // raw markdown source for the "Mark
 const allPrompts = (await getCollection('prompt')).filter(hasPublicPage);
 const profile = (await getCollection('profile')).find((p) => p.data.username === d.author)?.data;
 const authorName = profile?.displayName ?? authorDisplay(d.author);
-const authorCount = allPrompts.filter((p) => p.data.author === d.author).length;
+const byAuthor = allPrompts.filter((p) => p.data.author === d.author);
+const authorCount = byAuthor.length;
+// SOW-115: the author card splits the mixed count into two clickable stats when the author has
+// members-only stubs. Only Mode B stubs count (every counted item is clickable to its locked card);
+// Mode A items never enter the collection. A stub-less author keeps the single combined line.
+const authorPublic = byAuthor.filter(isPublic).length;
+const authorStubs = byAuthor.filter(isStub).length;
 const crumbs = breadcrumb(d.categories);
 
 // SOW-014: pricing badge + Resources links (public live, member-only inert/locked).
@@ -121,10 +127,21 @@ const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.netw
                 {profile?.headline && <p class="body-sm muted line-clamp-2" style="margin-top:2px">{profile.headline}</p>}
               </div>
             </div>
-            <a href={`/prompts/?author=${d.author}`} class="link mt16" style="display:flex;flex-wrap:wrap;align-items:center;white-space:normal;font-size:13px;line-height:1.4">
-              <span style="min-width:0">See all {authorCount} prompt{authorCount === 1 ? '' : 's'} by {authorName}</span>
-              <svg class="ar" viewBox="0 0 24 24" width="15" height="15"><use href="#ico-arrow"/></svg>
-            </a>
+            {authorStubs > 0 ? (
+              <div class="author-stats mt16">
+                <a href={`/prompts/?author=${d.author}`} class="astat" title={`Public prompts by ${authorName}`}>
+                  <b>{authorPublic}</b><span>Public</span>
+                </a>
+                <a href={`/prompts/?author=${d.author}&vis=members`} class="astat" title={`Members-only prompts by ${authorName}`}>
+                  <b>{authorStubs}</b><span>Members only</span>
+                </a>
+              </div>
+            ) : (
+              <a href={`/prompts/?author=${d.author}`} class="link mt16" style="display:flex;flex-wrap:wrap;align-items:center;white-space:normal;font-size:13px;line-height:1.4">
+                <span style="min-width:0">See all {authorCount} prompt{authorCount === 1 ? '' : 's'} by {authorName}</span>
+                <svg class="ar" viewBox="0 0 24 24" width="15" height="15"><use href="#ico-arrow"/></svg>
+              </a>
+            )}
           </div>
 
           {crumbs.length > 0 && (
@@ -186,6 +203,13 @@ const shareUrl = new URL(`/prompts/${d.slug}/`, Astro.site ?? 'https://gbti.netw
   <style>
     /* Two columns scale down (sidebar shrinks via clamp) and only collapse to one column below 600px. */
     .detail-grid { display: grid; gap: clamp(20px, 3vw, 32px); grid-template-columns: minmax(0, 1fr) clamp(220px, 26vw, 320px); align-items: start; }
+    /* SOW-115: the author card stat pair (public vs members-only prompt counts, each a deep link). */
+    .author-stats { display: flex; gap: 22px; }
+    .author-stats .astat { display: flex; flex-direction: column; text-decoration: none; line-height: 1.2; }
+    .author-stats .astat b { font-family: var(--f-display); font-size: 20px; font-weight: 800; color: var(--green-700); }
+    .author-stats .astat span { font-size: 12px; color: var(--fg-mute); }
+    .author-stats .astat:hover b { color: var(--green-600); }
+    .author-stats .astat:hover span { color: var(--fg-soft); }
     .detail-main { min-width: 0; }
     /* Result image (image-gen prompts): a full figure above the prompt block, stretched to the column
        width and centered. height:auto so the full image shows and is never cropped. */

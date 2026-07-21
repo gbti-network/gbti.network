@@ -415,11 +415,16 @@ const authorsMeta = Object.fromEntries([...new Set(prompts.map((p) => p.data.aut
       }
 
       // Deep links applied on load. ?cat= (from a card's category chip) preselects that sidebar category;
-      // ?author= filters to that member exactly and reveals the featured author header; ?tag= prefills search.
+      // ?author= filters to that member exactly and reveals the featured author header; ?tag= prefills search;
+      // ?vis= (public | members) pre-applies the visibility filter (SOW-115: the author card's members-only
+      // stat deep-links straight to that author's locked stubs).
       var params = new URLSearchParams(location.search);
       var cat = params.get('cat'), tag = params.get('tag'), author = params.get('author'), target = params.get('target');
+      var visParam = params.get('vis');
       if (cat && catItems.some(function (b) { return b.getAttribute('data-val') === cat; })) cats[cat] = true;
       if (target && targetItems.some(function (b) { return b.getAttribute('data-val') === target; })) targets[target] = true;
+      // 'all' never enters the store (the All button works by EMPTYING it; a stored 'all' matches no card).
+      if (visParam && visParam !== 'all' && visItems.some(function (b) { return b.getAttribute('data-val') === visParam; })) vis[visParam] = true;
       if (tag && searchEl) { searchEl.value = tag; search = tag.trim().toLowerCase(); }
       if (author) { authorFilter = author; showAuthorFeature(author); }
       refresh(catItems, cats);
