@@ -98,22 +98,69 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
     }
   }
 
-  // SOW-018: Shares are EXTENSION-ONLY — they must have NO public website surface. Assert there is no /shares/
-  // page in dist and that the public activity index carries no Share entry (the extension reads Shares
-  // authenticated; a public surface would publish members-Share stub metadata). A tripwire against a future
-  // /shares/ route or a re-added activity-index inclusion.
+  // SOW-018, SCOPED by SOW-136 (the sow-131 election): a published + visibility:public Share may render in the
+  // site feed (the homepage), but everything else about the SOW-018 invariant stays enforced here:
+  //   a) still NO /shares/ route (per-share public pages are SOW-094);
+  //   b) still NO Share entries in the public activity-index.json (the extension reads Shares authenticated);
+  //   c) NEW: a NON-public Share (members visibility, or any draft) must leak NOTHING to dist — its title,
+  //      blurb, and body text are scanned for across every text file in the build output.
   if (fs.existsSync(distDir)) {
     if (fs.existsSync(path.join(distDir, 'shares'))) {
-      errors.push('a public /shares/ surface exists in dist (dist/shares/) — Shares are extension-only and must have no public page. See SOW-018.');
+      errors.push('a public /shares/ surface exists in dist (dist/shares/) — per-share public pages are SOW-094; only the site feed may carry public Shares. See SOW-018 (scoped by SOW-136).');
     }
     const activityIdx = path.join(distDir, 'activity-index.json');
     if (fs.existsSync(activityIdx)) {
       try {
         const entries = JSON.parse(fs.readFileSync(activityIdx, 'utf8'))?.entries ?? [];
         if (entries.some((e) => e?.type === 'share')) {
-          errors.push('a Share appears in the public activity-index.json — Shares are extension-only and must be excluded. See SOW-018.');
+          errors.push('a Share appears in the public activity-index.json — Shares stay excluded from the activity index. See SOW-018 (scoped by SOW-136).');
         }
       } catch { /* a malformed index is caught elsewhere */ }
+    }
+
+    // c) the members-share leak scan. Collect identifying text from every share that is NOT published+public
+    // (fail closed: a missing visibility is the schema default `members`) and assert none of it reaches dist.
+    // Short strings are skipped to avoid false positives on generic words; a one-word members-share title is
+    // still protected by the feed's fail-closed isPublicShare filter, this scan is the backstop.
+    // Reads a frontmatter scalar, including the folded/literal block styles (`key: >-` + indented lines)
+    // the client writes for long titles/blurbs.
+    const shareField = (txt, key) => {
+      const inline = new RegExp('^' + key + ':[ \\t]*"?([^">|\\s][^"\\n]*?)"?[ \\t]*$', 'm').exec(txt);
+      if (inline) return inline[1].trim();
+      const folded = new RegExp('^' + key + ':\\s*[>|]-?\\s*\\n((?:[ \\t]+[^\\n]*\\n?)+)', 'm').exec(txt);
+      if (folded) return folded[1].split('\n').map((l) => l.trim()).filter(Boolean).join(' ');
+      return null;
+    };
+    const shareNeedles = []; // [needle, sourceRel]
+    const membersRoot = path.join(root, 'members');
+    if (fs.existsSync(membersRoot)) {
+      for (const u of fs.readdirSync(membersRoot)) {
+        const sharesDir = path.join(membersRoot, u, 'shares');
+        if (!fs.existsSync(sharesDir)) continue;
+        for (const f of fs.readdirSync(sharesDir)) {
+          if (!/\.(md|mdx)$/.test(f)) continue;
+          const p = path.join(sharesDir, f);
+          const txt = fs.readFileSync(p, 'utf8');
+          const isPublicShare = shareField(txt, 'status') === 'published' && shareField(txt, 'visibility') === 'public';
+          if (isPublicShare) continue;
+          const rel = path.relative(root, p);
+          const body = txt.replace(/^---\n[\s\S]*?\n---/, '').trim();
+          for (const needle of [shareField(txt, 'title'), shareField(txt, 'shortDescription'), body.slice(0, 200)]) {
+            if (needle && needle.length >= 12) shareNeedles.push([needle, rel]);
+          }
+        }
+      }
+    }
+    if (shareNeedles.length) {
+      for (const f of walk(distDir)) {
+        if (BINARY.test(f)) continue;
+        const txt = fs.readFileSync(f, 'utf8');
+        for (const [needle, srcRel] of shareNeedles) {
+          if (txt.includes(needle)) {
+            errors.push(`a NON-public Share leaked into build output: text from ${srcRel} appears in ${path.relative(root, f)} — only published + visibility:public Shares may reach a public artifact. See SOW-018 (scoped by SOW-136).`);
+          }
+        }
+      }
     }
   }
 

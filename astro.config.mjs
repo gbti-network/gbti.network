@@ -33,8 +33,9 @@ export default defineConfig({
   devToolbar: { enabled: false },
   integrations: [
     mdx(),
-    // Keep the auth shell / noindex stub out of the sitemap so crawl budget goes to public content.
-    sitemap({ filter: (page) => !/\/(account|codeable-invite)\/?$/.test(page) }),
+    // Keep the auth shell / noindex stubs (and the archived v1 homepage) out of the sitemap so crawl
+    // budget goes to public content.
+    sitemap({ filter: (page) => !/\/(account|codeable-invite|home\/v1)\/?$/.test(page) }),
   ],
   image: {
     // The legacy archive includes oversized animated GIFs (~40 MB across 12 files). Don't let

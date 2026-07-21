@@ -18,7 +18,7 @@ export function commitHistoryHref(filePath?: string): string | null {
  */
 export function commentThreadCount(
   comments: CollectionEntry<'comment'>[],
-  targetType: 'post' | 'product' | 'prompt',
+  targetType: 'post' | 'product' | 'prompt' | 'share',
   targetSlug: string,
   owner?: string,
 ): number {

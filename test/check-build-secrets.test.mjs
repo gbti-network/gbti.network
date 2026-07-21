@@ -183,3 +183,49 @@ test('a MEMBER_CONTENT_KEY value present in dist is caught', () => {
   assert.ok(errors.some((e) => /leaked MEMBER_CONTENT_KEY value/.test(e)));
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// SOW-136 (the sow-131 election, scoping SOW-018): public Shares may render in the site feed, but a
+// NON-public Share (members visibility or any draft) must leak nothing to dist. The scan matches the
+// share's title / blurb / body text across every text file in the build output.
+function writeShare(root, rel, lines) {
+  const p = path.join(root, rel);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, '---\n' + lines.join('\n') + '\n---\n');
+}
+
+test('SOW-136: a members-share title appearing in dist fails the build', () => {
+  const root = tmpRoot();
+  writeShare(root, 'members/alice/shares/x.md', ['status: published', 'visibility: members', 'title: A secret members-only headline', 'id: x', 'author: alice', "createdAt: '2026-01-01T00:00:00Z'"]);
+  fs.writeFileSync(path.join(root, 'dist/index.html'), '<h2>A secret members-only headline</h2>');
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /NON-public Share leaked into build output/.test(e)), errors.join('; '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('SOW-136: a DRAFT public share leaking into dist also fails (published + public only)', () => {
+  const root = tmpRoot();
+  writeShare(root, 'members/alice/shares/d.md', ['status: draft', 'visibility: public', 'title: An unpublished draft share headline', 'id: d', 'author: alice', "createdAt: '2026-01-01T00:00:00Z'"]);
+  fs.writeFileSync(path.join(root, 'dist/index.html'), '<h2>An unpublished draft share headline</h2>');
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /NON-public Share leaked into build output/.test(e)), errors.join('; '));
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('SOW-136: a published PUBLIC share rendered in dist passes (the scoped reversal)', () => {
+  const root = tmpRoot();
+  writeShare(root, 'members/alice/shares/p.md', ['status: published', 'visibility: public', 'title: A public share headline on the feed', 'id: p', 'author: alice', "createdAt: '2026-01-01T00:00:00Z'"]);
+  fs.writeFileSync(path.join(root, 'dist/index.html'), '<h2>A public share headline on the feed</h2>');
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.deepEqual(errors, []);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('SOW-136: a members-share FOLDED blurb (>- style) leaking into dist is caught', () => {
+  const root = tmpRoot();
+  writeShare(root, 'members/alice/shares/f.md', ['status: published', 'visibility: members', 'shortDescription: >-', '  A folded members-only blurb that', '  spans two source lines.', 'id: f', 'author: alice', "createdAt: '2026-01-01T00:00:00Z'"]);
+  fs.mkdirSync(path.join(root, 'dist/page'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist/page/index.html'), '<p>A folded members-only blurb that spans two source lines.</p>');
+  const { errors } = checkBuildSecrets({ root, env: {} });
+  assert.ok(errors.some((e) => /NON-public Share leaked into build output/.test(e)), errors.join('; '));
+  fs.rmSync(root, { recursive: true, force: true });
+});

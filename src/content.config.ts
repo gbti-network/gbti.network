@@ -295,12 +295,14 @@ const comment = defineCollection({
 // file per Share (append-only, like comments), owned by that member, so it auto-merges under the SOW-005
 // own-folder rule with no cross-member conflicts. Default visibility is `members` (a perk-gated stream): a
 // members Share encrypts its body to `encryptedBody` (Mode A); a member may opt a Share `public`.
-// EXTENSION-ONLY (SOW-018 directive): Shares have NO public website surface — there is NO /shares/ page, and
-// they are DELIBERATELY EXCLUDED from activity-index.json (see that endpoint's comment). The collection is
-// registered ONLY so the build validates the files; the sole reader of Shares is the GBTI client/extension
-// Shares tab, which lists them authenticated (operations.listShares) and decrypts members bodies via the
-// Worker (an active trial may read; posting is paid-only). Do NOT add a /shares/ route or wire Shares into the
-// public activity index — that would publish members-Share stub metadata to a public artifact.
+// SOW-018 directive, SCOPED by SOW-136 (the sow-131 election): a PUBLIC share (published + visibility:public,
+// the fail-closed `isPublicShare` in src/lib/home-feed.mjs) may render in the site feed (the homepage). Everything
+// else stays EXTENSION-ONLY: a members-only Share (including its Mode B stub metadata, title, blurb, and
+// encryptedBody) must NEVER reach a public artifact — scripts/check-build-secrets.mjs scans dist for leaks.
+// There is still NO /shares/ route (per-share public pages are SOW-094) and Shares stay DELIBERATELY EXCLUDED
+// from activity-index.json (see that endpoint's comment). The full stream's reader remains the GBTI
+// client/extension Shares tab, which lists them authenticated (operations.listShares) and decrypts members
+// bodies via the Worker (an active trial may read; posting is paid-only).
 // `publicStub`/Mode B/C carry over for schema + build-guard consistency, but a one-line status has no large
 // body to gate, so realistic Shares are public-or-members-A.
 const share = defineCollection({
