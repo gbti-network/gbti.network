@@ -14,6 +14,9 @@ import { renderTemplate } from '../../../membership/syndication-format.mjs';
 import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
 
 const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', mastodon: 'Mastodon' };
+// SOW-137 follow-up: dev.to + Hashnode cross-post the FULL article body, so the "Message template" field is
+// actually the article TITLE (fed to the adapter as the title; the body is the fetched article + byline + CTA).
+const FULL_BODY_DESTS = new Set(['devto', 'hashnode']);
 
 // Cloudflare KV's list() is eventually consistent, so a JUST-posted record can be missing from the tracker
 // read for a minute or more (hit live 2026-07-20: a fresh Reddit post showed no badge on reopen while the
@@ -390,9 +393,11 @@ class GbtiSyndicateNow extends GbtiElement {
       ? `<p class="warn">Members-only item: the STUB template set applies on this channel.</p>` : '';
     return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       ${stubNote}
-      <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
+      ${FULL_BODY_DESTS.has(dest)
+        ? `<label>Article title <span style="font-weight:400">(${esc(DEST_LABEL[dest] || dest)} cross-posts the FULL article body: this field is ONLY the post title, not the body. The body is the whole article, wrapped by the byline and CTA footer below. {title} {content-type} {category}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>`
+        : `<label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>`}
       <textarea data-template>${esc(template)}</textarea>
-      <label>Preview</label>
+      <label>${FULL_BODY_DESTS.has(dest) ? 'Title preview' : 'Preview'}</label>
       <div class="preview" data-preview>${esc(preview)}</div>
       ${channelRow}${redditRows}${devtoRows}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ''}${result}
       <div class="actions">

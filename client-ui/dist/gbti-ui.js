@@ -14555,6 +14555,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 
   // client-ui/src/elements/gbti-syndicate-now.mjs
   var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
+  var FULL_BODY_DESTS = /* @__PURE__ */ new Set(["devto", "hashnode"]);
   var LOCAL_SENDS_KEY = "gbti-synd-local-sends";
   var LOCAL_SENDS_MAX_AGE = 7 * 24 * 60 * 60 * 1e3;
   var localSendsAll = () => {
@@ -14902,9 +14903,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const stubNote = this._isStub() && dest !== "devto" ? `<p class="warn">Members-only item: the STUB template set applies on this channel.</p>` : "";
       return `<label>Destination</label><p class="sub" style="margin:0">${esc(DEST_LABEL[dest] || dest)} <button class="ghost" type="button" data-back style="padding:2px 10px;font-size:11.5px;margin-left:8px">change</button></p>
       ${stubNote}
-      <label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>
+      ${FULL_BODY_DESTS.has(dest) ? `<label>Article title <span style="font-weight:400">(${esc(DEST_LABEL[dest] || dest)} cross-posts the FULL article body: this field is ONLY the post title, not the body. The body is the whole article, wrapped by the byline and CTA footer below. {title} {content-type} {category}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>` : `<label>Message template <span style="font-weight:400">({title} {url} {content-type} {member-discord-username} {author} {fullName} {category} {author-note} {author-note-italic} {member-url} {short-description}; CAPS a token to uppercase it: {CONTENT-TYPE})</span></label>`}
       <textarea data-template>${esc(template)}</textarea>
-      <label>Preview</label>
+      <label>${FULL_BODY_DESTS.has(dest) ? "Title preview" : "Preview"}</label>
       <div class="preview" data-preview>${esc(preview)}</div>
       ${channelRow}${redditRows}${devtoRows}${liNote}${prior}${this._err ? `<p class="err">${esc(this._err)}</p>` : ""}${result}
       <div class="actions">
