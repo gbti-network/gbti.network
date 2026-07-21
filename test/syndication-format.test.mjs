@@ -1,7 +1,29 @@
 // SOW-058: the pure message formatter. Sanitization, truncation, URL preservation, no body leak.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom, redditHandleFrom } from '../membership/syndication-format.mjs';
+import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, renderBodyTemplate, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom, redditHandleFrom } from '../membership/syndication-format.mjs';
+
+// SOW-138: the full-body crosspost body renderer. {body} is spliced VERBATIM (never sanitized/truncated); the
+// wrapper renders like a normal template.
+test('renderBodyTemplate: {body} is verbatim; the wrapper renders; a raw body is not mangled', () => {
+  const item = { title: 'T', author: 'atwellpub', source: 'prompt', url: 'https://gbti.network/x' };
+  const body = 'A line with @astrojs/mdx and    doubled spaces.\n\n```js\nconst a = 1;\n```\n\nEmail foo@bar.com';
+  // default {body} and an empty template both return the raw body untouched
+  assert.equal(renderBodyTemplate('{body}', item, body), body);
+  assert.equal(renderBodyTemplate('', item, body), body);
+  // the raw body keeps its code fence, npm scope, doubled spaces, and email (no sanitize/collapse)
+  assert.ok(renderBodyTemplate('{body}', item, body).includes('const a = 1;'));
+  assert.ok(renderBodyTemplate('{body}', item, body).includes('@astrojs/mdx'));
+  assert.ok(renderBodyTemplate('{body}', item, body).includes('foo@bar.com'));
+  // a wrapper renders its tokens and keeps the body verbatim with its separators
+  const w = renderBodyTemplate('Note on {title}.\n\n{body}\n\nEnd.', item, body);
+  assert.ok(w.startsWith('Note on T.'));
+  assert.ok(w.includes(body));
+  assert.ok(w.endsWith('End.'));
+  // a template with no {body} is a fully custom body (the article is omitted)
+  const c = renderBodyTemplate('Summary of {title}. Read: {url}', item, body);
+  assert.equal(c, 'Summary of T. Read: https://gbti.network/x');
+});
 
 test('sanitizeMentions neutralizes @mentions and Discord mass-ping tokens', () => {
   assert.ok(!/@everyone/.test(sanitizeMentions('hey @everyone')));

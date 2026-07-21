@@ -215,6 +215,26 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
   return truncate(text, limit);
 }
 
+/**
+ * SOW-138: render a FULL-BODY crosspost body template (dev.to / Hashnode). Unlike renderTemplate, the
+ * `{body}` token expands to the article body VERBATIM: it is spliced in AFTER token rendering, so it never
+ * passes through sanitizeMentions (which zero-width-spaces every @) or the whitespace collapse / length cap
+ * (which would corrupt code fences, indentation, npm scopes like @astrojs/x, and email addresses). The
+ * wrapper text around {body} still renders through renderTemplate normally (metadata tokens + sanitize).
+ * An empty template is treated as `{body}` (= the raw body). Multiple {body} occurrences are all filled; a
+ * template with NO {body} renders as normal templated prose (a fully custom body, the article omitted). Pure.
+ */
+export function renderBodyTemplate(template, item = {}, rawBody = '') {
+  const body = String(rawBody ?? '');
+  const tmpl = String(template ?? '').trim() || '{body}';
+  // A private-use sentinel renderTemplate leaves untouched (no braces, no spaces/tabs, not an @-mention), so
+  // the verbatim body is spliced back only AFTER the wrapper has been token-rendered and sanitized.
+  const SENTINEL = 'GBTIBODY';
+  const withSentinel = tmpl.replace(/\{body\}/gi, `${SENTINEL}`);
+  const rendered = renderTemplate(withSentinel, item, { limit: 20000 });
+  return rendered.split(`${SENTINEL}`).join(body);
+}
+
 export function buildChannelText(item = {}, { limit = 280, includeUrl = true, sanitize = true } = {}) {
   const label = TYPE_LABEL[item.source] || item.source || 'update';
   const who = item.author ? `@${item.author}` : 'a member';

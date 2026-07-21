@@ -67,7 +67,12 @@ export function createHashnodeAdapter({ env = {}, fetchImpl = globalThis.fetch, 
       const stubBody = (typeof item.hashnodeStub === 'string' && item.hashnodeStub.trim())
         ? item.hashnodeStub
         : renderTemplate(templateFor(cfg, 'hashnode-stub', 'hashnode', { stub: true }) || '', item, { limit: 1200 });
-      const prepared = prepareHashnodeBody(raw, item, { intro, footer, stubBody });
+      // SOW-138: the PUBLIC body template stays a RAW string ({body} resolves inside prepareHashnodeBody). The
+      // popup override wins (dev.to-only today), else the admin-stored template, else '{body}'.
+      const bodyTemplate = (typeof item.hashnodeBodyTemplate === 'string' && item.hashnodeBodyTemplate.trim())
+        ? item.hashnodeBodyTemplate
+        : (templateFor(cfg, 'hashnode-body', 'hashnode') || '{body}');
+      const prepared = prepareHashnodeBody(raw, item, { intro, footer, stubBody, bodyTemplate });
       if (!prepared.ok) return { ok: true, skipped: true, reason: `hashnode: ${prepared.reason}` };
 
       const title = ((typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : String(item.title || ''))

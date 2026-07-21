@@ -5,6 +5,7 @@
 // difference is the tag SHAPE: Hashnode wants [{ name, slug }] (max 5), not dev.to's flat lowercase strings.
 
 import { contentPathFor, parsePublishedFile, rewriteRelativeImages, MEMBERS_MARKER } from './devto-body.mjs';
+import { renderBodyTemplate } from '../../membership/syndication-format.mjs';
 
 export { contentPathFor };
 
@@ -28,11 +29,12 @@ export function normalizeHashnodeTags(tags, categoryPath) {
 /**
  * Transform the raw canonical file into { ok, mode, body, tags } or { ok: false, reason } (fail-closed).
  * `intro` / `footer` / `stubBody` arrive PRE-RENDERED (the caller renders the templates; no tokens here).
+ * `bodyTemplate` (SOW-138) is the RAW public-body template string ({body} = the public article verbatim).
  * Mode comes from the FILE's visibility (the authority, never the queue item's copy), exactly like dev.to:
- *   public  -> 'full': the whole public body (members marker cut) between the byline and the CTA footer;
+ *   public  -> 'full': the public body run through bodyTemplate, between the byline and the CTA footer;
  *   members -> 'stub': the byline + the rendered stub template + the CTA footer, NEVER any of the body.
  */
-export function prepareHashnodeBody(rawFileText, item, { intro = '', footer = '', stubBody = '' } = {}) {
+export function prepareHashnodeBody(rawFileText, item, { intro = '', footer = '', stubBody = '', bodyTemplate = '{body}' } = {}) {
   const parsed = parsePublishedFile(rawFileText);
   if (!parsed.ok) return parsed;
   const fm = parsed.fm;
@@ -55,6 +57,9 @@ export function prepareHashnodeBody(rawFileText, item, { intro = '', footer = ''
 
   body = rewriteRelativeImages(body, item); // relative targets -> the CDN over the item's folder
 
-  body = [lead, body, tail].filter(Boolean).join('\n\n');
+  // SOW-138: the public body runs through the admin body template ({body} = the article verbatim; the default
+  // '{body}' reproduces today's post). The article is NEVER sanitized/truncated (renderBodyTemplate).
+  const middle = renderBodyTemplate(bodyTemplate, item, body);
+  body = [lead, middle, tail].filter(Boolean).join('\n\n');
   return { ok: true, mode: 'full', body, tags };
 }

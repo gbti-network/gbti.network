@@ -6289,10 +6289,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false })
     // opens = the owner's chosen counter
   });
-  var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-footer", "hashnode-stub"]);
+  var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
   var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
   var DEFAULT_REDDIT_BODY = "{short-description}";
   var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
+  var DEFAULT_DEVTO_BODY = "{body}";
   var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
   var DEFAULT_REDDIT_COMMENT = "Shared to the community by GBTI Network member {member-reddit-handle}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
   var DEFAULT_TEMPLATES = Object.freeze({
@@ -6303,10 +6304,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     "reddit-body": DEFAULT_REDDIT_BODY,
     "reddit-comment": DEFAULT_REDDIT_COMMENT,
     "devto-intro": DEFAULT_DEVTO_INTRO,
+    "devto-body": DEFAULT_DEVTO_BODY,
+    // SOW-138
     "devto-footer": DEFAULT_DEVTO_FOOTER,
     // SOW-134: Hashnode reuses the same byline + CTA footer as dev.to (both are full-body crossposts with a
     // canonical link home); admins can diverge them per channel in the templates card.
     "hashnode-intro": DEFAULT_DEVTO_INTRO,
+    "hashnode-body": DEFAULT_DEVTO_BODY,
+    // SOW-138
     "hashnode-footer": DEFAULT_DEVTO_FOOTER
   });
   var STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
@@ -6613,7 +6618,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   ];
   var SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
   var SYND_SUB_KEY = "gbti-synd-sub";
-  var TMPL_KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-footer", "hashnode-stub"];
+  var TMPL_KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"];
   var GbtiChannelMapManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -6780,12 +6785,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const tiles = TILE_CHANNELS.map((c) => `<button class="chtile${c.id === cur ? " on" : ""}${c.active ? "" : " soon"}" type="button" data-tile="${esc(c.id)}"${c.active ? "" : ' aria-disabled="true"'}${c.note ? ` title="${esc(c.note)}"` : ""}>
         <span class="ct-i ${esc(c.cls)}"><svg viewBox="0 0 24 24"><use href="#${esc(c.icon)}"/></svg></span>
         <span class="ct-n">${esc(c.name)}</span><span class="ct-s">${esc(c.sub)}</span></button>`).join("");
-      const chips = VARS.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join("");
+      const chipVars = cur === "devto" || cur === "hashnode" ? [...VARS, "{body}"] : VARS;
+      const chips = chipVars.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join("");
       const vis = this._tmplVis || "pub";
       const work = this._work?.[`${vis}:${cur}`] || {};
       const custom = (k) => (vis === "stub" ? this._channelTemplatesStub?.[cur]?.[k] : this._channelTemplates?.[cur]?.[k]) ? " · custom" : "";
       const FULL_BODY = /* @__PURE__ */ new Set(["devto", "hashnode"]);
-      const rows = (FULL_BODY.has(cur) ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">${esc(cur === "devto" ? "dev.to" : "Hashnode")} cross-posts the full article body, so there are no per-type message templates here. The byline is prepended and the CTA footer appended to that body; a members-only item posts the stub body instead of the body.</p>` : TMPL_TYPES.map((t) => `<div class="tmpl">
+      const rows = (FULL_BODY.has(cur) ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">${esc(cur === "devto" ? "dev.to" : "Hashnode")} cross-posts the full article body, so there are no per-type message templates here. Below: the byline is prepended and the CTA footer appended, and the ${vis === "stub" ? "stub body is the members-only teaser" : "Body wraps the article ({body} = the full article verbatim)"}.</p>` : TMPL_TYPES.map((t) => `<div class="tmpl">
         <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
         <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || "")}" /></div>`).join("")) + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc("the description under the title" + custom("reddit-body"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body">${esc(work["reddit-body"] || "")}</textarea></div>
@@ -6793,12 +6799,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc(work["reddit-comment"] || "")}</textarea></div>` : "") + (cur === "devto" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc("prepended to the crosspost" + custom("devto-intro"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc(work["devto-intro"] || "")}</textarea></div>
           ${vis === "stub" ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc("the members-only teaser middle" + custom("devto-stub"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-stub">${esc(work["devto-stub"] || "")}</textarea></div>` : ""}
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-stub">${esc(work["devto-stub"] || "")}</textarea></div>` : `<div class="tmpl"><div class="tl"><div class="nm">Body</div><div class="df">${esc("the public post body; {body} = the full article verbatim" + custom("devto-body"))}</div></div>
+            <textarea class="ctrl" maxlength="4000" rows="4" data-tk="devto-body">${esc(work["devto-body"] || "")}</textarea></div>`}
           <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc("appended to every dev.to post" + custom("devto-footer"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work["devto-footer"] || "")}</textarea></div>` : "") + (cur === "hashnode" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc("prepended to the crosspost" + custom("hashnode-intro"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-intro">${esc(work["hashnode-intro"] || "")}</textarea></div>
           ${vis === "stub" ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc("the members-only teaser middle" + custom("hashnode-stub"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-stub">${esc(work["hashnode-stub"] || "")}</textarea></div>` : ""}
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-stub">${esc(work["hashnode-stub"] || "")}</textarea></div>` : `<div class="tmpl"><div class="tl"><div class="nm">Body</div><div class="df">${esc("the public post body; {body} = the full article verbatim" + custom("hashnode-body"))}</div></div>
+            <textarea class="ctrl" maxlength="4000" rows="4" data-tk="hashnode-body">${esc(work["hashnode-body"] || "")}</textarea></div>`}
           <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc("appended to every Hashnode post" + custom("hashnode-footer"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="hashnode-footer">${esc(work["hashnode-footer"] || "")}</textarea></div>` : "");
       return `<section class="card" id="sec-templates" data-sec>
@@ -14528,6 +14536,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }).replace(/[ \t]{2,}/g, " ").trim();
     return truncate(text, limit);
   }
+  function renderBodyTemplate(template, item = {}, rawBody = "") {
+    const body = String(rawBody ?? "");
+    const tmpl = String(template ?? "").trim() || "{body}";
+    const SENTINEL = "GBTIBODY";
+    const withSentinel = tmpl.replace(/\{body\}/gi, `${SENTINEL}`);
+    const rendered = renderTemplate(withSentinel, item, { limit: 2e4 });
+    return rendered.split(`${SENTINEL}`).join(body);
+  }
 
   // membership/news-channels.mjs
   var lc7 = (s) => String(s ?? "").trim().toLowerCase();
@@ -14821,6 +14837,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (this._devtoFooterTemplate != null) return this._devtoFooterTemplate;
       return this._stored("devto", "devto-footer");
     }
+    /** The PUBLIC BODY template for a dev.to crosspost (SOW-138): an edit wins, else the stored devto-body,
+     *  else the built-in {body} (the article verbatim). Members items post the stub, not this. */
+    _effectiveDevtoBody() {
+      if (this._devtoBodyTemplate != null) return this._devtoBodyTemplate;
+      return this._stored("devto", "devto-body") || "{body}";
+    }
     _composeHtml() {
       const dest = this._dest;
       const item = this._item();
@@ -14880,11 +14902,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         <label>Stub preview</label>
         <div class="preview" data-devto-stub-preview>${esc(stubPreview)}</div>`;
         })() : "";
+        const bodyRows = this._isStub() ? "" : (() => {
+          const bodyTemplate = this._effectiveDevtoBody();
+          const bodyPreview = renderBodyTemplate(bodyTemplate, item, "[the full article body]");
+          return `<label>Body template <span style="font-weight:400">({body} = the full article verbatim; wrap it or replace it; markdown; same tokens)</span></label>
+        <textarea data-devto-body>${esc(bodyTemplate)}</textarea>
+        <label>Body preview</label>
+        <div class="preview" data-devto-body-preview>${esc(bodyPreview)}</div>`;
+        })();
         devtoRows = `${this._isStub() ? '<p class="warn">Members-only item: the STUB templates apply (description + link, never the body).</p>' : ""}
         <label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
         <textarea data-devto-intro>${esc(introTemplate)}</textarea>
         <label>Byline preview</label>
         <div class="preview" data-devto-intro-preview>${esc(introPreview)}</div>
+        ${bodyRows}
         <label>CTA footer template <span style="font-weight:400">(appended to the post; markdown; same tokens)</span></label>
         <textarea data-devto-footer>${esc(footerTemplate)}</textarea>
         <label>CTA preview</label>
@@ -14962,6 +14993,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const pv = this.$("[data-devto-intro-preview]");
         if (pv) pv.textContent = di.value ? renderTemplate(di.value, this._item(), { limit: 800 }) : "";
       });
+      const db = this.$("[data-devto-body]");
+      if (db) db.addEventListener("input", () => {
+        this._devtoBodyTemplate = db.value;
+        const pv = this.$("[data-devto-body-preview]");
+        if (pv) pv.textContent = renderBodyTemplate(db.value, this._item(), "[the full article body]");
+      });
       const df = this.$("[data-devto-footer]");
       if (df) df.addEventListener("input", () => {
         this._devtoFooterTemplate = df.value;
@@ -14992,6 +15029,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._bodyTemplate = null;
         this._commentTemplate = null;
         this._devtoIntroTemplate = null;
+        this._devtoBodyTemplate = null;
         this._devtoFooterTemplate = null;
         this._devtoStubTemplate = null;
         this._devtoDraft = false;
@@ -15049,6 +15087,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           if (footer) payload.devtoFooterTemplate = footer;
           const stubT = this._isStub() ? this._effectiveDevtoStub().trim() : "";
           if (stubT) payload.devtoStubTemplate = stubT;
+          const bodyT = this._isStub() ? "" : this._effectiveDevtoBody().trim();
+          if (bodyT) payload.devtoBodyTemplate = bodyT;
           if (this._devtoDraft) payload.devtoDraft = true;
         }
         if (this._dest === "discord") {

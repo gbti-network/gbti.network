@@ -69,7 +69,12 @@ export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg
       const stubBody = (typeof item.devtoStub === 'string' && item.devtoStub.trim())
         ? item.devtoStub
         : renderTemplate(templateFor(cfg, 'devto-stub', 'devto', { stub: true }) || '', item, { limit: 1200 });
-      const prepared = prepareDevtoBody(raw, item, { intro, footer, stubBody });
+      // SOW-138: the PUBLIC body template stays a RAW string ({body} resolves inside prepareDevtoBody, where the
+      // fetched article is available). The popup override wins, else the admin-stored template, else '{body}'.
+      const bodyTemplate = (typeof item.devtoBodyTemplate === 'string' && item.devtoBodyTemplate.trim())
+        ? item.devtoBodyTemplate
+        : (templateFor(cfg, 'devto-body', 'devto') || '{body}');
+      const prepared = prepareDevtoBody(raw, item, { intro, footer, stubBody, bodyTemplate });
       if (!prepared.ok) return { ok: true, skipped: true, reason: `devto: ${prepared.reason}` };
 
       const title = ((typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : String(item.title || ''))

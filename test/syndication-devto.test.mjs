@@ -56,6 +56,29 @@ test('prepareDevtoBody: a members item STUBS (the rendered stub template, never 
   assert.ok(!r.body.includes('SECRET'));
 });
 
+test('prepareDevtoBody: SOW-138 the default {body} template equals no template (byte-for-byte)', () => {
+  const implicit = prepareDevtoBody(FILE, ITEM, { intro: '**By H.**', footer: 'Join.' });
+  const explicit = prepareDevtoBody(FILE, ITEM, { intro: '**By H.**', footer: 'Join.', bodyTemplate: '{body}' });
+  assert.equal(implicit.body, explicit.body, 'the built-in default matches an explicit {body}');
+});
+
+test('prepareDevtoBody: SOW-138 a custom body template wraps the article ({body} verbatim, tokens render)', () => {
+  const r = prepareDevtoBody(FILE, ITEM, { intro: '**By H.**', footer: 'Join.', bodyTemplate: 'Editors note on {title}.\n\n{body}\n\nEnd note.' });
+  assert.equal(r.ok, true);
+  assert.ok(r.body.includes('Editors note on My Article.'), 'the wrapper token renders');
+  assert.ok(r.body.includes('Intro paragraph'), 'the article body is present verbatim');
+  assert.ok(r.body.includes('End note.'), 'the wrapper tail is present');
+  assert.ok(!r.body.includes('SECRET'), 'the members part is still cut');
+});
+
+test('prepareDevtoBody: SOW-138 a members item IGNORES the body template (stub only, no {body} leak)', () => {
+  const membersFile = FILE.replace('visibility: public', 'visibility: members');
+  const r = prepareDevtoBody(membersFile, ITEM, { intro: '**By H.**', footer: 'Join.', stubBody: 'Teaser.', bodyTemplate: '{body}' });
+  assert.equal(r.mode, 'stub');
+  assert.ok(!r.body.includes('Intro paragraph'), 'a {body} template can never leak the members body');
+  assert.ok(r.body.includes('Teaser.'));
+});
+
 test('prepareDevtoBody appends the CTA footer to a full post', () => {
   const r = prepareDevtoBody(FILE, ITEM, { intro: '**By H.**', footer: 'Join us at gbti.network.' });
   assert.equal(r.mode, 'full');
@@ -103,6 +126,22 @@ test('devto adapter: the full article payload (org, canonical, cover, draft flag
   assert.equal(r.ok, true);
   assert.equal(r.id, '777');
   assert.match(r.url, /dev\.to/);
+});
+
+test('devto adapter: SOW-138 item.devtoBodyTemplate replaces the public body (custom copy, no {body})', async () => {
+  const env = { DEVTO_API_KEY: 'k', DEVTO_ORG_ID: '10466' };
+  let lastBody = null;
+  const okFetch = async (url, opts) => {
+    if (url.startsWith('https://raw.')) return { ok: true, text: async () => FILE };
+    lastBody = JSON.parse(opts.body);
+    return { ok: true, status: 201, text: async () => JSON.stringify({ id: 1, url: 'https://dev.to/x' }) };
+  };
+  const ad = createDevtoAdapter({ env, fetchImpl: okFetch });
+  await ad.post({ ...ITEM, textOverride: 'My Article', devtoIntro: '**By H.**', devtoBodyTemplate: 'A custom summary of {title}. Read it at {url}.' });
+  const md = lastBody.article.body_markdown;
+  assert.ok(md.includes('A custom summary of My Article. Read it at https://gbti.network/articles/my-article/.'), 'the custom body renders its tokens');
+  assert.ok(!md.includes('Intro paragraph'), 'a template with no {body} omits the article body');
+  assert.ok(md.startsWith('**By H.**'), 'the byline still leads');
 });
 
 test('devto adapter: draft flag, skips (share/members/draft file), and readable errors', async () => {

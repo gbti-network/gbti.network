@@ -148,6 +148,9 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   const devtoIntroTemplate = String(payload?.devtoIntroTemplate || '').trim();
   const devtoFooterTemplate = String(payload?.devtoFooterTemplate || '').trim();
   const devtoStubTemplate = String(payload?.devtoStubTemplate || '').trim();
+  // SOW-138: the PUBLIC body template travels RAW to the adapter ({body} resolves there, where the fetched
+  // article is available); it is NOT server-rendered here like the byline/footer/stub.
+  const devtoBodyTemplate = String(payload?.devtoBodyTemplate || '').trim();
   const devtoDraft = payload?.devtoDraft === true;
 
   // The queue-item builder is the validation boundary: type whitelist, slug required, and the no-body
@@ -217,6 +220,8 @@ export async function handleSyndicateNow(request, env, deps = {}) {
             devtoIntro: renderTemplate(devtoIntroTemplate || templateFor(cfg, 'devto-intro', 'devto', { stub: item.membersOnly === true }) || '', item, { limit: 800 }),
             devtoFooter: renderTemplate(devtoFooterTemplate || templateFor(cfg, 'devto-footer', 'devto', { stub: item.membersOnly === true }) || '', item, { limit: 1200 }),
             devtoStub: renderTemplate(devtoStubTemplate || templateFor(cfg, 'devto-stub', 'devto', { stub: true }) || '', item, { limit: 1200 }),
+            // SOW-138: RAW (unrendered) so {body} resolves in the adapter; blank => the adapter uses the stored template.
+            ...(devtoBodyTemplate ? { devtoBodyTemplate } : {}),
           }
         : {};
     try { result = await adapter.post({ ...item, textOverride: text, ...extras }); }

@@ -10,6 +10,7 @@
 //   5. normalize tags for dev.to (lowercase alphanumeric, max 4; fallback: the taxonomy path leaves).
 
 import yaml from 'js-yaml';
+import { renderBodyTemplate } from '../../membership/syndication-format.mjs';
 
 export const DEVTO_CDN_BASE = 'https://cdn.jsdelivr.net/gh/gbti-network/gbti.network@main';
 export const MEMBERS_MARKER = '<!-- members-only -->';
@@ -62,12 +63,14 @@ export function rewriteRelativeImages(body, item, cdnBase = DEVTO_CDN_BASE) {
 /**
  * Transform the raw canonical file into { ok, mode, body, tags } or { ok: false, reason } (fail-closed).
  * `intro` / `footer` / `stubBody` arrive PRE-RENDERED (the caller renders the templates; no tokens here).
+ * `bodyTemplate` (SOW-138) is the RAW public-body template string: its `{body}` token expands to the public
+ * article VERBATIM here (where the fetched body is available), the rest renders through renderBodyTemplate.
  * Mode comes from the FILE's visibility (the authority, never the queue item's copy):
- *   public  -> 'full': the whole public body (members marker cut) between the byline and the CTA footer;
+ *   public  -> 'full': the public body run through bodyTemplate, between the byline and the CTA footer;
  *   members -> 'stub' (owner-directed): the byline + the rendered devto-stub template +
- *              the CTA footer — the description and link only, NEVER any of the body.
+ *              the CTA footer — the description and link only, NEVER any of the body (bodyTemplate ignored).
  */
-export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', stubBody = '' } = {}) {
+export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', stubBody = '', bodyTemplate = '{body}' } = {}) {
   const parsed = parsePublishedFile(rawFileText);
   if (!parsed.ok) return parsed;
   const fm = parsed.fm;
@@ -92,6 +95,9 @@ export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', s
 
   body = rewriteRelativeImages(body, item); // relative targets -> the CDN over the item's folder
 
-  body = [lead, body, tail].filter(Boolean).join('\n\n');
+  // SOW-138: the public body runs through the admin/popup body template ({body} = the article verbatim; the
+  // default '{body}' reproduces today's post exactly). The article is NEVER sanitized/truncated (renderBodyTemplate).
+  const middle = renderBodyTemplate(bodyTemplate, item, body);
+  body = [lead, middle, tail].filter(Boolean).join('\n\n');
   return { ok: true, mode: 'full', body, tags };
 }

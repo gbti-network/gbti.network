@@ -10,7 +10,7 @@
 // data-gbti-author, data-gbti-title, data-gbti-url (absolute), data-gbti-category (RAW top-level taxonomy
 // key or a share's flat topic), data-gbti-image (optional).
 import { GbtiElement, define, esc } from '../base.mjs';
-import { renderTemplate } from '../../../membership/syndication-format.mjs';
+import { renderTemplate, renderBodyTemplate } from '../../../membership/syndication-format.mjs';
 import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
 
 const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', mastodon: 'Mastodon' };
@@ -281,6 +281,13 @@ class GbtiSyndicateNow extends GbtiElement {
     return this._stored('devto', 'devto-footer');
   }
 
+  /** The PUBLIC BODY template for a dev.to crosspost (SOW-138): an edit wins, else the stored devto-body,
+   *  else the built-in {body} (the article verbatim). Members items post the stub, not this. */
+  _effectiveDevtoBody() {
+    if (this._devtoBodyTemplate != null) return this._devtoBodyTemplate;
+    return this._stored('devto', 'devto-body') || '{body}';
+  }
+
   _composeHtml() {
     const dest = this._dest;
     const item = this._item();
@@ -352,11 +359,25 @@ class GbtiSyndicateNow extends GbtiElement {
         <div class="preview" data-devto-stub-preview>${esc(stubPreview)}</div>`;
           })()
         : '';
+      // SOW-138: the PUBLIC body is editable ({body} = the full article verbatim; a members item posts the
+      // stub instead, so no body field there). The preview shows a [full article body] placeholder because the
+      // real article is fetched server-side at send time.
+      const bodyRows = this._isStub()
+        ? ''
+        : (() => {
+            const bodyTemplate = this._effectiveDevtoBody();
+            const bodyPreview = renderBodyTemplate(bodyTemplate, item, '[the full article body]');
+            return `<label>Body template <span style="font-weight:400">({body} = the full article verbatim; wrap it or replace it; markdown; same tokens)</span></label>
+        <textarea data-devto-body>${esc(bodyTemplate)}</textarea>
+        <label>Body preview</label>
+        <div class="preview" data-devto-body-preview>${esc(bodyPreview)}</div>`;
+          })();
       devtoRows = `${this._isStub() ? '<p class="warn">Members-only item: the STUB templates apply (description + link, never the body).</p>' : ''}
         <label>Byline template <span style="font-weight:400">(prepended to the article; markdown; same tokens)</span></label>
         <textarea data-devto-intro>${esc(introTemplate)}</textarea>
         <label>Byline preview</label>
         <div class="preview" data-devto-intro-preview>${esc(introPreview)}</div>
+        ${bodyRows}
         <label>CTA footer template <span style="font-weight:400">(appended to the post; markdown; same tokens)</span></label>
         <textarea data-devto-footer>${esc(footerTemplate)}</textarea>
         <label>CTA preview</label>
@@ -436,6 +457,13 @@ class GbtiSyndicateNow extends GbtiElement {
       const pv = this.$('[data-devto-intro-preview]');
       if (pv) pv.textContent = di.value ? renderTemplate(di.value, this._item(), { limit: 800 }) : '';
     });
+    const db = this.$('[data-devto-body]');
+    if (db) db.addEventListener('input', () => {
+      this._devtoBodyTemplate = db.value;
+      const pv = this.$('[data-devto-body-preview]');
+      // {body} previews as a placeholder (the real article is fetched server-side at send).
+      if (pv) pv.textContent = renderBodyTemplate(db.value, this._item(), '[the full article body]');
+    });
     const df = this.$('[data-devto-footer]');
     if (df) df.addEventListener('input', () => {
       this._devtoFooterTemplate = df.value;
@@ -460,7 +488,7 @@ class GbtiSyndicateNow extends GbtiElement {
   }
 
   async _pickDest(dest) {
-    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._devtoIntroTemplate = null; this._devtoFooterTemplate = null; this._devtoStubTemplate = null; this._devtoDraft = false; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
+    if (dest !== this._dest) { this._template = null; this._bodyTemplate = null; this._commentTemplate = null; this._devtoIntroTemplate = null; this._devtoBodyTemplate = null; this._devtoFooterTemplate = null; this._devtoStubTemplate = null; this._devtoDraft = false; this._redditKind = 'link'; } // per-destination defaults; an edit never leaks across
     this._dest = dest;
     this._step = 'compose';
     this._err = null;
@@ -512,6 +540,9 @@ class GbtiSyndicateNow extends GbtiElement {
         if (footer) payload.devtoFooterTemplate = footer;
         const stubT = this._isStub() ? this._effectiveDevtoStub().trim() : '';
         if (stubT) payload.devtoStubTemplate = stubT;
+        // SOW-138: the public body template (RAW; {body} resolves in the adapter). Members items post the stub.
+        const bodyT = this._isStub() ? '' : this._effectiveDevtoBody().trim();
+        if (bodyT) payload.devtoBodyTemplate = bodyT;
         if (this._devtoDraft) payload.devtoDraft = true;
       }
       if (this._dest === 'discord') {

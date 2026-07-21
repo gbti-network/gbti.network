@@ -290,3 +290,16 @@ test('POST devto: devtoStubTemplate renders into item.devtoStub', async () => {
   assert.equal(r.status, 200);
   assert.equal(seen.devtoStub, 'Teaser: CI Skill');
 });
+
+// SOW-138: unlike the byline/footer/stub, the public BODY template travels RAW to the adapter ({body} resolves
+// in the adapter, where the fetched article is available), so it must NOT be server-rendered here.
+test('POST devto: devtoBodyTemplate reaches the adapter as a RAW (unrendered) string', async () => {
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
+  const envDevto = { DEVTO_API_KEY: 'k', DEVTO_ORG_ID: '10466', SIGNUP_KV: kv };
+  let seen = null;
+  const adapters = { devto: { name: 'devto', enabled: () => true, post: async (it) => { seen = it; return { ok: true, id: '7', url: 'https://dev.to/x' }; } } };
+  await handleSyndicateNow(
+    req({ destination: 'devto', item: ITEM, template: '{title}', devtoBodyTemplate: 'Note on {title}.\n\n{body}' }),
+    envDevto, { kv, authorize: superadmin, adapters });
+  assert.equal(seen.devtoBodyTemplate, 'Note on {title}.\n\n{body}', 'the raw template: {title} and {body} are NOT expanded here');
+});

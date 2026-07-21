@@ -243,7 +243,7 @@ const SYND_TABS = [
 const SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
 const SYND_SUB_KEY = 'gbti-synd-sub';
 // The template keys a channel's working copy tracks (the four content types + the Reddit/dev.to sub-templates).
-const TMPL_KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer', 'devto-stub', 'hashnode-intro', 'hashnode-footer', 'hashnode-stub'];
+const TMPL_KEYS = ['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-body', 'devto-footer', 'devto-stub', 'hashnode-intro', 'hashnode-body', 'hashnode-footer', 'hashnode-stub']; // SOW-138: *-body = the public crosspost body
 
 class GbtiChannelMapManager extends GbtiElement {
   connectedCallback() { super.connectedCallback?.(); }
@@ -428,18 +428,21 @@ class GbtiChannelMapManager extends GbtiElement {
     const tiles = TILE_CHANNELS.map((c) => `<button class="chtile${c.id === cur ? ' on' : ''}${c.active ? '' : ' soon'}" type="button" data-tile="${esc(c.id)}"${c.active ? '' : ' aria-disabled="true"'}${c.note ? ` title="${esc(c.note)}"` : ''}>
         <span class="ct-i ${esc(c.cls)}"><svg viewBox="0 0 24 24"><use href="#${esc(c.icon)}"/></svg></span>
         <span class="ct-n">${esc(c.name)}</span><span class="ct-s">${esc(c.sub)}</span></button>`).join('');
-    const chips = VARS.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join('');
+    // SOW-138: {body} (the full article) is offered ONLY on the full-body channels, where it drives the public body field.
+    const chipVars = (cur === 'devto' || cur === 'hashnode') ? [...VARS, '{body}'] : VARS;
+    const chips = chipVars.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join('');
     const vis = this._tmplVis || 'pub';
     const work = this._work?.[`${vis}:${cur}`] || {};
     // The `· custom` marker reflects a stored override IN THE ACTIVE visibility map.
     const custom = (k) => ((vis === 'stub' ? this._channelTemplatesStub?.[cur]?.[k] : this._channelTemplates?.[cur]?.[k]) ? ' · custom' : '');
     // SOW-137: dev.to + Hashnode cross-post the FULL article body, so the per-type short templates
     // (share/post/product/prompt) do NOT drive their post (the title is the item title; the body is
-    // byline + the whole body + CTA footer). Hide those rows for full-body channels and show a note, so the
-    // editor stops implying a one-line message that never posts. Only the byline/stub/CTA below apply.
+    // byline + the body + CTA footer). Hide those rows for full-body channels and show a note. SOW-138: the
+    // body itself is now editable below (Public tab = Byline / Body / CTA footer, where {body} = the article;
+    // Members stub tab = Byline / Stub body / CTA footer).
     const FULL_BODY = new Set(['devto', 'hashnode']);
     const rows = (FULL_BODY.has(cur)
-      ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">${esc(cur === 'devto' ? 'dev.to' : 'Hashnode')} cross-posts the full article body, so there are no per-type message templates here. The byline is prepended and the CTA footer appended to that body; a members-only item posts the stub body instead of the body.</p>`
+      ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">${esc(cur === 'devto' ? 'dev.to' : 'Hashnode')} cross-posts the full article body, so there are no per-type message templates here. Below: the byline is prepended and the CTA footer appended, and the ${vis === 'stub' ? 'stub body is the members-only teaser' : 'Body wraps the article ({body} = the full article verbatim)'}.</p>`
       : TMPL_TYPES.map((t) => `<div class="tmpl">
         <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
         <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || '')}" /></div>`).join(''))
@@ -452,16 +455,22 @@ class GbtiChannelMapManager extends GbtiElement {
       + (cur === 'devto'
         ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc('prepended to the crosspost' + custom('devto-intro'))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-intro">${esc(work['devto-intro'] || '')}</textarea></div>
-          ${vis === 'stub' ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc('the members-only teaser middle' + custom('devto-stub'))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-stub">${esc(work['devto-stub'] || '')}</textarea></div>` : ''}
+          ${vis === 'stub'
+            ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc('the members-only teaser middle' + custom('devto-stub'))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-stub">${esc(work['devto-stub'] || '')}</textarea></div>`
+            : `<div class="tmpl"><div class="tl"><div class="nm">Body</div><div class="df">${esc('the public post body; {body} = the full article verbatim' + custom('devto-body'))}</div></div>
+            <textarea class="ctrl" maxlength="4000" rows="4" data-tk="devto-body">${esc(work['devto-body'] || '')}</textarea></div>`}
           <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc('appended to every dev.to post' + custom('devto-footer'))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work['devto-footer'] || '')}</textarea></div>`
         : '')
       + (cur === 'hashnode'
         ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc('prepended to the crosspost' + custom('hashnode-intro'))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-intro">${esc(work['hashnode-intro'] || '')}</textarea></div>
-          ${vis === 'stub' ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc('the members-only teaser middle' + custom('hashnode-stub'))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-stub">${esc(work['hashnode-stub'] || '')}</textarea></div>` : ''}
+          ${vis === 'stub'
+            ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc('the members-only teaser middle' + custom('hashnode-stub'))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-stub">${esc(work['hashnode-stub'] || '')}</textarea></div>`
+            : `<div class="tmpl"><div class="tl"><div class="nm">Body</div><div class="df">${esc('the public post body; {body} = the full article verbatim' + custom('hashnode-body'))}</div></div>
+            <textarea class="ctrl" maxlength="4000" rows="4" data-tk="hashnode-body">${esc(work['hashnode-body'] || '')}</textarea></div>`}
           <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc('appended to every Hashnode post' + custom('hashnode-footer'))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="hashnode-footer">${esc(work['hashnode-footer'] || '')}</textarea></div>`
         : '');

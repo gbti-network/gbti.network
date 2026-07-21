@@ -10,6 +10,10 @@ import { TEMPLATE_TYPES, NEWS_ENGAGEMENT_TIERS, newsEngagement, CONTENT_ENGAGEME
 export class TemplateEditError extends Error {}
 
 const MAX_TEMPLATE = 500;
+// SOW-138: the full-body crosspost BODY templates (devto-body / hashnode-body) may hold a custom body, so they
+// get more headroom than the short per-type message templates. `{body}` (the article) is a token, not stored text.
+const MAX_BODY_TEMPLATE = 4000;
+const BODY_TYPES = new Set(['devto-body', 'hashnode-body']);
 
 function isoOf(now) {
   const d = now instanceof Date ? now : new Date(now ?? Date.now());
@@ -139,7 +143,8 @@ export function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {
   const t = String(type || '').trim();
   if (!TEMPLATE_TYPES.includes(t)) throw new TemplateEditError(`the type must be one of: ${TEMPLATE_TYPES.join(', ')}`);
   const value = String(template ?? '').trim();
-  if (value.length > MAX_TEMPLATE) throw new TemplateEditError(`a template is capped at ${MAX_TEMPLATE} characters`);
+  const cap = BODY_TYPES.has(t) ? MAX_BODY_TEMPLATE : MAX_TEMPLATE;
+  if (value.length > cap) throw new TemplateEditError(`a template is capped at ${cap} characters`);
   // SOW-088: with a channel, the edit targets syndication.channel_templates[channel][type] (an empty value
   // deletes the override so the field falls back to the shared map, then the built-in default).
   // SOW-088 Proposal A: stub=true targets the MEMBERS-stub maps with identical semantics.

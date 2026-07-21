@@ -80,6 +80,15 @@ test('prepareHashnodeBody: a members item STUBS (rendered stub template, never a
   assert.ok(!r.body.includes('SECRET'));
 });
 
+test('prepareHashnodeBody: SOW-138 default {body} equals no template; a custom body wraps the article', () => {
+  const implicit = prepareHashnodeBody(FILE, ITEM, { intro: '**By H.**', footer: 'Join.' });
+  const explicit = prepareHashnodeBody(FILE, ITEM, { intro: '**By H.**', footer: 'Join.', bodyTemplate: '{body}' });
+  assert.equal(implicit.body, explicit.body, 'the built-in default matches an explicit {body}');
+  const wrapped = prepareHashnodeBody(FILE, ITEM, { intro: '**By H.**', footer: 'Join.', bodyTemplate: 'Lead {title}.\n\n{body}' });
+  assert.ok(wrapped.body.includes('Lead My Article.'));
+  assert.ok(wrapped.body.includes('Intro paragraph'), 'the article body stays verbatim');
+});
+
 test('prepareHashnodeBody fails closed: drafts, empty public body, no frontmatter', () => {
   assert.equal(prepareHashnodeBody(FILE.replace('status: published', 'status: draft'), ITEM).ok, false);
   assert.equal(prepareHashnodeBody('no frontmatter at all', ITEM).ok, false);

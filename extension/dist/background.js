@@ -21040,10 +21040,11 @@ var DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
   signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false })
   // opens = the owner's chosen counter
 });
-var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-footer", "hashnode-stub"]);
+var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 var DEFAULT_REDDIT_BODY = "{short-description}";
 var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
+var DEFAULT_DEVTO_BODY = "{body}";
 var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
 var DEFAULT_REDDIT_COMMENT = "Shared to the community by GBTI Network member {member-reddit-handle}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
 var DEFAULT_TEMPLATES = Object.freeze({
@@ -21054,10 +21055,14 @@ var DEFAULT_TEMPLATES = Object.freeze({
   "reddit-body": DEFAULT_REDDIT_BODY,
   "reddit-comment": DEFAULT_REDDIT_COMMENT,
   "devto-intro": DEFAULT_DEVTO_INTRO,
+  "devto-body": DEFAULT_DEVTO_BODY,
+  // SOW-138
   "devto-footer": DEFAULT_DEVTO_FOOTER,
   // SOW-134: Hashnode reuses the same byline + CTA footer as dev.to (both are full-body crossposts with a
   // canonical link home); admins can diverge them per channel in the templates card.
   "hashnode-intro": DEFAULT_DEVTO_INTRO,
+  "hashnode-body": DEFAULT_DEVTO_BODY,
+  // SOW-138
   "hashnode-footer": DEFAULT_DEVTO_FOOTER
 });
 var STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
@@ -21309,6 +21314,8 @@ function contentEngagement(cfg) {
 var TemplateEditError = class extends Error {
 };
 var MAX_TEMPLATE = 500;
+var MAX_BODY_TEMPLATE = 4e3;
+var BODY_TYPES = /* @__PURE__ */ new Set(["devto-body", "hashnode-body"]);
 function isoOf7(now) {
   const d = now instanceof Date ? now : new Date(now ?? Date.now());
   if (Number.isNaN(d.getTime())) throw new TemplateEditError("invalid timestamp");
@@ -21421,7 +21428,8 @@ function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {}) {
   const t = String(type || "").trim();
   if (!TEMPLATE_TYPES.includes(t)) throw new TemplateEditError(`the type must be one of: ${TEMPLATE_TYPES.join(", ")}`);
   const value = String(template ?? "").trim();
-  if (value.length > MAX_TEMPLATE) throw new TemplateEditError(`a template is capped at ${MAX_TEMPLATE} characters`);
+  const cap = BODY_TYPES.has(t) ? MAX_BODY_TEMPLATE : MAX_TEMPLATE;
+  if (value.length > cap) throw new TemplateEditError(`a template is capped at ${cap} characters`);
   const isStub = stub === true;
   const chField = isStub ? "channel_templates_stub" : "channel_templates";
   const sharedField = isStub ? "stub_templates" : "templates";
