@@ -331,7 +331,7 @@ section { position: relative; }
    card collapses to the viewport on mobile instead of flooring the grid track at ~766px (horizontal overflow). */
 .heat { display: grid; grid-template-columns: repeat(18, minmax(0, 1fr)); gap: 5px; margin-top: 4px; }
 .heat span { aspect-ratio: 1/1; border-radius: 3px; background: var(--tint); }
-.heat .l1 { background: #bfe6d0; } .heat .l2 { background: #7fd0a3; } .heat .l3 { background: #44b378; } .heat .l4 { background: var(--green-600); }
+.heat .l1, .heat-legend .l1 { background: #bfe6d0; } .heat .l2, .heat-legend .l2 { background: #7fd0a3; } .heat .l3, .heat-legend .l3 { background: #44b378; } .heat .l4, .heat-legend .l4 { background: var(--green-600); }
 .heat-legend { display: flex; align-items: center; gap: 6px; margin-top: 14px; font-family: var(--f-mono); font-size: 11px; color: var(--fg-mute); }
 .heat-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 .act-stats { display: flex; gap: 30px; margin-top: auto; padding-top: 26px; }
@@ -910,6 +910,10 @@ a.who:hover { color: var(--fg); }
 @media (max-width: 620px){
   .feed-item { grid-template-columns: 1fr; }
   .feed-cover { width: 100%; height: 180px; }
+  /* the section sublabel is nowrap for the desktop rule line; let it wrap on narrow screens so it
+     cannot push the page into horizontal scroll */
+  .feed-lab { flex-wrap: wrap; }
+  .feed-lab .more { white-space: normal; }
 }
 
 /* ---------- sow-131: /feeds/ views + the ladder pager ---------- */
@@ -983,3 +987,8 @@ a.tag:hover { border-color: var(--ink); color: var(--ink); }
 
 .feed-empty { font-family: var(--f-mono); font-size: 13px; color: var(--fg-mute); text-align: center; margin: 30px 0; }
 .feed-empty[hidden] { display: none; }
+
+/* sow-136 QA: the v1 contribution heatmap standing alone above the footer. v1 sized .act-card via the
+   two-column .act-grid; solo it is centered and width-capped so the 18-column grid keeps its cell
+   proportions. */
+.act-solo { max-width: 560px; margin: 0 auto; }
