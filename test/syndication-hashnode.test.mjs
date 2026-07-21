@@ -131,6 +131,23 @@ test('hashnode adapter: the GraphQL publishPost payload (canonical, publicationI
   assert.match(r.url, /gbti\.hashnode\.dev/);
 });
 
+test('hashnode adapter: SOW-139 defaults the cover to the branded per-type card when the item has no image', async () => {
+  const env = { HASHNODE_TOKEN: 'tok', HASHNODE_PUBLICATION_ID: 'pub123' };
+  let lastInput = null;
+  const okFetch = async (url, opts) => {
+    if (url.startsWith('https://raw.')) return { ok: true, text: async () => FILE };
+    lastInput = JSON.parse(opts.body).variables.input;
+    return { ok: true, status: 200, text: async () => JSON.stringify({ data: { publishPost: { post: { id: '1', url: 'https://gbti.hashnode.dev/x' } } } }) };
+  };
+  const ad = createHashnodeAdapter({ env, fetchImpl: okFetch });
+  await ad.post({ ...ITEM }); // source 'post' -> feature-article
+  assert.equal(lastInput.coverImageOptions.coverImageURL, 'https://gbti.network/brand/feature/feature-article.png');
+  await ad.post({ ...ITEM, source: 'prompt' });
+  assert.equal(lastInput.coverImageOptions.coverImageURL, 'https://gbti.network/brand/feature/feature-prompt.png');
+  await ad.post({ ...ITEM, image: 'https://cdn.example.com/c.png' }); // a custom cover still wins
+  assert.equal(lastInput.coverImageOptions.coverImageURL, 'https://cdn.example.com/c.png');
+});
+
 test('hashnode adapter: skips (share, draft file), no-publication-id, and readable errors', async () => {
   const env = { HASHNODE_TOKEN: 'tok', HASHNODE_PUBLICATION_ID: 'pub123' };
   const raw = (file) => async (u) => (u.startsWith('https://raw.') ? { ok: true, text: async () => file } : { ok: true, status: 200, text: async () => JSON.stringify({ data: { publishPost: { post: { id: '1', url: 'https://gbti.hashnode.dev/x' } } } }) });

@@ -235,6 +235,16 @@ export function renderBodyTemplate(template, item = {}, rawBody = '') {
   return rendered.split(`${SENTINEL}`).join(body);
 }
 
+// SOW-139: the branded per-type default COVER for a full-body crosspost (dev.to / Hashnode). Mirrors the
+// website fallback (`src/lib/feature-image.ts` TYPE_TO_FEATURE): an item with no custom cover falls back to its
+// type's branded 1200x630 feature card, served at gbti.network/brand/feature/, so every crosspost reads as GBTI
+// in the dev.to / Hashnode feed. Keep this map in sync with feature-image.ts (mjs cannot import the TS module).
+const FEATURE_COVER_KEY = { post: 'article', product: 'product', prompt: 'prompt', share: 'share' };
+export function defaultSyndicationCover(source) {
+  const key = FEATURE_COVER_KEY[source] || 'article';
+  return `https://gbti.network/brand/feature/feature-${key}.png`;
+}
+
 export function buildChannelText(item = {}, { limit = 280, includeUrl = true, sanitize = true } = {}) {
   const label = TYPE_LABEL[item.source] || item.source || 'update';
   const who = item.author ? `@${item.author}` : 'a member';

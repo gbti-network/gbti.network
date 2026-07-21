@@ -10,7 +10,7 @@
 // marker cut, relative images rewritten to the CDN). Shares and members items are SKIPPED, never failed.
 // Thin injectable-fetch client; no SDK. Secrets: DEVTO_API_KEY, DEVTO_ORG_ID (the gbti-network org).
 
-import { renderTemplate } from '../../membership/syndication-format.mjs';
+import { renderTemplate, defaultSyndicationCover } from '../../membership/syndication-format.mjs';
 import { templateFor } from '../../membership/syndication-config-core.mjs';
 import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
 import { contentPathFor, prepareDevtoBody } from './devto-body.mjs';
@@ -88,7 +88,9 @@ export function createDevtoAdapter({ env = {}, fetchImpl = globalThis.fetch, cfg
         tags: prepared.tags,
         published: item.devtoDraft ? false : true,
         ...(Number(env.DEVTO_ORG_ID) ? { organization_id: Number(env.DEVTO_ORG_ID) } : {}),
-        ...(absoluteImage(item.image) ? { main_image: absoluteImage(item.image) } : {}),
+        // SOW-139: a custom cover wins, else the branded per-type feature card (never no cover), mirroring the
+        // website's defaultFeatureImage fallback so an uncovered crosspost still reads as GBTI.
+        main_image: absoluteImage(item.image) || defaultSyndicationCover(item.source),
       };
       const res = await fetchImpl('https://dev.to/api/articles', {
         method: 'POST',

@@ -1,7 +1,7 @@
 // SOW-058: the pure message formatter. Sanitization, truncation, URL preservation, no body leak.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, renderBodyTemplate, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom, redditHandleFrom } from '../membership/syndication-format.mjs';
+import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, renderBodyTemplate, defaultSyndicationCover, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom, redditHandleFrom } from '../membership/syndication-format.mjs';
 
 // SOW-138: the full-body crosspost body renderer. {body} is spliced VERBATIM (never sanitized/truncated); the
 // wrapper renders like a normal template.
@@ -23,6 +23,15 @@ test('renderBodyTemplate: {body} is verbatim; the wrapper renders; a raw body is
   // a template with no {body} is a fully custom body (the article is omitted)
   const c = renderBodyTemplate('Summary of {title}. Read: {url}', item, body);
   assert.equal(c, 'Summary of T. Read: https://gbti.network/x');
+});
+
+// SOW-139: the per-type default crosspost cover (mirrors src/lib/feature-image.ts TYPE_TO_FEATURE).
+test('defaultSyndicationCover maps each content type to its branded feature card', () => {
+  assert.equal(defaultSyndicationCover('post'), 'https://gbti.network/brand/feature/feature-article.png');
+  assert.equal(defaultSyndicationCover('product'), 'https://gbti.network/brand/feature/feature-product.png');
+  assert.equal(defaultSyndicationCover('prompt'), 'https://gbti.network/brand/feature/feature-prompt.png');
+  assert.equal(defaultSyndicationCover('share'), 'https://gbti.network/brand/feature/feature-share.png');
+  assert.equal(defaultSyndicationCover('unknown'), 'https://gbti.network/brand/feature/feature-article.png', 'unknown falls back to the article banner');
 });
 
 test('sanitizeMentions neutralizes @mentions and Discord mass-ping tokens', () => {

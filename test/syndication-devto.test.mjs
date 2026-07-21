@@ -128,6 +128,25 @@ test('devto adapter: the full article payload (org, canonical, cover, draft flag
   assert.match(r.url, /dev\.to/);
 });
 
+test('devto adapter: SOW-139 defaults the cover to the branded per-type card when the item has no image', async () => {
+  const env = { DEVTO_API_KEY: 'k', DEVTO_ORG_ID: '10466' };
+  let lastBody = null;
+  const okFetch = async (url, opts) => {
+    if (url.startsWith('https://raw.')) return { ok: true, text: async () => FILE };
+    lastBody = JSON.parse(opts.body);
+    return { ok: true, status: 201, text: async () => JSON.stringify({ id: 1, url: 'https://dev.to/x' }) };
+  };
+  const ad = createDevtoAdapter({ env, fetchImpl: okFetch });
+  await ad.post({ ...ITEM }); // source 'post' -> feature-article
+  assert.equal(lastBody.article.main_image, 'https://gbti.network/brand/feature/feature-article.png');
+  await ad.post({ ...ITEM, source: 'prompt' });
+  assert.equal(lastBody.article.main_image, 'https://gbti.network/brand/feature/feature-prompt.png');
+  await ad.post({ ...ITEM, source: 'product' });
+  assert.equal(lastBody.article.main_image, 'https://gbti.network/brand/feature/feature-product.png');
+  await ad.post({ ...ITEM, image: '/_astro/cover.webp' }); // a custom cover still wins
+  assert.equal(lastBody.article.main_image, 'https://gbti.network/_astro/cover.webp');
+});
+
 test('devto adapter: SOW-138 item.devtoBodyTemplate replaces the public body (custom copy, no {body})', async () => {
   const env = { DEVTO_API_KEY: 'k', DEVTO_ORG_ID: '10466' };
   let lastBody = null;

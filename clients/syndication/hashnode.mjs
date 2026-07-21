@@ -12,7 +12,7 @@
 // to the CDN). Shares + members items are SKIPPED, never failed. Thin injectable-fetch client; no SDK.
 // Secrets: HASHNODE_TOKEN (a Hashnode PAT), HASHNODE_PUBLICATION_ID (the gbti.hashnode.dev publication id).
 
-import { renderTemplate } from '../../membership/syndication-format.mjs';
+import { renderTemplate, defaultSyndicationCover } from '../../membership/syndication-format.mjs';
 import { templateFor } from '../../membership/syndication-config-core.mjs';
 import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
 import { contentPathFor, prepareHashnodeBody } from './hashnode-body.mjs';
@@ -88,7 +88,9 @@ export function createHashnodeAdapter({ env = {}, fetchImpl = globalThis.fetch, 
         publicationId,
         tags: prepared.tags,
         ...(String(item.url || '') ? { originalArticleURL: String(item.url) } : {}),
-        ...(absoluteImage(item.image) ? { coverImageOptions: { coverImageURL: absoluteImage(item.image) } } : {}),
+        // SOW-139: a custom cover wins, else the branded per-type feature card (never no cover), mirroring the
+        // website's defaultFeatureImage fallback so an uncovered crosspost still reads as GBTI.
+        coverImageOptions: { coverImageURL: absoluteImage(item.image) || defaultSyndicationCover(item.source) },
       };
       const res = await fetchImpl(HASHNODE_GQL, {
         method: 'POST',
