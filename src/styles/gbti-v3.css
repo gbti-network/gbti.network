@@ -921,16 +921,17 @@ a.who:hover { color: var(--fg); }
    with the SAME dimensions (owner directive). min-height pins the row height across the swap. */
 .pager { margin: 34px 0; min-height: 34px; }
 .pager-done { border: 1.5px solid var(--line); border-radius: var(--r); background: transparent; }
-/* While a tag/visibility filter is active the ladder flattens: every chunk shows, pagers + separators
-   hide. Chunk/pager hidden attributes are untouched so clearing the filter restores the ladder. */
-.feed-flat .feed-chunk[hidden] { display: block; }
+/* While a tag/visibility filter is active the ladder flattens: the FeedView script lifts the chunks'
+   hidden attributes (Tailwind preflight makes [hidden] display:none !important inside @layer base, so
+   CSS alone cannot reveal them) and this hides the pagers + separators; clearing the filter restores
+   the ladder from the script's data-rehide markers. */
 .feed-flat .pager, .feed-flat .pager-done { display: none; }
 
 /* narrow tabs */
 .feed-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
 .feed-tab { font-family: var(--f-mono); font-size: 12.5px; font-weight: 600; color: var(--fg-soft);
   border: 1.5px solid var(--line-2); border-radius: 999px; padding: 6px 14px; background: var(--paper); }
-.feed-tab:hover { border-color: var(--ink); color: var(--fg); }
+.feed-tab:hover { border-color: var(--fg); color: var(--fg); }
 .feed-tab.on { border-color: var(--green); color: var(--green-700); background: var(--green-tint); }
 
 /* toolbar: visibility chips + density toggle */
@@ -983,7 +984,8 @@ html.is-gbti-member-active .feed-cta,
 html.is-gbti-member-active .feed-locked-shares { display: none; }
 
 /* trending-tag chips are links now (the /feeds/?tag= drilldown) */
-a.tag:hover { border-color: var(--ink); color: var(--ink); }
+/* hover on the theme-flipping fg token, NOT --ink (structural, stays dark in dark mode). */
+a.tag:hover { border-color: var(--fg); color: var(--fg); }
 
 .feed-empty { font-family: var(--f-mono); font-size: 13px; color: var(--fg-mute); text-align: center; margin: 30px 0; }
 .feed-empty[hidden] { display: none; }
