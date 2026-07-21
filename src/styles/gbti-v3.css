@@ -775,7 +775,9 @@ html[data-theme="dark"] .pchip { background: rgba(255,255,255,.05); border-color
    hardcoded light values (kind-tag palettes, thumb fallbacks, the join card).
    ========================================================================== */
 
-.feedwrap { padding: 34px 0 72px; }
+/* longhand only: the element also carries .wrap, whose horizontal var(--gut) padding must survive so
+   the feed columns align with the header (a `padding: 34px 0 72px` shorthand would zero the gutters). */
+.feedwrap { padding-top: 34px; padding-bottom: 72px; }
 
 /* section label */
 .feed-lab { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; scroll-margin-top: 90px; }
