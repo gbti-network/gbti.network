@@ -31,13 +31,14 @@ const splits = [
   { pct: PLATFORM_RETAINED_PCT, cls: 'plain', name: 'Platform & community', body: 'Funds hosting, tooling, the weekly sessions, and running the network.' },
 ];
 
+// Card imagery: Pexels photos (free license, no attribution required), committed as 800x480 (5:3) webp.
 const benefits = [
-  ['Private member community', 'A private Discord where professionals share work in progress, ask questions, and build relationships away from public noise.'],
-  ['Joint venture opportunities', 'Discover aligned projects and combine skills. One member brings the idea, another the technical depth, another the distribution.'],
-  ['Gated member content', 'Create gated articles, products, prompts, and downloads that enrich the network and give new members a reason to join.'],
-  ['Network syndication', 'The network distributes and promotes member work across social channels, so useful work travels further than it would alone.'],
-  ['Specialized member tools', 'A Chrome extension and other tools that make the gated parts of the network smoother to access and use.'],
-  ['Shared member upside', 'A portion of membership revenue is shared back with members whose published work and contributions help grow the network.'],
+  { name: 'Private member community', img: '/stock/member-community.webp', alt: 'Developers talking through work together in a studio space', body: 'A private Discord where professionals share work in progress, ask questions, and build relationships away from public noise.' },
+  { name: 'Joint venture opportunities', img: '/stock/joint-ventures.webp', alt: 'Two people shaking hands over a desk', body: 'Discover aligned projects and combine skills. One member brings the idea, another the technical depth, another the distribution.' },
+  { name: 'Gated member content', img: '/stock/gated-content.webp', alt: 'A hand holding a brass padlock', body: 'Create gated articles, products, prompts, and downloads that enrich the network and give new members a reason to join.' },
+  { name: 'Network syndication', img: '/stock/network-syndication.webp', alt: 'A hand holding a phone showing social network apps', body: 'The network distributes and promotes member work across social channels, so useful work travels further than it would alone.' },
+  { name: 'Specialized member tools', img: '/stock/member-tools.webp', alt: 'A laptop on a wooden desk with a code editor open', body: 'A Chrome extension and other tools that make the gated parts of the network smoother to access and use.' },
+  { name: 'Shared member upside', img: '/stock/member-upside.webp', alt: 'Growth charts on paper under a magnifying glass', body: 'A portion of membership revenue is shared back with members whose published work and contributions help grow the network.' },
 ];
 
 const faqs = [
@@ -220,8 +221,11 @@ const year = new Date().getFullYear();
       <p class="sec-lead">Built for professionals who want a place to publish useful work, improve alongside
         other members, and belong to a network that rewards contribution.</p>
       <div class="grid3">
-        {benefits.map(([name, body]) => (
-          <div class="card lift"><h3>{name}</h3><p>{body}</p></div>
+        {benefits.map((b) => (
+          <div class="card lift bcard">
+            <img src={b.img} alt={b.alt} width="800" height="480" loading="lazy" decoding="async" />
+            <div class="bod"><h3>{b.name}</h3><p>{b.body}</p></div>
+          </div>
         ))}
       </div>
     </section>
@@ -427,6 +431,10 @@ const year = new Date().getFullYear();
   .card { padding: 26px 24px; }
   .card h3 { font-family: var(--f-display); font-weight: 600; font-size: 19px; color: var(--ci-fg); margin: 0 0 8px; }
   .card p { font-size: 14.5px; line-height: 1.55; color: var(--ci-soft); margin: 0; }
+  /* benefits cards carry a 5:3 photo above the copy */
+  .card.bcard { padding: 0; overflow: hidden; }
+  .bcard img { display: block; width: 100%; height: auto; aspect-ratio: 5 / 3; object-fit: cover; }
+  .bcard .bod { padding: 22px 24px 26px; }
   .ic { width: 40px; height: 40px; border-radius: 7px; background: rgba(31,158,95,.14); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; flex: none; }
 
   .pct { font-family: var(--f-display); font-weight: 700; font-size: 30px; }
