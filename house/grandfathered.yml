@@ -68,3 +68,9 @@ grandfathered:
 #   login: founder
 #   reason: founding member
 #   until: null   # null = permanent; otherwise an ISO date
+
+  # SOW-119: coupon grants folded in from KV redemptions by reconcile (2026-07-21). Auto-appended.
+  - github_id: "307628108"      # github.com/adbox85
+    login: adbox85
+    reason: coupon:CODEABLEYEAR
+    until: "2027-07-21T15:20:31.034Z"
