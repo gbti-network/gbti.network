@@ -6784,9 +6784,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const vis = this._tmplVis || "pub";
       const work = this._work?.[`${vis}:${cur}`] || {};
       const custom = (k) => (vis === "stub" ? this._channelTemplatesStub?.[cur]?.[k] : this._channelTemplates?.[cur]?.[k]) ? " · custom" : "";
-      const rows = TMPL_TYPES.map((t) => `<div class="tmpl">
+      const FULL_BODY = /* @__PURE__ */ new Set(["devto", "hashnode"]);
+      const rows = (FULL_BODY.has(cur) ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">${esc(cur === "devto" ? "dev.to" : "Hashnode")} cross-posts the full article body, so there are no per-type message templates here. The byline is prepended and the CTA footer appended to that body; a members-only item posts the stub body instead of the body.</p>` : TMPL_TYPES.map((t) => `<div class="tmpl">
         <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
-        <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || "")}" /></div>`).join("") + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc("the description under the title" + custom("reddit-body"))}</div></div>
+        <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || "")}" /></div>`).join("")) + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc("the description under the title" + custom("reddit-body"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body">${esc(work["reddit-body"] || "")}</textarea></div>
           <div class="tmpl"><div class="tl"><div class="nm">First comment</div><div class="df">${esc("the brand account's first comment" + custom("reddit-comment"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="reddit-comment">${esc(work["reddit-comment"] || "")}</textarea></div>` : "") + (cur === "devto" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc("prepended to the crosspost" + custom("devto-intro"))}</div></div>

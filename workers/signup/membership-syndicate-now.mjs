@@ -28,7 +28,7 @@ import { createStripeClient } from '../../clients/stripe.mjs';
 import { createDiscordClient } from '../../clients/discord.mjs';
 
 // The destinations the manual flow offers (SOW-088: the Reddit adapter landed, the Radle port).
-const MANUAL_DESTS = ['discord', 'reddit', 'x', 'linkedin', 'mastodon', 'bluesky', 'devto'];
+const MANUAL_DESTS = ['discord', 'reddit', 'x', 'linkedin', 'mastodon', 'bluesky', 'devto', 'hashnode', 'dailydev']; // SOW-137: hashnode (auto) + dailydev (manual) were missing the Manually-Syndicate surface
 
 const FEATURED_ENV = { post: 'DISCORD_CHANNEL_POSTS', product: 'DISCORD_CHANNEL_PRODUCTS', prompt: 'DISCORD_CHANNEL_PROMPTS', share: 'DISCORD_CHANNEL_SHARES' };
 
@@ -51,6 +51,10 @@ export async function handleSyndicateNowInfo(request, env, deps = {}) {
   const cfg = await readSyndicationConfig(kv);
   const channelMap = await readContentChannels(kv);
   const destinations = MANUAL_DESTS.map((id) => {
+    // SOW-137: a MANUAL-capability destination (x, linkedin, dailydev) posts by enqueuing a Social Queue task,
+    // not by calling an API, so it needs NO secrets and is always ready. Only an AUTO destination (posted via
+    // its adapter) gates on secret presence.
+    if (channelCapability(id) === 'manual') return { id, ready: true };
     const ready = secretsPresent(env, id);
     return ready ? { id, ready: true } : { id, ready: false, reason: 'missing secrets' };
   });

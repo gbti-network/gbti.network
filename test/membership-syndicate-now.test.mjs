@@ -32,15 +32,18 @@ test('both verbs are superadmin-only (an admin is 403)', async () => {
   assert.equal(p.status, 403);
 });
 
-test('GET: readiness (secrets decide), templates with defaults, the channel map', async () => {
+test('GET: readiness (secrets decide for AUTO; manual is always ready), templates with defaults, the channel map', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG, [SYND_CHANNELS_KEY]: CHANNELS });
   const r = await handleSyndicateNowInfo(req(null, 'GET'), { ...ENV_DISCORD, SIGNUP_KV: kv }, { kv, authorize: superadmin });
   assert.equal(r.status, 200);
   const byId = Object.fromEntries(r.body.destinations.map((d) => [d.id, d]));
   assert.equal(byId.discord.ready, true);
-  assert.equal(byId.x.ready, false); // no X secrets in env
-  assert.equal(byId.reddit.ready, false); // a real destination now; just missing its secrets in this env
+  assert.equal(byId.x.ready, true); // SOW-137: X is manual-assist -> always ready (enqueues a Social Queue task, no secrets)
+  assert.equal(byId.linkedin.ready, true); // manual-assist -> always ready
+  assert.equal(byId.dailydev.ready, true); // SOW-135/136: daily.dev is manual-only -> always ready
+  assert.equal(byId.reddit.ready, false); // AUTO destination, just missing its secrets in this env
   assert.match(byId.reddit.reason, /missing secrets/);
+  assert.equal(byId.hashnode.ready, false); // AUTO destination (SOW-134), no HASHNODE secrets in this env
   assert.equal(r.body.templates.prompt, 'New prompt: {title} {url}');
   assert.equal(r.body.templates.share, 'New {content-type} published by {member-discord-username}: "{title}" {url}'); // the SOW-088 default fills gaps
   assert.deepEqual(r.body.channelMap, [{ category: 'ai', channelId: '111222333444555666' }]);

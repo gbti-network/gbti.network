@@ -433,9 +433,16 @@ class GbtiChannelMapManager extends GbtiElement {
     const work = this._work?.[`${vis}:${cur}`] || {};
     // The `· custom` marker reflects a stored override IN THE ACTIVE visibility map.
     const custom = (k) => ((vis === 'stub' ? this._channelTemplatesStub?.[cur]?.[k] : this._channelTemplates?.[cur]?.[k]) ? ' · custom' : '');
-    const rows = TMPL_TYPES.map((t) => `<div class="tmpl">
+    // SOW-137: dev.to + Hashnode cross-post the FULL article body, so the per-type short templates
+    // (share/post/product/prompt) do NOT drive their post (the title is the item title; the body is
+    // byline + the whole body + CTA footer). Hide those rows for full-body channels and show a note, so the
+    // editor stops implying a one-line message that never posts. Only the byline/stub/CTA below apply.
+    const FULL_BODY = new Set(['devto', 'hashnode']);
+    const rows = (FULL_BODY.has(cur)
+      ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">${esc(cur === 'devto' ? 'dev.to' : 'Hashnode')} cross-posts the full article body, so there are no per-type message templates here. The byline is prepended and the CTA footer appended to that body; a members-only item posts the stub body instead of the body.</p>`
+      : TMPL_TYPES.map((t) => `<div class="tmpl">
         <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
-        <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || '')}" /></div>`).join('')
+        <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || '')}" /></div>`).join(''))
       + (cur === 'reddit'
         ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc('the description under the title' + custom('reddit-body'))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body">${esc(work['reddit-body'] || '')}</textarea></div>
