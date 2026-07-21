@@ -373,6 +373,9 @@ const year = new Date().getFullYear();
   .btn-primary:disabled { opacity: .55; cursor: default; }
   .btn-ghost { border: 1px solid var(--ci-line2); color: var(--ci-fg); font-weight: 600; border-radius: 7px; font-size: 15px; padding: 14px 24px; }
   .btn-ghost:hover { color: var(--ci-fg); border-color: var(--ci-green); }
+  /* The hero CTAs are anchors, and `.ci a` outranks `.btn-*` on specificity, so re-assert the button ink. */
+  .ci a.btn-primary, .ci a.btn-primary:hover { color: #fff; }
+  .ci a.btn-ghost, .ci a.btn-ghost:hover { color: var(--ci-fg); }
   .lift { transition: transform .15s, border-color .2s; }
   .lift:hover { transform: translateY(-3px); border-color: rgba(31,158,95,.45); }
   .card { background: var(--ci-panel); border: 1px solid var(--ci-line); border-radius: 7px; }
