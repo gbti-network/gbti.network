@@ -112,6 +112,17 @@ const hasMembersRows = narrowed.some((it) => it.stub);
     function apply() {
       const filtered = vis !== 'all' || !!tag;
       view.classList.toggle('feed-flat', filtered);
+      // Flatten the ladder by lifting the chunks' hidden attribute (and restoring it on clear).
+      // CSS cannot do this: Tailwind's preflight sets [hidden]{display:none !important} inside
+      // @layer base, and a layered !important outranks any unlayered author !important.
+      list!.querySelectorAll<HTMLElement>('.feed-chunk').forEach((c) => {
+        if (filtered) {
+          if (c.hidden) { c.setAttribute('data-rehide', '1'); c.hidden = false; }
+        } else if (c.hasAttribute('data-rehide')) {
+          c.hidden = true;
+          c.removeAttribute('data-rehide');
+        }
+      });
       let shown = 0;
       rows.forEach((r) => {
         let ok = true;
