@@ -1,4 +1,5 @@
 ---
+status: published
 visibility: public
 title: 'GitHub - JuliusBrussee/caveman: 🪨 why use many token when few token do trick —'
 shortDescription: >-
