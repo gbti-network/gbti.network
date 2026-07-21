@@ -20,8 +20,8 @@ const composeUrl = (channel, text) => {
   if (channel === 'linkedin') return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
   return null;
 };
-const CH_LABEL = { x: 'X', discord: 'Discord', 'discord-category': 'Discord', reddit: 'Reddit', devto: 'dev.to', linkedin: 'LinkedIn', mastodon: 'Mastodon', bluesky: 'Bluesky' };
-const CH_ICON = { x: 'x', discord: 'discord', 'discord-category': 'discord', reddit: 'reddit', devto: 'devto', linkedin: 'linkedin', mastodon: 'mastodon', bluesky: 'bluesky' };
+const CH_LABEL = { x: 'X', discord: 'Discord', 'discord-category': 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', linkedin: 'LinkedIn', mastodon: 'Mastodon', bluesky: 'Bluesky' };
+const CH_ICON = { x: 'x', discord: 'discord', 'discord-category': 'discord', reddit: 'reddit', devto: 'devto', hashnode: 'hashnode', linkedin: 'linkedin', mastodon: 'mastodon', bluesky: 'bluesky' };
 const SRC_LABEL = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
 const PAGE_SIZE = 12;
 const fmtDate = (ms) => { try { return new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch { return ''; } };

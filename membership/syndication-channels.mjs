@@ -14,6 +14,7 @@ export const CHANNEL_LIMITS = Object.freeze({
   bluesky: 300,
   reddit: 300, // the Reddit post-title cap (SOW-088: the template renders the title)
   devto: 128, // the dev.to title cap (the article body is not template-limited)
+  hashnode: 250, // SOW-134: the Hashnode title cap (the article body is not template-limited)
 });
 
 // The env var(s) each channel requires to be considered configured. Discord needs the bot token (the per-type
@@ -27,6 +28,7 @@ export const CHANNEL_SECRET_KEYS = Object.freeze({
   bluesky: ['BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD'],
   reddit: ['REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET', 'REDDIT_REFRESH_TOKEN', 'REDDIT_SUBREDDIT'], // SOW-088
   devto: ['DEVTO_API_KEY', 'DEVTO_ORG_ID'], // SOW-088: full-body crossposts to the GBTI dev.to organization
+  hashnode: ['HASHNODE_TOKEN', 'HASHNODE_PUBLICATION_ID'], // SOW-134: PAT + the gbti.hashnode.dev publication id
 });
 
 /** The character cap for a channel (a small safe default for an unknown name). */

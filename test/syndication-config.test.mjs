@@ -45,7 +45,7 @@ test('SOW-131: isChannelEnabled + enabledChannelNames are MATRIX-DERIVED (any ce
   assert.equal(isChannelEnabled(c, 'mastodon'), false);  // every cell off
   assert.equal(isChannelEnabled(c, 'bluesky'), true);    // popular counts as enabled
   // Only mastodon is off; every other MATRIX channel is default-enabled.
-  assert.deepEqual(enabledChannelNames(c).sort(), ['bluesky', 'devto', 'discord', 'discord-category', 'linkedin', 'reddit', 'x']);
+  assert.deepEqual(enabledChannelNames(c).sort(), ['bluesky', 'devto', 'discord', 'discord-category', 'hashnode', 'linkedin', 'reddit', 'x']);
   // The legacy `channels` flag no longer gates enablement: channels:false but matrix on -> enabled.
   const flagged = syndicationConfigFromParsed({ channels: { reddit: false }, auto_matrix: { post: { reddit: 'on' } } });
   assert.equal(isChannelEnabled(flagged, 'reddit'), true);
@@ -61,7 +61,7 @@ test('toSyndicationMirror returns the secret-free shape for KV', () => {
     // SOW-126: the content-engagement (`popular` engine) settings, mirrored like news_engagement.
     content_engagement: { enabled: false, threshold: 3, tier: 'signed-in', signals: { opens: true, favorites: false, upvotes: false, comments: false } },
     // SOW-088: reddit joined CHANNELS (default false) so the admin pipeline switch survives normalization.
-    channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false },
+    channels: { discord: true, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false },
     channel_templates: {},
     stub_templates: {},
     channel_templates_stub: {},
@@ -149,7 +149,7 @@ test('SOW-125: autoModeFor coerces an unknown cell to the type default; unknown 
 test('SOW-125/131: isAutoOn + autoChannelsForType are MATRIX-ONLY (no channels gate)', () => {
   const c = syndicationConfigFromParsed({
     auto_matrix: {
-      post: { discord: 'on', 'discord-category': 'off', bluesky: 'popular', mastodon: 'on', reddit: 'off', devto: 'off' },
+      post: { discord: 'on', 'discord-category': 'off', bluesky: 'popular', mastodon: 'on', reddit: 'off', devto: 'off', hashnode: 'off' },
       share: { discord: 'on' },
     },
   });
@@ -159,7 +159,7 @@ test('SOW-125/131: isAutoOn + autoChannelsForType are MATRIX-ONLY (no channels g
   assert.deepEqual(autoChannelsForType(c, 'post').sort(), ['discord', 'mastodon']);
   assert.deepEqual(autoChannelsForType(c, 'share'), ['discord']); // share on for discord only (overrides default off)
   // prompt: the default matrix is on for every AUTO channel, so all deliver.
-  assert.deepEqual(autoChannelsForType(c, 'prompt').sort(), ['bluesky', 'devto', 'discord', 'discord-category', 'mastodon', 'reddit']);
+  assert.deepEqual(autoChannelsForType(c, 'prompt').sort(), ['bluesky', 'devto', 'discord', 'discord-category', 'hashnode', 'mastodon', 'reddit']);
 });
 
 test('SOW-125: channelHoldMs uses the per-channel override, else the global hold', () => {
@@ -397,14 +397,14 @@ test('On-Manual: the vocabulary, coercion, delivery, and the queue set', async (
   assert.ok(AUTO_MODES.includes('on-manual'));
   // An auto-capability channel accepts on-manual and routes to the queue set, not the adapter set.
   const c = syndicationConfigFromParsed({ auto_matrix: {
-    post: { bluesky: 'on-manual', discord: 'on', mastodon: 'off', x: 'off', linkedin: 'off', 'discord-category': 'off', reddit: 'off', devto: 'off' },
+    post: { bluesky: 'on-manual', discord: 'on', mastodon: 'off', x: 'off', linkedin: 'off', 'discord-category': 'off', reddit: 'off', devto: 'off', hashnode: 'off' },
   } });
   assert.equal(autoModeFor(c, 'post', 'bluesky'), 'on-manual');
   assert.ok(isManualMode(c, 'post', 'bluesky'));
   assert.deepEqual(manualQueueChannelsForType(c, 'post'), ['bluesky']);
   assert.deepEqual(deliverChannelsForType(c, 'post').sort(), ['bluesky', 'discord']); // on + on-manual both deliver
   // The legacy `on` on a manual channel coerces and still delivers (as a queue task).
-  const legacy = syndicationConfigFromParsed({ auto_matrix: { post: { x: 'on', linkedin: 'off', discord: 'off', 'discord-category': 'off', reddit: 'off', devto: 'off', mastodon: 'off', bluesky: 'off' } } });
+  const legacy = syndicationConfigFromParsed({ auto_matrix: { post: { x: 'on', linkedin: 'off', discord: 'off', 'discord-category': 'off', reddit: 'off', devto: 'off', mastodon: 'off', bluesky: 'off', hashnode: 'off' } } });
   assert.equal(autoModeFor(legacy, 'post', 'x'), 'on-manual');
   assert.deepEqual(deliverChannelsForType(legacy, 'post'), ['x']);
   assert.deepEqual(manualQueueChannelsForType(legacy, 'post'), ['x']);

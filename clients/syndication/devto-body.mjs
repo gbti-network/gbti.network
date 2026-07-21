@@ -12,7 +12,7 @@
 import yaml from 'js-yaml';
 
 export const DEVTO_CDN_BASE = 'https://cdn.jsdelivr.net/gh/gbti-network/gbti.network@main';
-const MEMBERS_MARKER = '<!-- members-only -->';
+export const MEMBERS_MARKER = '<!-- members-only -->';
 const SUB = { post: 'posts', product: 'products', prompt: 'prompts' };
 
 /** The canonical repo path for a content item; null for shares (a share has no article body). */
@@ -36,21 +36,41 @@ export function normalizeDevtoTags(tags, categoryPath) {
   return out;
 }
 
-/**
- * Transform the raw canonical file into { ok, mode, body, tags } or { ok: false, reason } (fail-closed).
- * `intro` / `footer` / `readMore` arrive PRE-RENDERED (the caller renders the templates; no tokens here).
- * Mode comes from the FILE's visibility (the authority, never the queue item's copy):
- *   public  -> 'full': the whole public body (members marker cut) between the byline and the CTA footer;
- *   members -> 'stub' (owner-directed): the byline + the rendered devto-stub template +
- *              the CTA footer — the description and link only, NEVER any of the body.
- */
-export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', stubBody = '' } = {}) {
+/** Split frontmatter and FAIL CLOSED unless `status: published`. Shared by the dev.to + Hashnode pipelines.
+ *  Returns { ok:true, fm, body } (body = everything after the frontmatter) or { ok:false, reason }. */
+export function parsePublishedFile(rawFileText) {
   const text = String(rawFileText ?? '');
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
   if (!m) return { ok: false, reason: 'no frontmatter in the canonical file' };
   let fm;
   try { fm = yaml.load(m[1]) ?? {}; } catch { return { ok: false, reason: 'unparseable frontmatter' }; }
   if (String(fm.status ?? '') !== 'published') return { ok: false, reason: 'the item is not published' };
+  return { ok: true, fm, body: text.slice(m[0].length) };
+}
+
+/** Rewrite repo-relative image/link targets ("](./x)" and "](images/x)") to the jsDelivr CDN over the item's
+ *  folder. Shared by the dev.to + Hashnode pipelines (neither can resolve repo-relative paths). */
+export function rewriteRelativeImages(body, item, cdnBase = DEVTO_CDN_BASE) {
+  const path = contentPathFor(item);
+  const dir = path ? path.replace(/\/index\.md$/, '') : null;
+  if (!dir) return String(body);
+  return String(body)
+    .replace(/\]\(\.\/([^)\s]+)\)/g, `](${cdnBase}/${dir}/$1)`)
+    .replace(/\]\((images\/[^)\s]+)\)/g, `](${cdnBase}/${dir}/$1)`);
+}
+
+/**
+ * Transform the raw canonical file into { ok, mode, body, tags } or { ok: false, reason } (fail-closed).
+ * `intro` / `footer` / `stubBody` arrive PRE-RENDERED (the caller renders the templates; no tokens here).
+ * Mode comes from the FILE's visibility (the authority, never the queue item's copy):
+ *   public  -> 'full': the whole public body (members marker cut) between the byline and the CTA footer;
+ *   members -> 'stub' (owner-directed): the byline + the rendered devto-stub template +
+ *              the CTA footer — the description and link only, NEVER any of the body.
+ */
+export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', stubBody = '' } = {}) {
+  const parsed = parsePublishedFile(rawFileText);
+  if (!parsed.ok) return parsed;
+  const fm = parsed.fm;
 
   const tags = normalizeDevtoTags(fm.tags, item?.categoryPath);
   const lead = String(intro || '').trim();
@@ -64,19 +84,13 @@ export function prepareDevtoBody(rawFileText, item, { intro = '', footer = '', s
     return { ok: true, mode: 'stub', body: parts.join('\n\n'), tags };
   }
 
-  let body = text.slice(m[0].length);
+  let body = parsed.body;
   const marker = body.indexOf(MEMBERS_MARKER);
   if (marker !== -1) body = body.slice(0, marker); // the public part only, defense in depth
   body = body.trim();
   if (!body) return { ok: false, reason: 'the public body is empty' };
 
-  // Relative image/link targets -> the CDN over the item's folder ("](./images/x.webp)" and "](images/x)").
-  const path = contentPathFor(item);
-  const dir = path ? path.replace(/\/index\.md$/, '') : null;
-  if (dir) {
-    body = body.replace(/\]\(\.\/([^)\s]+)\)/g, `](${DEVTO_CDN_BASE}/${dir}/$1)`);
-    body = body.replace(/\]\((images\/[^)\s]+)\)/g, `](${DEVTO_CDN_BASE}/${dir}/$1)`);
-  }
+  body = rewriteRelativeImages(body, item); // relative targets -> the CDN over the item's folder
 
   body = [lead, body, tail].filter(Boolean).join('\n\n');
   return { ok: true, mode: 'full', body, tags };

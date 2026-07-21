@@ -60,6 +60,10 @@ const REGISTRY = [
   // SOW-123: the Mastodon syndication destination (free, a normal auto channel). Worker-only.
   { name: 'MASTODON_BASE_URL', targets: ['worker'], kind: 'var', optional: true, note: 'The brand instance origin, e.g. https://mastodon.social. NON-SECRET; may live in wrangler.toml [env.production.vars].' },
   { name: 'MASTODON_ACCESS_TOKEN', targets: ['worker'], optional: true, note: 'A Mastodon Development-app access token with write:statuses (instance Settings > Development).' },
+  // SOW-134: the Hashnode syndication destination (free, a normal auto channel). Worker-only. Full-body
+  // crossposts to the GBTI Hashnode publication with a canonical link home.
+  { name: 'HASHNODE_TOKEN', targets: ['worker'], optional: true, note: 'A Hashnode Personal Access Token (hashnode.com/settings/developer) with publish scope.' },
+  { name: 'HASHNODE_PUBLICATION_ID', targets: ['worker'], kind: 'var', optional: true, note: 'The gbti.hashnode.dev publication id (657cab5387df3eed7ba621d7). NON-SECRET var; may live in wrangler.toml [env.production.vars].' },
   // SOW-133: the Chrome Web Store Publish API credentials for the publish-extension Action (Actions secrets, not
   // the Worker). One-time Google Cloud OAuth setup in .data/ops/extension-ops/chrome-web-store.md. Optional: the
   // publish script skips cleanly when unset.

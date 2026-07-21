@@ -9,6 +9,7 @@ import { createMastodonAdapter } from '../clients/syndication/mastodon.mjs';
 import { createBlueskyAdapter } from '../clients/syndication/bluesky.mjs';
 import { createRedditAdapter } from '../clients/syndication/reddit.mjs'; // SOW-088: the Radle port
 import { createDevtoAdapter } from '../clients/syndication/devto.mjs'; // SOW-088: full-body crossposts to the GBTI org
+import { createHashnodeAdapter } from '../clients/syndication/hashnode.mjs'; // SOW-134: full-body crossposts to the GBTI Hashnode publication
 import { enabledChannelNames, channelCapability } from './syndication-config-core.mjs';
 import { secretsPresent } from './syndication-channels.mjs';
 
@@ -21,6 +22,7 @@ const FACTORIES = {
   bluesky: createBlueskyAdapter,
   reddit: createRedditAdapter, // SOW-088,
   devto: ({ env, fetchImpl, cfg }) => createDevtoAdapter({ env, fetchImpl, cfg }),
+  hashnode: ({ env, fetchImpl, cfg }) => createHashnodeAdapter({ env, fetchImpl, cfg }), // SOW-134
 };
 
 /** Build every adapter (keyed by name). Pure construction; no network until post() is called.

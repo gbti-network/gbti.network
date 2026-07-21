@@ -6236,12 +6236,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-syndication-tracker", GbtiSyndicationTracker);
 
   // membership/syndication-config-core.mjs
-  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto"]);
+  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto", "hashnode"]);
   var CHANNEL_CAPABILITY = Object.freeze({
     discord: "auto",
     "discord-category": "auto",
     reddit: "auto",
     devto: "auto",
+    hashnode: "auto",
+    // SOW-134: full-body crosspost to the GBTI Hashnode publication (gbti.hashnode.dev)
     mastodon: "auto",
     // SOW-123
     bluesky: "auto",
@@ -6285,7 +6287,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     signals: Object.freeze({ opens: true, favorites: false, upvotes: false, comments: false })
     // opens = the owner's chosen counter
   });
-  var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"]);
+  var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-footer", "hashnode-stub"]);
   var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
   var DEFAULT_REDDIT_BODY = "{short-description}";
   var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
@@ -6299,7 +6301,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     "reddit-body": DEFAULT_REDDIT_BODY,
     "reddit-comment": DEFAULT_REDDIT_COMMENT,
     "devto-intro": DEFAULT_DEVTO_INTRO,
-    "devto-footer": DEFAULT_DEVTO_FOOTER
+    "devto-footer": DEFAULT_DEVTO_FOOTER,
+    // SOW-134: Hashnode reuses the same byline + CTA footer as dev.to (both are full-body crossposts with a
+    // canonical link home); admins can diverge them per channel in the templates card.
+    "hashnode-intro": DEFAULT_DEVTO_INTRO,
+    "hashnode-footer": DEFAULT_DEVTO_FOOTER
   });
   var STUB_FORMAT = 'Members-only on the GBTI Network: "{title}" by {fullName}. {short-description} {url}';
   var DEFAULT_STUB_TEMPLATES = Object.freeze({
@@ -6308,7 +6314,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     product: STUB_FORMAT,
     prompt: STUB_FORMAT,
     "reddit-body": "{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}",
-    "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish."
+    "devto-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish.",
+    "hashnode-stub": "{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish."
+    // SOW-134
   });
   var DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it on gbti.network. {url}';
   var DISCORD_SHARE_STUB = '{member-discord-username} shared the following link: "{title}" {url}';
@@ -6329,6 +6337,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
     // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
     devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+    // SOW-134: Hashnode titles are article titles too, so it mirrors dev.to's clean title suffix.
+    hashnode: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
     x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
     linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
     // SOW-127
@@ -6355,7 +6365,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-111: engagement-triggered news auto-share
     content_engagement: DEFAULT_CONTENT_ENGAGEMENT,
     // SOW-126: engagement-triggered content auto-share (the `popular` engine)
-    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
+    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false }),
     // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
     // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
     // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
@@ -6469,7 +6479,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .chtile.soon { opacity:.55; cursor:default; }
   .br-discord { background:#5865F2; } .br-reddit { background:#FF4500; } .br-x { background:#000; } .br-devto { background:#0a0a0a; }
   .br-li { background:#0A66C2; } .br-masto { background:#6364FF; } .br-bsky { background:#1185FE; }
-  .br-substack { background:#FF6719; }
+  .br-substack { background:#FF6719; } .br-hashnode { background:#2962FF; }
 
   /* template rows + variable chips */
   .varnote { font-size:12px; color:var(--muted); margin:14px 0 6px; }
@@ -6550,6 +6560,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   <g id="cb-mastodon"><path fill="currentColor" d="M21 8.6c0-3.1-2-4-2-4A17 17 0 0 0 12.9 3.5c-2.8-.2-5.2 0-6.3.5 0 0-2.1.9-2.1 4.1 0 3.6-.2 8 3.4 9 1.7.4 3.1.5 4.2.4 1.9-.1 2.9-.7 2.9-.7l-.1-1.4s-1.3.4-2.8.4c-1.5-.1-3-.2-3.2-2 0-.2 0-.3-.1-.5 3.3.8 6.1.4 6.9.3 2.2-.3 4.1-1.6 4.3-2.9.4-2 .3-3.6.3-3.6zm-2.6 4.3h-1.6V9c0-.9-.4-1.3-1.1-1.3-.8 0-1.2.5-1.2 1.5v2.1h-1.6V9.2c0-1-.4-1.5-1.2-1.5-.7 0-1.1.4-1.1 1.3v3.9H7.4V8.8c0-.9.2-1.6.7-2.1.5-.5 1.1-.8 1.9-.8.9 0 1.6.4 2 1l.4.7.4-.7c.4-.6 1.1-1 2-1 .8 0 1.4.3 1.9.8.5.5.7 1.2.7 2.1v4.1z"/></g>
   <g id="cb-bsky"><path fill="currentColor" d="M12 10.8C10.9 8.6 8 5.2 5.3 4 3.4 3.1 2 3.6 2 5.8c0 2.2 1.2 7.2 1.9 8.2.7 1 2 .9 3.3.7-2.2.4-2.6 1.9-1.5 3.4C7.8 21 9.7 17.9 10.2 16.7c.3-.8.5-1.4.6-1.6.1.2.3.8.6 1.6.5 1.2 2.4 4.3 4.5 1.4 1.1-1.5.7-3-1.5-3.4 1.3.2 2.6.3 3.3-.7.7-1 1.9-6 1.9-8.2 0-2.2-1.4-2.7-3.3-1.8-2.7 1.2-5.6 4.6-6.7 6.8z"/></g>
   <g id="cb-substack"><path fill="currentColor" d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.539 24V10.812H1.46zM22.539 0H1.46v2.836h21.08V0z"/></g>
+  <g id="cb-hashnode"><path fill="currentColor" d="M22.351 8.019l-6.37-6.37a5.63 5.63 0 0 0-7.962 0l-6.37 6.37a5.63 5.63 0 0 0 0 7.962l6.37 6.37a5.63 5.63 0 0 0 7.962 0l6.37-6.37a5.63 5.63 0 0 0 0-7.962zM12 15.953a3.953 3.953 0 1 1 0-7.906 3.953 3.953 0 0 1 0 7.906z"/></g>
 </defs></svg>`;
   var capOf = (id) => id === "substack" ? "manual" : channelCapability(id);
   var isTileActive = (id) => capOf(id) === "auto" || id === "x";
@@ -6558,6 +6569,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "discord-category", name: "Discord", sub: "Category", icon: "cb-discord", cls: "br-discord" },
     { id: "reddit", name: "Reddit", sub: "Subreddit", icon: "cb-reddit", cls: "br-reddit" },
     { id: "devto", name: "dev.to", sub: "Org blog", icon: "cb-devto", cls: "br-devto" },
+    { id: "hashnode", name: "Hashnode", sub: "Dev blog", icon: "cb-hashnode", cls: "br-hashnode" },
+    // SOW-134
     { id: "x", name: "X", sub: "Manual", icon: "cb-x", cls: "br-x" },
     { id: "linkedin", name: "LinkedIn", sub: "Building", icon: "cb-linkedin", cls: "br-li" },
     { id: "mastodon", name: "Mastodon", sub: "", icon: "cb-mastodon", cls: "br-masto" },
@@ -6572,7 +6585,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   ].map((c) => ({ ...c, active: isTileActive(c.id) }));
   var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
-  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", mastodon: "Mastodon", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn" };
+  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", mastodon: "Mastodon", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn" };
   var AUTO_MODE_LABEL = { off: "Off", on: "On-Automatic", "on-manual": "On-Manual", popular: "Popular" };
   var TMPL_TYPES = [
     { key: "share", nm: "Share", df: "reshare line" },
@@ -6591,7 +6604,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   ];
   var SYND_TAB_IDS = SYND_TABS.map((t) => t.id);
   var SYND_SUB_KEY = "gbti-synd-sub";
-  var TMPL_KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub"];
+  var TMPL_KEYS = ["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-footer", "hashnode-stub"];
   var GbtiChannelMapManager = class extends GbtiElement {
     connectedCallback() {
       super.connectedCallback?.();
@@ -6772,7 +6785,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           ${vis === "stub" ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc("the members-only teaser middle" + custom("devto-stub"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-stub">${esc(work["devto-stub"] || "")}</textarea></div>` : ""}
           <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc("appended to every dev.to post" + custom("devto-footer"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work["devto-footer"] || "")}</textarea></div>` : "");
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work["devto-footer"] || "")}</textarea></div>` : "") + (cur === "hashnode" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc("prepended to the crosspost" + custom("hashnode-intro"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-intro">${esc(work["hashnode-intro"] || "")}</textarea></div>
+          ${vis === "stub" ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc("the members-only teaser middle" + custom("hashnode-stub"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-stub">${esc(work["hashnode-stub"] || "")}</textarea></div>` : ""}
+          <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc("appended to every Hashnode post" + custom("hashnode-footer"))}</div></div>
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="hashnode-footer">${esc(work["hashnode-footer"] || "")}</textarea></div>` : "");
       return `<section class="card" id="sec-templates" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg></span>
         <div><h2>Syndication templates</h2><p>Configured per destination channel. Blank falls back to the shared template, then the built-in.</p></div>
@@ -14471,7 +14489,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-syndicate-now.mjs
-  var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
+  var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
   var LOCAL_SENDS_KEY = "gbti-synd-local-sends";
   var LOCAL_SENDS_MAX_AGE = 7 * 24 * 60 * 60 * 1e3;
   var localSendsAll = () => {

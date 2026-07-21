@@ -88,7 +88,7 @@ test('resolveAdapterRun splits ready (secrets) vs skipped (enabled-but-no-secret
   const env = { DISCORD_BOT_TOKEN: 't' };
   const { ready, skipped } = resolveAdapterRun({ cfg, env });
   assert.deepEqual(ready.map((a) => a.name).sort(), ['discord', 'discord-category']);
-  assert.deepEqual(skipped.sort(), ['bluesky', 'devto', 'mastodon', 'reddit']);
+  assert.deepEqual(skipped.sort(), ['bluesky', 'devto', 'hashnode', 'mastodon', 'reddit']);
 });
 
 // SOW-087: the second Discord post, routed by the item's category via the KV-mirrored map.

@@ -44,6 +44,7 @@ syndication:
     bluesky: true
     reddit: false
     devto: false
+    hashnode: false
   manual_assist_channels:
     - x
     - linkedin
@@ -57,15 +58,18 @@ syndication:
       bluesky: 'off'
       x: 'off'
       linkedin: 'off'
+      hashnode: 'off'
     post:
       x: on-manual
       linkedin: on-manual
     product:
       x: on-manual
       linkedin: on-manual
+      hashnode: 'off'
     prompt:
       x: on-manual
       linkedin: on-manual
+      hashnode: 'off'
   channel_templates:
     devto:
       devto-footer: >-

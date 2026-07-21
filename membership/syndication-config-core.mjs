@@ -27,7 +27,7 @@ export const SYNDICATION_MIRROR_KEY = 'synd:config';
 // SOW-087: `discord-category` is the SECOND Discord post — the same item posted again to the channel mapped to
 // its category in house/content-channels.yml (the featured per-type `discord` post is unchanged). A first-class
 // channel so it gets its own on/off switch and its own per-channel idempotency in the queue.
-export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky', 'reddit', 'devto']);
+export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky', 'reddit', 'devto', 'hashnode']);
 // SOW-088: the channels a per-channel TEMPLATE override may target (the admin Channels tab tiles). Same set
 // as the pipeline switches; blank/missing overrides fall back to the shared `templates` map, then built-ins.
 export const TEMPLATE_CHANNELS = CHANNELS;
@@ -43,6 +43,7 @@ export const CHANNEL_CAPABILITY = Object.freeze({
   'discord-category': 'auto',
   reddit: 'auto',
   devto: 'auto',
+  hashnode: 'auto', // SOW-134: full-body crosspost to the GBTI Hashnode publication (gbti.hashnode.dev)
   mastodon: 'auto', // SOW-123
   bluesky: 'auto', // SOW-122
   x: 'manual', // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
@@ -102,7 +103,7 @@ export const DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
 // back to the no-ping full name when none resolves), {member-discord-username} (the mention, else the public
 // profile Discord handle, else the GitHub username; SOW-088), {content-type} (article/product/prompt/link),
 // {fullName}, {author}, {shareurl}/{url}, {title}, {category}. A type with no template gets its default.
-export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer', 'devto-stub']);
+export const TEMPLATE_TYPES = Object.freeze(['share', 'post', 'product', 'prompt', 'reddit-body', 'reddit-comment', 'devto-intro', 'devto-footer', 'devto-stub', 'hashnode-intro', 'hashnode-footer', 'hashnode-stub']);
 // SOW-088 (owner-directed): ONE default Discord format for every type.
 const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 // SOW-088: the Reddit BODY template = the DESCRIPTION under the title on the link post (the embed card
@@ -130,6 +131,10 @@ export const DEFAULT_TEMPLATES = Object.freeze({
   'reddit-comment': DEFAULT_REDDIT_COMMENT,
   'devto-intro': DEFAULT_DEVTO_INTRO,
   'devto-footer': DEFAULT_DEVTO_FOOTER,
+  // SOW-134: Hashnode reuses the same byline + CTA footer as dev.to (both are full-body crossposts with a
+  // canonical link home); admins can diverge them per channel in the templates card.
+  'hashnode-intro': DEFAULT_DEVTO_INTRO,
+  'hashnode-footer': DEFAULT_DEVTO_FOOTER,
 });
 
 // SOW-088 Proposal A (owner-approved 2026-07-11): every channel gets a distinct template SET for
@@ -144,6 +149,7 @@ export const DEFAULT_STUB_TEMPLATES = Object.freeze({
   prompt: STUB_FORMAT,
   'reddit-body': '{short-description}\n\nThis {content-type} is part of the GBTI Network members library. Membership unlocks the full piece: {url}',
   'devto-stub': '{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish.',
+  'hashnode-stub': '{short-description}\n\n**[Read the full {content-type} on gbti.network]({url}).** Membership unlocks it, and members earn from the work they publish.', // SOW-134
 });
 const DISCORD_STUB = '{member-discord-username} published a members-only {content-type}: "{title}". Members can read it on gbti.network. {url}';
 // A members SHARE is just an external link, so it posts the destination directly (no "read it on
@@ -171,6 +177,8 @@ export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   reddit: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
   devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+  // SOW-134: Hashnode titles are article titles too, so it mirrors dev.to's clean title suffix.
+  hashnode: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
   linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }), // SOW-127
   bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
@@ -189,7 +197,7 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   channel_templates_stub: Object.freeze({}), // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT, // SOW-111: engagement-triggered news auto-share
   content_engagement: DEFAULT_CONTENT_ENGAGEMENT, // SOW-126: engagement-triggered content auto-share (the `popular` engine)
-  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false }),
+  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false }),
   // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
   // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
   // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
