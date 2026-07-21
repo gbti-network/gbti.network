@@ -116,8 +116,10 @@ const year = new Date().getFullYear();
             <span class="applied" data-coupon-applied hidden>&#10003; applied</span>
           </div>
           <div class="signup-cta">
-            <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-callback="gbtiTurnstileOk" data-expired-callback="gbtiTurnstileReset" data-error-callback="gbtiTurnstileReset" data-theme="auto"></div>
+            <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-callback="gbtiTurnstileOk" data-expired-callback="gbtiTurnstileReset" data-error-callback="gbtiTurnstileFail" data-theme="auto"></div>
             <button id="signup-go" type="button" class="btn-primary btn-claim" disabled>Claim your free year</button>
+            <p class="ci-ts-note" data-ts-note hidden>The human verification did not load, so the button stays
+              disabled. If you use a content blocker, allow challenges.cloudflare.com and refresh this page.</p>
           </div>
           <p class="ci-fine">Sign in with GitHub. No card at any point during the free year, and nothing
             bills automatically.</p>
@@ -278,8 +280,22 @@ const year = new Date().getFullYear();
     }
 
     var btn = document.getElementById('signup-go');
-    window.gbtiTurnstileOk = function (token) { if (btn) { btn.disabled = false; btn.dataset.token = token; } };
+    var tsNote = document.querySelector('[data-ts-note]');
+    window.gbtiTurnstileOk = function (token) {
+      if (btn) { btn.disabled = false; btn.dataset.token = token; }
+      if (tsNote) tsNote.hidden = true;
+    };
     window.gbtiTurnstileReset = function () { if (btn) { btn.disabled = true; delete btn.dataset.token; } };
+    // Widget error (network failure, blocked frame): reset the button and explain why it is disabled.
+    window.gbtiTurnstileFail = function () {
+      window.gbtiTurnstileReset();
+      if (tsNote) tsNote.hidden = false;
+      return true;
+    };
+    // Blocked script: api.js never arrives, no callback ever fires, the button would stay silently dead.
+    setTimeout(function () {
+      if (!window.turnstile && tsNote && btn && btn.disabled) tsNote.hidden = false;
+    }, 8000);
     if (btn) btn.addEventListener('click', function () {
       var token = btn.dataset.token;
       if (!token) return;
@@ -363,6 +379,8 @@ const year = new Date().getFullYear();
 
   /* nav */
   .ci-nav { position: sticky; top: 0; z-index: 20; background: var(--ci-surface); border-bottom: 1px solid var(--ci-navline); }
+  /* the sticky nav is ~63px tall; without this every anchor jump lands the section under the bar */
+  .ci-sec, .ci-band, .ci-claim { scroll-margin-top: 78px; }
   .ci-nav-in { max-width: 1160px; margin: 0 auto; display: flex; align-items: center; gap: 28px; padding: 14px 40px; }
   .ci-brand { display: flex; align-items: center; gap: 11px; font-family: var(--f-display); font-weight: 700; font-size: 19px; color: var(--ci-fg) !important; letter-spacing: -0.01em; }
   .ci-links { display: flex; gap: 24px; font-size: 14px; margin-left: 8px; }
@@ -394,6 +412,7 @@ const year = new Date().getFullYear();
   .signup-cta .cf-turnstile { margin: 16px auto 0; min-height: 65px; }
   .btn-claim { width: 100%; text-align: center; font-size: 15.5px; padding: 15px; margin-top: 12px; box-shadow: 0 6px 20px rgba(31,158,95,.3); }
   .ci-fine { font-size: 11.5px; line-height: 1.5; color: var(--ci-mute); text-align: center; margin: 14px 0 0; }
+  .ci-ts-note { font-size: 12px; line-height: 1.5; color: var(--ci-amber); text-align: center; margin: 10px 0 0; }
 
   /* sections */
   .ci-sec { max-width: 1160px; margin: 0 auto; padding: 84px 40px 20px; }
