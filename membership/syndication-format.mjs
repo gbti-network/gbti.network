@@ -245,6 +245,27 @@ export function defaultSyndicationCover(source) {
   return `https://gbti.network/brand/feature/feature-${key}.png`;
 }
 
+// SOW (manual-syndicate history fix): the channels a syndication tracker record actually reached, for the
+// popup's "already syndicated" history. The manual-popup path stores results under `channels`
+// ({ 'discord:<id>':{...}, devto:{...} }); the DRAIN / queue path stores them under `perChannel`
+// (recordChannel). Reading only `channels` collapsed EVERY drained item to a legacy 'discord' fallback (the
+// "every push shows as Discord" bug). Read BOTH maps, count only a DELIVERED channel (status 'sent') or one
+// routed to the manual queue ('queued-manual'), never a skipped/off/failed one, and normalize
+// `discord:<id>` / `discord-forward:<id>` -> `discord`. Returns a Set of channel ids. Pure.
+export function recordDestinations(rec) {
+  const merged = { ...(rec?.perChannel || {}), ...(rec?.channels || {}) };
+  const out = new Set();
+  for (const [k, v] of Object.entries(merged)) {
+    const status = v && typeof v === 'object' ? v.status : v;
+    if (status && status !== 'sent' && status !== 'queued-manual') continue;
+    out.add(k.split(':')[0].replace(/^discord-forward$/, 'discord'));
+  }
+  if (!out.size && rec?.destination) out.add(rec.destination);
+  // Only a TRULY empty record (no channel map at all) falls back to Discord (a pre-channels-map legacy send).
+  if (!out.size && !Object.keys(merged).length) out.add('discord');
+  return out;
+}
+
 export function buildChannelText(item = {}, { limit = 280, includeUrl = true, sanitize = true } = {}) {
   const label = TYPE_LABEL[item.source] || item.source || 'update';
   const who = item.author ? `@${item.author}` : 'a member';

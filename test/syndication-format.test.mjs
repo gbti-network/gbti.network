@@ -1,7 +1,7 @@
 // SOW-058: the pure message formatter. Sanitization, truncation, URL preservation, no body leak.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, renderBodyTemplate, defaultSyndicationCover, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom, redditHandleFrom } from '../membership/syndication-format.mjs';
+import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, renderBodyTemplate, defaultSyndicationCover, recordDestinations, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom, redditHandleFrom } from '../membership/syndication-format.mjs';
 
 // SOW-138: the full-body crosspost body renderer. {body} is spliced VERBATIM (never sanitized/truncated); the
 // wrapper renders like a normal template.
@@ -32,6 +32,28 @@ test('defaultSyndicationCover maps each content type to its branded feature card
   assert.equal(defaultSyndicationCover('prompt'), 'https://gbti.network/brand/feature/feature-prompt.png');
   assert.equal(defaultSyndicationCover('share'), 'https://gbti.network/brand/feature/feature-share.png');
   assert.equal(defaultSyndicationCover('unknown'), 'https://gbti.network/brand/feature/feature-article.png', 'unknown falls back to the article banner');
+});
+
+// Manual-syndicate history fix: a drain record stores channels under `perChannel`; reading only `channels`
+// collapsed every drained item to a bogus 'discord' attribution.
+test('recordDestinations reads perChannel (drain) AND channels (popup), skips off/failed, discord only for legacy', () => {
+  const set = (rec) => [...recordDestinations(rec)].sort();
+  // DRAIN record: channels live under perChannel; a skipped/off/failed channel is NOT a destination.
+  assert.deepEqual(set({ perChannel: {
+    'discord:123': { status: 'sent' },
+    devto: { status: 'sent' },
+    linkedin: { status: 'queued-manual' },
+    x: { status: 'skipped', reason: 'auto-off' },
+    bluesky: { status: 'failed' },
+  } }), ['devto', 'discord', 'linkedin']);
+  // MANUAL-popup record: channels under `channels`; a discord-forward normalizes to discord.
+  assert.deepEqual(set({ channels: { linkedin: { status: 'sent' } } }), ['linkedin']);
+  assert.deepEqual(set({ channels: { 'discord:1': { status: 'sent' }, 'discord-forward:2': { status: 'sent' } } }), ['discord']);
+  // An item that only SKIPPED everything reached nothing (no false discord).
+  assert.deepEqual(set({ perChannel: { x: { status: 'skipped' }, linkedin: { status: 'skipped' } } }), []);
+  // A truly-legacy record with no channel map at all keeps the Discord fallback; `destination` wins first.
+  assert.deepEqual(set({}), ['discord']);
+  assert.deepEqual(set({ destination: 'reddit' }), ['reddit']);
 });
 
 test('sanitizeMentions neutralizes @mentions and Discord mass-ping tokens', () => {

@@ -14509,6 +14509,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const rendered = renderTemplate(withSentinel, item, { limit: 2e4 });
     return rendered.split(`${SENTINEL}`).join(body);
   }
+  function recordDestinations(rec) {
+    const merged = { ...rec?.perChannel || {}, ...rec?.channels || {} };
+    const out = /* @__PURE__ */ new Set();
+    for (const [k, v] of Object.entries(merged)) {
+      const status2 = v && typeof v === "object" ? v.status : v;
+      if (status2 && status2 !== "sent" && status2 !== "queued-manual") continue;
+      out.add(k.split(":")[0].replace(/^discord-forward$/, "discord"));
+    }
+    if (!out.size && rec?.destination) out.add(rec.destination);
+    if (!out.size && !Object.keys(merged).length) out.add("discord");
+    return out;
+  }
 
   // membership/news-channels.mjs
   var lc7 = (s) => String(s ?? "").trim().toLowerCase();
@@ -14686,8 +14698,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const covered = (s) => (this._prior || []).some((rec) => {
         const at = rec.sentAt || rec.enqueuedAt || 0;
-        const dests = new Set(Object.keys(rec.channels || {}).map((k) => k.split(":")[0].replace(/^discord-forward$/, "discord")));
-        return dests.has(s.dest) && at >= (s.at || 0) - 12e4;
+        return recordDestinations(rec).has(s.dest) && at >= (s.at || 0) - 12e4;
       });
       const still = [];
       for (const s of mine) {
@@ -14713,9 +14724,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       for (const rec of this._prior || []) {
         const at = rec.sentAt || rec.enqueuedAt || 0;
         const manual = rec.trigger === "manual" || !!rec.manualBy;
-        const dests = new Set(Object.keys(rec.channels || {}).map((k) => k.split(":")[0].replace(/^discord-forward$/, "discord")));
-        if (!dests.size && rec.destination) dests.add(rec.destination);
-        if (!dests.size) dests.add("discord");
+        const dests = recordDestinations(rec);
         for (const d of dests) {
           const cur = map[d] || { count: 0, last: 0, manual: false };
           map[d] = { count: cur.count + 1, last: Math.max(cur.last, at), manual: cur.manual || manual };

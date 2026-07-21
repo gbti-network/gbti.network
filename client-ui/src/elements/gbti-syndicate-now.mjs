@@ -10,7 +10,7 @@
 // data-gbti-author, data-gbti-title, data-gbti-url (absolute), data-gbti-category (RAW top-level taxonomy
 // key or a share's flat topic), data-gbti-image (optional).
 import { GbtiElement, define, esc } from '../base.mjs';
-import { renderTemplate, renderBodyTemplate } from '../../../membership/syndication-format.mjs';
+import { renderTemplate, renderBodyTemplate, recordDestinations } from '../../../membership/syndication-format.mjs';
 import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
 
 const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', mastodon: 'Mastodon' };
@@ -133,8 +133,7 @@ class GbtiSyndicateNow extends GbtiElement {
     if (!mine.length) { localSendsSave(all); return; }
     const covered = (s) => (this._prior || []).some((rec) => {
       const at = rec.sentAt || rec.enqueuedAt || 0;
-      const dests = new Set(Object.keys(rec.channels || {}).map((k) => k.split(':')[0].replace(/^discord-forward$/, 'discord')));
-      return dests.has(s.dest) && at >= (s.at || 0) - 120000;
+      return recordDestinations(rec).has(s.dest) && at >= (s.at || 0) - 120000;
     });
     const still = [];
     for (const s of mine) {
@@ -166,9 +165,7 @@ class GbtiSyndicateNow extends GbtiElement {
     for (const rec of this._prior || []) {
       const at = rec.sentAt || rec.enqueuedAt || 0;
       const manual = rec.trigger === 'manual' || !!rec.manualBy;
-      const dests = new Set(Object.keys(rec.channels || {}).map((k) => k.split(':')[0].replace(/^discord-forward$/, 'discord')));
-      if (!dests.size && rec.destination) dests.add(rec.destination);
-      if (!dests.size) dests.add('discord'); // legacy records predate the channels map; the pipeline was Discord-only
+      const dests = recordDestinations(rec);
       for (const d of dests) {
         const cur = map[d] || { count: 0, last: 0, manual: false };
         map[d] = { count: cur.count + 1, last: Math.max(cur.last, at), manual: cur.manual || manual };
