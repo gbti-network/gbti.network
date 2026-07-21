@@ -11616,6 +11616,44 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return base ? base + handle : value;
   }
 
+  // client-ui/src/profile-fields.mjs
+  var AVATAR_HOSTS = /(^|\.)githubusercontent\.com$|^github\.com$|(^|\.)gravatar\.com$/i;
+  function isSanctionedAvatar(url) {
+    const v = String(url == null ? "" : url).trim();
+    if (!v) return true;
+    let u;
+    try {
+      u = new URL(v);
+    } catch {
+      return false;
+    }
+    return u.protocol === "https:" && AVATAR_HOSTS.test(u.hostname);
+  }
+  var githubAvatarUrl = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
+  function mergeStagedLinks(links, staged, allowed = null) {
+    const out = { ...links || {} };
+    if (!staged || typeof staged !== "object" || Array.isArray(staged)) return out;
+    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+    for (const [k, v] of Object.entries(staged)) {
+      if (ok && !ok.has(k)) continue;
+      if (typeof v !== "string" || !v.trim()) continue;
+      if (typeof out[k] === "string" && out[k].trim() !== "") continue;
+      out[k] = v.trim();
+    }
+    return out;
+  }
+  function recallProfileSocials(links, allowed = null) {
+    const out = {};
+    if (!links || typeof links !== "object" || Array.isArray(links)) return out;
+    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+    for (const [k, v] of Object.entries(links)) {
+      if (ok && !ok.has(k)) continue;
+      if (typeof v !== "string" || !v.trim()) continue;
+      out[k] = v.trim();
+    }
+    return out;
+  }
+
   // client-ui/src/elements/gbti-topic-picker.mjs
   var SITE7 = "https://gbti.network";
   var MAX_TOPICS = 200;
@@ -12070,6 +12108,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._socialDraft = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
       } catch {
         this._socialDraft = {};
+      }
+      try {
+        await Promise.race([
+          (async () => {
+            const list = await this.client?.listContent?.({ type: "profile" });
+            const path = (list?.items || [])[0]?.path;
+            if (!path) return;
+            const full = await this.client?.getContentItem?.({ path });
+            this._socialDraft = { ...recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), ...this._socialDraft };
+          })().catch(() => {
+          }),
+          new Promise((r) => setTimeout(r, 6e3))
+        ]);
+      } catch {
       }
       this._loaded = true;
       this.render();
@@ -17366,33 +17418,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     overlay.querySelector(".expiry-later")?.addEventListener("click", dismiss);
     overlay.querySelector(".expiry-cta")?.addEventListener("click", dismiss);
     document.body.appendChild(overlay);
-  }
-
-  // client-ui/src/profile-fields.mjs
-  var AVATAR_HOSTS = /(^|\.)githubusercontent\.com$|^github\.com$|(^|\.)gravatar\.com$/i;
-  function isSanctionedAvatar(url) {
-    const v = String(url == null ? "" : url).trim();
-    if (!v) return true;
-    let u;
-    try {
-      u = new URL(v);
-    } catch {
-      return false;
-    }
-    return u.protocol === "https:" && AVATAR_HOSTS.test(u.hostname);
-  }
-  var githubAvatarUrl = (login) => login ? `https://github.com/${encodeURIComponent(login)}.png?size=128` : "";
-  function mergeStagedLinks(links, staged, allowed = null) {
-    const out = { ...links || {} };
-    if (!staged || typeof staged !== "object" || Array.isArray(staged)) return out;
-    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
-    for (const [k, v] of Object.entries(staged)) {
-      if (ok && !ok.has(k)) continue;
-      if (typeof v !== "string" || !v.trim()) continue;
-      if (typeof out[k] === "string" && out[k].trim() !== "") continue;
-      out[k] = v.trim();
-    }
-    return out;
   }
 
   // client-ui/src/elements/gbti-profile-editor.mjs

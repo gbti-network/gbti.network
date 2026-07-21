@@ -4351,6 +4351,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   // client-ui/src/discord.mjs
   var DISCORD_LINK_URL = "https://signup.gbti.network/discord/link/start";
 
+  // client-ui/src/profile-fields.mjs
+  function recallProfileSocials(links, allowed = null) {
+    const out = {};
+    if (!links || typeof links !== "object" || Array.isArray(links)) return out;
+    const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+    for (const [k, v] of Object.entries(links)) {
+      if (ok && !ok.has(k)) continue;
+      if (typeof v !== "string" || !v.trim()) continue;
+      out[k] = v.trim();
+    }
+    return out;
+  }
+
   // client-ui/src/elements/gbti-topic-picker.mjs
   var SITE3 = "https://gbti.network";
   var MAX_TOPICS = 200;
@@ -4805,6 +4818,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         this._socialDraft = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
       } catch {
         this._socialDraft = {};
+      }
+      try {
+        await Promise.race([
+          (async () => {
+            const list = await this.client?.listContent?.({ type: "profile" });
+            const path = (list?.items || [])[0]?.path;
+            if (!path) return;
+            const full = await this.client?.getContentItem?.({ path });
+            this._socialDraft = { ...recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), ...this._socialDraft };
+          })().catch(() => {
+          }),
+          new Promise((r) => setTimeout(r, 6e3))
+        ]);
+      } catch {
       }
       this._loaded = true;
       this.render();

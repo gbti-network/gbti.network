@@ -31,3 +31,19 @@ export function mergeStagedLinks(links, staged, allowed = null) {
   }
   return out;
 }
+
+/** SOW-129 QA: the INVERSE of mergeStagedLinks. Extract a member's SAVED social handles from their profile
+ *  `links` object into the welcome socials step's { key: value } draft shape, filtered to `allowed` (pass
+ *  SOCIAL_KEYS), dropping empty/non-string values. Used to RECALL saved socials into the welcome so a reset
+ *  does not clear them. Pure. */
+export function recallProfileSocials(links, allowed = null) {
+  const out = {};
+  if (!links || typeof links !== 'object' || Array.isArray(links)) return out;
+  const ok = Array.isArray(allowed) ? new Set(allowed) : null;
+  for (const [k, v] of Object.entries(links)) {
+    if (ok && !ok.has(k)) continue;
+    if (typeof v !== 'string' || !v.trim()) continue;
+    out[k] = v.trim();
+  }
+  return out;
+}

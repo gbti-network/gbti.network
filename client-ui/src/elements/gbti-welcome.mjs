@@ -11,6 +11,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { phaseLabel, shuffle, excludeSelf, paginate } from '../welcome-core.mjs';
 import { DISCORD_LINK_URL } from '../discord.mjs';
 import { socialIcon, SOCIAL_KEYS, SOCIAL_LABELS } from '../social-icons.mjs';
+import { recallProfileSocials } from '../profile-fields.mjs'; // SOW-129 QA: recall saved profile socials into the welcome step
 import './gbti-topic-picker.mjs'; // SOW-054: the followed-topics step control
 
 const SITE = 'https://gbti.network';
@@ -347,6 +348,22 @@ class GbtiWelcome extends GbtiElement {
       const raw = JSON.parse(localStorage.getItem(SOCIALS_STAGE_KEY) || 'null');
       this._socialDraft = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
     } catch { this._socialDraft = {}; }
+    // SOW-129 QA (2026-07-20): RECALL the member's SAVED profile socials so a welcome RESET does not clear them.
+    // The staged draft (an in-flight edit) always wins; the saved profile fills the rest. Time-boxed + fail-open:
+    // a brand-new member with no profile, a slow read, or any error leaves the fields blank and the welcome
+    // proceeds. The read matches the profile editor's path (listContent -> getContentItem, frontmatter.links).
+    try {
+      await Promise.race([
+        (async () => {
+          const list = await this.client?.listContent?.({ type: 'profile' });
+          const path = (list?.items || [])[0]?.path;
+          if (!path) return;
+          const full = await this.client?.getContentItem?.({ path });
+          this._socialDraft = { ...recallProfileSocials(full?.frontmatter?.links, SOCIAL_KEYS), ...this._socialDraft };
+        })().catch(() => {}),
+        new Promise((r) => setTimeout(r, 6000)),
+      ]);
+    } catch { /* keep the staged draft (possibly empty) */ }
     this._loaded = true;
     this.render();
   }

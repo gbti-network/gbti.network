@@ -2,7 +2,7 @@
 // only come from a GitHub avatar or a Gravatar (https), never an arbitrary external image host. Pure, DOM-free.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isSanctionedAvatar, githubAvatarUrl, mergeStagedLinks } from '../client-ui/src/profile-fields.mjs';
+import { isSanctionedAvatar, githubAvatarUrl, mergeStagedLinks, recallProfileSocials } from '../client-ui/src/profile-fields.mjs';
 
 test('isSanctionedAvatar allows empty (the GitHub default)', () => {
   assert.equal(isSanctionedAvatar(''), true);
@@ -60,4 +60,29 @@ test('mergeStagedLinks: tolerates junk staged payloads and a missing allowlist',
   assert.deepEqual(mergeStagedLinks({ x: 'a' }, null), { x: 'a' });
   assert.deepEqual(mergeStagedLinks({ x: 'a' }, ['not', 'an', 'object']), { x: 'a' });
   assert.deepEqual(mergeStagedLinks(null, { x: '@me' }), { x: '@me' });
+});
+
+test('recallProfileSocials: extracts saved socials, filters the allowlist, drops empties/junk', () => {
+  const links = { x: 'https://x.com/me', mastodon: '  https://mastodon.social/@me  ', bluesky: '', github: 'https://github.com/me', avatar: 'not-a-social', tiktok: 42 };
+  const recalled = recallProfileSocials(links, ['x', 'mastodon', 'bluesky', 'github', 'tiktok']);
+  assert.equal(recalled.x, 'https://x.com/me');
+  assert.equal(recalled.mastodon, 'https://mastodon.social/@me'); // trimmed
+  assert.equal(recalled.github, 'https://github.com/me');
+  assert.ok(!('bluesky' in recalled)); // empty dropped
+  assert.ok(!('avatar' in recalled)); // not in the allowlist
+  assert.ok(!('tiktok' in recalled)); // non-string dropped
+});
+
+test('recallProfileSocials: tolerates junk and a missing allowlist', () => {
+  assert.deepEqual(recallProfileSocials(null), {});
+  assert.deepEqual(recallProfileSocials([1, 2, 3]), {});
+  assert.deepEqual(recallProfileSocials({ x: 'a', y: 'b' }), { x: 'a', y: 'b' }); // no allowlist = keep all non-empty
+});
+
+test('recallProfileSocials + a staged draft: the staged (in-flight) value wins', () => {
+  // The welcome merges as { ...recalled, ...staged }, so a mid-flow edit is never clobbered, and on RESET
+  // (an empty staged draft) the saved profile fills every field.
+  const recalled = recallProfileSocials({ x: 'https://x.com/saved', mastodon: 'https://m.social/@saved' }, ['x', 'mastodon']);
+  assert.deepEqual({ ...recalled, ...{ x: '@editing' } }, { x: '@editing', mastodon: 'https://m.social/@saved' });
+  assert.deepEqual({ ...recalled, ...{} }, { x: 'https://x.com/saved', mastodon: 'https://m.social/@saved' }); // reset -> recalled
 });
