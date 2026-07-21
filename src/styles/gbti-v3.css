@@ -995,3 +995,12 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
    GitHub-graph scale across the wrap. */
 .heat-wide { grid-template-columns: repeat(36, 1fr); }
 #activity .act-stats { justify-content: center; gap: 56px; }
+
+/* sow-136 QA: the nine-offer join section at the homepage bottom (codeable-invite card style). Each
+   card carries a committed Pexels photo cropped to 5:2 above the copy. */
+.join-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; }
+.join-offer { padding: 0; overflow: hidden; }
+.join-offer img { display: block; width: 100%; aspect-ratio: 5 / 2; object-fit: cover; }
+.join-offer .jo-bod { padding: 20px 22px 24px; }
+@media (max-width: 960px) { .join-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 620px) { .join-grid { grid-template-columns: 1fr; } }
