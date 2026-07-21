@@ -45,9 +45,11 @@ syndication:
     reddit: false
     devto: false
     hashnode: false
+    dailydev: false
   manual_assist_channels:
     - x
     - linkedin
+    - dailydev
   auto_matrix:
     share:
       discord: 'off'
@@ -59,17 +61,21 @@ syndication:
       x: 'off'
       linkedin: 'off'
       hashnode: 'off'
+      dailydev: 'off'
     post:
       x: on-manual
       linkedin: on-manual
+      dailydev: on-manual
     product:
       x: on-manual
       linkedin: on-manual
       hashnode: 'off'
+      dailydev: 'off'
     prompt:
       x: on-manual
       linkedin: on-manual
       hashnode: 'off'
+      dailydev: 'off'
   channel_templates:
     devto:
       devto-footer: >-

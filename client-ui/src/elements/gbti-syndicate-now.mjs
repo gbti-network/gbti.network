@@ -13,7 +13,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { renderTemplate } from '../../../membership/syndication-format.mjs';
 import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
 
-const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', mastodon: 'Mastodon' };
+const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', mastodon: 'Mastodon' };
 
 // Cloudflare KV's list() is eventually consistent, so a JUST-posted record can be missing from the tracker
 // read for a minute or more (hit live 2026-07-20: a fresh Reddit post showed no badge on reopen while the

@@ -27,7 +27,7 @@ export const SYNDICATION_MIRROR_KEY = 'synd:config';
 // SOW-087: `discord-category` is the SECOND Discord post — the same item posted again to the channel mapped to
 // its category in house/content-channels.yml (the featured per-type `discord` post is unchanged). A first-class
 // channel so it gets its own on/off switch and its own per-channel idempotency in the queue.
-export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky', 'reddit', 'devto', 'hashnode']);
+export const CHANNELS = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky', 'reddit', 'devto', 'hashnode', 'dailydev']);
 // SOW-088: the channels a per-channel TEMPLATE override may target (the admin Channels tab tiles). Same set
 // as the pipeline switches; blank/missing overrides fall back to the shared `templates` map, then built-ins.
 export const TEMPLATE_CHANNELS = CHANNELS;
@@ -47,6 +47,7 @@ export const CHANNEL_CAPABILITY = Object.freeze({
   mastodon: 'auto', // SOW-123
   bluesky: 'auto', // SOW-122
   x: 'manual', // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
+  dailydev: 'manual', // SOW-135: manual-assist to the GBTI daily.dev squad (no public squad-post API)
   linkedin: 'manual', // SOW-127: manual-assist until Community Management API access is granted (business
   // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
   // superadmin posts it by hand through the free LinkedIn composer. No LinkedIn API token is used.
@@ -171,6 +172,9 @@ const BLUESKY_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Jo
 // SOW-123: Mastodon includes {url} (Mastodon auto-links + builds a preview card from it).
 const MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
 const MASTODON_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
+// SOW-135: daily.dev is a link-share squad, so the members stub is a tight hook plus the link (mirrors X).
+const DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+const DAILYDEV_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
 export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
   'discord-category': Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
@@ -181,6 +185,7 @@ export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   hashnode: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
   linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }), // SOW-127
+  dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }), // SOW-135
   bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
   mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB }),
 });
@@ -197,7 +202,7 @@ export const DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   channel_templates_stub: Object.freeze({}), // SOW-088 Proposal A: per-channel stub overrides
   news_engagement: DEFAULT_NEWS_ENGAGEMENT, // SOW-111: engagement-triggered news auto-share
   content_engagement: DEFAULT_CONTENT_ENGAGEMENT, // SOW-126: engagement-triggered content auto-share (the `popular` engine)
-  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false }),
+  channels: Object.freeze({ discord: false, 'discord-category': false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
   // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
   // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
   // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in

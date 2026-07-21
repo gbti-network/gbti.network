@@ -103,7 +103,7 @@ const CSS = `
   .chtile.soon { opacity:.55; cursor:default; }
   .br-discord { background:#5865F2; } .br-reddit { background:#FF4500; } .br-x { background:#000; } .br-devto { background:#0a0a0a; }
   .br-li { background:#0A66C2; } .br-masto { background:#6364FF; } .br-bsky { background:#1185FE; }
-  .br-substack { background:#FF6719; } .br-hashnode { background:#2962FF; }
+  .br-substack { background:#FF6719; } .br-hashnode { background:#2962FF; } .br-dailydev { background:#CE3DF3; }
 
   /* template rows + variable chips */
   .varnote { font-size:12px; color:var(--muted); margin:14px 0 6px; }
@@ -186,6 +186,7 @@ const ICONS = `<svg width="0" height="0" style="position:absolute" aria-hidden="
   <g id="cb-bsky"><path fill="currentColor" d="M12 10.8C10.9 8.6 8 5.2 5.3 4 3.4 3.1 2 3.6 2 5.8c0 2.2 1.2 7.2 1.9 8.2.7 1 2 .9 3.3.7-2.2.4-2.6 1.9-1.5 3.4C7.8 21 9.7 17.9 10.2 16.7c.3-.8.5-1.4.6-1.6.1.2.3.8.6 1.6.5 1.2 2.4 4.3 4.5 1.4 1.1-1.5.7-3-1.5-3.4 1.3.2 2.6.3 3.3-.7.7-1 1.9-6 1.9-8.2 0-2.2-1.4-2.7-3.3-1.8-2.7 1.2-5.6 4.6-6.7 6.8z"/></g>
   <g id="cb-substack"><path fill="currentColor" d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.539 24V10.812H1.46zM22.539 0H1.46v2.836h21.08V0z"/></g>
   <g id="cb-hashnode"><path fill="currentColor" d="M22.351 8.019l-6.37-6.37a5.63 5.63 0 0 0-7.962 0l-6.37 6.37a5.63 5.63 0 0 0 0 7.962l6.37 6.37a5.63 5.63 0 0 0 7.962 0l6.37-6.37a5.63 5.63 0 0 0 0-7.962zM12 15.953a3.953 3.953 0 1 1 0-7.906 3.953 3.953 0 0 1 0 7.906z"/></g>
+  <g id="cb-dailydev"><path fill="currentColor" d="M18.29 5.706a1.405 1.405 0 0 0-1.987 0L4.716 17.296l1.324-2.65-2.65-2.649 3.312-3.311 2.65 2.65 1.986-1.988-3.642-3.642a1.405 1.405 0 0 0-1.987 0L.411 11.004a1.404 1.404 0 0 0 0 1.987l4.305 4.304.993.993a1.405 1.405 0 0 0 1.987 0L19.285 6.7l-.993-.994Zm-.332 3.647 2.65 2.65-4.306 4.305a1.404 1.404 0 1 0 1.986 1.986l5.299-5.298a1.404 1.404 0 0 0 0-1.987l-4.305-4.304-1.324 2.648Z"/></g>
 </defs></svg>`;
 
 // The template-editing destinations (SOW-088). SOW-125: `active` (editable) + the sub-label are DERIVED from
@@ -197,13 +198,14 @@ const ICONS = `<svg width="0" height="0" style="position:absolute" aria-hidden="
 const capOf = (id) => (id === 'substack' ? 'manual' : channelCapability(id));
 // A tile is editable when its adapter posts automatically (`auto`) OR it is X (manual-assist, but its template
 // still renders the Social Queue text). Substack (manual, no adapter/prefill) and LinkedIn (building) stay off.
-const isTileActive = (id) => capOf(id) === 'auto' || id === 'x';
+const isTileActive = (id) => capOf(id) === 'auto' || id === 'x' || id === 'dailydev'; // SOW-135: daily.dev is manual-assist but its template is editable
 const TILE_CHANNELS = [
   { id: 'discord', name: 'Discord', sub: 'Featured', icon: 'cb-discord', cls: 'br-discord' },
   { id: 'discord-category', name: 'Discord', sub: 'Category', icon: 'cb-discord', cls: 'br-discord' },
   { id: 'reddit', name: 'Reddit', sub: 'Subreddit', icon: 'cb-reddit', cls: 'br-reddit' },
   { id: 'devto', name: 'dev.to', sub: 'Org blog', icon: 'cb-devto', cls: 'br-devto' },
   { id: 'hashnode', name: 'Hashnode', sub: 'Dev blog', icon: 'cb-hashnode', cls: 'br-hashnode' }, // SOW-134
+  { id: 'dailydev', name: 'daily.dev', sub: 'Manual', icon: 'cb-dailydev', cls: 'br-dailydev' }, // SOW-135
   { id: 'x', name: 'X', sub: 'Manual', icon: 'cb-x', cls: 'br-x' },
   { id: 'linkedin', name: 'LinkedIn', sub: 'Building', icon: 'cb-linkedin', cls: 'br-li' },
   { id: 'mastodon', name: 'Mastodon', sub: '', icon: 'cb-mastodon', cls: 'br-masto' },
@@ -215,7 +217,7 @@ const TILE_CHANNELS = [
 // SOW-125: labels for the auto-share matrix (content types down the rows, deliverable channels across the top)
 // and the per-channel delay inputs.
 const MATRIX_TYPE_LABEL = { share: 'Share', post: 'Article', product: 'Product', prompt: 'Prompt' };
-const MATRIX_CHAN_LABEL = { discord: 'Discord', 'discord-category': 'Discord cat', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', mastodon: 'Mastodon', bluesky: 'Bluesky', x: 'X', linkedin: 'LinkedIn' };
+const MATRIX_CHAN_LABEL = { discord: 'Discord', 'discord-category': 'Discord cat', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', mastodon: 'Mastodon', bluesky: 'Bluesky', x: 'X', linkedin: 'LinkedIn' };
 const AUTO_MODE_LABEL = { off: 'Off', on: 'On-Automatic', 'on-manual': 'On-Manual', popular: 'Popular' };
 const TMPL_TYPES = [
   { key: 'share', nm: 'Share', df: 'reshare line' },

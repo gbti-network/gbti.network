@@ -15,6 +15,7 @@ export const CHANNEL_LIMITS = Object.freeze({
   reddit: 300, // the Reddit post-title cap (SOW-088: the template renders the title)
   devto: 128, // the dev.to title cap (the article body is not template-limited)
   hashnode: 250, // SOW-134: the Hashnode title cap (the article body is not template-limited)
+  dailydev: 300, // SOW-135: the daily.dev manual-assist note cap (a link + a short line; no secret keys, it is manual)
 });
 
 // The env var(s) each channel requires to be considered configured. Discord needs the bot token (the per-type

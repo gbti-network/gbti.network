@@ -20985,7 +20985,7 @@ function removeFlagTerm(doc, { list, term } = {}, ctx = {}) {
 }
 
 // membership/syndication-config-core.mjs
-var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto", "hashnode"]);
+var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto", "hashnode", "dailydev"]);
 var TEMPLATE_CHANNELS = CHANNELS;
 var CHANNEL_CAPABILITY = Object.freeze({
   discord: "auto",
@@ -21000,6 +21000,8 @@ var CHANNEL_CAPABILITY = Object.freeze({
   // SOW-122
   x: "manual",
   // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
+  dailydev: "manual",
+  // SOW-135: manual-assist to the GBTI daily.dev squad (no public squad-post API)
   linkedin: "manual"
   // SOW-127: manual-assist until Community Management API access is granted (business
   // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
@@ -21081,6 +21083,8 @@ var BLUESKY_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. M
 var BLUESKY_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it.';
 var MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
 var MASTODON_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
+var DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+var DAILYDEV_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
 var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
   "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
@@ -21092,6 +21096,8 @@ var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
   linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
   // SOW-127
+  dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
+  // SOW-135
   bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
   mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB })
 });
@@ -21115,7 +21121,7 @@ var DEFAULT_SYNDICATION_CONFIG = Object.freeze({
   // SOW-111: engagement-triggered news auto-share
   content_engagement: DEFAULT_CONTENT_ENGAGEMENT,
   // SOW-126: engagement-triggered content auto-share (the `popular` engine)
-  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false }),
+  channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
   // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
   // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
   // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
@@ -21444,7 +21450,7 @@ function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {}) {
   d.syndication[sharedField] = nextTemplates;
   return { next: d, changed: true, audit: auditEntry6(ctx, t, { stub: isStub || void 0, template: value || null }) };
 }
-var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto", "hashnode"]);
+var SYNDICATION_CHANNEL_NAMES = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto", "hashnode", "dailydev"]);
 function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === "object" ? doc : {});
   if (!d.syndication || typeof d.syndication !== "object" || Array.isArray(d.syndication)) d.syndication = {};

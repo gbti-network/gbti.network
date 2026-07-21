@@ -40,7 +40,7 @@ const GBTI_CHANNELS = [
   ['youtube', 'YouTube', 'https://www.youtube.com/@gbti_network', 'Video sessions and walkthroughs from the network.', '@gbti_network'],
   ['github', 'GitHub', 'https://github.com/gbti-network', 'The public content repo and our open source work.', 'gbti-network'],
   ['devto', 'Dev.to', 'https://dev.to/gbti', 'Member articles crossposted to the GBTI organization on DEV.', '@gbti'],
-  ['dailydev', 'daily.dev', 'https://dly.to/zfCriM6JfRF', 'Follow the GBTI squad inside your daily.dev feed.', 'GBTI squad'],
+  ['dailydev', 'daily.dev', 'https://daily.dev/squads/gbti_network/', 'Follow the GBTI squad inside your daily.dev feed.', 'GBTI squad'],
   ['linkedin', 'LinkedIn', 'https://www.linkedin.com/company/gbti-network/posts', 'Network updates and member work on LinkedIn.', 'GBTI Network'],
 ];
 

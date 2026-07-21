@@ -178,7 +178,7 @@ export function setTemplate(doc, { type, template, channel, stub } = {}, ctx = {
 // SOW-088: the syndication PIPELINE settings (master switch, approval mode, hold window, per-channel
 // switches), so the admin UI can run these without hand-editing the yml. Partial patch; hard validation;
 // idempotent against the normalized current values.
-export const SYNDICATION_CHANNEL_NAMES = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky', 'reddit', 'devto', 'hashnode']);
+export const SYNDICATION_CHANNEL_NAMES = Object.freeze(['discord', 'discord-category', 'x', 'linkedin', 'mastodon', 'bluesky', 'reddit', 'devto', 'hashnode', 'dailydev']);
 
 export function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, channels, autoMatrix, channelHoldMinutes } = {}, ctx = {}) {
   const d = structuredClone(doc && typeof doc === 'object' ? doc : {});

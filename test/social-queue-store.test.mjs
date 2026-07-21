@@ -36,7 +36,7 @@ test('store: put/get/list/delete round-trips a task', async () => {
 });
 
 test('drain: a manual-assist channel enqueues a task and NEVER calls an adapter', async () => {
-  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: { discord: false }, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off' } } } });
+  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: { discord: false }, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off', dailydev: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'alice/hello', title: 'Hello World', url: 'https://gbti.network/articles/hello/', visibility: 'public' }, { kv, now: at(0) });
   // An adapter set that would THROW if X were ever posted (it must not be).
@@ -55,7 +55,7 @@ test('drain: a manual-assist channel enqueues a task and NEVER calls an adapter'
 });
 
 test('drain: does not re-task a channel already queued-manual on a prior tick', async () => {
-  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: {}, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off' } } } });
+  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: {}, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off', dailydev: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/b', title: 'T', url: 'https://e.com/x', visibility: 'public' }, { kv, now: at(0) });
   await drainSyndication({}, { kv, now: at(AFTER_HOLD), adapters: {} });

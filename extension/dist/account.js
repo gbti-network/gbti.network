@@ -6201,7 +6201,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   define("gbti-syndication-tracker", GbtiSyndicationTracker);
 
   // membership/syndication-config-core.mjs
-  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto", "hashnode"]);
+  var CHANNELS = Object.freeze(["discord", "discord-category", "x", "linkedin", "mastodon", "bluesky", "reddit", "devto", "hashnode", "dailydev"]);
   var CHANNEL_CAPABILITY = Object.freeze({
     discord: "auto",
     "discord-category": "auto",
@@ -6215,6 +6215,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-122
     x: "manual",
     // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
+    dailydev: "manual",
+    // SOW-135: manual-assist to the GBTI daily.dev squad (no public squad-post API)
     linkedin: "manual"
     // SOW-127: manual-assist until Community Management API access is granted (business
     // verification failed; the appeal is pending). The text is rendered + queued to the Social Queue; a
@@ -6296,6 +6298,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var BLUESKY_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it.';
   var MASTODON_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
   var MASTODON_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
+  var DAILYDEV_STUB = 'Members-only on the GBTI Network: "{title}" by {fullName}. Membership unlocks it. {url}';
+  var DAILYDEV_SHARE_STUB = '{fullName} shared a members-only link: "{title}". Join the GBTI Network to open it. {url}';
   var DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
     discord: Object.freeze({ share: DISCORD_SHARE_STUB, post: DISCORD_STUB, product: DISCORD_STUB, prompt: DISCORD_STUB }),
     "discord-category": Object.freeze({ share: DISCORD_CAT_SHARE_STUB, post: DISCORD_CAT_STUB, product: DISCORD_CAT_STUB, prompt: DISCORD_CAT_STUB }),
@@ -6307,6 +6311,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
     linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
     // SOW-127
+    dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
+    // SOW-135
     bluesky: Object.freeze({ share: BLUESKY_SHARE_STUB, post: BLUESKY_STUB, product: BLUESKY_STUB, prompt: BLUESKY_STUB }),
     mastodon: Object.freeze({ share: MASTODON_SHARE_STUB, post: MASTODON_STUB, product: MASTODON_STUB, prompt: MASTODON_STUB })
   });
@@ -6330,7 +6336,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // SOW-111: engagement-triggered news auto-share
     content_engagement: DEFAULT_CONTENT_ENGAGEMENT,
     // SOW-126: engagement-triggered content auto-share (the `popular` engine)
-    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false }),
+    channels: Object.freeze({ discord: false, "discord-category": false, x: false, linkedin: false, mastodon: false, bluesky: false, reddit: false, devto: false, hashnode: false, dailydev: false }),
     // SOW-121: channels the system NEVER auto-posts to (their adapter is never called). Instead a
     // superadmin manual-assist task is enqueued (Social Queue) and a human posts it by hand. Used for
     // pay-to-post channels like X after the free API tier was deprecated. A channel here should be OFF in
@@ -6444,7 +6450,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .chtile.soon { opacity:.55; cursor:default; }
   .br-discord { background:#5865F2; } .br-reddit { background:#FF4500; } .br-x { background:#000; } .br-devto { background:#0a0a0a; }
   .br-li { background:#0A66C2; } .br-masto { background:#6364FF; } .br-bsky { background:#1185FE; }
-  .br-substack { background:#FF6719; } .br-hashnode { background:#2962FF; }
+  .br-substack { background:#FF6719; } .br-hashnode { background:#2962FF; } .br-dailydev { background:#CE3DF3; }
 
   /* template rows + variable chips */
   .varnote { font-size:12px; color:var(--muted); margin:14px 0 6px; }
@@ -6526,9 +6532,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   <g id="cb-bsky"><path fill="currentColor" d="M12 10.8C10.9 8.6 8 5.2 5.3 4 3.4 3.1 2 3.6 2 5.8c0 2.2 1.2 7.2 1.9 8.2.7 1 2 .9 3.3.7-2.2.4-2.6 1.9-1.5 3.4C7.8 21 9.7 17.9 10.2 16.7c.3-.8.5-1.4.6-1.6.1.2.3.8.6 1.6.5 1.2 2.4 4.3 4.5 1.4 1.1-1.5.7-3-1.5-3.4 1.3.2 2.6.3 3.3-.7.7-1 1.9-6 1.9-8.2 0-2.2-1.4-2.7-3.3-1.8-2.7 1.2-5.6 4.6-6.7 6.8z"/></g>
   <g id="cb-substack"><path fill="currentColor" d="M22.539 8.242H1.46V5.406h21.08v2.836zM1.46 10.812V24L12 18.11 22.539 24V10.812H1.46zM22.539 0H1.46v2.836h21.08V0z"/></g>
   <g id="cb-hashnode"><path fill="currentColor" d="M22.351 8.019l-6.37-6.37a5.63 5.63 0 0 0-7.962 0l-6.37 6.37a5.63 5.63 0 0 0 0 7.962l6.37 6.37a5.63 5.63 0 0 0 7.962 0l6.37-6.37a5.63 5.63 0 0 0 0-7.962zM12 15.953a3.953 3.953 0 1 1 0-7.906 3.953 3.953 0 0 1 0 7.906z"/></g>
+  <g id="cb-dailydev"><path fill="currentColor" d="M18.29 5.706a1.405 1.405 0 0 0-1.987 0L4.716 17.296l1.324-2.65-2.65-2.649 3.312-3.311 2.65 2.65 1.986-1.988-3.642-3.642a1.405 1.405 0 0 0-1.987 0L.411 11.004a1.404 1.404 0 0 0 0 1.987l4.305 4.304.993.993a1.405 1.405 0 0 0 1.987 0L19.285 6.7l-.993-.994Zm-.332 3.647 2.65 2.65-4.306 4.305a1.404 1.404 0 1 0 1.986 1.986l5.299-5.298a1.404 1.404 0 0 0 0-1.987l-4.305-4.304-1.324 2.648Z"/></g>
 </defs></svg>`;
   var capOf = (id) => id === "substack" ? "manual" : channelCapability(id);
-  var isTileActive = (id) => capOf(id) === "auto" || id === "x";
+  var isTileActive = (id) => capOf(id) === "auto" || id === "x" || id === "dailydev";
   var TILE_CHANNELS = [
     { id: "discord", name: "Discord", sub: "Featured", icon: "cb-discord", cls: "br-discord" },
     { id: "discord-category", name: "Discord", sub: "Category", icon: "cb-discord", cls: "br-discord" },
@@ -6536,6 +6543,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "devto", name: "dev.to", sub: "Org blog", icon: "cb-devto", cls: "br-devto" },
     { id: "hashnode", name: "Hashnode", sub: "Dev blog", icon: "cb-hashnode", cls: "br-hashnode" },
     // SOW-134
+    { id: "dailydev", name: "daily.dev", sub: "Manual", icon: "cb-dailydev", cls: "br-dailydev" },
+    // SOW-135
     { id: "x", name: "X", sub: "Manual", icon: "cb-x", cls: "br-x" },
     { id: "linkedin", name: "LinkedIn", sub: "Building", icon: "cb-linkedin", cls: "br-li" },
     { id: "mastodon", name: "Mastodon", sub: "", icon: "cb-mastodon", cls: "br-masto" },
@@ -6550,7 +6559,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   ].map((c) => ({ ...c, active: isTileActive(c.id) }));
   var MATRIX_TYPE_LABEL = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
-  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", mastodon: "Mastodon", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn" };
+  var MATRIX_CHAN_LABEL = { discord: "Discord", "discord-category": "Discord cat", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", mastodon: "Mastodon", bluesky: "Bluesky", x: "X", linkedin: "LinkedIn" };
   var AUTO_MODE_LABEL = { off: "Off", on: "On-Automatic", "on-manual": "On-Manual", popular: "Popular" };
   var TMPL_TYPES = [
     { key: "share", nm: "Share", df: "reshare line" },
@@ -11724,7 +11733,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     ["youtube", "YouTube", "https://www.youtube.com/@gbti_network", "Video sessions and walkthroughs from the network.", "@gbti_network"],
     ["github", "GitHub", "https://github.com/gbti-network", "The public content repo and our open source work.", "gbti-network"],
     ["devto", "Dev.to", "https://dev.to/gbti", "Member articles crossposted to the GBTI organization on DEV.", "@gbti"],
-    ["dailydev", "daily.dev", "https://dly.to/zfCriM6JfRF", "Follow the GBTI squad inside your daily.dev feed.", "GBTI squad"],
+    ["dailydev", "daily.dev", "https://daily.dev/squads/gbti_network/", "Follow the GBTI squad inside your daily.dev feed.", "GBTI squad"],
     ["linkedin", "LinkedIn", "https://www.linkedin.com/company/gbti-network/posts", "Network updates and member work on LinkedIn.", "GBTI Network"]
   ];
   var SOCIALS_STAGE_KEY = "gbti-welcome-socials";
@@ -14481,7 +14490,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-syndicate-now.mjs
-  var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
+  var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
   var LOCAL_SENDS_KEY = "gbti-synd-local-sends";
   var LOCAL_SENDS_MAX_AGE = 7 * 24 * 60 * 60 * 1e3;
   var localSendsAll = () => {
@@ -16077,10 +16086,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const t = encodeURIComponent(String(text || ""));
     if (channel === "x") return `https://twitter.com/intent/tweet?text=${t}`;
     if (channel === "linkedin") return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
+    if (channel === "dailydev") return "https://app.daily.dev/squads/gbti_network";
     return null;
   };
-  var CH_LABEL = { x: "X", discord: "Discord", "discord-category": "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", linkedin: "LinkedIn", mastodon: "Mastodon", bluesky: "Bluesky" };
-  var CH_ICON = { x: "x", discord: "discord", "discord-category": "discord", reddit: "reddit", devto: "devto", hashnode: "hashnode", linkedin: "linkedin", mastodon: "mastodon", bluesky: "bluesky" };
+  var CH_LABEL = { x: "X", discord: "Discord", "discord-category": "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", linkedin: "LinkedIn", mastodon: "Mastodon", bluesky: "Bluesky" };
+  var CH_ICON = { x: "x", discord: "discord", "discord-category": "discord", reddit: "reddit", devto: "devto", hashnode: "hashnode", dailydev: "dailydev", linkedin: "linkedin", mastodon: "mastodon", bluesky: "bluesky" };
   var SRC_LABEL2 = { share: "Share", post: "Article", product: "Product", prompt: "Prompt" };
   var PAGE_SIZE2 = 12;
   var fmtDate = (ms) => {
