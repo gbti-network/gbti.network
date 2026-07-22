@@ -1,0 +1,152 @@
+# SOW-058 (+ SOW-057): syndication configuration. Admin/superadmin-CODEOWNED (house/**), so a PR changing it
+# without the required role is auto-rejected by the SOW-005 gate.
+#
+# Read by membership/syndication-config.mjs and mirrored to the KV key `synd:config` by `npm run reconcile
+# --apply`, so the signup Worker drain reads the live values WITHOUT a redeploy. This file carries NO secrets;
+# the per-channel API tokens live only in the Worker secret store.
+#
+# Fail-closed: ships disabled. Flip `enabled: true` and the per-channel switches when ready to syndicate. A
+# channel switched on here still also requires its secret to be configured at drain time (otherwise it is
+# recorded "skipped", never "failed").
+#
+# auto_matrix cell modes (per content type x channel; a missing cell = the code default, shares OFF and every
+# other type ON):
+#   on        = On-Automatic: the channel adapter posts after the hold window.
+#   on-manual = On-Manual: delivered as a superadmin SOCIAL QUEUE task for review. The queue's Post now sends
+#               it through the adapter; X and LinkedIn are posted by hand (they cannot auto-post, so this is
+#               their only deliverable mode; a legacy `on` coerces here, and the settings UI never offers
+#               them On-Automatic).
+#   off       = never. popular = only when the engagement engine promotes the item (trigger: popular).
+# `manual_assist_channels` below is DEPRECATED for routing (per-cell on-manual + the code-level channel
+# capability replaced it); it stays only so an old reader parses.
+#
+# NOTE: an admin settings save rewrites this file and keeps ONLY this leading comment block, so durable
+# documentation belongs HERE, not beside the keys below.
+syndication:
+  enabled: true
+  require_approval: false
+  hold_minutes: 60
+  upvote_threshold: 2
+  classify: ai
+  templates:
+    share: Shared by {memberdiscord} {shareurl}
+  news_engagement:
+    enabled: true
+    open_threshold: 2
+    tier: paid
+    comment_autopost: true
+  channels:
+    discord: true
+    discord-category: true
+    x: false
+    linkedin: false
+    mastodon: true
+    bluesky: true
+    reddit: false
+    devto: false
+    hashnode: false
+    dailydev: false
+  manual_assist_channels:
+    - x
+    - linkedin
+    - dailydev
+  auto_matrix:
+    share:
+      discord: 'off'
+      discord-category: 'off'
+      reddit: 'off'
+      devto: 'off'
+      mastodon: 'off'
+      bluesky: 'off'
+      x: 'off'
+      linkedin: 'off'
+      hashnode: 'off'
+      dailydev: 'off'
+    post:
+      x: on-manual
+      linkedin: on-manual
+      dailydev: on-manual
+    product:
+      x: on-manual
+      linkedin: on-manual
+      hashnode: 'off'
+      dailydev: 'off'
+    prompt:
+      x: on-manual
+      linkedin: on-manual
+      hashnode: 'off'
+      dailydev: 'off'
+  channel_templates:
+    devto:
+      devto-footer: >-
+        The resource shared in this post is a new {content-type} published by GBTI Network member
+        {fullName}. 
+
+
+        ---
+
+
+        >Are you a writer, musician, or product developer? We would love to support your work on the
+        GBTI Network. For more information about how to join our community visit
+        https://gbti.network
+
+
+        >To follow {fullName}'s work more closely, consider joining our network and subscribing to
+        them directly: {member-url}
+    x:
+      post: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      product: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      prompt: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      share: '{member-x-handle} shared: "{title}" {url} {category-hashtag} {tags-hashtags}'
+    bluesky:
+      post: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
+      product: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
+      prompt: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
+      share: '{member-bluesky-handle} shared: "{title}" {category-hashtag} {tags-hashtags}'
+    mastodon:
+      post: >-
+        New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag}
+        {tags-hashtags}
+      product: >-
+        New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag}
+        {tags-hashtags}
+      prompt: >-
+        New {content-type} by {member-mastodon-handle}: "{title}" {url} {category-hashtag}
+        {tags-hashtags}
+      share: '{member-mastodon-handle} shared: "{title}" {url} {category-hashtag} {tags-hashtags}'
+    linkedin:
+      post: >-
+        New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url}
+        {category-hashtag} {tags-hashtags}
+      product: >-
+        New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url}
+        {category-hashtag} {tags-hashtags}
+      prompt: >-
+        New {content-type} by {fullName}: "{title}"\n\n{short-description}\n\n{url}
+        {category-hashtag} {tags-hashtags}
+      share: >-
+        {fullName} shared: "{title}"\n\n{short-description}\n\n{url} {category-hashtag}
+        {tags-hashtags}
+    reddit:
+      reddit-comment: >-
+        Shared to the community by GBTI Network member {member-reddit-handle}. 
+
+
+        "{author-note-italic}"
+
+
+        ---
+
+
+        Are you a writer, musician, or product developer? We would love to support your work on the
+        GBTI Network. For more information about how to join our community visit
+        https://gbti.network
+
+
+        To follow {fullName}'s work more closely, consider joining our network and subscribing to
+        them directly: {member-url}
+    dailydev:
+      post: 'New {content-type}: "{title}" {url}'
+      product: 'New {content-type}: "{title}" {url}'
+      prompt: 'New {content-type}: "{title}" {url}'
+      share: 'New {content-type}: "{title}" {url}'
