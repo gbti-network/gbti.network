@@ -52,6 +52,16 @@ function validCategoryPath(arr) {
   return true;
 }
 
+/** sow-140: a product's newsFeed (the member-owned RSS the admin registry may approve into the news pool)
+ *  must be an https URL. RSS VALIDITY is verified by the moderator at approval time (CI stays offline). */
+function checkNewsFeed(fm, rel) {
+  const v = fm?.newsFeed;
+  if (v === undefined || v === null) return;
+  if (typeof v !== 'string' || !/^https:\/\/[^\s]+$/i.test(v)) {
+    errors.push(`${rel}: newsFeed must be an https URL to the product's RSS feed (got ${JSON.stringify(v)}). See sow-140.`);
+  }
+}
+
 /** SOW-015: an encrypted link must be member-only (encryption attaches only to visibility: members). */
 function checkEncryptedLinks(fm, rel) {
   const links = fm?.links;
@@ -154,6 +164,7 @@ function checkContent(file, owner, type) {
     const fm = frontmatter(txt);
     checkCategories(fm, rel);
     checkEncryptedLinks(fm, rel);
+    if (type === 'product') checkNewsFeed(fm, rel); // sow-140
     checkMemberGating(fm, rel, bodyOf(txt)); // SOW-016
     // A prompt result image is reserved for image-gen models: reject an `image` unless a target is one.
     if (type === 'prompt' && fm.image && !isImageGenTarget(fm.targets)) {

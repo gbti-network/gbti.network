@@ -1,0 +1,19 @@
+# sow-140: the ADMIN-OWNED approval registry for member-recommended news sources.
+#
+# A member declares an RSS feed on a product they own (`newsFeed:` in the product frontmatter, an https
+# URL). Declaring it does NOTHING by itself. A source only enters the network's news pool when an admin
+# adds the product slug below; the build then merges the feed into /news-sources.json (id
+# "member-<product-slug>", named after the product, credited to the member), and the gbti-news worker
+# ingests it on its next hourly cron. Removing a row here, or the member unpublishing the product or
+# dropping the newsFeed field, removes the source on the next build. Fail closed: an approved slug that
+# does not resolve to a PUBLISHED + PUBLIC product carrying a newsFeed is skipped.
+#
+# Moderation contract (see .data/ops/moderation-ops/sop-member-news-sources.md): the feed must belong to
+# the member (their product/site), must be valid RSS (verified by the reviewing moderator; CI stays
+# offline), and must fit the editorial standard. This file lives under house/** so only an admin PR can
+# change it (CODEOWNERS).
+#
+# Row shape:
+#   - product: <product-slug>
+#     note: <optional reviewer note: who approved, when, the feed checked>
+approved: []

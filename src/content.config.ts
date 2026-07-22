@@ -156,6 +156,10 @@ const productShape = ({ image }: { image: any }) => ({
   pricing: z.enum(['free', 'freemium', 'paid']).optional(),
   version: z.string().optional(),
   pricingUrl: z.string().url().optional(), // SOW-014: where to buy/upgrade, shown when pricing !== 'free'
+  // sow-140: the RSS feed of the member-owned product/site. Declaring it does NOTHING by itself: the feed
+  // only reaches the network's news pool once an admin approves the product slug in the admin-owned
+  // house/member-news-sources.yml registry (moderation boundary; see the ops SOP).
+  newsFeed: z.string().url().optional(),
   icon: image(),
   banner: image().optional(),
   featuredImage: image(), // REQUIRED marquee cover for the Featured-product spotlight. Must be 16:10 (1280x800); the spotlight media box is locked to 16:10 so the image fills it without cropping.
