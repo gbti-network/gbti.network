@@ -4,14 +4,20 @@
 import { SOCIAL_LINKS } from '../lib/social';
 
 const year = new Date().getFullYear();
+// Owner QA 2026-07-22: three columns. Feeds (leftmost) carries the feed views; Pages keeps the
+// standalone pages plus the legal/contact links (moved from Community); Community keeps membership.
 const columns = [
   {
+    title: 'Feeds',
+    links: [['All', '/feeds/'], ['News', '/feeds/news/'], ['Articles', '/feeds/articles/'], ['Products', '/feeds/products/'], ['Prompts', '/feeds/prompts/'], ['Shares', '/feeds/shares/']],
+  },
+  {
     title: 'Pages',
-    links: [['The Feed', '/feeds/'], ['Articles', '/articles/'], ['Prompts', '/prompts/'], ['Products', '/products/'], ['Members', '/members/'], ['Revenue Model', '/revenue-model/'], ['Brand', '/brand/']],
+    links: [['Members', '/members/'], ['Revenue Model', '/revenue-model/'], ['Brand', '/brand/'], ['Contact', '/contact/'], ['Terms', '/terms/'], ['Privacy', '/privacy/']],
   },
   {
     title: 'Community',
-    links: [['Become a Member', '/membership/'], ['Member Handbook', '/handbook/'], ['How the network works', '/revenue-model/'], ['Member Directory', '/members/'], ['My Account', '/account/'], ['Contact', '/contact/'], ['Terms', '/terms/'], ['Privacy', '/privacy/']],
+    links: [['Become a Member', '/membership/'], ['Member Handbook', '/handbook/'], ['How the network works', '/revenue-model/'], ['Member Directory', '/members/'], ['My Account', '/account/']],
   },
 ];
 ---
