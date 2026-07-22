@@ -1,0 +1,31 @@
+---
+// sow-136 QA (2026-07-21): the nine-offer membership card grid, built codeable-invite style for the
+// homepage bottom and then LIFTED OFF the homepage the same day (owner: remove it there, but keep the
+// arrangement). Mount it anywhere with <JoinOffers /> (the /membership/ page is the natural future
+// home). Each card is topped with an already-committed Pexels photo from /public/stock/ (free
+// license), cropped to 5:2 by the .join-offer CSS in gbti-v3.css.
+import { FIRST_TOUCH_PCT } from '../lib/membership';
+
+const OFFERS = [
+  { name: 'Publish your work', img: '/stock/publish-without-hosting.webp', alt: 'A person reading an article on a laptop at a tidy desk', body: 'Articles, products, and AI prompts under your own name, version-controlled in the open, with no hosting to run.' },
+  { name: 'Private member community', img: '/stock/member-community.webp', alt: 'Developers talking through work together in a studio space', body: 'A private Discord where professionals share work in progress, ask questions, and build relationships away from public noise.' },
+  { name: 'Weekly Shop Talk calls', img: '/stock/shop-talk-call.webp', alt: 'A laptop showing a group video call', body: 'A recurring two-hour session, live on Google Meet: product development, progress, goals, and accountability.' },
+  { name: 'Gated member content', img: '/stock/gated-content.webp', alt: 'A hand holding a brass padlock', body: 'Create gated articles, products, prompts, and downloads that enrich the network and give new members a reason to join.' },
+  { name: 'Network syndication', img: '/stock/network-syndication.webp', alt: 'A hand holding a phone showing social network apps', body: 'The network distributes and promotes member work across social channels, so useful work travels further than it would alone.' },
+  { name: 'Specialized member tools', img: '/stock/member-tools.webp', alt: 'A laptop on a wooden desk with a code editor open', body: 'A Chrome extension, MCP servers, and agent-ready publishing manage your content without ever touching Git directly.' },
+  { name: 'Revenue share, for life', img: '/stock/member-upside.webp', alt: 'Growth charts on paper under a magnifying glass', body: `Earn up to ${FIRST_TOUCH_PCT} from every member your published work brings in, for the life of their membership.` },
+  { name: 'Joint venture opportunities', img: '/stock/joint-ventures.webp', alt: 'Two people shaking hands over a desk', body: 'Discover aligned projects and combine skills. One member brings the idea, another the technical depth, another the distribution.' },
+  { name: 'Curated news and discovery', img: '/stock/ai-recommendations.webp', alt: 'A glowing network of connected points', body: 'A curated member news stream and follow-based discovery keep you close to the people and topics that matter to your work.' },
+];
+---
+<div class="join-grid">
+  {OFFERS.map((o) => (
+    <div class="card card-hover join-offer">
+      <img src={o.img} alt={o.alt} width="800" height="480" loading="lazy" decoding="async" />
+      <div class="jo-bod">
+        <h3 class="h4">{o.name}</h3>
+        <p class="body-sm muted mt8">{o.body}</p>
+      </div>
+    </div>
+  ))}
+</div>

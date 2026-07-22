@@ -1004,3 +1004,29 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .join-offer .jo-bod { padding: 20px 22px 24px; }
 @media (max-width: 960px) { .join-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 620px) { .join-grid { grid-template-columns: 1fr; } }
+
+/* ---------- feed card density (sow-131 QA: up to 5 per row, the DEFAULT view) ---------- */
+/* The branded-thumb fallback cover exists only for the card grid (an imageless tile breaks the
+   rhythm); detailed rows hide it, and the compact rule already hides every cover. */
+.feed-cover-fb { display: none; }
+.feed-page[data-view="card"] .feed-chunk { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; }
+/* the in-feed join CTA spans the full row in the card grid (its min-content width would otherwise
+   stretch whichever column it lands in) */
+.feed-page[data-view="card"] .feed-cta { grid-column: 1 / -1; margin: 4px 0; }
+.feed-page[data-view="card"] .feed-item { display: flex; flex-direction: column; gap: 0; padding: 0;
+  border: 1.5px solid var(--line); border-radius: var(--r-lg); background: var(--paper); overflow: hidden; }
+.feed-page[data-view="card"] .feed-item:hover { border-color: var(--line-2); }
+.feed-page[data-view="card"] .feed-cover { order: -1; width: 100%; height: auto; aspect-ratio: 16 / 10; border-radius: 0; }
+.feed-page[data-view="card"] .feed-cover-fb { display: block; }
+.feed-page[data-view="card"] .feed-main { display: flex; flex-direction: column; flex: 1; min-width: 0; padding: 12px 14px 14px; }
+.feed-page[data-view="card"] .feed-meta { margin-bottom: 8px; gap: 7px; }
+.feed-page[data-view="card"] .feed-meta .av { width: 20px; height: 20px; }
+.feed-page[data-view="card"] .feed-meta .tmeta { font-size: 10.5px; }
+.feed-page[data-view="card"] .feed-title { font-size: 15px; line-height: 1.28;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.feed-page[data-view="card"] .feed-ex { display: none; }
+.feed-page[data-view="card"] .feed-foot { margin-top: auto; padding-top: 10px; }
+@media (max-width: 1080px) { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 900px)  { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 620px)  { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px)  { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: 1fr; } }

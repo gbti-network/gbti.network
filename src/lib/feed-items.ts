@@ -10,6 +10,7 @@ import { upvoteCount } from './upvotes';
 import { commentThreadCount } from './comments';
 import { resolveThumb } from './index-thumb';
 import { imageFieldOf } from './content-index.mjs';
+import { defaultFeatureImage } from './feature-image';
 import { feedTime, isPublicShare, readMinutes, decodeEntities } from './home-feed.mjs';
 
 export type FeedItem = {
@@ -79,7 +80,9 @@ function shareItem(entry: any, comments: CollectionEntry<'comment'>[]): FeedItem
     upvotes: upvoteCount(slug),
     comments: commentThreadCount(comments, 'share', slug, d.author),
     tags: d.tags ?? [],
-    thumb: typeof d.image === 'string' && d.image ? d.image : null,
+    // thumb keeps a branded fallback (the card grid needs every tile imaged); cover stays real-only
+    // so detailed rows without an image keep their text-only layout.
+    thumb: typeof d.image === 'string' && d.image ? d.image : defaultFeatureImage('share'),
     cover: typeof d.image === 'string' && d.image ? d.image : null,
     srcDomain,
   };
