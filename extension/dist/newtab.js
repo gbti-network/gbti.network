@@ -6022,6 +6022,32 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
   }
 
+  // client-ui/src/newtab-prefs.mjs
+  var LAST_SECTION_KEY = "gbti-nt-last-section";
+  var LEGACY_MODE_KEY = "gbti-nt-mode";
+  var VIEW_MODES = /* @__PURE__ */ new Set(["compact", "detailed", "card"]);
+  var DEFAULT_VIEW = Object.freeze({
+    all: "card",
+    post: "card",
+    product: "detailed",
+    prompt: "compact",
+    share: "detailed",
+    news: "card"
+  });
+  function viewKey(type) {
+    return `gbti-nt-view-${type}`;
+  }
+  function viewModeFor(type, stored) {
+    return VIEW_MODES.has(stored) ? stored : DEFAULT_VIEW[type] || "compact";
+  }
+  function landingType({ hash, remembered, splashDest } = {}) {
+    const fromHash = parseTypeFromHash(hash);
+    if (fromHash) return fromHash;
+    if (TYPE_FILTERS.has(remembered)) return remembered;
+    if (splashDest) return typeForHash(splashDestHash(splashDest));
+    return "all";
+  }
+
   // client-ui/src/elements/gbti-auth.mjs
   var GbtiAuth = class extends GbtiElement {
     async render() {
@@ -17628,13 +17654,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var FOLLOWS_LOADED = false;
   var FOLLOWED_CHANNELS = null;
   var PREFS_LOADED = false;
-  var MODE = (() => {
-    try {
-      return localStorage.getItem("gbti-nt-mode") || "compact";
-    } catch (e) {
-      return "compact";
-    }
-  })();
+  var MODE = "compact";
   var hashStr = () => typeof location !== "undefined" && location.hash || "";
   var readFromHash = () => {
     const { read } = parseBrowseHash(hashStr());
@@ -17650,6 +17670,23 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
   }
   var TYPE = typeForHash(hashStr());
+  var storedView = (t) => {
+    try {
+      return localStorage.getItem(viewKey(t));
+    } catch (e) {
+      return null;
+    }
+  };
+  var storedLastSection = () => {
+    try {
+      return localStorage.getItem(LAST_SECTION_KEY);
+    } catch (e) {
+      return null;
+    }
+  };
+  var resolveMode = () => {
+    MODE = viewModeFor(TYPE, storedView(TYPE));
+  };
   var MEMBERSHIP = "unknown";
   var SHARES = null;
   var SHARES_LOADED = false;
@@ -17950,7 +17987,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function selectType(next) {
     if (!TYPE_FILTERS.has(next) || next === TYPE) return;
     TYPE = next;
+    try {
+      localStorage.setItem(LAST_SECTION_KEY, next);
+    } catch (e) {
+    }
+    resolveMode();
     syncTypeButtons();
+    syncModeButtons();
     setRailActive(railKeyForType(TYPE));
     closeReader();
     renderFeed($("[data-filter]")?.value || "");
@@ -18190,9 +18233,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const splashBare = !hashStr();
     const splashDecision = readSplashDecision();
     const wantSplash = splashBare && shouldShowSplash(splashDecision, Date.now(), splashWindowMs());
-    if (splashBare && !wantSplash && splashDecision?.dest) {
-      TYPE = typeForHash(splashDestHash(splashDecision.dest));
+    TYPE = landingType({ hash: hashStr(), remembered: storedLastSection(), splashDest: splashDecision?.dest });
+    try {
+      localStorage.removeItem(LEGACY_MODE_KEY);
+    } catch (e) {
     }
+    resolveMode();
     initShell({ active: railKeyForType(TYPE), nav: "feed" });
     const modesEl = $(".nt-greet .nt-modes");
     const modesSlot = $("[data-modes-slot]");
@@ -18224,7 +18270,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     document.querySelectorAll(".nt-mode").forEach((b) => b.addEventListener("click", () => {
       MODE = b.dataset.mode;
       try {
-        localStorage.setItem("gbti-nt-mode", MODE);
+        localStorage.setItem(viewKey(TYPE), MODE);
       } catch (e) {
       }
       syncModeButtons();

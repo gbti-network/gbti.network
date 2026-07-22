@@ -12,6 +12,7 @@ import { newsToItem } from '../../client-ui/src/news.mjs'; // SOW-043: blend mem
 import { parseBrowseHash, stripDoParam } from '../../client-ui/src/browse-hash.mjs'; // the activity bell's deep-link (tab=<type>&read=<path>)
 import { initShell, setRailActive } from './shell.mjs';
 import { TYPE_FILTERS, typeForHash, railKeyForType, feedSources } from '../../client-ui/src/feed-route.mjs';
+import { viewKey, viewModeFor, landingType, LAST_SECTION_KEY, LEGACY_MODE_KEY } from '../../client-ui/src/newtab-prefs.mjs'; // SOW-105: last-section + per-section view-mode memory
 import { mountPageClient } from './page-client.mjs'; // SOW-041 P5: a GbtiClient so the top-bar "+" composer works here (also defines <gbti-card-list>)
 
 const SITE = 'https://gbti.network';
@@ -67,16 +68,19 @@ let FOLLOWS_LOADED = false;
 // SOW-046 E: the member's followed NEWS CHANNELS (source ids); the Following view drills into these for news.
 let FOLLOWED_CHANNELS = null; // a Set of lowercased source ids, or null when not loaded / not a paid member
 let PREFS_LOADED = false;
-// SOW-039: the persisted feed view mode (compact | detailed | card).
-let MODE = (() => { try { return localStorage.getItem('gbti-nt-mode') || 'compact'; } catch (e) { return 'compact'; } })();
+// SOW-039/105: the feed view mode (compact | detailed | card), persisted PER SECTION (gbti-nt-view-<type>)
+// with per-type defaults. Resolved in init() once the landing TYPE is final, and re-resolved on every
+// selectType switch; this placeholder only covers the window before init runs.
+let MODE = 'compact';
 // SOW-042/043: the active type filter (all | post | product | prompt | share | news). 'all' blends the
 // activity-index with the member's Shares + members-only News (capped river). MEMBERSHIP gates both; SHARES + NEWS
 // are the raw lists, loaded once on demand. News is PAID-only; Shares are paid-or-trial. (TYPE_FILTERS,
 // parseTypeFromHash, typeForHash, railKeyForType live in client-ui/src/feed-route.mjs so they are node-testable.)
 // The feed IS the unified content browser; the rail's Browse items are shortcuts that open it pre-filtered via
-// the hash (newtab.html#type=<X>). A BARE newtab.html (the Activity rail item) is ALWAYS the all-types river: the
-// hash alone decides the filter, so clicking Activity deterministically resets to 'all' (there is no persisted
-// type to fight it). The activity bell deep-links here too, in the legacy Browse hash shape
+// the hash (newtab.html#type=<X>). SOW-105: a genuinely BARE newtab.html (a fresh Chrome tab or the brand logo)
+// lands on the REMEMBERED last section (gbti-nt-last-section, written in selectType); the Activity rail item
+// stays deterministic because it carries an explicit #type=all (shell.mjs), and any explicit hash outranks the
+// memory. The activity bell deep-links here too, in the legacy Browse hash shape
 // (#tab=<type>&read=<repo path>); the hash parser accepts `type=` OR `tab=`, and readFromHash pulls the optional
 // path that auto-opens the in-place reader.
 const hashStr = () => (typeof location !== 'undefined' && location.hash) || '';
@@ -89,7 +93,11 @@ function consumeDo() {
   const rest = stripDoParam(location.hash);
   try { history.replaceState(null, '', location.pathname + location.search + (rest ? '#' + rest : '')); } catch { /* fail-soft */ }
 }
-let TYPE = typeForHash(hashStr()); // bare newtab.html -> 'all' (the river); #type=<X> -> that type
+let TYPE = typeForHash(hashStr()); // bare newtab.html -> 'all' here; init() re-resolves a bare tab via landingType (SOW-105)
+// SOW-105: the device-local prefs reads (try/catch per the file convention; a blocked store = today's behavior).
+const storedView = (t) => { try { return localStorage.getItem(viewKey(t)); } catch (e) { return null; } };
+const storedLastSection = () => { try { return localStorage.getItem(LAST_SECTION_KEY); } catch (e) { return null; } };
+const resolveMode = () => { MODE = viewModeFor(TYPE, storedView(TYPE)); };
 let MEMBERSHIP = 'unknown';
 let SHARES = null;
 let SHARES_LOADED = false;
@@ -415,7 +423,11 @@ function syncTypeButtons() {
 function selectType(next) {
   if (!TYPE_FILTERS.has(next) || next === TYPE) return;
   TYPE = next;
+  // SOW-105: remember the section (the guard above keeps junk + no-ops out) and re-resolve its view mode.
+  try { localStorage.setItem(LAST_SECTION_KEY, next); } catch (e) { /* storage unavailable */ }
+  resolveMode();
   syncTypeButtons();
+  syncModeButtons(); // each section shows its OWN remembered mode the moment you switch
   setRailActive(railKeyForType(TYPE)); // keep the left rail in lockstep with the chips + feed
   closeReader(); // switching filter returns from the reader to the feed
   // Render IMMEDIATELY with whatever is already loaded (member activity + any cached news) — no blank "Loading...".
@@ -660,14 +672,15 @@ function init() {
   // new tab too; the feed itself still talks to the background worker directly.
   mountPageClient();
   // SOW-063: resolve the landing BEFORE initShell (so the rail highlight matches). A bare tab (no hash) shows the
-  // splash unless snoozed within the window; if snoozed, land directly on the remembered feed type. A hashed open
-  // (rail click / bell deep-link) always goes straight to the feed.
+  // splash unless snoozed within the window. SOW-105: the landing section obeys one precedence everywhere,
+  // explicit hash > remembered last section > snoozed splash dest > 'all', and applies even when the splash will
+  // show (the feed renders BEHIND the overlay, so lifting the splash reveals the remembered section already there).
   const splashBare = !hashStr();
   const splashDecision = readSplashDecision();
   const wantSplash = splashBare && shouldShowSplash(splashDecision, Date.now(), splashWindowMs());
-  if (splashBare && !wantSplash && splashDecision?.dest) {
-    TYPE = typeForHash(splashDestHash(splashDecision.dest)); // snoozed -> land on the remembered feed type
-  }
+  TYPE = landingType({ hash: hashStr(), remembered: storedLastSection(), splashDest: splashDecision?.dest });
+  try { localStorage.removeItem(LEGACY_MODE_KEY); } catch (e) { /* storage unavailable */ }
+  resolveMode(); // SOW-105: per-section MODE, now that the landing TYPE is final
   // The shared shell injects the left rail (feed variant: search + Latest/Following on top) + the control cluster
   // (theme, apps, account, "+") into the greeting's top-right, and fills the page's [data-ico] glyphs. The rail
   // item highlighted is derived from the active TYPE (railKeyForType); selectType keeps it in sync thereafter.
@@ -705,10 +718,11 @@ function init() {
       : window.open(chrome.runtime.getURL('onboarding.html'), '_blank');
   });
 
-  // SOW-039: the view-mode switcher. Persist + re-render in place.
+  // SOW-039/105: the view-mode switcher. Persists PER SECTION, so a change sticks to the section it was
+  // made in (Prompts can stay compact while Articles stay cards). Re-renders in place.
   document.querySelectorAll('.nt-mode').forEach((b) => b.addEventListener('click', () => {
     MODE = b.dataset.mode;
-    try { localStorage.setItem('gbti-nt-mode', MODE); } catch (e) {}
+    try { localStorage.setItem(viewKey(TYPE), MODE); } catch (e) {}
     syncModeButtons();
     renderFeed($('[data-filter]')?.value || '');
   }));
