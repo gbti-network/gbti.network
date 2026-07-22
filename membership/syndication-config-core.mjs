@@ -112,7 +112,13 @@ const DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username
 // (owner-directed 2026-07-10: keep both, templated independently). Editable in the admin templates card.
 const DEFAULT_REDDIT_BODY = '{short-description}';
 // SOW-088: the dev.to byline prepended to the full-body crosspost (the owner's example post shape).
-const DEFAULT_DEVTO_INTRO = '**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).';
+// SOW-140: the byline first MENTIONS the member's own dev.to profile ({member-devto-handle} -> @handle, which
+// links + notifies on dev.to) and falls back to their name; the gbti.network profile link moves onto "GBTI
+// Network Member" so it survives both cases.
+const DEFAULT_DEVTO_INTRO = '**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).';
+// SOW-140: Hashnode keeps the NAME-based byline (a member's dev.to handle is not their Hashnode handle, so the
+// dev.to mention must not leak onto a Hashnode post). A parallel {member-hashnode-handle} can be added later.
+const DEFAULT_HASHNODE_INTRO = '**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).';
 // SOW-138: the PUBLIC crosspost BODY template for dev.to + Hashnode. `{body}` expands to the full published
 // article VERBATIM (byline + this + CTA footer wrap it). The default `{body}` reproduces today's post exactly;
 // admins may wrap the article or replace it with custom copy. The MEMBERS body stays the stub (devto-stub).
@@ -137,9 +143,10 @@ export const DEFAULT_TEMPLATES = Object.freeze({
   'devto-intro': DEFAULT_DEVTO_INTRO,
   'devto-body': DEFAULT_DEVTO_BODY, // SOW-138
   'devto-footer': DEFAULT_DEVTO_FOOTER,
-  // SOW-134: Hashnode reuses the same byline + CTA footer as dev.to (both are full-body crossposts with a
-  // canonical link home); admins can diverge them per channel in the templates card.
-  'hashnode-intro': DEFAULT_DEVTO_INTRO,
+  // SOW-134: Hashnode reuses the same CTA footer as dev.to (both are full-body crossposts with a canonical link
+  // home); admins can diverge them per channel. SOW-140: the byline default is NAME-based here (not the dev.to
+  // handle), since a member's dev.to profile is the wrong platform to mention on Hashnode.
+  'hashnode-intro': DEFAULT_HASHNODE_INTRO,
   'hashnode-body': DEFAULT_DEVTO_BODY, // SOW-138
   'hashnode-footer': DEFAULT_DEVTO_FOOTER,
 });

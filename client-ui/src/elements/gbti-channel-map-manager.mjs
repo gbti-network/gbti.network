@@ -428,8 +428,10 @@ class GbtiChannelMapManager extends GbtiElement {
     const tiles = TILE_CHANNELS.map((c) => `<button class="chtile${c.id === cur ? ' on' : ''}${c.active ? '' : ' soon'}" type="button" data-tile="${esc(c.id)}"${c.active ? '' : ' aria-disabled="true"'}${c.note ? ` title="${esc(c.note)}"` : ''}>
         <span class="ct-i ${esc(c.cls)}"><svg viewBox="0 0 24 24"><use href="#${esc(c.icon)}"/></svg></span>
         <span class="ct-n">${esc(c.name)}</span><span class="ct-s">${esc(c.sub)}</span></button>`).join('');
-    // SOW-138: {body} (the full article) is offered ONLY on the full-body channels, where it drives the public body field.
-    const chipVars = (cur === 'devto' || cur === 'hashnode') ? [...VARS, '{body}'] : VARS;
+    // SOW-138: {body} (the full article) + SOW-140: {member-devto-handle} (the dev.to byline mention) are offered
+    // on the full-body channels only, where they drive the body + byline fields.
+    const chipVars = cur === 'devto' ? [...VARS, '{body}', '{member-devto-handle}']
+      : cur === 'hashnode' ? [...VARS, '{body}'] : VARS;
     const chips = chipVars.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join('');
     const vis = this._tmplVis || 'pub';
     const work = this._work?.[`${vis}:${cur}`] || {};

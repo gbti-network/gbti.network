@@ -3780,7 +3780,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
   var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
   var DEFAULT_REDDIT_BODY = "{short-description}";
-  var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
+  var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).";
+  var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
   var DEFAULT_DEVTO_BODY = "{body}";
   var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
   var DEFAULT_REDDIT_COMMENT = "Shared to the community by GBTI Network member {member-reddit-handle}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
@@ -3795,9 +3796,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     "devto-body": DEFAULT_DEVTO_BODY,
     // SOW-138
     "devto-footer": DEFAULT_DEVTO_FOOTER,
-    // SOW-134: Hashnode reuses the same byline + CTA footer as dev.to (both are full-body crossposts with a
-    // canonical link home); admins can diverge them per channel in the templates card.
-    "hashnode-intro": DEFAULT_DEVTO_INTRO,
+    // SOW-134: Hashnode reuses the same CTA footer as dev.to (both are full-body crossposts with a canonical link
+    // home); admins can diverge them per channel. SOW-140: the byline default is NAME-based here (not the dev.to
+    // handle), since a member's dev.to profile is the wrong platform to mention on Hashnode.
+    "hashnode-intro": DEFAULT_HASHNODE_INTRO,
     "hashnode-body": DEFAULT_DEVTO_BODY,
     // SOW-138
     "hashnode-footer": DEFAULT_DEVTO_FOOTER
@@ -12282,7 +12284,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const tiles = TILE_CHANNELS.map((c) => `<button class="chtile${c.id === cur ? " on" : ""}${c.active ? "" : " soon"}" type="button" data-tile="${esc(c.id)}"${c.active ? "" : ' aria-disabled="true"'}${c.note ? ` title="${esc(c.note)}"` : ""}>
         <span class="ct-i ${esc(c.cls)}"><svg viewBox="0 0 24 24"><use href="#${esc(c.icon)}"/></svg></span>
         <span class="ct-n">${esc(c.name)}</span><span class="ct-s">${esc(c.sub)}</span></button>`).join("");
-      const chipVars = cur === "devto" || cur === "hashnode" ? [...VARS, "{body}"] : VARS;
+      const chipVars = cur === "devto" ? [...VARS, "{body}", "{member-devto-handle}"] : cur === "hashnode" ? [...VARS, "{body}"] : VARS;
       const chips = chipVars.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join("");
       const vis = this._tmplVis || "pub";
       const work = this._work?.[`${vis}:${cur}`] || {};
@@ -15836,6 +15838,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     s = s.replace(/^\/?u\//i, "").replace(/^@/, "").trim();
     return /^[A-Za-z0-9_-]{3,20}$/.test(s) ? s : "";
   }
+  function devtoHandleFrom(value) {
+    let s = String(value || "").trim();
+    if (!s) return "";
+    const m = s.match(/^https?:\/\/(?:www\.)?dev\.to\/([^/?#]+)/i);
+    if (m) s = m[1];
+    s = s.replace(/^@/, "").trim();
+    return /^[A-Za-z0-9_]{1,30}$/.test(s) ? s : "";
+  }
   function toHashtag(label) {
     const parts = String(label || "").split(/[^A-Za-z0-9]+/).filter(Boolean);
     if (!parts.length) return "";
@@ -15897,6 +15907,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // {member-reddit-handle} = the member's Reddit username as u/name (from profile links.reddit), else the
       // full name. Reddit renders u/name as a profile link natively; redditHandleFrom strictly validates.
       memberreddithandle: redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName,
+      // SOW-140: {member-devto-handle} = the member's OWN dev.to @handle (from profile links.devto) rendered as a
+      // native dev.to mention, else the sanitized full name (mirrors {member-x-handle}). Used in the dev.to byline.
+      memberdevtohandle: devtoHandleFrom(item.authorDevto) ? `@${devtoHandleFrom(item.authorDevto)}` : fullName,
       categoryhashtag: toHashtag(item.category),
       tagshashtags: hashtagList(item.tags),
       hashtags: hashtagList([item.category, ...Array.isArray(item.tags) ? item.tags : []])
@@ -16063,6 +16076,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         // SOW-123: the public profile Mastodon handle ({member-mastodon-handle})
         authorReddit: d.gbtiReddit || void 0,
         // the public profile Reddit username ({member-reddit-handle})
+        authorDevto: d.gbtiDevto || void 0,
+        // SOW-140: the public profile dev.to handle ({member-devto-handle})
         tags: d.gbtiTags ? d.gbtiTags.split(",").map((t) => t.trim()).filter(Boolean) : void 0,
         // SOW-120: {tags-hashtags}
         authorNote: this._authorNote || void 0,
@@ -16903,12 +16918,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const syndUrl = it.url ? it.type === "share" ? it.url : SITE14 + it.url : "";
       const authorDiscord = this._author?.entry?.links?.discord || "";
       const authorX = this._author?.entry?.links?.x || "";
+      const authorDevto = this._author?.entry?.links?.devto || "";
       const authorBluesky = this._author?.entry?.links?.bluesky || "";
       const authorMastodon = this._author?.entry?.links?.mastodon || "";
       const authorReddit = this._author?.entry?.links?.reddit || "";
       const tagsList = Array.isArray(this._fm?.tags) ? this._fm.tags : Array.isArray(it.tags) ? it.tags : [];
       const syndTags = tagsList.filter((t) => typeof t === "string" && t.trim()).join(",");
-      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
+      const synd = resolved && slug && ["post", "product", "prompt", "share"].includes(it.type) ? `<gbti-syndicate-now data-gbti-type="${esc(it.type)}" data-gbti-slug="${esc(slug)}" data-gbti-author="${esc(it.author || "")}"${this._author?.entry?.displayName ? ` data-gbti-author-name="${esc(this._author.entry.displayName)}"` : ""} data-gbti-title="${esc(it.title || "")}"${it.shortDescription || this._fm?.shortDescription ? ` data-gbti-blurb="${esc(String(it.shortDescription || this._fm.shortDescription))}"` : ""} data-gbti-url="${esc(syndUrl)}" data-gbti-visibility="${esc(String(this._fm?.visibility || it.visibility || "public"))}"${syndCategory ? ` data-gbti-category="${esc(syndCategory)}"` : ""}${syndPath ? ` data-gbti-category-path="${esc(syndPath)}"` : ""}${authorDiscord ? ` data-gbti-discord="${esc(String(authorDiscord))}"` : ""}${authorX ? ` data-gbti-x="${esc(String(authorX))}"` : ""}${authorBluesky ? ` data-gbti-bluesky="${esc(String(authorBluesky))}"` : ""}${authorMastodon ? ` data-gbti-mastodon="${esc(String(authorMastodon))}"` : ""}${authorReddit ? ` data-gbti-reddit="${esc(String(authorReddit))}"` : ""}${authorDevto ? ` data-gbti-devto="${esc(String(authorDevto))}"` : ""}${syndTags ? ` data-gbti-tags="${esc(syndTags)}"` : ""}${it.thumb ? ` data-gbti-image="${esc(String(it.thumb))}"` : ""}></gbti-syndicate-now>` : "";
       const side = resolved ? `<aside class="side">${this._authorCardHtml(it)}${sideLink}${synd}${discussion}</aside>` : '<aside class="side"></aside>';
       const shareUpvote = it.type === "share" && slug && this._author && !this._author.isSelf ? `<div class="share-actions" style="margin-top:12px"><gbti-upvote data-gbti-target-type="share" data-gbti-target-slug="${esc(slug)}"></gbti-upvote></div>` : "";
       this.set(this.css(CSS39) + `<div class="wrap"><div class="cols"><article><h1>${esc(it.title || "")}</h1>${meta}${cover}${body}${view}${copyAll}${shareUpvote}</article>${side}</div></div>`);

@@ -14,7 +14,7 @@
 // same inputs the drain would have used (category/tags/handles/image feed the per-channel renderers). The
 // queue item is public-safe by construction (no bodies; the author note is public-only and capped).
 const ITEM_SNAPSHOT_KEYS = Object.freeze(['id', 'source', 'targetType', 'targetSlug', 'author', 'authorName',
-  'authorDiscord', 'authorX', 'authorBluesky', 'authorMastodon', 'authorReddit', 'tags', 'authorNote', 'title', 'blurb',
+  'authorDiscord', 'authorX', 'authorBluesky', 'authorMastodon', 'authorReddit', 'authorDevto', 'tags', 'authorNote', 'title', 'blurb',
   'url', 'image', 'category', 'categoryPath', 'membersOnly', 'visibility', 'trigger', 'shortDescription', 'mention']);
 
 function itemSnapshot(item) {

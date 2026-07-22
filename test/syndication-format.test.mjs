@@ -1,7 +1,7 @@
 // SOW-058: the pure message formatter. Sanitization, truncation, URL preservation, no body leak.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, renderBodyTemplate, defaultSyndicationCover, recordDestinations, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom, redditHandleFrom } from '../membership/syndication-format.mjs';
+import { buildChannelText, sanitizeMentions, hostOf, renderTemplate, renderBodyTemplate, defaultSyndicationCover, recordDestinations, xHandleFrom, toHashtag, blueskyHandleFrom, mastodonHandleFrom, redditHandleFrom, devtoHandleFrom } from '../membership/syndication-format.mjs';
 
 // SOW-138: the full-body crosspost body renderer. {body} is spliced VERBATIM (never sanitized/truncated); the
 // wrapper renders like a normal template.
@@ -202,6 +202,28 @@ test('xHandleFrom parses a URL, a bare @handle, and rejects junk', () => {
   assert.equal(xHandleFrom('not a handle with spaces'), '');
   assert.equal(xHandleFrom(''), '');
   assert.equal(xHandleFrom('waytoolonghandlethatexceedsfifteen'), ''); // > 15 chars
+});
+
+// SOW-140: the dev.to byline mentions the member's dev.to profile, falling back to their name.
+test('devtoHandleFrom parses a dev.to URL, a bare @handle, and rejects junk', () => {
+  assert.equal(devtoHandleFrom('https://dev.to/atwellpub'), 'atwellpub');
+  assert.equal(devtoHandleFrom('https://www.dev.to/Some_User?ref=1'), 'Some_User');
+  assert.equal(devtoHandleFrom('@atwellpub'), 'atwellpub');
+  assert.equal(devtoHandleFrom('atwellpub'), 'atwellpub');
+  assert.equal(devtoHandleFrom('https://dev.to/'), ''); // no handle
+  assert.equal(devtoHandleFrom('has spaces'), '');
+  assert.equal(devtoHandleFrom('bad-hyphen'), ''); // dev.to usernames are letters/digits/underscore
+  assert.equal(devtoHandleFrom(''), '');
+});
+
+test('{member-devto-handle} renders the dev.to @mention when the profile lists one, else the full name', () => {
+  const withHandle = renderTemplate('By {member-devto-handle}.', { authorDevto: 'https://dev.to/atwellpub', author: 'atwellpub', authorName: 'Hudson Atwell' });
+  assert.equal(withHandle, 'By @atwellpub.');
+  const noHandle = renderTemplate('By {member-devto-handle}.', { author: 'atwellpub', authorName: 'Hudson Atwell' });
+  assert.equal(noHandle, 'By Hudson Atwell.');
+  // A crafted handle cannot fire a mass mention (sanitized like the other handle tokens); dev.to @user tags one user.
+  const bare = renderTemplate('By {member-devto-handle}.', { authorDevto: 'atwellpub', author: 'atwellpub' });
+  assert.equal(bare, 'By @atwellpub.');
 });
 
 test('toHashtag PascalCases multi-word, preserves a single word and acronyms, drops junk', () => {

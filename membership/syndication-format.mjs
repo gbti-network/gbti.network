@@ -90,6 +90,21 @@ export function redditHandleFrom(value) {
 }
 
 /**
+ * SOW-140: extract a dev.to username from a profile value. Accepts a dev.to profile URL
+ * (`https://dev.to/<user>`), a bare "@user", or a bare "user"; returns '' for anything implausible. dev.to
+ * usernames are letters/digits/underscore. On dev.to "@user" renders as a NATIVE mention (links the profile
+ * AND notifies the user), the natural way to credit the member on that channel. Pure.
+ */
+export function devtoHandleFrom(value) {
+  let s = String(value || '').trim();
+  if (!s) return '';
+  const m = s.match(/^https?:\/\/(?:www\.)?dev\.to\/([^/?#]+)/i);
+  if (m) s = m[1];
+  s = s.replace(/^@/, '').trim();
+  return /^[A-Za-z0-9_]{1,30}$/.test(s) ? s : '';
+}
+
+/**
  * SOW-120 follow-up: normalize a free-form tag or category label into a single hashtag token. Splits on any
  * non-alphanumeric run, capitalizes the first letter of each part (so a multi-word label survives as one
  * token and a single word keeps its casing, preserving acronyms), and prefixes '#'. Returns '' when nothing
@@ -198,6 +213,9 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
     // {member-reddit-handle} = the member's Reddit username as u/name (from profile links.reddit), else the
     // full name. Reddit renders u/name as a profile link natively; redditHandleFrom strictly validates.
     memberreddithandle: redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName,
+    // SOW-140: {member-devto-handle} = the member's OWN dev.to @handle (from profile links.devto) rendered as a
+    // native dev.to mention, else the sanitized full name (mirrors {member-x-handle}). Used in the dev.to byline.
+    memberdevtohandle: devtoHandleFrom(item.authorDevto) ? `@${devtoHandleFrom(item.authorDevto)}` : fullName,
     categoryhashtag: toHashtag(item.category),
     tagshashtags: hashtagList(item.tags),
     hashtags: hashtagList([item.category, ...(Array.isArray(item.tags) ? item.tags : [])]),

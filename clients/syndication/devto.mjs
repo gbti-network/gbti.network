@@ -21,7 +21,9 @@ const RAW_BASE = 'https://raw.githubusercontent.com/gbti-network/gbti.network/ma
 const USER_AGENT = 'gbti-network-syndication/0.1 (+https://gbti.network)';
 const SITE = 'https://gbti.network';
 // The built-in byline; the Worker normally pre-renders the devto-intro template into item.devtoIntro.
-const DEFAULT_INTRO = '**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).';
+// SOW-140: kept in sync with DEFAULT_DEVTO_INTRO (mentions the member's dev.to profile, else their name) so
+// this dead-fallback path can never resurrect the old name-only byline if templateFor ever returns null.
+const DEFAULT_INTRO = '**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).';
 // The stub middle is now the devto-stub TEMPLATE (admin-editable; the old hardcoded read-more line
 // lives on inside DEFAULT_STUB_TEMPLATES['devto-stub']).
 

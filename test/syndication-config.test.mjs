@@ -292,6 +292,11 @@ test('reddit-body: default template, config override, and the admin edit path', 
   assert.match(DEFAULT_TEMPLATES['reddit-comment'], /\{member-reddit-handle\}[\s\S]*\{short-description\}[\s\S]*\{member-url\}/);
   assert.ok(!/\{author-note/.test(DEFAULT_TEMPLATES['reddit-comment']), 'no author-note dependency, so it fires for a share');
   assert.equal(templateFor(syndicationConfigFromParsed({}), 'reddit-body'), DEFAULT_TEMPLATES['reddit-body']);
+  // SOW-140: the dev.to byline MENTIONS the member's dev.to profile ({member-devto-handle}); Hashnode keeps the
+  // NAME-based byline ({fullName}), since a dev.to handle is the wrong platform to mention on Hashnode.
+  assert.match(DEFAULT_TEMPLATES['devto-intro'], /\{member-devto-handle\}/);
+  assert.ok(!/\{member-devto-handle\}/.test(DEFAULT_TEMPLATES['hashnode-intro']), 'Hashnode byline does not mention the dev.to handle');
+  assert.match(DEFAULT_TEMPLATES['hashnode-intro'], /\{fullName\}/);
   const cfg = syndicationConfigFromParsed({ syndication: { templates: { 'reddit-body': 'Custom {author-note}' } } });
   assert.equal(templateFor(cfg, 'reddit-body'), 'Custom {author-note}');
   const { setTemplate } = await import('../membership/syndication-template-edits.mjs');

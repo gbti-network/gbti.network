@@ -21043,7 +21043,8 @@ var DEFAULT_CONTENT_ENGAGEMENT = Object.freeze({
 var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
 var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
 var DEFAULT_REDDIT_BODY = "{short-description}";
-var DEFAULT_DEVTO_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
+var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).";
+var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
 var DEFAULT_DEVTO_BODY = "{body}";
 var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
 var DEFAULT_REDDIT_COMMENT = "Shared to the community by GBTI Network member {member-reddit-handle}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
@@ -21058,9 +21059,10 @@ var DEFAULT_TEMPLATES = Object.freeze({
   "devto-body": DEFAULT_DEVTO_BODY,
   // SOW-138
   "devto-footer": DEFAULT_DEVTO_FOOTER,
-  // SOW-134: Hashnode reuses the same byline + CTA footer as dev.to (both are full-body crossposts with a
-  // canonical link home); admins can diverge them per channel in the templates card.
-  "hashnode-intro": DEFAULT_DEVTO_INTRO,
+  // SOW-134: Hashnode reuses the same CTA footer as dev.to (both are full-body crossposts with a canonical link
+  // home); admins can diverge them per channel. SOW-140: the byline default is NAME-based here (not the dev.to
+  // handle), since a member's dev.to profile is the wrong platform to mention on Hashnode.
+  "hashnode-intro": DEFAULT_HASHNODE_INTRO,
   "hashnode-body": DEFAULT_DEVTO_BODY,
   // SOW-138
   "hashnode-footer": DEFAULT_DEVTO_FOOTER
