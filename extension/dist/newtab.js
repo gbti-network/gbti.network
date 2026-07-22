@@ -15915,6 +15915,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       // {author-note-italic}: the intro in markdown ITALICS for channels that render it (Reddit does).
       // Markdown italics never span line breaks, so each non-empty LINE is wrapped, not the whole block.
       authornoteitalic: sanitizeMentions(item.authorNote || "").split("\n").map((l) => l.trim() ? `*${l.trim()}*` : l).join("\n"),
+      // {author-note-block}: the whole labelled, quoted "From the author:" paragraph set (for long-form channels
+      // like LinkedIn), or EMPTY when the item has no from-the-author note (a note-less post shows no dangling
+      // label). Real newlines; sanitized. Products/prompts always carry a note; posts may not.
+      authornoteblock: String(item.authorNote || "").trim() ? `
+
+From the author:
+
+"${sanitizeMentions(String(item.authorNote).trim())}"` : "",
       memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : "",
       // {member-url}: the public profile
       shortdescription: sanitizeMentions(item.blurb || ""),
@@ -15944,7 +15952,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const text = String(template || "").replace(/\{([a-zA-Z-]+)\}/g, (_, name) => {
       const val = vars[name.toLowerCase().replace(/-/g, "")] ?? "";
       return name === name.toUpperCase() && /[A-Z]/.test(name) && !/^<@!?\d+>$/.test(val) ? val.toUpperCase() : val;
-    }).replace(/[ \t]{2,}/g, " ").trim();
+    }).replace(/\\n/g, "\n").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
     return truncate(text, limit);
   }
   function renderBodyTemplate(template, item = {}, rawBody = "") {

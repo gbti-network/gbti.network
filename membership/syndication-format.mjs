@@ -196,6 +196,12 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
       .split('\n')
       .map((l) => (l.trim() ? `*${l.trim()}*` : l))
       .join('\n'),
+    // {author-note-block}: the whole labelled, quoted "From the author:" paragraph set (for long-form channels
+    // like LinkedIn), or EMPTY when the item has no from-the-author note (a note-less post shows no dangling
+    // label). Real newlines; sanitized. Products/prompts always carry a note; posts may not.
+    authornoteblock: String(item.authorNote || '').trim()
+      ? `\n\nFrom the author:\n\n"${sanitizeMentions(String(item.authorNote).trim())}"`
+      : '',
     memberurl: item.author ? `https://gbti.network/members/${encodeURIComponent(String(item.author))}/` : '', // {member-url}: the public profile
     shortdescription: sanitizeMentions(item.blurb || ''), // {short-description}: the item's shortDescription (the queue item's blurb)
     // SOW-120 follow-up: {member-x-handle} is the member's OWN validated X handle rendered as a real
@@ -228,7 +234,13 @@ export function renderTemplate(template, item = {}, { limit = 2000 } = {}) {
       const val = vars[name.toLowerCase().replace(/-/g, '')] ?? '';
       return name === name.toUpperCase() && /[A-Z]/.test(name) && !/^<@!?\d+>$/.test(val) ? val.toUpperCase() : val;
     })
+    // A literal `\n` escape (LinkedIn/Mastodon multi-line templates authored in YAML folded scalars store a
+    // 2-char backslash-n, not a real break) becomes an actual newline, so the paragraph breaks post as intended
+    // instead of showing the text "\n\n". Real newlines are untouched; a run of 3+ collapses to a blank line so
+    // an empty token (a note-less item) does not leave a big gap.
+    .replace(/\\n/g, '\n')
     .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
   return truncate(text, limit);
 }

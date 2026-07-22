@@ -56,6 +56,27 @@ test('recordDestinations reads perChannel (drain) AND channels (popup), skips of
   assert.deepEqual(set({ destination: 'reddit' }), ['reddit']);
 });
 
+// LinkedIn/Mastodon multi-line templates authored in YAML folded scalars store literal `\n` (2 chars); the
+// renderer must turn those into real newlines so the post breaks into paragraphs instead of showing "\n\n".
+test('renderTemplate converts literal \\n to newlines, collapses 3+, and leaves single-line templates alone', () => {
+  assert.equal(renderTemplate('a\\n\\nb', {}), 'a\n\nb'); // literal backslash-n -> real newline
+  assert.equal(renderTemplate('a\n\nb', {}), 'a\n\nb'); // real newlines are preserved
+  // an empty token (a note-less item) does not leave a big gap: 3+ newlines collapse to a blank line
+  assert.equal(renderTemplate('a\\n\\n{author-note}\\n\\nb', {}), 'a\n\nb');
+  // a single-line template (Discord/X) is untouched
+  assert.equal(renderTemplate('New {content-type}: "{title}" {url}', { source: 'post', title: 'T', url: 'u' }), 'New article: "T" u');
+  // the LinkedIn shape renders the {author-note-block} with real breaks
+  const TMPL = 'New {content-type} by {fullName}: "{title}"\\n\\n{short-description}\\n\\n{url}{author-note-block}\\n\\n{hashtags}';
+  const li = renderTemplate(TMPL, { source: 'prompt', authorName: 'Hudson Atwell', title: 'Resp Audit', blurb: 'Drive Claude Code.', url: 'https://gbti.network/x/', authorNote: 'I wrote this.', category: 'DevOps', tags: ['prompts'] });
+  assert.ok(li.includes('\n\nFrom the author:\n\n"I wrote this."'), 'the author note posts as its own block');
+  assert.ok(!/\\n/.test(li), 'no literal backslash-n survives');
+  assert.match(li, /#DevOps #prompts$/);
+  // a NOTE-LESS item shows NO dangling "From the author:" label
+  const noNote = renderTemplate(TMPL, { source: 'post', authorName: 'A', title: 'T', blurb: 'B', url: 'https://gbti.network/y/', category: 'AI', tags: [] });
+  assert.ok(!noNote.includes('From the author'), 'no dangling label when the item has no note');
+  assert.ok(noNote.includes('https://gbti.network/y/\n\n#AI'), 'the url flows straight into the hashtags');
+});
+
 test('sanitizeMentions neutralizes @mentions and Discord mass-ping tokens', () => {
   assert.ok(!/@everyone/.test(sanitizeMentions('hey @everyone')));
   assert.ok(!/@here/.test(sanitizeMentions('@here look')));
