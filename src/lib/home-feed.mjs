@@ -87,16 +87,17 @@ export function aggregateTags(items, n = 9) {
 export const FEED_NARROWS = ['all', 'news', 'network', 'articles', 'products', 'prompts', 'shares'];
 
 /**
- * Does a feed item belong to a narrow? `all` = everything; `network` = the network's own output
- * (house content, author `gbti`); `news` matches NO static item (the News view is client-rendered
- * from the worker, sow-139); the rest match the item's kind. Unknown narrows match nothing
- * (fail closed).
+ * Does a feed item belong to a narrow? `all` = everything; `network` = the PUBLICATIONS from across
+ * the whole network, member and house alike (articles/products/prompts, no shares; owner QA
+ * 2026-07-21 redefined this from the house-only reading); `news` matches NO static item (the News
+ * view is client-rendered from the worker, sow-139); the rest match the item's kind. Unknown narrows
+ * match nothing (fail closed).
  */
 export function matchesNarrow(item, narrow) {
   switch (narrow) {
     case 'all': return true;
     case 'news': return false;
-    case 'network': return item?.author === 'gbti';
+    case 'network': return item?.kind === 'article' || item?.kind === 'product' || item?.kind === 'prompt';
     case 'articles': return item?.kind === 'article';
     case 'products': return item?.kind === 'product';
     case 'prompts': return item?.kind === 'prompt';

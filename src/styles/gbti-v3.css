@@ -935,7 +935,8 @@ a.who:hover { color: var(--fg); }
 .feed-tab.on { border-color: var(--green); color: var(--green-700); background: var(--green-tint); }
 
 /* toolbar: visibility chips + density toggle */
-.feed-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 2px; }
+/* breathing room below the toolbar: in cards mode the grid otherwise touches the density toggle */
+.feed-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 14px 0 20px; }
 .feed-vis { display: flex; gap: 8px; }
 .feed-toolbar .filter { cursor: pointer; }
 .feed-tb-sp { flex: 1; }

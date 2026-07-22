@@ -105,8 +105,10 @@ test('matchesNarrow maps the six narrows and fails closed on unknown values', ()
   assert.equal(matchesNarrow(art, 'all'), true);
   assert.equal(matchesNarrow(art, 'articles'), true);
   assert.equal(matchesNarrow(art, 'products'), false);
+  // owner QA 2026-07-21: network = the publications from across the whole network (no shares)
   assert.equal(matchesNarrow(house, 'network'), true);
-  assert.equal(matchesNarrow(art, 'network'), false);
+  assert.equal(matchesNarrow(art, 'network'), true);
+  assert.equal(matchesNarrow(share, 'network'), false);
   assert.equal(matchesNarrow(share, 'shares'), true);
   assert.equal(matchesNarrow(share, 'nope'), false);
   assert.equal(matchesNarrow(undefined, 'articles'), false);
