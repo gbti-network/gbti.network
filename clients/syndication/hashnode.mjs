@@ -109,8 +109,16 @@ export function createHashnodeAdapter({ env = {}, fetchImpl = globalThis.fetch, 
       if (Array.isArray(body?.errors) && body.errors.length) {
         return { ok: false, error: `hashnode: ${String(body.errors[0]?.message || 'graphql error')}`.slice(0, 160) };
       }
+      // A 200 with no returned post is NOT a success (it never reached the blog). Hashnode's API requires an
+      // ACTIVE PRO PLAN on the publication (retired free API 2026-05-13); without Pro, a wrong publication id, or
+      // an under-scoped token, publishPost can answer 200 with a null post and no errors[]. Surface it as a
+      // failure with a diagnostic snippet so it is never silently recorded as "sent".
       const post = body?.data?.publishPost?.post || null;
-      return { ok: true, id: post?.id != null ? String(post.id) : null, url: post?.url || null, stub: prepared.mode === 'stub' };
+      if (!post || post.id == null) {
+        const hint = JSON.stringify(body?.data ?? body ?? {}).replace(/\s+/g, ' ').slice(0, 140);
+        return { ok: false, error: `hashnode: no post returned (needs an active Pro plan on the publication, or a valid publication id / publish-scoped token). API: ${hint}`.slice(0, 240) };
+      }
+      return { ok: true, id: String(post.id), url: post.url || null, stub: prepared.mode === 'stub' };
     },
   };
 }

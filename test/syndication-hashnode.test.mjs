@@ -171,6 +171,16 @@ test('hashnode adapter: skips (share, draft file), no-publication-id, and readab
   assert.match(http500.error, /hashnode 500/);
 });
 
+test('hashnode adapter: a 200 with a null post is a FAILURE (Pro/permission), never a silent success', async () => {
+  const env = { HASHNODE_TOKEN: 'tok', HASHNODE_PUBLICATION_ID: 'pub123' };
+  const fetchImpl = async (u) => (u.startsWith('https://raw.')
+    ? { ok: true, text: async () => FILE }
+    : { ok: true, status: 200, text: async () => JSON.stringify({ data: { publishPost: { post: null } } }) });
+  const r = await createHashnodeAdapter({ env, fetchImpl }).post({ ...ITEM, textOverride: 'My Article' });
+  assert.equal(r.ok, false, 'a null post must not report ok');
+  assert.match(r.error, /no post returned|Pro plan/i);
+});
+
 test('hashnode adapter is disabled without both secrets', () => {
   assert.equal(createHashnodeAdapter({ env: {} }).enabled(), false);
   assert.equal(createHashnodeAdapter({ env: { HASHNODE_TOKEN: 'x' } }).enabled(), false);
