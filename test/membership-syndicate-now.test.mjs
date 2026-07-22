@@ -43,7 +43,7 @@ test('GET: readiness (secrets decide for AUTO; manual is always ready), template
   assert.equal(byId.dailydev.ready, true); // SOW-135/136: daily.dev is manual-only -> always ready
   assert.equal(byId.reddit.ready, false); // AUTO destination, just missing its secrets in this env
   assert.match(byId.reddit.reason, /missing secrets/);
-  assert.equal(byId.hashnode.ready, false); // AUTO destination (SOW-134), no HASHNODE secrets in this env
+  assert.equal(byId.hashnode.ready, true); // MANUAL destination now (no Pro): always ready, enqueues a Social Queue task
   assert.equal(r.body.templates.prompt, 'New prompt: {title} {url}');
   assert.equal(r.body.templates.share, 'New {content-type} published by {member-discord-username}: "{title}" {url}'); // the SOW-088 default fills gaps
   assert.deepEqual(r.body.channelMap, [{ category: 'ai', channelId: '111222333444555666' }]);

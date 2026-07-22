@@ -119,9 +119,11 @@ test('SOW-125: channelCapability derives auto/manual/building from the one map',
   assert.equal(channelCapability('mastodon'), 'auto');
   assert.equal(channelCapability('x'), 'manual');
   assert.equal(channelCapability('linkedin'), 'manual'); // SOW-127: LinkedIn is now manual-assist
+  assert.equal(channelCapability('dailydev'), 'manual'); // SOW-135
+  assert.equal(channelCapability('hashnode'), 'manual'); // manual pivot: no Hashnode Pro, so hand-post via the Social Queue
+  assert.equal(channelCapability('devto'), 'auto'); // dev.to stays the API-driven full-body channel
   assert.equal(channelCapability('nope'), 'building'); // an unknown channel defaults to building
-  assert.equal(channelCapability('nope'), 'building');
-  assert.ok(AUTO_CHANNELS.includes('bluesky') && !AUTO_CHANNELS.includes('x'));
+  assert.ok(AUTO_CHANNELS.includes('bluesky') && !AUTO_CHANNELS.includes('x') && !AUTO_CHANNELS.includes('hashnode'));
 });
 
 test('SOW-125: the default matrix is shares off, every other type on, backward-compatible', () => {
@@ -159,7 +161,7 @@ test('SOW-125/131: isAutoOn + autoChannelsForType are MATRIX-ONLY (no channels g
   assert.deepEqual(autoChannelsForType(c, 'post').sort(), ['discord', 'mastodon']);
   assert.deepEqual(autoChannelsForType(c, 'share'), ['discord']); // share on for discord only (overrides default off)
   // prompt: the default matrix is on for every AUTO channel, so all deliver.
-  assert.deepEqual(autoChannelsForType(c, 'prompt').sort(), ['bluesky', 'devto', 'discord', 'discord-category', 'hashnode', 'mastodon', 'reddit']);
+  assert.deepEqual(autoChannelsForType(c, 'prompt').sort(), ['bluesky', 'devto', 'discord', 'discord-category', 'mastodon', 'reddit']); // hashnode is MANUAL now (not an auto channel)
 });
 
 test('SOW-125: channelHoldMs uses the per-channel override, else the global hold', () => {

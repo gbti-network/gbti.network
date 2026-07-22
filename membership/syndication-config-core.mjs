@@ -43,7 +43,11 @@ export const CHANNEL_CAPABILITY = Object.freeze({
   'discord-category': 'auto',
   reddit: 'auto',
   devto: 'auto',
-  hashnode: 'auto', // SOW-134: full-body crosspost to the GBTI Hashnode publication (gbti.hashnode.dev)
+  // SOW-134 built the full-body auto adapter, but Hashnode retired its free GraphQL API (2026-05-13): API
+  // publishing now needs a paid Pro plan on the publication. Owner-decided: keep Hashnode as a MANUAL-assist
+  // channel (a Social Queue task a superadmin posts by hand) instead of paying for Pro. The adapter is kept but
+  // never called (manual channels are hard-excluded from the adapter run); flip back to 'auto' if Pro is added.
+  hashnode: 'manual', // SOW-134 + manual pivot: no Pro, so hand-post to gbti.hashnode.dev via the Social Queue
   mastodon: 'auto', // SOW-123
   bluesky: 'auto', // SOW-122
   x: 'manual', // SOW-120: the adapter renders, but posting is manual-assist (the free API tier was deprecated)
@@ -195,7 +199,9 @@ export const DEFAULT_CHANNEL_STUB_TEMPLATES = Object.freeze({
   // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
   devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
   // SOW-134: Hashnode titles are article titles too, so it mirrors dev.to's clean title suffix.
-  hashnode: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+  // Hashnode is now a MANUAL-assist channel (the task text is a full message, not an article-title suffix), so
+  // its members stub is sentence-shaped like the other manual channels.
+  hashnode: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
   x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
   linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }), // SOW-127
   dailydev: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }), // SOW-135

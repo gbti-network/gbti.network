@@ -16,7 +16,9 @@ import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
 const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn', mastodon: 'Mastodon' };
 // SOW-137 follow-up: dev.to + Hashnode cross-post the FULL article body, so the "Message template" field is
 // actually the article TITLE (fed to the adapter as the title; the body is the fetched article + byline + CTA).
-const FULL_BODY_DESTS = new Set(['devto', 'hashnode']);
+// dev.to is the only API-driven full-body channel left; Hashnode is now manual-assist (a Social Queue task), so
+// it uses the normal message-template field like X / LinkedIn / daily.dev.
+const FULL_BODY_DESTS = new Set(['devto']);
 
 // Cloudflare KV's list() is eventually consistent, so a JUST-posted record can be missing from the tracker
 // read for a minute or more (hit live 2026-07-20: a fresh Reddit post showed no badge on reopen while the

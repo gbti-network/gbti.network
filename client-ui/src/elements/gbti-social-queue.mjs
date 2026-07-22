@@ -19,6 +19,7 @@ const composeUrl = (channel, text) => {
   if (channel === 'x') return `https://twitter.com/intent/tweet?text=${t}`;
   if (channel === 'linkedin') return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
   if (channel === 'dailydev') return 'https://app.daily.dev/squads/gbti_network'; // SOW-135: no text prefill; Assist opens the squad, the Copy button supplies the link
+  if (channel === 'hashnode') return 'https://hashnode.com/draft'; // Hashnode is a full-article cross-post: Assist opens a new draft; copy the article from the gbti.network link in the task text
   return null;
 };
 const CH_LABEL = { x: 'X', discord: 'Discord', 'discord-category': 'Discord', reddit: 'Reddit', devto: 'dev.to', hashnode: 'Hashnode', dailydev: 'daily.dev', linkedin: 'LinkedIn', mastodon: 'Mastodon', bluesky: 'Bluesky' };

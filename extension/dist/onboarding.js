@@ -6207,8 +6207,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     "discord-category": "auto",
     reddit: "auto",
     devto: "auto",
-    hashnode: "auto",
-    // SOW-134: full-body crosspost to the GBTI Hashnode publication (gbti.hashnode.dev)
+    // SOW-134 built the full-body auto adapter, but Hashnode retired its free GraphQL API (2026-05-13): API
+    // publishing now needs a paid Pro plan on the publication. Owner-decided: keep Hashnode as a MANUAL-assist
+    // channel (a Social Queue task a superadmin posts by hand) instead of paying for Pro. The adapter is kept but
+    // never called (manual channels are hard-excluded from the adapter run); flip back to 'auto' if Pro is added.
+    hashnode: "manual",
+    // SOW-134 + manual pivot: no Pro, so hand-post to gbti.hashnode.dev via the Social Queue
     mastodon: "auto",
     // SOW-123
     bluesky: "auto",
@@ -6314,7 +6318,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // dev.to titles are article titles: a clean suffix, never the sentence-shaped shared stub.
     devto: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
     // SOW-134: Hashnode titles are article titles too, so it mirrors dev.to's clean title suffix.
-    hashnode: Object.freeze({ share: REDDIT_TITLE_STUB, post: REDDIT_TITLE_STUB, product: REDDIT_TITLE_STUB, prompt: REDDIT_TITLE_STUB }),
+    // Hashnode is now a MANUAL-assist channel (the task text is a full message, not an article-title suffix), so
+    // its members stub is sentence-shaped like the other manual channels.
+    hashnode: Object.freeze({ share: DAILYDEV_SHARE_STUB, post: DAILYDEV_STUB, product: DAILYDEV_STUB, prompt: DAILYDEV_STUB }),
     x: Object.freeze({ share: X_SHARE_STUB, post: X_STUB, product: X_STUB, prompt: X_STUB }),
     linkedin: Object.freeze({ share: LINKEDIN_SHARE_STUB, post: LINKEDIN_STUB, product: LINKEDIN_STUB, prompt: LINKEDIN_STUB }),
     // SOW-127
@@ -6542,18 +6548,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   <g id="cb-dailydev"><path fill="currentColor" d="M18.29 5.706a1.405 1.405 0 0 0-1.987 0L4.716 17.296l1.324-2.65-2.65-2.649 3.312-3.311 2.65 2.65 1.986-1.988-3.642-3.642a1.405 1.405 0 0 0-1.987 0L.411 11.004a1.404 1.404 0 0 0 0 1.987l4.305 4.304.993.993a1.405 1.405 0 0 0 1.987 0L19.285 6.7l-.993-.994Zm-.332 3.647 2.65 2.65-4.306 4.305a1.404 1.404 0 1 0 1.986 1.986l5.299-5.298a1.404 1.404 0 0 0 0-1.987l-4.305-4.304-1.324 2.648Z"/></g>
 </defs></svg>`;
   var capOf = (id) => id === "substack" ? "manual" : channelCapability(id);
-  var isTileActive = (id) => capOf(id) === "auto" || id === "x" || id === "dailydev";
+  var isTileActive = (id) => capOf(id) === "auto" || capOf(id) === "manual";
   var TILE_CHANNELS = [
     { id: "discord", name: "Discord", sub: "Featured", icon: "cb-discord", cls: "br-discord" },
     { id: "discord-category", name: "Discord", sub: "Category", icon: "cb-discord", cls: "br-discord" },
     { id: "reddit", name: "Reddit", sub: "Subreddit", icon: "cb-reddit", cls: "br-reddit" },
     { id: "devto", name: "dev.to", sub: "Org blog", icon: "cb-devto", cls: "br-devto" },
-    { id: "hashnode", name: "Hashnode", sub: "Dev blog", icon: "cb-hashnode", cls: "br-hashnode" },
-    // SOW-134
+    { id: "hashnode", name: "Hashnode", sub: "Manual", icon: "cb-hashnode", cls: "br-hashnode" },
+    // SOW-134 + manual pivot (no Pro)
     { id: "dailydev", name: "daily.dev", sub: "Manual", icon: "cb-dailydev", cls: "br-dailydev" },
     // SOW-135
     { id: "x", name: "X", sub: "Manual", icon: "cb-x", cls: "br-x" },
-    { id: "linkedin", name: "LinkedIn", sub: "Building", icon: "cb-linkedin", cls: "br-li" },
+    { id: "linkedin", name: "LinkedIn", sub: "Manual", icon: "cb-linkedin", cls: "br-li" },
     { id: "mastodon", name: "Mastodon", sub: "", icon: "cb-mastodon", cls: "br-masto" },
     { id: "bluesky", name: "Bluesky", sub: "", icon: "cb-bsky", cls: "br-bsky" },
     {
@@ -6774,13 +6780,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const tiles = TILE_CHANNELS.map((c) => `<button class="chtile${c.id === cur ? " on" : ""}${c.active ? "" : " soon"}" type="button" data-tile="${esc(c.id)}"${c.active ? "" : ' aria-disabled="true"'}${c.note ? ` title="${esc(c.note)}"` : ""}>
         <span class="ct-i ${esc(c.cls)}"><svg viewBox="0 0 24 24"><use href="#${esc(c.icon)}"/></svg></span>
         <span class="ct-n">${esc(c.name)}</span><span class="ct-s">${esc(c.sub)}</span></button>`).join("");
-      const chipVars = cur === "devto" ? [...VARS, "{body}", "{member-devto-handle}"] : cur === "hashnode" ? [...VARS, "{body}"] : VARS;
+      const chipVars = cur === "devto" ? [...VARS, "{body}", "{member-devto-handle}"] : VARS;
       const chips = chipVars.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join("");
       const vis = this._tmplVis || "pub";
       const work = this._work?.[`${vis}:${cur}`] || {};
       const custom = (k) => (vis === "stub" ? this._channelTemplatesStub?.[cur]?.[k] : this._channelTemplates?.[cur]?.[k]) ? " · custom" : "";
-      const FULL_BODY = /* @__PURE__ */ new Set(["devto", "hashnode"]);
-      const rows = (FULL_BODY.has(cur) ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">${esc(cur === "devto" ? "dev.to" : "Hashnode")} cross-posts the full article body, so there are no per-type message templates here. Below: the byline is prepended and the CTA footer appended, and the ${vis === "stub" ? "stub body is the members-only teaser" : "Body wraps the article ({body} = the full article verbatim)"}.</p>` : TMPL_TYPES.map((t) => `<div class="tmpl">
+      const FULL_BODY = /* @__PURE__ */ new Set(["devto"]);
+      const rows = (FULL_BODY.has(cur) ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">dev.to cross-posts the full article body, so there are no per-type message templates here. Below: the byline is prepended and the CTA footer appended, and the ${vis === "stub" ? "stub body is the members-only teaser" : "Body wraps the article ({body} = the full article verbatim)"}.</p>` : TMPL_TYPES.map((t) => `<div class="tmpl">
         <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
         <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || "")}" /></div>`).join("")) + (cur === "reddit" ? `<div class="tmpl"><div class="tl"><div class="nm">Reddit body</div><div class="df">${esc("the description under the title" + custom("reddit-body"))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="reddit-body">${esc(work["reddit-body"] || "")}</textarea></div>
@@ -6791,13 +6797,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
             <textarea class="ctrl" maxlength="500" rows="3" data-tk="devto-stub">${esc(work["devto-stub"] || "")}</textarea></div>` : `<div class="tmpl"><div class="tl"><div class="nm">Body</div><div class="df">${esc("the public post body; {body} = the full article verbatim" + custom("devto-body"))}</div></div>
             <textarea class="ctrl" maxlength="4000" rows="4" data-tk="devto-body">${esc(work["devto-body"] || "")}</textarea></div>`}
           <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc("appended to every dev.to post" + custom("devto-footer"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work["devto-footer"] || "")}</textarea></div>` : "") + (cur === "hashnode" ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc("prepended to the crosspost" + custom("hashnode-intro"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-intro">${esc(work["hashnode-intro"] || "")}</textarea></div>
-          ${vis === "stub" ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc("the members-only teaser middle" + custom("hashnode-stub"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-stub">${esc(work["hashnode-stub"] || "")}</textarea></div>` : `<div class="tmpl"><div class="tl"><div class="nm">Body</div><div class="df">${esc("the public post body; {body} = the full article verbatim" + custom("hashnode-body"))}</div></div>
-            <textarea class="ctrl" maxlength="4000" rows="4" data-tk="hashnode-body">${esc(work["hashnode-body"] || "")}</textarea></div>`}
-          <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc("appended to every Hashnode post" + custom("hashnode-footer"))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="4" data-tk="hashnode-footer">${esc(work["hashnode-footer"] || "")}</textarea></div>` : "");
+            <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work["devto-footer"] || "")}</textarea></div>` : "");
       return `<section class="card" id="sec-templates" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg></span>
         <div><h2>Syndication templates</h2><p>Configured per destination channel. Blank falls back to the shared template, then the built-in.</p></div>
@@ -14592,7 +14592,7 @@ From the author:
 
   // client-ui/src/elements/gbti-syndicate-now.mjs
   var DEST_LABEL = { discord: "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", x: "X", bluesky: "Bluesky", linkedin: "LinkedIn", mastodon: "Mastodon" };
-  var FULL_BODY_DESTS = /* @__PURE__ */ new Set(["devto", "hashnode"]);
+  var FULL_BODY_DESTS = /* @__PURE__ */ new Set(["devto"]);
   var LOCAL_SENDS_KEY = "gbti-synd-local-sends";
   var LOCAL_SENDS_MAX_AGE = 7 * 24 * 60 * 60 * 1e3;
   var localSendsAll = () => {

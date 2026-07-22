@@ -50,6 +50,7 @@ syndication:
     - x
     - linkedin
     - dailydev
+    - hashnode
   auto_matrix:
     share:
       discord: 'off'
@@ -66,6 +67,7 @@ syndication:
       x: on-manual
       linkedin: on-manual
       dailydev: on-manual
+      hashnode: on-manual
     product:
       x: on-manual
       linkedin: on-manual

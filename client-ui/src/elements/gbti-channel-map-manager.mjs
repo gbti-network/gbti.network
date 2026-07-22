@@ -198,16 +198,19 @@ const ICONS = `<svg width="0" height="0" style="position:absolute" aria-hidden="
 const capOf = (id) => (id === 'substack' ? 'manual' : channelCapability(id));
 // A tile is editable when its adapter posts automatically (`auto`) OR it is X (manual-assist, but its template
 // still renders the Social Queue text). Substack (manual, no adapter/prefill) and LinkedIn (building) stay off.
-const isTileActive = (id) => capOf(id) === 'auto' || id === 'x' || id === 'dailydev'; // SOW-135: daily.dev is manual-assist but its template is editable
+// A channel's templates are editable when it actually delivers: any AUTO channel, and any MANUAL-assist channel
+// (x, linkedin, dailydev, hashnode) whose per-type text drives the Social Queue task. Only 'building' tiles
+// (an unknown/placeholder channel like Substack) stay disabled.
+const isTileActive = (id) => capOf(id) === 'auto' || capOf(id) === 'manual';
 const TILE_CHANNELS = [
   { id: 'discord', name: 'Discord', sub: 'Featured', icon: 'cb-discord', cls: 'br-discord' },
   { id: 'discord-category', name: 'Discord', sub: 'Category', icon: 'cb-discord', cls: 'br-discord' },
   { id: 'reddit', name: 'Reddit', sub: 'Subreddit', icon: 'cb-reddit', cls: 'br-reddit' },
   { id: 'devto', name: 'dev.to', sub: 'Org blog', icon: 'cb-devto', cls: 'br-devto' },
-  { id: 'hashnode', name: 'Hashnode', sub: 'Dev blog', icon: 'cb-hashnode', cls: 'br-hashnode' }, // SOW-134
+  { id: 'hashnode', name: 'Hashnode', sub: 'Manual', icon: 'cb-hashnode', cls: 'br-hashnode' }, // SOW-134 + manual pivot (no Pro)
   { id: 'dailydev', name: 'daily.dev', sub: 'Manual', icon: 'cb-dailydev', cls: 'br-dailydev' }, // SOW-135
   { id: 'x', name: 'X', sub: 'Manual', icon: 'cb-x', cls: 'br-x' },
-  { id: 'linkedin', name: 'LinkedIn', sub: 'Building', icon: 'cb-linkedin', cls: 'br-li' },
+  { id: 'linkedin', name: 'LinkedIn', sub: 'Manual', icon: 'cb-linkedin', cls: 'br-li' },
   { id: 'mastodon', name: 'Mastodon', sub: '', icon: 'cb-mastodon', cls: 'br-masto' },
   { id: 'bluesky', name: 'Bluesky', sub: '', icon: 'cb-bsky', cls: 'br-bsky' },
   { id: 'substack', name: 'Substack', sub: 'Manual only', icon: 'cb-substack', cls: 'br-substack',
@@ -432,22 +435,21 @@ class GbtiChannelMapManager extends GbtiElement {
         <span class="ct-i ${esc(c.cls)}"><svg viewBox="0 0 24 24"><use href="#${esc(c.icon)}"/></svg></span>
         <span class="ct-n">${esc(c.name)}</span><span class="ct-s">${esc(c.sub)}</span></button>`).join('');
     // SOW-138: {body} (the full article) + SOW-140: {member-devto-handle} (the dev.to byline mention) are offered
-    // on the full-body channels only, where they drive the body + byline fields.
-    const chipVars = cur === 'devto' ? [...VARS, '{body}', '{member-devto-handle}']
-      : cur === 'hashnode' ? [...VARS, '{body}'] : VARS;
+    // on dev.to only (the last API-driven full-body channel; Hashnode is now manual-assist, so it uses the
+    // per-type short templates like X / LinkedIn / daily.dev).
+    const chipVars = cur === 'devto' ? [...VARS, '{body}', '{member-devto-handle}'] : VARS;
     const chips = chipVars.map((v) => `<button class="varchip" type="button" data-var="${esc(v)}">${esc(v)}</button>`).join('');
     const vis = this._tmplVis || 'pub';
     const work = this._work?.[`${vis}:${cur}`] || {};
     // The `· custom` marker reflects a stored override IN THE ACTIVE visibility map.
     const custom = (k) => ((vis === 'stub' ? this._channelTemplatesStub?.[cur]?.[k] : this._channelTemplates?.[cur]?.[k]) ? ' · custom' : '');
-    // SOW-137: dev.to + Hashnode cross-post the FULL article body, so the per-type short templates
-    // (share/post/product/prompt) do NOT drive their post (the title is the item title; the body is
-    // byline + the body + CTA footer). Hide those rows for full-body channels and show a note. SOW-138: the
-    // body itself is now editable below (Public tab = Byline / Body / CTA footer, where {body} = the article;
-    // Members stub tab = Byline / Stub body / CTA footer).
-    const FULL_BODY = new Set(['devto', 'hashnode']);
+    // SOW-137: dev.to cross-posts the FULL article body, so the per-type short templates
+    // (share/post/product/prompt) do NOT drive its post (the title is the item title; the body is byline + the
+    // body + CTA footer). Hide those rows for dev.to and show a note. SOW-138: the body itself is editable below
+    // (Public tab = Byline / Body / CTA footer). Hashnode is now MANUAL-assist, so it uses the per-type rows.
+    const FULL_BODY = new Set(['devto']);
     const rows = (FULL_BODY.has(cur)
-      ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">${esc(cur === 'devto' ? 'dev.to' : 'Hashnode')} cross-posts the full article body, so there are no per-type message templates here. Below: the byline is prepended and the CTA footer appended, and the ${vis === 'stub' ? 'stub body is the members-only teaser' : 'Body wraps the article ({body} = the full article verbatim)'}.</p>`
+      ? `<p style="margin:2px 0 12px;color:var(--muted);font-size:12px;line-height:1.5">dev.to cross-posts the full article body, so there are no per-type message templates here. Below: the byline is prepended and the CTA footer appended, and the ${vis === 'stub' ? 'stub body is the members-only teaser' : 'Body wraps the article ({body} = the full article verbatim)'}.</p>`
       : TMPL_TYPES.map((t) => `<div class="tmpl">
         <div class="tl"><div class="nm">${esc(t.nm)}</div><div class="df">${esc(t.df + custom(t.key))}</div></div>
         <input class="ctrl" maxlength="500" data-tk="${esc(t.key)}" value="${esc(work[t.key] || '')}" /></div>`).join(''))
@@ -467,17 +469,6 @@ class GbtiChannelMapManager extends GbtiElement {
             <textarea class="ctrl" maxlength="4000" rows="4" data-tk="devto-body">${esc(work['devto-body'] || '')}</textarea></div>`}
           <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc('appended to every dev.to post' + custom('devto-footer'))}</div></div>
             <textarea class="ctrl" maxlength="500" rows="4" data-tk="devto-footer">${esc(work['devto-footer'] || '')}</textarea></div>`
-        : '')
-      + (cur === 'hashnode'
-        ? `<div class="tmpl"><div class="tl"><div class="nm">Byline</div><div class="df">${esc('prepended to the crosspost' + custom('hashnode-intro'))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-intro">${esc(work['hashnode-intro'] || '')}</textarea></div>
-          ${vis === 'stub'
-            ? `<div class="tmpl"><div class="tl"><div class="nm">Stub body</div><div class="df">${esc('the members-only teaser middle' + custom('hashnode-stub'))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="3" data-tk="hashnode-stub">${esc(work['hashnode-stub'] || '')}</textarea></div>`
-            : `<div class="tmpl"><div class="tl"><div class="nm">Body</div><div class="df">${esc('the public post body; {body} = the full article verbatim' + custom('hashnode-body'))}</div></div>
-            <textarea class="ctrl" maxlength="4000" rows="4" data-tk="hashnode-body">${esc(work['hashnode-body'] || '')}</textarea></div>`}
-          <div class="tmpl"><div class="tl"><div class="nm">CTA footer</div><div class="df">${esc('appended to every Hashnode post' + custom('hashnode-footer'))}</div></div>
-            <textarea class="ctrl" maxlength="500" rows="4" data-tk="hashnode-footer">${esc(work['hashnode-footer'] || '')}</textarea></div>`
         : '');
     return `<section class="card" id="sec-templates" data-sec>
       <div class="card-h"><span class="hi"><svg viewBox="0 0 24 24"><use href="#c-tmpl"/></svg></span>
