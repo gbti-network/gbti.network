@@ -80,10 +80,10 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
   {thread.length === 0 ? (
     <div class="card" style="padding:24px;background:var(--tint-warm);margin-top:16px;display:flex;flex-direction:column;align-items:flex-start;gap:12px">
       <p class="body-sm muted" style="margin:0">
-        No comments yet. Be the first. Members comment from the GBTI local client, where comments are
-        submitted as pull requests and auto-published for paid members.
+        No comments yet. Be the first.<span class="cmt-join-pitch"> Members comment from the GBTI local client, where comments are
+        submitted as pull requests and auto-published for paid members.</span>
       </p>
-      <a href="/membership/" class="link">Become a member <svg class="ar" viewBox="0 0 24 24" width="16" height="16"><use href="#ico-arrow"/></svg></a>
+      <a href="/membership/" class="link cmt-join-pitch">Become a member <svg class="ar" viewBox="0 0 24 24" width="16" height="16"><use href="#ico-arrow"/></svg></a>
     </div>
   ) : (
     <ul style="list-style:none;padding:0;margin-top:24px;display:flex;flex-direction:column;gap:24px">
@@ -113,10 +113,13 @@ const avatarOf = (username: string) => authorAvatar(username, profileAvatar.get(
   )}
 
   {/* SOW-027: the inert comment composer; the GBTI client upgrades it for a paid member, inert otherwise. */}
-  <CommentBox targetType={targetType} targetSlug={targetSlug} />
+  <CommentBox targetType={targetType} targetSlug={targetSlug} readerPath={itemReaderPath} />
 </section>
 
 <style is:global>
+  /* Owner QA 2026-07-22: a signed-in active member never sees the become-a-member pitch (the SOW-030
+     presentation signal; the real gate stays server-side). */
+  html.is-gbti-member-active .cmt-join-pitch { display: none; }
   /* Rendered comment / author-note markdown: give paragraphs real spacing and make links read as links. */
   .cmt-rich > :first-child { margin-top: 0; }
   .cmt-rich > :last-child { margin-bottom: 0; }

@@ -1117,7 +1117,13 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
   .detail-side { position: static; }
 }
 
-/* owner QA 2026-07-22: the share page's quoted-summary footnote + the member-note block */
-.share-fn-ref { font-size: 0.62em; color: var(--green-700); margin-left: 2px; }
-.share-footnote { font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); margin-top: 14px; }
-.share-footnote sup { color: var(--green-700); }
+/* owner QA 2026-07-22: the share page's quoted summary (italic, inline source credit), the top-meta
+   source badge stacked over the member avatar, and the member-note quotation treatment */
+.share-quote { font-style: italic; }
+.sq-credit { font-style: normal; font-family: var(--f-mono); font-size: 13px; color: var(--fg-mute); white-space: nowrap; }
+.share-src-stack { position: relative; display: inline-flex; flex: none; }
+.sss-fav { position: absolute; right: -7px; bottom: -5px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; border: 2px solid var(--paper); z-index: 1; }
+.share-member-note .cmt-rich { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 17px; }
+.share-member-note .cmt-rich p:first-child::before { content: '"'; }
+.share-member-note .cmt-rich p:last-child::after { content: '"'; }

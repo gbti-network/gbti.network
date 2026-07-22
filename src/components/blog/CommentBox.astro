@@ -10,20 +10,22 @@ interface Props {
   targetSlug: string;
   commentId?: string; // present => the inline "Edit" affordance for that comment (author-only, client-gated)
   commentAuthor?: string;
+  readerPath?: string; // the parent item's repo path; lets the signed-in note deep-link the extension reader
 }
-const { targetType, targetSlug, commentId, commentAuthor } = Astro.props;
+const { targetType, targetSlug, commentId, commentAuthor, readerPath } = Astro.props;
 const isEdit = Boolean(commentId);
 const { aliases = [] } = Astro.props as { aliases?: string[] };
 const attrs: Record<string, string> = { 'data-gbti-target-type': targetType, 'data-gbti-target-slug': targetSlug };
 if (aliases.length) attrs['data-gbti-target-aliases'] = aliases.join(','); // SOW-112: pre-rename slugs
 if (commentId) attrs['data-gbti-comment-id'] = commentId;
 if (commentAuthor) attrs['data-gbti-comment-author'] = commentAuthor;
+if (readerPath) attrs['data-gbti-reader-path'] = readerPath;
 ---
 <gbti-comment-box {...attrs}>
   {!isEdit && (
     <div class="cbox-fallback">
       <p class="body-sm muted for-visitor" style="margin:0">Members write comments from the GBTI client or browser extension. <a href="/membership/" class="link">Become a member</a> to join the conversation.</p>
-      <p class="body-sm muted for-paid" style="margin:0">You are signed in as a member — reply to this discussion from the GBTI extension.</p>
+      <p class="body-sm muted for-paid" style="margin:0">You are signed in as a member. <button type="button" class="link cbox-open" data-cbox-open>Reply to this discussion from the GBTI extension</button>.</p>
     </div>
   )}
 </gbti-comment-box>
@@ -32,7 +34,26 @@ if (commentAuthor) attrs['data-gbti-comment-author'] = commentAuthor;
   /* The edit affordance is inline and EMPTY until the client upgrades it (and only for the author). */
   gbti-comment-box[data-gbti-comment-id] { display: inline-block; }
   .cbox-fallback { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: var(--r); background: var(--green-tint); }
+  .cbox-open { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
   .for-paid { display: none; }
   :global(html.is-gbti-paid) .for-paid { display: block; }
   :global(html.is-gbti-paid) .for-visitor { display: none; }
 </style>
+
+<script>
+  // Owner QA 2026-07-22: the signed-in note deep-links into the extension's reader for this item via
+  // the gbti:open relay (the header-menu pattern). A share reads by its <author>/<id> key; content
+  // types read by their repo path when the parent passed one (data-gbti-reader-path via Comments).
+  document.querySelectorAll('gbti-comment-box').forEach((box) => {
+    const btn = box.querySelector('[data-cbox-open]');
+    if (!btn) return;
+    btn.addEventListener('click', () => {
+      const type = box.getAttribute('data-gbti-target-type') || '';
+      const slug = box.getAttribute('data-gbti-target-slug') || '';
+      const readerPath = box.getAttribute('data-gbti-reader-path') || '';
+      const read = type === 'share' ? slug : readerPath;
+      const hash = read ? `tab=${type}&read=${read}` : `tab=${type}`;
+      document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'newtab.html', hash } }));
+    });
+  });
+</script>

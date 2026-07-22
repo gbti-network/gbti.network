@@ -43,20 +43,23 @@ const body = (share.rendered?.html ?? '').trim();
     <div class="detail-main">
     <article>
       <div class="feed-meta" style="margin-bottom:14px">
-        <a href={authorHref(d.author)}><Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={34} /></a>
+        <a href={authorHref(d.author)} class="share-src-stack">
+          <Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={34} />
+          {srcDomain && <img class="sss-fav" alt="" width="20" height="20" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(srcDomain)}&sz=64`} onerror="this.remove()" />}
+        </a>
         <span class="tmeta"><a class="who" href={authorHref(d.author)}>{authorDisplay(d.author)}</a><span class="dotsep"></span>{formatDate(d.createdAt)}</span>
         <span class="kind-tag kt-share">shared{srcDomain ? ` · ${srcDomain}` : ''}</span>
       </div>
 
       <h1 class="h1 share-title">{title}</h1>
-      {quotedDesc && <p class="lead" style="margin-top:14px">{quotedDesc}<sup class="share-fn-ref">1</sup></p>}
+      {quotedDesc && <p class="lead share-quote" style="margin-top:14px">{quotedDesc} <span class="sq-credit">- {srcDomain ?? 'the source'}</span></p>}
 
       {typeof d.image === 'string' && d.image && (
         <a href={d.url} target="_blank" rel="noopener nofollow" class="share-hero" aria-hidden="true" tabindex="-1"><img src={d.image} alt="" loading="lazy" decoding="async" /></a>
       )}
 
       {body && (
-        <article class="card share-member-note" style="padding:24px;border-color:var(--green);background:var(--green-tint);margin-top:26px">
+        <article class="card share-member-note" style="padding:24px;margin-top:26px">
           <div class="flex items-center g12">
             <a href={authorHref(d.author)} class="shrink-0"><Avatar item={{ name: authorDisplay(d.author), avatar }} size={44} class="rounded-full" /></a>
             <div>
@@ -72,9 +75,7 @@ const body = (share.rendered?.html ?? '').trim();
         {d.url && <a href={d.url} target="_blank" rel="noopener nofollow" class="btn btn-primary">Read on {srcDomain ?? 'the source'} <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>}
         <UpvoteButton targetSlug={slug} />
       </div>
-      {quotedDesc && (
-        <p class="share-footnote"><sup>1</sup> The summary is quoted directly from the article source{srcDomain ? ` (${srcDomain})` : ''}.</p>
-      )}
+
 
       {d.tags?.length > 0 && (
         <div class="tags" style="margin-top:22px">

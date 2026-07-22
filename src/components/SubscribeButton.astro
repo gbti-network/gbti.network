@@ -75,6 +75,14 @@ const { name = 'this member', username, variant = 'primary' } = Astro.props;
     const dlg = wrap.querySelector('[data-subscribe-modal]') as HTMLDialogElement | null;
     if (!btn || !dlg) return;
     btn.addEventListener('click', () => {
+      // Owner QA 2026-07-22: with the extension installed AND a signed-in member, never show the
+      // dialog; relay into the extension's follow surface (the workspace Subscriptions tab) instead.
+      // (The upgraded shadow toggle normally covers this path; this is the fallback when it has not.)
+      const de = document.documentElement.dataset;
+      if (de.gbtiExtension && de.gbtiMember) {
+        document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'workspace.html', hash: 'tab=subs' } }));
+        return;
+      }
       const extensionNeeded = hasIdentity();
       dlg.querySelectorAll('[data-sub-state]').forEach((s) => {
         (s as HTMLElement).hidden = s.getAttribute('data-sub-state') !== (extensionNeeded ? 'extension' : 'join');
