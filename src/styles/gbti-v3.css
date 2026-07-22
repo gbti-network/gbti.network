@@ -1116,3 +1116,8 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
   .detail-grid { grid-template-columns: 1fr; }
   .detail-side { position: static; }
 }
+
+/* owner QA 2026-07-22: the share page's quoted-summary footnote + the member-note block */
+.share-fn-ref { font-size: 0.62em; color: var(--green-700); margin-left: 2px; }
+.share-footnote { font-family: var(--f-mono); font-size: 12px; color: var(--fg-mute); margin-top: 14px; }
+.share-footnote sup { color: var(--green-700); }
