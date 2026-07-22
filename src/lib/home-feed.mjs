@@ -119,6 +119,21 @@ export function readMinutes(text) {
   return words === 0 ? 0 : Math.max(1, Math.round(words / 220));
 }
 
+/**
+ * The news comment-thread key: "news-<FNV-1a 32-bit base36><len%36>". A byte-exact port of
+ * client-ui/src/news.mjs newsTargetSlug, so the site's gated news discussion reads the same thread the
+ * extension writes. Keep the two implementations in lockstep (the unit test pins known values).
+ */
+export function newsTargetSlug(guid) {
+  const s = String(guid ?? '');
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `news-${(h >>> 0).toString(36)}${(s.length % 36).toString(36)}`;
+}
+
 /** Short relative time for feed metadata: "just now", "5m ago", "3h ago", "2d ago", "4mo ago", "1y ago". */
 export function relativeTime(date, now = Date.now()) {
   const t = date ? new Date(date).valueOf() : NaN;

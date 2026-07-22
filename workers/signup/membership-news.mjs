@@ -96,6 +96,9 @@ export async function publicNews(request, env, { fetch = globalThis.fetch } = {}
   const q = new URLSearchParams();
   const cat = url.searchParams.get('category');
   if (cat && SAFE_CATEGORY.test(cat)) q.set('category', cat);
+  // The news detail shell narrows its lookup window by publication (mirrors findNewsItemByGuid).
+  const src = url.searchParams.get('source');
+  if (src && SAFE_SOURCE.test(src)) q.set('source', src);
   const since = url.searchParams.get('since');
   if (since && /^[0-9]{1,12}$/.test(since)) q.set('since', since);
   q.set('limit', String(clampLimit(url.searchParams.get('limit'), 40, 60)));

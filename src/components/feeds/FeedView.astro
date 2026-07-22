@@ -63,9 +63,9 @@ const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersSha
   <div class="feed-toolbar">
     <span class="feed-tb-sp"></span>
     <div class="view-toggle" role="group" aria-label="Density">
-      <button type="button" class="vt-btn on" data-feedview-density="card" aria-pressed="true"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-grid"/></svg> Cards</button>
-      <button type="button" class="vt-btn" data-feedview-density="detailed" aria-pressed="false"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-list"/></svg> Detailed</button>
-      <button type="button" class="vt-btn" data-feedview-density="compact" aria-pressed="false"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg> Compact</button>
+      <button type="button" class="vt-btn on" data-feedview-density="card" aria-pressed="true" aria-label="Cards" data-tooltip="Cards" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-grid"/></svg></button>
+      <button type="button" class="vt-btn" data-feedview-density="detailed" aria-pressed="false" aria-label="Detailed" data-tooltip="Detailed" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-list"/></svg></button>
+      <button type="button" class="vt-btn" data-feedview-density="compact" aria-pressed="false" aria-label="Compact" data-tooltip="Compact" data-tooltip-pos="below"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>
   </div>
 
@@ -218,18 +218,18 @@ const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersSha
           if (!items.length) { newsBox.append(el('p', 'feed-empty', 'No news right now.')); return; }
           const chunk = el('div', 'feed-chunk');
           for (const it of items) {
-            const art = el('article', 'feed-item' + (it.image ? '' : ' nocover'));
+            const art = el('article', 'feed-item news-row' + (it.image ? '' : ' nocover'));
             art.setAttribute('data-fi', '');
             const main = el('div', 'feed-main');
             const meta = el('div', 'feed-meta');
             const tagEl = el('span', 'kind-tag kt-news', 'news' + (it.source ? ' · ' + it.source : ''));
             const when = el('span', 'tmeta', typeof it.publishedAt === 'number' ? relTime(it.publishedAt) : '');
             meta.append(tagEl, when);
+            // sow-139 QA: the row deep-links to the item's expanded view; the external link lives there.
+            const detailHref = '/news/item/?g=' + encodeURIComponent(String(it.guid || '')) + (it.source ? '&s=' + encodeURIComponent(String(it.source)) : '');
             const h2 = el('h2', 'feed-title');
             const a = el('a', undefined, String(it.title || 'Untitled'));
-            a.setAttribute('href', String(it.link || '#'));
-            a.setAttribute('target', '_blank');
-            a.setAttribute('rel', 'noopener nofollow');
+            a.setAttribute('href', detailHref);
             h2.append(a);
             main.append(meta, h2);
             if (it.summary) main.append(el('p', 'feed-ex', String(it.summary)));
@@ -238,9 +238,7 @@ const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersSha
             main.append(foot);
             art.append(main);
             const cover = el('a', 'feed-cover' + (it.image ? '' : ' feed-cover-fb'));
-            cover.setAttribute('href', String(it.link || '#'));
-            cover.setAttribute('target', '_blank');
-            cover.setAttribute('rel', 'noopener nofollow');
+            cover.setAttribute('href', detailHref);
             cover.setAttribute('aria-hidden', 'true');
             cover.setAttribute('tabindex', '-1');
             const img = document.createElement('img');

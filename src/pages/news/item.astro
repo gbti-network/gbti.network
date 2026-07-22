@@ -1,0 +1,230 @@
+---
+// sow-139 (owner-directed, 2026-07-21): the news item's deep-linked expanded view, mirroring the
+// extension's news reader. News items live only in the worker (no static build data), so this is a
+// CLIENT-RENDERED shell (the embed.astro pattern): noindex, keyed by ?g=<guid> (+ an optional
+// &s=<source> hint that narrows the lookup window per publication). It fetches the anonymous
+// /news/feed, the site's own /news-sources.json (the source meta card), and /comments-index.json
+// (the GATED discussion: public comment bodies render, members comments render as locked rows; the
+// index strips members bodies at build, src/lib/comments-index.mjs). The source FOLLOW button routes
+// per the owner directive: extension present + signed in -> the gbti:open relay into the extension's
+// news tab (follow-channel is an extension pref); otherwise the shared join/extension CTA dialog.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { SIGNUP_BASE } from '../../lib/membership';
+---
+<BaseLayout title="News" description="A story from the curated GBTI Network news stream." noindex={true}>
+  <div class="wrap share-page news-item-page" data-news-item data-signup-base={SIGNUP_BASE}>
+    <nav class="share-crumb"><a href="/feeds/news/" class="link">&larr; News feed</a></nav>
+    <div data-news-target>
+      <p class="feed-empty" style="margin-top:60px">Loading the story…</p>
+    </div>
+
+    <dialog class="subscribe-modal" data-follow-modal aria-label="Follow this source">
+      <div class="sm-card">
+        <div data-follow-state="join">
+          <p class="eyebrow" style="color:var(--green-700)">Member feature</p>
+          <h3 class="h3 mt8">Follow news sources</h3>
+          <p class="body mt12" style="color:var(--fg-soft)">
+            Members follow publications to shape their news stream. Join to follow sources, save
+            stories, and take part in the member discussion.
+          </p>
+          <div class="sm-actions mt24">
+            <a href="/membership/" class="btn btn-primary">Start your free trial</a>
+            <a href="/extension/" class="btn btn-ghost">Already a member? Sign in</a>
+            <button type="button" class="btn btn-ghost" data-follow-close>Maybe later</button>
+          </div>
+        </div>
+        <div data-follow-state="extension" hidden>
+          <p class="eyebrow" style="color:var(--green-700)">Extension required</p>
+          <h3 class="h3 mt8">Follow from the GBTI extension</h3>
+          <p class="body mt12" style="color:var(--fg-soft)">
+            Source follows live in the GBTI browser extension, where your news stream is personalized.
+            Install it and sign in to follow this publication.
+          </p>
+          <div class="sm-actions mt24">
+            <a href="/extension/" class="btn btn-primary">Get the extension</a>
+            <button type="button" class="btn btn-ghost" data-follow-close>Maybe later</button>
+          </div>
+        </div>
+      </div>
+    </dialog>
+  </div>
+
+  <style>
+    /* the modal reuses the SubscribeButton dialog treatment (Tailwind preflight margin reset fix incl.) */
+    .subscribe-modal { border: 0; padding: 0; border-radius: var(--r-lg); max-width: 440px; width: calc(100vw - 32px); background: transparent; margin: auto; height: fit-content; max-height: calc(100dvh - 32px); }
+    .subscribe-modal::backdrop { background: rgba(15, 14, 18, .55); backdrop-filter: blur(2px); }
+    .subscribe-modal .sm-card { background: var(--paper); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 28px; box-shadow: var(--sh-lg); }
+    .subscribe-modal .sm-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+  </style>
+
+  <script>
+    import { newsTargetSlug } from '../../lib/home-feed.mjs';
+
+    const view = document.querySelector<HTMLElement>('[data-news-item]');
+    const target = document.querySelector<HTMLElement>('[data-news-target]');
+    if (view && target) {
+      const base = view.getAttribute('data-signup-base') || '';
+      const params = new URLSearchParams(location.search);
+      const guid = params.get('g') || '';
+      const sourceHint = (params.get('s') || '').trim();
+
+      const el = (t: string, cls?: string, text?: string) => {
+        const n = document.createElement(t);
+        if (cls) n.className = cls;
+        if (text !== undefined) n.textContent = text;
+        return n;
+      };
+      const fixUrl = (u: string) => String(u).replace(/&#0*38;/g, '&').replace(/&amp;/g, '&');
+      const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
+      const faviconFor = (u: string) => { const h = hostOf(u); return h ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(h)}&sz=64` : ''; };
+      const relTime = (epochS: number) => {
+        const s = Math.max(0, Math.floor(Date.now() / 1000 - epochS));
+        if (s < 60) return 'just now';
+        const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+        const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+        const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
+        if (d < 365) return Math.max(1, Math.round(d / 30)) + 'mo ago';
+        return Math.max(1, Math.round(d / 365)) + 'y ago';
+      };
+      const fmtDate = (iso: string) => { try { return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
+
+      const missing = () => {
+        target.replaceChildren();
+        const p = el('p', 'feed-empty', 'That story has left the stream (the news window keeps the latest month).');
+        const back = el('p', 'tcenter mt16');
+        const a = el('a', 'link', 'Back to the news feed');
+        a.setAttribute('href', '/feeds/news/');
+        back.append(a);
+        target.append(p, back);
+      };
+
+      const feedUrl = base + '/news/feed?limit=60' + (sourceHint && /^[a-z0-9][a-z0-9 _.-]{0,60}$/i.test(sourceHint) ? '&source=' + encodeURIComponent(sourceHint) : '');
+      Promise.all([
+        fetch(feedUrl).then((r) => (r.ok ? r.json() : Promise.reject(new Error('feed')))),
+        fetch('/news-sources.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        fetch('/comments-index.json').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]).then(([feed, sources, commentsIdx]) => {
+        const items = Array.isArray(feed?.items) ? feed.items : [];
+        const it = items.find((x: any) => String(x?.guid) === guid);
+        if (!guid || !it) { missing(); return; }
+
+        document.title = String(it.title || 'News') + ' | The GBTI Network';
+        target.replaceChildren();
+
+        // meta row
+        const meta = el('div', 'feed-meta');
+        meta.append(el('span', 'kind-tag kt-news', 'news' + (it.source ? ' · ' + it.source : '')));
+        if (it.category) meta.append(el('span', 'kind-tag kt-share', String(it.category)));
+        if (typeof it.publishedAt === 'number') meta.append(el('span', 'tmeta', relTime(it.publishedAt)));
+        target.append(meta);
+
+        // title + summary
+        target.append(el('h1', 'h1 share-title mt12', String(it.title || 'Untitled')));
+        if (it.summary) target.append(el('p', 'lead mt16', String(it.summary)));
+
+        // hero
+        const imgUrl = it.image ? fixUrl(String(it.image)) : '';
+        if (imgUrl) {
+          const hero = el('a', 'share-hero');
+          hero.setAttribute('href', String(it.link || '#'));
+          hero.setAttribute('target', '_blank');
+          hero.setAttribute('rel', 'noopener nofollow');
+          const img = document.createElement('img');
+          img.src = imgUrl; img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+          img.addEventListener('error', () => hero.remove(), { once: true });
+          hero.append(img);
+          target.append(hero);
+        }
+
+        // actions: read at source
+        const actions = el('div', 'share-actions');
+        if (it.link) {
+          const read = el('a', 'btn btn-primary', 'Read at ' + (hostOf(String(it.link)) || 'the source'));
+          read.setAttribute('href', String(it.link));
+          read.setAttribute('target', '_blank');
+          read.setAttribute('rel', 'noopener nofollow');
+          actions.append(read);
+        }
+        target.append(actions);
+
+        // the source meta card + follow
+        const srcMeta = Array.isArray(sources?.sources) ? sources.sources.find((s: any) => s?.id === it.source) : null;
+        const card = el('aside', 'news-source-card');
+        const fav = document.createElement('img');
+        fav.className = 'nsc-fav'; fav.alt = ''; fav.width = 40; fav.height = 40;
+        fav.src = faviconFor(String(srcMeta?.url || it.link || ''));
+        fav.addEventListener('error', () => fav.remove(), { once: true });
+        const info = el('div', 'nsc-info');
+        info.append(el('div', 'nsc-name', String(srcMeta?.name || it.source || 'Unknown source')));
+        if (srcMeta?.description) info.append(el('div', 'nsc-desc', String(srcMeta.description)));
+        const follow = el('button', 'btn btn-ghost nsc-follow', 'Follow');
+        follow.setAttribute('type', 'button');
+        follow.setAttribute('data-follow-source', String(it.source || ''));
+        card.append(fav, info, follow);
+        target.append(card);
+
+        // the gated discussion from the public comments index (members bodies are stripped at build)
+        const slug = newsTargetSlug(guid);
+        const rows = Array.isArray(commentsIdx?.items)
+          ? commentsIdx.items.filter((c: any) => c?.targetType === 'news' && c?.targetSlug === slug && !c?.authorNote)
+          : [];
+        rows.sort((a: any, b: any) => String(a?.createdAt || '').localeCompare(String(b?.createdAt || '')));
+        const disc = el('section', 'news-discussion');
+        disc.append(el('h2', 'h3', rows.length + (rows.length === 1 ? ' Comment' : ' Comments')));
+        if (!rows.length) {
+          const box = el('div', 'card news-disc-empty');
+          box.append(el('p', 'body-sm muted', 'No member discussion yet. Members comment from the GBTI extension, where news threads live.'));
+          const join = el('a', 'link', 'Become a member');
+          join.setAttribute('href', '/membership/');
+          box.append(join);
+          disc.append(box);
+        } else {
+          const ul = el('ul', 'news-disc-list');
+          for (const c of rows) {
+            const li = el('li', 'card news-disc-row');
+            const head = el('div', 'ndr-head');
+            head.append(el('span', 'ndr-author', String(c.author || 'member')));
+            head.append(el('span', 'tmeta', fmtDate(String(c.createdAt || ''))));
+            li.append(head);
+            if (c.visibility === 'members' || !c.body) {
+              const lock = el('div', 'ndr-locked');
+              lock.append(el('span', undefined, 'Member discussion. '));
+              const a = el('a', 'link', 'Become a member to read it');
+              a.setAttribute('href', '/membership/');
+              lock.append(a);
+              li.append(lock);
+            } else {
+              li.append(el('p', 'ndr-body', String(c.body)));
+            }
+            ul.append(li);
+          }
+          disc.append(ul);
+        }
+        target.append(disc);
+      }).catch(() => missing());
+
+      // The source FOLLOW button: extension present + signed in -> relay into the extension's news tab
+      // (follow-channel is an extension pref); otherwise the state-aware CTA dialog (join vs extension).
+      const dlg = document.querySelector<HTMLDialogElement>('[data-follow-modal]');
+      const hasIdentity = () => {
+        if (document.documentElement.dataset.gbtiMember) return true;
+        try { return !!localStorage.getItem('gbti_hello'); } catch { return false; }
+      };
+      document.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest('[data-follow-source]');
+        if (!btn || !dlg) return;
+        if (document.documentElement.dataset.gbtiExtension && document.documentElement.dataset.gbtiMember) {
+          document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'newtab.html', hash: 'tab=news' } }));
+          return;
+        }
+        const extensionNeeded = hasIdentity();
+        dlg.querySelectorAll('[data-follow-state]').forEach((s) => {
+          (s as HTMLElement).hidden = s.getAttribute('data-follow-state') !== (extensionNeeded ? 'extension' : 'join');
+        });
+        dlg.showModal();
+      });
+      dlg?.querySelectorAll('[data-follow-close]').forEach((c) => c.addEventListener('click', () => dlg.close()));
+      dlg?.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    }
+  </script>
+</BaseLayout>

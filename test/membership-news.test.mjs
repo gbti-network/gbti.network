@@ -132,3 +132,12 @@ test('public news: an unconfigured news env returns 502 without calling upstream
   assert.equal(r.status, 502);
   assert.equal(called, false);
 });
+
+test('public news: a safe source narrows the upstream window; an unsafe one is dropped', async () => {
+  let sentUrl = null;
+  const fetch = async (url) => { sentUrl = url; return new Response(JSON.stringify({ items: [] }), { status: 200 }); };
+  await publicNews(new Request('https://x/news/feed?source=pytorch'), ENV, { fetch });
+  assert.match(sentUrl, /source=pytorch/);
+  await publicNews(new Request('https://x/news/feed?source=..%2Fevil%3Fx'), ENV, { fetch });
+  assert.doesNotMatch(sentUrl, /source=\.\./);
+});

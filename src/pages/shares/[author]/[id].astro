@@ -8,6 +8,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import Avatar from '../../../components/Avatar.astro';
 import UpvoteButton from '../../../components/UpvoteButton.astro';
+import SubscribeButton from '../../../components/SubscribeButton.astro';
 import Comments from '../../../components/blog/Comments.astro';
 import { getCollection } from 'astro:content';
 import { authorDisplay, authorHref, formatDate, authorAvatar } from '../../../lib/authors';
@@ -52,7 +53,19 @@ const body = (share.rendered?.html ?? '').trim();
       <div class="share-actions">
         {d.url && <a href={d.url} target="_blank" rel="noopener nofollow" class="btn btn-primary">Read on {srcDomain ?? 'the source'} <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>}
         <UpvoteButton targetSlug={slug} />
+        <SubscribeButton name={authorDisplay(d.author)} username={d.author} variant="ghost" />
       </div>
+
+      {srcDomain && (
+        <aside class="news-source-card">
+          <img class="nsc-fav" alt="" width="40" height="40" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(srcDomain)}&sz=64`} onerror="this.remove()" />
+          <div class="nsc-info">
+            <div class="nsc-name">{srcDomain}</div>
+            <div class="nsc-desc">The source {authorDisplay(d.author)} shared this from.</div>
+          </div>
+          {d.url && <a href={d.url} target="_blank" rel="noopener nofollow" class="btn btn-ghost nsc-follow">Visit</a>}
+        </aside>
+      )}
 
       {d.tags?.length > 0 && (
         <div class="tags" style="margin-top:22px">

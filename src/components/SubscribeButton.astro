@@ -19,15 +19,33 @@ const { name = 'this member', username, variant = 'primary' } = Astro.props;
   </button>
   <dialog class="subscribe-modal" data-subscribe-modal aria-label="Subscribe to member activity">
     <div class="sm-card">
-      <p class="eyebrow" style="color:var(--green-700)">Member feature</p>
-      <h3 class="h3 mt8" data-subscribe-title>Subscribe to {name}</h3>
-      <p class="body mt12" style="color:var(--fg-soft)">
-        Activity subscriptions are available to GBTI Network members. Join to follow members and get
-        their latest posts, products, prompts, and shares in your feed.
-      </p>
-      <div class="sm-actions mt24">
-        <a href="/membership/" class="btn btn-primary">Become a member</a>
-        <button type="button" class="btn btn-ghost" data-subscribe-close>Maybe later</button>
+      {/* State 1 (default): no identity at all -> the become-a-member/join-trial nudge. */}
+      <div data-sub-state="join">
+        <p class="eyebrow" style="color:var(--green-700)">Member feature</p>
+        <h3 class="h3 mt8" data-subscribe-title>Subscribe to {name}</h3>
+        <p class="body mt12" style="color:var(--fg-soft)">
+          Activity subscriptions are available to GBTI Network members. Join to follow members and get
+          their latest posts, products, prompts, and shares in your feed.
+        </p>
+        <div class="sm-actions mt24">
+          <a href="/membership/" class="btn btn-primary">Start your free trial</a>
+          <a href="/extension/" class="btn btn-ghost">Already a member? Sign in</a>
+          <button type="button" class="btn btn-ghost" data-subscribe-close>Maybe later</button>
+        </div>
+      </div>
+      {/* State 2: a signed-in identity (or the signup hint) but the control never upgraded, meaning
+          the GBTI extension is missing here -> the get-the-extension nudge. */}
+      <div data-sub-state="extension" hidden>
+        <p class="eyebrow" style="color:var(--green-700)">Extension required</p>
+        <h3 class="h3 mt8">Follow from the GBTI extension</h3>
+        <p class="body mt12" style="color:var(--fg-soft)">
+          Follows work from the GBTI browser extension. Install it and sign in, and this button becomes
+          a working follow toggle.
+        </p>
+        <div class="sm-actions mt24">
+          <a href="/extension/" class="btn btn-primary">Get the extension</a>
+          <button type="button" class="btn btn-ghost" data-subscribe-close>Maybe later</button>
+        </div>
       </div>
     </div>
   </dialog>
@@ -43,13 +61,27 @@ const { name = 'this member', username, variant = 'primary' } = Astro.props;
 </style>
 
 <script>
-  // One handler set, shared across every SubscribeButton instance on the page.
+  // One handler set, shared across every SubscribeButton instance on the page. The dialog picks its
+  // state AT OPEN TIME (owner directive, 2026-07-21): a visitor with no identity gets the join/trial
+  // nudge; an identity (the SOW-030 signal or the signup hint) whose control never upgraded means the
+  // extension is missing here, so they get the get-the-extension nudge. When the extension is present
+  // and signed in, <gbti-subscribe> upgrades into the real toggle and this dialog never opens.
+  function hasIdentity(): boolean {
+    if (document.documentElement.dataset.gbtiMember) return true;
+    try { return !!localStorage.getItem('gbti_hello'); } catch { return false; }
+  }
   document.querySelectorAll('.subscribe-wrap').forEach((wrap) => {
     const btn = wrap.querySelector('[data-subscribe]');
     const dlg = wrap.querySelector('[data-subscribe-modal]') as HTMLDialogElement | null;
     if (!btn || !dlg) return;
-    btn.addEventListener('click', () => dlg.showModal());
-    wrap.querySelector('[data-subscribe-close]')?.addEventListener('click', () => dlg.close());
+    btn.addEventListener('click', () => {
+      const extensionNeeded = hasIdentity();
+      dlg.querySelectorAll('[data-sub-state]').forEach((s) => {
+        (s as HTMLElement).hidden = s.getAttribute('data-sub-state') !== (extensionNeeded ? 'extension' : 'join');
+      });
+      dlg.showModal();
+    });
+    dlg.querySelectorAll('[data-subscribe-close]').forEach((c) => c.addEventListener('click', () => dlg.close()));
     // Click on the backdrop (outside the card) closes the dialog.
     dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
   });

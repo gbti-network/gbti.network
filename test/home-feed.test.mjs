@@ -2,7 +2,7 @@
 // SOW-018 reversal), the New & Popular ranking, tag aggregation, and relative time.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { feedTime, sortByNewest, isPublicShare, rankNewAndPopular, aggregateTags, relativeTime, readMinutes, decodeEntities, matchesNarrow, chunkPages } from '../src/lib/home-feed.mjs';
+import { feedTime, sortByNewest, isPublicShare, rankNewAndPopular, aggregateTags, relativeTime, readMinutes, decodeEntities, matchesNarrow, chunkPages, newsTargetSlug } from '../src/lib/home-feed.mjs';
 
 test('decodeEntities resolves numeric + common named entities in scraped share metadata', () => {
   assert.equal(decodeEntities('WordPress Down &#8211; SQL Injection'), 'WordPress Down – SQL Injection');
@@ -122,4 +122,12 @@ test('chunkPages splits into fixed-size pages with a short tail', () => {
   assert.deepEqual(chunkPages(items, 3), [[1, 2, 3], [4, 5, 6], [7]]);
   assert.deepEqual(chunkPages([], 3), []);
   assert.deepEqual(chunkPages([1], 5), [[1]]);
+});
+
+// sow-139: the news comment-thread key must stay byte-identical to client-ui/src/news.mjs so the site
+// reads the thread the extension writes. Pinned values guard the port.
+test('newsTargetSlug matches the client-ui implementation (pinned values)', () => {
+  assert.equal(newsTargetSlug('https://pytorch.org/?p=148439'), 'news-1r5tn2pt');
+  assert.equal(newsTargetSlug(''), 'news-ztntfp0');
+  assert.equal(newsTargetSlug('abc'), 'news-7aigaz3');
 });

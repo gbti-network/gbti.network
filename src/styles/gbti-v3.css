@@ -941,8 +941,8 @@ a.who:hover { color: var(--fg); }
 .feed-toolbar .filter { cursor: pointer; }
 .feed-tb-sp { flex: 1; }
 .feed-page .view-toggle { display: inline-flex; border: 1.5px solid var(--line-2); border-radius: var(--r); overflow: hidden; }
-.feed-page .vt-btn { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: 12px; font-weight: 600;
-  color: var(--fg-soft); background: var(--paper); border: 0; padding: 7px 12px; cursor: pointer; }
+.feed-page .vt-btn { display: inline-flex; align-items: center; justify-content: center; font-family: var(--f-mono); font-size: 12px; font-weight: 600;
+  color: var(--fg-soft); background: var(--paper); border: 0; padding: 8px 12px; cursor: pointer; }
 .feed-page .vt-btn + .vt-btn { border-left: 1.5px solid var(--line-2); }
 .feed-page .vt-btn.on { background: var(--green-tint); color: var(--green-700); }
 
@@ -1058,6 +1058,9 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 
 /* the client-rendered news list reuses the feed vocabulary; nothing extra beyond spacing */
 .feed-news { margin-top: 8px; }
+/* owner QA: news cards keep their summary under the title (other cards stay title-only) */
+.feed-page[data-view="card"] .news-row .feed-ex { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: 13px; line-height: 1.5; margin-top: 8px; }
 
 /* the public share page (sow-094) */
 .share-page { max-width: 860px; padding-top: 40px; padding-bottom: 80px; }
@@ -1067,3 +1070,20 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .share-hero img { display: block; width: 100%; height: auto; max-height: 480px; object-fit: cover; }
 .share-note { margin-top: 22px; color: var(--fg-soft); font-size: 16px; line-height: 1.6; }
 .share-actions { display: flex; align-items: center; gap: 14px; margin-top: 28px; flex-wrap: wrap; }
+
+/* ---------- sow-139 QA: the news item detail + source meta card + gated discussion ---------- */
+.news-source-card { display: flex; align-items: center; gap: 14px; margin-top: 30px; padding: 16px 18px;
+  border: 1.5px solid var(--line); border-radius: var(--r-lg); background: var(--paper); }
+.nsc-fav { border-radius: 8px; flex: none; }
+.nsc-info { flex: 1; min-width: 0; }
+.nsc-name { font-weight: 700; font-size: 15px; color: var(--fg); }
+.nsc-desc { font-size: 13px; color: var(--fg-mute); margin-top: 2px; }
+.nsc-follow { flex: none; }
+.news-discussion { margin-top: 48px; }
+.news-disc-empty { padding: 24px; background: var(--tint-warm); margin-top: 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.news-disc-list { list-style: none; padding: 0; margin-top: 24px; display: flex; flex-direction: column; gap: 18px; }
+.news-disc-row { padding: 18px 20px; }
+.ndr-head { display: flex; align-items: center; gap: 10px; }
+.ndr-author { font-weight: 700; font-size: 14.5px; color: var(--fg); }
+.ndr-locked { margin-top: 10px; font-size: 14px; color: var(--fg-soft); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ndr-body { margin-top: 10px; font-size: 14.5px; line-height: 1.6; color: var(--fg-soft); white-space: pre-line; }
