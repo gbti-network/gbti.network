@@ -1095,3 +1095,24 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .news-source-cta .lead { max-width: 640px; margin-left: auto; margin-right: auto; }
 .news-source-cta .nsc-cta-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
 @media (max-width: 620px) { .news-source-cta { padding: 34px 20px; } }
+
+/* owner QA 2026-07-21: detail pages (news item + share) gain the extension-style right sidebar */
+.detail-page { padding-top: 40px; padding-bottom: 80px; }
+.detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 48px; align-items: start; }
+.detail-main { min-width: 0; }
+.detail-side { position: sticky; top: 88px; display: flex; flex-direction: column; gap: 18px; }
+.detail-side[hidden] { display: none; }
+/* sidebar variants of the shared cards: stack vertically in the 300px rail */
+.detail-side .news-source-card { flex-direction: column; align-items: flex-start; margin-top: 0; }
+.detail-side .news-source-card .nsc-follow { width: 100%; justify-content: center; }
+.side-author-card { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.side-author-card .sac-head { display: flex; align-items: center; gap: 12px; color: inherit; }
+.side-author-card .sac-info { min-width: 0; display: flex; flex-direction: column; }
+.side-author-card .sac-name { font-weight: 700; font-size: 15.5px; color: var(--fg); }
+.side-author-card .sac-head:hover .sac-name { color: var(--green-700); }
+.side-author-card .sac-role { font-size: 12.5px; color: var(--fg-mute); margin-top: 2px; }
+.side-author-card .subscribe-wrap, .side-author-card .subscribe-btn { width: 100%; justify-content: center; }
+@media (max-width: 940px) {
+  .detail-grid { grid-template-columns: 1fr; }
+  .detail-side { position: static; }
+}

@@ -56,6 +56,17 @@ const ogImageUrl = new URL(ogImage || DEFAULT_OG_IMAGE, Astro.site).href;
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    {/* The signup Worker serves the public news feed + membership oracles; warm the connection early. */}
+    <link rel="preconnect" href="https://signup.gbti.network" crossorigin />
+    {/* Speculation Rules (owner directive, 2026-07-21): hover-triggered PRERENDER of news item shells
+        runs their fetch chain before the click, so the first open feels instant; every other internal
+        link gets a cheap hover prefetch. Browsers without the API ignore the script. Note: a
+        prerendered-but-unclicked page may log one Cloudflare Web Analytics view (cookieless beacon);
+        accepted at moderate eagerness, where hover intent makes activation likely. */}
+    <script type="speculationrules" is:inline set:html={JSON.stringify({
+      prerender: [{ where: { href_matches: '/news/item/*' }, eagerness: 'moderate' }],
+      prefetch: [{ where: { and: [{ href_matches: '/*' }, { not: { href_matches: '/news/item/*' } }] }, eagerness: 'moderate' }],
+    })} />
     {/* Set the light/dark theme before paint to avoid a flash of the wrong theme. */}
     <script is:inline>
       (function () {

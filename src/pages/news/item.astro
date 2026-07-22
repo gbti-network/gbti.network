@@ -12,10 +12,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import { SIGNUP_BASE } from '../../lib/membership';
 ---
 <BaseLayout title="News" description="A story from the curated GBTI Network news stream." noindex={true}>
-  <div class="wrap share-page news-item-page" data-news-item data-signup-base={SIGNUP_BASE}>
+  <div class="wrap detail-page news-item-page" data-news-item data-signup-base={SIGNUP_BASE}>
     <nav class="share-crumb"><a href="/feeds/news/" class="link">&larr; News feed</a></nav>
-    <div data-news-target>
-      <p class="feed-empty" style="margin-top:60px">Loading the story…</p>
+    <div class="detail-grid">
+      <div class="detail-main" data-news-target>
+        <p class="feed-empty" style="margin-top:60px">Loading the story…</p>
+      </div>
+      {/* The extension-style right sidebar: the source/publication card (filled by the script). */}
+      <aside class="detail-side" data-news-side hidden></aside>
     </div>
 
     <dialog class="subscribe-modal" data-follow-modal aria-label="Follow this source">
@@ -147,9 +151,10 @@ import { SIGNUP_BASE } from '../../lib/membership';
         }
         target.append(actions);
 
-        // the source meta card + follow
+        // the source meta card + follow (rendered into the right sidebar, extension reader style)
+        const side = document.querySelector<HTMLElement>('[data-news-side]');
         const srcMeta = Array.isArray(sources?.sources) ? sources.sources.find((s: any) => s?.id === it.source) : null;
-        const card = el('aside', 'news-source-card');
+        const card = el('div', 'card news-source-card');
         const fav = document.createElement('img');
         fav.className = 'nsc-fav'; fav.alt = ''; fav.width = 40; fav.height = 40;
         fav.src = faviconFor(String(srcMeta?.url || it.link || ''));
@@ -161,7 +166,7 @@ import { SIGNUP_BASE } from '../../lib/membership';
         follow.setAttribute('type', 'button');
         follow.setAttribute('data-follow-source', String(it.source || ''));
         card.append(fav, info, follow);
-        target.append(card);
+        if (side) { side.append(card); side.hidden = false; } else { target.append(card); }
 
         // the gated discussion from the public comments index (members bodies are stripped at build)
         const slug = newsTargetSlug(guid);
