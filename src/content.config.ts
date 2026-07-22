@@ -299,8 +299,9 @@ const comment = defineCollection({
 // the fail-closed `isPublicShare` in src/lib/home-feed.mjs) may render in the site feed (the homepage). Everything
 // else stays EXTENSION-ONLY: a members-only Share (including its Mode B stub metadata, title, blurb, and
 // encryptedBody) must NEVER reach a public artifact — scripts/check-build-secrets.mjs scans dist for leaks.
-// There is still NO /shares/ route (per-share public pages are SOW-094) and Shares stay DELIBERATELY EXCLUDED
-// from activity-index.json (see that endpoint's comment). The full stream's reader remains the GBTI
+// sow-094 (2026-07-21): a PUBLIC share also gets its own /shares/<author>/<id>/ page (the guard proves
+// dist/shares/ carries nothing else). Shares stay DELIBERATELY EXCLUDED from activity-index.json (see that
+// endpoint's comment). The full stream's reader remains the GBTI
 // client/extension Shares tab, which lists them authenticated (operations.listShares) and decrypts members
 // bodies via the Worker (an active trial may read; posting is paid-only).
 // `publicStub`/Mode B/C carry over for schema + build-guard consistency, but a one-line status has no large

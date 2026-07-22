@@ -98,16 +98,13 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
     }
   }
 
-  // SOW-018, SCOPED by SOW-136 (the sow-131 election): a published + visibility:public Share may render in the
-  // site feed (the homepage), but everything else about the SOW-018 invariant stays enforced here:
-  //   a) still NO /shares/ route (per-share public pages are SOW-094);
+  // SOW-018, SCOPED by SOW-136 + sow-094: a published + visibility:public Share may render in the site feed
+  // AND get its own /shares/<author>/<id>/ page. Everything else stays enforced here:
+  //   a) dist/shares/ may contain ONLY public-share pages (a members/draft share page fails the build);
   //   b) still NO Share entries in the public activity-index.json (the extension reads Shares authenticated);
-  //   c) NEW: a NON-public Share (members visibility, or any draft) must leak NOTHING to dist — its title,
+  //   c) a NON-public Share (members visibility, or any draft) must leak NOTHING to dist — its title,
   //      blurb, and body text are scanned for across every text file in the build output.
   if (fs.existsSync(distDir)) {
-    if (fs.existsSync(path.join(distDir, 'shares'))) {
-      errors.push('a public /shares/ surface exists in dist (dist/shares/) — per-share public pages are SOW-094; only the site feed may carry public Shares. See SOW-018 (scoped by SOW-136).');
-    }
     const activityIdx = path.join(distDir, 'activity-index.json');
     if (fs.existsSync(activityIdx)) {
       try {
@@ -132,6 +129,7 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
       return null;
     };
     const shareNeedles = []; // [needle, sourceRel]
+    const publicShares = new Set(); // "<author>/<id>" of published + public shares (the ONLY pages allowed)
     const membersRoot = path.join(root, 'members');
     if (fs.existsSync(membersRoot)) {
       for (const u of fs.readdirSync(membersRoot)) {
@@ -142,11 +140,29 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
           const p = path.join(sharesDir, f);
           const txt = fs.readFileSync(p, 'utf8');
           const isPublicShare = shareField(txt, 'status') === 'published' && shareField(txt, 'visibility') === 'public';
-          if (isPublicShare) continue;
+          if (isPublicShare) {
+            const id = shareField(txt, 'id') || f.replace(/\.(md|mdx)$/, '');
+            publicShares.add(`${u}/${id}`);
+            continue;
+          }
           const rel = path.relative(root, p);
           const body = txt.replace(/^---\n[\s\S]*?\n---/, '').trim();
           for (const needle of [shareField(txt, 'title'), shareField(txt, 'shortDescription'), body.slice(0, 200)]) {
             if (needle && needle.length >= 12) shareNeedles.push([needle, rel]);
+          }
+        }
+      }
+    }
+
+    // a) sow-094: every page under dist/shares/<author>/<id>/ must correspond to a published + public share.
+    const distShares = path.join(distDir, 'shares');
+    if (fs.existsSync(distShares)) {
+      for (const author of fs.readdirSync(distShares, { withFileTypes: true })) {
+        if (!author.isDirectory()) continue;
+        for (const id of fs.readdirSync(path.join(distShares, author.name), { withFileTypes: true })) {
+          if (!id.isDirectory()) continue;
+          if (!publicShares.has(`${author.name}/${id.name}`)) {
+            errors.push(`a NON-public share has a page in dist: dist/shares/${author.name}/${id.name}/ — only published + visibility:public shares may have pages. See SOW-018 (scoped by SOW-136/sow-094).`);
           }
         }
       }

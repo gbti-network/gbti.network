@@ -83,17 +83,19 @@ export function aggregateTags(items, n = 9) {
     .slice(0, n);
 }
 
-/** The six public feed narrows (sow-131): route segment -> predicate over a normalized feed item. */
-export const FEED_NARROWS = ['all', 'network', 'articles', 'products', 'prompts', 'shares'];
+/** The public feed narrows (sow-131 + sow-139 news): route segment -> predicate over a normalized feed item. */
+export const FEED_NARROWS = ['all', 'news', 'network', 'articles', 'products', 'prompts', 'shares'];
 
 /**
  * Does a feed item belong to a narrow? `all` = everything; `network` = the network's own output
- * (house content, author `gbti`); the rest match the item's kind. Unknown narrows match nothing
+ * (house content, author `gbti`); `news` matches NO static item (the News view is client-rendered
+ * from the worker, sow-139); the rest match the item's kind. Unknown narrows match nothing
  * (fail closed).
  */
 export function matchesNarrow(item, narrow) {
   switch (narrow) {
     case 'all': return true;
+    case 'news': return false;
     case 'network': return item?.author === 'gbti';
     case 'articles': return item?.kind === 'article';
     case 'products': return item?.kind === 'product';

@@ -7,7 +7,7 @@ import LockedBody from '../LockedBody.astro';
 import CommentBox from './CommentBox.astro';
 
 interface Props {
-  targetType: 'post' | 'product' | 'prompt';
+  targetType: 'post' | 'product' | 'prompt' | 'share'; // sow-094: the public share page mounts the discussion
   targetSlug: string;
   author?: string; // content owner; their earliest comment renders as the pinned "From the author" block (SOW-014)
   wide?: boolean; // when true, span the full content width (prompt detail) instead of the 800px reading column
@@ -15,9 +15,12 @@ interface Props {
 const { targetType, targetSlug, author, wide = false, aliases = [] } = Astro.props;
 // SOW-112 QA: the parent item's index.md path, for the paid-member open-in-extension reader deep link.
 const SUB = { post: 'posts', product: 'products', prompt: 'prompts' } as Record<string, string>;
-const itemReaderPath = SUB[targetType]
-  ? (author === 'gbti' || author === 'house' ? `house/${SUB[targetType]}/${targetSlug}/index.md` : `members/${author}/${SUB[targetType]}/${targetSlug}/index.md`)
-  : undefined;
+// sow-094: a share's targetSlug is "<author>/<id>" and its file is flat (members/<author>/shares/<id>.md).
+const itemReaderPath = targetType === 'share'
+  ? `members/${targetSlug.split('/')[0]}/shares/${targetSlug.split('/').slice(1).join('/')}.md`
+  : SUB[targetType]
+    ? (author === 'gbti' || author === 'house' ? `house/${SUB[targetType]}/${targetSlug}/index.md` : `members/${author}/${SUB[targetType]}/${targetSlug}/index.md`)
+    : undefined;
 // SOW-112: comments written before a rename carry the OLD slug; union it so the discussion follows the item.
 const slugSet = new Set([targetSlug, ...aliases]);
 

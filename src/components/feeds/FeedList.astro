@@ -54,7 +54,7 @@ const tagsAttr = (it: FeedItem) => (it.tags ?? []).map((t) => String(t).trim().t
                 </div>
                 <h2 class="feed-title">
                   {it.href
-                    ? <a href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener' : undefined}>{it.title}</a>
+                    ? <a href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener nofollow' : undefined}>{it.title}</a>
                     : it.title}
                 </h2>
                 {it.excerpt && <p class="feed-ex">{it.excerpt}</p>}
@@ -69,7 +69,7 @@ const tagsAttr = (it: FeedItem) => (it.tags ?? []).map((t) => String(t).trim().t
               {/* A real cover renders in every density; the branded thumb fallback (feed-cover-fb)
                   exists only for the card grid, where an imageless tile would break the rhythm. */}
               {(it.cover || it.thumb) && (it.href
-                ? <a class:list={['feed-cover', !it.cover && 'feed-cover-fb']} href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener' : undefined} aria-hidden="true" tabindex="-1"><img src={it.cover ?? it.thumb} alt="" loading="lazy" decoding="async" /></a>
+                ? <a class:list={['feed-cover', !it.cover && 'feed-cover-fb']} href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener nofollow' : undefined} aria-hidden="true" tabindex="-1"><img src={it.cover ?? it.thumb} alt="" loading="lazy" decoding="async" /></a>
                 : <span class:list={['feed-cover', !it.cover && 'feed-cover-fb']}><img src={it.cover ?? it.thumb} alt="" loading="lazy" decoding="async" /></span>)}
             </article>
             {ci === 0 && ctaAfter !== undefined && ri === ctaAfter && (

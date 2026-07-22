@@ -10,10 +10,10 @@ import FeedList from './FeedList.astro';
 import { matchesNarrow, sortByNewest } from '../../lib/home-feed.mjs';
 import type { FeedItem } from '../../lib/feed-items';
 import type { AvatarIndex } from '../../lib/avatars';
-import { FIRST_TOUCH_PCT, TRIAL_DAYS_SITE, MEMBERSHIP_PRICE_LABEL, BILLING_PERIOD } from '../../lib/membership';
+import { FIRST_TOUCH_PCT, TRIAL_DAYS_SITE, MEMBERSHIP_PRICE_LABEL, BILLING_PERIOD, SIGNUP_BASE } from '../../lib/membership';
 
 interface Props {
-  narrow: 'all' | 'network' | 'articles' | 'products' | 'prompts' | 'shares';
+  narrow: 'all' | 'news' | 'network' | 'articles' | 'products' | 'prompts' | 'shares';
   items: FeedItem[]; // the full normalized set; this component narrows it
   avatarIndex: AvatarIndex;
   membersShareCount: number;
@@ -22,6 +22,7 @@ const { narrow, items, avatarIndex, membersShareCount } = Astro.props;
 
 const TABS: { key: Props['narrow']; label: string; href: string }[] = [
   { key: 'all', label: 'All', href: '/feeds/' },
+  { key: 'news', label: 'News', href: '/feeds/news/' },
   { key: 'network', label: 'Network', href: '/feeds/network/' },
   { key: 'articles', label: 'Articles', href: '/feeds/articles/' },
   { key: 'products', label: 'Products', href: '/feeds/products/' },
@@ -30,17 +31,27 @@ const TABS: { key: Props['narrow']; label: string; href: string }[] = [
 ];
 const SUB: Record<Props['narrow'], string> = {
   all: 'Everything, including member shares',
+  news: 'The curated developer news stream',
   network: 'From the GBTI Network itself',
   articles: 'Member articles',
   products: 'Member products, tools & plugins',
   prompts: 'Reusable AI prompts from members',
   shares: 'Links members are sharing',
 };
+const isNews = narrow === 'news';
 const narrowed = sortByNewest(items.filter((it) => matchesNarrow(it, narrow))) as FeedItem[];
 const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersShareCount > 0;
-const hasMembersRows = narrowed.some((it) => it.stub);
 ---
-<div class="wrap feedwrap feed-page" data-feedview data-view="card">
+<div class="wrap feedwrap feed-page" data-feedview data-view="card" data-signup-base={SIGNUP_BASE}>
+  {!isNews && (
+    <div class="feed-topbar">
+      <button type="button" class="members-toggle" data-members-toggle aria-pressed="false">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><use href="#ico-lock"/></svg>
+        Member content only
+        <span class="mt-switch" aria-hidden="true"><span class="mt-knob"></span></span>
+      </button>
+    </div>
+  )}
   <div class="feed-lab"><span class="dot"></span><span class="t">The Feed</span><span class="rule"></span><span class="more">{SUB[narrow]}</span></div>
 
   <nav class="feed-tabs" aria-label="Feed views">
@@ -50,13 +61,6 @@ const hasMembersRows = narrowed.some((it) => it.stub);
   </nav>
 
   <div class="feed-toolbar">
-    {hasMembersRows && (
-      <div class="feed-vis" role="group" aria-label="Visibility filter">
-        <button type="button" class="chip filter on" data-vis="all" aria-pressed="true">All</button>
-        <button type="button" class="chip filter" data-vis="public" aria-pressed="false">Public</button>
-        <button type="button" class="chip filter" data-vis="members" aria-pressed="false">Members only</button>
-      </div>
-    )}
     <span class="feed-tb-sp"></span>
     <div class="view-toggle" role="group" aria-label="Density">
       <button type="button" class="vt-btn on" data-feedview-density="card" aria-pressed="true"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><use href="#ico-grid"/></svg> Cards</button>
@@ -70,6 +74,21 @@ const hasMembersRows = narrowed.some((it) => it.stub);
     <a href={TABS.find((t) => t.key === narrow)!.href} data-tag-clear>Clear</a>
   </div>
 
+  {!isNews && (
+    <aside class="feed-cta feed-members-cta" data-members-cta hidden aria-label="Become a member">
+      <div class="feed-cta-inner">
+        <div>
+          <div class="fc-t"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-lock"/></svg> This is member-only content</div>
+          <p class="fc-d">Become a member to read the gated articles, products, prompts, and shares across the network.</p>
+        </div>
+        <div class="fc-a">
+          <a href="/membership/" class="btn btn-primary">Start your free trial</a>
+          <span class="fc-n">{MEMBERSHIP_PRICE_LABEL}/{BILLING_PERIOD} after · {TRIAL_DAYS_SITE}-day trial · no card required</span>
+        </div>
+      </div>
+    </aside>
+  )}
+
   {showLockedShares && (
     <aside class="feed-locked-shares" aria-label="Member-only shares">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-lock"/></svg>
@@ -78,18 +97,24 @@ const hasMembersRows = narrowed.some((it) => it.stub);
     </aside>
   )}
 
-  <FeedList items={narrowed} avatarIndex={avatarIndex} ctaAfter={4}>
-    <div slot="cta" class="feed-cta-inner">
-      <div>
-        <div class="fc-t">Join the co-op</div>
-        <p class="fc-d">Publish articles, products &amp; prompts, build with peers in a private Discord, and earn up to {FIRST_TOUCH_PCT} from members your work brings in.</p>
-      </div>
-      <div class="fc-a">
-        <a href="/membership/" class="btn btn-primary">Start your free trial</a>
-        <span class="fc-n">{MEMBERSHIP_PRICE_LABEL}/{BILLING_PERIOD} after · {TRIAL_DAYS_SITE}-day trial · no card required</span>
-      </div>
+  {isNews ? (
+    <div class="feed-news" data-news-feed>
+      <p class="feed-empty" style="margin-top:40px">Loading the news stream…</p>
     </div>
-  </FeedList>
+  ) : (
+    <FeedList items={narrowed} avatarIndex={avatarIndex} ctaAfter={4}>
+      <div slot="cta" class="feed-cta-inner">
+        <div>
+          <div class="fc-t">Join the co-op</div>
+          <p class="fc-d">Publish articles, products &amp; prompts, build with peers in a private Discord, and earn up to {FIRST_TOUCH_PCT} from members your work brings in.</p>
+        </div>
+        <div class="fc-a">
+          <a href="/membership/" class="btn btn-primary">Start your free trial</a>
+          <span class="fc-n">{MEMBERSHIP_PRICE_LABEL}/{BILLING_PERIOD} after · {TRIAL_DAYS_SITE}-day trial · no card required</span>
+        </div>
+      </div>
+    </FeedList>
+  )}
 
   <p class="feed-empty" data-feed-empty hidden>Nothing here matches the current filter.</p>
 </div>
@@ -99,15 +124,17 @@ const hasMembersRows = narrowed.some((it) => it.stub);
   // filter is active the ladder flattens (chunks all visible via .feed-flat CSS, pagers hidden); when
   // the filter clears, the chunk/pager hidden attributes are untouched, so the ladder state restores.
   document.querySelectorAll<HTMLElement>('[data-feedview]').forEach((view) => {
+    // The News view has no server-rendered FeedList; list stays null there and only the density +
+    // news-renderer paths below apply.
     const list = view.querySelector<HTMLElement>('[data-feedlist]');
-    if (!list) return;
-    const rows = Array.from(list.querySelectorAll<HTMLElement>('[data-fi]'));
+    const rows = list ? Array.from(list.querySelectorAll<HTMLElement>('[data-fi]')) : [];
     const empty = view.querySelector<HTMLElement>('[data-feed-empty]');
     const banner = view.querySelector<HTMLElement>('[data-tag-banner]');
     const bannerLabel = view.querySelector<HTMLElement>('[data-tag-label]');
-    const visBtns = Array.from(view.querySelectorAll<HTMLButtonElement>('[data-vis]'));
 
-    let vis = 'all';
+    const membersToggle = view.querySelector<HTMLButtonElement>('[data-members-toggle]');
+    const membersCta = view.querySelector<HTMLElement>('[data-members-cta]');
+    let vis = 'all'; // 'all' | 'members' (the top-right member-content toggle)
     let tag = '';
 
     function apply() {
@@ -116,7 +143,7 @@ const hasMembersRows = narrowed.some((it) => it.stub);
       // Flatten the ladder by lifting the chunks' hidden attribute (and restoring it on clear).
       // CSS cannot do this: Tailwind's preflight sets [hidden]{display:none !important} inside
       // @layer base, and a layered !important outranks any unlayered author !important.
-      list!.querySelectorAll<HTMLElement>('.feed-chunk').forEach((c) => {
+      list?.querySelectorAll<HTMLElement>('.feed-chunk').forEach((c) => {
         if (filtered) {
           if (c.hidden) { c.setAttribute('data-rehide', '1'); c.hidden = false; }
         } else if (c.hasAttribute('data-rehide')) {
@@ -127,7 +154,7 @@ const hasMembersRows = narrowed.some((it) => it.stub);
       let shown = 0;
       rows.forEach((r) => {
         let ok = true;
-        if (vis !== 'all') ok = r.getAttribute('data-visibility') === vis;
+        if (vis === 'members') ok = r.getAttribute('data-visibility') === 'members';
         if (ok && tag) ok = (' ' + (r.getAttribute('data-tags') || '') + ' ').includes(' ' + tag + ' ');
         r.hidden = filtered && !ok;
         if (!r.hidden) shown++;
@@ -135,13 +162,19 @@ const hasMembersRows = narrowed.some((it) => it.stub);
       if (empty) empty.hidden = !(filtered && shown === 0);
       if (banner) banner.hidden = !tag;
       if (bannerLabel) bannerLabel.textContent = tag ? '#' + tag : '';
+      // The become-a-member CTA rides with the toggle (active members never see it via the
+      // is-gbti-member-active CSS hide).
+      if (membersCta) membersCta.hidden = vis !== 'members';
+      if (membersToggle) {
+        membersToggle.setAttribute('aria-pressed', String(vis === 'members'));
+        membersToggle.classList.toggle('on', vis === 'members');
+      }
     }
 
-    visBtns.forEach((b) => b.addEventListener('click', () => {
-      vis = b.getAttribute('data-vis') || 'all';
-      visBtns.forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); });
+    membersToggle?.addEventListener('click', () => {
+      vis = vis === 'members' ? 'all' : 'members';
       apply();
-    }));
+    });
 
     view.querySelector('[data-tag-clear]')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -150,16 +183,90 @@ const hasMembersRows = narrowed.some((it) => it.stub);
       apply();
     });
 
-    // Deep links: /feeds/?tag=x (the homepage trending-tag chips) and ?vis=public|members.
+    // Deep links: /feeds/?tag=x (the homepage trending-tag chips) and ?vis=members (the toggle).
     const params = new URLSearchParams(location.search);
     const qTag = (params.get('tag') || '').trim().toLowerCase();
     if (qTag) tag = qTag;
-    const qVis = params.get('vis');
-    if (qVis === 'public' || qVis === 'members') {
-      const b = visBtns.find((x) => x.getAttribute('data-vis') === qVis);
-      if (b) { vis = qVis; visBtns.forEach((x) => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); }); }
-    }
+    if (params.get('vis') === 'members' && membersToggle) vis = 'members';
     apply();
+
+    // sow-139: the News view. Client-rendered from the anonymous worker endpoint (the static build
+    // has no news items); rows reuse the feed vocabulary so the density toggle keeps working.
+    const newsBox = view.querySelector<HTMLElement>('[data-news-feed]');
+    if (newsBox) {
+      const base = view.getAttribute('data-signup-base') || '';
+      const relTime = (epochS: number) => {
+        const s = Math.max(0, Math.floor(Date.now() / 1000 - epochS));
+        if (s < 60) return 'just now';
+        const m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+        const h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+        const d = Math.floor(h / 24); if (d < 30) return d + 'd ago';
+        if (d < 365) return Math.max(1, Math.round(d / 30)) + 'mo ago';
+        return Math.max(1, Math.round(d / 365)) + 'y ago';
+      };
+      const el = (t: string, cls?: string, text?: string) => {
+        const n = document.createElement(t);
+        if (cls) n.className = cls;
+        if (text !== undefined) n.textContent = text;
+        return n;
+      };
+      fetch(base + '/news/feed?limit=60')
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error('bad status'))))
+        .then((data) => {
+          const items = Array.isArray(data?.items) ? data.items : [];
+          newsBox.replaceChildren();
+          if (!items.length) { newsBox.append(el('p', 'feed-empty', 'No news right now.')); return; }
+          const chunk = el('div', 'feed-chunk');
+          for (const it of items) {
+            const art = el('article', 'feed-item' + (it.image ? '' : ' nocover'));
+            art.setAttribute('data-fi', '');
+            const main = el('div', 'feed-main');
+            const meta = el('div', 'feed-meta');
+            const tagEl = el('span', 'kind-tag kt-news', 'news' + (it.source ? ' · ' + it.source : ''));
+            const when = el('span', 'tmeta', typeof it.publishedAt === 'number' ? relTime(it.publishedAt) : '');
+            meta.append(tagEl, when);
+            const h2 = el('h2', 'feed-title');
+            const a = el('a', undefined, String(it.title || 'Untitled'));
+            a.setAttribute('href', String(it.link || '#'));
+            a.setAttribute('target', '_blank');
+            a.setAttribute('rel', 'noopener nofollow');
+            h2.append(a);
+            main.append(meta, h2);
+            if (it.summary) main.append(el('p', 'feed-ex', String(it.summary)));
+            const foot = el('div', 'feed-foot');
+            foot.append(el('span', 'fsp'));
+            main.append(foot);
+            art.append(main);
+            const cover = el('a', 'feed-cover' + (it.image ? '' : ' feed-cover-fb'));
+            cover.setAttribute('href', String(it.link || '#'));
+            cover.setAttribute('target', '_blank');
+            cover.setAttribute('rel', 'noopener nofollow');
+            cover.setAttribute('aria-hidden', 'true');
+            cover.setAttribute('tabindex', '-1');
+            const img = document.createElement('img');
+            // Some feed images arrive entity-encoded (&#038;) which breaks their query strings; and a
+            // dead external image degrades to the branded banner instead of a broken tile.
+            const imgUrl = it.image ? String(it.image).replace(/&#0*38;/g, '&').replace(/&amp;/g, '&') : '';
+            img.src = imgUrl || '/brand/feature/feature-category.png';
+            img.alt = '';
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.addEventListener('error', () => {
+              img.src = '/brand/feature/feature-category.png';
+              cover.classList.add('feed-cover-fb');
+            }, { once: true });
+            cover.append(img);
+            art.append(cover);
+            chunk.append(art);
+          }
+          const wrap = el('div', 'feed-list');
+          wrap.append(chunk);
+          newsBox.append(wrap);
+        })
+        .catch(() => {
+          newsBox.replaceChildren(el('p', 'feed-empty', 'News is unavailable right now.'));
+        });
+    }
 
     // Density: card (default) / detailed / compact, persisted like the prompts directory view toggle.
     const KEY = 'gbti-feed-view';

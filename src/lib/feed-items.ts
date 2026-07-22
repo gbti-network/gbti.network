@@ -70,8 +70,8 @@ function shareItem(entry: any, comments: CollectionEntry<'comment'>[]): FeedItem
     targetType: 'share',
     slug,
     title: decodeEntities(d.title ?? d.shortDescription ?? 'Shared a link'),
-    href: d.url ?? null, // no /shares/ routes until SOW-094; a share clicks through to its source
-    external: true,
+    href: `/shares/${slug}/`, // sow-094: the share's own expanded view (the external CTA lives there)
+    external: false,
     author: d.author,
     date: feedTime(d),
     excerpt: d.title && d.shortDescription ? decodeEntities(d.shortDescription) : undefined,

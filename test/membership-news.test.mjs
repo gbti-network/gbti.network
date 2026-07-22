@@ -101,3 +101,34 @@ test('news-categories: paid passes through; non-paid denied; unconfigured 502', 
   assert.equal((await membershipNewsCategories(req(), ENV, { authorize: denied, fetch: async () => new Response('{}') })).status, 403);
   assert.equal((await membershipNewsCategories(req(), {}, { authorize: paid, fetch: async () => new Response('{}') })).status, 502);
 });
+
+// sow-139: the PUBLIC news list. No auth at all; capped tighter than the signed-in proxy; the key
+// stays server-side; unconfigured env fails closed with a 502 and no upstream call.
+import { publicNews } from '../workers/signup/membership-news.mjs';
+
+test('public news: an anonymous request (no Authorization header) is served with the capped limit', async () => {
+  let sentUrl = null; let sentAuth = null;
+  const fetch = async (url, init) => { sentUrl = url; sentAuth = init?.headers?.Authorization; return new Response(JSON.stringify({ updatedAt: 9, items: [{ guid: 'g1', title: 'A' }] }), { status: 200 }); };
+  const r = await publicNews(new Request('https://signup.gbti.network/news/feed'), ENV, { fetch });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true);
+  assert.equal(r.body.items.length, 1);
+  assert.equal(sentAuth, 'Bearer secret-key'); // the server-held key goes upstream, never to the page
+  assert.match(sentUrl, /limit=40/); // the anonymous default is 40
+});
+
+test('public news: limit is clamped to 60 and category/since are sanitized', async () => {
+  let sentUrl = null;
+  const fetch = async (url) => { sentUrl = url; return new Response(JSON.stringify({ items: [] }), { status: 200 }); };
+  await publicNews(new Request('https://x/news/feed?limit=500&category=../evil&since=abc'), ENV, { fetch });
+  assert.match(sentUrl, /limit=60/);
+  assert.doesNotMatch(sentUrl, /category=/); // the unsafe category token is dropped
+  assert.doesNotMatch(sentUrl, /since=/); // the non-numeric since is dropped
+});
+
+test('public news: an unconfigured news env returns 502 without calling upstream', async () => {
+  let called = false;
+  const r = await publicNews(new Request('https://x/news/feed'), {}, { fetch: async () => { called = true; return new Response('{}'); } });
+  assert.equal(r.status, 502);
+  assert.equal(called, false);
+});

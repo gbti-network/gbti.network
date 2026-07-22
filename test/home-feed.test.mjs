@@ -110,6 +110,9 @@ test('matchesNarrow maps the six narrows and fails closed on unknown values', ()
   assert.equal(matchesNarrow(share, 'shares'), true);
   assert.equal(matchesNarrow(share, 'nope'), false);
   assert.equal(matchesNarrow(undefined, 'articles'), false);
+  // sow-139: the News view is client-rendered from the worker; no static item matches it.
+  assert.equal(matchesNarrow(art, 'news'), false);
+  assert.equal(matchesNarrow(share, 'news'), false);
 });
 
 test('chunkPages splits into fixed-size pages with a short tail', () => {

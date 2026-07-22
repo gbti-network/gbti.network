@@ -6,7 +6,7 @@
 // plain browser (same model as EditHooks/LockedBody). The SOW-005 gate + the paid-only publish rule are the real
 // boundary; this is just the authoring surface.
 interface Props {
-  targetType: 'post' | 'product' | 'prompt';
+  targetType: 'post' | 'product' | 'prompt' | 'share'; // sow-094: share pages carry the inert composer too
   targetSlug: string;
   commentId?: string; // present => the inline "Edit" affordance for that comment (author-only, client-gated)
   commentAuthor?: string;

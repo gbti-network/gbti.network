@@ -83,6 +83,29 @@ export async function membershipNews(request, env, { authorize = authorizeSigned
   return { status: 200, body: { ok: true, updatedAt: r.data?.updatedAt ?? null, count: items.length, items } };
 }
 
+/** GET /news/feed -> { items } with NO auth (sow-139, owner-directed policy change): the curated news
+ *  LIST is public metadata for the site's /feeds/news/ view. The interactive layer (prefs, follows,
+ *  hearts, discussion) stays gated where it is. Tighter limit than the signed-in proxy (default 40,
+ *  max 60), same category/since sanitizing, and the NEWS_API_KEY still never leaves the Worker. The
+ *  route serves it with Cache-Control: public so anonymous traffic is browser-cached. */
+export async function publicNews(request, env, { fetch = globalThis.fetch } = {}) {
+  const cfg = newsEnv(env);
+  if (!cfg) return { status: 502, body: { error: 'news_unavailable', message: 'the news service is not configured yet' } };
+
+  const url = new URL(request.url);
+  const q = new URLSearchParams();
+  const cat = url.searchParams.get('category');
+  if (cat && SAFE_CATEGORY.test(cat)) q.set('category', cat);
+  const since = url.searchParams.get('since');
+  if (since && /^[0-9]{1,12}$/.test(since)) q.set('since', since);
+  q.set('limit', String(clampLimit(url.searchParams.get('limit'), 40, 60)));
+
+  const r = await callNews(cfg, `/feed?${q.toString()}`, fetch);
+  if (!r.ok) return r;
+  const items = Array.isArray(r.data?.items) ? r.data.items : [];
+  return { status: 200, body: { ok: true, updatedAt: r.data?.updatedAt ?? null, count: items.length, items } };
+}
+
 /** GET /membership/news-categories -> { categories } (the classifier label set + live counts). Same paid gate. */
 export async function membershipNewsCategories(request, env, { authorize = authorizeSignedIn, fetch = globalThis.fetch, ...authDeps } = {}) {
   const auth = await authorize(request, env, authDeps);

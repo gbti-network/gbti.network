@@ -69,7 +69,7 @@ import { drainSyndication } from './syndication-drain.mjs';
 import { handleFollows } from './membership-follows.mjs';
 import { handleEarnings } from './membership-earnings.mjs'; // SOW-083 P2: the member's own earnings ledger
 import { handleCommentEcho } from './membership-comment-echo.mjs'; // SOW-076 P1: optimistic comment echoes (instant-feel)
-import { membershipNews, membershipNewsCategories, membershipNewsSources } from './membership-news.mjs'; // SOW-043/046: members-only news proxy
+import { membershipNews, membershipNewsCategories, membershipNewsSources, publicNews } from './membership-news.mjs'; // SOW-043/046 proxy; sow-139 public list
 import { handlePrefs } from './membership-prefs.mjs'; // SOW-046: member prefs (categories + followed news channels)
 import { membershipNewsPublish } from './membership-news-publish.mjs'; // SOW-046 C: curator-gated news -> Discord publish
 import { membershipNewsDiscussed } from './membership-news-discussed.mjs'; // SOW-046 D: reflect news discussion onto Discord
@@ -673,6 +673,16 @@ export default {
         if (method === 'GET' || method === 'POST') {
           const r = await handleCommentEcho(request, env);
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // sow-139: the PUBLIC news list (owner-directed policy change; see membership-news.mjs). Anonymous,
+      // metadata-only, capped, and browser-cacheable; the NEWS_API_KEY still never leaves this Worker.
+      if (pathname === '/news/feed') {
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        if (method === 'GET') {
+          const r = await publicNews(request, env);
+          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'public, max-age=300' });
         }
       }
 

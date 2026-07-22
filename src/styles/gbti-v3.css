@@ -1030,3 +1030,39 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 @media (max-width: 900px)  { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 620px)  { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 420px)  { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: 1fr; } }
+
+/* ---------- sow-139 + sow-131 QA: news rows, the member-content toggle, share pages ---------- */
+.kt-news { color: #b3661e; background: #fdf1e4; }
+[data-theme="dark"] .kt-news { color: #e8b079; background: rgba(179,102,30,.2); }
+
+/* the top-right member-content toggle (above THE FEED) */
+.feed-topbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.members-toggle { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: 12px;
+  font-weight: 600; color: var(--fg-soft); background: var(--paper); border: 1.5px solid var(--line-2);
+  border-radius: 999px; padding: 7px 9px 7px 13px; cursor: pointer; }
+.members-toggle svg { color: var(--fg-mute); }
+.members-toggle:hover { border-color: var(--fg); color: var(--fg); }
+.members-toggle.on { border-color: var(--green); color: var(--green-700); background: var(--green-tint); }
+.members-toggle.on svg { color: var(--green-700); }
+.mt-switch { width: 30px; height: 17px; border-radius: 999px; background: var(--line-2); position: relative; transition: background .15s ease; flex: none; }
+.mt-knob { position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--paper); transition: left .15s ease; }
+.members-toggle.on .mt-switch { background: var(--green); }
+.members-toggle.on .mt-knob { left: 15px; }
+
+/* the become-a-member banner while the toggle is on */
+.feed-members-cta { margin: 14px 0 4px; }
+.feed-members-cta[hidden] { display: none; }
+.feed-members-cta .fc-t { display: flex; align-items: center; gap: 8px; }
+.feed-members-cta .fc-t svg { color: var(--green-700); }
+
+/* the client-rendered news list reuses the feed vocabulary; nothing extra beyond spacing */
+.feed-news { margin-top: 8px; }
+
+/* the public share page (sow-094) */
+.share-page { max-width: 860px; padding-top: 40px; padding-bottom: 80px; }
+.share-crumb { margin-bottom: 26px; }
+.share-title { font-size: clamp(30px, 3.6vw, 44px); line-height: 1.14; }
+.share-hero { display: block; margin-top: 26px; border-radius: var(--r-lg); overflow: hidden; border: 1.5px solid var(--line); }
+.share-hero img { display: block; width: 100%; height: auto; max-height: 480px; object-fit: cover; }
+.share-note { margin-top: 22px; color: var(--fg-soft); font-size: 16px; line-height: 1.6; }
+.share-actions { display: flex; align-items: center; gap: 14px; margin-top: 28px; flex-wrap: wrap; }

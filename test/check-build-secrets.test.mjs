@@ -82,12 +82,20 @@ test('SOW-016: a Mode A item with NO dist page passes (the normal case)', () => 
 });
 
 // SOW-018: the extension-only tripwire must catch a Share leaking onto a public surface.
-test('SOW-018: a public /shares/ page in dist fails the build (Shares are extension-only)', () => {
+test('sow-094: a PUBLIC share page in dist/shares/ passes; a MEMBERS share page fails', () => {
   const root = tmpRoot();
-  fs.mkdirSync(path.join(root, 'dist/shares'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'dist/shares/index.html'), '<html>nope</html>');
-  const { errors } = checkBuildSecrets({ root, env: {} });
-  assert.ok(errors.some((e) => /public \/shares\/ surface exists in dist/.test(e)), errors.join('; '));
+  fs.mkdirSync(path.join(root, 'members/alice/shares'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'members/alice/shares/pub-1.md'), '---\nstatus: published\nvisibility: public\nid: pub-1\nauthor: alice\n---\n');
+  fs.writeFileSync(path.join(root, 'members/alice/shares/priv-1.md'), '---\nstatus: published\nvisibility: members\nid: priv-1\nauthor: alice\n---\n');
+  fs.mkdirSync(path.join(root, 'dist/shares/alice/pub-1'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist/shares/alice/pub-1/index.html'), '<html>the public share page</html>');
+  const ok = checkBuildSecrets({ root, env: {} });
+  assert.deepEqual(ok.errors, [], 'a public-share page is allowed: ' + ok.errors.join('; '));
+  // now a page for the MEMBERS share appears -> fail
+  fs.mkdirSync(path.join(root, 'dist/shares/alice/priv-1'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'dist/shares/alice/priv-1/index.html'), '<html>leak</html>');
+  const bad = checkBuildSecrets({ root, env: {} });
+  assert.ok(bad.errors.some((e) => /NON-public share has a page in dist/.test(e)), bad.errors.join('; '));
   fs.rmSync(root, { recursive: true, force: true });
 });
 
