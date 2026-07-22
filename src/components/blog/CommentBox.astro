@@ -51,8 +51,10 @@ if (readerPath) attrs['data-gbti-reader-path'] = readerPath;
       const type = box.getAttribute('data-gbti-target-type') || '';
       const slug = box.getAttribute('data-gbti-target-slug') || '';
       const readerPath = box.getAttribute('data-gbti-reader-path') || '';
+      // encodeURIComponent: the relay validator only admits URL-safe tokens (a raw '/' in the share
+      // key or a repo path would be rejected silently by the extension's open-page allowlist).
       const read = type === 'share' ? slug : readerPath;
-      const hash = read ? `tab=${type}&read=${read}` : `tab=${type}`;
+      const hash = read ? `tab=${type}&read=${encodeURIComponent(read)}` : `tab=${type}`;
       document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'newtab.html', hash } }));
     });
   });
