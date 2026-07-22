@@ -225,7 +225,10 @@ const TMPL_TYPES = [
   { key: 'product', nm: 'Product', df: 'product' },
   { key: 'prompt', nm: 'Prompt', df: 'prompt' },
 ];
-const VARS = ['{memberdiscord}', '{member-discord-username}', '{fullName}', '{author}', '{title}', '{url}', '{category}', '{content-type}', '{author-note}', '{author-note-italic}', '{member-url}', '{short-description}'];
+const VARS = ['{memberdiscord}', '{member-discord-username}', '{fullName}', '{author}', '{title}', '{url}', '{category}', '{content-type}', '{author-note}', '{author-note-italic}', '{member-url}', '{short-description}',
+  // Hashtag tokens (category + free-form tags as #Hashtags) and the per-channel member handle tokens (each
+  // resolves the member's own handle for that channel, falling back to their name): documented + insertable.
+  '{category-hashtag}', '{tags-hashtags}', '{hashtags}', '{member-x-handle}', '{member-bluesky-handle}', '{member-mastodon-handle}', '{member-reddit-handle}'];
 // SOW-131: the DESTINATIONS checkbox chips (PIPE_CHIPS) were removed. Channel enablement is matrix-derived, so
 // the auto-share matrix is the single control; the channel's readiness (secrets) is still checked at drain time.
 
