@@ -47,17 +47,20 @@ test('buildSnapshot shapes a versioned, counted, timestamped blob', () => {
   assert.equal(s.takenAt, NOW.toISOString());
 });
 
-test('collectSnapshot gathers activity:/follows:/prefs:/conv: and is a no-op without creds', async () => {
+test('collectSnapshot gathers activity:/follows:/prefs:/conv:/coupon-grant:/redemption: and is a no-op without creds', async () => {
   const kv = fakeKv({
     'activity:1': '{"favorites":[]}', 'follows:2': '{"following":[]}', 'prefs:4': '{}', 'conv:5': '{"member":"5"}',
+    'coupon-grant:8': '{"code":"CODEABLEYEAR","until":"2027-07-21T00:00:00.000Z"}',
+    'redemption:CODEABLEYEAR:8': '{"code":"CODEABLEYEAR"}', 'redemptions:CODEABLEYEAR': '1',
     'earnings:6': '{}', 'touch:7': '{}', 'gh:3': 'cus_x', 'overrides:mirror': '{}',
   });
   const c = await collectSnapshot({ env: CF, fetchImpl: kv.fetchImpl, now: NOW });
   assert.equal(c.available, true);
   const keys = c.snapshot.records.map((r) => r.key).sort();
-  // conv: (irreplaceable money attribution) + prefs: are now backed up; earnings: (recomputable), touch: (ephemeral),
-  // gh: + overrides:mirror (regenerable) are NOT.
-  assert.deepEqual(keys, ['activity:1', 'conv:5', 'follows:2', 'prefs:4']);
+  // conv: (irreplaceable money attribution) + prefs: + the SOW-119 coupon records (the free-period grant + the
+  // one-per-github_id lock) are backed up; earnings: (recomputable), touch: (ephemeral), gh: + overrides:mirror
+  // (regenerable), and redemptions: (a counter recomputable from redemption: records) are NOT.
+  assert.deepEqual(keys, ['activity:1', 'conv:5', 'coupon-grant:8', 'follows:2', 'prefs:4', 'redemption:CODEABLEYEAR:8']);
   const none = await collectSnapshot({ env: {}, fetchImpl: async () => { throw new Error('no fetch'); } });
   assert.equal(none.available, false);
   assert.match(none.reason, /CF_ACCOUNT_ID/);
