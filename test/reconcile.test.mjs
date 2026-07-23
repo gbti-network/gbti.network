@@ -205,6 +205,27 @@ test('day-87 window excludes day 86 (too early), day 90 (expired), and converted
   assert.equal(ofKind(planReconcile({ members: [make(88, true)], now: NOW }), 'reminder').length, 0);
 });
 
+// SOW-142: the day-87 nag is gated on the EFFECTIVE status being a trial. A member whose Stripe record is
+// a day-88 trial but who is effective-paid another way (grandfather comp, a coupon free year, staff) must
+// NOT be told their trial is ending; their entitlement does not end at day 90.
+test('day-87 reminder never targets an effective-paid member with a Stripe trial record', () => {
+  const make = (source) => ({
+    githubId: 'g1',
+    username: 'g1',
+    derived: 'trialing',
+    effective: { status: 'paid', source },
+    trialStartedAt: new Date(NOW.getTime() - 88 * DAY).toISOString(),
+    converted: false,
+  });
+  for (const source of ['grandfather', 'staff']) {
+    const reminders = ofKind(planReconcile({ members: [make(source)], now: NOW }), 'reminder');
+    assert.equal(reminders.filter((r) => r.type === 'day-87').length, 0, `source=${source}`);
+  }
+  // the plain trial control case still fires
+  const plain = { githubId: 't', username: 't', derived: 'trialing', effective: { status: 'trialing', source: 'stripe' }, trialStartedAt: new Date(NOW.getTime() - 88 * DAY).toISOString(), converted: false };
+  assert.equal(ofKind(planReconcile({ members: [plain], now: NOW }), 'reminder').filter((r) => r.type === 'day-87').length, 1);
+});
+
 // ---- resubscribed member with drafted content -> publish actions + member role added ----
 test('resubscribed (paid) member with drafted content is re-published and gets the member role', () => {
   const members = [

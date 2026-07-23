@@ -592,9 +592,14 @@ async function main() {
       const r = await syncCouponGrants({ env, github, now, readGrandfathered: () => readGrandfatheredFromDisk(ROOT) });
       console.log(
         r.synced
-          ? `reconcile: folded ${r.additions} coupon redemption(s) into grandfather grants (PR #${r.prNumber}).`
+          ? `reconcile: folded ${r.additions} coupon redemption(s) into grandfather grants (PR #${r.prNumber})${r.conversions ? `, ${r.conversions} converted from permanent comp (SOW-142)` : ''}.`
           : `reconcile: coupon-grants sync SKIPPED (${r.reason}).`,
       );
+      if (r.skippedBounded?.length) {
+        for (const s of r.skippedBounded) {
+          console.log(`reconcile: coupon fold SKIPPED bounded non-coupon grant for ${s.githubId} (reason: ${s.reason}; until: ${s.until}): owner call, never rewritten silently.`);
+        }
+      }
     } catch (e) {
       console.error('reconcile: coupon-grants sync FAILED:', e?.message ?? e);
       process.exitCode = 1;

@@ -171,8 +171,11 @@ export function planReconcile({ members = [], repoIndex = {}, now = new Date() }
       }
     }
 
-    // 3. Day-87 reminder: trial member inside the [87d, 90d) window who has not converted.
-    if (!banned && inReminderWindow(m.trialStartedAt, m.converted, now)) {
+    // 3. Day-87 reminder: trial member inside the [87d, 90d) window who has not converted. Gated on the
+    //    EFFECTIVE status actually being a trial (SOW-142): a member who is effective-paid another way
+    //    (grandfather, staff, a coupon free year) has a Stripe trial customer too, and without this gate
+    //    they would get a bogus "trial ending" nag at day 87 of an entitlement that does not end then.
+    if (!banned && TRIAL_STATUSES.has(status) && inReminderWindow(m.trialStartedAt, m.converted, now)) {
       actions.push({ kind: 'reminder', type: 'day-87', githubId, email: m.email ?? null, discordUserId: m.discordUserId ?? null });
     }
 

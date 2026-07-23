@@ -58,34 +58,57 @@ export async function listCouponRedemptions({ env = process.env, fetchImpl = glo
 }
 
 /**
- * Pure: which redemptions need a git grant? Skips ids that already hold ANY grandfather entry (an existing
- * grant, coupon or otherwise, wins), redemptions already expired at `now`, and malformed records.
+ * Pure: which redemptions need a git grant, and how? Per redemption id, the existing entry decides:
+ *   - a `coupon:` entry        -> SKIP (already folded; idempotent re-runs, and a folded grant is final)
+ *   - a permanent comp entry   -> REPLACE (SOW-142, owner-elected 2026-07-22: redeeming the invite
+ *     (non-coupon, until null)    CONVERTS a permanently grandfathered co-op member to the standard
+ *                                 free-year-then-pay deal; the coupon entry supersedes the permanent one)
+ *   - a BOUNDED non-coupon     -> SKIP + surface in `skippedBounded` (a hand-set temporary grant is
+ *     entry                       never silently rewritten; the owner decides)
+ *   - no entry                 -> ADD (the normal SOW-119 fold)
+ * Expired redemptions, malformed records, and duplicate ids are dropped as before.
+ * Returns { grants, skippedBounded }; a grant carries `replaces: true` when it supersedes an entry.
  */
 export function planCouponGrants({ redemptions = [], grandfatheredParsed = null, now = new Date() } = {}) {
   const existing = grandfathersFromParsed(grandfatheredParsed);
-  const additions = [];
+  const grants = [];
+  const skippedBounded = [];
   const seen = new Set();
   for (const r of redemptions) {
     const githubId = String(r?.githubId ?? '');
     const until = r?.until ? new Date(r.until) : null;
     if (!githubId || !r?.code || !until || Number.isNaN(until.getTime())) continue;
-    if (existing.has(githubId) || seen.has(githubId)) continue;
+    if (seen.has(githubId)) continue;
     if (until.getTime() <= now.getTime()) continue; // already over: nothing to grant
+    const entry = existing.get(githubId);
+    let replaces = false;
+    if (entry) {
+      const reason = String(entry.reason ?? '');
+      if (reason.startsWith(COUPON_REASON_PREFIX)) continue; // already folded
+      const bounded = entry.until !== null && entry.until !== undefined && String(entry.until).trim() !== '';
+      if (bounded) {
+        skippedBounded.push({ githubId, reason, until: entry.until });
+        continue;
+      }
+      replaces = true;
+    }
     seen.add(githubId);
-    additions.push({
+    grants.push({
       githubId,
       login: typeof r.login === 'string' && /^[a-z0-9-]+$/i.test(r.login) ? r.login.toLowerCase() : null,
       code: r.code,
       until: until.toISOString(),
+      ...(replaces ? { replaces: true } : {}),
     });
   }
-  additions.sort((a, b) => a.githubId.localeCompare(b.githubId));
-  return additions;
+  grants.sort((a, b) => a.githubId.localeCompare(b.githubId));
+  return { grants, skippedBounded };
 }
 
 /** Render one grant as a YAML list-item block matching the file's hand-written style. */
-function renderGrantBlock(a) {
-  const comment = a.login ? `# github.com/${a.login}` : `# coupon redemption`;
+function renderGrantBlock(a, stamp) {
+  const who = a.login ? `github.com/${a.login}` : 'coupon redemption';
+  const comment = a.replaces ? `# ${who} (converted from permanent comp ${stamp}, SOW-142)` : `# ${who}`;
   const lines = [
     `  - github_id: "${a.githubId}"${' '.repeat(Math.max(1, 15 - a.githubId.length))}${comment}`,
   ];
@@ -96,24 +119,53 @@ function renderGrantBlock(a) {
 }
 
 /**
- * Pure: append grant blocks to the current file text and VERIFY the result parses with every addition
- * present. Throws on a verification miss (the PR must never carry a file that silently drops a grant).
+ * Pure: remove one member's entry block (the `  - github_id: ...` list-item line plus its 4-space
+ * continuation lines) from the file text. Comments outside the block are untouched. Throws when the
+ * block cannot be found (a replacement must never silently no-op into a duplicate).
  */
-export function appendGrantEntries(text, additions, now = new Date()) {
-  if (!additions.length) return text;
+export function removeGrantEntry(text, githubId) {
+  const lines = text.split('\n');
+  const startRe = new RegExp(`^  - github_id: "?${githubId}"?(\\s|$)`);
+  const start = lines.findIndex((l) => startRe.test(l));
+  if (start === -1) throw new Error(`coupon-grants: cannot find the entry block for ${githubId} to replace`);
+  let end = start + 1;
+  while (end < lines.length && /^    \S/.test(lines[end])) end++;
+  lines.splice(start, end - start);
+  return lines.join('\n');
+}
+
+/**
+ * Pure: apply the planned grants to the current file text (removing any superseded permanent entries
+ * first, then appending the coupon blocks) and VERIFY the result: it parses, every grant resolves to
+ * its coupon entry, and no github_id appears twice. Throws on a verification miss (the PR must never
+ * carry a file that silently drops or shadows a grant).
+ */
+export function appendGrantEntries(text, grants, now = new Date()) {
+  if (!grants.length) return text;
   const stamp = now.toISOString().slice(0, 10);
+  let base = text;
+  for (const g of grants) {
+    if (g.replaces) base = removeGrantEntry(base, g.githubId);
+  }
   const block = [
     '',
     `  # SOW-119: coupon grants folded in from KV redemptions by reconcile (${stamp}). Auto-appended.`,
-    ...additions.map(renderGrantBlock),
+    ...grants.map((g) => renderGrantBlock(g, stamp)),
     '',
   ].join('\n');
-  const next = text.replace(/\n*$/, '\n') + block;
+  const next = base.replace(/\n*$/, '\n') + block;
   const parsed = yaml.load(next);
   const map = grandfathersFromParsed(parsed);
-  for (const a of additions) {
-    if (!map.has(a.githubId)) throw new Error(`coupon-grants: appended grant for ${a.githubId} did not parse back`);
+  for (const g of grants) {
+    const e = map.get(g.githubId);
+    if (!e) throw new Error(`coupon-grants: appended grant for ${g.githubId} did not parse back`);
+    if (String(e.reason ?? '') !== `${COUPON_REASON_PREFIX}${g.code}`) {
+      throw new Error(`coupon-grants: the entry for ${g.githubId} did not resolve to its coupon grant (shadowed by another block?)`);
+    }
   }
+  const ids = (parsed?.grandfathered ?? []).map((e) => String(e?.github_id ?? '')).filter(Boolean);
+  const dup = ids.find((id, i) => ids.indexOf(id) !== i);
+  if (dup) throw new Error(`coupon-grants: duplicate github_id ${dup} after the fold`);
   return next;
 }
 
@@ -143,11 +195,12 @@ export async function syncCouponGrants({
   const current = readGrandfathered ? await readGrandfathered() : null;
   if (!current?.text) return { synced: false, reason: 'cannot read house/grandfathered.yml' };
 
-  const additions = planCouponGrants({ redemptions: kv.redemptions, grandfatheredParsed: current.parsed, now });
-  if (!additions.length) return { synced: false, reason: 'all redemptions already granted', redemptions: kv.redemptions.length };
-  if (!github) return { synced: false, reason: 'no github client to write the grants PR', additions: additions.length };
+  const { grants, skippedBounded } = planCouponGrants({ redemptions: kv.redemptions, grandfatheredParsed: current.parsed, now });
+  if (!grants.length) return { synced: false, reason: 'all redemptions already granted', redemptions: kv.redemptions.length, skippedBounded };
+  if (!github) return { synced: false, reason: 'no github client to write the grants PR', additions: grants.length, skippedBounded };
 
-  const nextText = appendGrantEntries(current.text, additions, now);
+  const nextText = appendGrantEntries(current.text, grants, now);
+  const conversions = grants.filter((g) => g.replaces).length;
   const branch = `gbti/coupon-grants-${now.getTime()}`;
   const baseRef = await github.getRef(`heads/${base}`);
   const baseSha = baseRef?.object?.sha;
@@ -164,8 +217,10 @@ export async function syncCouponGrants({
     title: 'reconcile: coupon grants (SOW-119)',
     head: branch,
     base,
-    body: `Folds ${additions.length} coupon redemption${additions.length === 1 ? '' : 's'} from KV into until-bounded grandfather grants.`,
+    body:
+      `Folds ${grants.length} coupon redemption${grants.length === 1 ? '' : 's'} from KV into until-bounded grandfather grants.` +
+      (conversions ? `\n\n${conversions} of these CONVERT a permanent comp member to the standard free-year deal (redeeming the invite is the conversion; SOW-142, owner-elected 2026-07-22).` : ''),
   });
   await github.mergePull(pull.number, { method: 'squash' });
-  return { synced: true, prNumber: pull.number, additions: additions.length };
+  return { synced: true, prNumber: pull.number, additions: grants.length, conversions, skippedBounded };
 }

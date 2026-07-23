@@ -7,6 +7,7 @@ import yaml from 'js-yaml';
 import {
   planCouponGrants,
   appendGrantEntries,
+  removeGrantEntry,
   listCouponRedemptions,
   syncCouponGrants,
 } from '../scripts/lib/coupon-grants.mjs';
@@ -28,22 +29,32 @@ grandfathered:
 #   until: null   # null = permanent; otherwise an ISO date
 `;
 
-test('planCouponGrants skips existing grants, expired and malformed redemptions, and dups', () => {
-  const parsed = yaml.load(FILE);
-  const additions = planCouponGrants({
+// SOW-142 (owner-elected 2026-07-22): redeeming the invite CONVERTS a permanent comp member to the
+// standard free-year deal, so a permanent (non-coupon, until null) entry is REPLACED, a coupon: entry is
+// skipped (idempotent), and a BOUNDED non-coupon entry is skipped + surfaced (never silently rewritten).
+test('planCouponGrants: the four-way policy (add / replace permanent comp / skip coupon / skip bounded)', () => {
+  const file = FILE + `  - github_id: "666"\n    login: folded\n    reason: coupon:CODEABLEYEAR\n    until: "2027-01-01T00:00:00.000Z"\n  - github_id: "777"\n    login: handset\n    reason: temporary comp (owner set)\n    until: "2026-12-01T00:00:00.000Z"\n`;
+  const parsed = yaml.load(file);
+  const { grants, skippedBounded } = planCouponGrants({
     redemptions: [
-      { githubId: '111', code: 'CODEABLEYEAR', until: '2027-01-01T00:00:00.000Z' }, // already granted
-      { githubId: '222', code: 'CODEABLEYEAR', login: 'Newbie', until: '2027-07-15T12:00:00.000Z' },
+      { githubId: '111', code: 'CODEABLEYEAR', login: 'existing', until: '2027-01-01T00:00:00.000Z' }, // permanent comp -> REPLACE
+      { githubId: '222', code: 'CODEABLEYEAR', login: 'Newbie', until: '2027-07-15T12:00:00.000Z' }, // no entry -> ADD
       { githubId: '222', code: 'CODEABLEYEAR', until: '2028-01-01T00:00:00.000Z' }, // dup id
       { githubId: '333', code: 'CODEABLEYEAR', until: '2026-01-01T00:00:00.000Z' }, // already over
       { githubId: '444', code: 'CODEABLEYEAR', until: 'garbage' }, // malformed
       { githubId: '', code: 'CODEABLEYEAR', until: '2027-01-01T00:00:00.000Z' }, // no id
+      { githubId: '666', code: 'CODEABLEYEAR', until: '2028-01-01T00:00:00.000Z' }, // already folded -> skip
+      { githubId: '777', code: 'CODEABLEYEAR', until: '2028-01-01T00:00:00.000Z' }, // bounded non-coupon -> skip + surface
     ],
     grandfatheredParsed: parsed,
     now: NOW,
   });
-  assert.equal(additions.length, 1);
-  assert.deepEqual(additions[0], { githubId: '222', login: 'newbie', code: 'CODEABLEYEAR', until: '2027-07-15T12:00:00.000Z' });
+  assert.equal(grants.length, 2);
+  assert.deepEqual(grants[0], { githubId: '111', login: 'existing', code: 'CODEABLEYEAR', until: '2027-01-01T00:00:00.000Z', replaces: true });
+  assert.deepEqual(grants[1], { githubId: '222', login: 'newbie', code: 'CODEABLEYEAR', until: '2027-07-15T12:00:00.000Z' });
+  assert.equal(skippedBounded.length, 1);
+  assert.equal(skippedBounded[0].githubId, '777');
+  assert.match(skippedBounded[0].reason, /temporary comp/);
 });
 
 test('appendGrantEntries keeps comments, parses back, and round-trips through overrides-core', () => {
@@ -58,7 +69,30 @@ test('appendGrantEntries keeps comments, parses back, and round-trips through ov
   assert.equal(map.get('222').reason, 'coupon:CODEABLEYEAR');
   assert.equal(map.get('222').until, '2027-07-15T12:00:00.000Z');
   assert.equal(map.get('555').reason, 'coupon:CAPPED');
-  assert.equal(map.get('111').until, null); // the existing permanent grant is untouched
+  assert.equal(map.get('111').until, null); // a non-replacing fold leaves the permanent grant untouched
+});
+
+// SOW-142: a replacement removes the permanent block (its inline comment included), appends the coupon
+// entry, and the verification proves no duplicate github_id survives. Comments OUTSIDE the block stay.
+test('appendGrantEntries replaces a permanent comp entry without duplicating the id', () => {
+  const grants = [
+    { githubId: '111', login: 'existing', code: 'CODEABLEYEAR', until: '2027-01-01T00:00:00.000Z', replaces: true },
+  ];
+  const next = appendGrantEntries(FILE, grants, NOW);
+  assert.ok(next.includes('# header comment survives'));
+  assert.ok(next.includes('#   reason: founding member'));
+  assert.ok(!next.includes('complimentary access (grandfathered co-op member)'), 'the permanent entry is gone');
+  assert.ok(next.includes('converted from permanent comp'), 'the conversion is noted inline');
+  const parsed = yaml.load(next);
+  const ids = parsed.grandfathered.map((e) => String(e.github_id));
+  assert.equal(ids.filter((id) => id === '111').length, 1, 'exactly one entry for the id');
+  const map = grandfathersFromParsed(parsed);
+  assert.equal(map.get('111').reason, 'coupon:CODEABLEYEAR');
+  assert.equal(map.get('111').until, '2027-01-01T00:00:00.000Z');
+});
+
+test('removeGrantEntry throws when the block is missing (a replacement must never silently no-op)', () => {
+  assert.throws(() => removeGrantEntry(FILE, '999'), /cannot find the entry block/);
 });
 
 test('listCouponRedemptions is a reported no-op without CF creds and parses keys with them', async () => {
