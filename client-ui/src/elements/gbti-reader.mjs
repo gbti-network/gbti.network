@@ -20,6 +20,7 @@ import './gbti-favorite.mjs'; // SOW-013/064: favorite + add-to-collection on th
 import './gbti-collection.mjs';
 import './gbti-mod-actions.mjs'; // SOW-071: per-item moderation (Hide/Unhide/Remove) for moderator+
 import { hostOf } from '../all-merge.mjs'; // SOW-057: the link domain for the "Read article on <domain>" CTA
+import { faviconFor } from './gbti-card-list.mjs'; // owner QA 2026-07-22: the share source favicon (meta stack + side card)
 import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
 import './gbti-syndicate-now.mjs'; // SOW-088: the superadmin Manually Syndicate control (self-gates)
 import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: the ONE shared video extractor (a share's video link plays inline)
@@ -193,6 +194,16 @@ const CSS = `
   .share-summary { font-size:15px; line-height:1.6; color:var(--muted); margin:0 0 16px; }
   .share-summary em { font-style: italic; }
   .share-cite { font-style: normal; font-family: var(--mono, monospace); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  /* the share meta stack: source favicon large, member avatar as the badge */
+  .av.srcstack { position: relative; overflow: visible; }
+  .av.srcstack .src-big { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; background: #fff; padding: 3px; box-sizing: border-box; }
+  .av.srcstack .src-mini { position: absolute; right: -5px; bottom: -4px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--card, #1c1a21); object-fit: cover; }
+  /* the sidebar source card (favicon + domain + credit + the open action) */
+  .side-src { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .side-src .ss-fav { width: 36px; height: 36px; border-radius: 8px; background: #fff; object-fit: contain; padding: 4px; box-sizing: border-box; }
+  .side-src .ss-host { font-weight: 700; font-size: 14px; }
+  .side-src .ss-note { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .side-src .side-open { width: 100%; justify-content: center; box-sizing: border-box; }
   .author-note { border-left:3px solid var(--accent); background:var(--hover); border-radius:0 10px 10px 0; padding:12px 15px; margin:0 0 20px; }
   .author-note .an-eyebrow { font-family:var(--font-mono, ui-monospace, monospace); font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); margin:0 0 6px; }
   .author-note .body { font-size:15px; }
@@ -386,7 +397,12 @@ class GbtiReader extends GbtiElement {
     const name = authorName(it.author);
     const avUrl = this._author?.entry?.avatar || githubAvatar(it.author);
     const ini = esc((name || '?').trim().charAt(0).toUpperCase() || '?');
-    const av = `<span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`;
+    // Owner QA 2026-07-22: on a Share the SOURCE favicon is the larger circle and the member avatar
+    // rides as the badge (mirrors the site share page).
+    const srcFav = it.type === 'share' && it.url ? faviconFor(it.url) : '';
+    const av = srcFav
+      ? `<span class="av srcstack"><img class="src-big" src="${esc(srcFav)}" alt="">${avUrl ? `<img class="src-mini" src="${esc(avUrl)}" alt="">` : ''}</span>`
+      : `<span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`;
     const cats = Array.isArray(it.categoryLabels) && it.categoryLabels.length
       ? `<span class="cats">${it.categoryLabels.map((c) => `<span class="cat">${esc(c)}</span>`).join('')}</span>` : '';
     // SOW-013/064: favorite + add-to-collection, on the meta row (right-justified on desktop, a right-justified row
@@ -502,9 +518,10 @@ class GbtiReader extends GbtiElement {
     const discussion = (resolved && slug)
       ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"${Array.isArray(it.aliases) && it.aliases.length ? ` data-gbti-target-aliases="${esc(it.aliases.join(','))}"` : ''}></gbti-discussion></section>`
       : '';
-    // A large "open the link" button in the sidebar for a Share, under the member card and above the discussion.
+    // Owner QA 2026-07-22: the sidebar SOURCE card (favicon, domain, credit line) wraps the
+    // open-the-link action, mirroring the site share page's source card.
     const sideLink = (it.type === 'share' && it.url)
-      ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>`
+      ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(hostOf(it.url))}</div><p class="ss-note">The source ${esc(this._author?.entry?.displayName || authorName(it.author))} shared this from.</p><a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a></div>`
       : '';
     // SOW-088: the superadmin Manually Syndicate control (self-gates to superadmin; the Worker enforces).
     // The category attribute carries the RAW top-level taxonomy key (a share's flat topic, or the first

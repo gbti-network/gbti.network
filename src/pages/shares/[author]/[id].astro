@@ -45,10 +45,13 @@ const body = (share.rendered?.html ?? '').trim();
     <div class="detail-main">
     <article>
       <div class="feed-meta" style="margin-bottom:14px">
-        <a href={authorHref(d.author)} class="share-src-stack">
-          <Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={34} />
-          {srcDomain && <img class="sss-fav" alt="" width="20" height="20" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(srcDomain)}&sz=64`} onerror="this.remove()" />}
-        </a>
+        {/* owner QA 2026-07-22: the SOURCE is the larger circle; the member avatar rides as the badge. */}
+        <span class="share-src-stack">
+          {srcDomain
+            ? <a href={d.url} target="_blank" rel="noopener nofollow" aria-label={`Visit ${srcDomain}`}><img class="sss-src" alt="" width="36" height="36" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(srcDomain)}&sz=64`} onerror="this.remove()" /></a>
+            : <a href={authorHref(d.author)}><Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={36} /></a>}
+          {srcDomain && <a class="sss-member" href={authorHref(d.author)} aria-label={authorDisplay(d.author)}><Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={20} /></a>}
+        </span>
         <span class="tmeta"><a class="who" href={authorHref(d.author)}>{authorDisplay(d.author)}</a><span class="dotsep"></span>{formatDate(d.createdAt)}</span>
         <span class="kind-tag kt-share">shared{srcDomain ? ` · ${srcDomain}` : ''}</span>
       </div>

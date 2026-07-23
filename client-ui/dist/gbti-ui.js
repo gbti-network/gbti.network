@@ -15325,6 +15325,16 @@ From the author:
   .share-summary { font-size:15px; line-height:1.6; color:var(--muted); margin:0 0 16px; }
   .share-summary em { font-style: italic; }
   .share-cite { font-style: normal; font-family: var(--mono, monospace); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  /* the share meta stack: source favicon large, member avatar as the badge */
+  .av.srcstack { position: relative; overflow: visible; }
+  .av.srcstack .src-big { width: 100%; height: 100%; border-radius: 50%; object-fit: contain; background: #fff; padding: 3px; box-sizing: border-box; }
+  .av.srcstack .src-mini { position: absolute; right: -5px; bottom: -4px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--card, #1c1a21); object-fit: cover; }
+  /* the sidebar source card (favicon + domain + credit + the open action) */
+  .side-src { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .side-src .ss-fav { width: 36px; height: 36px; border-radius: 8px; background: #fff; object-fit: contain; padding: 4px; box-sizing: border-box; }
+  .side-src .ss-host { font-weight: 700; font-size: 14px; }
+  .side-src .ss-note { margin: 0; font-size: 12.5px; color: var(--muted); }
+  .side-src .side-open { width: 100%; justify-content: center; box-sizing: border-box; }
   .author-note { border-left:3px solid var(--accent); background:var(--hover); border-radius:0 10px 10px 0; padding:12px 15px; margin:0 0 20px; }
   .author-note .an-eyebrow { font-family:var(--font-mono, ui-monospace, monospace); font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); margin:0 0 6px; }
   .author-note .body { font-size:15px; }
@@ -15509,7 +15519,8 @@ From the author:
       const name = authorName4(it.author);
       const avUrl = this._author?.entry?.avatar || githubAvatar(it.author);
       const ini = esc((name || "?").trim().charAt(0).toUpperCase() || "?");
-      const av = `<span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`;
+      const srcFav = it.type === "share" && it.url ? faviconFor(it.url) : "";
+      const av = srcFav ? `<span class="av srcstack"><img class="src-big" src="${esc(srcFav)}" alt="">${avUrl ? `<img class="src-mini" src="${esc(avUrl)}" alt="">` : ""}</span>` : `<span class="av">${avUrl ? `<img src="${esc(avUrl)}" alt="">` : ini}</span>`;
       const cats = Array.isArray(it.categoryLabels) && it.categoryLabels.length ? `<span class="cats">${it.categoryLabels.map((c) => `<span class="cat">${esc(c)}</span>`).join("")}</span>` : "";
       const slug = it.type === "share" ? "" : targetSlugFor(it);
       const HEART = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20.3S3.6 15.2 3.6 9.5A4 4 0 0 1 12 7.3a4 4 0 0 1 8.4 2.2c0 5.7-8.4 10.8-8.4 10.8z"/></svg>';
@@ -15576,7 +15587,7 @@ From the author:
       const resolved = this._html !== null;
       const slug = targetSlugFor(it);
       const discussion = resolved && slug ? `<section class="discussion"><h3>Discussion</h3><gbti-discussion data-gbti-target-type="${esc(it.type)}" data-gbti-target-slug="${esc(slug)}"${Array.isArray(it.aliases) && it.aliases.length ? ` data-gbti-target-aliases="${esc(it.aliases.join(","))}"` : ""}></gbti-discussion></section>` : "";
-      const sideLink = it.type === "share" && it.url ? `<a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf2(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a>` : "";
+      const sideLink = it.type === "share" && it.url ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(hostOf2(it.url))}</div><p class="ss-note">The source ${esc(this._author?.entry?.displayName || authorName4(it.author))} shared this from.</p><a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf2(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a></div>` : "";
       const syndCategory = it.type === "share" ? it.category || "" : this._fmCategories?.[0] || "";
       const syndPath = it.type === "share" ? "" : (this._fmCategories || []).join(",");
       const syndUrl = it.url ? it.type === "share" ? it.url : SITE13 + it.url : "";

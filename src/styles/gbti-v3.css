@@ -1122,8 +1122,9 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 .share-quote { font-style: italic; }
 .sq-credit { font-style: normal; font-family: var(--f-mono); font-size: 13px; color: var(--fg-mute); white-space: nowrap; }
 .share-src-stack { position: relative; display: inline-flex; flex: none; }
-.sss-fav { position: absolute; right: -7px; bottom: -5px; width: 20px; height: 20px; border-radius: 50%;
-  background: #fff; border: 2px solid var(--paper); z-index: 1; }
+.sss-src { display: block; width: 36px; height: 36px; border-radius: 50%; background: #fff; border: 1.5px solid var(--line); object-fit: contain; padding: 4px; box-sizing: border-box; }
+.sss-member { position: absolute; right: -7px; bottom: -5px; z-index: 1; display: inline-flex; }
+.sss-member .av { border: 2px solid var(--paper); }
 .share-member-note .cmt-rich { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 17px; }
 .share-member-note .cmt-rich p:first-child::before { content: '"'; }
 .share-member-note .cmt-rich p:last-child::after { content: '"'; }

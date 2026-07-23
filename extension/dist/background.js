@@ -17451,13 +17451,15 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
     return { path: relPath, frontmatter, body };
   }
   function summarize(relPath, frontmatter) {
+    const pubMs = frontmatter.publishedAt ? new Date(frontmatter.publishedAt).getTime() : NaN;
     return {
       path: relPath,
       type: frontmatter.type ?? null,
       title: frontmatter.title ?? frontmatter.displayName ?? relPath,
       slug: frontmatter.slug ?? null,
       status: frontmatter.status ?? null,
-      visibility: frontmatter.visibility ?? null
+      visibility: frontmatter.visibility ?? null,
+      publishedAt: Number.isFinite(pubMs) ? pubMs : null
     };
   }
   async function listType(username, type) {
