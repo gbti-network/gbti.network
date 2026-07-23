@@ -17890,17 +17890,20 @@ From the author:
       this.render();
     }
     _modelFromFm(fm, body) {
+      const str = (v) => v == null ? "" : String(v);
+      const links = {};
+      for (const [k, v] of Object.entries(fm.links || {})) links[k] = str(v);
       return {
-        displayName: fm.displayName || "",
-        headline: fm.headline || "",
-        avatar: fm.avatar || "",
-        location: fm.location || "",
+        displayName: str(fm.displayName),
+        headline: str(fm.headline),
+        avatar: str(fm.avatar),
+        location: str(fm.location),
         // preserved, never surfaced (owner decision)
         forHire: fm.forHire === true,
         directory: fm.directory === true,
-        skills: Array.isArray(fm.skills) ? fm.skills.slice() : [],
-        roles: Array.isArray(fm.roles) ? fm.roles.slice() : [],
-        links: { ...fm.links || {} },
+        skills: Array.isArray(fm.skills) ? fm.skills.map(str) : [],
+        roles: Array.isArray(fm.roles) ? fm.roles.map(str) : [],
+        links,
         visibility: fm.visibility || "public",
         body: body || ""
       };

@@ -140,16 +140,25 @@ class GbtiProfileEditor extends GbtiElement {
   }
 
   _modelFromFm(fm, body) {
+    // Coerce every text field to a string on load. YAML parses an unquoted numeric/boolean value (e.g. a
+    // numeric social handle `discord: 123456789`) as a Number/Boolean; the model then feeds `.trim()` in
+    // _buildInput / render, which would throw on a non-string. The editor's own serializer quotes such values
+    // (so a round-trip is safe) and content-check rejects an unquoted-numeric profile.md at the gate, but a
+    // hand-crafted or migrated file could still reach here, so coerce defensively (matches the String(x ?? '')
+    // pattern in buildSocialUrl / isSanctionedAvatar). Pure string data is unaffected.
+    const str = (v) => (v == null ? '' : String(v));
+    const links = {};
+    for (const [k, v] of Object.entries(fm.links || {})) links[k] = str(v);
     return {
-      displayName: fm.displayName || '',
-      headline: fm.headline || '',
-      avatar: fm.avatar || '',
-      location: fm.location || '', // preserved, never surfaced (owner decision)
+      displayName: str(fm.displayName),
+      headline: str(fm.headline),
+      avatar: str(fm.avatar),
+      location: str(fm.location), // preserved, never surfaced (owner decision)
       forHire: fm.forHire === true,
       directory: fm.directory === true,
-      skills: Array.isArray(fm.skills) ? fm.skills.slice() : [],
-      roles: Array.isArray(fm.roles) ? fm.roles.slice() : [],
-      links: { ...(fm.links || {}) },
+      skills: Array.isArray(fm.skills) ? fm.skills.map(str) : [],
+      roles: Array.isArray(fm.roles) ? fm.roles.map(str) : [],
+      links,
       visibility: fm.visibility || 'public',
       body: body || '',
     };
