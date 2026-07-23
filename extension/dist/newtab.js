@@ -2841,7 +2841,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/workspace-core.mjs
-  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "product", "drafts", "prs", "inbox", "saved", "subs", "earnings"]);
+  var WORKSPACE_TABS = /* @__PURE__ */ new Set(["overview", "post", "prompt", "product", "prs", "inbox", "saved", "subs", "earnings"]);
   function parseWorkspaceTab(hash) {
     const m = String(hash || "").replace(/^#/, "").match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
     return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
@@ -2939,6 +2939,46 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     if (c.label === "Accepted") return { state: "published", label: "Published", tone: "ok" };
     if (c.label === "Declined") return { state: "declined", label: "Declined", tone: "muted" };
     return { state: "review", label: c.label === "Proposed" ? "Submitted" : c.label, tone: c.tone };
+  }
+  function slugOf(x) {
+    const m = String(x?.path || "").match(/\/([^/]+)\/index\.md$/);
+    return String(m && m[1] || x?.slug || x?.pendingSlug || "").toLowerCase();
+  }
+  var SORT_MODES = /* @__PURE__ */ new Set(["newest", "oldest", "title-asc", "title-desc"]);
+  var DEFAULT_SORT = "newest";
+  var WORKSPACE_SORT_KEY = "gbti-wb-sort";
+  function sortModeFor(stored) {
+    return SORT_MODES.has(stored) ? stored : DEFAULT_SORT;
+  }
+  function sortItems(items, sort = DEFAULT_SORT) {
+    const list = Array.isArray(items) ? [...items] : [];
+    const byTitle = (a, b) => String(a?.title || "").localeCompare(String(b?.title || ""), void 0, { sensitivity: "base" });
+    const dateOf = (x) => Number.isFinite(x?.publishedAt) ? x.publishedAt : Infinity;
+    switch (sort) {
+      case "oldest":
+        return list.sort((a, b) => dateOf(a) - dateOf(b) || byTitle(a, b));
+      case "title-asc":
+        return list.sort(byTitle);
+      case "title-desc":
+        return list.sort((a, b) => byTitle(b, a));
+      case "newest":
+      default:
+        return list.sort((a, b) => dateOf(b) - dateOf(a) || byTitle(a, b));
+    }
+  }
+  function filterByStatus(items, status = "all") {
+    const list = Array.isArray(items) ? items : [];
+    if (status === "published") return list.filter((x) => x?.status === "published");
+    if (status === "draft") return list.filter((x) => x?.status !== "published");
+    return list;
+  }
+  function mergeTypeItems(content = [], drafts = []) {
+    const canon = new Set((Array.isArray(content) ? content : []).map(slugOf).filter(Boolean));
+    const extra = (Array.isArray(drafts) ? drafts : []).filter((d) => {
+      const s = slugOf(d);
+      return !s || !canon.has(s);
+    }).map((d) => ({ ...d, isDraft: true }));
+    return [...Array.isArray(content) ? content : [], ...extra];
   }
 
   // client-ui/src/topic-picker-core.mjs
@@ -14588,8 +14628,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { id: "post", label: "Articles", type: "post" },
     { id: "prompt", label: "Prompts", type: "prompt" },
     { id: "product", label: "Products", type: "product" },
-    { id: "drafts", label: "Drafts" },
-    // SOW-082: fork-staged drafts (Save -> review -> Publish)
+    // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
+    // type's list (a draft article under Articles), reached by the per-type Drafts filter.
     { id: "prs", label: "Pull requests" },
     { id: "inbox", label: "Inbox" },
     { id: "saved", label: "Saved" },
@@ -14629,6 +14669,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .pager-n { font-size:12.5px; color:var(--muted); font-family:var(--font-mono, monospace); }
   .btn[disabled] { opacity:.42; cursor:default; }
   .btn[disabled]:hover { border-color:var(--line); color:var(--fg); }
+  /* SOW-085: the content-list controls bar (status filter + sort) */
+  .lc-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 10px; }
+  .lc-filter { display:inline-flex; gap:2px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:3px; }
+  .lc-f { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:600; font-size:12.5px; padding:5px 12px; border-radius:6px; cursor:pointer; }
+  .lc-f.on { background:var(--hover); color:var(--accent); }
+  .lc-sort { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); }
+  .lc-sort .lc-sl { font-weight:600; }
+  .lc-sort select { font:inherit; font-size:12.5px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:5px 9px; cursor:pointer; }
   .muted { color:var(--muted); }
   .empty { color:var(--muted); padding:18px 2px; }
   .back { margin:0 0 14px; }
@@ -14671,6 +14719,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return d ? { draft: d } : null;
       })();
       this._page = 0;
+      this._sort = sortModeFor(typeof localStorage !== "undefined" ? localStorage.getItem(WORKSPACE_SORT_KEY) : null);
+      this._statusFilter = "all";
+      this._viewList = [];
       this._reviewing = null;
       this._inboxCount = null;
       super.connectedCallback?.();
@@ -14685,6 +14736,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._reviewing = null;
           this._tab = plan.tab;
           this._page = 0;
+          this._statusFilter = "all";
           this.render();
           this._ensureTab(plan.tab);
         } else if (plan.action === "openNew") {
@@ -14693,6 +14745,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         } else if (plan.action === "switchTab") {
           this._tab = plan.tab;
           this._page = 0;
+          this._statusFilter = "all";
           this.render();
           this._ensureTab(plan.tab);
         }
@@ -14827,10 +14880,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       if (id === "inbox" || id === "saved" || id === "subs") return;
-      if (id === "drafts") {
-        await this._loadDrafts(id);
-        return;
-      }
       if (tab.type) {
         await this._swrContent(id, tab.type);
         this._loadDrafts(id);
@@ -15098,13 +15147,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return;
       }
       const tabs = TABS.map((t) => {
-        const badge = t.id === "inbox" && this._inboxCount ? `<span class="tbadge">${esc(this._inboxCount)}</span>` : "";
+        const n = this._tabCount(t);
+        const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
       }).join("");
       this.set(this.css(CSS35) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
       this.$$("[data-tab]").forEach((b) => b.addEventListener("click", () => {
         this._tab = b.dataset.tab;
         this._msg = null;
+        this._draftMsg = null;
+        this._page = 0;
+        this._statusFilter = "all";
         this.render();
         this._ensureTab(this._tab);
       }));
@@ -15127,30 +15180,69 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         const prs = this._prs;
         if (prs === null) return `<p class="empty">Loading your pull requests...</p>`;
         if (prs.length === 0) return `<p class="empty">No pull requests yet. Publish from the site or the CMS and they show here.</p>`;
-        return `<ul class="rows">${prs.map((pr) => `<li class="row">
+        const PAGE2 = 15;
+        const pages2 = Math.max(1, Math.ceil(prs.length / PAGE2));
+        const page2 = Math.min(this._page || 0, pages2 - 1);
+        const rows2 = prs.slice(page2 * PAGE2, page2 * PAGE2 + PAGE2).map((pr) => `<li class="row">
         <span class="t"><b>${esc(pr.title || "PR #" + pr.number)}</b><span class="meta"><a href="${esc(pr.html_url || "#")}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span><span class="why" data-n="${esc(pr.number)}" hidden></span></span>
-        <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join("")}</ul>`;
+        <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join("");
+        const pager2 = pages2 > 1 ? `<div class="pager"><button class="btn" data-page="${page2 - 1}" type="button"${page2 === 0 ? " disabled" : ""}>&larr; Prev</button><span class="pager-n">Page ${page2 + 1} of ${pages2}</span><button class="btn" data-page="${page2 + 1}" type="button"${page2 >= pages2 - 1 ? " disabled" : ""}>Next &rarr;</button></div>` : "";
+        return `<ul class="rows">${rows2}</ul>${pager2}`;
       }
-      if (this._tab === "drafts") return this._draftsHtml();
-      const items = this._cache?.[tab?.type];
-      if (!items) return `<p class="empty">Loading...</p>`;
-      if (items.length === 0) return `<p class="empty">No ${esc(tab.label.toLowerCase())} yet.</p>`;
+      const type = tab?.type;
+      const content = this._cache?.[type];
+      if (!content) return `<p class="empty">Loading...</p>`;
+      const typeDrafts = (this._drafts || []).filter((d) => d.type === type);
+      const view = filterByStatus(sortItems(mergeTypeItems(content, typeDrafts), this._sort), this._statusFilter);
+      this._viewList = view;
+      const controls = this._listControls();
+      const note = this._msg || this._draftMsg ? `<p class="empty">${esc(this._msg || this._draftMsg)}</p>` : "";
+      const draftNote = this._statusFilter === "draft" ? `<p class="muted draft-intro">Drafts live on your own fork. Save work here, then publish it to the network when you are ready.</p>` : "";
+      if (view.length === 0) {
+        const empty = this._statusFilter === "all" ? `No ${esc(tab.label.toLowerCase())} yet.` : this._statusFilter === "draft" ? `No drafts in ${esc(tab.label)}.` : `No published ${esc(tab.label.toLowerCase())}.`;
+        return `${controls}${draftNote}${note}<p class="empty">${empty}</p>`;
+      }
+      const paid = this._overview ? this._overview.membership === "paid" : true;
       const PAGE = 15;
-      const pages = Math.max(1, Math.ceil(items.length / PAGE));
+      const pages = Math.max(1, Math.ceil(view.length / PAGE));
       const page = Math.min(this._page || 0, pages - 1);
       const start = page * PAGE;
-      const rows = items.slice(start, start + PAGE).map((it, j) => {
+      const rows = view.slice(start, start + PAGE).map((it, j) => {
         const i = start + j;
-        const g = glyphFor(null, it.type);
-        const status = it.status ? `<span class="tag ${it.status === "published" ? "ok" : ""}">${esc(it.status)}</span>` : "";
-        const vis = it.visibility === "members" ? `<span class="tag">members</span>` : "";
-        const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : "";
-        const flip = it.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
-        return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${status} ${stagedTag} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
+        return it.isDraft ? this._draftRow(it, i, paid) : this._contentRow(it, i);
       }).join("");
       const pager = pages > 1 ? `<div class="pager"><button class="btn" data-page="${page - 1}" type="button"${page === 0 ? " disabled" : ""}>&larr; Prev</button><span class="pager-n">Page ${page + 1} of ${pages}</span><button class="btn" data-page="${page + 1}" type="button"${page >= pages - 1 ? " disabled" : ""}>Next &rarr;</button></div>` : "";
-      const note = this._msg ? `<p class="empty">${esc(this._msg)}</p>` : "";
-      return `${note}<ul class="rows">${rows}</ul>${pager}`;
+      return `${controls}${draftNote}${note}<ul class="rows">${rows}</ul>${pager}`;
+    }
+    // SOW-085: a tab's count badge value, from data ALREADY loaded (no fetch just for a badge). Content tabs use
+    // the exact merged count once their list is cached, else the eager Overview count; PRs use the loaded PR list;
+    // Inbox keeps its awaiting-review count. 0 / unknown -> the caller hides the badge.
+    _tabCount(t) {
+      if (t.id === "inbox") return this._inboxCount || 0;
+      const counts = this._overview?.counts;
+      if (t.id === "prs") return Array.isArray(this._prs) ? this._prs.length : counts?.prs ?? 0;
+      if (t.type) {
+        const content = this._cache?.[t.type];
+        if (content) return mergeTypeItems(content, (this._drafts || []).filter((d) => d.type === t.type)).length;
+        return counts?.[t.type] ?? 0;
+      }
+      return 0;
+    }
+    // SOW-085: the shared list-controls bar (sort + published/draft filter). Rendered above every content list.
+    _listControls() {
+      const f = (v, label) => `<button class="lc-f ${this._statusFilter === v ? "on" : ""}" data-filter="${v}" type="button">${label}</button>`;
+      const opt = (v, label) => `<option value="${v}"${this._sort === v ? " selected" : ""}>${label}</option>`;
+      return `<div class="lc-bar"><div class="lc-filter" role="group" aria-label="Filter by status">${f("all", "All")}${f("published", "Published")}${f("draft", "Drafts")}</div><label class="lc-sort"><span class="lc-sl">Sort</span><select data-sort aria-label="Sort">${opt("newest", "Newest")}${opt("oldest", "Oldest")}${opt("title-asc", "Title A-Z")}${opt("title-desc", "Title Z-A")}</select></label></div>`;
+    }
+    // SOW-085: a canonical content row (its index is into this._viewList). SOW-062 glyph + Manage; SOW-106 the
+    // staged-edits chip + the reversible self-unpublish/republish flip.
+    _contentRow(it, i) {
+      const g = glyphFor(null, it.type);
+      const status = it.status ? `<span class="tag ${it.status === "published" ? "ok" : ""}">${esc(it.status)}</span>` : "";
+      const vis = it.visibility === "members" ? `<span class="tag">members</span>` : "";
+      const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : "";
+      const flip = it.status === "published" ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>` : it.status === "draft" ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>` : "";
+      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || "")}</span></span><span class="right">${status} ${stagedTag} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
     }
     // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
     // and the pull requests needing attention. Tiles are <a> links so they need no JS wiring.
@@ -15164,8 +15256,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         { nm: "Articles", href: "workspace.html#tab=post", n: c.post },
         { nm: "Prompts", href: "workspace.html#tab=prompt", n: c.prompt },
         { nm: "Products", href: "workspace.html#tab=product", n: c.product },
-        { nm: "Drafts", href: "workspace.html#tab=drafts", n: this._drafts ? this._drafts.length : null },
-        // SOW-082: fork-staged
         { nm: "Pull requests", href: "workspace.html#tab=prs", n: c.prs },
         { nm: "Saved", href: "workspace.html#tab=saved", n: c.saved },
         { nm: "Following", href: "workspace.html#tab=subs", n: c.subs },
@@ -15185,24 +15275,16 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       ${att}
     </div>`;
     }
-    // SOW-082: the fork-staged drafts review view. Each draft shows its lifecycle state (Staged -> Submitted / Needs
-    // changes -> Published / Declined via classifyDraft) and opens in the editor; a paid member publishes it here.
-    _draftsHtml() {
-      const drafts = this._drafts;
-      if (drafts == null) return `<p class="empty">Loading your drafts...</p>`;
-      const msg = this._draftMsg ? `<div class="notice">${esc(this._draftMsg)}</div>` : "";
-      const intro = `<p class="muted draft-intro">Drafts live on your own fork. Save work here, review it, then publish it to the network when you are ready.</p>`;
-      if (!drafts.length) return msg + intro + `<p class="empty">No drafts yet. Use <b>Save draft</b> in the editor to stage an article, product, or prompt on your fork.</p>`;
-      const paid = this._overview ? this._overview.membership === "paid" : true;
-      return msg + intro + `<ul class="rows">${drafts.map((d, i) => this._draftRow(d, i, paid)).join("")}</ul>`;
-    }
+    // SOW-082 + SOW-085: a fork-staged draft row, MERGED into its content type's list. The lifecycle state (Staged
+    // -> Submitted / Needs changes -> Published / Declined via classifyDraft), Manage / Publish / Discard. `i` is the
+    // index into this._viewList; the actions carry data-drow-* so _wireBody looks the draft up there.
     _draftRow(d, i, paid) {
       const g = glyphFor(null, d.type);
       const { label, tone } = classifyDraft({ pull: d.pull });
       const vis = d.visibility === "members" ? `<span class="tag">members</span>` : "";
       const bad = d.valid === false ? `<span class="tag bad" title="${esc(d.invalidReason || "no longer matches the current schema")}">Invalid</span>` : "";
-      const pub = label === "Published" ? "" : paid ? `<button class="btn" data-draft-publish="${i}" type="button">Publish</button>` : `<a class="btn" href="https://gbti.network/membership/" target="_blank" rel="noopener" title="Publishing requires a paid membership">Upgrade to publish</a>`;
-      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)} · ${esc(d.slug)}${d.pendingSlug ? ` (renames to ${esc(d.pendingSlug)} on publish)` : ""}</span></span><span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${d.pendingSlug ? `<span class="tag">rename pending</span>` : ""}${bad}${vis}<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
+      const pub = label === "Published" ? "" : paid ? `<button class="btn" data-drow-publish="${i}" type="button">Publish</button>` : `<a class="btn" href="https://gbti.network/membership/" target="_blank" rel="noopener" title="Publishing requires a paid membership">Upgrade to publish</a>`;
+      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span><span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)} · draft${d.pendingSlug ? ` (renames to ${esc(d.pendingSlug)} on publish)` : ""}</span></span><span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${d.pendingSlug ? `<span class="tag">rename pending</span>` : ""}${bad}${vis}<button class="btn" data-drow-edit="${i}" type="button">Manage</button>${pub}<button class="btn" data-drow-discard="${i}" type="button">Discard</button></span></li>`;
     }
     _wireBody() {
       this.on("[data-profile]", "click", () => {
@@ -15212,12 +15294,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         this._openItem(this._profile?.path, "profile");
       });
-      if (this._tab === "drafts") {
-        const drafts = this._drafts || [];
-        this.$$("[data-draft-edit]").forEach((b) => b.addEventListener("click", () => this._openDraft(drafts[Number(b.dataset.draftEdit)])));
-        this.$$("[data-draft-publish]").forEach((b) => b.addEventListener("click", () => this._publishDraft(drafts[Number(b.dataset.draftPublish)], b)));
-        this.$$("[data-draft-discard]").forEach((b) => b.addEventListener("click", () => this._discardDraft(drafts[Number(b.dataset.draftDiscard)], b)));
-      }
       if (this._tab === "inbox") {
         this.$("gbti-contrib-inbox")?.addEventListener("contrib-open", (e) => {
           this._reviewing = e.detail?.number ?? null;
@@ -15226,20 +15302,47 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       const tab = TABS.find((t) => t.id === this._tab);
       if (tab?.type) {
+        const view = () => this._viewList || [];
         this.$$("[data-edit]").forEach((b) => b.addEventListener("click", () => {
-          const it = (this._cache[tab.type] || [])[Number(b.dataset.edit)];
+          const it = view()[Number(b.dataset.edit)];
           if (it) this._openItem(it.path, it.type);
         }));
         this.$$("[data-status]").forEach((b) => b.addEventListener("click", () => {
-          const it = (this._cache[tab.type] || [])[Number(b.dataset.status)];
+          const it = view()[Number(b.dataset.status)];
           if (it) this._setItemStatus(it, b.dataset.to, b, tab.type);
         }));
-        this.$$("[data-page]").forEach((b) => b.addEventListener("click", () => {
-          if (b.hasAttribute("disabled")) return;
-          this._page = Number(b.dataset.page) || 0;
+        this.$$("[data-drow-edit]").forEach((b) => b.addEventListener("click", () => {
+          const d = view()[Number(b.dataset.drowEdit)];
+          if (d) this._openDraft(d);
+        }));
+        this.$$("[data-drow-publish]").forEach((b) => b.addEventListener("click", () => {
+          const d = view()[Number(b.dataset.drowPublish)];
+          if (d) this._publishDraft(d, b);
+        }));
+        this.$$("[data-drow-discard]").forEach((b) => b.addEventListener("click", () => {
+          const d = view()[Number(b.dataset.drowDiscard)];
+          if (d) this._discardDraft(d, b);
+        }));
+        this.$("[data-sort]")?.addEventListener("change", (e) => {
+          this._sort = sortModeFor(e.target.value);
+          try {
+            if (typeof localStorage !== "undefined") localStorage.setItem(WORKSPACE_SORT_KEY, this._sort);
+          } catch {
+          }
+          this._page = 0;
+          this.render();
+        });
+        this.$$("[data-filter]").forEach((b) => b.addEventListener("click", () => {
+          this._statusFilter = b.dataset.filter;
+          this._page = 0;
           this.render();
         }));
       }
+      this.$$("[data-page]").forEach((b) => b.addEventListener("click", () => {
+        if (b.hasAttribute("disabled")) return;
+        this._page = Number(b.dataset.page) || 0;
+        this.render();
+      }));
     }
     // SOW-106 Phase B: member self-unpublish/republish. A reversible status flip on the member's OWN canonical
     // item, via the normal gated PR (auto-merges like any own-folder change; live at the next deploy).
@@ -15298,7 +15401,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const full = await this.client.readDraft({ type: d.type, slug: d.slug });
         this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || "", staged: true };
-        this._writeHash(`#tab=drafts&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
+        this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
         try {
           const v = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });
           this._editing.invalidNote = v && v.valid === false ? v.error || "This draft no longer matches the current schema." : null;
@@ -15345,7 +15448,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         await this.client.discardDraft({ type: d.type, slug: d.slug });
         this._drafts = null;
         this._overview = null;
-        this._ensureTab("drafts");
+        this._ensureTab(this._tab);
       } catch (err) {
         if (btn) {
           btn.disabled = false;
@@ -15353,7 +15456,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }
         this._draftMsg = err?.message || "Could not discard this draft.";
         this._drafts = null;
-        this._ensureTab("drafts");
+        this._ensureTab(this._tab);
       }
     }
   };

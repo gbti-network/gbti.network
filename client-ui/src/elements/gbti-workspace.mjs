@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, submitAck } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY } from '../workspace-core.mjs';
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
 const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'product']); // SOW-073: types whose publish invalidates a tab
@@ -22,7 +22,8 @@ const TABS = [
   { id: 'post', label: 'Articles', type: 'post' },
   { id: 'prompt', label: 'Prompts', type: 'prompt' },
   { id: 'product', label: 'Products', type: 'product' },
-  { id: 'drafts', label: 'Drafts' }, // SOW-082: fork-staged drafts (Save -> review -> Publish)
+  // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
+  // type's list (a draft article under Articles), reached by the per-type Drafts filter.
   { id: 'prs', label: 'Pull requests' },
   { id: 'inbox', label: 'Inbox' },
   { id: 'saved', label: 'Saved' }, // SOW-037: favorites + collections
@@ -63,6 +64,14 @@ const CSS = `
   .pager-n { font-size:12.5px; color:var(--muted); font-family:var(--font-mono, monospace); }
   .btn[disabled] { opacity:.42; cursor:default; }
   .btn[disabled]:hover { border-color:var(--line); color:var(--fg); }
+  /* SOW-085: the content-list controls bar (status filter + sort) */
+  .lc-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin:0 0 10px; }
+  .lc-filter { display:inline-flex; gap:2px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:3px; }
+  .lc-f { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:600; font-size:12.5px; padding:5px 12px; border-radius:6px; cursor:pointer; }
+  .lc-f.on { background:var(--hover); color:var(--accent); }
+  .lc-sort { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); }
+  .lc-sort .lc-sl { font-weight:600; }
+  .lc-sort select { font:inherit; font-size:12.5px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:5px 9px; cursor:pointer; }
   .muted { color:var(--muted); }
   .empty { color:var(--muted); padding:18px 2px; }
   .back { margin:0 0 14px; }
@@ -115,6 +124,12 @@ class GbtiWorkspace extends GbtiElement {
       return d ? { draft: d } : null;
     })();
     this._page = 0; // SOW-062: the current content-list page (client-side paging; resets on tab switch)
+    // SOW-085: the content-list controls. The SORT persists across sessions (one device-local pref); the STATUS
+    // filter resets to All on each tab switch. `_viewList` is the merged+sorted+filtered list for the current
+    // content tab, the index target the row action handlers read.
+    this._sort = sortModeFor(typeof localStorage !== 'undefined' ? localStorage.getItem(WORKSPACE_SORT_KEY) : null);
+    this._statusFilter = 'all';
+    this._viewList = [];
     this._reviewing = null; // SOW-028: the PR number being reviewed in the drill-in, or null
     this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
     super.connectedCallback?.(); // base now renders the initial view with fields in place
@@ -131,11 +146,11 @@ class GbtiWorkspace extends GbtiElement {
       const plan = planHashRoute(h, { editing: !!this._editing, reviewing: this._reviewing != null, tab: this._tab });
       if (plan.action === 'exit') {
         this._editing = null; this._reviewing = null;
-        this._tab = plan.tab; this._page = 0; this.render(); this._ensureTab(plan.tab);
+        this._tab = plan.tab; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(plan.tab);
       } else if (plan.action === 'openNew') {
         this._editing = { type: plan.type, frontmatter: {}, body: '' }; this.render();
       } else if (plan.action === 'switchTab') {
-        this._tab = plan.tab; this._page = 0; this.render(); this._ensureTab(plan.tab);
+        this._tab = plan.tab; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(plan.tab);
       }
     };
     if (typeof window !== 'undefined') window.addEventListener('hashchange', this._onHash);
@@ -266,8 +281,7 @@ class GbtiWorkspace extends GbtiElement {
     // The Inbox / Saved / Subscriptions tabs are self-loading elements (they fetch their own data on connect),
     // so there is nothing to preload here; render() already mounted them. Returning avoids a redundant render.
     if (id === 'inbox' || id === 'saved' || id === 'subs') return;
-    if (id === 'drafts') { await this._loadDrafts(id); return; } // SOW-082
-    if (tab.type) { await this._swrContent(id, tab.type); this._loadDrafts(id); return; } // SOW-106 QA: drafts feed the staged-edits chips
+    if (tab.type) { await this._swrContent(id, tab.type); this._loadDrafts(id); return; } // SOW-106 QA + SOW-085: drafts feed the staged-edits chips AND merge into the list
     if (id === 'prs') { await this._swrPrs(id); }
   }
 
@@ -511,11 +525,14 @@ class GbtiWorkspace extends GbtiElement {
       return;
     }
     const tabs = TABS.map((t) => {
-      const badge = t.id === 'inbox' && this._inboxCount ? `<span class="tbadge">${esc(this._inboxCount)}</span>` : '';
+      // SOW-085: count badges on the content tabs + Pull requests (+ the existing Inbox), from already-loaded
+      // data only; hidden while unknown or 0.
+      const n = this._tabCount(t);
+      const badge = n ? `<span class="tbadge">${esc(n)}</span>` : '';
       return `<button class="tab ${t.id === this._tab ? 'on' : ''}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
     }).join('');
     this.set(this.css(CSS) + `${this._profileHtml()}<div class="tabs" role="tablist">${tabs}</div><div data-body>${this._body()}</div>`);
-    this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this._msg = null; this.render(); this._ensureTab(this._tab); }));
+    this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this._msg = null; this._draftMsg = null; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(this._tab); })); // SOW-085: a direct tab click resets the page + filter (was a gap)
     this._wireBody();
   }
 
@@ -539,44 +556,98 @@ class GbtiWorkspace extends GbtiElement {
       const prs = this._prs;
       if (prs === null) return `<p class="empty">Loading your pull requests...</p>`;
       if (prs.length === 0) return `<p class="empty">No pull requests yet. Publish from the site or the CMS and they show here.</p>`;
-      return `<ul class="rows">${prs.map((pr) => `<li class="row">
+      // SOW-085: paginate the PR list too (same 15/page pager as the content tabs); rows key on pr.number, so a
+      // slice is safe. The per-PR gate status still resolves live for the visible page after the paint.
+      const PAGE = 15;
+      const pages = Math.max(1, Math.ceil(prs.length / PAGE));
+      const page = Math.min(this._page || 0, pages - 1);
+      const rows = prs.slice(page * PAGE, page * PAGE + PAGE).map((pr) => `<li class="row">
         <span class="t"><b>${esc(pr.title || ('PR #' + pr.number))}</b><span class="meta"><a href="${esc(pr.html_url || '#')}" target="_blank" rel="noopener">#${esc(pr.number)}</a> on GitHub</span><span class="why" data-n="${esc(pr.number)}" hidden></span></span>
-        <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join('')}</ul>`;
+        <span class="right"><span class="gate tag" data-n="${esc(pr.number)}">checking...</span></span></li>`).join('');
+      const pager = pages > 1 ? `<div class="pager">`
+        + `<button class="btn" data-page="${page - 1}" type="button"${page === 0 ? ' disabled' : ''}>&larr; Prev</button>`
+        + `<span class="pager-n">Page ${page + 1} of ${pages}</span>`
+        + `<button class="btn" data-page="${page + 1}" type="button"${page >= pages - 1 ? ' disabled' : ''}>Next &rarr;</button></div>` : '';
+      return `<ul class="rows">${rows}</ul>${pager}`;
     }
-    if (this._tab === 'drafts') return this._draftsHtml(); // SOW-082
-    const items = this._cache?.[tab?.type]; // optional chain: never throw if render runs before init
-    if (!items) return `<p class="empty">Loading...</p>`;
-    if (items.length === 0) return `<p class="empty">No ${esc(tab.label.toLowerCase())} yet.</p>`;
-    // SOW-062 Phase 1: each row leads with the SOW-049 type glyph; "Open" is now "Manage"; the list pages
-    // client-side (15/page) so a member with many items does not scroll a long flat list.
+    // SOW-085: merge the type's canonical content with its fork-staged drafts (SOW-082), then apply the shared
+    // list controls (sort -> status filter) before the existing client-side paging. `this._viewList` is the index
+    // target the row action handlers in _wireBody read.
+    const type = tab?.type;
+    const content = this._cache?.[type]; // optional chain: never throw if render runs before init
+    if (!content) return `<p class="empty">Loading...</p>`;
+    const typeDrafts = (this._drafts || []).filter((d) => d.type === type);
+    const view = filterByStatus(sortItems(mergeTypeItems(content, typeDrafts), this._sort), this._statusFilter);
+    this._viewList = view;
+    const controls = this._listControls();
+    // SOW-085: the status-flip ack (_msg) AND draft-action errors (_draftMsg, previously shown on the Drafts tab)
+    // both surface here now that drafts live in the content list.
+    const note = (this._msg || this._draftMsg) ? `<p class="empty">${esc(this._msg || this._draftMsg)}</p>` : '';
+    // The "drafts live on your fork" copy that lived on the Drafts tab now shows only when the Drafts filter is on.
+    const draftNote = this._statusFilter === 'draft'
+      ? `<p class="muted draft-intro">Drafts live on your own fork. Save work here, then publish it to the network when you are ready.</p>` : '';
+    if (view.length === 0) {
+      const empty = this._statusFilter === 'all' ? `No ${esc(tab.label.toLowerCase())} yet.`
+        : this._statusFilter === 'draft' ? `No drafts in ${esc(tab.label)}.`
+          : `No published ${esc(tab.label.toLowerCase())}.`;
+      return `${controls}${draftNote}${note}<p class="empty">${empty}</p>`;
+    }
+    const paid = this._overview ? this._overview.membership === 'paid' : true;
     const PAGE = 15;
-    const pages = Math.max(1, Math.ceil(items.length / PAGE));
+    const pages = Math.max(1, Math.ceil(view.length / PAGE));
     const page = Math.min(this._page || 0, pages - 1);
     const start = page * PAGE;
-    const rows = items.slice(start, start + PAGE).map((it, j) => {
-      const i = start + j; // absolute index into _cache[type] for data-edit
-      const g = glyphFor(null, it.type);
-      const status = it.status ? `<span class="tag ${it.status === 'published' ? 'ok' : ''}">${esc(it.status)}</span>` : '';
-      const vis = it.visibility === 'members' ? `<span class="tag">members</span>` : '';
-      // SOW-106 QA fix: a staged fork draft exists for this item (same path); Manage opens the staged version.
-      const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : '';
-      // SOW-106 Phase B: the reversible self-unpublish (status flip via the normal own-folder PR) + its inverse.
-      const flip = it.status === 'published'
-        ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>`
-        : it.status === 'draft'
-          ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>`
-          : '';
-      return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
-        + `<span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span></span>`
-        + `<span class="right">${status} ${stagedTag} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
+    const rows = view.slice(start, start + PAGE).map((it, j) => {
+      const i = start + j; // absolute index into this._viewList for the action handlers
+      return it.isDraft ? this._draftRow(it, i, paid) : this._contentRow(it, i);
     }).join('');
     const pager = pages > 1 ? `<div class="pager">`
       + `<button class="btn" data-page="${page - 1}" type="button"${page === 0 ? ' disabled' : ''}>&larr; Prev</button>`
       + `<span class="pager-n">Page ${page + 1} of ${pages}</span>`
       + `<button class="btn" data-page="${page + 1}" type="button"${page >= pages - 1 ? ' disabled' : ''}>Next &rarr;</button></div>` : '';
-    // SOW-106 Phase B: the status-flip acknowledgement (or failure) for this tab's rows.
-    const note = this._msg ? `<p class="empty">${esc(this._msg)}</p>` : '';
-    return `${note}<ul class="rows">${rows}</ul>${pager}`;
+    return `${controls}${draftNote}${note}<ul class="rows">${rows}</ul>${pager}`;
+  }
+
+  // SOW-085: a tab's count badge value, from data ALREADY loaded (no fetch just for a badge). Content tabs use
+  // the exact merged count once their list is cached, else the eager Overview count; PRs use the loaded PR list;
+  // Inbox keeps its awaiting-review count. 0 / unknown -> the caller hides the badge.
+  _tabCount(t) {
+    if (t.id === 'inbox') return this._inboxCount || 0;
+    const counts = this._overview?.counts;
+    if (t.id === 'prs') return Array.isArray(this._prs) ? this._prs.length : (counts?.prs ?? 0);
+    if (t.type) {
+      const content = this._cache?.[t.type];
+      if (content) return mergeTypeItems(content, (this._drafts || []).filter((d) => d.type === t.type)).length;
+      return counts?.[t.type] ?? 0;
+    }
+    return 0;
+  }
+
+  // SOW-085: the shared list-controls bar (sort + published/draft filter). Rendered above every content list.
+  _listControls() {
+    const f = (v, label) => `<button class="lc-f ${this._statusFilter === v ? 'on' : ''}" data-filter="${v}" type="button">${label}</button>`;
+    const opt = (v, label) => `<option value="${v}"${this._sort === v ? ' selected' : ''}>${label}</option>`;
+    return `<div class="lc-bar">`
+      + `<div class="lc-filter" role="group" aria-label="Filter by status">${f('all', 'All')}${f('published', 'Published')}${f('draft', 'Drafts')}</div>`
+      + `<label class="lc-sort"><span class="lc-sl">Sort</span><select data-sort aria-label="Sort">${opt('newest', 'Newest')}${opt('oldest', 'Oldest')}${opt('title-asc', 'Title A-Z')}${opt('title-desc', 'Title Z-A')}</select></label>`
+      + `</div>`;
+  }
+
+  // SOW-085: a canonical content row (its index is into this._viewList). SOW-062 glyph + Manage; SOW-106 the
+  // staged-edits chip + the reversible self-unpublish/republish flip.
+  _contentRow(it, i) {
+    const g = glyphFor(null, it.type);
+    const status = it.status ? `<span class="tag ${it.status === 'published' ? 'ok' : ''}">${esc(it.status)}</span>` : '';
+    const vis = it.visibility === 'members' ? `<span class="tag">members</span>` : '';
+    const stagedTag = (this._drafts || []).some((d) => d.path === it.path) ? `<span class="tag">staged edits</span>` : '';
+    const flip = it.status === 'published'
+      ? `<button class="btn" data-status="${i}" data-to="draft" type="button">Unpublish</button>`
+      : it.status === 'draft'
+        ? `<button class="btn" data-status="${i}" data-to="published" type="button">Republish</button>`
+        : '';
+    return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
+      + `<span class="t"><b>${esc(it.title)}</b><span class="meta">${esc(it.type || '')}</span></span>`
+      + `<span class="right">${status} ${stagedTag} ${vis}<button class="btn" data-edit="${i}" type="button">Manage</button>${flip}</span></li>`;
   }
 
   // SOW-052: the Overview hub — a membership line, a tile per section (with counts; tiles deep-link via #tab=),
@@ -591,7 +662,6 @@ class GbtiWorkspace extends GbtiElement {
       { nm: 'Articles', href: 'workspace.html#tab=post', n: c.post },
       { nm: 'Prompts', href: 'workspace.html#tab=prompt', n: c.prompt },
       { nm: 'Products', href: 'workspace.html#tab=product', n: c.product },
-      { nm: 'Drafts', href: 'workspace.html#tab=drafts', n: this._drafts ? this._drafts.length : null }, // SOW-082: fork-staged
       { nm: 'Pull requests', href: 'workspace.html#tab=prs', n: c.prs },
       { nm: 'Saved', href: 'workspace.html#tab=saved', n: c.saved },
       { nm: 'Following', href: 'workspace.html#tab=subs', n: c.subs },
@@ -618,18 +688,9 @@ class GbtiWorkspace extends GbtiElement {
     </div>`;
   }
 
-  // SOW-082: the fork-staged drafts review view. Each draft shows its lifecycle state (Staged -> Submitted / Needs
-  // changes -> Published / Declined via classifyDraft) and opens in the editor; a paid member publishes it here.
-  _draftsHtml() {
-    const drafts = this._drafts;
-    if (drafts == null) return `<p class="empty">Loading your drafts...</p>`;
-    const msg = this._draftMsg ? `<div class="notice">${esc(this._draftMsg)}</div>` : '';
-    const intro = `<p class="muted draft-intro">Drafts live on your own fork. Save work here, review it, then publish it to the network when you are ready.</p>`;
-    if (!drafts.length) return msg + intro + `<p class="empty">No drafts yet. Use <b>Save draft</b> in the editor to stage an article, product, or prompt on your fork.</p>`;
-    const paid = this._overview ? this._overview.membership === 'paid' : true; // unknown -> show Publish; the server gates
-    return msg + intro + `<ul class="rows">${drafts.map((d, i) => this._draftRow(d, i, paid)).join('')}</ul>`;
-  }
-
+  // SOW-082 + SOW-085: a fork-staged draft row, MERGED into its content type's list. The lifecycle state (Staged
+  // -> Submitted / Needs changes -> Published / Declined via classifyDraft), Manage / Publish / Discard. `i` is the
+  // index into this._viewList; the actions carry data-drow-* so _wireBody looks the draft up there.
   _draftRow(d, i, paid) {
     const g = glyphFor(null, d.type);
     const { label, tone } = classifyDraft({ pull: d.pull });
@@ -638,13 +699,13 @@ class GbtiWorkspace extends GbtiElement {
     const bad = d.valid === false ? `<span class="tag bad" title="${esc(d.invalidReason || 'no longer matches the current schema')}">Invalid</span>` : '';
     const pub = label === 'Published' ? ''
       : paid
-        ? `<button class="btn" data-draft-publish="${i}" type="button">Publish</button>`
+        ? `<button class="btn" data-drow-publish="${i}" type="button">Publish</button>`
         : `<a class="btn" href="https://gbti.network/membership/" target="_blank" rel="noopener" title="Publishing requires a paid membership">Upgrade to publish</a>`;
     return `<li class="row"><span class="gl" style="--ka:${esc(g.accent)}"><svg viewBox="0 0 24 24" aria-hidden="true">${g.svg}</svg></span>`
-      + `<span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)} · ${esc(d.slug)}${d.pendingSlug ? ` (renames to ${esc(d.pendingSlug)} on publish)` : ''}</span></span>`
+      + `<span class="t"><b>${esc(d.title)}</b><span class="meta">${esc(d.type)} · draft${d.pendingSlug ? ` (renames to ${esc(d.pendingSlug)} on publish)` : ''}</span></span>`
       + `<span class="right"><span class="tag ${esc(tone)}">${esc(label)}</span>${d.pendingSlug ? `<span class="tag">rename pending</span>` : ''}${bad}${vis}`
-      + `<button class="btn" data-draft-edit="${i}" type="button">Manage</button>${pub}`
-      + `<button class="btn" data-draft-discard="${i}" type="button">Discard</button></span></li>`;
+      + `<button class="btn" data-drow-edit="${i}" type="button">Manage</button>${pub}`
+      + `<button class="btn" data-drow-discard="${i}" type="button">Discard</button></span></li>`;
   }
 
   _wireBody() {
@@ -654,12 +715,6 @@ class GbtiWorkspace extends GbtiElement {
       if (typeof chrome !== 'undefined' && chrome.runtime?.id && typeof location !== 'undefined') { location.href = 'profile.html'; return; }
       this._openItem(this._profile?.path, 'profile');
     });
-    if (this._tab === 'drafts') {
-      const drafts = this._drafts || [];
-      this.$$('[data-draft-edit]').forEach((b) => b.addEventListener('click', () => this._openDraft(drafts[Number(b.dataset.draftEdit)])));
-      this.$$('[data-draft-publish]').forEach((b) => b.addEventListener('click', () => this._publishDraft(drafts[Number(b.dataset.draftPublish)], b)));
-      this.$$('[data-draft-discard]').forEach((b) => b.addEventListener('click', () => this._discardDraft(drafts[Number(b.dataset.draftDiscard)], b)));
-    }
     // SOW-028: the Inbox tab's <gbti-contrib-inbox> emits `contrib-open` (composed) when a Review button is
     // clicked; open the review drill-in. The listener sits on the element node the bubbling event passes through.
     if (this._tab === 'inbox') {
@@ -667,21 +722,35 @@ class GbtiWorkspace extends GbtiElement {
     }
     const tab = TABS.find((t) => t.id === this._tab);
     if (tab?.type) {
+      // SOW-085: all row actions index into this._viewList (the merged + sorted + filtered list).
+      const view = () => this._viewList || [];
       this.$$('[data-edit]').forEach((b) => b.addEventListener('click', () => {
-        const it = (this._cache[tab.type] || [])[Number(b.dataset.edit)];
+        const it = view()[Number(b.dataset.edit)];
         if (it) this._openItem(it.path, it.type);
       }));
       // SOW-106 Phase B: flip an own item's status (unpublish/republish) through the gated own-folder PR.
       this.$$('[data-status]').forEach((b) => b.addEventListener('click', () => {
-        const it = (this._cache[tab.type] || [])[Number(b.dataset.status)];
+        const it = view()[Number(b.dataset.status)];
         if (it) this._setItemStatus(it, b.dataset.to, b, tab.type);
       }));
-      this.$$('[data-page]').forEach((b) => b.addEventListener('click', () => { // SOW-062 Phase 1: client-side paging
-        if (b.hasAttribute('disabled')) return;
-        this._page = Number(b.dataset.page) || 0;
-        this.render(); // re-renders the slice + re-wires via _wireBody
-      }));
+      // SOW-085: the merged fork-staged draft rows (SOW-082 affordances).
+      this.$$('[data-drow-edit]').forEach((b) => b.addEventListener('click', () => { const d = view()[Number(b.dataset.drowEdit)]; if (d) this._openDraft(d); }));
+      this.$$('[data-drow-publish]').forEach((b) => b.addEventListener('click', () => { const d = view()[Number(b.dataset.drowPublish)]; if (d) this._publishDraft(d, b); }));
+      this.$$('[data-drow-discard]').forEach((b) => b.addEventListener('click', () => { const d = view()[Number(b.dataset.drowDiscard)]; if (d) this._discardDraft(d, b); }));
+      // SOW-085: the shared list controls. Sort persists (one device-local key); the status filter is session-only.
+      this.$('[data-sort]')?.addEventListener('change', (e) => {
+        this._sort = sortModeFor(e.target.value);
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem(WORKSPACE_SORT_KEY, this._sort); } catch { /* private mode */ }
+        this._page = 0; this.render();
+      });
+      this.$$('[data-filter]').forEach((b) => b.addEventListener('click', () => { this._statusFilter = b.dataset.filter; this._page = 0; this.render(); }));
     }
+    // SOW-062 + SOW-085: client-side paging, wired for whichever pager is present (content tabs OR Pull requests).
+    this.$$('[data-page]').forEach((b) => b.addEventListener('click', () => {
+      if (b.hasAttribute('disabled')) return;
+      this._page = Number(b.dataset.page) || 0;
+      this.render(); // re-renders the slice + re-wires via _wireBody
+    }));
   }
 
   // SOW-106 Phase B: member self-unpublish/republish. A reversible status flip on the member's OWN canonical
@@ -736,7 +805,7 @@ class GbtiWorkspace extends GbtiElement {
     try {
       const full = await this.client.readDraft({ type: d.type, slug: d.slug });
       this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || '', staged: true };
-      this._writeHash(`#tab=drafts&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
+      this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
       // SOW-106 Phase C: re-validate against the CURRENT schema on open, so drift surfaces here (a clear prompt)
       // instead of as a publish-time failure. Best-effort: a validate error never blocks opening the draft.
       try {
@@ -773,12 +842,12 @@ class GbtiWorkspace extends GbtiElement {
       await this.client.discardDraft({ type: d.type, slug: d.slug });
       this._drafts = null;
       this._overview = null;
-      this._ensureTab('drafts');
+      this._ensureTab(this._tab); // SOW-085: refresh the current content tab (drafts merge into it now)
     } catch (err) {
       if (btn) { btn.disabled = false; btn.textContent = 'Discard'; }
       this._draftMsg = err?.message || 'Could not discard this draft.';
       this._drafts = null; // SOW-112 QA fix: re-list live so a stale row (branch already gone) clears itself
-      this._ensureTab('drafts');
+      this._ensureTab(this._tab); // SOW-085: refresh the current content tab (drafts merge into it now)
     }
   }
 }

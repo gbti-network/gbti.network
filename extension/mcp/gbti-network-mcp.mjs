@@ -17455,13 +17455,15 @@ function safeRel(relPath) {
 function createReader(repoPath) {
   function readItem(absPath, relPath) {
     const { frontmatter } = parseContentFile(fs2.readFileSync(absPath, "utf8"));
+    const pubMs = frontmatter.publishedAt ? new Date(frontmatter.publishedAt).getTime() : NaN;
     return {
       path: relPath,
       type: frontmatter.type ?? null,
       title: frontmatter.title ?? frontmatter.displayName ?? relPath,
       slug: frontmatter.slug ?? null,
       status: frontmatter.status ?? null,
-      visibility: frontmatter.visibility ?? null
+      visibility: frontmatter.visibility ?? null,
+      publishedAt: Number.isFinite(pubMs) ? pubMs : null
     };
   }
   function listType(username, type) {

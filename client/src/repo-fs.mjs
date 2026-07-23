@@ -28,6 +28,8 @@ function safeRel(relPath) {
 export function createReader(repoPath) {
   function readItem(absPath, relPath) {
     const { frontmatter } = parseContentFile(fs.readFileSync(absPath, 'utf8'));
+    // SOW-085: a sortable publish date (ms, or null when unset/unparseable) for the WorkBench list controls.
+    const pubMs = frontmatter.publishedAt ? new Date(frontmatter.publishedAt).getTime() : NaN;
     return {
       path: relPath,
       type: frontmatter.type ?? null,
@@ -35,6 +37,7 @@ export function createReader(repoPath) {
       slug: frontmatter.slug ?? null,
       status: frontmatter.status ?? null,
       visibility: frontmatter.visibility ?? null,
+      publishedAt: Number.isFinite(pubMs) ? pubMs : null,
     };
   }
 

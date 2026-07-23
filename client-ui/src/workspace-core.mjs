@@ -9,7 +9,7 @@
 // SOW-036: the workspace deep-link tab hint. The avatar menu opens workspace.html#tab=<id>; <gbti-workspace>
 // reads the hash on connect to open directly on that management tab. Returns a valid tab id, or null when the hash
 // carries no/unknown tab (the caller defaults to 'post'). Kept in lockstep with the TABS list in gbti-workspace.
-const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'product', 'drafts', 'prs', 'inbox', 'saved', 'subs', 'earnings']);
+const WORKSPACE_TABS = new Set(['overview', 'post', 'prompt', 'product', 'prs', 'inbox', 'saved', 'subs', 'earnings']); // SOW-085: 'drafts' retired (merged into the content tabs)
 export function parseWorkspaceTab(hash) {
   const m = String(hash || '').replace(/^#/, '').match(/(?:^|&)tab=([a-z]+)(?:&|$)/);
   return m && WORKSPACE_TABS.has(m[1]) ? m[1] : null;
@@ -160,4 +160,62 @@ export function classifyDraft({ pull = null, status = null } = {}) {
   if (c.label === 'Declined') return { state: 'declined', label: 'Declined', tone: 'muted' };
   // an open PR: it has been submitted to the network and is moving through the gate
   return { state: 'review', label: c.label === 'Proposed' ? 'Submitted' : c.label, tone: c.tone };
+}
+
+// SOW-085: the WorkBench content-list controls (sort + published/draft filter + the per-type content/drafts
+// merge). All PURE + node-testable; the element applies sortItems -> filterByStatus -> its existing 15/page slice.
+
+/** The folder slug for a content or draft item (from its canonical path, else its slug/pendingSlug). Lowercased. */
+function slugOf(x) {
+  const m = String(x?.path || '').match(/\/([^/]+)\/index\.md$/);
+  return String((m && m[1]) || x?.slug || x?.pendingSlug || '').toLowerCase();
+}
+
+/** The valid sort modes + the default. `sortModeFor` mirrors newtab-prefs `viewModeFor` (a valid stored value
+ *  wins, else the default) so the element can persist the choice with one localStorage key. */
+export const SORT_MODES = new Set(['newest', 'oldest', 'title-asc', 'title-desc']);
+export const DEFAULT_SORT = 'newest';
+export const WORKSPACE_SORT_KEY = 'gbti-wb-sort'; // one device-local sort pref shared across the content tabs
+export function sortModeFor(stored) {
+  return SORT_MODES.has(stored) ? stored : DEFAULT_SORT;
+}
+
+/**
+ * Sort a content list (a copy; the input is not mutated). A dateless item (a fork-staged draft carries no
+ * publishedAt) sorts as the NEWEST (top for Newest, bottom for Oldest) so in-progress work stays visible; the
+ * title is the stable tiebreak. `newest` (default) = publishedAt desc.
+ */
+export function sortItems(items, sort = DEFAULT_SORT) {
+  const list = Array.isArray(items) ? [...items] : [];
+  const byTitle = (a, b) => String(a?.title || '').localeCompare(String(b?.title || ''), undefined, { sensitivity: 'base' });
+  const dateOf = (x) => (Number.isFinite(x?.publishedAt) ? x.publishedAt : Infinity); // dateless -> newest
+  switch (sort) {
+    case 'oldest': return list.sort((a, b) => (dateOf(a) - dateOf(b)) || byTitle(a, b));
+    case 'title-asc': return list.sort(byTitle);
+    case 'title-desc': return list.sort((a, b) => byTitle(b, a));
+    case 'newest':
+    default: return list.sort((a, b) => (dateOf(b) - dateOf(a)) || byTitle(a, b));
+  }
+}
+
+/** Filter by publish state: 'all' (everything), 'published' (status published), 'draft' (anything NOT published). */
+export function filterByStatus(items, status = 'all') {
+  const list = Array.isArray(items) ? items : [];
+  if (status === 'published') return list.filter((x) => x?.status === 'published');
+  if (status === 'draft') return list.filter((x) => x?.status !== 'published');
+  return list;
+}
+
+/**
+ * Merge a type's canonical content (listContent) with its fork-staged drafts (listDrafts), deduped by folder
+ * slug. A fork draft whose slug matches a canonical item is that item's STAGED EDIT: it is dropped here (the
+ * canonical row represents it, with the element's existing "staged edits" chip). A fork draft with no canonical
+ * match is a NEW item and is kept, flagged `isDraft: true` so the element renders it as a draft row.
+ */
+export function mergeTypeItems(content = [], drafts = []) {
+  const canon = new Set((Array.isArray(content) ? content : []).map(slugOf).filter(Boolean));
+  const extra = (Array.isArray(drafts) ? drafts : [])
+    .filter((d) => { const s = slugOf(d); return !s || !canon.has(s); })
+    .map((d) => ({ ...d, isDraft: true }));
+  return [...(Array.isArray(content) ? content : []), ...extra];
 }

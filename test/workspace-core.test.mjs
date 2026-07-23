@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, sortItems, filterByStatus, mergeTypeItems, sortModeFor } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -136,7 +136,7 @@ test('parseWorkspaceTab reads a valid tab from the hash (leading # optional, ext
   // SOW-037: the Saved + Subscriptions tabs are deep-linkable too.
   assert.equal(parseWorkspaceTab('#tab=saved'), 'saved');
   assert.equal(parseWorkspaceTab('#tab=subs'), 'subs');
-  assert.equal(parseWorkspaceTab('#tab=drafts'), 'drafts'); // SOW-082: the fork-staged Drafts tab
+  assert.equal(parseWorkspaceTab('#tab=drafts'), null); // SOW-085: the standalone Drafts tab is retired (drafts merge into the content tabs)
 });
 
 test('SOW-064: parseWorkspaceNew reads a valid #new=<type>; null otherwise', () => {
@@ -203,4 +203,52 @@ test('planHashRoute: not editing, a different plain tab switches', () => {
 });
 test('planHashRoute: not editing, the same tab is a no-op', () => {
   assert.deepEqual(planHashRoute('#tab=post', { editing: false, tab: 'post' }), { action: 'none' });
+});
+
+// SOW-085: the WorkBench content-list controls (sort + filter + merge + sort persistence).
+const titles = (arr) => arr.map((x) => x.title);
+test('sortItems: newest is publishedAt desc with dateless (drafts) at the top, title as tiebreak', () => {
+  const items = [
+    { title: 'Old', publishedAt: 1000 },
+    { title: 'New', publishedAt: 3000 },
+    { title: 'Zed draft', publishedAt: null },
+    { title: 'Abe draft' }, // no publishedAt at all
+    { title: 'Mid', publishedAt: 2000 },
+  ];
+  // dateless first (Abe, Zed by title), then New, Mid, Old
+  assert.deepEqual(titles(sortItems(items, 'newest')), ['Abe draft', 'Zed draft', 'New', 'Mid', 'Old']);
+  // oldest: real dates ascending, dateless drop to the bottom
+  assert.deepEqual(titles(sortItems(items, 'oldest')), ['Old', 'Mid', 'New', 'Abe draft', 'Zed draft']);
+  assert.deepEqual(titles(sortItems(items, 'title-asc')), ['Abe draft', 'Mid', 'New', 'Old', 'Zed draft']);
+  assert.deepEqual(titles(sortItems(items, 'title-desc')), ['Zed draft', 'Old', 'New', 'Mid', 'Abe draft']);
+  assert.deepEqual(sortItems(null, 'newest'), []); // defensive
+});
+
+test('filterByStatus: all / published / draft (anything not published)', () => {
+  const items = [{ title: 'P', status: 'published' }, { title: 'D', status: 'draft' }, { title: 'S', status: 'staged' }];
+  assert.deepEqual(titles(filterByStatus(items, 'all')), ['P', 'D', 'S']);
+  assert.deepEqual(titles(filterByStatus(items, 'published')), ['P']);
+  assert.deepEqual(titles(filterByStatus(items, 'draft')), ['D', 'S']);
+});
+
+test('mergeTypeItems: canonical + fork drafts, deduped by slug (a staged edit drops, a new draft is kept + flagged)', () => {
+  const content = [
+    { title: 'Published A', path: 'members/al/posts/aaa/index.md', status: 'published' },
+    { title: 'Published B', path: 'members/al/posts/bbb/index.md', status: 'published' },
+  ];
+  const drafts = [
+    { title: 'Edit of A', path: 'members/al/posts/aaa/index.md', status: 'draft', pull: null }, // staged edit of A -> dropped
+    { title: 'New draft C', path: 'members/al/posts/ccc/index.md', status: 'draft', pull: null }, // new -> kept
+  ];
+  const merged = mergeTypeItems(content, drafts);
+  assert.deepEqual(titles(merged), ['Published A', 'Published B', 'New draft C']);
+  assert.equal(merged[2].isDraft, true);
+  assert.ok(!merged.some((x) => x.title === 'Edit of A'), 'the staged edit of A is deduped away (A represents it)');
+});
+
+test('sortModeFor: a valid stored value wins, else the default (newest)', () => {
+  assert.equal(sortModeFor('oldest'), 'oldest');
+  assert.equal(sortModeFor('title-asc'), 'title-asc');
+  assert.equal(sortModeFor('garbage'), 'newest');
+  assert.equal(sortModeFor(null), 'newest');
 });
