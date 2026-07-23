@@ -20,6 +20,7 @@ import './gbti-favorite.mjs'; // SOW-013/064: favorite + add-to-collection on th
 import './gbti-collection.mjs';
 import './gbti-mod-actions.mjs'; // SOW-071: per-item moderation (Hide/Unhide/Remove) for moderator+
 import { hostOf } from '../all-merge.mjs'; // SOW-057: the link domain for the "Read article on <domain>" CTA
+import { utmLink, UTM } from '../news.mjs'; // sow-145: UTM attribution on outbound share links
 import { faviconFor } from './gbti-card-list.mjs'; // owner QA 2026-07-22: the share source favicon (meta stack + side card)
 import { socialIcon } from '../social-icons.mjs'; // SOW-067: per-platform inline brand icons for the author card
 import './gbti-syndicate-now.mjs'; // SOW-088: the superadmin Manually Syndicate control (self-gates)
@@ -203,7 +204,10 @@ const CSS = `
   .side-src .ss-fav { width: 36px; height: 36px; border-radius: 8px; background: #fff; object-fit: contain; padding: 4px; box-sizing: border-box; }
   .side-src .ss-host { font-weight: 700; font-size: 14px; }
   .side-src .ss-note { margin: 0; font-size: 12.5px; color: var(--muted); }
-  .side-src .side-open { width: 100%; justify-content: center; box-sizing: border-box; }
+  /* owner QA 2026-07-22: the source card's action is the neutral "Visit" (not the green CTA). */
+  .side-src .side-open { width: 100%; justify-content: center; box-sizing: border-box;
+    background: transparent; border: 1px solid var(--line); color: var(--fg); }
+  .side-src .side-open:hover { border-color: var(--fg); }
   .author-note { border-left:3px solid var(--accent); background:var(--hover); border-radius:0 10px 10px 0; padding:12px 15px; margin:0 0 20px; }
   .author-note .an-eyebrow { font-family:var(--font-mono, ui-monospace, monospace); font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); margin:0 0 6px; }
   .author-note .body { font-size:15px; }
@@ -473,8 +477,10 @@ class GbtiReader extends GbtiElement {
     const it = this._item;
     if (!it) { this.set(this.css(CSS)); return; }
     // A Share's `url` is the external link it points at; every other type's `url` is a gbti.network path.
+    // sow-145: outbound share links carry UTM attribution (the embed relay keeps the RAW url).
+    const shareOut = it.type === 'share' && it.url ? utmLink(it.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }) : '';
     const view = it.type === 'share'
-      ? (it.url ? `<a class="view" href="${esc(it.url)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? 'Watch video' : 'Read article'} on ${esc(hostOf(it.url))}</a>` : '')
+      ? (it.url ? `<a class="view" href="${esc(shareOut)}" target="_blank" rel="noopener nofollow">${embedUrl(it.url) ? 'Watch video' : 'Read article'} on ${esc(hostOf(it.url))}</a>` : '')
       : (it.url ? `<a class="view" href="${esc(SITE + it.url)}" target="_blank" rel="noopener">View on gbti.network</a>` : '');
     const when = it.publishedAt ?? (it.createdAt ? Date.parse(it.createdAt) : null);
     const meta = this._metaHtml(it, when);
@@ -521,7 +527,7 @@ class GbtiReader extends GbtiElement {
     // Owner QA 2026-07-22: the sidebar SOURCE card (favicon, domain, credit line) wraps the
     // open-the-link action, mirroring the site share page's source card.
     const sideLink = (it.type === 'share' && it.url)
-      ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(hostOf(it.url))}</div><p class="ss-note">The source ${esc(this._author?.entry?.displayName || authorName(it.author))} shared this from.</p><a class="side-open" href="${esc(it.url)}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Open the link</a></div>`
+      ? `<div class="side-src"><img class="ss-fav" src="${esc(faviconFor(it.url))}" alt="" onerror="this.remove()"><div class="ss-host">${esc(hostOf(it.url))}</div><p class="ss-note">The source ${esc(this._author?.entry?.displayName || authorName(it.author))} shared this from.</p><a class="side-open" href="${esc(utmLink(it.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow" title="Open ${esc(hostOf(it.url))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>Visit</a></div>`
       : '';
     // SOW-088: the superadmin Manually Syndicate control (self-gates to superadmin; the Worker enforces).
     // The category attribute carries the RAW top-level taxonomy key (a share's flat topic, or the first

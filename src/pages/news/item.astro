@@ -79,6 +79,16 @@ import { SIGNUP_BASE } from '../../lib/membership';
         return n;
       };
       const fixUrl = (u: string) => String(u).replace(/&#0*38;/g, '&').replace(/&amp;/g, '&');
+      // sow-145: outbound source links carry the UTM attribution (existing queries preserved).
+      const utm = (u: string) => {
+        try {
+          const x = new URL(u);
+          x.searchParams.set('utm_source', 'gbti-network');
+          x.searchParams.set('utm_medium', 'website');
+          x.searchParams.set('utm_campaign', 'news');
+          return x.toString();
+        } catch { return u; }
+      };
       const hostOf = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
       const faviconFor = (u: string) => { const h = hostOf(u); return h ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(h)}&sz=64` : ''; };
       const relTime = (epochS: number) => {
@@ -133,7 +143,7 @@ import { SIGNUP_BASE } from '../../lib/membership';
         const imgUrl = it.image ? fixUrl(String(it.image)) : '';
         if (imgUrl) {
           const hero = el('a', 'share-hero');
-          hero.setAttribute('href', String(it.link || '#'));
+          hero.setAttribute('href', it.link ? utm(String(it.link)) : '#');
           hero.setAttribute('target', '_blank');
           hero.setAttribute('rel', 'noopener nofollow');
           const img = document.createElement('img');
@@ -147,7 +157,7 @@ import { SIGNUP_BASE } from '../../lib/membership';
         const actions = el('div', 'share-actions');
         if (it.link) {
           const read = el('a', 'btn btn-primary', 'Read at ' + (hostOf(String(it.link)) || 'the source'));
-          read.setAttribute('href', String(it.link));
+          read.setAttribute('href', utm(String(it.link)));
           read.setAttribute('target', '_blank');
           read.setAttribute('rel', 'noopener nofollow');
           actions.append(read);

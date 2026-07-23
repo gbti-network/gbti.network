@@ -6,6 +6,7 @@
 // the Worker, SOW-016; threads via SOW-032's listShareComments + the inert <gbti-comment-box>) is unchanged.
 // A Locked account gets a splash; the key never reaches the page.
 import { GbtiElement, define, esc } from '../base.mjs';
+import { utmLink, UTM } from '../news.mjs'; // sow-145: UTM attribution on outbound share links
 import { parseBrowseHash } from '../browse-hash.mjs'; // SOW-092: the share deep link (#tab=share&read=<author>/<id>)
 import { embedUrl, isPortraitEmbed } from '../../../client/src/video-embed.mjs'; // SOW-092: a video share plays inline
 import { shareToItem, hostOf } from '../all-merge.mjs'; // SOW-042: the shared Share projection + link-host helper
@@ -187,7 +188,7 @@ class GbtiSharesFeed extends GbtiElement {
     const title = share.title ? `<div class="title">${esc(share.title)}</div>` : '';
     const desc = share.shortDescription ? `<div class="desc">${esc(share.shortDescription)}</div>` : '';
     // SOW-057: "Read article on <domain>" + the featured image beneath it (single-column feed).
-    const link = share.url ? `<a class="link" href="${esc(share.url)}" target="_blank" rel="noopener nofollow">${embedUrl(share.url) ? 'Watch video' : 'Read article'} on ${esc(hostOf(share.url))}</a>` : '';
+    const link = share.url ? `<a class="link" href="${esc(utmLink(share.url, { ...UTM, utm_medium: 'extension', utm_campaign: 'shares' }))}" target="_blank" rel="noopener nofollow">${embedUrl(share.url) ? 'Watch video' : 'Read article'} on ${esc(hostOf(share.url))}</a>` : '';
     // SOW-092: a video link (YouTube/Vimeo/TikTok/Rumble embed) plays inline; the static image (usually
     // that video's thumbnail) shows only for non-video links.
     const shareEmbed = share.url ? embedUrl(share.url) : null;

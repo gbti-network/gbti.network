@@ -113,6 +113,22 @@ export function chunkPages(items, size = 10) {
   return chunks;
 }
 
+/**
+ * sow-145: append the GBTI UTM params to an outbound source link so publications can attribute the
+ * referred traffic. Mirrors client-ui/src/news.mjs utmLink semantics: existing query params survive,
+ * a non-URL falls through unchanged. utm_source is the brand; medium names the surface.
+ */
+export function utmUrl(link, { campaign, medium = 'website' } = {}) {
+  if (typeof link !== 'string' || !link) return '';
+  try {
+    const u = new URL(link);
+    u.searchParams.set('utm_source', 'gbti-network');
+    u.searchParams.set('utm_medium', medium);
+    if (campaign) u.searchParams.set('utm_campaign', campaign);
+    return u.toString();
+  } catch { return link; }
+}
+
 /** Estimated reading time in whole minutes (220 wpm), minimum 1. 0 for an empty/absent body. */
 export function readMinutes(text) {
   const words = String(text ?? '').trim().split(/\s+/).filter(Boolean).length;

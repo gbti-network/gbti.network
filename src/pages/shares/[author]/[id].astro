@@ -13,7 +13,7 @@ import SubscribeButton from '../../../components/SubscribeButton.astro';
 import Comments from '../../../components/blog/Comments.astro';
 import { getCollection } from 'astro:content';
 import { authorDisplay, authorHref, formatDate, authorAvatar } from '../../../lib/authors';
-import { isPublicShare, decodeEntities } from '../../../lib/home-feed.mjs';
+import { isPublicShare, decodeEntities, utmUrl } from '../../../lib/home-feed.mjs';
 import { favoriteCount } from '../../../lib/favorites';
 
 export async function getStaticPaths() {
@@ -37,6 +37,8 @@ const profile = profiles.find((p) => p.data.username === d.author);
 const avatar = authorAvatar(d.author, profile?.data.avatar);
 const headline = profile?.data.headline;
 const body = (share.rendered?.html ?? '').trim();
+// sow-145: every outbound click-through carries the UTM attribution for the source publication.
+const outUrl = d.url ? utmUrl(d.url, { campaign: 'shares' }) : undefined;
 ---
 <BaseLayout title={title} description={desc ?? `A link ${authorDisplay(d.author)} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
   <div class="wrap detail-page" data-gbti-reader-hash={`tab=share&read=${encodeURIComponent(slug)}`}>
@@ -48,7 +50,7 @@ const body = (share.rendered?.html ?? '').trim();
         {/* owner QA 2026-07-22: the SOURCE is the larger circle; the member avatar rides as the badge. */}
         <span class="share-src-stack">
           {srcDomain
-            ? <a href={d.url} target="_blank" rel="noopener nofollow" aria-label={`Visit ${srcDomain}`}><img class="sss-src" alt="" width="36" height="36" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(srcDomain)}&sz=64`} onerror="this.remove()" /></a>
+            ? <a href={outUrl} target="_blank" rel="noopener nofollow" aria-label={`Visit ${srcDomain}`}><img class="sss-src" alt="" width="36" height="36" src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(srcDomain)}&sz=64`} onerror="this.remove()" /></a>
             : <a href={authorHref(d.author)}><Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={36} /></a>}
           {srcDomain && <a class="sss-member" href={authorHref(d.author)} aria-label={authorDisplay(d.author)}><Avatar item={{ name: authorDisplay(d.author), avatar }} class="av" size={20} /></a>}
         </span>
@@ -60,7 +62,7 @@ const body = (share.rendered?.html ?? '').trim();
       {quotedDesc && <p class="lead share-quote" style="margin-top:14px">{quotedDesc} <span class="sq-credit">- {srcDomain ?? 'the source'}</span></p>}
 
       {typeof d.image === 'string' && d.image && (
-        <a href={d.url} target="_blank" rel="noopener nofollow" class="share-hero" aria-hidden="true" tabindex="-1"><img src={d.image} alt="" loading="lazy" decoding="async" /></a>
+        <a href={outUrl} target="_blank" rel="noopener nofollow" class="share-hero" aria-hidden="true" tabindex="-1"><img src={d.image} alt="" loading="lazy" decoding="async" /></a>
       )}
 
       {body && (
@@ -77,7 +79,7 @@ const body = (share.rendered?.html ?? '').trim();
       )}
 
       <div class="share-actions">
-        {d.url && <a href={d.url} target="_blank" rel="noopener nofollow" class="btn btn-primary">Read on {srcDomain ?? 'the source'} <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>}
+        {d.url && <a href={outUrl} target="_blank" rel="noopener nofollow" class="btn btn-primary">Read on {srcDomain ?? 'the source'} <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>}
         <FavoriteButton targetType="share" targetSlug={slug} count={favoriteCount('share', slug)} />
         <CollectionButton targetType="share" targetSlug={slug} />
       </div>
@@ -115,7 +117,7 @@ const body = (share.rendered?.html ?? '').trim();
             <div class="nsc-name">{srcDomain}</div>
             <div class="nsc-desc">The source {authorDisplay(d.author)} shared this from.</div>
           </div>
-          {d.url && <a href={d.url} target="_blank" rel="noopener nofollow" class="btn btn-ghost nsc-follow">Visit</a>}
+          {d.url && <a href={outUrl} target="_blank" rel="noopener nofollow" class="btn btn-ghost nsc-follow">Visit</a>}
         </div>
       )}
     </aside>

@@ -2,7 +2,7 @@
 // SOW-018 reversal), the New & Popular ranking, tag aggregation, and relative time.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { feedTime, sortByNewest, isPublicShare, rankNewAndPopular, aggregateTags, relativeTime, readMinutes, decodeEntities, matchesNarrow, chunkPages, newsTargetSlug } from '../src/lib/home-feed.mjs';
+import { feedTime, sortByNewest, isPublicShare, rankNewAndPopular, aggregateTags, relativeTime, readMinutes, decodeEntities, matchesNarrow, chunkPages, newsTargetSlug, utmUrl } from '../src/lib/home-feed.mjs';
 
 test('decodeEntities resolves numeric + common named entities in scraped share metadata', () => {
   assert.equal(decodeEntities('WordPress Down &#8211; SQL Injection'), 'WordPress Down – SQL Injection');
@@ -130,4 +130,16 @@ test('newsTargetSlug matches the client-ui implementation (pinned values)', () =
   assert.equal(newsTargetSlug('https://pytorch.org/?p=148439'), 'news-1r5tn2pt');
   assert.equal(newsTargetSlug(''), 'news-ztntfp0');
   assert.equal(newsTargetSlug('abc'), 'news-7aigaz3');
+});
+
+// sow-145: outbound source links carry UTM attribution.
+test('utmUrl appends the attribution params, preserves existing queries, falls through on non-URLs', () => {
+  assert.equal(
+    utmUrl('https://patchstack.com/articles/x/', { campaign: 'shares' }),
+    'https://patchstack.com/articles/x/?utm_source=gbti-network&utm_medium=website&utm_campaign=shares',
+  );
+  assert.match(utmUrl('https://x.test/a?q=1', { campaign: 'news', medium: 'extension' }), /q=1/);
+  assert.match(utmUrl('https://x.test/a?q=1', { campaign: 'news', medium: 'extension' }), /utm_medium=extension/);
+  assert.equal(utmUrl('not a url', { campaign: 'shares' }), 'not a url');
+  assert.equal(utmUrl('', { campaign: 'shares' }), '');
 });
