@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 
 import {
   resolveUsername,
+  resolveTarget,
   contentPath,
   canAuthorPath,
   sanitizeInput,
@@ -27,12 +28,51 @@ test('contentPath: per-type folder layout', () => {
   assert.throws(() => contentPath('post', 'alice'), /requires a slug/);
 });
 
+// SOW-145: the house content target (superadmin-only surface, gated by the caller).
+test('resolveTarget: member vs house scope', () => {
+  assert.deepEqual(resolveTarget({ scope: 'member', username: 'alice' }), {
+    scope: 'member',
+    folder: 'members/alice',
+    author: 'alice',
+  });
+  assert.deepEqual(resolveTarget({ scope: 'house' }), { scope: 'house', folder: 'house', author: 'gbti' });
+  assert.deepEqual(resolveTarget({ scope: 'house', username: 'alice' }), { scope: 'house', folder: 'house', author: 'gbti' });
+  // Default scope is member; a member scope without a username is a programming error.
+  assert.deepEqual(resolveTarget({ username: 'bob' }), { scope: 'member', folder: 'members/bob', author: 'bob' });
+  assert.throws(() => resolveTarget({ scope: 'member' }), /username is required/);
+});
+
+test('contentPath: house scope emits house/<sub>/<slug>/index.md', () => {
+  assert.equal(contentPath('post', 'gbtilabs', 'welcome', 'house'), 'house/posts/welcome/index.md');
+  assert.equal(contentPath('product', 'gbtilabs', 'hue', 'house'), 'house/products/hue/index.md');
+  assert.equal(contentPath('prompt', 'gbtilabs', 'seo', 'house'), 'house/prompts/seo/index.md');
+  // The actor's username never leaks into a house path.
+  assert.equal(contentPath('post', undefined, 'welcome', 'house'), 'house/posts/welcome/index.md');
+  // Profiles are member-only regardless of scope.
+  assert.equal(contentPath('profile', 'gbtilabs', null, 'house'), 'members/gbtilabs/profile.md');
+});
+
 test('canAuthorPath: own folder only, no traversal', () => {
   assert.equal(canAuthorPath('members/alice/posts/x/index.md', 'alice'), true);
   assert.equal(canAuthorPath('members/bob/posts/x/index.md', 'alice'), false);
   assert.equal(canAuthorPath('members/alice/../bob/posts/x.md', 'alice'), false);
   assert.equal(canAuthorPath('/etc/passwd', 'alice'), false);
   assert.equal(canAuthorPath('house/roles.yml', 'alice'), false);
+});
+
+// SOW-145: allowHouse (a superadmin) may additionally author under house/; a member still may not, and
+// traversal is rejected even with allowHouse (the server gate is the real enforcement, this is UX scoping).
+test('canAuthorPath: allowHouse permits house/ only for a superadmin', () => {
+  assert.equal(canAuthorPath('house/posts/x/index.md', 'gbtilabs', { allowHouse: true }), true);
+  assert.equal(canAuthorPath('house/products/hue/index.md', 'gbtilabs', { allowHouse: true }), true);
+  // Without allowHouse a house/ path is rejected (a plain member).
+  assert.equal(canAuthorPath('house/posts/x/index.md', 'alice'), false);
+  assert.equal(canAuthorPath('house/posts/x/index.md', 'alice', { allowHouse: false }), false);
+  // Traversal is rejected even with allowHouse.
+  assert.equal(canAuthorPath('house/../members/bob/posts/x.md', 'gbtilabs', { allowHouse: true }), false);
+  assert.equal(canAuthorPath('house\\posts\\x', 'gbtilabs', { allowHouse: true }), false);
+  // A superadmin may still author their own member folder alongside house.
+  assert.equal(canAuthorPath('members/gbtilabs/posts/x/index.md', 'gbtilabs', { allowHouse: true }), true);
 });
 
 test('sanitizeInput: forces author + strips system-managed fields', () => {
@@ -58,6 +98,27 @@ test('buildContentFile: valid post is scoped, author-forced, system-stripped', (
   assert.match(out.markdown, /^---\n/);
   assert.match(out.markdown, /title: Hello World/);
   assert.match(out.markdown, /Body text\./);
+});
+
+// SOW-145: a house publish writes house/<sub>/<slug>/ but keeps author 'gbti', never the editing superadmin.
+test('buildContentFile: house scope writes house/ with author gbti', () => {
+  const out = buildContentFile({
+    type: 'post',
+    username: 'gbtilabs',
+    input: { title: 'House Post', slug: 'house-post', author: 'gbtilabs', status: 'published' },
+    body: 'House body.',
+    scope: 'house',
+  });
+  assert.equal(out.path, 'house/posts/house-post/index.md');
+  assert.equal(out.scope, 'house');
+  assert.equal(out.frontmatter.author, 'gbti'); // never the editing superadmin
+  assert.equal(out.username, 'gbtilabs'); // the actor stays on the result (fork/commit context)
+  assert.match(out.markdown, /author: gbti/);
+});
+
+test('sanitizeInput: an explicit author overrides the folder username (house content)', () => {
+  const post = sanitizeInput('post', { title: 'T', author: 'gbtilabs' }, 'gbtilabs', { author: 'gbti' });
+  assert.equal(post.author, 'gbti');
 });
 
 test('buildContentFile: invalid slug throws ContentValidationError', () => {

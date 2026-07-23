@@ -164,10 +164,13 @@ class GbtiContentEditor extends GbtiElement {
     return out;
   }
 
-  load(type, input, body, path, { staged = false } = {}) {
+  load(type, input, body, path, { staged = false, scope } = {}) {
     this.type = type || this.type;
     this.preset = { input: input || {}, body: body || '' };
     this.itemPath = path || null; // SOW-062 P6: the item's index.md path, to resolve a repo-relative cover for preview
+    // SOW-145: the content scope. Explicit for a NEW house item (no path yet); inferred from a house/ path when
+    // editing an existing house item. House content publishes DIRECTLY (no fork-staged house drafts in v1).
+    this.itemScope = scope || (path && String(path).startsWith('house/') ? 'house' : 'member');
     this.staged = Boolean(staged); // SOW-106 QA: loaded from a fork draft branch (not live until published)
     this._slugVal = null; // SOW-112 v2: the pending permalink value follows the loaded item
     if (this.isConnected) this.render();
@@ -205,7 +208,9 @@ class GbtiContentEditor extends GbtiElement {
     try {
       const st = await this.client.status();
       membership = st?.membership ?? 'unknown';
-      canStage = membership === 'unknown' || st?.canStageDrafts === true;
+      // SOW-145: house content publishes directly (fork-staged house drafts are deferred), so Save-draft is
+      // hidden in house scope; a superadmin editing a house item Publishes (which auto-merges via SOW-108).
+      canStage = this.itemScope !== 'house' && (membership === 'unknown' || st?.canStageDrafts === true);
       authorInitial = (st?.identity?.login || '').slice(0, 1).toUpperCase() || 'A';
     } catch {
       membership = 'unknown';
@@ -989,7 +994,8 @@ class GbtiContentEditor extends GbtiElement {
       // publish() already stages to the member's OWN fork first (publishFiles -> commitToBranchOnFork) and opens the
       // network PR FROM that fork branch, so no separate pre-publish saveDraft is needed.
       // SOW-112 v2: `path` names the loaded canonical item; a changed permalink makes this publish a RENAME.
-      const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || undefined });
+      // SOW-145: a house target publishes to house/ (author stays 'gbti'); the server re-checks superadmin.
+      const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || undefined, scope: this.itemScope === 'house' ? 'house' : undefined });
       this._setChip(`${CHECK} Published`, 'ok');
       this._dirty = false; this.$('#publish')?.setAttribute('hidden', ''); // now live + matches -> nothing to publish
       // SOW-112 QA (owner-directed): the publish-expectation banner appears only AFTER Publish is pressed.

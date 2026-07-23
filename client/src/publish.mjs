@@ -6,9 +6,13 @@
 
 import { toBase64 } from './github-repo.mjs';
 
-/** Deterministic branch name for a content item, so re-publishing reuses the same branch + PR. */
-export function branchName(type, slug) {
-  return type === 'profile' ? 'gbti/profile' : `gbti/${type}-${slug}`;
+/** Deterministic branch name for a content item, so re-publishing reuses the same branch + PR. SOW-145: a
+ *  house target uses a `gbti/house-<type>-<slug>` branch so it cannot collide with a member item of the same
+ *  slug (the branch namespace is scope-free otherwise). */
+export function branchName(type, slug, scope = 'member') {
+  if (type === 'profile') return 'gbti/profile';
+  const prefix = scope === 'house' ? 'gbti/house-' : 'gbti/';
+  return `${prefix}${type}-${slug}`;
 }
 
 function defaultMessage(change) {
@@ -102,7 +106,7 @@ export async function commitToBranchOnFork({ repo, branch, files, message, reset
 export async function publishContent({ repo, change, message, title, body }) {
   if (!change?.path || !change?.markdown) throw new Error('publishContent: a built content change is required');
 
-  const branch = branchName(change.type, change.slug);
+  const branch = branchName(change.type, change.slug, change.scope); // SOW-145: house target -> house-prefixed branch
   const { fork, owner, base } = await commitToBranchOnFork({
     repo,
     branch,

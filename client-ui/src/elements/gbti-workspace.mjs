@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY } from '../workspace-core.mjs';
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
 const WB_CONTENT_TYPES = new Set(['post', 'prompt', 'product']); // SOW-073: types whose publish invalidates a tab
@@ -69,6 +69,10 @@ const CSS = `
   .lc-filter { display:inline-flex; gap:2px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:3px; }
   .lc-f { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:600; font-size:12.5px; padding:5px 12px; border-radius:6px; cursor:pointer; }
   .lc-f.on { background:var(--hover); color:var(--accent); }
+  /* SOW-145: the superadmin content-scope switch (My content / House content). */
+  .lc-scopes { display:inline-flex; gap:2px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:3px; margin-right:auto; }
+  .lc-scope { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:600; font-size:12.5px; padding:5px 12px; border-radius:6px; cursor:pointer; }
+  .lc-scope.on { background:var(--accent); color:#fff; }
   .lc-sort { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); }
   .lc-sort .lc-sl { font-weight:600; }
   .lc-sort select { font:inherit; font-size:12.5px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:5px 9px; cursor:pointer; }
@@ -130,11 +134,21 @@ class GbtiWorkspace extends GbtiElement {
     this._sort = sortModeFor(typeof localStorage !== 'undefined' ? localStorage.getItem(WORKSPACE_SORT_KEY) : null);
     this._statusFilter = 'all';
     this._viewList = [];
+    // SOW-145: the content SCOPE (My content / House content), superadmin-only. Unresolved (null) until the
+    // Overview arrives with the caller's role + personal counts; treated as 'member' until then (so a
+    // non-superadmin, and the pre-overview paint, always list the member folder). `scopeFor` then resolves it
+    // (an empty-personal superadmin defaults to house). Persisted device-local like the sort pref.
+    this._scope = null;
+    this._scopeResolved = false;
     this._reviewing = null; // SOW-028: the PR number being reviewed in the drill-in, or null
     this._inboxCount = null; // SOW-028 P5: count of contributions awaiting review, for the Inbox tab badge
     super.connectedCallback?.(); // base now renders the initial view with fields in place
     this._loadProfile();
     this._ensureTab(this._tab);
+    // SOW-145: the Overview carries the caller's role + personal counts, which resolve the content SCOPE and gate
+    // the superadmin toggle. _ensureTab loads it only on the Overview tab, so a deep-link straight to a content
+    // tab (the avatar menu's "My prompts" etc.) would never resolve the scope — load it eagerly in that case.
+    if (this._tab !== 'overview') this._ensureOverview();
     this._loadInboxCount();
     // SOW-052: the WorkBench rail deep-links to #tab=<id>; switch the tab on a same-document hash change.
     this._onHash = () => {
@@ -219,6 +233,29 @@ class GbtiWorkspace extends GbtiElement {
         if (Array.isArray(this._prs)) wbCacheSet(ck, 'prs', this._prs, { allowEmpty: true });
       }
     }
+    // SOW-145: resolve the content scope now that the caller's REAL role + personal counts are known (only on a
+    // trusted snapshot, once per mount). A superadmin whose member folder is empty (e.g. gbtilabs) lands on the
+    // house scope; everyone else stays 'member'. If the resolution moves us off 'member', reload the visible tab.
+    if (trusted && !this._scopeResolved) {
+      this._scopeResolved = true;
+      const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(WORKSPACE_SCOPE_KEY) : null;
+      const personalCount = items(post).length + items(prompt).length + items(product).length;
+      const resolved = scopeFor(stored, { personalCount, role: this._overview.role });
+      const moved = resolved !== this._scopeNow(); // compare BEFORE assigning
+      this._scope = resolved;
+      // Guard every render here with !this._editing (mirrors the other overview-time renders). An UNGUARDED
+      // render() while the editor is open re-mounts <gbti-content-editor> and wipes in-progress edits — reachable
+      // via a #new= / #edit= deep-link whose editor opens before this async resolve lands. When the scope MOVED,
+      // reset + reload the visible list. Re-render (to surface the now-known superadmin toggle) only when the
+      // scope moved or the toggle should appear. While editing, preload the resolved scope's list silently
+      // (_ensureTab's own renders are !editing-guarded) so it is ready when the member exits the editor.
+      if (!this._editing) {
+        if (moved) { this._page = 0; this._statusFilter = 'all'; this._ensureTab(this._tab); }
+        if (moved || this._canScope()) this.render();
+      } else if (moved) {
+        this._ensureTab(this._tab);
+      }
+    }
     if (this._tab === 'overview' && !this._editing) this.render();
     // Self-heal: if the session looked unauthenticated (a token that may have since recovered/refreshed), retry
     // ONCE shortly so the hub fills in without a manual page refresh.
@@ -285,6 +322,13 @@ class GbtiWorkspace extends GbtiElement {
     if (id === 'prs') { await this._swrPrs(id); }
   }
 
+  // SOW-145: the active scope (member until the Overview resolves it), and the scope-keyed content-cache key so
+  // house + member lists of the same type never collide in this._cache or the persistent cache.
+  _scopeNow() { return this._scope || 'member'; }
+  _ck(type) { return this._scopeNow() === 'house' ? `house:${type}` : type; }
+  /** SOW-145: whether the superadmin scope toggle should render (a superadmin, from the trusted Overview). */
+  _canScope() { return this._overview?.role === 'superadmin'; }
+
   /** SOW-073: the per-member cache key (immutable github_id, falling back to login). Cached after the first read. */
   async _memberKey() {
     if (this._mk !== undefined) return this._mk;
@@ -298,26 +342,30 @@ class GbtiWorkspace extends GbtiElement {
   // this._cache[type] is the fast path (a tab revisit does not refetch); the persistent cache hydrates the FIRST
   // access of a session (so a reload is instant too). A genuinely-empty list (the success path) is cached as [].
   async _swrContent(id, type) {
-    if (this._cache[type]) return; // already loaded this session
+    // SOW-145: cache + fetch under the SCOPE-keyed slot so the house list never overwrites the member list of
+    // the same type (and the persistent cache keeps them separate). Member scope keeps the plain `type` key.
+    const ck = this._ck(type);
+    const scope = this._scopeNow();
+    if (this._cache[ck]) return; // already loaded this session (this scope)
     const key = await this._memberKey();
     let fresh = false;
     if (key) {
-      const cached = await wbCacheGet(key, type);
+      const cached = await wbCacheGet(key, ck);
       if (cached) {
-        this._cache[type] = cached.items;
+        this._cache[ck] = cached.items;
         if (this._tab === id && !this._editing) this.render(); // instant paint from cache
         fresh = cached.fresh;
       }
     }
     if (fresh) return; // fresh enough: skip the revalidate
     try {
-      const items = (await this.client?.listContent?.({ type }))?.items ?? [];
-      const changed = !this._cache[type] || JSON.stringify(this._cache[type]) !== JSON.stringify(items);
-      this._cache[type] = items;
-      if (key) await wbCacheSet(key, type, items, { allowEmpty: true }); // success path: [] means truly none
+      const items = (await this.client?.listContent?.({ type, scope }))?.items ?? [];
+      const changed = !this._cache[ck] || JSON.stringify(this._cache[ck]) !== JSON.stringify(items);
+      this._cache[ck] = items;
+      if (key) await wbCacheSet(key, ck, items, { allowEmpty: true }); // success path: [] means truly none
       if (changed && this._tab === id && !this._editing) this.render();
     } catch {
-      if (!this._cache[type]) this._cache[type] = []; // no cache + fetch failed -> empty (prior behavior)
+      if (!this._cache[ck]) this._cache[ck] = []; // no cache + fetch failed -> empty (prior behavior)
       if (this._tab === id && !this._editing) this.render();
     }
   }
@@ -378,12 +426,15 @@ class GbtiWorkspace extends GbtiElement {
   // publish opens a PR), in BOTH the in-memory and the persistent cache, then refetches what the member will see.
   async _onPublished(type) {
     const t = type && WB_CONTENT_TYPES.has(type) ? type : null;
-    if (t) delete this._cache[t];
+    // SOW-145: invalidate BOTH the plain (member) slot AND the active scope's slot, so a house publish refreshes
+    // the house list (and a member publish the member list) without leaving the other scope stale.
+    const keys = t ? [...new Set([t, this._ck(t)])] : [];
+    keys.forEach((k) => delete this._cache[k]);
     this._overview = null;
     this._prs = null;
     this._drafts = null; // SOW-082: a publish moves a draft Staged -> Submitted
     const key = await this._memberKey();
-    if (key) await wbCacheInvalidateMany(key, [t, 'overview', 'prs'].filter(Boolean));
+    if (key) await wbCacheInvalidateMany(key, [...keys, 'overview', 'prs']);
     if (!this._editing) this._ensureTab(this._tab); // refresh the visible tab (skip while still in the editor)
   }
 
@@ -491,7 +542,10 @@ class GbtiWorkspace extends GbtiElement {
       this.on('[data-back]', 'click', () => { this._editing = null; this._writeHash(`#tab=${encodeURIComponent(this._tab)}`); this.render(); });
       const ed = this.$('gbti-content-editor');
       const e = this._editing;
-      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged }); // SOW-062 P6 + SOW-106 QA: path resolves the cover preview; staged drives the fork-draft meta
+      // SOW-062 P6 + SOW-106 QA: path resolves the cover preview; staged drives the fork-draft meta.
+      // SOW-145: an EDIT carries a house/ path the editor infers scope from; a NEW item has no path, so the
+      // current workspace scope decides (a superadmin in House scope creates house content).
+      if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? undefined : this._scopeNow() });
       // SOW-112 QA fix: after a rename PR opens, drop the stale caches and repoint the deep-link hash at the
       // NEW path — but do NOT refetch it yet (the auto-merge takes ~2-3 minutes; an immediate read 404s and
       // looked like the rename did nothing). The editor already updated its own view optimistically.
@@ -574,9 +628,11 @@ class GbtiWorkspace extends GbtiElement {
     // list controls (sort -> status filter) before the existing client-side paging. `this._viewList` is the index
     // target the row action handlers in _wireBody read.
     const type = tab?.type;
-    const content = this._cache?.[type]; // optional chain: never throw if render runs before init
+    const content = this._cache?.[this._ck(type)]; // SOW-145: read the scope-keyed slot (house vs member)
     if (!content) return `<p class="empty">Loading...</p>`;
-    const typeDrafts = (this._drafts || []).filter((d) => d.type === type);
+    // SOW-145: house content publishes directly (no fork-staged house drafts in v1), so never merge the member's
+    // fork drafts into the house list; the member scope keeps the SOW-085 merged-draft view.
+    const typeDrafts = this._scopeNow() === 'house' ? [] : (this._drafts || []).filter((d) => d.type === type);
     const view = filterByStatus(sortItems(mergeTypeItems(content, typeDrafts), this._sort), this._statusFilter);
     this._viewList = view;
     const controls = this._listControls();
@@ -616,6 +672,12 @@ class GbtiWorkspace extends GbtiElement {
     const counts = this._overview?.counts;
     if (t.id === 'prs') return Array.isArray(this._prs) ? this._prs.length : (counts?.prs ?? 0);
     if (t.type) {
+      // SOW-145: in house scope the badge counts the loaded house list (no fork drafts, no personal-count
+      // fallback, which would be the WRONG number); member scope keeps the merged personal count + eager fallback.
+      if (this._scopeNow() === 'house') {
+        const houseContent = this._cache?.[this._ck(t.type)];
+        return houseContent ? houseContent.length : 0;
+      }
       const content = this._cache?.[t.type];
       if (content) return mergeTypeItems(content, (this._drafts || []).filter((d) => d.type === t.type)).length;
       return counts?.[t.type] ?? 0;
@@ -624,13 +686,35 @@ class GbtiWorkspace extends GbtiElement {
   }
 
   // SOW-085: the shared list-controls bar (sort + published/draft filter). Rendered above every content list.
+  // SOW-145: a superadmin also gets a scope switch (My content / House content) on the far left; a non-superadmin
+  // never sees it (and the server re-checks the house gate regardless).
   _listControls() {
     const f = (v, label) => `<button class="lc-f ${this._statusFilter === v ? 'on' : ''}" data-filter="${v}" type="button">${label}</button>`;
     const opt = (v, label) => `<option value="${v}"${this._sort === v ? ' selected' : ''}>${label}</option>`;
+    const now = this._scopeNow();
+    const scopeBtn = (v, label) => `<button class="lc-scope ${now === v ? 'on' : ''}" data-scope="${v}" type="button" aria-pressed="${now === v}">${label}</button>`;
+    const scopeSwitch = this._canScope()
+      ? `<div class="lc-scopes" role="group" aria-label="Content scope">${scopeBtn('member', 'My content')}${scopeBtn('house', 'House content')}</div>`
+      : '';
     return `<div class="lc-bar">`
+      + scopeSwitch
       + `<div class="lc-filter" role="group" aria-label="Filter by status">${f('all', 'All')}${f('published', 'Published')}${f('draft', 'Drafts')}</div>`
       + `<label class="lc-sort"><span class="lc-sl">Sort</span><select data-sort aria-label="Sort">${opt('newest', 'Newest')}${opt('oldest', 'Oldest')}${opt('title-asc', 'Title A-Z')}${opt('title-desc', 'Title Z-A')}</select></label>`
       + `</div>`;
+  }
+
+  // SOW-145: switch the content scope (My content <-> House content), persist it, reset the page + status filter,
+  // and load the newly-active scope's list for the current tab (the scope-keyed cache makes a repeat switch instant).
+  _setScope(scope) {
+    if (scope !== 'member' && scope !== 'house') return;
+    if (scope === this._scopeNow()) return;
+    this._scope = scope;
+    this._scopeResolved = true; // an explicit choice pins it (the auto empty-personal default no longer applies)
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(WORKSPACE_SCOPE_KEY, scope); } catch { /* private mode */ }
+    this._page = 0;
+    this._statusFilter = 'all';
+    this.render();
+    if (!this._editing) this._ensureTab(this._tab);
   }
 
   // SOW-085: a canonical content row (its index is into this._viewList). SOW-062 glyph + Manage; SOW-106 the
@@ -731,7 +815,7 @@ class GbtiWorkspace extends GbtiElement {
       // SOW-106 Phase B: flip an own item's status (unpublish/republish) through the gated own-folder PR.
       this.$$('[data-status]').forEach((b) => b.addEventListener('click', () => {
         const it = view()[Number(b.dataset.status)];
-        if (it) this._setItemStatus(it, b.dataset.to, b, tab.type);
+        if (it) this._setItemStatus(it, b.dataset.to, b, this._ck(tab.type)); // SOW-145: refetch the ACTIVE scope's slot
       }));
       // SOW-085: the merged fork-staged draft rows (SOW-082 affordances).
       this.$$('[data-drow-edit]').forEach((b) => b.addEventListener('click', () => { const d = view()[Number(b.dataset.drowEdit)]; if (d) this._openDraft(d); }));
@@ -744,6 +828,8 @@ class GbtiWorkspace extends GbtiElement {
         this._page = 0; this.render();
       });
       this.$$('[data-filter]').forEach((b) => b.addEventListener('click', () => { this._statusFilter = b.dataset.filter; this._page = 0; this.render(); }));
+      // SOW-145: the superadmin scope switch (My content / House content).
+      this.$$('[data-scope]').forEach((b) => b.addEventListener('click', () => this._setScope(b.dataset.scope)));
     }
     // SOW-062 + SOW-085: client-side paging, wired for whichever pager is present (content tabs OR Pull requests).
     this.$$('[data-page]').forEach((b) => b.addEventListener('click', () => {

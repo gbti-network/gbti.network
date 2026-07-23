@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, sortItems, filterByStatus, mergeTypeItems, sortModeFor } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, sortItems, filterByStatus, mergeTypeItems, sortModeFor, scopeFor } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -251,4 +251,24 @@ test('sortModeFor: a valid stored value wins, else the default (newest)', () => 
   assert.equal(sortModeFor('title-asc'), 'title-asc');
   assert.equal(sortModeFor('garbage'), 'newest');
   assert.equal(sortModeFor(null), 'newest');
+});
+
+// SOW-145: the WorkBench content scope (My content / House content).
+test('scopeFor: a non-superadmin is always member (the toggle is hidden)', () => {
+  assert.equal(scopeFor('house', { role: 'member', personalCount: 0 }), 'member');
+  assert.equal(scopeFor('house', { role: 'admin', personalCount: 0 }), 'member');
+  assert.equal(scopeFor('house', { role: 'moderator', personalCount: 5 }), 'member');
+  assert.equal(scopeFor(null, { role: 'member' }), 'member');
+});
+
+test('scopeFor: a superadmin — stored pref wins, else empty-personal defaults to house', () => {
+  // A valid stored pref always wins.
+  assert.equal(scopeFor('house', { role: 'superadmin', personalCount: 9 }), 'house');
+  assert.equal(scopeFor('member', { role: 'superadmin', personalCount: 0 }), 'member');
+  // No stored pref: default member when they have their own content, house when their member folder is empty.
+  assert.equal(scopeFor(null, { role: 'superadmin', personalCount: 3 }), 'member');
+  assert.equal(scopeFor(null, { role: 'superadmin', personalCount: 0 }), 'house');
+  assert.equal(scopeFor('garbage', { role: 'superadmin', personalCount: 0 }), 'house');
+  // gbtilabs (owns only house content) lands on house on first open.
+  assert.equal(scopeFor(undefined, { role: 'superadmin' }), 'house');
 });

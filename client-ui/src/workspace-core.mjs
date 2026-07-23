@@ -180,6 +180,27 @@ export function sortModeFor(stored) {
   return SORT_MODES.has(stored) ? stored : DEFAULT_SORT;
 }
 
+// SOW-145: the WorkBench content SCOPE. 'member' lists the caller's own members/<username>/ folder (the default,
+// and the ONLY scope a non-superadmin ever gets); 'house' lists the non-member house/ folder (a superadmin
+// surface). Persisted device-local like the sort pref.
+export const SCOPE_MODES = new Set(['member', 'house']);
+export const DEFAULT_SCOPE = 'member';
+export const WORKSPACE_SCOPE_KEY = 'gbti-wb-scope';
+
+/**
+ * Resolve the active content scope. A non-superadmin is ALWAYS 'member' (the toggle is hidden and this is the
+ * client mirror of the server-side house gate). For a superadmin: a valid stored pref wins; with no stored pref,
+ * default to 'member' UNLESS their personal content count is 0 (then 'house', so a superadmin whose member
+ * folder is empty — e.g. gbtilabs, who owns only house content — lands on the house articles on first open).
+ * @param {string|null} stored     the persisted pref (localStorage), or null.
+ * @param {{ personalCount?: number, role?: string }} ctx
+ */
+export function scopeFor(stored, { personalCount = 0, role = 'member' } = {}) {
+  if (role !== 'superadmin') return 'member';
+  if (SCOPE_MODES.has(stored)) return stored;
+  return Number(personalCount) > 0 ? 'member' : 'house';
+}
+
 /**
  * Sort a content list (a copy; the input is not mutated). A dateless item (a fork-staged draft carries no
  * publishedAt) sorts as the NEWEST (top for Newest, bottom for Oldest) so in-progress work stays visible; the

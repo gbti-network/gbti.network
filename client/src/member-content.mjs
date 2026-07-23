@@ -79,8 +79,12 @@ export function splitMemberMarkdown(body) {
 }
 
 /** The repo-relative path + asset id for a content item's encrypted body envelope (SOW-016 convention). */
-export function encAssetFor(type, username, slug) {
+// SOW-145: `scope` places the ciphertext beside its item — 'member' -> members/<username>/_enc/, 'house' ->
+// house/_enc/ (a house members-only body; the decrypt allowlist ENC_PATH_RE already permits house/_enc/). The
+// assetId stays scope-free: it is embedded in the envelope, so decrypt round-trips regardless of the folder.
+export function encAssetFor(type, username, slug, scope = 'member') {
   const assetId = `${type}:${slug}:body`;
-  const path = `members/${username}/_enc/${type}-${slug}-body.enc`;
+  const folder = scope === 'house' ? 'house' : `members/${username}`;
+  const path = `${folder}/_enc/${type}-${slug}-body.enc`;
   return { assetId, path };
 }

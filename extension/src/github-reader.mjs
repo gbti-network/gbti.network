@@ -106,8 +106,12 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
     };
   }
 
-  async function listType(username, type) {
+  // SOW-145: `scope` selects the target folder — 'member' -> members/<username>/, 'house' -> the non-member
+  // house/ folder (a superadmin surface; profiles are member-only). Mirrors client/src/repo-fs.mjs.
+  async function listType(username, type, scope = 'member') {
+    const houseScope = scope === 'house';
     if (type === 'profile') {
+      if (houseScope) return [];
       const rel = `members/${username}/profile.md`;
       const text = await readFile(rel);
       if (text == null) return [];
@@ -115,12 +119,13 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
     }
     const sub = SUBDIR[type];
     if (!sub) return [];
-    const dir = await contents(`members/${username}/${sub}`);
+    const base = houseScope ? `house/${sub}` : `members/${username}/${sub}`;
+    const dir = await contents(base);
     if (!Array.isArray(dir)) return [];
     const out = [];
     for (const entry of dir) {
       if (entry.type !== 'dir') continue; // each item is <slug>/index.md
-      const rel = `members/${username}/${sub}/${entry.name}/index.md`;
+      const rel = `${base}/${entry.name}/index.md`;
       const text = await readFile(rel);
       if (text != null) out.push(summarize(rel, parseContentFile(text).frontmatter));
     }
@@ -142,11 +147,11 @@ export function createGithubReader({ upstream, token, ref = 'HEAD', fetch = glob
       const { frontmatter, body } = parseContentFile(text);
       return { path: relPath, frontmatter, body };
     },
-    async list(username, type) {
-      if (!username) return [];
-      if (type) return listType(username, type);
+    async list(username, type, scope = 'member') {
+      if (scope !== 'house' && !username) return [];
+      if (type) return listType(username, type, scope);
       const all = [];
-      for (const t of TYPES) all.push(...(await listType(username, t)));
+      for (const t of TYPES) all.push(...(await listType(username, t, scope)));
       return all;
     },
     /** Browsing ALL members-only content over the Contents API is too many calls for the live overlay; the npm

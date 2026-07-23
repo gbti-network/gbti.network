@@ -1164,6 +1164,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function sortModeFor(stored) {
     return SORT_MODES.has(stored) ? stored : DEFAULT_SORT;
   }
+  var SCOPE_MODES = /* @__PURE__ */ new Set(["member", "house"]);
+  var WORKSPACE_SCOPE_KEY = "gbti-wb-scope";
+  function scopeFor(stored, { personalCount = 0, role = "member" } = {}) {
+    if (role !== "superadmin") return "member";
+    if (SCOPE_MODES.has(stored)) return stored;
+    return Number(personalCount) > 0 ? "member" : "house";
+  }
   function sortItems(items, sort = DEFAULT_SORT) {
     const list = Array.isArray(items) ? [...items] : [];
     const byTitle = (a, b) => String(a?.title || "").localeCompare(String(b?.title || ""), void 0, { sensitivity: "base" });
@@ -1938,10 +1945,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       return out;
     }
-    load(type, input, body, path, { staged = false } = {}) {
+    load(type, input, body, path, { staged = false, scope } = {}) {
       this.type = type || this.type;
       this.preset = { input: input || {}, body: body || "" };
       this.itemPath = path || null;
+      this.itemScope = scope || (path && String(path).startsWith("house/") ? "house" : "member");
       this.staged = Boolean(staged);
       this._slugVal = null;
       if (this.isConnected) this.render();
@@ -1974,7 +1982,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       try {
         const st = await this.client.status();
         membership = st?.membership ?? "unknown";
-        canStage = membership === "unknown" || st?.canStageDrafts === true;
+        canStage = this.itemScope !== "house" && (membership === "unknown" || st?.canStageDrafts === true);
         authorInitial = (st?.identity?.login || "").slice(0, 1).toUpperCase() || "A";
       } catch {
         membership = "unknown";
@@ -2772,7 +2780,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           input.updatedAt = nowIso;
           input.publishedAt = nowIso;
         }
-        const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || void 0 });
+        const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || void 0, scope: this.itemScope === "house" ? "house" : void 0 });
         this._setChip(`${CHECK} Published`, "ok");
         this._dirty = false;
         this.$("#publish")?.setAttribute("hidden", "");
@@ -12986,6 +12994,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .lc-filter { display:inline-flex; gap:2px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:3px; }
   .lc-f { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:600; font-size:12.5px; padding:5px 12px; border-radius:6px; cursor:pointer; }
   .lc-f.on { background:var(--hover); color:var(--accent); }
+  /* SOW-145: the superadmin content-scope switch (My content / House content). */
+  .lc-scopes { display:inline-flex; gap:2px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:3px; margin-right:auto; }
+  .lc-scope { border:0; background:transparent; color:var(--muted); font:inherit; font-weight:600; font-size:12.5px; padding:5px 12px; border-radius:6px; cursor:pointer; }
+  .lc-scope.on { background:var(--accent); color:#fff; }
   .lc-sort { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); }
   .lc-sort .lc-sl { font-weight:600; }
   .lc-sort select { font:inherit; font-size:12.5px; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:5px 9px; cursor:pointer; }
@@ -13034,11 +13046,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._sort = sortModeFor(typeof localStorage !== "undefined" ? localStorage.getItem(WORKSPACE_SORT_KEY) : null);
       this._statusFilter = "all";
       this._viewList = [];
+      this._scope = null;
+      this._scopeResolved = false;
       this._reviewing = null;
       this._inboxCount = null;
       super.connectedCallback?.();
       this._loadProfile();
       this._ensureTab(this._tab);
+      if (this._tab !== "overview") this._ensureOverview();
       this._loadInboxCount();
       this._onHash = () => {
         const h = typeof location !== "undefined" ? location.hash : "";
@@ -13123,6 +13138,24 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           if (Array.isArray(this._prs)) wbCacheSet(ck, "prs", this._prs, { allowEmpty: true });
         }
       }
+      if (trusted && !this._scopeResolved) {
+        this._scopeResolved = true;
+        const stored = typeof localStorage !== "undefined" ? localStorage.getItem(WORKSPACE_SCOPE_KEY) : null;
+        const personalCount = items(post).length + items(prompt2).length + items(product).length;
+        const resolved = scopeFor(stored, { personalCount, role: this._overview.role });
+        const moved = resolved !== this._scopeNow();
+        this._scope = resolved;
+        if (!this._editing) {
+          if (moved) {
+            this._page = 0;
+            this._statusFilter = "all";
+            this._ensureTab(this._tab);
+          }
+          if (moved || this._canScope()) this.render();
+        } else if (moved) {
+          this._ensureTab(this._tab);
+        }
+      }
       if (this._tab === "overview" && !this._editing) this.render();
       if (!trusted && !this._overviewRetried) {
         this._overviewRetried = true;
@@ -13201,6 +13234,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         await this._swrPrs(id);
       }
     }
+    // SOW-145: the active scope (member until the Overview resolves it), and the scope-keyed content-cache key so
+    // house + member lists of the same type never collide in this._cache or the persistent cache.
+    _scopeNow() {
+      return this._scope || "member";
+    }
+    _ck(type) {
+      return this._scopeNow() === "house" ? `house:${type}` : type;
+    }
+    /** SOW-145: whether the superadmin scope toggle should render (a superadmin, from the trusted Overview). */
+    _canScope() {
+      return this._overview?.role === "superadmin";
+    }
     /** SOW-073: the per-member cache key (immutable github_id, falling back to login). Cached after the first read. */
     async _memberKey() {
       if (this._mk !== void 0) return this._mk;
@@ -13217,26 +13262,28 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // this._cache[type] is the fast path (a tab revisit does not refetch); the persistent cache hydrates the FIRST
     // access of a session (so a reload is instant too). A genuinely-empty list (the success path) is cached as [].
     async _swrContent(id, type) {
-      if (this._cache[type]) return;
+      const ck = this._ck(type);
+      const scope = this._scopeNow();
+      if (this._cache[ck]) return;
       const key = await this._memberKey();
       let fresh = false;
       if (key) {
-        const cached = await wbCacheGet(key, type);
+        const cached = await wbCacheGet(key, ck);
         if (cached) {
-          this._cache[type] = cached.items;
+          this._cache[ck] = cached.items;
           if (this._tab === id && !this._editing) this.render();
           fresh = cached.fresh;
         }
       }
       if (fresh) return;
       try {
-        const items = (await this.client?.listContent?.({ type }))?.items ?? [];
-        const changed = !this._cache[type] || JSON.stringify(this._cache[type]) !== JSON.stringify(items);
-        this._cache[type] = items;
-        if (key) await wbCacheSet(key, type, items, { allowEmpty: true });
+        const items = (await this.client?.listContent?.({ type, scope }))?.items ?? [];
+        const changed = !this._cache[ck] || JSON.stringify(this._cache[ck]) !== JSON.stringify(items);
+        this._cache[ck] = items;
+        if (key) await wbCacheSet(key, ck, items, { allowEmpty: true });
         if (changed && this._tab === id && !this._editing) this.render();
       } catch {
-        if (!this._cache[type]) this._cache[type] = [];
+        if (!this._cache[ck]) this._cache[ck] = [];
         if (this._tab === id && !this._editing) this.render();
       }
     }
@@ -13300,12 +13347,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // publish opens a PR), in BOTH the in-memory and the persistent cache, then refetches what the member will see.
     async _onPublished(type) {
       const t = type && WB_CONTENT_TYPES.has(type) ? type : null;
-      if (t) delete this._cache[t];
+      const keys = t ? [.../* @__PURE__ */ new Set([t, this._ck(t)])] : [];
+      keys.forEach((k) => delete this._cache[k]);
       this._overview = null;
       this._prs = null;
       this._drafts = null;
       const key = await this._memberKey();
-      if (key) await wbCacheInvalidateMany(key, [t, "overview", "prs"].filter(Boolean));
+      if (key) await wbCacheInvalidateMany(key, [...keys, "overview", "prs"]);
       if (!this._editing) this._ensureTab(this._tab);
     }
     // SOW-073: if ANOTHER extension page invalidates this member's cache (e.g. a publish in a second workbench tab),
@@ -13427,7 +13475,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         });
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
-        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged });
+        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow() });
         ed?.addEventListener?.("gbti-renamed", (ev) => {
           const r = ev?.detail || {};
           if (!r.path) return;
@@ -13502,9 +13550,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return `<ul class="rows">${rows2}</ul>${pager2}`;
       }
       const type = tab?.type;
-      const content = this._cache?.[type];
+      const content = this._cache?.[this._ck(type)];
       if (!content) return `<p class="empty">Loading...</p>`;
-      const typeDrafts = (this._drafts || []).filter((d) => d.type === type);
+      const typeDrafts = this._scopeNow() === "house" ? [] : (this._drafts || []).filter((d) => d.type === type);
       const view = filterByStatus(sortItems(mergeTypeItems(content, typeDrafts), this._sort), this._statusFilter);
       this._viewList = view;
       const controls = this._listControls();
@@ -13534,6 +13582,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const counts = this._overview?.counts;
       if (t.id === "prs") return Array.isArray(this._prs) ? this._prs.length : counts?.prs ?? 0;
       if (t.type) {
+        if (this._scopeNow() === "house") {
+          const houseContent = this._cache?.[this._ck(t.type)];
+          return houseContent ? houseContent.length : 0;
+        }
         const content = this._cache?.[t.type];
         if (content) return mergeTypeItems(content, (this._drafts || []).filter((d) => d.type === t.type)).length;
         return counts?.[t.type] ?? 0;
@@ -13541,10 +13593,31 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return 0;
     }
     // SOW-085: the shared list-controls bar (sort + published/draft filter). Rendered above every content list.
+    // SOW-145: a superadmin also gets a scope switch (My content / House content) on the far left; a non-superadmin
+    // never sees it (and the server re-checks the house gate regardless).
     _listControls() {
       const f = (v, label) => `<button class="lc-f ${this._statusFilter === v ? "on" : ""}" data-filter="${v}" type="button">${label}</button>`;
       const opt = (v, label) => `<option value="${v}"${this._sort === v ? " selected" : ""}>${label}</option>`;
-      return `<div class="lc-bar"><div class="lc-filter" role="group" aria-label="Filter by status">${f("all", "All")}${f("published", "Published")}${f("draft", "Drafts")}</div><label class="lc-sort"><span class="lc-sl">Sort</span><select data-sort aria-label="Sort">${opt("newest", "Newest")}${opt("oldest", "Oldest")}${opt("title-asc", "Title A-Z")}${opt("title-desc", "Title Z-A")}</select></label></div>`;
+      const now = this._scopeNow();
+      const scopeBtn = (v, label) => `<button class="lc-scope ${now === v ? "on" : ""}" data-scope="${v}" type="button" aria-pressed="${now === v}">${label}</button>`;
+      const scopeSwitch = this._canScope() ? `<div class="lc-scopes" role="group" aria-label="Content scope">${scopeBtn("member", "My content")}${scopeBtn("house", "House content")}</div>` : "";
+      return `<div class="lc-bar">` + scopeSwitch + `<div class="lc-filter" role="group" aria-label="Filter by status">${f("all", "All")}${f("published", "Published")}${f("draft", "Drafts")}</div><label class="lc-sort"><span class="lc-sl">Sort</span><select data-sort aria-label="Sort">${opt("newest", "Newest")}${opt("oldest", "Oldest")}${opt("title-asc", "Title A-Z")}${opt("title-desc", "Title Z-A")}</select></label></div>`;
+    }
+    // SOW-145: switch the content scope (My content <-> House content), persist it, reset the page + status filter,
+    // and load the newly-active scope's list for the current tab (the scope-keyed cache makes a repeat switch instant).
+    _setScope(scope) {
+      if (scope !== "member" && scope !== "house") return;
+      if (scope === this._scopeNow()) return;
+      this._scope = scope;
+      this._scopeResolved = true;
+      try {
+        if (typeof localStorage !== "undefined") localStorage.setItem(WORKSPACE_SCOPE_KEY, scope);
+      } catch {
+      }
+      this._page = 0;
+      this._statusFilter = "all";
+      this.render();
+      if (!this._editing) this._ensureTab(this._tab);
     }
     // SOW-085: a canonical content row (its index is into this._viewList). SOW-062 glyph + Manage; SOW-106 the
     // staged-edits chip + the reversible self-unpublish/republish flip.
@@ -13621,7 +13694,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         }));
         this.$$("[data-status]").forEach((b) => b.addEventListener("click", () => {
           const it = view()[Number(b.dataset.status)];
-          if (it) this._setItemStatus(it, b.dataset.to, b, tab.type);
+          if (it) this._setItemStatus(it, b.dataset.to, b, this._ck(tab.type));
         }));
         this.$$("[data-drow-edit]").forEach((b) => b.addEventListener("click", () => {
           const d = view()[Number(b.dataset.drowEdit)];
@@ -13649,6 +13722,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           this._page = 0;
           this.render();
         }));
+        this.$$("[data-scope]").forEach((b) => b.addEventListener("click", () => this._setScope(b.dataset.scope)));
       }
       this.$$("[data-page]").forEach((b) => b.addEventListener("click", () => {
         if (b.hasAttribute("disabled")) return;
@@ -16167,7 +16241,8 @@ From the author:
     };
     return {
       status: () => request("GET", "/api/status"),
-      listContent: ({ type } = {}) => request("GET", `/api/content${qs({ type })}`),
+      listContent: ({ type, scope } = {}) => request("GET", `/api/content${qs({ type, scope })}`),
+      // SOW-145: scope 'house' lists house/ (superadmin)
       getContentItem: ({ path }) => request("GET", `/api/content/item${qs({ path })}`),
       readItem: ({ path }) => request("GET", `/api/read${qs({ path })}`),
       // SOW-031: read ANY published index.md for the in-extension reader -> { path, frontmatter, body }

@@ -60,6 +60,24 @@ function requireRepo(ctx) {
   return repo;
 }
 
+// SOW-145: authoring HOUSE content (list/read-for-edit/publish/status-flip of house/) is superadmin-only.
+// Re-derive the caller's role from house/roles.yml via the host-agnostic reader (fail-closed: a missing/
+// unreadable file leaves everyone a plain member), and require superadmin. The client toggle is hidden for
+// non-superadmins, but this is the server-side re-check; the SOW-005 metadata-only gate + SOW-108 superadmin
+// auto-merge stay the REAL enforcement (a forged non-superadmin house/** PR is Tier A -> rejected + closed).
+async function requireSuperadminForHouse(ctx) {
+  const id = requireIdentity(ctx);
+  let rolesParsed = {};
+  try { rolesParsed = yaml.load((await ctx.reader?.readFile?.('house/roles.yml')) || '') || {}; } catch { rolesParsed = {}; }
+  const role = roleOf(String(id.githubId), rolesFromParsed(rolesParsed));
+  if (role !== 'superadmin') throw new OperationError('forbidden', `house content is superadmin-only (you are ${role})`);
+  return { id, role };
+}
+
+// SOW-145: a valid house content path (superadmin surface). Posts/products/prompts only, one nested item folder,
+// no traversal (the leading-anchored, char-classed pattern rejects `house/../`, `house/roles.yml`, etc.).
+const HOUSE_CONTENT_PATH_RE = /^house\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
+
 export function getStatus(ctx) {
   const id = ctx.identity?.() ?? null;
   // SOW-011: the cached membership (paid/trialing/...) drives the "membership required to publish" notice in
@@ -85,9 +103,16 @@ export function getStatus(ctx) {
   };
 }
 
-export function listContent(ctx, { type } = {}) {
+// SOW-145: `scope` selects which folder the WorkBench lists. 'member' (default) lists the caller's own
+// members/<username>/; 'house' lists the non-member house/ folder (a superadmin surface, re-checked). Async so
+// the one op serves the sync npm reader and the async extension reader (await passes a sync value through).
+export async function listContent(ctx, { type, scope = 'member' } = {}) {
   const id = requireIdentity(ctx);
-  return { items: ctx.reader.list(id.username, type || undefined) };
+  if (scope === 'house') {
+    await requireSuperadminForHouse(ctx);
+    return { items: await ctx.reader.list(null, type || undefined, 'house') };
+  }
+  return { items: await ctx.reader.list(id.username, type || undefined, 'member') };
 }
 
 /** List members-only content (visibility: members) across all folders, for the members-only portal. */
@@ -226,10 +251,20 @@ export async function readContent(ctx, { path } = {}) {
   return item;
 }
 
-export function getContentItem(ctx, { path } = {}) {
+export async function getContentItem(ctx, { path } = {}) {
   const id = requireIdentity(ctx);
   if (!path) throw new OperationError('bad-request', 'path is required');
-  const item = ctx.reader.get(id.username, path);
+  // SOW-145: a house/ item opens for a superadmin (re-checked) via the general readFile; the member reader.get
+  // is own-folder-scoped so it would reject a house path. Async so both readers (sync npm / async ext) work.
+  if (String(path).startsWith('house/')) {
+    if (!HOUSE_CONTENT_PATH_RE.test(path)) throw new OperationError('bad-request', 'invalid house content path');
+    await requireSuperadminForHouse(ctx);
+    const text = await ctx.reader?.readFile?.(path);
+    if (text == null) throw new OperationError('not-found', 'no such house item');
+    const { frontmatter, body } = parseContentFile(text);
+    return { path, frontmatter, body };
+  }
+  const item = await ctx.reader.get(id.username, path);
   if (!item) throw new OperationError('not-found', 'no such item in your folder');
   return item;
 }
@@ -384,10 +419,29 @@ export async function setOwnContentStatus(ctx, { path: rel, status } = {}) {
   if (status !== 'published' && status !== 'draft') {
     throw new OperationError('bad-request', 'status must be "published" or "draft"');
   }
-  const m = OWN_STATUS_PATH_RE.exec(String(rel || ''));
-  if (!m) throw new OperationError('bad-request', 'path must be members/<you>/(posts|products|prompts)/<slug>/index.md');
-  if (m[1] !== String(id.username).toLowerCase()) {
-    throw new OperationError('forbidden', 'you may only change the status of your own content');
+  // SOW-145: a house/ status flip is superadmin-only (re-checked); the house branch is prefixed so it cannot
+  // collide with a member item of the same slug. Otherwise the path must be the caller's own member folder.
+  const houseTarget = String(rel || '').startsWith('house/');
+  let type, slug, branch;
+  if (houseTarget) {
+    // Validate the content-path shape BEFORE the role gate: a non-content house path (house/roles.yml, a
+    // traversal) is a plain bad-request for everyone, and only a well-formed house item reaches the superadmin
+    // check, so a non-superadmin cannot probe which house paths exist via the error.
+    const hm = HOUSE_CONTENT_PATH_RE.exec(String(rel || ''));
+    if (!hm) throw new OperationError('bad-request', 'invalid house content path');
+    await requireSuperadminForHouse(ctx);
+    type = hm[1].slice(0, -1);
+    slug = String(rel).split('/')[2];
+    branch = `gbti/status-house-${type}-${slug}`;
+  } else {
+    const m = OWN_STATUS_PATH_RE.exec(String(rel || ''));
+    if (!m) throw new OperationError('bad-request', 'path must be members/<you>/(posts|products|prompts)/<slug>/index.md');
+    if (m[1] !== String(id.username).toLowerCase()) {
+      throw new OperationError('forbidden', 'you may only change the status of your own content');
+    }
+    type = m[2].slice(0, -1);
+    slug = m[3];
+    branch = `gbti/status-${type}-${slug}`;
   }
   // The publishing lifecycle is paid-only (SOW-011); the gate is the real authority (unknown fails open to it).
   const membership = await membershipOf(ctx);
@@ -398,9 +452,6 @@ export async function setOwnContentStatus(ctx, { path: rel, status } = {}) {
   if (text == null) throw new OperationError('not-found', `no such file: ${rel}`);
   const flip = flipContentStatus(text, status);
   if (!flip.changed) return { ok: true, noop: true, status };
-  const type = m[2].slice(0, -1);
-  const slug = m[3];
-  const branch = `gbti/status-${type}-${slug}`;
   const verb = status === 'draft' ? 'Unpublish' : 'Republish';
   await syncForkIfCreatingBranch(ctx, repo, branch); // SOW-106 Phase A: fresh-base the flip branch
   const pr = await publishFiles({
@@ -441,9 +492,16 @@ export async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = worke
   }
 }
 
-export async function publish(ctx, { type, input, body, message, title, prBody, authorNote, path } = {}) {
+export async function publish(ctx, { type, input, body, message, title, prBody, authorNote, path, scope } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
+  // SOW-145: a house publish targets the non-member house/ folder (author stays 'gbti'). The scope is declared
+  // by the caller (a NEW house item) or inferred from `path` (editing an existing house item). It is
+  // superadmin-only, RE-CHECKED here server-side (never trust the client); the SOW-108 gate auto-merges a
+  // superadmin house/** PR, and a forged non-superadmin one is Tier A -> rejected + closed by the gate.
+  const houseTarget = scope === 'house' || String(path || '').startsWith('house/');
+  const targetScope = houseTarget ? 'house' : 'member';
+  if (houseTarget) await requireSuperadminForHouse(ctx);
   // SOW-011: publishing to the canonical repo is paid-only. Block a KNOWN non-paid (trial / lapsed) member
   // BEFORE opening any PR, so their draft stays on their own fork and nothing reaches the canonical repo.
   // 'unknown' (oracle unreachable) fails OPEN to the SOW-005 gate, which is the real authority and rejects a
@@ -460,7 +518,9 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   // edit was loaded from; a submitted slug that differs from it makes this publish a RENAME (one PR: the new
   // path, the old path deleted, the old URL in redirectFrom so the build 301s and readers alias). Even without
   // a slug change, the old file's redirectFrom entries are merged in (a plain re-publish used to drop them).
-  const origin = renameOriginOf({ path, username: id.username, type });
+  // House rename is deferred (SOW-145 v1): a house target never enters the rename path (origin stays null), so a
+  // house edit is always a plain re-publish of the same slug. Member content keeps the full SOW-112 rename flow.
+  const origin = houseTarget ? null : renameOriginOf({ path, username: id.username, type });
   let oldFm = null;
   if (origin) {
     const oldText = await ctx.reader?.readFile?.(origin.oldPath);
@@ -486,8 +546,7 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
     const nowIso = new Date().toISOString();
     let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === 'string' && effInput.slug) {
-      const sub = { post: 'posts', product: 'products', prompt: 'prompts' }[type];
-      const canonical = `members/${id.username}/${sub}/${effInput.slug}/index.md`;
+      const canonical = contentPath(type, id.username, effInput.slug, targetScope); // SOW-145: house -> house/<sub>/…
       let text = null;
       try { text = (await ctx.reader?.readFile?.(canonical)) ?? null; } catch { text = null; }
       // The MCP host without a local repoPath has no working reader (hit live 2026-07-10: a re-publish
@@ -502,7 +561,7 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   try {
     // SOW-106: publishing merges into the network repo, and merged content is PUBLIC. Force status: published (an
     // explicit caller status still wins), so a publish can never silently produce a hidden merged draft.
-    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || 'published' }, body });
+    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || 'published' }, body, scope: targetScope });
   } catch (err) {
     throw new OperationError('invalid-content', err.message, err instanceof ContentValidationError ? err.issues : undefined);
   }
@@ -543,7 +602,7 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   // SOW-112 v2: a rename rides the item's OWN branch (the staged-draft identity), carries the deletes of the
   // old path (+ its .enc; the new one was freshly encrypted above), and moves the intro comment — unless this
   // publish writes a fresh authorNote intro at the new slug already.
-  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug);
+  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug, built.scope); // SOW-145: house prefix
   // SOW-106 Phase A: fresh-base a branch that is about to be created (best-effort; a miss changes nothing).
   await syncForkIfCreatingBranch(ctx, repo, branch);
   let renameFiles = [];
@@ -628,6 +687,8 @@ export function buildIntroCommentFile({ username, built, authorNote, now } = {})
   if (!note || !built?.slug || !['product', 'prompt'].includes(built.type)) return null;
   const introBuilt = buildCommentFile({
     username,
+    // SOW-145: a house product/prompt intro lands at house/comments/ with author 'gbti' (mirrors the item scope).
+    scope: built.scope || 'member',
     input: {
       id: `intro-${built.slug}`,
       targetType: built.type,
@@ -667,7 +728,7 @@ export async function planMemberFiles({ built, body, encrypt }) {
       return { files: [{ path: built.path, content: serializeContentFile(built.frontmatter, publicPart) }] };
     }
   }
-  const { assetId, path: encPath } = encAssetFor(built.type, built.username, built.slug);
+  const { assetId, path: encPath } = encAssetFor(built.type, built.username, built.slug, built.scope); // SOW-145: house -> house/_enc/
   const envelope = await encrypt(memberPart, assetId);
   const markdown = serializeContentFile({ ...built.frontmatter, encryptedBody: encPath }, publicPart);
   return {

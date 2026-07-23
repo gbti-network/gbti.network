@@ -17251,20 +17251,28 @@ function schemaFor(type) {
 // client/src/content-ops.mjs
 var SUBDIR = Object.freeze({ post: "posts", product: "products", prompt: "prompts" });
 var MAX_BODY_BYTES = 1e6;
-function contentPath(type, username, slug) {
-  if (!username) throw new Error("contentPath: username is required");
-  if (type === "profile") return `members/${username}/profile.md`;
+function resolveTarget({ scope = "member", username } = {}) {
+  if (scope === "house") return { scope: "house", folder: "house", author: "gbti" };
+  if (!username) throw new Error("resolveTarget: username is required for the member scope");
+  return { scope: "member", folder: `members/${username}`, author: username };
+}
+function contentPath(type, username, slug, scope = "member") {
+  if (type === "profile") {
+    if (!username) throw new Error("contentPath: username is required");
+    return `members/${username}/profile.md`;
+  }
   const sub = SUBDIR[type];
   if (!sub) throw new Error(`contentPath: unknown type ${type}`);
   if (!slug) throw new Error(`contentPath: ${type} requires a slug`);
-  return `members/${username}/${sub}/${slug}/index.md`;
+  const { folder } = resolveTarget({ scope, username });
+  return `${folder}/${sub}/${slug}/index.md`;
 }
-function sanitizeInput(type, input, username) {
+function sanitizeInput(type, input, username, { author } = {}) {
   const out = { ...input ?? {} };
   for (const field of SYSTEM_MANAGED[type] ?? []) delete out[field];
   out.type = type;
   if (type === "profile") out.username = username;
-  else out.author = username;
+  else out.author = author || username;
   return out;
 }
 var ContentValidationError = class extends Error {
@@ -17281,11 +17289,12 @@ function stripUndefined(obj2) {
   for (const [k, v] of Object.entries(obj2)) if (v !== void 0) out[k] = v;
   return out;
 }
-function buildContentFile({ type, username, input, body = "" }) {
+function buildContentFile({ type, username, input, body = "", scope = "member" }) {
   if (!AUTHORABLE_TYPES.includes(type)) throw new Error(`buildContentFile: ${type} is not an authorable type`);
-  if (!username) throw new Error("buildContentFile: username is required");
+  const target = resolveTarget({ scope, username });
+  if (scope !== "house" && !username) throw new Error("buildContentFile: username is required");
   const schema = schemaFor(type);
-  const cleaned = sanitizeInput(type, input, username);
+  const cleaned = sanitizeInput(type, input, username, { author: target.author });
   const result = schema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError(type, result.error.issues);
   const bodyStr = String(body ?? "").trim();
@@ -17293,12 +17302,12 @@ function buildContentFile({ type, username, input, body = "" }) {
     throw new ContentValidationError(type, [{ path: ["body"], message: `body exceeds ${MAX_BODY_BYTES} bytes` }]);
   }
   const slug = type === "profile" ? null : cleaned.slug;
-  const path4 = contentPath(type, username, slug);
+  const path4 = contentPath(type, username, slug, scope);
   const frontmatter = stripUndefined(cleaned);
   if (result.data && Array.isArray(result.data.tags) && "tags" in frontmatter) frontmatter.tags = result.data.tags;
   if (Array.isArray(frontmatter.tags) && !frontmatter.tags.length) delete frontmatter.tags;
   const markdown = serializeContentFile(frontmatter, body);
-  return { path: path4, frontmatter, markdown, type, username, slug };
+  return { path: path4, frontmatter, markdown, type, username, slug, scope };
 }
 function shareSummary(relPath, frontmatter = {}, body = "") {
   const fm = frontmatter || {};
@@ -17366,9 +17375,10 @@ function commentId(createdAt, suffix) {
   const s = String(suffix ?? "").replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 8) || "c";
   return `${ts}-${s}`;
 }
-function buildCommentFile({ username, input, body = "" }) {
+function buildCommentFile({ username, input, body = "", scope = "member" } = {}) {
   if (!username) throw new Error("buildCommentFile: username is required");
-  const cleaned = stripUndefined({ ...input ?? {}, type: "comment", author: username });
+  const target = resolveTarget({ scope, username });
+  const cleaned = stripUndefined({ ...input ?? {}, type: "comment", author: target.author });
   const result = commentSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError("comment", result.error.issues);
   const id = cleaned.id;
@@ -17376,9 +17386,9 @@ function buildCommentFile({ username, input, body = "" }) {
   if (bodyStr.length > MAX_BODY_BYTES) {
     throw new ContentValidationError("comment", [{ path: ["body"], message: `body exceeds ${MAX_BODY_BYTES} bytes` }]);
   }
-  const path4 = `members/${username}/comments/${id}.md`;
+  const path4 = `${target.folder}/comments/${id}.md`;
   const markdown = serializeContentFile(cleaned, body);
-  return { path: path4, frontmatter: cleaned, markdown, type: "comment", username, slug: id, id };
+  return { path: path4, frontmatter: cleaned, markdown, type: "comment", username, slug: id, id, scope: target.scope };
 }
 function serializeContentFile(frontmatter, body) {
   const front = index_vite_proxy_tmp_default.dump(stripUndefined(frontmatter), { lineWidth: 100, noRefs: true }).trimEnd();
@@ -17466,9 +17476,11 @@ function createReader(repoPath) {
       publishedAt: Number.isFinite(pubMs) ? pubMs : null
     };
   }
-  function listType(username, type) {
+  function listType(username, type, scope = "member") {
     const out = [];
+    const houseScope = scope === "house";
     if (type === "profile") {
+      if (houseScope) return out;
       const rel = `members/${username}/profile.md`;
       const abs = path2.join(repoPath, "members", username, "profile.md");
       if (fs2.existsSync(abs)) out.push(readItem(abs, rel));
@@ -17476,7 +17488,8 @@ function createReader(repoPath) {
     }
     const sub = SUBDIR2[type];
     if (!sub) return out;
-    const dir = path2.join(repoPath, "members", username, sub);
+    const relBase = houseScope ? `house/${sub}` : `members/${username}/${sub}`;
+    const dir = houseScope ? path2.join(repoPath, "house", sub) : path2.join(repoPath, "members", username, sub);
     if (!fs2.existsSync(dir)) return out;
     for (const slug of fs2.readdirSync(dir).sort()) {
       const slugDir = path2.join(dir, slug);
@@ -17490,7 +17503,7 @@ function createReader(repoPath) {
       for (const idx of ["index.md", "index.mdx"]) {
         const abs = path2.join(slugDir, idx);
         if (fs2.existsSync(abs)) {
-          out.push(readItem(abs, `members/${username}/${sub}/${slug}/${idx}`));
+          out.push(readItem(abs, `${relBase}/${slug}/${idx}`));
           break;
         }
       }
@@ -17498,11 +17511,12 @@ function createReader(repoPath) {
     return out;
   }
   return {
-    /** List the member's content of a type, or all authorable types when type is omitted. */
-    list(username, type) {
-      if (!repoPath || !username) return [];
-      if (type) return listType(username, type);
-      return TYPES.flatMap((t) => listType(username, t));
+    /** List content of a type (or all authorable types when omitted). SOW-145: scope 'house' lists house/. */
+    list(username, type, scope = "member") {
+      if (!repoPath) return [];
+      if (scope !== "house" && !username) return [];
+      if (type) return listType(username, type, scope);
+      return TYPES.flatMap((t) => listType(username, t, scope));
     },
     /**
      * List members-only content (visibility: members) across ALL member folders + house, for the
@@ -18255,8 +18269,10 @@ function buildContext(store) {
 }
 
 // client/src/publish.mjs
-function branchName(type, slug) {
-  return type === "profile" ? "gbti/profile" : `gbti/${type}-${slug}`;
+function branchName(type, slug, scope = "member") {
+  if (type === "profile") return "gbti/profile";
+  const prefix = scope === "house" ? "gbti/house-" : "gbti/";
+  return `${prefix}${type}-${slug}`;
 }
 function defaultMessage(change) {
   return change.type === "profile" ? "Update profile" : `${change.slug ? "Update" : "Add"} ${change.type}: ${change.slug ?? ""}`.trim();
@@ -18300,7 +18316,7 @@ async function commitToBranchOnFork({ repo, branch, files, message, resetStale =
 }
 async function publishContent({ repo, change, message, title, body }) {
   if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
-  const branch = branchName(change.type, change.slug);
+  const branch = branchName(change.type, change.slug, change.scope);
   const { fork, owner, base: base2 } = await commitToBranchOnFork({
     repo,
     branch,
@@ -18359,9 +18375,10 @@ function splitMemberMarkdown(body) {
     memberPart: text.slice(idx + MEMBER_MARKER.length).replace(/^\s+/, "")
   };
 }
-function encAssetFor(type, username, slug) {
+function encAssetFor(type, username, slug, scope = "member") {
   const assetId = `${type}:${slug}:body`;
-  const path4 = `members/${username}/_enc/${type}-${slug}-body.enc`;
+  const folder = scope === "house" ? "house" : `members/${username}`;
+  const path4 = `${folder}/_enc/${type}-${slug}-body.enc`;
   return { assetId, path: path4 };
 }
 
@@ -18448,6 +18465,23 @@ var ROLE2 = Object.freeze({
 });
 var PRIVILEGED_ROLES = /* @__PURE__ */ new Set([ROLE2.moderator, ROLE2.admin, ROLE2.superadmin]);
 var ADMIN_ROLES = /* @__PURE__ */ new Set([ROLE2.admin, ROLE2.superadmin]);
+var idOf = (entry) => String(entry?.github_id ?? entry);
+function rolesFromParsed2(parsed) {
+  const roles = /* @__PURE__ */ new Map();
+  const assign = (list, role) => {
+    for (const e of list ?? []) {
+      const id = idOf(e);
+      if (id && id !== "REPLACE_AT_M0") roles.set(id, role);
+    }
+  };
+  assign(parsed?.moderators, ROLE2.moderator);
+  assign(parsed?.admins, ROLE2.admin);
+  assign(parsed?.superadmins, ROLE2.superadmin);
+  return roles;
+}
+function roleOf2(githubId, roles) {
+  return roles.get(String(githubId)) ?? ROLE2.member;
+}
 
 // membership/classify-pr.mjs
 var CONTENT_DIRS = ["posts", "products", "prompts", "comments"];
@@ -18488,6 +18522,19 @@ function requireRepo(ctx2) {
   if (!repo) throw new OperationError("not-authenticated", "not authenticated; run `gbti login` first");
   return repo;
 }
+async function requireSuperadminForHouse(ctx2) {
+  const id = requireIdentity(ctx2);
+  let rolesParsed = {};
+  try {
+    rolesParsed = index_vite_proxy_tmp_default.load(await ctx2.reader?.readFile?.("house/roles.yml") || "") || {};
+  } catch {
+    rolesParsed = {};
+  }
+  const role = roleOf2(String(id.githubId), rolesFromParsed2(rolesParsed));
+  if (role !== "superadmin") throw new OperationError("forbidden", `house content is superadmin-only (you are ${role})`);
+  return { id, role };
+}
+var HOUSE_CONTENT_PATH_RE = /^house\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
 function getStatus(ctx2) {
   const id = ctx2.identity?.() ?? null;
   const membership = ctx2.membership?.() ?? "unknown";
@@ -18513,9 +18560,13 @@ function getStatus(ctx2) {
     // SOW-046 C: news -> Discord publish (UX hint; Worker re-checks)
   };
 }
-function listContent(ctx2, { type } = {}) {
+async function listContent(ctx2, { type, scope = "member" } = {}) {
   const id = requireIdentity(ctx2);
-  return { items: ctx2.reader.list(id.username, type || void 0) };
+  if (scope === "house") {
+    await requireSuperadminForHouse(ctx2);
+    return { items: await ctx2.reader.list(null, type || void 0, "house") };
+  }
+  return { items: await ctx2.reader.list(id.username, type || void 0, "member") };
 }
 async function membershipOf(ctx2) {
   const m = await (ctx2.membershipResolved ? ctx2.membershipResolved() : ctx2.membership?.());
@@ -18573,10 +18624,18 @@ async function listComments(ctx2, { targetType, targetSlug, limit, aliases } = {
   const gated = gateMemberComments(items, await membershipOf(ctx2));
   return { items: await mergeCommentEchoesFor(ctx2, { targetType, targetSlug, deployed: gated }) };
 }
-function getContentItem(ctx2, { path: path4 } = {}) {
+async function getContentItem(ctx2, { path: path4 } = {}) {
   const id = requireIdentity(ctx2);
   if (!path4) throw new OperationError("bad-request", "path is required");
-  const item = ctx2.reader.get(id.username, path4);
+  if (String(path4).startsWith("house/")) {
+    if (!HOUSE_CONTENT_PATH_RE.test(path4)) throw new OperationError("bad-request", "invalid house content path");
+    await requireSuperadminForHouse(ctx2);
+    const text = await ctx2.reader?.readFile?.(path4);
+    if (text == null) throw new OperationError("not-found", "no such house item");
+    const { frontmatter, body } = parseContentFile(text);
+    return { path: path4, frontmatter, body };
+  }
+  const item = await ctx2.reader.get(id.username, path4);
   if (!item) throw new OperationError("not-found", "no such item in your folder");
   return item;
 }
@@ -18637,9 +18696,12 @@ async function syncForkIfCreatingBranch(ctx2, repo, branch, { sync = workerSyncF
     return { synced: false, reason: "error" };
   }
 }
-async function publish(ctx2, { type, input, body, message, title, prBody, authorNote, path: path4 } = {}) {
+async function publish(ctx2, { type, input, body, message, title, prBody, authorNote, path: path4, scope } = {}) {
   const id = requireIdentity(ctx2);
   const repo = requireRepo(ctx2);
+  const houseTarget = scope === "house" || String(path4 || "").startsWith("house/");
+  const targetScope = houseTarget ? "house" : "member";
+  if (houseTarget) await requireSuperadminForHouse(ctx2);
   const membership = await membershipOf(ctx2);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError(
@@ -18648,7 +18710,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
       { membership }
     );
   }
-  const origin = renameOriginOf({ path: path4, username: id.username, type });
+  const origin = houseTarget ? null : renameOriginOf({ path: path4, username: id.username, type });
   let oldFm = null;
   if (origin) {
     const oldText = await ctx2.reader?.readFile?.(origin.oldPath);
@@ -18667,8 +18729,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
     let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === "string" && effInput.slug) {
-      const sub = { post: "posts", product: "products", prompt: "prompts" }[type];
-      const canonical = `members/${id.username}/${sub}/${effInput.slug}/index.md`;
+      const canonical = contentPath(type, id.username, effInput.slug, targetScope);
       let text = null;
       try {
         text = await ctx2.reader?.readFile?.(canonical) ?? null;
@@ -18695,7 +18756,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
   }
   let built;
   try {
-    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || "published" }, body });
+    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || "published" }, body, scope: targetScope });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
@@ -18719,7 +18780,7 @@ async function publish(ctx2, { type, input, body, message, title, prBody, author
   const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
   const bdy = prBody ?? desc.body;
-  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug);
+  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug, built.scope);
   await syncForkIfCreatingBranch(ctx2, repo, branch);
   let renameFiles = [];
   if (renaming) {
@@ -18782,6 +18843,8 @@ function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
   if (!note || !built?.slug || !["product", "prompt"].includes(built.type)) return null;
   const introBuilt = buildCommentFile({
     username,
+    // SOW-145: a house product/prompt intro lands at house/comments/ with author 'gbti' (mirrors the item scope).
+    scope: built.scope || "member",
     input: {
       id: `intro-${built.slug}`,
       targetType: built.type,
@@ -18812,7 +18875,7 @@ async function planMemberFiles({ built, body, encrypt }) {
       return { files: [{ path: built.path, content: serializeContentFile(built.frontmatter, publicPart) }] };
     }
   }
-  const { assetId, path: encPath } = encAssetFor(built.type, built.username, built.slug);
+  const { assetId, path: encPath } = encAssetFor(built.type, built.username, built.slug, built.scope);
   const envelope = await encrypt(memberPart, assetId);
   const markdown = serializeContentFile({ ...built.frontmatter, encryptedBody: encPath }, publicPart);
   return {

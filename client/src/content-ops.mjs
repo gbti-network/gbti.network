@@ -19,27 +19,42 @@ export function resolveUsername(githubId, membersIndex) {
   return null;
 }
 
-/** The repo path for a content item of the given type in a member's folder. */
-export function contentPath(type, username, slug) {
-  if (!username) throw new Error('contentPath: username is required');
-  if (type === 'profile') return `members/${username}/profile.md`;
+// SOW-145: the content TARGET, decoupled from the ACTOR. A member scope writes members/<username>/ with the
+// member as author; a house scope writes the non-member house/ folder with the fixed pseudo-author 'gbti'
+// (rendered "GBTI Network"). The actor's identity (for the fork + the superadmin gate) is separate. Pure.
+export function resolveTarget({ scope = 'member', username } = {}) {
+  if (scope === 'house') return { scope: 'house', folder: 'house', author: 'gbti' };
+  if (!username) throw new Error('resolveTarget: username is required for the member scope');
+  return { scope: 'member', folder: `members/${username}`, author: username };
+}
+
+/** The repo path for a content item of the given type. Member scope -> members/<username>/…; house scope ->
+ *  house/… (SOW-145; a superadmin-only target, gated by the caller). Profiles are member-only. */
+export function contentPath(type, username, slug, scope = 'member') {
+  if (type === 'profile') {
+    if (!username) throw new Error('contentPath: username is required');
+    return `members/${username}/profile.md`;
+  }
   const sub = SUBDIR[type];
   if (!sub) throw new Error(`contentPath: unknown type ${type}`);
   if (!slug) throw new Error(`contentPath: ${type} requires a slug`);
   // NESTED layout (matches the SOW-001 migration + validate-content + the Astro glob): one folder per item
   // (so assets can co-locate); the slug folder name == the slug.
-  return `members/${username}/${sub}/${slug}/index.md`;
+  const { folder } = resolveTarget({ scope, username });
+  return `${folder}/${sub}/${slug}/index.md`;
 }
 
 export function ownFolderPrefix(username) {
   return `members/${username}/`;
 }
 
-/** A member may author ONLY inside their own folder. Rejects traversal + other folders (UX scoping). */
-export function canAuthorPath(path, username) {
-  if (typeof path !== 'string' || !username) return false;
+/** A member may author ONLY inside their own folder. Rejects traversal + other folders (UX scoping). SOW-145:
+ *  a superadmin (allowHouse) may additionally author under house/ (the server gate is the real enforcement). */
+export function canAuthorPath(path, username, { allowHouse = false } = {}) {
+  if (typeof path !== 'string') return false;
   if (path.includes('..') || path.includes('\\') || path.startsWith('/')) return false;
-  return path.startsWith(ownFolderPrefix(username));
+  if (allowHouse && (path === 'house' || path.startsWith('house/'))) return true;
+  return !!username && path.startsWith(ownFolderPrefix(username));
 }
 
 /**
@@ -47,12 +62,14 @@ export function canAuthorPath(path, username) {
  * `contributors` (merge automation owns it), their `tier`/`joinedAt` (membership system owns it), or claim
  * a different `author`/`username` than themselves.
  */
-export function sanitizeInput(type, input, username) {
+export function sanitizeInput(type, input, username, { author } = {}) {
   const out = { ...(input ?? {}) };
   for (const field of SYSTEM_MANAGED[type] ?? []) delete out[field];
   out.type = type;
+  // SOW-145: `author` decouples the stamped author from the folder username. House content keeps author 'gbti'
+  // while living under house/; member content keeps author == the folder username.
   if (type === 'profile') out.username = username;
-  else out.author = username;
+  else out.author = author || username;
   return out;
 }
 
@@ -77,12 +94,15 @@ function stripUndefined(obj) {
  * @returns {{ path, frontmatter, markdown, type, username, slug }}
  * @throws ContentValidationError on schema failure; Error on a non-authorable type / missing username.
  */
-export function buildContentFile({ type, username, input, body = '' }) {
+export function buildContentFile({ type, username, input, body = '', scope = 'member' }) {
   if (!AUTHORABLE_TYPES.includes(type)) throw new Error(`buildContentFile: ${type} is not an authorable type`);
-  if (!username) throw new Error('buildContentFile: username is required');
+  // SOW-145: the member scope needs a username (folder + author); the house scope does not (folder 'house',
+  // author 'gbti'). The actor's username is still carried on the result for the fork/commit context.
+  const target = resolveTarget({ scope, username });
+  if (scope !== 'house' && !username) throw new Error('buildContentFile: username is required');
 
   const schema = schemaFor(type);
-  const cleaned = sanitizeInput(type, input, username);
+  const cleaned = sanitizeInput(type, input, username, { author: target.author });
 
   const result = schema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError(type, result.error.issues);
@@ -94,7 +114,7 @@ export function buildContentFile({ type, username, input, body = '' }) {
   }
 
   const slug = type === 'profile' ? null : cleaned.slug;
-  const path = contentPath(type, username, slug);
+  const path = contentPath(type, username, slug, scope);
 
   // Serialize the cleaned input (validity already proven) so we preserve the author's original date
   // strings and omit defaulted noise; the gate / CI apply schema defaults at build time.
@@ -105,7 +125,8 @@ export function buildContentFile({ type, username, input, body = '' }) {
   if (Array.isArray(frontmatter.tags) && !frontmatter.tags.length) delete frontmatter.tags;
   const markdown = serializeContentFile(frontmatter, body);
 
-  return { path, frontmatter, markdown, type, username, slug };
+  // `username` stays the ACTOR (the fork/commit context); `scope` + `path` carry the TARGET (member or house).
+  return { path, frontmatter, markdown, type, username, slug, scope };
 }
 
 /** SOW-018: derive a filesystem-safe, sortable Share id (a timestamp-slug) from its createdAt + optional title.
@@ -265,9 +286,13 @@ export function commentId(createdAt, suffix) {
  * member-only encrypt path (planMemberFiles) and publishFiles can consume it unchanged.
  * @returns {{ path, frontmatter, markdown, type:'comment', username, slug, id }}
  */
-export function buildCommentFile({ username, input, body = '' }) {
+export function buildCommentFile({ username, input, body = '', scope = 'member' } = {}) {
   if (!username) throw new Error('buildCommentFile: username is required');
-  const cleaned = stripUndefined({ ...(input ?? {}), type: 'comment', author: username });
+  // SOW-145: a house comment (e.g. a house product/prompt author intro) lives at house/comments/<id>.md with
+  // author 'gbti', while the actor's username stays on the result (fork/commit context). Member scope is
+  // unchanged (folder members/<username>, author == username).
+  const target = resolveTarget({ scope, username });
+  const cleaned = stripUndefined({ ...(input ?? {}), type: 'comment', author: target.author });
   const result = commentSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError('comment', result.error.issues);
   const id = cleaned.id;
@@ -275,11 +300,11 @@ export function buildCommentFile({ username, input, body = '' }) {
   if (bodyStr.length > MAX_BODY_BYTES) {
     throw new ContentValidationError('comment', [{ path: ['body'], message: `body exceeds ${MAX_BODY_BYTES} bytes` }]);
   }
-  const path = `members/${username}/comments/${id}.md`;
+  const path = `${target.folder}/comments/${id}.md`;
   const markdown = serializeContentFile(cleaned, body);
   // slug = id so planMemberFiles (which keys encryption on built.slug + built.type) treats a members comment
   // like a body-bearing item; encAssetFor('comment', username, id) puts the .enc under members/<u>/_enc/.
-  return { path, frontmatter: cleaned, markdown, type: 'comment', username, slug: id, id };
+  return { path, frontmatter: cleaned, markdown, type: 'comment', username, slug: id, id, scope: target.scope };
 }
 
 /** Serialize a frontmatter object + body into a content file string (the same shape buildContentFile emits).

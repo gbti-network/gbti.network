@@ -17196,20 +17196,28 @@ function schemaFor(type) {
 // client/src/content-ops.mjs
 var SUBDIR = Object.freeze({ post: "posts", product: "products", prompt: "prompts" });
 var MAX_BODY_BYTES = 1e6;
-function contentPath(type, username, slug) {
-  if (!username) throw new Error("contentPath: username is required");
-  if (type === "profile") return `members/${username}/profile.md`;
+function resolveTarget({ scope = "member", username } = {}) {
+  if (scope === "house") return { scope: "house", folder: "house", author: "gbti" };
+  if (!username) throw new Error("resolveTarget: username is required for the member scope");
+  return { scope: "member", folder: `members/${username}`, author: username };
+}
+function contentPath(type, username, slug, scope = "member") {
+  if (type === "profile") {
+    if (!username) throw new Error("contentPath: username is required");
+    return `members/${username}/profile.md`;
+  }
   const sub = SUBDIR[type];
   if (!sub) throw new Error(`contentPath: unknown type ${type}`);
   if (!slug) throw new Error(`contentPath: ${type} requires a slug`);
-  return `members/${username}/${sub}/${slug}/index.md`;
+  const { folder } = resolveTarget({ scope, username });
+  return `${folder}/${sub}/${slug}/index.md`;
 }
-function sanitizeInput(type, input, username) {
+function sanitizeInput(type, input, username, { author } = {}) {
   const out = { ...input ?? {} };
   for (const field of SYSTEM_MANAGED[type] ?? []) delete out[field];
   out.type = type;
   if (type === "profile") out.username = username;
-  else out.author = username;
+  else out.author = author || username;
   return out;
 }
 var ContentValidationError = class extends Error {
@@ -17226,11 +17234,12 @@ function stripUndefined(obj) {
   for (const [k, v] of Object.entries(obj)) if (v !== void 0) out[k] = v;
   return out;
 }
-function buildContentFile({ type, username, input, body = "" }) {
+function buildContentFile({ type, username, input, body = "", scope = "member" }) {
   if (!AUTHORABLE_TYPES.includes(type)) throw new Error(`buildContentFile: ${type} is not an authorable type`);
-  if (!username) throw new Error("buildContentFile: username is required");
+  const target = resolveTarget({ scope, username });
+  if (scope !== "house" && !username) throw new Error("buildContentFile: username is required");
   const schema = schemaFor(type);
-  const cleaned = sanitizeInput(type, input, username);
+  const cleaned = sanitizeInput(type, input, username, { author: target.author });
   const result = schema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError(type, result.error.issues);
   const bodyStr = String(body ?? "").trim();
@@ -17238,12 +17247,12 @@ function buildContentFile({ type, username, input, body = "" }) {
     throw new ContentValidationError(type, [{ path: ["body"], message: `body exceeds ${MAX_BODY_BYTES} bytes` }]);
   }
   const slug = type === "profile" ? null : cleaned.slug;
-  const path = contentPath(type, username, slug);
+  const path = contentPath(type, username, slug, scope);
   const frontmatter = stripUndefined(cleaned);
   if (result.data && Array.isArray(result.data.tags) && "tags" in frontmatter) frontmatter.tags = result.data.tags;
   if (Array.isArray(frontmatter.tags) && !frontmatter.tags.length) delete frontmatter.tags;
   const markdown = serializeContentFile(frontmatter, body);
-  return { path, frontmatter, markdown, type, username, slug };
+  return { path, frontmatter, markdown, type, username, slug, scope };
 }
 function shareId(createdAt, title) {
   const ts = String(createdAt ?? "").replace(/[^0-9]/g, "").slice(0, 14);
@@ -17356,9 +17365,10 @@ function commentId(createdAt, suffix) {
   const s = String(suffix ?? "").replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 8) || "c";
   return `${ts}-${s}`;
 }
-function buildCommentFile({ username, input, body = "" }) {
+function buildCommentFile({ username, input, body = "", scope = "member" } = {}) {
   if (!username) throw new Error("buildCommentFile: username is required");
-  const cleaned = stripUndefined({ ...input ?? {}, type: "comment", author: username });
+  const target = resolveTarget({ scope, username });
+  const cleaned = stripUndefined({ ...input ?? {}, type: "comment", author: target.author });
   const result = commentSchema.safeParse(cleaned);
   if (!result.success) throw new ContentValidationError("comment", result.error.issues);
   const id = cleaned.id;
@@ -17366,9 +17376,9 @@ function buildCommentFile({ username, input, body = "" }) {
   if (bodyStr.length > MAX_BODY_BYTES) {
     throw new ContentValidationError("comment", [{ path: ["body"], message: `body exceeds ${MAX_BODY_BYTES} bytes` }]);
   }
-  const path = `members/${username}/comments/${id}.md`;
+  const path = `${target.folder}/comments/${id}.md`;
   const markdown = serializeContentFile(cleaned, body);
-  return { path, frontmatter: cleaned, markdown, type: "comment", username, slug: id, id };
+  return { path, frontmatter: cleaned, markdown, type: "comment", username, slug: id, id, scope: target.scope };
 }
 function serializeContentFile(frontmatter, body) {
   const front = index_vite_proxy_tmp_default.dump(stripUndefined(frontmatter), { lineWidth: 100, noRefs: true }).trimEnd();
@@ -17462,8 +17472,10 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
       publishedAt: Number.isFinite(pubMs) ? pubMs : null
     };
   }
-  async function listType(username, type) {
+  async function listType(username, type, scope = "member") {
+    const houseScope = scope === "house";
     if (type === "profile") {
+      if (houseScope) return [];
       const rel = `members/${username}/profile.md`;
       const text = await readFile(rel);
       if (text == null) return [];
@@ -17471,12 +17483,13 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
     }
     const sub = SUBDIR2[type];
     if (!sub) return [];
-    const dir = await contents(`members/${username}/${sub}`);
+    const base3 = houseScope ? `house/${sub}` : `members/${username}/${sub}`;
+    const dir = await contents(base3);
     if (!Array.isArray(dir)) return [];
     const out = [];
     for (const entry of dir) {
       if (entry.type !== "dir") continue;
-      const rel = `members/${username}/${sub}/${entry.name}/index.md`;
+      const rel = `${base3}/${entry.name}/index.md`;
       const text = await readFile(rel);
       if (text != null) out.push(summarize(rel, parseContentFile(text).frontmatter));
     }
@@ -17497,11 +17510,11 @@ function createGithubReader({ upstream, token, ref = "HEAD", fetch: fetch2 = glo
       const { frontmatter, body } = parseContentFile(text);
       return { path: relPath, frontmatter, body };
     },
-    async list(username, type) {
-      if (!username) return [];
-      if (type) return listType(username, type);
+    async list(username, type, scope = "member") {
+      if (scope !== "house" && !username) return [];
+      if (type) return listType(username, type, scope);
       const all = [];
-      for (const t of TYPES) all.push(...await listType(username, t));
+      for (const t of TYPES) all.push(...await listType(username, t, scope));
       return all;
     },
     /** Browsing ALL members-only content over the Contents API is too many calls for the live overlay; the npm
@@ -18215,8 +18228,10 @@ function buildExtContext(store) {
 }
 
 // client/src/publish.mjs
-function branchName(type, slug) {
-  return type === "profile" ? "gbti/profile" : `gbti/${type}-${slug}`;
+function branchName(type, slug, scope = "member") {
+  if (type === "profile") return "gbti/profile";
+  const prefix = scope === "house" ? "gbti/house-" : "gbti/";
+  return `${prefix}${type}-${slug}`;
 }
 function defaultMessage(change) {
   return change.type === "profile" ? "Update profile" : `${change.slug ? "Update" : "Add"} ${change.type}: ${change.slug ?? ""}`.trim();
@@ -18260,7 +18275,7 @@ async function commitToBranchOnFork({ repo, branch, files, message, resetStale =
 }
 async function publishContent({ repo, change, message, title, body }) {
   if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
-  const branch = branchName(change.type, change.slug);
+  const branch = branchName(change.type, change.slug, change.scope);
   const { fork, owner, base: base3 } = await commitToBranchOnFork({
     repo,
     branch,
@@ -18332,9 +18347,10 @@ function splitMemberMarkdown(body) {
     memberPart: text.slice(idx + MEMBER_MARKER.length).replace(/^\s+/, "")
   };
 }
-function encAssetFor(type, username, slug) {
+function encAssetFor(type, username, slug, scope = "member") {
   const assetId = `${type}:${slug}:body`;
-  const path = `members/${username}/_enc/${type}-${slug}-body.enc`;
+  const folder = scope === "house" ? "house" : `members/${username}`;
+  const path = `${folder}/_enc/${type}-${slug}-body.enc`;
   return { assetId, path };
 }
 
@@ -19118,6 +19134,27 @@ function requireRepo(ctx) {
   if (!repo) throw new OperationError("not-authenticated", "not authenticated; run `gbti login` first");
   return repo;
 }
+async function requireSuperadminForHouse(ctx) {
+  const id = requireIdentity(ctx);
+  let rolesParsed = {};
+  try {
+    rolesParsed = index_vite_proxy_tmp_default.load(await ctx.reader?.readFile?.("house/roles.yml") || "") || {};
+  } catch {
+    rolesParsed = {};
+  }
+  const role = roleOf2(String(id.githubId), rolesFromParsed2(rolesParsed));
+  if (role !== "superadmin") throw new OperationError("forbidden", `house content is superadmin-only (you are ${role})`);
+  return { id, role };
+}
+var HOUSE_CONTENT_PATH_RE = /^house\/(posts|products|prompts)\/[a-z0-9][a-z0-9-]*\/index\.md$/;
+async function listContent(ctx, { type, scope = "member" } = {}) {
+  const id = requireIdentity(ctx);
+  if (scope === "house") {
+    await requireSuperadminForHouse(ctx);
+    return { items: await ctx.reader.list(null, type || void 0, "house") };
+  }
+  return { items: await ctx.reader.list(id.username, type || void 0, "member") };
+}
 async function listShares(ctx, { limit } = {}) {
   requireIdentity(ctx);
   const n = Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 40;
@@ -19194,6 +19231,21 @@ async function readContent(ctx, { path } = {}) {
   if (!item) throw new OperationError("not-found", "no such readable content");
   return item;
 }
+async function getContentItem(ctx, { path } = {}) {
+  const id = requireIdentity(ctx);
+  if (!path) throw new OperationError("bad-request", "path is required");
+  if (String(path).startsWith("house/")) {
+    if (!HOUSE_CONTENT_PATH_RE.test(path)) throw new OperationError("bad-request", "invalid house content path");
+    await requireSuperadminForHouse(ctx);
+    const text = await ctx.reader?.readFile?.(path);
+    if (text == null) throw new OperationError("not-found", "no such house item");
+    const { frontmatter, body } = parseContentFile(text);
+    return { path, frontmatter, body };
+  }
+  const item = await ctx.reader.get(id.username, path);
+  if (!item) throw new OperationError("not-found", "no such item in your folder");
+  return item;
+}
 function validateContent(ctx, { type, input, body } = {}) {
   const id = requireIdentity(ctx);
   try {
@@ -19244,9 +19296,12 @@ async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = workerSyncFo
     return { synced: false, reason: "error" };
   }
 }
-async function publish(ctx, { type, input, body, message, title, prBody: prBody2, authorNote, path } = {}) {
+async function publish(ctx, { type, input, body, message, title, prBody: prBody2, authorNote, path, scope } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
+  const houseTarget = scope === "house" || String(path || "").startsWith("house/");
+  const targetScope = houseTarget ? "house" : "member";
+  if (houseTarget) await requireSuperadminForHouse(ctx);
   const membership = await membershipOf(ctx);
   if (isBlockedFromPublishing(membership)) {
     throw new OperationError(
@@ -19255,7 +19310,7 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
       { membership }
     );
   }
-  const origin = renameOriginOf({ path, username: id.username, type });
+  const origin = houseTarget ? null : renameOriginOf({ path, username: id.username, type });
   let oldFm = null;
   if (origin) {
     const oldText = await ctx.reader?.readFile?.(origin.oldPath);
@@ -19274,8 +19329,7 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
     let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === "string" && effInput.slug) {
-      const sub = { post: "posts", product: "products", prompt: "prompts" }[type];
-      const canonical = `members/${id.username}/${sub}/${effInput.slug}/index.md`;
+      const canonical = contentPath(type, id.username, effInput.slug, targetScope);
       let text = null;
       try {
         text = await ctx.reader?.readFile?.(canonical) ?? null;
@@ -19302,7 +19356,7 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
   }
   let built;
   try {
-    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || "published" }, body });
+    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || "published" }, body, scope: targetScope });
   } catch (err) {
     throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
   }
@@ -19326,7 +19380,7 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
   const msg = message ?? desc.message;
   const ttl = title ?? desc.title;
   const bdy = prBody2 ?? desc.body;
-  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug);
+  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug, built.scope);
   await syncForkIfCreatingBranch(ctx, repo, branch);
   let renameFiles = [];
   if (renaming) {
@@ -19389,6 +19443,8 @@ function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
   if (!note || !built?.slug || !["product", "prompt"].includes(built.type)) return null;
   const introBuilt = buildCommentFile({
     username,
+    // SOW-145: a house product/prompt intro lands at house/comments/ with author 'gbti' (mirrors the item scope).
+    scope: built.scope || "member",
     input: {
       id: `intro-${built.slug}`,
       targetType: built.type,
@@ -19419,7 +19475,7 @@ async function planMemberFiles({ built, body, encrypt }) {
       return { files: [{ path: built.path, content: serializeContentFile(built.frontmatter, publicPart) }] };
     }
   }
-  const { assetId, path: encPath } = encAssetFor(built.type, built.username, built.slug);
+  const { assetId, path: encPath } = encAssetFor(built.type, built.username, built.slug, built.scope);
   const envelope = await encrypt(memberPart, assetId);
   const markdown = serializeContentFile({ ...built.frontmatter, encryptedBody: encPath }, publicPart);
   return {
@@ -22237,13 +22293,12 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     const username = id?.username;
     if (!username) throw new OperationError("no-identity", "no signed-in identity; sign in first");
     switch (pathname) {
+      // SOW-145: route through the shared ops so the house scope + its superadmin re-check live in ONE place
+      // (the ops are async-reader-aware). Member scope behaves exactly as the old inline reader call did.
       case "/api/content":
-        return ok({ items: await ctx.reader.list(username, query.type || void 0) });
-      case "/api/content/item": {
-        const item = await ctx.reader.get(username, query.path);
-        if (!item) throw new OperationError("not-found", "no such item in your folder");
-        return ok(item);
-      }
+        return ok(await listContent(ctx, { type: query.type, scope: query.scope }));
+      case "/api/content/item":
+        return ok(await getContentItem(ctx, { path: query.path }));
       case "/api/read":
         return ok(await readContent(ctx, { path: query.path }));
       // shared op (parity with the npm host /api/read)

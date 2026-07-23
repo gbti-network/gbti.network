@@ -6,7 +6,7 @@
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, validateContent, publish, saveDraft, listDrafts, readDraft, discardDraft, publishDraft, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, recordNewsOpen, recordContentOpen, setOwnContentStatus, renameContent, deleteComment, listDiscordChannels, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue, socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil } from '../../client/src/operations.mjs';
+import { OperationError, listContent, getContentItem, validateContent, publish, saveDraft, listDrafts, readDraft, discardDraft, publishDraft, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, recordNewsOpen, recordContentOpen, setOwnContentStatus, renameContent, deleteComment, listDiscordChannels, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue, socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil } from '../../client/src/operations.mjs';
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
@@ -109,13 +109,12 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
     if (!username) throw new OperationError('no-identity', 'no signed-in identity; sign in first');
 
     switch (pathname) {
+      // SOW-145: route through the shared ops so the house scope + its superadmin re-check live in ONE place
+      // (the ops are async-reader-aware). Member scope behaves exactly as the old inline reader call did.
       case '/api/content':
-        return ok({ items: await ctx.reader.list(username, query.type || undefined) });
-      case '/api/content/item': {
-        const item = await ctx.reader.get(username, query.path);
-        if (!item) throw new OperationError('not-found', 'no such item in your folder');
-        return ok(item);
-      }
+        return ok(await listContent(ctx, { type: query.type, scope: query.scope }));
+      case '/api/content/item':
+        return ok(await getContentItem(ctx, { path: query.path }));
       case '/api/read': // SOW-031: read ANY published content index.md (allowlist-gated) for the in-extension reader
         return ok(await readContent(ctx, { path: query.path })); // shared op (parity with the npm host /api/read)
       case '/api/members-content':

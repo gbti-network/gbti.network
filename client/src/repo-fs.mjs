@@ -41,9 +41,13 @@ export function createReader(repoPath) {
     };
   }
 
-  function listType(username, type) {
+  // SOW-145: `scope` selects the target folder — 'member' walks members/<username>/, 'house' walks the
+  // non-member house/ folder (a superadmin surface; profiles are member-only).
+  function listType(username, type, scope = 'member') {
     const out = [];
+    const houseScope = scope === 'house';
     if (type === 'profile') {
+      if (houseScope) return out; // house has no profile
       const rel = `members/${username}/profile.md`;
       const abs = path.join(repoPath, 'members', username, 'profile.md');
       if (fs.existsSync(abs)) out.push(readItem(abs, rel));
@@ -51,10 +55,11 @@ export function createReader(repoPath) {
     }
     const sub = SUBDIR[type];
     if (!sub) return out;
-    const dir = path.join(repoPath, 'members', username, sub);
+    const relBase = houseScope ? `house/${sub}` : `members/${username}/${sub}`;
+    const dir = houseScope ? path.join(repoPath, 'house', sub) : path.join(repoPath, 'members', username, sub);
     if (!fs.existsSync(dir)) return out;
-    // NESTED layout: each item is members/<u>/<sub>/<slug>/index.md (a folder per item). Walk the slug
-    // folders and read their index.md (.md or .mdx); skip stray flat files for resilience.
+    // NESTED layout: each item is <base>/<slug>/index.md (a folder per item). Walk the slug folders and read
+    // their index.md (.md or .mdx); skip stray flat files for resilience.
     for (const slug of fs.readdirSync(dir).sort()) {
       const slugDir = path.join(dir, slug);
       let isDir = false;
@@ -67,7 +72,7 @@ export function createReader(repoPath) {
       for (const idx of ['index.md', 'index.mdx']) {
         const abs = path.join(slugDir, idx);
         if (fs.existsSync(abs)) {
-          out.push(readItem(abs, `members/${username}/${sub}/${slug}/${idx}`));
+          out.push(readItem(abs, `${relBase}/${slug}/${idx}`));
           break;
         }
       }
@@ -76,11 +81,12 @@ export function createReader(repoPath) {
   }
 
   return {
-    /** List the member's content of a type, or all authorable types when type is omitted. */
-    list(username, type) {
-      if (!repoPath || !username) return [];
-      if (type) return listType(username, type);
-      return TYPES.flatMap((t) => listType(username, t));
+    /** List content of a type (or all authorable types when omitted). SOW-145: scope 'house' lists house/. */
+    list(username, type, scope = 'member') {
+      if (!repoPath) return [];
+      if (scope !== 'house' && !username) return [];
+      if (type) return listType(username, type, scope);
+      return TYPES.flatMap((t) => listType(username, t, scope));
     },
 
     /**

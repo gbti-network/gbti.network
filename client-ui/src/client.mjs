@@ -58,7 +58,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
 
   return {
     status: () => request('GET', '/api/status'),
-    listContent: ({ type } = {}) => request('GET', `/api/content${qs({ type })}`),
+    listContent: ({ type, scope } = {}) => request('GET', `/api/content${qs({ type, scope })}`), // SOW-145: scope 'house' lists house/ (superadmin)
     getContentItem: ({ path }) => request('GET', `/api/content/item${qs({ path })}`),
     readItem: ({ path }) => request('GET', `/api/read${qs({ path })}`), // SOW-031: read ANY published index.md for the in-extension reader -> { path, frontmatter, body }
     validateContent: (b) => request('POST', '/api/validate', b),
