@@ -191,6 +191,8 @@ const CSS = `
      distinct "Comment by <author>" author note (the note itself in quotes), so it never looks like an
      auto-imported description. */
   .share-summary { font-size:15px; line-height:1.6; color:var(--muted); margin:0 0 16px; }
+  .share-summary em { font-style: italic; }
+  .share-cite { font-style: normal; font-family: var(--mono, monospace); font-size: 12px; color: var(--muted); white-space: nowrap; }
   .author-note { border-left:3px solid var(--accent); background:var(--hover); border-radius:0 10px 10px 0; padding:12px 15px; margin:0 0 20px; }
   .author-note .an-eyebrow { font-family:var(--font-mono, ui-monospace, monospace); font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent); margin:0 0 6px; }
   .author-note .body { font-size:15px; }
@@ -482,7 +484,13 @@ class GbtiReader extends GbtiElement {
       // "From <author>" author note so it does not read as an auto-imported description; and show the
       // OG/SEO summary (shortDescription, pulled from the link's meta at post time) above it, if present.
       const authorDisplay = this._author?.entry?.displayName || authorName(it.author);
-      const summary = it.shortDescription ? `<p class="share-summary">${esc(it.shortDescription)}</p>` : '';
+      // Owner QA 2026-07-22: the summary is scraped from the article source, so it renders QUOTED,
+      // gains a trailing ellipsis when the scrape cut mid-sentence, and cites the source inline.
+      const sumRaw = String(it.shortDescription || '').trim();
+      const sumHost = hostOf(it.url || '');
+      const summary = sumRaw
+        ? `<p class="share-summary"><em>"${esc(sumRaw)}${/[.!?]["')\]]?$/.test(sumRaw) ? '' : '...'}"</em>${sumHost ? ` <span class="share-cite">- ${esc(sumHost)}</span>` : ''}</p>`
+        : '';
       const note = (typeof this._html === 'string' && this._html.trim())
         ? `<div class="author-note"><p class="an-eyebrow">Comment by ${esc(authorDisplay)}</p><div class="body quoted">${this._html}</div></div>` : '';
       body = `${summary}${note}`;

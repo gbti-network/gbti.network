@@ -250,7 +250,10 @@ const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersSha
             a.setAttribute('href', detailHref);
             h2.append(a);
             main.append(meta, h2);
-            if (it.summary) main.append(el('p', 'feed-ex', String(it.summary)));
+            if (it.summary) {
+              const sum = String(it.summary).trim();
+              main.append(el('p', 'feed-ex', /[.!?]["')\]]?$/.test(sum) ? sum : sum + '...'));
+            }
             const foot = el('div', 'feed-foot');
             foot.append(el('span', 'fsp'));
             main.append(foot);

@@ -76,7 +76,9 @@ function shareItem(entry: any, comments: CollectionEntry<'comment'>[]): FeedItem
     date: feedTime(d),
     excerpt: d.title && d.shortDescription ? decodeEntities(d.shortDescription) : undefined,
     stub: false,
-    favorites: 0,
+    // owner QA 2026-07-22: the site presents LIKES (the favorites store) on shares, same as every other
+    // kind; the SOW-057 upvote store stays extension-side (its syndication threshold engine).
+    favorites: favoriteCount('share', slug),
     upvotes: upvoteCount(slug),
     comments: commentThreadCount(comments, 'share', slug, d.author),
     tags: d.tags ?? [],

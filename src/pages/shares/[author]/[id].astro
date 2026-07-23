@@ -7,12 +7,14 @@
 // always members-only + encrypted, SOW-044; visitors see locked placeholders + the join nudge).
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import Avatar from '../../../components/Avatar.astro';
-import UpvoteButton from '../../../components/UpvoteButton.astro';
+import FavoriteButton from '../../../components/FavoriteButton.astro';
+import CollectionButton from '../../../components/CollectionButton.astro';
 import SubscribeButton from '../../../components/SubscribeButton.astro';
 import Comments from '../../../components/blog/Comments.astro';
 import { getCollection } from 'astro:content';
 import { authorDisplay, authorHref, formatDate, authorAvatar } from '../../../lib/authors';
 import { isPublicShare, decodeEntities } from '../../../lib/home-feed.mjs';
+import { favoriteCount } from '../../../lib/favorites';
 
 export async function getStaticPaths() {
   const shares = (await getCollection('share')).filter((s) => isPublicShare(s.data));
@@ -37,7 +39,7 @@ const headline = profile?.data.headline;
 const body = (share.rendered?.html ?? '').trim();
 ---
 <BaseLayout title={title} description={desc ?? `A link ${authorDisplay(d.author)} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
-  <div class="wrap detail-page">
+  <div class="wrap detail-page" data-gbti-reader-hash={`tab=share&read=${encodeURIComponent(slug)}`}>
     <nav class="share-crumb"><a href="/feeds/shares/" class="link">&larr; Shares feed</a></nav>
     <div class="detail-grid">
     <div class="detail-main">
@@ -73,7 +75,8 @@ const body = (share.rendered?.html ?? '').trim();
 
       <div class="share-actions">
         {d.url && <a href={d.url} target="_blank" rel="noopener nofollow" class="btn btn-primary">Read on {srcDomain ?? 'the source'} <svg class="ar" viewBox="0 0 24 24" width="18" height="18"><use href="#ico-arrow"/></svg></a>}
-        <UpvoteButton targetSlug={slug} />
+        <FavoriteButton targetType="share" targetSlug={slug} count={favoriteCount('share', slug)} />
+        <CollectionButton targetType="share" targetSlug={slug} />
       </div>
 
 

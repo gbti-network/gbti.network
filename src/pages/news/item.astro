@@ -124,7 +124,10 @@ import { SIGNUP_BASE } from '../../lib/membership';
 
         // title + summary
         target.append(el('h1', 'h1 share-title mt12', String(it.title || 'Untitled')));
-        if (it.summary) target.append(el('p', 'lead mt16', String(it.summary)));
+        if (it.summary) {
+          const sum = String(it.summary).trim();
+          target.append(el('p', 'lead mt16', /[.!?]["')\]]?$/.test(sum) ? sum : sum + '...'));
+        }
 
         // hero
         const imgUrl = it.image ? fixUrl(String(it.image)) : '';

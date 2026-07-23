@@ -36,8 +36,12 @@ const benefitsUrl = '/membership/';
       <h2 class="h3 mt12">The extension is installed</h2>
       <p class="body-sm muted mt8">Click the GBTI icon in your browser toolbar to sign in, then edit and publish your work in place.</p>
       <div class="signin-actions mt20">
+        {/* owner QA 2026-07-22: pages that declare a reader hash (data-gbti-reader-hash on their shell)
+            get a direct open-in-the-extension action, so likes/saves route the member to the page's
+            in-extension view instead of a dead end. Hidden when the page declares none. */}
+        <button type="button" class="btn btn-primary" data-open-in-extension hidden>Open this page in the extension</button>
         <a class="btn btn-ghost" href={benefitsUrl}>Member benefits</a>
-        <button type="button" class="btn btn-primary" data-close>Got it</button>
+        <button type="button" class="btn btn-ghost" data-close>Got it</button>
       </div>
     </div>
   </div>
@@ -67,8 +71,18 @@ const benefitsUrl = '/membership/';
         if (typeof dialog.showModal !== 'function') return; // no <dialog> support: follow the href fallback
         e.preventDefault();
         sync();
+        // owner QA 2026-07-22: surface the open-in-extension action when the page declares a reader hash.
+        const openBtn = dialog.querySelector('[data-open-in-extension]') as HTMLElement | null;
+        const readerHash = document.querySelector('[data-gbti-reader-hash]')?.getAttribute('data-gbti-reader-hash') || '';
+        if (openBtn) openBtn.hidden = !(installed && readerHash);
         dialog.showModal();
         if (installed) document.dispatchEvent(new CustomEvent('gbti:request-signin'));
+        return;
+      }
+      if ((e.target as HTMLElement)?.closest('[data-open-in-extension]')) {
+        const readerHash = document.querySelector('[data-gbti-reader-hash]')?.getAttribute('data-gbti-reader-hash') || '';
+        document.dispatchEvent(new CustomEvent('gbti:open', { detail: { page: 'newtab.html', hash: readerHash || undefined } }));
+        dialog.close();
         return;
       }
       if ((e.target as HTMLElement)?.closest('[data-close]')) { dialog.close(); return; }

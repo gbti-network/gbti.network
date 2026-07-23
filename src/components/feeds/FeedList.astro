@@ -9,7 +9,6 @@
 // separators hidden) and restores it on clear.
 import Avatar from '../Avatar.astro';
 import FavoriteButton from '../FavoriteButton.astro';
-import UpvoteButton from '../UpvoteButton.astro';
 import { authorDisplay, authorHref } from '../../lib/authors';
 import { authorItem } from '../../lib/avatars';
 import type { AvatarIndex } from '../../lib/avatars';
@@ -59,9 +58,7 @@ const tagsAttr = (it: FeedItem) => (it.tags ?? []).map((t) => String(t).trim().t
                 </h2>
                 {it.excerpt && <p class="feed-ex">{it.excerpt}</p>}
                 <div class="feed-foot">
-                  {it.kind === 'share'
-                    ? <UpvoteButton targetSlug={it.slug} size="sm" />
-                    : !it.stub && <FavoriteButton targetType={it.targetType as 'post' | 'product' | 'prompt'} targetSlug={it.slug} count={it.favorites} size="sm" />}
+                  {!it.stub && <FavoriteButton targetType={it.targetType} targetSlug={it.slug} count={it.favorites} size="sm" />}
                   <span class="rx rx-static"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-chat"/></svg> {it.comments}<span class="sr-only"> comments</span></span>
                   <span class="fsp"></span>
                 </div>
