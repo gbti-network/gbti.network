@@ -955,7 +955,7 @@ a.who:hover { color: var(--fg); }
 .feed-page[data-view="compact"] .feed-foot { margin-top: 10px; }
 
 /* tag drilldown banner */
-.feed-tag-banner { display: flex; align-items: center; gap: 12px; margin: 12px 0 2px; padding: 10px 14px;
+.feed-tag-banner { display: flex; align-items: center; gap: 12px; margin: 12px 0 22px; padding: 10px 14px;
   border: 1.5px solid var(--green-tint-2); border-radius: var(--r); background: var(--green-tint);
   font-size: 14px; color: var(--fg); }
 .feed-tag-banner[hidden] { display: none; }
