@@ -10,6 +10,7 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { parseBlocks, serializeBlocks, emptyBlock, CALLOUT_VARIANTS, inlineMdToHtml, inlineHtmlToMd } from '../markdown-blocks.mjs';
 import { createSelectionToolbar } from '../selection-toolbar.mjs'; // sow-235: the toolbar + link manager, shared with the WorkBench Preview
 import { resolveContentAsset } from '../assets.mjs'; // sow-165: repo-relative body images need the item folder to resolve
+import { loadStagedImages } from '../../../src/lib/staged-images.mjs'; // a body image staged but not yet published reads back from the Worker store, not from the CDN
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
 
 let UID = 0;
@@ -191,8 +192,26 @@ class GbtiDocEditor extends GbtiElement {
   // sow-165: the owning editor sets this so a repo-relative body image resolves against the item's folder.
   set itemPath(v) { this._itemPath = v || null; if (this.isConnected) this._render(); }
   get itemPath() { return this._itemPath || null; }
-  set value(md) { this._blocks = parseBlocks(md).map(withId); if (this.isConnected) this._render(); }
+  set value(md) { this._blocks = parseBlocks(md).map(withId); if (this.isConnected) { this._render(); this._rehydrateStaged().catch(() => {}); } }
   get value() { return serializeBlocks(this._blocks || []); } // serializeBlock ignores the non-serialized _id
+
+  // A body image that is staged but not yet published exists ONLY in the Worker's staged store, so after a
+  // reload its path resolves to a jsDelivr URL for a file that is not on main and the block renders broken.
+  // Refill _stagedSrc from the store and swap the <img> src in place. Hung off the value SETTER (once per
+  // loaded document) rather than _render(), which runs on every block-level edit, and patching the element
+  // instead of re-rendering so an author who is already typing keeps their caret.
+  async _rehydrateStaged() {
+    const blocks = (this._blocks || []).filter((b) => b?.type === 'image' && b.url);
+    if (!blocks.length) return;
+    const found = await loadStagedImages(blocks.map((b) => b.url), (path) => this.client?.getStagedImage?.(path), this._stagedSrc || {});
+    if (!Object.keys(found).length) return;
+    Object.assign((this._stagedSrc ||= {}), found);
+    for (const b of blocks) {
+      const src = found[b.url];
+      const img = src && this.$(`[data-imgfile="${b._id}"]`)?.closest('.imgframe')?.querySelector('img');
+      if (img) img.src = src;
+    }
+  }
 
   connectedCallback() {
     if (!this._blocks) this._blocks = [];

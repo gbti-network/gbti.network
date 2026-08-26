@@ -179,10 +179,15 @@ const labelOf = CATEGORY_LABELS;
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 
       const CDN = 'https://cdn.jsdelivr.net/gh/gbti-network/gbti.network@main';
+      // An image the author has uploaded but not yet published is not on main, so jsDelivr 404s it and the
+      // preview shows a broken image. Its bytes are in the Worker's staged store; this map is filled from
+      // there once the draft is loaded (see loadStagedImages below) and consulted FIRST.
+      const stagedSrc: Record<string, string> = {};
       // Mirrors resolveContentAsset (client-ui/src/assets.mjs): a repo-relative path resolves against the
       // item's folder over jsDelivr, because a draft's images may not be on the site yet.
       const asset = (v: string, itemPath: string) => {
         if (!v) return '';
+        if (stagedSrc[v]) return stagedSrc[v];
         if (/^https?:\/\//.test(v) || /^\/\//.test(v)) return v.replace(/^\/\//, 'https://');
         const folder = String(itemPath || '').replace(/\/[^/]*$/, '').replace(/^\/+/, '');
         if (folder) return `${CDN}/${folder}/${v.replace(/^\.?\/+/, '')}`;
@@ -264,6 +269,19 @@ const labelOf = CATEGORY_LABELS;
 
       const fm = draft.frontmatter || {};
       const itemPath = draft.path || '';
+      // Awaited, not fired off: every render below resolves its images through asset(), so the staged bytes
+      // have to be in hand before the first paint or the preview shows the broken CDN URL and never repaints.
+      // A miss is normal (published and merged, so the CDN has the real file) and simply leaves asset() alone.
+      try {
+        const { loadStagedImages, referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
+        Object.assign(stagedSrc, await loadStagedImages(
+          referencedDraftImages(fm, String(draft.body || '')),
+          async (path: string) => {
+            const r = await fetch(`${base}/membership/draft-image?name=${encodeURIComponent(String(stagedImageName(path)))}`, { credentials: 'include' });
+            return r.ok ? await r.json() : null;
+          },
+        ));
+      } catch { /* the preview still renders; unstaged images just resolve to the CDN */ }
       // A KV-sourced preview is a STAGED (saved-but-not-published) draft; a main-sourced one is the committed draft.
       const stagedPreview = fromKv || store !== 'repo';
       say(stagedPreview

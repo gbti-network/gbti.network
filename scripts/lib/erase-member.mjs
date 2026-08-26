@@ -34,6 +34,7 @@ export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
 export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`; // SOW-023 subscription graph
 export const NOTIFICATIONS_KEY = (githubId) => `notifications:${githubId}`; // SOW-150/186 per-member notification store
 export const DRAFTS_KEY = (githubId) => `drafts:${githubId}`; // SOW-157 hosted draft staging
+export const DRAFT_IMAGES_PREFIX = (githubId) => `draftimg:${githubId}:`; // staged lead/cover image bytes, one key each
 export const PREFS_KEY = (githubId) => `prefs:${githubId}`; // SOW-046 member prefs (categories + followed news channels)
 export const LOOKUP_KEY = (githubId) => `gh:${githubId}`; // the github_id -> Stripe customer_id lookup cache
 export const CONV_SNAPSHOT_KEY = (githubId) => `conv:${githubId}`; // SOW-059 P1c: the frozen conversion attribution snapshot
@@ -152,6 +153,29 @@ export async function eraseDrafts({ githubId, env = process.env, fetchImpl = glo
   return deleteKvKey({ key: DRAFTS_KEY(String(githubId)), env, fetchImpl });
 }
 
+/**
+ * Hard-delete a member's STAGED IMAGE bytes (`draftimg:<github_id>:*`, one key per image).
+ *
+ * A separate step from eraseDrafts because it is a separate keyspace: the bytes could not live inside the draft
+ * record (a draft is capped at 150,000 bytes, one image may be 1,048,576), so they sit beside it under their own
+ * prefix. It is unpublished member-authored content exactly as a draft is, and a per-member store the erasure
+ * runbook did not know about would be a right-to-erasure hole.
+ *
+ * Fail-closed on the listing: listKvByPrefix throws on a failed page rather than returning a short list, so a
+ * partial sweep cannot be reported as a complete one.
+ */
+export async function eraseDraftImages({ githubId, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+  if (!githubId) throw new Error('a github_id is required');
+  const listed = await listKvByPrefix({ prefix: DRAFT_IMAGES_PREFIX(String(githubId)), env, fetchImpl, keysOnly: true });
+  if (!listed.available) return { available: false, reason: listed.reason, deleted: 0 };
+  let deleted = 0;
+  for (const key of listed.keys) {
+    const r = await deleteKvKey({ key, env, fetchImpl });
+    if (r?.deleted !== false) deleted++;
+  }
+  return { available: true, deleted, scanned: listed.keys.length };
+}
+
 /** Hard-delete the github_id -> Stripe customer_id lookup cache (`gh:<github_id>`). It is per-member identity
  *  data; after a Stripe delete it would dangle, and even without one it maps the member to their billing record,
  *  so it is part of the erasure set. A signup re-resolves via Stripe Search if the member ever returns. */
@@ -180,7 +204,7 @@ export async function eraseLookupCache({ githubId, env = process.env, fetchImpl 
  * like "it does not". A caller that only needs to know which keys exist should read `keys` and never fetch a
  * value at all.
  */
-export async function listKvByPrefix({ prefix, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+export async function listKvByPrefix({ prefix, env = process.env, fetchImpl = globalThis.fetch, keysOnly = false } = {}) {
   const accountId = env.CF_ACCOUNT_ID;
   const namespaceId = env.CF_KV_NAMESPACE_ID;
   const apiToken = env.CF_API_TOKEN;
@@ -198,6 +222,10 @@ export async function listKvByPrefix({ prefix, env = process.env, fetchImpl = gl
     cursor = json?.result_info?.cursor || '';
     if (!cursor) break;
   }
+  // A caller that only needs to know which keys EXIST skips the value loop entirely, as the doc above says it
+  // should. eraseDraftImages does: it deletes by key, and each staged image value may be a full megabyte, so
+  // fetching them to throw them away would move tens of megabytes for nothing. The key list stays fail-closed.
+  if (keysOnly) return { available: true, entries: [], keys, dropped: 0, unreadable: 0, unparsed: 0 };
   const entries = [];
   let unreadable = 0;   // the read itself failed: we could not tell what is in this key
   let unparsed = 0;     // the read succeeded and the value was not a JSON object: a schema mismatch, not a blind spot
@@ -759,6 +787,7 @@ export function planErasure({ githubId, username } = {}) {
     { step: 'content', auto: true, tool: 'erase-member.mjs --apply', action: `Flip ${who} content status -> draft via an auto-merged PR (reversible; history persists), and remove their house/grandfathered.yml grant in the same PR.` },
     { step: 'coupon-grant', auto: true, tool: 'erase-member.mjs --apply', action: `MINIMIZE ${COUPON_GRANT_KEY(githubId)}: write a keyed-hash lock, then delete the raw-id record. The one-coupon-per-member lock SURVIVES erasure (owner ruling 2026-08-11); needs COUPON_LOCK_KEY.` },
     { step: 'coupon-redemptions', auto: true, tool: 'erase-member.mjs --apply', action: `Delete every redemption:<CODE>:${githubId} record (the id is in the key name) and decrement each shared redemptions:<CODE> counter.` },
+    { step: 'draft-images', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete every ${DRAFT_IMAGES_PREFIX(githubId)}* key (staged image bytes for unpublished drafts).` },
     { step: 'activity', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete the edge-store keys ${ACTIVITY_KEY(githubId)} (favorites + collections) and ${FOLLOWS_KEY(githubId)} (the follow graph).` },
     { step: 'notifications', auto: true, tool: 'erase-member.mjs --apply', action: `Hard-delete ${NOTIFICATIONS_KEY(githubId)} (SOW-150/186: the member's inbound notifications -- mentions + followed-author publishes).` },
     { step: 'reverse-follows', auto: true, tool: 'erase-member.mjs --apply', action: `SOW-186: delete ${FOLLOWERS_KEY(githubId)} (the inbound follower index) and scrub github_id ${githubId} from every followers:* set (a prefix scan, resolution-free). Follower github_ids survive in their own forward follows: lists; reconcile's full recompute is the periodic backstop.` },
@@ -1009,6 +1038,7 @@ export async function runErasure({
   await runStep('notifications', () => eraseNotifications({ githubId, env, fetchImpl })); // SOW-150/186: inbound notification store
   await runStep('prefs', () => erasePrefs({ githubId, env, fetchImpl })); // SOW-046: categories + followed news channels
   await runStep('drafts', () => eraseDrafts({ githubId, env, fetchImpl })); // SOW-157: hosted draft staging
+  await runStep('draft-images', () => eraseDraftImages({ githubId, env, fetchImpl })); // the staged image bytes beside those drafts
   await runStep('lookup-cache', () => eraseLookupCache({ githubId, env, fetchImpl }));
   await runStep('share-votes', () => eraseShareVotes({ githubId, env, fetchImpl })); // SOW-057: per-target voter sets
   await runStep('news-opens', () => eraseNewsOpens({ githubId, env, fetchImpl })); // SOW-111: per-item opener sets

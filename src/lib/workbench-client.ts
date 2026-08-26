@@ -28,7 +28,7 @@ import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImagePaths, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
+import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImage, referencedImagePaths, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 
 const MAX_IMAGE_BYTES = 1_048_576; // 1 MB, matching the Worker gate + check-media
@@ -133,8 +133,32 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
   const user = String(login || '');
   // sow-158 image upload: staged image binaries (base64), keyed by their own-folder repo path. stageImage fills
   // this; publish() flushes the ones the content actually references into the SAME author PR, so the image + the
-  // .md land atomically and the path resolves on merge. Held in memory (a save-draft-then-reload re-picks).
+  // .md land atomically and the path resolves on merge.
+  //
+  // This Map used to be the ONLY copy, and it is per-tab, so saving a draft persisted the image PATH and the
+  // BYTES nowhere. A reload left the editor and the preview resolving that path to a jsDelivr URL for a file
+  // that had never been committed: the broken thumbnail no amount of re-saving could fix. The bytes now also go
+  // to the Worker's staged-image store (`draftimg:<github_id>:<name>`), which survives the reload and the
+  // device. The Map stays as the same-session fast path so picking an image and publishing immediately needs no
+  // round trip, but it is a cache now, not the record.
   const pendingImages = new Map<string, string>();
+  /** The staged-image name for an own-folder path (`members/<user>/images/<name>` -> `<name>`). */
+  const stagedName = (p: string) => String(p || '').split('/').pop() || '';
+  /**
+   * Read a staged image back from the Worker store. Returns null when it is not staged, which is the NORMAL
+   * state once the image has been published and merged: publish deletes the key, and the caller then falls
+   * back to the CDN. A miss must therefore never read as a failure.
+   */
+  async function readStagedImage(path: string) {
+    const name = stagedName(path);
+    if (!name) return null;
+    try {
+      const r = await workerGet(`/membership/draft-image?name=${encodeURIComponent(name)}`);
+      return r?.dataBase64 ? { dataBase64: r.dataBase64 as string, contentType: (r.contentType as string) || 'image/png' } : null;
+    } catch {
+      return null; // a 404 or an offline read is a fall-back-to-CDN, not a hard failure
+    }
+  }
 
   async function parseJson(res: Response) {
     let json: any = null;
@@ -255,12 +279,23 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     const files: Array<{ path: string; content?: string | null; contentBase64?: string }> = plan ? plan.files : [{ path: built.path, content: built.markdown }];
     const intro = buildIntroFile(target, user, built, authorNote);
     if (intro) files.push(intro);
-    // sow-158 image upload: flush the pending images this item references into the same PR (binary base64 entries
-    // the Worker commits raw). Only referenced uploads ride along; each is removed from the pending set once queued.
-    // Newly staged uploads always live under the ACTING caller's own folder (stageImage), regardless of target.
+    // sow-158 image upload: flush the images this item references into the SAME PR as the .md (binary base64
+    // entries the Worker commits raw), so the path resolves the moment the PR merges. Newly staged uploads always
+    // live under the ACTING caller's own folder (stageImage), regardless of the target folder. planPublishImage
+    // holds the commit / skip / REFUSE rule and the order the three sources are tried in; it is unit-tested in
+    // test/workbench-client-core.test.mjs, and the three lookups it needs are wired here.
+    const stagedForCleanup: string[] = [];
     for (const p of referencedImagePaths(built.frontmatter, user)) {
-      const b64 = pendingImages.get(p);
-      if (b64) { files.push({ path: p, contentBase64: b64 }); pendingImages.delete(p); }
+      const plan = await planPublishImage(p, {
+        fromSession: (path: string) => pendingImages.get(path),
+        fromStore: async (path: string) => (await readStagedImage(path))?.dataBase64,
+        onMain: async (path: string) => (await readOwnFile(path)) != null,
+      });
+      if (plan.action === 'refuse') throw err('bad-request', plan.message);
+      if (plan.action === 'skip') continue;
+      files.push({ path: p, contentBase64: plan.contentBase64 });
+      pendingImages.delete(p);
+      stagedForCleanup.push(p);
     }
     // Move cleanup: delete the old index.md + old .enc, and move the from-the-author intro (product/prompt), all
     // in the same PR. Fail closed if the original vanished from main (never a half-move).
@@ -281,6 +316,14 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     const title = `Publish ${TYPE_LABEL[built.type] || built.type}: ${built.frontmatter?.title || built.slug || user}`;
     const itemId = hostedItemId(built.type, moved ? origin!.oldSlug : built.slug);
     const res = await workerPost('/membership/author', { itemId, files, title });
+    // The bytes are in the PR now, so the staging copies have done their job. Dropped AFTER the author call
+    // succeeds, never before: a failed publish must leave the image staged, or the author loses it by trying.
+    // Best effort, because a stale key is harmless (it is re-put on the next stage, swept by the SOW-024
+    // erasure step, and ignored once the real file resolves on main) while a throw here would report a
+    // successful publish as a failure.
+    for (const p of stagedForCleanup) {
+      try { await workerPost('/membership/draft-image', { op: 'delete', name: stagedName(p) }); } catch { /* see above */ }
+    }
     return {
       prNumber: res.number, prUrl: res.html_url, branch: res.branch, updated: !!res.already, hosted: true,
       encrypted: Boolean(plan?.encPath),
@@ -708,7 +751,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     // preview; this validates + records the base64 (keyed by its own-folder path) and returns the path the field
     // stores. The image is committed with the content in one PR (publish flushes referencedImagePaths). png/jpg/
     // webp/gif only (no svg on web), <= 1 MB (the Worker + check-media re-enforce; this is the fast client refusal).
-    stageImage({ filename, dataBase64 }: any) {
+    async stageImage({ filename, dataBase64 }: any) {
       const name = sanitizeImageName(filename);
       if (!name) throw err('bad-request', 'Use a PNG, JPG, WEBP, or GIF image (SVG is not supported on the web).');
       const b64 = String(dataBase64 || '');
@@ -716,8 +759,14 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
       if (base64Bytes(b64) > MAX_IMAGE_BYTES) throw err('bad-request', 'That image is over 1 MB. Please optimize it (or pick a smaller one) first.');
       const path = `members/${user}/images/${name}`;
       pendingImages.set(path, b64);
+      // Persist alongside the draft so the image survives a reload. The Worker re-validates and re-derives the
+      // key from the authenticated identity, so this is not the only place the rules are enforced.
+      await workerPost('/membership/draft-image', { op: 'put', name, dataBase64: b64 });
       return { ok: true, path };
     },
+
+    // The editor and the preview call this to rehydrate a thumbnail after a reload.
+    getStagedImage: readStagedImage,
   };
 }
 

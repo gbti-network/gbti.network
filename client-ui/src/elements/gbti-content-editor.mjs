@@ -16,6 +16,7 @@ import { BANNER_PRESETS } from '../../../src/lib/banner-presets.mjs'; // sow-174
 import { detectLinkSource } from '../../../src/lib/product-page.mjs'; // sow-175: wordpress.org/github.com URL detection
 import { publicUrlFor } from '../public-url.mjs'; // SOW-265: the shared live-URL scheme (also used by the My Content table)
 import { galleryRowsFromValue, galleryValueFromRows } from '../gallery.mjs'; // sow-268: gallery rows parse/serialize (round-trips a json field that a comma-join used to break)
+import { loadStagedImages, referencedDraftImages } from '../../../src/lib/staged-images.mjs'; // a staged (uploaded, unpublished) image reads back from the Worker store, not from the CDN
 
 // SOW-062 P6: inline icons for the edhead toolbar + section headers (the design's sprite is not in the shadow root).
 const _svg = (p) => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -206,6 +207,30 @@ class GbtiContentEditor extends GbtiElement {
     // sow-165: a freshly-staged cover previews from its local data URL (jsDelivr 404s until the PR merges);
     // an already-committed value resolves against the item folder over jsDelivr.
     return (this._stagedSrc && this._stagedSrc[value]) || resolveContentAsset(value, this.itemPath);
+  }
+
+  // An image that is staged but not yet published exists ONLY in the Worker's staged store, so on a reload
+  // resolveCover falls through to a jsDelivr URL for a file that is not on main: the broken thumbnail the
+  // author sees after saving a draft. Refill _stagedSrc from the store, then repaint just the thumbs that
+  // changed. Repainting in place rather than re-rendering, so an author who is already typing keeps their
+  // caret. Fire-and-forget from render(): the form is fully usable while this is in flight.
+  async _rehydrateStaged() {
+    // Read the paths off the live controls rather than through gather(), which drops HIDDEN fields: a cover
+    // sitting in a collapsed or conditionally hidden row is exactly the one an author would notice missing.
+    const paths = [
+      ...this.$$('[data-key][data-kind="image"]').map((el) => el.value),
+      ...this.$$('.galrow .gr-src').map((el) => el.value),
+      ...referencedDraftImages(this.preset?.input || {}, this.$('#body')?.value || ''),
+    ];
+    const found = await loadStagedImages(paths, (path) => this.client?.getStagedImage?.(path), this._stagedSrc || {});
+    if (!Object.keys(found).length) return;
+    Object.assign((this._stagedSrc ||= {}), found);
+    this.$$('[data-cover]').forEach((c) => {
+      const val = c.querySelector('[data-key][data-kind="image"]')?.value || '';
+      const cf = found[val] && c.querySelector('[data-coverframe]');
+      if (cf) cf.innerHTML = this._coverFrameInner(this.resolveCover(val));
+    });
+    this.$$('.galrow').forEach((row) => this._refreshGalleryThumb(row));
   }
 
   async render() {
@@ -778,6 +803,8 @@ class GbtiContentEditor extends GbtiElement {
       const el = this.$(`[data-key="${dep}"]`);
       if (el) { el.addEventListener('input', () => this.syncConditional()); el.addEventListener('change', () => this.syncConditional()); }
     }
+
+    this._rehydrateStaged().catch(() => {}); // a store that cannot be reached just leaves the CDN fallback in place
   }
 
   fieldHtml(f, value, visible = true) {

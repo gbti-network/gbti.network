@@ -76,6 +76,7 @@ import { backfillImages } from './news/src/backfill.mjs'; // UnifiedWorker: the 
 import { handleFollows } from './membership-follows.mjs';
 import { handleNotifications } from './membership-notifications.mjs'; // SOW-150/186: the per-member notification store (bell source)
 import { handleDrafts } from './membership-drafts.mjs'; // SOW-157: the hosted draft store
+import { handleDraftImage } from './membership-draft-images.mjs'; // the staged image bytes beside those drafts
 import { handleEarnings } from './membership-earnings.mjs'; // SOW-083 P2: the member's own earnings ledger
 import { handleCommentEcho } from './membership-comment-echo.mjs'; // SOW-076 P1: optimistic comment echoes (instant-feel)
 import { membershipNews, membershipNewsCategories, membershipNewsSources, publicNews } from './membership-news.mjs'; // SOW-043/046 proxy; sow-139 public list
@@ -1218,6 +1219,20 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
         if (method === 'GET' || method === 'POST') {
           const r = await handleDrafts(request, env);
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+
+      // The staged IMAGE bytes for those drafts. They cannot live inside the draft record (a draft is capped
+      // at 150,000 bytes and one image may be 1,048,576), so they get their own keys under `draftimg:<id>:`.
+      // Same auth bar as the draft store, same privacy properties: per-member, private, ERASABLE (SOW-024),
+      // never cached and varied on the bearer. The key is derived from the AUTHENTICATED id, so a caller
+      // cannot address another member's image.
+      if (pathname === '/membership/draft-image') {
+        const cors = corsHeaders(request, env, { credentials: true }); // credentialed cookie route (POST -> CSRF gate in resolveIdentity, as /membership/drafts)
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET' || method === 'POST') {
+          const r = await handleDraftImage(request, env);
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
         }
       }

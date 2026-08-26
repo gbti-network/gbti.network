@@ -88,6 +88,31 @@ export function referencedImagePaths(frontmatter, login) {
   return out;
 }
 
+/**
+ * Decide what publish should do with ONE image path the content references. Pure over three injected lookups,
+ * so the rule is testable without a Worker, a browser or a network.
+ *
+ * The order is load-bearing:
+ *   1. `fromSession` -- the in-tab Map, for an image picked and published without a reload;
+ *   2. `fromStore`   -- the Worker's staged store, for one picked in an EARLIER session. It wins over what is
+ *      on main, because re-staging the same file name is a replacement of the committed image;
+ *   3. `onMain`      -- already committed, the steady state for every re-publish of an item whose image has
+ *      not changed. Nothing to send, so this is a skip.
+ *
+ * Anything else REFUSES. The original code silently dropped an image it could not find and opened a PR whose
+ * frontmatter pointed at a file that was not in it; Astro's image() has to resolve, so merging that would have
+ * broken the site build on main. An error the author can act on beats a red build.
+ *
+ * @returns {Promise<{action:'commit',contentBase64:string}|{action:'skip'}|{action:'refuse',message:string}>}
+ */
+export async function planPublishImage(path, { fromSession, fromStore, onMain } = {}) {
+  const b64 = (fromSession ? fromSession(path) : null) || (fromStore ? await fromStore(path) : null);
+  if (b64) return { action: 'commit', contentBase64: b64 };
+  if (onMain && (await onMain(path))) return { action: 'skip' };
+  const name = String(path ?? '').split('/').pop() || 'that image';
+  return { action: 'refuse', message: `the image ${name} is no longer staged; choose it again before publishing` };
+}
+
 /** The decoded byte length of a base64 payload (padding-aware), for the client-side 1 MB pre-check. */
 export function base64Bytes(b64) {
   const s = String(b64 ?? '');

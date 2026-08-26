@@ -865,6 +865,44 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return `${site}${thumb.startsWith("/") ? "" : "/"}${thumb}`;
   }
 
+  // src/lib/staged-images.mjs
+  var STAGED_PATH_G = /members\/[A-Za-z0-9-]+\/images\/[^/"'\s)]+\.(?:png|jpe?g|webp|gif)/gi;
+  var STAGED_PATH = /^members\/[A-Za-z0-9-]+\/images\/[^/]+\.(?:png|jpe?g|webp|gif)$/i;
+  function isStagedImagePath(v) {
+    return STAGED_PATH.test(String(v ?? ""));
+  }
+  function referencedDraftImages(frontmatter = {}, body = "") {
+    let fm = "";
+    try {
+      fm = JSON.stringify(frontmatter ?? {});
+    } catch {
+      fm = "";
+    }
+    return [...new Set(`${fm}
+${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
+  }
+  function stagedImageDataUrl(img) {
+    const b64 = img?.dataBase64;
+    return b64 ? `data:${img.contentType || "image/png"};base64,${b64}` : "";
+  }
+  async function loadStagedImages(paths, read2, have = {}) {
+    const out = {};
+    if (typeof read2 !== "function") return out;
+    for (const raw of new Set(paths || [])) {
+      const p = String(raw || "");
+      if (!isStagedImagePath(p) || have[p] || out[p]) continue;
+      let img = null;
+      try {
+        img = await read2(p);
+      } catch {
+        img = null;
+      }
+      const url = stagedImageDataUrl(img);
+      if (url) out[p] = url;
+    }
+    return out;
+  }
+
   // client-ui/src/elements/gbti-doc-editor.mjs
   var UID = 0;
   var withId = (b) => {
@@ -1046,12 +1084,33 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     set value(md) {
       this._blocks = parseBlocks(md).map(withId);
-      if (this.isConnected) this._render();
+      if (this.isConnected) {
+        this._render();
+        this._rehydrateStaged().catch(() => {
+        });
+      }
     }
     get value() {
       return serializeBlocks(this._blocks || []);
     }
     // serializeBlock ignores the non-serialized _id
+    // A body image that is staged but not yet published exists ONLY in the Worker's staged store, so after a
+    // reload its path resolves to a jsDelivr URL for a file that is not on main and the block renders broken.
+    // Refill _stagedSrc from the store and swap the <img> src in place. Hung off the value SETTER (once per
+    // loaded document) rather than _render(), which runs on every block-level edit, and patching the element
+    // instead of re-rendering so an author who is already typing keeps their caret.
+    async _rehydrateStaged() {
+      const blocks = (this._blocks || []).filter((b) => b?.type === "image" && b.url);
+      if (!blocks.length) return;
+      const found = await loadStagedImages(blocks.map((b) => b.url), (path) => this.client?.getStagedImage?.(path), this._stagedSrc || {});
+      if (!Object.keys(found).length) return;
+      Object.assign(this._stagedSrc ||= {}, found);
+      for (const b of blocks) {
+        const src = found[b.url];
+        const img = src && this.$(`[data-imgfile="${b._id}"]`)?.closest(".imgframe")?.querySelector("img");
+        if (img) img.src = src;
+      }
+    }
     connectedCallback() {
       if (!this._blocks) this._blocks = [];
       this._seltb = this._seltb || createSelectionToolbar({
@@ -2668,6 +2727,27 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     resolveCover(value) {
       return this._stagedSrc && this._stagedSrc[value] || resolveContentAsset(value, this.itemPath);
     }
+    // An image that is staged but not yet published exists ONLY in the Worker's staged store, so on a reload
+    // resolveCover falls through to a jsDelivr URL for a file that is not on main: the broken thumbnail the
+    // author sees after saving a draft. Refill _stagedSrc from the store, then repaint just the thumbs that
+    // changed. Repainting in place rather than re-rendering, so an author who is already typing keeps their
+    // caret. Fire-and-forget from render(): the form is fully usable while this is in flight.
+    async _rehydrateStaged() {
+      const paths = [
+        ...this.$$('[data-key][data-kind="image"]').map((el) => el.value),
+        ...this.$$(".galrow .gr-src").map((el) => el.value),
+        ...referencedDraftImages(this.preset?.input || {}, this.$("#body")?.value || "")
+      ];
+      const found = await loadStagedImages(paths, (path) => this.client?.getStagedImage?.(path), this._stagedSrc || {});
+      if (!Object.keys(found).length) return;
+      Object.assign(this._stagedSrc ||= {}, found);
+      this.$$("[data-cover]").forEach((c) => {
+        const val = c.querySelector('[data-key][data-kind="image"]')?.value || "";
+        const cf = found[val] && c.querySelector("[data-coverframe]");
+        if (cf) cf.innerHTML = this._coverFrameInner(this.resolveCover(val));
+      });
+      this.$$(".galrow").forEach((row) => this._refreshGalleryThumb(row));
+    }
     async render() {
       if (!this.client) return;
       try {
@@ -3186,6 +3266,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           el.addEventListener("change", () => this.syncConditional());
         }
       }
+      this._rehydrateStaged().catch(() => {
+      });
     }
     fieldHtml(f, value, visible = true) {
       const v = value == null ? "" : Array.isArray(value) ? value.join(", ") : value instanceof Date ? Number.isNaN(value.getTime()) ? "" : value.toISOString().slice(0, 10) : typeof value === "object" ? JSON.stringify(value) : String(value);

@@ -3,7 +3,7 @@
 // filter/tier-gate, the comment-visibility coercion, and the favorite derivation. Uses a FAKE encrypt (no Worker).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImagePaths, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
+import { planMemberFiles, planPublishImage, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImagePaths, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
 import { buildCommentFile, buildContentFile, buildShareFile, shareId, commentId, parseContentFile, serializeContentFile } from '../client/src/content-ops.mjs';
 
 const fakeEncrypt = async (plaintext, assetId) => ({ v: 1, kid: '1', iv: 'IV', aad: assetId, ct: 'CT(' + plaintext + ')' });
@@ -311,4 +311,43 @@ test('networkContent: cap applies after the sort (keeps the newest N)', () => {
 test('networkContent: a non-array input returns []', () => {
   assert.deepEqual(networkContent(undefined), []);
   assert.deepEqual(networkContent({}), []);
+});
+
+// The publish-time image rule. Before this existed, publish read the in-tab Map and SILENTLY dropped anything
+// it did not find, opening a PR whose frontmatter named an image the PR did not carry. Astro's image() has to
+// resolve, so merging that broke the site build on main.
+const IMG = 'members/gwen/images/lead.png';
+const never = () => { throw new Error('this source must not be consulted'); };
+
+test('planPublishImage: the in-tab bytes are used without touching the store or main', async () => {
+  const plan = await planPublishImage(IMG, { fromSession: () => 'SESSION_B64', fromStore: never, onMain: never });
+  assert.deepEqual(plan, { action: 'commit', contentBase64: 'SESSION_B64' });
+});
+
+test('planPublishImage: the staged store answers after a reload, and OUTRANKS the copy on main', async () => {
+  // Re-staging the same file name is a REPLACEMENT of the committed image, so a store hit has to win. If main
+  // were checked first, replacing an image would publish the old one back over the new one.
+  const plan = await planPublishImage(IMG, {
+    fromSession: () => undefined,
+    fromStore: async () => 'STORE_B64',
+    onMain: async () => true,
+  });
+  assert.deepEqual(plan, { action: 'commit', contentBase64: 'STORE_B64' });
+});
+
+test('planPublishImage: an image already committed on main is a SKIP, not a failure', async () => {
+  // The steady state for every re-publish of an item whose image has not changed: the bytes are gone from both
+  // caches because publish deleted them, and the file is on main. Refusing here would block editing any item
+  // that carries a lead image.
+  const plan = await planPublishImage(IMG, { fromSession: () => undefined, fromStore: async () => null, onMain: async () => true });
+  assert.deepEqual(plan, { action: 'skip' });
+});
+
+test('planPublishImage: bytes nowhere and no file on main REFUSES, naming the image', async () => {
+  const plan = await planPublishImage(IMG, { fromSession: () => undefined, fromStore: async () => null, onMain: async () => false });
+  assert.equal(plan.action, 'refuse');
+  assert.match(plan.message, /lead\.png/);
+  assert.match(plan.message, /choose it again before publishing/);
+  // No lookup at all is the same refusal, not an accidental commit of undefined.
+  assert.equal((await planPublishImage(IMG)).action, 'refuse');
 });
