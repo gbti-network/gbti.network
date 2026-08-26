@@ -25,6 +25,21 @@ import {
 } from './prompt-page.mjs';
 
 /**
+ * Does this type's published page carry a Contents rail?
+ *
+ * A prompt page does not: it is one enclosed prompt block, and a rail over it is product chrome. The
+ * reshape below hides the nav, but preview.astro's buildRail runs AFTERWARDS and ends with
+ * `nav.hidden = toc.length === 0`, which un-hid it again the moment a body carried two h2s. That is
+ * exactly what shipped, and the drift test missed it because it asserts class names, not visibility.
+ *
+ * So the decision lives here, in one pure function both callers ask, rather than as a hide that a later
+ * pass can silently undo.
+ */
+export function shellHasToc(type) {
+  return type !== 'prompt';
+}
+
+/**
  * @param {Document} document the preview document to reshape in place
  * @param {object} ctx
  * @param {string} ctx.type      'post' | 'prompt' | anything else (a product, which needs no reshape)
@@ -126,7 +141,7 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
     // A prompt page has no Contents rail, so the preview must not invent one. Hidden rather than
     // removed, because the toc wiring further down queries it unconditionally.
     const ptoc = document.querySelector('[data-pd-toc]');
-    if (ptoc) ptoc.hidden = true;
+    if (ptoc && !shellHasToc(type)) ptoc.hidden = true;
     // The header, above the grid and full width, exactly where the page has it. The inert byline notice
     // MOVES into it rather than being duplicated: a draft has no publication date and no price, so the
     // preview says so where the real byline would be instead of inventing one.

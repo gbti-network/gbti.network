@@ -163,7 +163,7 @@ const labelOf = CATEGORY_LABELS;
       normalizeGallery, hasCaptions, resolveGalleryStyle, buildToc,
       repoUrl as findRepo, resolvePrimaryCta, railLinks, linkLabel, isLockedLink, resolveHeroForType, iconForUrl,
     } from '../../lib/product-page.mjs';
-    import { applyPreviewShell } from '../../lib/preview-shells.mjs';
+    import { applyPreviewShell, shellHasToc } from '../../lib/preview-shells.mjs';
 
     (async () => {
       const root = document.querySelector('[data-preview-root]');
@@ -475,6 +475,9 @@ const labelOf = CATEGORY_LABELS;
           el.id = s;
           return { depth: 2, slug: s, text };
         });
+        // A type whose published page has no Contents rail must not grow one here. The headings above are
+        // still stamped with ids, so in-body anchors keep working; only the rail is withheld.
+        if (!shellHasToc(type)) { list.innerHTML = ''; nav.hidden = true; return; }
         const toc = buildToc(headings, {
           hasBody: !(membersOnly && !asMember),
           hasGallery: usable.length > 0,

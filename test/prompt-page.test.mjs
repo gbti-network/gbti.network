@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { PROMPT_SHELL, buildPromptHeadHtml, buildPromptResultHtml, buildPromptBlockHtml } from '../src/lib/prompt-page.mjs';
+import { shellHasToc } from '../src/lib/preview-shells.mjs';
 
 const pageSrc = readFileSync(new URL('../src/pages/prompts/[slug].astro', import.meta.url), 'utf8');
 const shellSrc = readFileSync(new URL('../src/lib/preview-shells.mjs', import.meta.url), 'utf8');
@@ -83,4 +84,16 @@ test('the block omits the mode switch and Copy when they would do nothing', () =
   const live = buildPromptBlockHtml({ interactive: true });
   assert.match(live, /data-mode-btn="markdown"/);
   assert.match(live, /data-copy/);
+});
+
+// A prompt page has no Contents rail. The first version of this hid the nav during the reshape, and
+// buildRail un-hid it a moment later with `nav.hidden = toc.length === 0`, so a rail shipped on the live
+// prompt preview. The decision is now one pure answer both callers ask, and this is what pins it.
+test('a prompt preview has no Contents rail, and the rail builder asks the same question', () => {
+  assert.equal(shellHasToc('prompt'), false);
+  assert.equal(shellHasToc('post'), true);
+  assert.equal(shellHasToc('product'), true);
+  // buildRail must consult it BEFORE it can set nav.hidden from the toc length, or the hide is undone again.
+  const rail = previewSrc.slice(previewSrc.indexOf('const buildRail'), previewSrc.indexOf('nav.hidden = toc.length'));
+  assert.ok(rail.includes('shellHasToc(type)'), 'buildRail no longer honours the shell, so the rail can come back');
 });
