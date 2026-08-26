@@ -306,3 +306,60 @@ export function mergeTypeItems(content = [], drafts = []) {
     .map((d) => ({ ...d, isDraft: true }));
   return [...(Array.isArray(content) ? content : []), ...extra];
 }
+
+// sow-183 Author picker: which owner a loaded item STARTS on, and when a pick is a real reassignment.
+//
+// WHY THESE ARE PURE AND HERE. The picker is the only control in the WorkBench that can MOVE an item between
+// member folders, and on 2026-08-24 it did exactly that without being touched: publishing the Ryker product
+// moved it out of members/atwellpub/ into members/gbtilabs/ and red-ded the build on main. The repository was
+// repaired; the cause was not, and it recurred.
+//
+// The cause is two decisions that were made in markup. The <select> marked an option `selected` only when the
+// loaded frontmatter's `author` matched a members-index username exactly, and `author` is not a form field, so
+// gather() drops it and a saved draft round-trips back with no author at all. With nothing selected a browser
+// selects the FIRST option, which is "House / GBTI Network", and publish sent that as a deliberate
+// reassignment. Since sow-195 the house scope resolves to the literal members/gbtilabs folder and the literal
+// gbtilabs author, so an untouched control silently reassigned the item to gbtilabs on every publish.
+//
+// Both decisions now live here, where they can be tested:
+//   - the starting option comes from the item's PATH, which is where the item actually IS and which IS
+//     persisted with a draft, rather than from a frontmatter field that is not;
+//   - a reassignment is sent only when the pick DIFFERS from what was rendered, so an untouched control cannot
+//     move anything, whatever the resolution above decided.
+
+/**
+ * The Author <select> value a loaded item should start on: 'house', 'member:<login>', or '' when it cannot be
+ * told. '' is deliberate and must render as an inert placeholder rather than falling through to the first real
+ * option, because the first real option is the one that moves the item.
+ *
+ * The path rules MIRROR renameOriginOf in src/lib/workbench-client-core.mjs, which is what publish() uses to
+ * decide the item's origin. If these two disagreed, an untouched picker would look unchanged and still be read
+ * as a move.
+ */
+export function authorSelectValue({ itemPath, author } = {}) {
+  const p = String(itemPath || '');
+  const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(p);
+  if (m) return `member:${m[1].toLowerCase()}`;
+  if (/^house\//.test(p)) return 'house';
+  // No usable path. The frontmatter author is a weaker second source: it is absent from any draft the editor
+  // saved, and after a house publish the editor used to write the pre-sow-195 literal 'gbti', which is not a
+  // member. Neither is allowed to resolve to a folder move.
+  const a = String(author || '').trim().toLowerCase();
+  return a && a !== 'gbti' ? `member:${a}` : '';
+}
+
+/**
+ * The authorTarget to send with a publish, or undefined for "leave the owner alone".
+ * `selected` is the picker's current value, `initial` what it was rendered with. Equal (or empty) means the
+ * author did not touch it, and an untouched control must never move an item.
+ */
+export function authorTargetFor(selected, initial) {
+  const v = String(selected || '');
+  if (!v || v === String(initial || '')) return undefined;
+  if (v === 'house') return { scope: 'house' };
+  if (v.startsWith('member:')) {
+    const username = v.slice(7).trim();
+    return username ? { scope: 'member', username } : undefined;
+  }
+  return undefined;
+}

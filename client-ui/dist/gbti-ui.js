@@ -1877,6 +1877,24 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
     }).map((d) => ({ ...d, isDraft: true }));
     return [...Array.isArray(content) ? content : [], ...extra];
   }
+  function authorSelectValue({ itemPath, author } = {}) {
+    const p = String(itemPath || "");
+    const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(p);
+    if (m) return `member:${m[1].toLowerCase()}`;
+    if (/^house\//.test(p)) return "house";
+    const a = String(author || "").trim().toLowerCase();
+    return a && a !== "gbti" ? `member:${a}` : "";
+  }
+  function authorTargetFor(selected, initial) {
+    const v = String(selected || "");
+    if (!v || v === String(initial || "")) return void 0;
+    if (v === "house") return { scope: "house" };
+    if (v.startsWith("member:")) {
+      const username = v.slice(7).trim();
+      return username ? { scope: "member", username } : void 0;
+    }
+    return void 0;
+  }
 
   // client-ui/src/editor-core.mjs
   function fmtDate(value) {
@@ -2813,8 +2831,8 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
         } catch {
         }
       }
-      const curAuthorScope = this.itemScope === "house" ? "house" : "member";
-      const curAuthorUsername = curAuthorScope === "house" ? null : this.presetStr(p.author) || "";
+      const ownerSelValue = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(p.author) });
+      this._ownerSelInitial = "";
       const headerKeys = /* @__PURE__ */ new Set(["title", "slug"]);
       const docSecKeys = DOC_SECTION_KEYS[this.type] || /* @__PURE__ */ new Set();
       const schema = RAIL_SCHEMA[this.type] || RAIL_SCHEMA.post;
@@ -2868,7 +2886,10 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
       const docSections = videoSection + authorSection + discussionSection;
       const ownerFieldHtml = authorMembers ? (() => {
         const opt = (value, label, selected) => `<option value="${esc(value)}"${selected ? " selected" : ""}>${esc(label)}</option>`;
-        const options = [opt("house", "House / GBTI Network", curAuthorScope === "house")].concat(authorMembers.map((m) => opt(`member:${m.username}`, m.username, curAuthorScope === "member" && m.username === curAuthorUsername))).join("");
+        const real = [{ value: "house", label: "House / GBTI Network" }].concat(authorMembers.map((m) => ({ value: `member:${m.username}`, label: m.username })));
+        const known = real.some((o) => o.value === ownerSelValue);
+        this._ownerSelInitial = known ? ownerSelValue : "";
+        const options = (known ? "" : opt("", "Keep the current author", true)) + real.map((o) => opt(o.value, o.label, known && o.value === ownerSelValue)).join("");
         return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div></div></details>`;
       })() : "";
       const showStats = isPub && slug && ["post", "product", "prompt"].includes(this.type);
@@ -3866,8 +3887,7 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
         if (["post", "product", "prompt"].includes(type)) {
           input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
         }
-        const ownerSel = this.$("#ownerSelect")?.value;
-        const authorTarget = ownerSel === "house" ? { scope: "house" } : ownerSel?.startsWith("member:") ? { scope: "member", username: ownerSel.slice(7) } : void 0;
+        const authorTarget = authorTargetFor(this.$("#ownerSelect")?.value, this._ownerSelInitial);
         const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || void 0, scope: this.itemScope === "house" ? "house" : void 0, authorTarget });
         this._setChip(`${CHECK} Published`, "ok");
         this._dirty = false;
@@ -3880,8 +3900,9 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
         if (res?.renamed && this.preset?.input) {
           this.preset.input.slug = res.renamed.to;
         }
-        if (res?.reassigned && this.preset?.input) {
-          this.preset.input.author = res.reassigned.to.scope === "house" ? "gbti" : res.reassigned.to.username;
+        if (res?.path && this.preset?.input) {
+          const owner = authorSelectValue({ itemPath: res.path });
+          if (owner.startsWith("member:")) this.preset.input.author = owner.slice(7);
         }
         if (res?.path) {
           this.itemPath = res.path;

@@ -5,7 +5,7 @@
 // pure form.mjs helpers, so the only DOM concern here is reading raw values + rendering.
 
 import { GbtiElement, define, esc } from '../base.mjs';
-import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
+import { submitAck, failHint, authorSelectValue, authorTargetFor } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { editorStatus, mediaSummary } from '../editor-core.mjs'; // SOW-184: pure Status-card + Media-summary helpers (design 3a)
 import { gatherInput } from '../form.mjs';
 import { resolveContentAsset } from '../assets.mjs'; // SOW-062 P3 + sow-165: resolve a cover/body image path to a loadable preview URL
@@ -272,8 +272,11 @@ class GbtiContentEditor extends GbtiElement {
         if (t && Array.isArray(t.members)) authorMembers = t.members;
       } catch { /* not superadmin, or unsupported on this host -- no Author section */ }
     }
-    const curAuthorScope = this.itemScope === 'house' ? 'house' : 'member';
-    const curAuthorUsername = curAuthorScope === 'house' ? null : (this.presetStr(p.author) || '');
+    // The item's own path is where it actually IS, and it is persisted with a draft; the frontmatter author is
+    // not (it is not a form field, so gather() drops it on every save). Deriving from the path is what stops an
+    // untouched picker from reading as "House / GBTI Network". See authorSelectValue.
+    const ownerSelValue = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(p.author) });
+    this._ownerSelInitial = ''; // reset per render: a stale value from a previous item must not read as "unchanged"
     // SOW-062 Phase 6: header = title + slug ONLY (the description moved into the rail Details per the mockup). The
     // rail renders the per-type RAIL_SCHEMA in order; fields NOT in the schema (nor header, nor publicStub which the
     // visibility switch folds in) are preserved HIDDEN so gather() still submits their existing values.
@@ -344,9 +347,15 @@ class GbtiContentEditor extends GbtiElement {
     // takes effect only when Publish is pressed, no separate action or dialog.
     const ownerFieldHtml = authorMembers ? (() => {
       const opt = (value, label, selected) => `<option value="${esc(value)}"${selected ? ' selected' : ''}>${esc(label)}</option>`;
-      const options = [opt('house', 'House / GBTI Network', curAuthorScope === 'house')]
-        .concat(authorMembers.map((m) => opt(`member:${m.username}`, m.username, curAuthorScope === 'member' && m.username === curAuthorUsername)))
-        .join('');
+      const real = [{ value: 'house', label: 'House / GBTI Network' }]
+        .concat(authorMembers.map((m) => ({ value: `member:${m.username}`, label: m.username })));
+      // A value that matches no option would leave the browser selecting the FIRST one, and the first one MOVES
+      // the item. So an unresolvable owner gets an inert placeholder at the head of the list instead, and
+      // authorTargetFor reads it as "leave the owner alone".
+      const known = real.some((o) => o.value === ownerSelValue);
+      this._ownerSelInitial = known ? ownerSelValue : '';
+      const options = (known ? '' : opt('', 'Keep the current author', true))
+        + real.map((o) => opt(o.value, o.label, known && o.value === ownerSelValue)).join('');
       return `<details open class="rsec"><summary><span class="st"><span class="si">${USERS}</span>Author</span><span class="chev">${CHEV}</span></summary><div class="rbody"><div class="fld"><select id="ownerSelect" class="selbox">${options}</select><div class="urlprev">Superadmin only. Reassigning moves this item to the new owner's folder when you Publish; the public link stays the same.</div></div></div></details>`;
     })() : '';
     // SOW-062 P6 rail-2: the stat tiles footer, shown for a published post/product/prompt (in the rail).
@@ -1367,13 +1376,11 @@ class GbtiContentEditor extends GbtiElement {
       // SOW-112 v2: `path` names the loaded canonical item; a changed permalink makes this publish a RENAME.
       // SOW-145: a house target publishes to house/ (author stays 'gbti'); the server re-checks superadmin.
       // sow-183: the Author picker (superadmin-only, rendered only for an existing item) -> authorTarget. Sent
-      // whenever the field is present, whether or not the pick actually differs from the current owner; the
-      // host resolves that diff itself (a same-owner pick is a correctly-detected no-op, same as a re-publish
-      // with an unchanged permalink).
-      const ownerSel = this.$('#ownerSelect')?.value;
-      const authorTarget = ownerSel === 'house' ? { scope: 'house' }
-        : ownerSel?.startsWith('member:') ? { scope: 'member', username: ownerSel.slice(7) }
-        : undefined;
+      // ONLY when the pick differs from what the picker was rendered with. It used to be sent unconditionally,
+      // on the reasoning that a same-owner pick is a self-cancelling no-op; that reasoning holds only while the
+      // rendered value is right, and when it was not (see authorSelectValue) an untouched control moved a live
+      // item into members/gbtilabs on publish. An untouched control now moves nothing, whatever it displays.
+      const authorTarget = authorTargetFor(this.$('#ownerSelect')?.value, this._ownerSelInitial);
       const res = await this.client.publish({ type, input, body, authorNote, path: this.itemPath || undefined, scope: this.itemScope === 'house' ? 'house' : undefined, authorTarget });
       this._setChip(`${CHECK} Published`, 'ok');
       this._dirty = false; this.$('#publish')?.setAttribute('hidden', ''); // now live + matches -> nothing to publish
@@ -1384,7 +1391,14 @@ class GbtiContentEditor extends GbtiElement {
       const reassignNote = res?.reassigned ? ` This item moved from ${esc(ownerLabel(res.reassigned.from))} to ${esc(ownerLabel(res.reassigned.to))}.` : '';
       this.out(`<span class="tag ok">submitted</span> ${esc(submitAck({ prNumber: res.prNumber, autoMerge: true }))}${renameNote}${reassignNote}`); // SOW-072 P2: consistent ack (esc: out() writes innerHTML)
       if (res?.renamed && this.preset?.input) { this.preset.input.slug = res.renamed.to; } // the view reflects the accepted rename
-      if (res?.reassigned && this.preset?.input) { this.preset.input.author = res.reassigned.to.scope === 'house' ? 'gbti' : res.reassigned.to.username; }
+      // Follow the item to where the Worker actually put it. This used to write the pre-sow-195 literal 'gbti'
+      // for a house reassignment; 'gbti' names no member, so the Author picker could never resolve the owner
+      // again and re-defaulted to House on every later render. Reading it off the returned PATH keeps one
+      // source of truth and needs no second copy of the network owner's name in this bundle.
+      if (res?.path && this.preset?.input) {
+        const owner = authorSelectValue({ itemPath: res.path });
+        if (owner.startsWith('member:')) this.preset.input.author = owner.slice(7);
+      }
       // sow-183: keep itemPath/itemScope live from the Worker's own account of where the item now sits, so a
       // SECOND publish in the same session (no reload) targets the new location rather than the just-deleted
       // old one -- true for either a rename or a reassignment, and a harmless no-op for a plain edit.

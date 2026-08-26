@@ -1,7 +1,7 @@
 // SOW-033: the pure PR classifier behind the member workspace PR tab. No DOM, no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, publicPathFor, sortItems, filterByStatus, mergeTypeItems, sortModeFor, scopeFor } from '../client-ui/src/workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, submitAck, failHint, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, publicPathFor, sortItems, filterByStatus, mergeTypeItems, sortModeFor, scopeFor, authorSelectValue, authorTargetFor } from '../client-ui/src/workspace-core.mjs';
 
 test('merged PR -> Accepted (regardless of gate status)', () => {
   assert.deepEqual(classifyPull({ merged: true }, null), { label: 'Accepted', tone: 'ok' });
@@ -334,4 +334,54 @@ test('scopeFor: a superadmin — stored pref wins, else empty-personal defaults 
   assert.equal(scopeFor('garbage', { role: 'superadmin', personalCount: 0 }), 'house');
   // gbtilabs (owns only house content) lands on house on first open.
   assert.equal(scopeFor(undefined, { role: 'superadmin' }), 'house');
+});
+
+// The sow-183 Author picker. On 2026-08-24 it moved the live Ryker product out of members/atwellpub/ into
+// members/gbtilabs/ WITHOUT being touched, and red-ded the build on main; the repository was repaired and the
+// cause was not, so it recurred. These two functions are that cause, extracted so it cannot recur silently.
+// The reversion needed BOTH halves: a starting value that resolved to nothing, and a publish that sent the
+// resulting first-option default as a deliberate reassignment. Each half is pinned separately below.
+
+test('authorSelectValue: the item PATH decides the owner, because a draft persists the path and not the author', () => {
+  assert.equal(authorSelectValue({ itemPath: 'members/atwellpub/prompts/grok-skill-for-claude-code/index.md' }), 'member:atwellpub');
+  assert.equal(authorSelectValue({ itemPath: 'members/gbtilabs/posts/x/index.md' }), 'member:gbtilabs');
+  assert.equal(authorSelectValue({ itemPath: 'house/products/y/index.md' }), 'house');
+  // THE REGRESSION: a draft saved from the editor carries no author at all, because author is not a form field
+  // and gather() only returns form fields. Before the fix this resolved to nothing, no option was marked
+  // selected, and the browser picked the first option, which moves the item to gbtilabs.
+  assert.equal(authorSelectValue({ itemPath: 'members/atwellpub/products/ryker/index.md', author: undefined }), 'member:atwellpub');
+  assert.equal(authorSelectValue({ itemPath: 'members/atwellpub/products/ryker/index.md', author: '' }), 'member:atwellpub');
+  // Case and the uppercase folder form both normalise to the members-index username.
+  assert.equal(authorSelectValue({ itemPath: 'members/AtwellPub/posts/x/index.md' }), 'member:atwellpub');
+});
+
+test('authorSelectValue: with no usable path it says UNKNOWN rather than guessing a folder', () => {
+  // '' must render as an inert placeholder. Anything else here becomes a silent move.
+  assert.equal(authorSelectValue({ itemPath: '', author: '' }), '');
+  assert.equal(authorSelectValue({}), '');
+  // sow-195 moved the network's content into members/gbtilabs and its author to gbtilabs. The editor used to
+  // write the old 'gbti' literal back into the preset after a reassignment; it names no member, so it must not
+  // resolve to one, or the picker would offer to move the item to a folder called members/gbti.
+  assert.equal(authorSelectValue({ itemPath: '', author: 'gbti' }), '');
+  assert.equal(authorSelectValue({ itemPath: '', author: 'atwellpub' }), 'member:atwellpub');
+});
+
+test('authorTargetFor: an UNTOUCHED picker moves nothing, whatever it happens to be displaying', () => {
+  // This is the second half of the 2026-08-24 defect and the backstop for the first. Even if the rendered
+  // value were wrong again, an author who does not touch the control cannot reassign their own item.
+  assert.equal(authorTargetFor('member:atwellpub', 'member:atwellpub'), undefined);
+  assert.equal(authorTargetFor('house', 'house'), undefined);
+  // The inert placeholder, and a picker that never rendered.
+  assert.equal(authorTargetFor('', 'member:atwellpub'), undefined);
+  assert.equal(authorTargetFor(undefined, ''), undefined);
+  assert.equal(authorTargetFor(null, null), undefined);
+});
+
+test('authorTargetFor: a real pick still reassigns, in both directions', () => {
+  assert.deepEqual(authorTargetFor('house', 'member:atwellpub'), { scope: 'house' });
+  assert.deepEqual(authorTargetFor('member:leogopal', 'member:atwellpub'), { scope: 'member', username: 'leogopal' });
+  assert.deepEqual(authorTargetFor('member:atwellpub', 'house'), { scope: 'member', username: 'atwellpub' });
+  // A malformed value is not a reassignment either.
+  assert.equal(authorTargetFor('member:', 'house'), undefined);
+  assert.equal(authorTargetFor('nonsense', 'house'), undefined);
 });
