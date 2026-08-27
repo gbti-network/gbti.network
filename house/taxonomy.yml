@@ -59,7 +59,7 @@ tree:
       image-generation:
         label: Image Generation
       prompts:
-        label: Prompts
+        label: "Prompts & Skills"
         children:
           skill:
             label: Skill
