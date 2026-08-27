@@ -21525,13 +21525,19 @@ function unban(parsedBans, { githubId, login }, ctx = {}) {
   const next = list.filter((e) => idOf2(e) !== id);
   return { next: { ...parsedBans || {}, bans: next }, changed: next.length !== list.length, audit: audit({ ...ctx, action: "unban", target: { githubId: id, login } }) };
 }
-function grandfather(parsedGf, { githubId, login, reason, until = null }, ctx = {}) {
+function grandfather(parsedGf, { githubId, login, reason, until, tier } = {}, ctx = {}) {
   const id = reqId(githubId);
-  if (until != null && until !== "" && Number.isNaN(new Date(until).getTime())) throw new SuperadminActionError("invalid until date");
+  if (until !== void 0 && until !== null && until !== "" && Number.isNaN(new Date(until).getTime())) throw new SuperadminActionError("invalid until date");
+  if (tier !== void 0 && !PAID_GRANT_TIERS.includes(tier)) throw new SuperadminActionError(`invalid grant tier: ${tier}`);
   const list = cloneList(parsedGf?.grandfathered);
   const i = list.findIndex((e) => idOf2(e) === id);
-  const at = i >= 0 && list[i]?.at ? list[i].at : isoOf(ctx.now);
-  const entry = { github_id: id, ...login ? { login } : {}, reason: reasonOr(reason, "complimentary access"), until: until ?? null, at };
+  const prev = i >= 0 ? list[i] : null;
+  const entry = { ...prev || {}, github_id: id };
+  if (login) entry.login = login;
+  if (reason !== void 0 || entry.reason === void 0) entry.reason = reasonOr(reason, prev?.reason || "complimentary access");
+  if (until !== void 0 || entry.until === void 0) entry.until = until ?? null;
+  if (tier !== void 0) entry.tier = tier;
+  entry.at = prev?.at || isoOf(ctx.now);
   let changed;
   if (i >= 0) {
     changed = JSON.stringify(list[i]) !== JSON.stringify(entry);
@@ -21540,7 +21546,7 @@ function grandfather(parsedGf, { githubId, login, reason, until = null }, ctx = 
     list.push(entry);
     changed = true;
   }
-  return { next: { ...parsedGf || {}, grandfathered: list }, changed, audit: audit({ ...ctx, action: "grandfather", target: { githubId: id, login }, detail: { reason: reason ?? null, until: until ?? null } }) };
+  return { next: { ...parsedGf || {}, grandfathered: list }, changed, audit: audit({ ...ctx, action: "grandfather", target: { githubId: id, login }, detail: { reason: entry.reason, until: entry.until, tier: entry.tier ?? null } }) };
 }
 function revokeGrandfather(parsedGf, { githubId, login }, ctx = {}) {
   const id = reqId(githubId);
@@ -22530,13 +22536,13 @@ async function unbanMember(ctx, { githubId } = {}) {
   const pr = await adminPublish(ctx, { repo, branch: `gbti/unban-${id}`, files: [{ path: "house/bans.yml", content: dumpYaml(next) }], message: `Unban ${id}`, title: `Unban member ${id}`, body: prBody(null, audit2) });
   return { ...pr, changed: true, audit: audit2 };
 }
-async function grandfatherMember(ctx, { githubId, reason, until = null, login } = {}) {
+async function grandfatherMember(ctx, { githubId, reason, until, tier, login } = {}) {
   requireRole(ctx, canBanGrandfather, "admin");
   const { repo } = requireRepo2(ctx);
   const id = requireId(githubId);
   let result;
   try {
-    result = grandfather(await readYaml(ctx, "house/grandfathered.yml"), { githubId: id, login, reason, until }, actionCtx(ctx));
+    result = grandfather(await readYaml(ctx, "house/grandfathered.yml"), { githubId: id, login, reason, until, tier }, actionCtx(ctx));
   } catch (err) {
     if (err instanceof SuperadminActionError) throw new OperationError("bad-request", err.message);
     throw err;

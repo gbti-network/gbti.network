@@ -11,6 +11,7 @@
 // Anti-escalation is therefore structural, not trusted from this module.
 
 import { ROLE } from './overrides-core.mjs';
+import { PAID_GRANT_TIERS } from './tier-gate.mjs'; // sow-185: the paid tiers a grant may name (member | creator)
 
 export class SuperadminActionError extends Error {}
 
@@ -93,21 +94,42 @@ export function unban(parsedBans, { githubId, login }, ctx = {}) {
   return { next: { ...(parsedBans || {}), bans: next }, changed: next.length !== list.length, audit: audit({ ...ctx, action: 'unban', target: { githubId: id, login } }) };
 }
 
-/** Grandfather a github_id (counts as paid, no Stripe sub). `until` null = permanent; else an ISO date string. */
-export function grandfather(parsedGf, { githubId, login, reason, until = null }, ctx = {}) {
+/**
+ * Grandfather a github_id (counts as paid, no Stripe sub). `until` null = permanent; else an ISO date string.
+ * `tier` names the paid tier the grant confers (member | creator). A grant carrying no tier resolves to member
+ * via tier-gate.grantTier (owner Q15, 2026-08-18); an unrecognized tier is REJECTED here rather than coerced,
+ * because coercion would silently hand the editor a different tier from the one they asked for.
+ *
+ * sow-213: this OVERLAYS the existing entry instead of rebuilding it. Rebuilding destroyed every field the
+ * caller did not pass, so a re-grant wiped a hand-set `tier: creator` (the one escape hatch tier-gate
+ * documents), reset a hand-set reason, dropped the login, and turned a time-boxed grant permanent, which is
+ * the direction that grants MORE access than intended. `undefined` means leave the existing value alone; an
+ * explicit value, null included, means set it.
+ */
+export function grandfather(parsedGf, { githubId, login, reason, until, tier } = {}, ctx = {}) {
   const id = reqId(githubId);
-  if (until != null && until !== '' && Number.isNaN(new Date(until).getTime())) throw new SuperadminActionError('invalid until date');
+  if (until !== undefined && until !== null && until !== '' && Number.isNaN(new Date(until).getTime())) throw new SuperadminActionError('invalid until date');
+  if (tier !== undefined && !PAID_GRANT_TIERS.includes(tier)) throw new SuperadminActionError(`invalid grant tier: ${tier}`);
   const list = cloneList(parsedGf?.grandfathered);
   const i = list.findIndex((e) => idOf(e) === id);
+  const prev = i >= 0 ? list[i] : null;
+  // Spread prev FIRST so unknown and unsupplied fields survive, and so the key order of an existing entry is
+  // unchanged (which keeps the YAML diff and the byte-identity check below honest).
+  const entry = { ...(prev || {}), github_id: id };
+  if (login) entry.login = login;
+  if (reason !== undefined || entry.reason === undefined) entry.reason = reasonOr(reason, prev?.reason || 'complimentary access');
+  if (until !== undefined || entry.until === undefined) entry.until = until ?? null;
+  if (tier !== undefined) entry.tier = tier;
   // Carry the grant time `at`: commissions.mjs reads it as the grandfathered referrer's commission-active interval
   // START (a missing `at` falls back to epoch, over-crediting). Preserve the ORIGINAL `at` across an idempotent
   // re-grant so the entry stays byte-identical for the equality check below; a brand-new grant stamps `now`.
-  const at = (i >= 0 && list[i]?.at) ? list[i].at : isoOf(ctx.now);
-  const entry = { github_id: id, ...(login ? { login } : {}), reason: reasonOr(reason, 'complimentary access'), until: until ?? null, at };
+  entry.at = prev?.at || isoOf(ctx.now);
   let changed;
   if (i >= 0) { changed = JSON.stringify(list[i]) !== JSON.stringify(entry); list[i] = entry; }
   else { list.push(entry); changed = true; }
-  return { next: { ...(parsedGf || {}), grandfathered: list }, changed, audit: audit({ ...ctx, action: 'grandfather', target: { githubId: id, login }, detail: { reason: reason ?? null, until: until ?? null } }) };
+  // The audit reports the RESULTING grant, not the arguments: an omitted field preserves whatever was already
+  // there, so echoing the arguments would record "until: null" for a grant that is still time-boxed.
+  return { next: { ...(parsedGf || {}), grandfathered: list }, changed, audit: audit({ ...ctx, action: 'grandfather', target: { githubId: id, login }, detail: { reason: entry.reason, until: entry.until, tier: entry.tier ?? null } }) };
 }
 
 /** Revoke a grandfather grant. Idempotent. */

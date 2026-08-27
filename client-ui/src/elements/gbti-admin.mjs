@@ -81,9 +81,10 @@ class GbtiAdmin extends GbtiElement {
 
          ${rank >= RANK.admin && capOn('membership') ? `<div class="grp">
            <h4>Member status</h4>
-           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants permanent paid access with no Stripe subscription. Keyed by the immutable github_id.</p>
+           <p class="desc">Ban deplatforms a member regardless of payment; grandfather grants paid access with no Stripe subscription. Choose the tier the grant confers: Network Member reads, Content Creator can also publish. Keyed by the immutable github_id.</p>
            <input class="fld" id="gid" placeholder="github_id" />
            <input class="fld" id="reason" placeholder="Reason (optional)" />
+           <select class="fld" id="gtier" aria-label="Grant tier"><option value="member">Grant tier: Network Member</option><option value="creator">Grant tier: Content Creator</option></select>
            <div class="btns">
              <button class="btn danger" id="ban" type="button">Ban</button>
              <button class="btn" id="unban" type="button">Unban</button>
@@ -125,7 +126,7 @@ class GbtiAdmin extends GbtiElement {
     if (rank >= RANK.admin && capOn('membership')) {
       this.on('#ban', 'click', run('ban', gid));
       this.on('#unban', 'click', run('unban', () => ({ githubId: this.$('#gid').value.trim() })));
-      this.on('#grandfather', 'click', run('grandfather', gid));
+      this.on('#grandfather', 'click', run('grandfather', () => ({ ...gid(), tier: this.$('#gtier').value })));
       this.on('#ungrandfather', 'click', run('ungrandfather', () => ({ githubId: this.$('#gid').value.trim() })));
     }
     if (rank >= RANK.superadmin && capOn('roles')) {

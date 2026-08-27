@@ -25,6 +25,7 @@ import { flipContentStatus } from '../../client/src/content-ops.mjs'; // already
 import { isCleanPath } from '../../membership/classify-pr.mjs';
 import { adminHostedBranchFor } from '../../membership/hosted-author.mjs';
 import { ban, unban, grandfather, revokeGrandfather, grantRole } from '../../membership/superadmin-actions.mjs'; // sow-161 increments 2-3
+import { PAID_GRANT_TIERS } from '../../membership/tier-gate.mjs'; // sow-213: the paid tiers a grandfather grant may name
 import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-edits.mjs'; // sow-161 increment 4
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
@@ -53,7 +54,7 @@ const GOV_ACTIONS = new Set(['ban', 'unban', 'grandfather', 'ungrandfather', 'ro
 const GOV_OP = {
   ban: { path: 'house/bans.yml', rank: ROLE_RANK.admin, fn: ban, args: (t) => ({ githubId: t.targetId, reason: t.reason }) },
   unban: { path: 'house/bans.yml', rank: ROLE_RANK.admin, fn: unban, args: (t) => ({ githubId: t.targetId }) },
-  grandfather: { path: 'house/grandfathered.yml', rank: ROLE_RANK.admin, fn: grandfather, args: (t) => ({ githubId: t.targetId, reason: t.reason }) },
+  grandfather: { path: 'house/grandfathered.yml', rank: ROLE_RANK.admin, fn: grandfather, args: (t) => ({ githubId: t.targetId, reason: t.reason, until: t.until, tier: t.tier }) },
   ungrandfather: { path: 'house/grandfathered.yml', rank: ROLE_RANK.admin, fn: revokeGrandfather, args: (t) => ({ githubId: t.targetId }) },
   role: { path: 'house/roles.yml', rank: ROLE_RANK.superadmin, fn: grantRole, args: (t) => ({ githubId: t.targetId, role: t.role }) },
 };
@@ -271,11 +272,24 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
       roleVal = String(payload?.role || '');
       if (!VALID_ROLES.has(roleVal)) return { status: 400, body: { error: 'bad_request', message: 'an invalid role was requested' } };
     }
+    // sow-213: a grandfather grant may name the paid TIER it confers and an expiry. Both are OPTIONAL and both
+    // distinguish absent from explicit: a key the caller did not send is left alone by the pure core, so an
+    // omitted tier does not silently reset a hand-set one. An explicit `until: null` still means permanent.
+    // Validate here, before the branch/write/PR, so a bad value costs nothing and never reaches the repo.
+    const hasUntil = payload != null && Object.prototype.hasOwnProperty.call(payload, 'until');
+    const until = hasUntil ? payload.until : undefined;
+    if (until !== undefined && until !== null && until !== '' && Number.isNaN(new Date(until).getTime())) {
+      return { status: 400, body: { error: 'bad_request', message: 'an invalid until date was requested' } };
+    }
+    const tier = payload?.tier ?? undefined;
+    if (tier !== undefined && !PAID_GRANT_TIERS.includes(tier)) {
+      return { status: 400, body: { error: 'bad_request', message: 'an invalid grant tier was requested' } };
+    }
     const op = GOV_OP[action];
     const load = await loadHouseYaml(fetchImpl, instToken, upstream, op.path);
     if (!load.ok) return { status: load.status, body: load.body };
     let result;
-    try { result = op.fn(load.parsed, op.args({ targetId, reason, role: roleVal }), { actor: { githubId }, now: Date.now() }); }
+    try { result = op.fn(load.parsed, op.args({ targetId, reason, role: roleVal, until, tier }), { actor: { githubId }, now: Date.now() }); }
     catch (e) { return { status: 400, body: { error: 'bad_request', message: e?.message || 'invalid action' } }; }
     if (!result.changed) return { status: 200, body: { ok: true, noop: true, message: `no change (${action})` } };
     file = { path: op.path, content: yaml.dump(result.next, { lineWidth: 100, noRefs: true }) };

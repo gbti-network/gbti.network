@@ -133,13 +133,16 @@ export async function unbanMember(ctx, { githubId } = {}) {
   return { ...pr, changed: true, audit };
 }
 
-export async function grandfatherMember(ctx, { githubId, reason, until = null, login } = {}) {
+// sow-213: `tier` names the paid tier the grant confers (member | creator); absent leaves an existing tier
+// alone rather than resetting it. `until` deliberately has NO default: defaulting it to null made every
+// re-grant silently permanent, wiping a hand-set expiry. Pass null explicitly to mean permanent.
+export async function grandfatherMember(ctx, { githubId, reason, until, tier, login } = {}) {
   requireRole(ctx, canBanGrandfather, 'admin');
   const { repo } = requireRepo(ctx);
   const id = requireId(githubId);
   let result;
   try {
-    result = grandfather(await readYaml(ctx, 'house/grandfathered.yml'), { githubId: id, login, reason, until }, actionCtx(ctx));
+    result = grandfather(await readYaml(ctx, 'house/grandfathered.yml'), { githubId: id, login, reason, until, tier }, actionCtx(ctx));
   } catch (err) {
     if (err instanceof SuperadminActionError) throw new OperationError('bad-request', err.message);
     throw err;
