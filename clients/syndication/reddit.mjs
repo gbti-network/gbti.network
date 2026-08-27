@@ -16,7 +16,7 @@ import { buildChannelText, renderTemplate } from '../../membership/syndication-f
 import { templateFor } from '../../membership/syndication-config-core.mjs';
 import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
 
-const USER_AGENT = 'cloudflare-worker:network.gbti.syndication:v0.1 (by /u/gbti_network)';
+const USER_AGENT = 'cloudflare-worker:network.gbti.syndication:v0.1 (by /u/gbti-labs)';
 
 async function refreshAccessToken(env, fetchImpl) {
   const basic = btoa(`${env.REDDIT_CLIENT_ID}:${env.REDDIT_CLIENT_SECRET}`);
@@ -26,7 +26,17 @@ async function refreshAccessToken(env, fetchImpl) {
     body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: env.REDDIT_REFRESH_TOKEN }).toString(),
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body.access_token) throw new Error(`reddit token refresh failed (${res.status}); the refresh token may be revoked — re-mint via scripts/reddit-auth.mjs`);
+  // Name the credential the STATUS actually implicates rather than guessing. Reddit rejects HTTP Basic
+  // (client id/secret) with 401 and a bad refresh token with 400 invalid_grant. The old text said "the refresh
+  // token may be revoked" on every failure, and on 2026-08-26 that sent the reader to re-mint a token when the
+  // CLIENT CREDENTIALS were the dead part -- and reddit-auth.mjs signs its code exchange with those same
+  // credentials, so the suggested fix could not have worked either.
+  if (!res.ok || !body.access_token) {
+    const who = res.status === 401
+      ? 'REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET were rejected (HTTP Basic); fix the app credentials at reddit.com/prefs/apps FIRST -- scripts/reddit-auth.mjs signs with them too'
+      : 'the refresh token was not accepted; re-mint via scripts/reddit-auth.mjs';
+    throw new Error(`reddit token refresh failed (${res.status}): ${who}`);
+  }
   return body.access_token;
 }
 

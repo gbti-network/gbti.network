@@ -29,7 +29,7 @@ try {
 const PORT = 8976;
 const REDIRECT = `http://localhost:${PORT}/callback`;
 const SCOPES = 'identity submit read';
-const USER_AGENT = 'cloudflare-worker:network.gbti.syndication:v0.1 (by /u/gbti_network)';
+const USER_AGENT = 'cloudflare-worker:network.gbti.syndication:v0.1 (by /u/gbti-labs)';
 
 function ask(q) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });

@@ -226,13 +226,26 @@ test('reddit: redditKind self posts text with the body, and a link post carries 
   assert.equal(p.get('kind'), 'self');
 });
 
-test('reddit: a dead refresh token and json.errors both surface readable failures', async () => {
+// The 2026-08-24 Reddit outage was misdiagnosed for a day because a 401 and a 400 both said "the refresh
+// token may be revoked". They are different repairs: a 401 means the app's client id/secret are rejected as
+// HTTP Basic, so re-minting a refresh token cannot help (reddit-auth.mjs signs with the same bad pair),
+// while a 400 really is the grant. The error text has to tell an operator which one they are holding.
+test('reddit: a rejected client and a dead refresh token name DIFFERENT repairs', async () => {
   const { createRedditAdapter } = await import('../clients/syndication/reddit.mjs');
   const env = { REDDIT_CLIENT_ID: 'id', REDDIT_CLIENT_SECRET: 'sec', REDDIT_REFRESH_TOKEN: 'rt', REDDIT_SUBREDDIT: 'GBTI_network' };
+
+  const badClient = createRedditAdapter({ env, fetchImpl: async () => ({ ok: false, status: 401, json: async () => ({}) }) });
+  const r0 = await badClient.post(item);
+  assert.equal(r0.ok, false);
+  assert.match(r0.error, /401/);
+  assert.match(r0.error, /CLIENT_ID/, '401 must send the operator to the app credentials');
+  assert.doesNotMatch(r0.error, /re-mint/, '401 must NOT send the operator to re-mint a token that is not the fault');
+
   const dead = createRedditAdapter({ env, fetchImpl: async () => ({ ok: false, status: 400, json: async () => ({}) }) });
   const r1 = await dead.post(item);
   assert.equal(r1.ok, false);
-  assert.match(r1.error, /refresh token may be revoked/);
+  assert.match(r1.error, /400/);
+  assert.match(r1.error, /refresh token/, '400 is the grant, so the repair is a re-mint');
   const errs = createRedditAdapter({ env, fetchImpl: async (url) => (url.includes('access_token')
     ? { ok: true, status: 200, json: async () => ({ access_token: 'at' }) }
     : { ok: true, status: 200, json: async () => ({ json: { errors: [['SUBREDDIT_NOTALLOWED', 'not allowed to post there', 'sr']] } }) }) });
