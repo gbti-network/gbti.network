@@ -64,7 +64,7 @@ const CLICKS_NOTE = 'Clicks are total clicks, not unique clickers: the click sto
   + 'Over a small send that makes a click rate above 100% ordinary rather than an error.';
 const WHERE_NOTE = 'Per-link and per-placement clicks are in mail:clicks:<issueId>. Notes: .data/ops/mail-ops/.';
 
-// sow-283: TWO tables, not one eight-column table, and this was measured rather than guessed. Eight columns is
+// TWO tables, not one eight-column table, and this was measured rather than guessed. Eight columns is
 // too many for an email: at a 375px viewport the numeric columns hold their width, the only column that can give
 // is the left-aligned one, and `2026-08-24` collapsed into a 206px-tall stack while the table still ran 231px off
 // the screen. Splitting on the natural seam fixes it and reads better anyway, because delivery and engagement
