@@ -2,10 +2,10 @@
 id: intro-grok-skill-for-claude-code
 targetType: prompt
 targetSlug: grok-skill-for-claude-code
+createdAt: '2026-08-27T00:22:08.903Z'
 status: published
 visibility: public
 authorNote: true
-createdAt: '2026-08-26T15:54:50.000Z'
 type: comment
 author: atwellpub
 ---
