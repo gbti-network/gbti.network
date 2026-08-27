@@ -182,6 +182,12 @@ test('sow-260: reddit enqueues a manual task carrying the title AND the body, an
   // The TITLE. A Reddit title cannot hold a line break (SOW-223), so assert the absence directly.
   assert.ok(tasks[0].text.includes('Hello World'), 'the task text is the post title');
   assert.ok(!tasks[0].text.includes('\n'), 'a reddit title can never contain a newline');
+  // Reddit carries the link in its own url field. A title that ALSO contains the URL duplicates it in the
+  // submission and eats the 300-char cap. This shipped once: routing the title through renderChannelText
+  // inherited its generic '{title} {url}' fallback instead of the adapter's '{title}', and a live queue task
+  // showed the URL glued onto the title. Assert the absence, not just the presence of the title.
+  assert.ok(!tasks[0].text.includes('https://'), 'the url belongs in the url field, never in the title');
+  assert.equal(tasks[0].url, 'https://gbti.network/articles/hello/', 'and it IS carried, separately');
   // The BODY, author note FIRST (sow-260: the note is the main content, the blurb rides with it).
   assert.ok(tasks[0].bodyText.includes('I built this because'), 'the author note is in the body');
   assert.ok(tasks[0].bodyText.includes('A short description.'), 'the short description rides with it');

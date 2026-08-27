@@ -37,9 +37,16 @@ export const REDDIT_BODY_LIMIT = 9500;
  */
 export function renderRedditTitle(cfg, item = {}, { textOverride } = {}) {
   const limit = channelLimit('reddit');
-  return renderChannelText(cfg, item, 'reddit', { textOverride, channelOnly: true })
-    .replace(/\s*\n+\s*/g, ' ')
-    .slice(0, limit);
+  const strip = (v) => String(v || '').replace(/\s*\n+\s*/g, ' ').slice(0, limit);
+  if (typeof textOverride === 'string' && textOverride.trim()) return strip(textOverride);
+  const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
+  // The fallback is '{title}' and NOT renderChannelText's generic '{title} {url}'. Reddit carries the link in
+  // its own url field, so a title that also contains the URL duplicates it in the submission and wastes the
+  // 300-char cap. The adapter had this right (clients/syndication/reddit.mjs used `|| '{title}'`); routing the
+  // title through renderChannelText silently inherited the wrong default, and a live task showed the URL glued
+  // onto the title before this was caught.
+  const tpl = (cfg && templateFor(cfg, item.source, 'reddit', { stub: stubish, channelOnly: true })) || '{title}';
+  return strip(renderTemplate(tpl, item, { limit }));
 }
 
 /**
