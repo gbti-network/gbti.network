@@ -85,11 +85,16 @@ test('resolveAdapterRun splits ready (secrets) vs skipped (enabled-but-no-secret
   // so with only DISCORD_BOT_TOKEN present, discord + discord-category are ready (they share the bot token) and the
   // other auto channels are enabled-but-secretless -> skipped. x + linkedin are MANUAL -> hard-excluded (never
   // auto-posted), belt-and-suspenders behind the matrix gate.
+  // sow-260: REDDIT joined the manual set, so it moved out of `skipped` and into hard-excluded. That is the
+  // load-bearing assertion of this change: we no longer hold a Reddit credential, and an adapter that is
+  // merely 'skipped for missing secrets' would start posting again the moment one reappeared in env.
   const cfg = syndicationConfigFromParsed({ enabled: true });
   const env = { DISCORD_BOT_TOKEN: 't' };
   const { ready, skipped } = resolveAdapterRun({ cfg, env });
   assert.deepEqual(ready.map((a) => a.name).sort(), ['discord', 'discord-category']);
-  assert.deepEqual(skipped.sort(), ['bluesky', 'devto', 'reddit']); // sow-159: mastodon retired (out of CHANNELS); hashnode is MANUAL: hard-excluded
+  assert.deepEqual(skipped.sort(), ['bluesky', 'devto']); // sow-159: mastodon retired; hashnode + reddit are MANUAL: hard-excluded
+  assert.ok(!ready.some((a) => a.name === 'reddit'), 'reddit must never be in the auto-post set');
+  assert.ok(!skipped.includes('reddit'), 'and not merely skipped: a manual channel is excluded before secrets are consulted');
 });
 
 // SOW-087: the second Discord post, routed by the item's category via the KV-mirrored map.

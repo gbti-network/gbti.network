@@ -63,7 +63,16 @@ export const TEMPLATE_CHANNELS = CHANNELS;
 export const CHANNEL_CAPABILITY = Object.freeze({
   discord: 'auto',
   'discord-category': 'auto',
-  reddit: 'auto',
+  // sow-260 (2026-08-26): MANUAL. Reddit banned the gbti-labs account for self-promotion on 2026-08-25 and
+  // reinstated it the same day, but the ban DESTROYED the OAuth application the adapter authenticated as,
+  // which is why every token refresh returned 401 afterwards. It cannot be recreated: Reddit closed
+  // self-service app creation in November 2025 under the Responsible Builder Policy, and the create-app form
+  // refuses even after registering for API access. Devvit, the platform Reddit now points developers to,
+  // was investigated and rejected (it cannot fetch a first-party domain, and it would post from a bot
+  // account holding full mod permissions). The owner's call is that SELECTIVE pushing is the goal anyway,
+  // and a human choosing what to post needs no API at all. Same shape as x/dailydev/linkedin below: the
+  // adapter still renders the text, a superadmin posts it by hand from the Social Queue.
+  reddit: 'manual',
   devto: 'auto',
   // DORMANT (sow-217, 2026-08-12): Hashnode is RETIRED and out of CHANNELS, so this entry is never consulted.
   // Kept deliberately so a revival is a one-line change rather than a rebuild. History: SOW-134 built the
@@ -141,7 +150,14 @@ const DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
 // SOW-088: the Reddit BODY template = the DESCRIPTION under the title on the link post (the embed card
 // comes from the item URL automatically); the COMMENT template = the separately-controlled first comment
 // (owner-directed 2026-07-10: keep both, templated independently). Editable in the admin templates card.
-const DEFAULT_REDDIT_BODY = '{short-description}';
+// sow-260 (2026-08-26, owner-directed): the AUTHOR NOTE is the main content, shipped WITH the description.
+// It used to be a decorative pull-quote inside the first comment while the body carried the blurb alone.
+// The note is the one part of a syndicated post that is genuinely the member's own words about their own
+// work, so it leads, plain rather than italicised, and the blurb follows it as a second paragraph.
+// An absent note renders empty and the blank-line collapse closes the gap, so a note-less item degrades to
+// exactly the old body (the blurb alone) with no dangling punctuation. That is the sow-220 fallback,
+// arrived at by construction rather than by a second template.
+const DEFAULT_REDDIT_BODY = '{author-note}\n\n{short-description}';
 // SOW-088: the dev.to byline prepended to the full-body crosspost (the owner's example post shape).
 // SOW-140: the byline first MENTIONS the member's own dev.to profile ({member-devto-handle} -> @handle, which
 // links + notifies on dev.to) and falls back to their name; the gbti.network profile link moves onto "GBTI
@@ -163,7 +179,14 @@ const DEFAULT_DEVTO_FOOTER = '---\n\nAre you a writer, musician, or product deve
 // author note when none exists, which is why a share got no crediting comment before.
 // The first comment credits the member's Reddit username when their profile lists one ({member-reddit-handle}
 // renders u/name, which Reddit links natively), falling back to the full name, matching X/Bluesky/Mastodon.
-const DEFAULT_REDDIT_COMMENT = 'Shared to the community by GBTI Network member {member-reddit-handle}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}\'s work more closely, consider joining our network and subscribing to them directly: {member-url}';
+// sow-260 (2026-08-26): EMPTY, deliberately. This used to append a recruitment CTA carrying two more
+// gbti.network links to every single submission. Reddit banned the posting account for self-promotion on
+// 2026-08-25; the automation had posted only 7 times in 25 days, so volume was not the trigger and RATIO
+// is the likely one, and this comment was the largest single contributor to it. The member credit it also
+// carried is not lost: the author note now leads the post BODY (DEFAULT_REDDIT_BODY above), which is more
+// prominent than a first comment was. Non-empty is still supported, and a superadmin-supplied
+// item.commentText still posts, so this is a default rather than a removal.
+const DEFAULT_REDDIT_COMMENT = '';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_SHARE_FORMAT, // sow-180: content-first, no member credit
   post: DEFAULT_FORMAT,

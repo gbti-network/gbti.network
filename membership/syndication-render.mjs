@@ -16,3 +16,41 @@ export function renderChannelText(cfg, item = {}, channel, { textOverride, chann
     : buildChannelText(item, { limit });
   return String(text || '').slice(0, limit);
 }
+
+// sow-260: Reddit is the one channel whose submission is not a single block of text. Every other manual
+// channel (x, linkedin, dailydev) posts one message, so `renderChannelText` above is the whole task. A Reddit
+// submission is a TITLE plus a URL plus a DESCRIPTION under the link, each templated separately, which is why
+// the adapter resolved three templates rather than one (clients/syndication/reddit.mjs).
+//
+// Now that Reddit is manual-assist, a human pastes those parts by hand, so they have to be rendered somewhere
+// and handed to the Social Queue. They are rendered HERE, server-side, rather than in the queue component,
+// for the same reason `renderChannelText` exists: a task must carry the same text the automatic path would
+// have posted, and duplicating template resolution in the UI is how those two drift apart.
+
+/** The Reddit body cap. Reddit's own selftext limit is 40k; the adapter used 9500 and this matches it. */
+export const REDDIT_BODY_LIMIT = 9500;
+
+/**
+ * The Reddit post TITLE. A Reddit title cannot contain a line break (SOW-223), and since the per-type
+ * template fields became textareas an admin can type one in, so the strip happens here rather than by
+ * special-casing the shared admin UI.
+ */
+export function renderRedditTitle(cfg, item = {}, { textOverride } = {}) {
+  const limit = channelLimit('reddit');
+  return renderChannelText(cfg, item, 'reddit', { textOverride, channelOnly: true })
+    .replace(/\s*\n+\s*/g, ' ')
+    .slice(0, limit);
+}
+
+/**
+ * The Reddit post BODY: the description shown under the link. Since sow-260 this leads with the member's own
+ * author note and carries the short description after it, so the note is the main content rather than a
+ * decorative quote in a first comment. Empty is a legitimate result (an item with neither a note nor a blurb),
+ * and callers must treat it as "post no body" rather than posting an empty string.
+ */
+export function renderRedditBody(cfg, item = {}) {
+  if (!cfg) return '';
+  const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
+  const tpl = templateFor(cfg, 'reddit-body', 'reddit', { stub: stubish }) || '';
+  return String(renderTemplate(tpl, item, { limit: REDDIT_BODY_LIMIT }) || '').trim();
+}

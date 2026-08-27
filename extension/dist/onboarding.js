@@ -7641,7 +7641,16 @@ ${String(body ?? "")}`;
   var CHANNEL_CAPABILITY = Object.freeze({
     discord: "auto",
     "discord-category": "auto",
-    reddit: "auto",
+    // sow-260 (2026-08-26): MANUAL. Reddit banned the gbti-labs account for self-promotion on 2026-08-25 and
+    // reinstated it the same day, but the ban DESTROYED the OAuth application the adapter authenticated as,
+    // which is why every token refresh returned 401 afterwards. It cannot be recreated: Reddit closed
+    // self-service app creation in November 2025 under the Responsible Builder Policy, and the create-app form
+    // refuses even after registering for API access. Devvit, the platform Reddit now points developers to,
+    // was investigated and rejected (it cannot fetch a first-party domain, and it would post from a bot
+    // account holding full mod permissions). The owner's call is that SELECTIVE pushing is the goal anyway,
+    // and a human choosing what to post needs no API at all. Same shape as x/dailydev/linkedin below: the
+    // adapter still renders the text, a superadmin posts it by hand from the Social Queue.
+    reddit: "manual",
     devto: "auto",
     // DORMANT (sow-217, 2026-08-12): Hashnode is RETIRED and out of CHANNELS, so this entry is never consulted.
     // Kept deliberately so a revival is a one-line change rather than a rebuild. History: SOW-134 built the
@@ -7698,12 +7707,12 @@ ${String(body ?? "")}`;
   var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
   var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
   var DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
-  var DEFAULT_REDDIT_BODY = "{short-description}";
+  var DEFAULT_REDDIT_BODY = "{author-note}\n\n{short-description}";
   var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).";
   var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
   var DEFAULT_DEVTO_BODY = "{body}";
   var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
-  var DEFAULT_REDDIT_COMMENT = "Shared to the community by GBTI Network member {member-reddit-handle}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
+  var DEFAULT_REDDIT_COMMENT = "";
   var DEFAULT_TEMPLATES = Object.freeze({
     share: DEFAULT_SHARE_FORMAT,
     // sow-180: content-first, no member credit

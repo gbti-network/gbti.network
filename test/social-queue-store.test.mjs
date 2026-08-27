@@ -36,7 +36,7 @@ test('store: put/get/list/delete round-trips a task', async () => {
 });
 
 test('drain: a manual-assist channel enqueues a task and NEVER calls an adapter', async () => {
-  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: { discord: false }, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } });
+  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: { discord: false }, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   const r = await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'alice/hello', title: 'Hello World', url: 'https://gbti.network/articles/hello/', visibility: 'public' }, { kv, now: at(0) });
   // An adapter set that would THROW if X were ever posted (it must not be).
@@ -55,7 +55,7 @@ test('drain: a manual-assist channel enqueues a task and NEVER calls an adapter'
 });
 
 test('drain: does not re-task a channel already queued-manual on a prior tick', async () => {
-  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: {}, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } });
+  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60, channels: {}, manual_assist_channels: ['x'], auto_matrix: { post: { linkedin: 'off', dailydev: 'off', hashnode: 'off', reddit: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
   await enqueue({ SIGNUP_KV: kv }, { source: 'post', targetSlug: 'a/b', title: 'T', url: 'https://e.com/x', visibility: 'public' }, { kv, now: at(0) });
   await drainSyndication({}, { kv, now: at(AFTER_HOLD), adapters: {} });
@@ -152,4 +152,57 @@ test('endpoint POST action=post: manual-capability channels, missing secrets, an
   const rd = await handleSocialQueueAction(req({ action: 'post', id: 'b::bluesky' }),
     { SIGNUP_KV: kv, BLUESKY_HANDLE: 'h', BLUESKY_APP_PASSWORD: 'p' }, { kv, authorize: superAuth });
   assert.equal(rd.status, 400);
+});
+
+// sow-260: Reddit lost its API. Reddit banned the posting account for self-promotion on 2026-08-25 and the ban
+// destroyed the OAuth app the adapter authenticated as; self-service app creation has been closed since
+// November 2025, so it cannot be recreated. Reddit is manual-assist now, like x/linkedin/dailydev.
+//
+// It is the FIRST manual channel whose submission is not one block of text: a Reddit post is a title, a url and
+// a description under the link. This asserts all three reach the queue, because a task carrying only the title
+// would send a superadmin to Reddit with nothing to paste and no way to know something was missing.
+test('sow-260: reddit enqueues a manual task carrying the title AND the body, and never calls an adapter', async () => {
+  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
+    auto_matrix: { post: { discord: 'off', 'discord-category': 'off', bluesky: 'off', devto: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } });
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
+  const r = await enqueue({ SIGNUP_KV: kv }, {
+    source: 'post', targetSlug: 'alice/hello', title: 'Hello World', url: 'https://gbti.network/articles/hello/',
+    visibility: 'public', authorNote: 'I built this because the tooling kept losing my drafts.', blurb: 'A short description.',
+  }, { kv, now: at(0) });
+  // An adapter that THROWS if reddit is ever posted. A manual channel must reach zero API calls, and the whole
+  // point of the change is that we no longer hold a credential that could make one.
+  const adapters = { reddit: { name: 'reddit', enabled: () => true, post: async () => { throw new Error('reddit must not be posted through an adapter'); } } };
+  const out = await drainSyndication({}, { kv, now: at(AFTER_HOLD), adapters });
+  assert.equal(out.drained, 1);
+  const item = await getItem(kv, r.id);
+  assert.equal(item.perChannel.reddit.status, 'queued-manual');
+  const tasks = await listTasks(kv);
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].channel, 'reddit');
+  // The TITLE. A Reddit title cannot hold a line break (SOW-223), so assert the absence directly.
+  assert.ok(tasks[0].text.includes('Hello World'), 'the task text is the post title');
+  assert.ok(!tasks[0].text.includes('\n'), 'a reddit title can never contain a newline');
+  // The BODY, author note FIRST (sow-260: the note is the main content, the blurb rides with it).
+  assert.ok(tasks[0].bodyText.includes('I built this because'), 'the author note is in the body');
+  assert.ok(tasks[0].bodyText.includes('A short description.'), 'the short description rides with it');
+  assert.ok(tasks[0].bodyText.indexOf('I built this') < tasks[0].bodyText.indexOf('A short description'),
+    'the author note LEADS; it is the main content, not a footnote');
+  // No recruitment CTA anywhere in what we hand the human to paste.
+  assert.ok(!/gbti\.network\/members/.test(tasks[0].bodyText), 'no join-our-community CTA in the body');
+});
+
+// The note is optional (an article may have none), and sow-220 shipped after a note-less article posted a lone
+// `""` to Reddit. The blurb must stand alone cleanly, with no dangling punctuation and no leading blank line.
+test('sow-260/sow-220: a note-less item degrades to the description alone, with no empty-quote debris', async () => {
+  const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
+    auto_matrix: { post: { discord: 'off', 'discord-category': 'off', bluesky: 'off', devto: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } });
+  const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
+  await enqueue({ SIGNUP_KV: kv }, {
+    source: 'post', targetSlug: 'alice/no-note', title: 'No Note', url: 'https://gbti.network/articles/no-note/',
+    visibility: 'public', blurb: 'Only a description.',
+  }, { kv, now: at(0) });
+  await drainSyndication({}, { kv, now: at(AFTER_HOLD), adapters: {} });
+  const t = (await listTasks(kv))[0];
+  assert.equal(t.bodyText, 'Only a description.', 'the blurb stands alone, trimmed, with nothing around it');
+  assert.ok(!/["'']{2}/.test(t.bodyText), 'no empty quote pair, which is the sow-220 defect');
 });

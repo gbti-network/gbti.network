@@ -27,7 +27,12 @@ export const CHANNEL_SECRET_KEYS = Object.freeze({
   linkedin: ['LINKEDIN_ACCESS_TOKEN', 'LINKEDIN_ORG_URN'],
   mastodon: ['MASTODON_BASE_URL', 'MASTODON_ACCESS_TOKEN'],
   bluesky: ['BLUESKY_HANDLE', 'BLUESKY_APP_PASSWORD'],
-  reddit: ['REDDIT_CLIENT_ID', 'REDDIT_CLIENT_SECRET', 'REDDIT_REFRESH_TOKEN', 'REDDIT_SUBREDDIT'], // SOW-088
+  // sow-260 (2026-08-26): the three OAuth secrets are GONE. They authenticated an application Reddit
+  // destroyed when it banned the posting account on 2026-08-25, and it cannot be recreated because
+  // self-service app creation closed in November 2025. Reddit is manual-assist now and the manual lane
+  // needs no credential at all, so listing dead keys here would only make a working channel report itself
+  // unconfigured. REDDIT_SUBREDDIT stays: it names the destination and the dormant adapter still reads it.
+  reddit: ['REDDIT_SUBREDDIT'], // SOW-088, narrowed by sow-260
   devto: ['DEVTO_API_KEY', 'DEVTO_ORG_ID'], // SOW-088: full-body crossposts to the GBTI dev.to organization
   hashnode: ['HASHNODE_TOKEN', 'HASHNODE_PUBLICATION_ID'], // SOW-134: PAT + the gbti.hashnode.dev publication id
 });

@@ -7,7 +7,7 @@
 import { markClaimed, markSent, markFailed, recordChannel, channelDone, isDue, channelDue } from '../../membership/syndication-queue.mjs';
 import { resolveAdapterRun } from '../../membership/syndication-adapters.mjs';
 import { isSyndicationEnabled, requiresApproval, isAutoOn, autoModeFor, channelHoldMs, explicitChannelHoldMs, MATRIX_CHANNELS, channelCapability } from '../../membership/syndication-config-core.mjs';
-import { renderChannelText } from '../../membership/syndication-render.mjs'; // SOW-121
+import { renderChannelText, renderRedditTitle, renderRedditBody } from '../../membership/syndication-render.mjs'; // SOW-121
 import { buildSocialTask } from '../../membership/social-queue.mjs'; // SOW-121
 import { putTask } from './social-queue-store.mjs'; // SOW-121
 import { readSyndicationConfig, readContentChannels, getItem, putItem, listDue, removeFromPending } from './syndication-store.mjs';
@@ -108,8 +108,16 @@ export async function drainSyndication(env, {
         // A manual-capability channel keeps its channel-only template chain (X/LinkedIn are whole-message
         // channels with explicit templates); an AUTO channel routed on-manual also falls back to the SHARED
         // templates, so the reviewed text tracks what the automatic path would have posted.
-        const text = renderChannelText(cfg, item, ch, { channelOnly: channelCapability(ch) === 'manual' });
-        await putTask(kv, buildSocialTask({ item, channel: ch, text, trigger: 'auto', now: Number(now()) }));
+        // sow-260: Reddit is the one manual channel whose submission is not a single block. Its `text` is the
+        // post TITLE (newline-stripped, because a Reddit title cannot hold one) and its description under the
+        // link is a separate template, so both are rendered here and the queue shows the human exactly what to
+        // paste. Every other channel is unchanged: one template, one block of text, no body.
+        const isReddit = ch === 'reddit';
+        const text = isReddit
+          ? renderRedditTitle(cfg, item)
+          : renderChannelText(cfg, item, ch, { channelOnly: channelCapability(ch) === 'manual' });
+        const bodyText = isReddit ? renderRedditBody(cfg, item) : '';
+        await putTask(kv, buildSocialTask({ item, channel: ch, text, bodyText, trigger: 'auto', now: Number(now()) }));
         item = recordChannel(item, ch, { status: 'queued-manual', at: Number(now()) });
       } catch {
         // SOW-125: the task write (or render) failed. Mark the item as having a retryable failure so it is NOT

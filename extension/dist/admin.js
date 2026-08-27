@@ -7641,7 +7641,16 @@ ${String(body ?? "")}`;
   var CHANNEL_CAPABILITY = Object.freeze({
     discord: "auto",
     "discord-category": "auto",
-    reddit: "auto",
+    // sow-260 (2026-08-26): MANUAL. Reddit banned the gbti-labs account for self-promotion on 2026-08-25 and
+    // reinstated it the same day, but the ban DESTROYED the OAuth application the adapter authenticated as,
+    // which is why every token refresh returned 401 afterwards. It cannot be recreated: Reddit closed
+    // self-service app creation in November 2025 under the Responsible Builder Policy, and the create-app form
+    // refuses even after registering for API access. Devvit, the platform Reddit now points developers to,
+    // was investigated and rejected (it cannot fetch a first-party domain, and it would post from a bot
+    // account holding full mod permissions). The owner's call is that SELECTIVE pushing is the goal anyway,
+    // and a human choosing what to post needs no API at all. Same shape as x/dailydev/linkedin below: the
+    // adapter still renders the text, a superadmin posts it by hand from the Social Queue.
+    reddit: "manual",
     devto: "auto",
     // DORMANT (sow-217, 2026-08-12): Hashnode is RETIRED and out of CHANNELS, so this entry is never consulted.
     // Kept deliberately so a revival is a one-line change rather than a rebuild. History: SOW-134 built the
@@ -7698,12 +7707,12 @@ ${String(body ?? "")}`;
   var TEMPLATE_TYPES = Object.freeze(["share", "post", "product", "prompt", "reddit-body", "reddit-comment", "devto-intro", "devto-body", "devto-footer", "devto-stub", "hashnode-intro", "hashnode-body", "hashnode-footer", "hashnode-stub"]);
   var DEFAULT_FORMAT = 'New {content-type} published by {member-discord-username}: "{title}" {url}';
   var DEFAULT_SHARE_FORMAT = 'Shared on the GBTI Network: "{title}" {url}';
-  var DEFAULT_REDDIT_BODY = "{short-description}";
+  var DEFAULT_REDDIT_BODY = "{author-note}\n\n{short-description}";
   var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Member]({member-url}).** Originally published on [gbti.network]({url}).";
   var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
   var DEFAULT_DEVTO_BODY = "{body}";
   var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
-  var DEFAULT_REDDIT_COMMENT = "Shared to the community by GBTI Network member {member-reddit-handle}. {short-description}\n\n---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
+  var DEFAULT_REDDIT_COMMENT = "";
   var DEFAULT_TEMPLATES = Object.freeze({
     share: DEFAULT_SHARE_FORMAT,
     // sow-180: content-first, no member credit
@@ -18696,12 +18705,19 @@ From the author:
   }
 
   // client-ui/src/elements/gbti-social-queue.mjs
-  var composeUrl = (channel, text) => {
-    const t = encodeURIComponent(String(text || ""));
+  var REDDIT_SUB = "GBTI_network";
+  var composeUrl = (task) => {
+    const channel = task?.channel;
+    const text = String(task?.text || "");
+    const t = encodeURIComponent(text);
     if (channel === "x") return `https://twitter.com/intent/tweet?text=${t}`;
     if (channel === "linkedin") return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
     if (channel === "dailydev") return "https://app.daily.dev/squads/gbti_network";
     if (channel === "hashnode") return "https://hashnode.com/draft";
+    if (channel === "reddit") {
+      const u = String(task?.url || "");
+      return `https://www.reddit.com/r/${REDDIT_SUB}/submit?title=${t}${u ? `&url=${encodeURIComponent(u)}` : ""}`;
+    }
     return null;
   };
   var CH_LABEL = { x: "X", discord: "Discord", "discord-category": "Discord", reddit: "Reddit", devto: "dev.to", hashnode: "Hashnode", dailydev: "daily.dev", linkedin: "LinkedIn", bluesky: "Bluesky" };
@@ -18755,6 +18771,10 @@ From the author:
   .task .top { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
   .task .ti { font-weight:700; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .task .txt { font-size:12px; color:var(--fg-soft, var(--fg)); background:var(--hover); border-radius:7px; padding:8px 10px; margin:0 0 9px; white-space:pre-wrap; word-break:break-word; line-height:1.5; max-height:100px; overflow:auto; }
+  /* sow-260: Reddit tasks carry a second block, the description that goes under the link. It is marked off
+     from the title above it so the two are not mistaken for one pasteable blob. */
+  .task .txt.body { position:relative; padding-top:20px; max-height:160px; }
+  .task .txt.body .blabel { position:absolute; top:5px; left:10px; font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--fg-mute, var(--fg-soft)); }
   .acts { display:flex; gap:7px; flex-wrap:wrap; }
   .btn { font:inherit; font-size:12px; font-weight:700; border-radius:7px; padding:6px 11px; cursor:pointer; border:1.5px solid var(--line); background:none; color:var(--fg); display:inline-flex; align-items:center; gap:6px; }
   .btn svg { width:13px; height:13px; }
@@ -18897,6 +18917,7 @@ From the author:
       }));
       this.$$("[data-assist]").forEach((b) => b.addEventListener("click", () => this._assist(b.dataset.assist)));
       this.$$("[data-copy]").forEach((b) => b.addEventListener("click", () => this._copy(b.dataset.copy)));
+      this.$$("[data-copybody]").forEach((b) => b.addEventListener("click", () => this._copy(b.dataset.copybody, "bodyText")));
       this.$$("[data-done]").forEach((b) => b.addEventListener("click", () => this._action("done", b.dataset.done)));
       this.$$("[data-del]").forEach((b) => b.addEventListener("click", () => this._action("delete", b.dataset.del)));
       this.$$("[data-post]").forEach((b) => b.addEventListener("click", () => this._action("post", b.dataset.post)));
@@ -18915,12 +18936,13 @@ From the author:
     }
     _todoRow(t) {
       const label = CH_LABEL[t.channel] || t.channel;
-      const url = composeUrl(t.channel, t.text);
+      const url = composeUrl(t);
       const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
       return `<div class="task">
       <div class="top"><span class="src">${esc(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc(fmtDate2(t.createdAt)) : ""}</span></div>
       <div class="txt">${esc(t.text || "")}</div>
-      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy</button><button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
+      ${t.bodyText ? `<div class="txt body"><span class="blabel">Body</span>${esc(t.bodyText)}</div>` : ""}
+      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${t.bodyText ? " title" : ""}</button>${t.bodyText ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">Copy body</button>` : ""}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
     </div>`;
     }
     _doneRow(t) {
@@ -18934,22 +18956,25 @@ From the author:
     _assist(id) {
       const t = this._byId(id);
       if (!t) return;
-      const url = composeUrl(t.channel, t.text);
+      const url = composeUrl(t);
       if (url) {
         try {
           window.open(url, "_blank", "noopener");
         } catch {
         }
       }
-      this._msg = 'Opened the composer. Post it, then click "Mark done".';
+      this._msg = t.bodyText ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".' : 'Opened the composer. Post it, then click "Mark done".';
       this.render();
     }
-    async _copy(id) {
+    // sow-260: `field` selects which part of the task to copy. Reddit tasks carry a body as well as a title, so
+    // the row offers both; every other channel has only `text` and the default keeps its single Copy button.
+    async _copy(id, field = "text") {
       const t = this._byId(id);
       if (!t) return;
+      const what = field === "bodyText" ? "body" : "post text";
       try {
-        await navigator.clipboard?.writeText?.(t.text || "");
-        this._msg = "Copied the post text.";
+        await navigator.clipboard?.writeText?.(t[field] || "");
+        this._msg = `Copied the ${what}.`;
       } catch {
         this._msg = "Could not copy automatically; select the text to copy it.";
       }

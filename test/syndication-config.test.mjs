@@ -161,7 +161,7 @@ test('SOW-125/131: isAutoOn + autoChannelsForType are MATRIX-ONLY (no channels g
   assert.deepEqual(autoChannelsForType(c, 'post').sort(), ['discord']);
   assert.deepEqual(autoChannelsForType(c, 'share'), ['discord']); // share on for discord only (overrides default off)
   // prompt: the default matrix is on for every AUTO channel, so all deliver. (sow-159: mastodon retired.)
-  assert.deepEqual(autoChannelsForType(c, 'prompt').sort(), ['bluesky', 'devto', 'discord', 'discord-category', 'reddit']); // hashnode is MANUAL now (not an auto channel)
+  assert.deepEqual(autoChannelsForType(c, 'prompt').sort(), ['bluesky', 'devto', 'discord', 'discord-category']); // hashnode AND reddit are MANUAL now (sow-260), so neither is an auto channel
 });
 
 test('SOW-125: channelHoldMs uses the per-channel override, else the global hold', () => {
@@ -287,13 +287,16 @@ test('setSyndicationSettings writes the auto-share matrix + per-channel delay, v
 test('reddit-body: default template, config override, and the admin edit path', async () => {
   const { TEMPLATE_TYPES, DEFAULT_TEMPLATES, templateFor, syndicationConfigFromParsed } = await import('../membership/syndication-config-core.mjs');
   assert.ok(TEMPLATE_TYPES.includes('reddit-body'));
-  assert.equal(DEFAULT_TEMPLATES['reddit-body'], '{short-description}'); // the description under the title
-  // side-quest 2026-07-16: the first comment credits the member via {short-description} (which shares carry),
-  // NOT {author-note-italic} (a posts-only intro that blanked the comment for shares).
-  // The first comment now credits the member's Reddit username first ({member-reddit-handle} renders
-  // u/name, falling back to the full name), matching X/Bluesky/Mastodon.
-  assert.match(DEFAULT_TEMPLATES['reddit-comment'], /\{member-reddit-handle\}[\s\S]*\{short-description\}[\s\S]*\{member-url\}/);
-  assert.ok(!/\{author-note/.test(DEFAULT_TEMPLATES['reddit-comment']), 'no author-note dependency, so it fires for a share');
+  // sow-260: the AUTHOR NOTE leads the body and the description follows it. The note is the member's own words
+  // about their own work, so it is the main content rather than a pull-quote in a first comment.
+  assert.equal(DEFAULT_TEMPLATES['reddit-body'], '{author-note}\n\n{short-description}');
+  // sow-260: the first comment is EMPTY by default. It used to append a recruitment CTA carrying two more
+  // gbti.network links to every submission, and Reddit banned the posting account for self-promotion on
+  // 2026-08-25 after only 7 automated posts in 25 days. Assert the CTA specifically, not just emptiness, so
+  // re-adding the pitch under a different wording still trips this.
+  assert.equal(DEFAULT_TEMPLATES['reddit-comment'], '');
+  assert.ok(!/gbti\.network/.test(DEFAULT_TEMPLATES['reddit-comment']), 'no second link back to our own site');
+  assert.ok(!/\{member-url\}/.test(DEFAULT_TEMPLATES['reddit-comment']), 'no join-our-community CTA');
   assert.equal(templateFor(syndicationConfigFromParsed({}), 'reddit-body'), DEFAULT_TEMPLATES['reddit-body']);
   // SOW-140: the dev.to byline MENTIONS the member's dev.to profile ({member-devto-handle}); Hashnode keeps the
   // NAME-based byline ({fullName}), since a dev.to handle is the wrong platform to mention on Hashnode.

@@ -23,7 +23,11 @@ function itemSnapshot(item) {
   return out;
 }
 
-export function buildSocialTask({ item = {}, channel, text, trigger = 'auto', now } = {}) {
+// sow-260: `bodyText` is OPTIONAL and today only Reddit sets it. Every other channel posts one block of
+// text; a Reddit submission is a title plus a URL plus a description under the link, so the human needs
+// the description as a separate thing to paste. It is rendered upstream (membership/syndication-render.mjs
+// renderRedditBody) and carried here so the queue never resolves a template itself.
+export function buildSocialTask({ item = {}, channel, text, bodyText = '', trigger = 'auto', now } = {}) {
   const at = Number(now) || 0;
   const itemId = item.id ? String(item.id) : null;
   return {
@@ -35,6 +39,7 @@ export function buildSocialTask({ item = {}, channel, text, trigger = 'auto', no
     title: item.title || null,
     url: item.url || null,
     text: String(text || ''),
+    bodyText: String(bodyText || ''),
     item: itemSnapshot(item),
     trigger: trigger === 'manual' ? 'manual' : 'auto',
     createdAt: at,

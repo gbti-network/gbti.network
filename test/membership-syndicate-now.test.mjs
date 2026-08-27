@@ -41,8 +41,10 @@ test('GET: readiness (secrets decide for AUTO; manual is always ready), template
   assert.equal(byId.x.ready, true); // SOW-137: X is manual-assist -> always ready (enqueues a Social Queue task, no secrets)
   assert.equal(byId.linkedin.ready, true); // manual-assist -> always ready
   assert.equal(byId.dailydev.ready, true); // SOW-135/136: daily.dev is manual-only -> always ready
-  assert.equal(byId.reddit.ready, false); // AUTO destination, just missing its secrets in this env
-  assert.match(byId.reddit.reason, /missing secrets/);
+  // sow-260: Reddit joined the manual-assist set, so it is ALWAYS ready like x/linkedin/dailydev above. It is
+  // ready precisely BECAUSE it needs no secrets any more: the OAuth app it used to post with was destroyed
+  // when Reddit banned the account on 2026-08-25 and cannot be recreated.
+  assert.equal(byId.reddit.ready, true);
   // sow-217: Hashnode is RETIRED and out of MANUAL_DESTS, so it is no longer OFFERED as a destination at all.
   // Asserting its ABSENCE rather than deleting the line, because this surface is one of the three
   // hand-maintained channel lists: if MANUAL_DESTS ever drifts back out of step with CHANNELS, this fails.
@@ -83,7 +85,11 @@ test('POST discord: renders the edited template server-side (sanitized) and post
 test('POST validations: unknown destination, missing template/channel, missing secrets (reddit included)', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
   const deps = { kv, authorize: superadmin };
-  assert.equal((await handleSyndicateNow(req({ destination: 'reddit', item: ITEM, template: 'x' }), { SIGNUP_KV: kv }, deps)).status, 409); // a real destination now; no secrets in this env
+  // sow-260: reddit no longer 409s on missing secrets, because it no longer HAS secrets. Like X below, a
+  // manual-capability destination always queues to the Social Queue instead of consulting env.
+  const rr = await handleSyndicateNow(req({ destination: 'reddit', item: ITEM, template: 'x' }), { SIGNUP_KV: kv }, deps);
+  assert.equal(rr.status, 200);
+  assert.equal(rr.body.queued, true);
   assert.equal((await handleSyndicateNow(req({ destination: 'myspace', item: ITEM, template: 'x' }), { SIGNUP_KV: kv }, deps)).status, 400);
   assert.equal((await handleSyndicateNow(req({ destination: 'discord', item: ITEM, template: '' }), { SIGNUP_KV: kv }, deps)).status, 400);
   assert.equal((await handleSyndicateNow(req({ destination: 'discord', item: ITEM, template: 'x' }), { ...ENV_DISCORD, SIGNUP_KV: kv }, deps)).status, 400); // no channelId
@@ -224,22 +230,27 @@ test('a manual send cancels the pending queue twin and repoints the dedupe at th
 
 // SOW-088 Radle-style Reddit options: redditKind + a bodyTemplate rendered SERVER-side (same sanitization
 // boundary as the title template) reach the adapter as redditKind/bodyText; other destinations never see them.
-test('POST reddit: redditKind and a server-rendered bodyTemplate reach the adapter', async () => {
+// sow-260: Reddit is manual-assist now, so "Manually Syndicate" QUEUES it instead of posting it. Reddit banned
+// the posting account for self-promotion on 2026-08-25 and the ban destroyed the OAuth app; self-service app
+// creation has been closed since November 2025, so there is no credential to post with and there will not be.
+//
+// This is the flow a superadmin actually uses to put an item on Reddit, so the assertion that matters is that
+// NO adapter is called and a task lands in the queue with something pasteable in it.
+test('sow-260: POST reddit QUEUES a Social Queue task and never calls an adapter', async () => {
   const kv = fakeKV({ [SYND_CONFIG_KEY]: CFG });
-  const envReddit = { REDDIT_CLIENT_ID: 'i', REDDIT_CLIENT_SECRET: 's', REDDIT_REFRESH_TOKEN: 'r', REDDIT_SUBREDDIT: 'GBTI_network', SIGNUP_KV: kv };
-  let seen = null;
-  const adapters = { reddit: { name: 'reddit', enabled: () => true, post: async (it) => { seen = it; return { ok: true, id: 'p1', url: 'https://r/p1' }; } } };
+  const envReddit = { REDDIT_SUBREDDIT: 'GBTI_network', SIGNUP_KV: kv };
+  const adapters = { reddit: { name: 'reddit', enabled: () => true, post: async () => { throw new Error('reddit must not be posted through an adapter'); } } };
   const r = await handleSyndicateNow(
-    req({ destination: 'reddit', item: ITEM, template: '{title}', redditKind: 'self', bodyTemplate: 'Read it: {url}' }),
+    req({ destination: 'reddit', item: ITEM, template: '{title}' }),
     envReddit, { kv, authorize: superadmin, adapters });
   assert.equal(r.status, 200);
-  assert.equal(seen.redditKind, 'self');
-  assert.equal(seen.bodyText, 'Read it: https://gbti.network/prompts/ci-skill/');
-  assert.equal(seen.textOverride, 'CI Skill', 'the payload template is the title, never the stored default');
-  // An invalid kind degrades to link; a missing bodyTemplate sends no bodyText.
-  await handleSyndicateNow(req({ destination: 'reddit', item: ITEM, template: '{title}', redditKind: 'weird' }), envReddit, { kv, authorize: superadmin, adapters });
-  assert.equal(seen.redditKind, 'link');
-  assert.equal(seen.bodyText, undefined);
+  assert.equal(r.body.queued, true, 'queued for a human, not posted');
+  const tasks = [...kv.store.keys()].filter((k) => k.startsWith('social:task:'));
+  assert.equal(tasks.length, 1);
+  const task = JSON.parse(kv.store.get(tasks[0]));
+  assert.equal(task.channel, 'reddit');
+  assert.equal(task.trigger, 'manual');
+  assert.ok(task.text.includes('CI Skill'), 'the rendered title rides along');
 });
 
 // SOW-088: the GET carries the per-channel template overrides for the popup's channel-aware defaults.

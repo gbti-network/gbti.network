@@ -14,12 +14,24 @@ import { channelCapability } from '../../../membership/syndication-config-core.m
 // SOW-121/127: the free web composer for a manual-assist channel, pre-filled with the rendered text. X uses
 // its intent composer; LinkedIn opens the feed share composer with the text (LinkedIn no longer guarantees a
 // text prefill, so the "Copy" button is the reliable fallback: copy, then paste into the composer).
-const composeUrl = (channel, text) => {
-  const t = encodeURIComponent(String(text || ''));
+// sow-260: takes the whole TASK rather than (channel, text), because Reddit is the first channel whose
+// composer prefill needs more than the rendered text: a submission is a title AND a url.
+const REDDIT_SUB = 'GBTI_network'; // hardcoded, as daily.dev hardcodes its squad; the Worker holds REDDIT_SUBREDDIT
+const composeUrl = (task) => {
+  const channel = task?.channel;
+  const text = String(task?.text || '');
+  const t = encodeURIComponent(text);
   if (channel === 'x') return `https://twitter.com/intent/tweet?text=${t}`;
   if (channel === 'linkedin') return `https://www.linkedin.com/feed/?shareActive=true&text=${t}`;
   if (channel === 'dailydev') return 'https://app.daily.dev/squads/gbti_network'; // SOW-135: no text prefill; Assist opens the squad, the Copy button supplies the link
   if (channel === 'hashnode') return 'https://hashnode.com/draft'; // RETAINED for already-queued tasks, see below
+  // sow-260: unlike X and LinkedIn, Reddit's submit form takes a REAL prefill, so Assist lands on a form with
+  // the title and link already filled and only the body left to paste. `text` is the title here (the drain
+  // renders it newline-stripped, since a Reddit title cannot hold one).
+  if (channel === 'reddit') {
+    const u = String(task?.url || '');
+    return `https://www.reddit.com/r/${REDDIT_SUB}/submit?title=${t}${u ? `&url=${encodeURIComponent(u)}` : ''}`;
+  }
   return null;
 };
 // sow-217 RETAINED these three Hashnode entries deliberately, and this is a DEPARTURE from how sow-159
@@ -75,6 +87,10 @@ const CSS = `
   .task .top { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
   .task .ti { font-weight:700; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .task .txt { font-size:12px; color:var(--fg-soft, var(--fg)); background:var(--hover); border-radius:7px; padding:8px 10px; margin:0 0 9px; white-space:pre-wrap; word-break:break-word; line-height:1.5; max-height:100px; overflow:auto; }
+  /* sow-260: Reddit tasks carry a second block, the description that goes under the link. It is marked off
+     from the title above it so the two are not mistaken for one pasteable blob. */
+  .task .txt.body { position:relative; padding-top:20px; max-height:160px; }
+  .task .txt.body .blabel { position:absolute; top:5px; left:10px; font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--fg-mute, var(--fg-soft)); }
   .acts { display:flex; gap:7px; flex-wrap:wrap; }
   .btn { font:inherit; font-size:12px; font-weight:700; border-radius:7px; padding:6px 11px; cursor:pointer; border:1.5px solid var(--line); background:none; color:var(--fg); display:inline-flex; align-items:center; gap:6px; }
   .btn svg { width:13px; height:13px; }
@@ -181,6 +197,7 @@ class GbtiSocialQueue extends GbtiElement {
     this.$$('[data-pg]').forEach((b) => b.addEventListener('click', () => { this._page += b.dataset.pg === 'next' ? 1 : -1; this.render(); }));
     this.$$('[data-assist]').forEach((b) => b.addEventListener('click', () => this._assist(b.dataset.assist)));
     this.$$('[data-copy]').forEach((b) => b.addEventListener('click', () => this._copy(b.dataset.copy)));
+    this.$$('[data-copybody]').forEach((b) => b.addEventListener('click', () => this._copy(b.dataset.copybody, 'bodyText')));
     this.$$('[data-done]').forEach((b) => b.addEventListener('click', () => this._action('done', b.dataset.done)));
     this.$$('[data-del]').forEach((b) => b.addEventListener('click', () => this._action('delete', b.dataset.del)));
     this.$$('[data-post]').forEach((b) => b.addEventListener('click', () => this._action('post', b.dataset.post)));
@@ -196,7 +213,7 @@ class GbtiSocialQueue extends GbtiElement {
     // it here for review) posts through its adapter with one click; a MANUAL channel (x, linkedin) opens the
     // free web composer (Assist) or falls back to Copy, and a human marks it done.
     const label = CH_LABEL[t.channel] || t.channel;
-    const url = composeUrl(t.channel, t.text);
+    const url = composeUrl(t);
     const primary = channelCapability(t.channel) === 'auto'
       ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>`
       : url
@@ -205,7 +222,8 @@ class GbtiSocialQueue extends GbtiElement {
     return `<div class="task">
       <div class="top"><span class="src">${esc(SRC_LABEL[t.source] || t.source || '')}</span>${this._chip(t.channel, '', true)}<span class="ti">${esc(t.title || t.itemId || '(untitled)')}</span><span class="when">${t.createdAt ? esc(fmtDate(t.createdAt)) : ''}</span></div>
       <div class="txt">${esc(t.text || '')}</div>
-      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy</button><button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
+      ${t.bodyText ? `<div class="txt body"><span class="blabel">Body</span>${esc(t.bodyText)}</div>` : ''}
+      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${t.bodyText ? ' title' : ''}</button>${t.bodyText ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">Copy body</button>` : ''}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
     </div>`;
   }
   _doneRow(t) {
@@ -219,13 +237,20 @@ class GbtiSocialQueue extends GbtiElement {
 
   _assist(id) {
     const t = this._byId(id); if (!t) return;
-    const url = composeUrl(t.channel, t.text);
+    const url = composeUrl(t);
     if (url) { try { window.open(url, '_blank', 'noopener'); } catch { /* popup blocked */ } }
-    this._msg = 'Opened the composer. Post it, then click "Mark done".'; this.render();
+    // sow-260: a Reddit task has a body to paste after the prefill lands, so the instruction differs.
+    this._msg = t.bodyText
+      ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".'
+      : 'Opened the composer. Post it, then click "Mark done".';
+    this.render();
   }
-  async _copy(id) {
+  // sow-260: `field` selects which part of the task to copy. Reddit tasks carry a body as well as a title, so
+  // the row offers both; every other channel has only `text` and the default keeps its single Copy button.
+  async _copy(id, field = 'text') {
     const t = this._byId(id); if (!t) return;
-    try { await navigator.clipboard?.writeText?.(t.text || ''); this._msg = 'Copied the post text.'; }
+    const what = field === 'bodyText' ? 'body' : 'post text';
+    try { await navigator.clipboard?.writeText?.(t[field] || ''); this._msg = `Copied the ${what}.`; }
     catch { this._msg = 'Could not copy automatically; select the text to copy it.'; }
     this.render();
   }

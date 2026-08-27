@@ -1,4 +1,22 @@
 #!/usr/bin/env node
+// DORMANT since sow-260 (2026-08-26). NOTHING CALLS THIS.
+//
+// Reddit banned the gbti-labs posting account for self-promotion on 2026-08-25 and reinstated it the same day,
+// but the ban DESTROYED the OAuth application this file authenticated as, which is why every token refresh
+// afterwards returned 401. It cannot be recreated: Reddit closed self-service app creation in November 2025
+// under the Responsible Builder Policy, and the create-app form refuses even after registering for API access.
+// Devvit, the platform Reddit now directs developers to, was investigated and rejected (a Devvit app cannot
+// fetch a first-party domain, and it would post from a bot account holding full mod permissions).
+//
+// Reddit is a MANUAL-ASSIST channel now (CHANNEL_CAPABILITY.reddit === 'manual'), so resolveAdapterRun
+// hard-excludes it and this adapter is never constructed by the drain. The rendering it used to do lives on in
+// membership/syndication-render.mjs (renderRedditTitle / renderRedditBody), which feeds the Social Queue.
+//
+// KEPT rather than deleted, following the same reasoning as the dormant `hashnode` capability entry: a revival
+// is a one-line capability flip plus fresh credentials, not a rebuild. Do not "clean this up" without checking
+// whether Reddit API access has become obtainable again.
+// This script mints a refresh token for an app at reddit.com/prefs/apps. There is no such app any more and
+// one cannot be created, so running it cannot succeed today. It is kept for the day that changes.
 // SOW-088: the Reddit OAuth helper (the recovered Radle refresh token was revoked, so fresh mints happen
 // here). Mirrors scripts/linkedin-auth.mjs: LOCAL-ONLY, tokens print to the terminal, nothing stored.
 //
