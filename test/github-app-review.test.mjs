@@ -88,3 +88,40 @@ test('reviewFileContent decodes base64, rejects non-members paths, and reports a
   assert.equal(missing.status, 200);
   assert.equal(missing.body.text, null);
 });
+
+// sow-183: a MOVE (an author reassignment or a rename) has to carry the item's co-located images to its new
+// folder, and the only way to read a committed image back out of the repo is through this route. An image is
+// binary, so the decoded `text` is mojibake and the bytes are unrecoverable from it. GitHub already sends the
+// base64 in the same response this handler was decoding, so returning it beside the text is not a second call,
+// a wider token scope, or a wider allow-list: it is the bytes the handler had in hand and was discarding.
+test('reviewFileContent returns the RAW base64 beside the text, over the SAME allow-list', async () => {
+  const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0xfe]); // a PNG header
+  const content = bytes.toString('base64');
+  const fetchImpl = async (u) => instOk(u) || { ok: true, async json() { return { content }; } };
+
+  const img = await reviewFileContent(getReq('https://w/membership/file?path=members/alice/posts/x/images/lead.png&ref=main'), env, { ...base, fetchImpl });
+  assert.equal(img.status, 200);
+  assert.equal(img.body.base64, content, 'the caller must get the bytes, not a lossy decode of them');
+  // Round-trips to the ORIGINAL binary. Asserted against the bytes rather than against the string, because a
+  // handler that re-encoded its own mojibake would return a base64 that is the right shape and the wrong file.
+  assert.deepEqual(Buffer.from(img.body.base64, 'base64'), bytes);
+
+  // The allow-list is what stops this being a general file oracle, and it is UNCHANGED: base64 reaches exactly
+  // the paths text already reached, and no others. Asserted per rejected path, so widening any one of them
+  // reds this test rather than silently handing out repo bytes.
+  for (const path of ['house/roles.yml', 'house/bans.yml', 'house/grandfathered.yml', '.github/workflows/deploy.yml', 'members/alice/../../house/roles.yml']) {
+    const r = await reviewFileContent(getReq(`https://w/membership/file?path=${encodeURIComponent(path)}&ref=main`), env, { ...base, fetchImpl });
+    assert.equal(r.status, 400, `${path} must stay rejected`);
+    assert.equal(r.body.base64, undefined, `${path} must not leak bytes`);
+  }
+
+  // A missing file carries no base64 either, so an absent old-folder image reads as "not there" and never as
+  // an empty string the caller could commit.
+  const missing = await reviewFileContent(getReq('https://w/membership/file?path=members/alice/posts/x/images/lead.png&ref=main'), env, { ...base, fetchImpl: async (u) => instOk(u) || { ok: false, status: 404, async json() { return {}; } } });
+  assert.equal(missing.status, 200);
+  assert.equal(missing.body.base64, undefined);
+
+  // An unauthenticated caller gets nothing at all: the new field rides the existing member gate.
+  const anon = await reviewFileContent(getReq('https://w/membership/file?path=members/alice/posts/x/images/lead.png&ref=main'), env, { ...base, fetchUser: async () => { throw new Error('bad token'); }, fetchImpl });
+  assert.equal(anon.status, 401);
+});

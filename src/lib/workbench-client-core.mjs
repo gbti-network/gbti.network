@@ -162,11 +162,16 @@ export function referencedImages(frontmatter) {
  * the resolved commit path).
  *
  * The order is load-bearing:
- *   1. `fromSession` -- the in-tab Map, for an image picked and published without a reload;
- *   2. `fromStore`   -- the Worker's staged store, for one picked in an EARLIER session. It wins over what is
- *      on main, because re-staging the same file name is a replacement of the committed image;
- *   3. `onMain`      -- already committed, the steady state for every re-publish of an item whose image has
- *      not changed. Nothing to send, so this is a skip.
+ *   1. `fromSession`    -- the in-tab Map, for an image picked and published without a reload;
+ *   2. `fromStore`      -- the Worker's staged store, for one picked in an EARLIER session. It wins over what
+ *      is on main, because re-staging the same file name is a replacement of the committed image;
+ *   3. `fromOldFolder`  -- sow-183: on a MOVE (a rename or an author reassignment), the committed copy is in
+ *      the ORIGIN folder, and `onMain` looks at the destination, where nothing is yet. Without this source all
+ *      three lookups missed and the publish REFUSED, so reassigning any item carrying an image was impossible
+ *      without re-picking every image by hand. It ranks BELOW the store on purpose: re-staging a file name is
+ *      still a replacement, and the old committed bytes must not win over the new ones;
+ *   4. `onMain`         -- already committed at the destination, the steady state for every re-publish of an
+ *      item whose image has not changed. Nothing to send, so this is a skip.
  *
  * Anything else REFUSES. The original code silently dropped an image it could not find and opened a PR whose
  * frontmatter pointed at a file that was not in it; Astro's image() has to resolve, so merging that would have
@@ -174,12 +179,47 @@ export function referencedImages(frontmatter) {
  *
  * @returns {Promise<{action:'commit',contentBase64:string}|{action:'skip'}|{action:'refuse',message:string}>}
  */
-export async function planPublishImage(ref, { fromSession, fromStore, onMain } = {}) {
-  const b64 = (fromSession ? fromSession(ref) : null) || (fromStore ? await fromStore(ref) : null);
+export async function planPublishImage(ref, { fromSession, fromStore, fromOldFolder, onMain } = {}) {
+  const b64 = (fromSession ? fromSession(ref) : null)
+    || (fromStore ? await fromStore(ref) : null)
+    || (fromOldFolder ? await fromOldFolder(ref) : null);
   if (b64) return { action: 'commit', contentBase64: b64 };
   if (onMain && (await onMain(ref))) return { action: 'skip' };
   const name = ref?.name || 'that image';
   return { action: 'refuse', message: `the image ${name} is no longer staged; choose it again before publishing` };
+}
+
+/**
+ * sow-183: every file entry ONE referenced image contributes to a publish PR, the MOVE included.
+ *
+ * `planPublishImage` above decides WHERE the bytes come from. This decides WHAT the PR carries, which on a
+ * move is two entries and not one: the image has to be committed into the item's new folder AND deleted from
+ * the old one. Splitting those apart is how a half-move ships. The old folder keeping an orphaned image after
+ * its index.md is deleted is not a red build (nothing references it any more), which is exactly why it would
+ * go unnoticed: the repo quietly accumulates the images of every item ever reassigned.
+ *
+ * `ref` extends the descriptor with the move: `oldPath` is where the committed copy lives now, and
+ * `oldBase64` is its bytes, or null when it is not there. The caller reads it ONCE and passes the value,
+ * rather than passing a lookup, because the same read answers both questions: it is the fallback source for
+ * the copy, and it is the proof the delete has a target. A delete of a path that is not there would be a
+ * fabricated file entry.
+ *
+ * @returns {Promise<{action:'commit'|'skip'|'refuse', files:Array<object>, message?:string}>}
+ */
+export async function planPublishImageFiles(ref, { fromSession, fromStore, onMain } = {}) {
+  const oldPath = ref?.oldPath && ref.oldPath !== ref?.commitPath ? String(ref.oldPath) : null;
+  const oldBase64 = ref?.oldBase64 || null;
+  const plan = await planPublishImage(ref, {
+    fromSession,
+    fromStore,
+    fromOldFolder: oldPath ? () => oldBase64 : null,
+    onMain,
+  });
+  if (plan.action === 'refuse') return { action: 'refuse', files: [], message: plan.message };
+  const files = [];
+  if (plan.action === 'commit') files.push({ path: ref.commitPath, contentBase64: plan.contentBase64 });
+  if (oldPath && oldBase64) files.push({ path: oldPath, content: null });
+  return { action: plan.action, files };
 }
 
 /** The decoded byte length of a base64 payload (padding-aware), for the client-side 1 MB pre-check. */

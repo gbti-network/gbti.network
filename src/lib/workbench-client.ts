@@ -28,7 +28,7 @@ import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImage, referencedImages, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
+import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 
 const MAX_IMAGE_BYTES = 1_048_576; // 1 MB, matching the Worker gate + check-media
@@ -217,6 +217,14 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     const r = await workerGet(`/membership/file?path=${encodeURIComponent(path)}&ref=main`);
     return r?.text ?? null;
   }
+  // sow-183: the same read, returning the RAW base64 GitHub sent rather than the decoded text. An image is
+  // binary, so `text` is mojibake for it and the bytes cannot be recovered from that; this is the only way to
+  // read a committed image back out of the repo, which a move has to do to carry it to the item's new folder.
+  // Same route, same allow-list, same auth: nothing here is reachable that readOwnFile above cannot reach.
+  async function readOwnFileBase64(path: string): Promise<string | null> {
+    const r = await workerGet(`/membership/file?path=${encodeURIComponent(path)}&ref=main`);
+    return r?.base64 ?? null;
+  }
 
   // The core publish: build the file set from PURE builders and POST it to the hosted-authoring endpoint.
   // sow-158 permalink rename (SOW-112 v2, owner-directed rename-at-publish): `path` names the canonical item this
@@ -300,12 +308,23 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     // was picked. The store is keyed by the draft's `<type>:<slug>`, which moves with a permalink edit, so a
     // renamed item also asks under its previous slug before giving up.
     const imagesDir = `${built.path.replace(/\/[^/]*$/, '')}/images`;
+    // sow-183 THE MOVE CASE. Images are co-located: they live in the item's OWN folder, so a rename or an
+    // author reassignment moves them too. Before this, every lookup was pointed at the destination folder,
+    // where nothing is yet, and the publish refused with "the image is no longer staged" -- which made
+    // reassigning any item that carries an image impossible, the owner's /grok prompt among them. The origin
+    // folder derives from origin.oldPath by exactly the rule imagesDir uses on built.path, so one rule
+    // resolves both ends of the move and they cannot drift apart.
+    const oldImagesDir = moved && origin ? `${origin.oldPath.replace(/\/[^/]*$/, '')}/images` : null;
     const itemTokens = [`${type}:${built.slug}`];
     if (origin?.oldSlug && origin.oldSlug !== built.slug) itemTokens.push(`${type}:${origin.oldSlug}`);
     const stagedForCleanup: Array<{ name: string; item: string }> = [];
     for (const ref of referencedImages(built.frontmatter)) {
       const commitPath = `${imagesDir}/${ref.name}`;
-      const plan = await planPublishImage({ name: ref.name, item: itemTokens[0], commitPath }, {
+      const oldPath = oldImagesDir ? `${oldImagesDir}/${ref.name}` : null;
+      // ONE read answers both halves of the move: it is the fallback bytes for the copy into the new folder,
+      // and it is the proof there is something at the old path worth deleting.
+      const oldBase64 = oldPath && oldPath !== commitPath ? await readOwnFileBase64(oldPath) : null;
+      const plan = await planPublishImageFiles({ name: ref.name, item: itemTokens[0], commitPath, oldPath, oldBase64 }, {
         fromSession: (r: any) => pendingImages.get(r.name),
         fromStore: async (r: any) => {
           for (const it of itemTokens) {
@@ -317,8 +336,9 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
         onMain: async (r: any) => (await readOwnFile(r.commitPath)) != null,
       });
       if (plan.action === 'refuse') throw err('bad-request', plan.message);
-      if (plan.action === 'skip') continue;
-      files.push({ path: commitPath, contentBase64: plan.contentBase64 });
+      if (!plan.files.length) continue;
+      files.push(...plan.files);
+      if (plan.action !== 'commit') continue;
       pendingImages.delete(ref.name);
       for (const it of itemTokens) stagedForCleanup.push({ name: ref.name, item: it });
     }

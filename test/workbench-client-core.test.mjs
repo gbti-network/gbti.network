@@ -3,7 +3,7 @@
 // filter/tier-gate, the comment-visibility coercion, and the favorite derivation. Uses a FAKE encrypt (no Worker).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planMemberFiles, planPublishImage, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImages, normalizeImageFields, normalizeImageValue, IMAGE_FIELD_KEYS, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
+import { planMemberFiles, planPublishImage, planPublishImageFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImages, normalizeImageFields, normalizeImageValue, IMAGE_FIELD_KEYS, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
 import { buildCommentFile, buildContentFile, buildShareFile, shareId, commentId, parseContentFile, serializeContentFile } from '../client/src/content-ops.mjs';
 
 const fakeEncrypt = async (plaintext, assetId) => ({ v: 1, kid: '1', iv: 'IV', aad: assetId, ct: 'CT(' + plaintext + ')' });
@@ -398,6 +398,135 @@ test('planPublishImage: an image already committed on main is a SKIP, not a fail
   // that carries a lead image.
   const plan = await planPublishImage(IMG, { fromSession: () => undefined, fromStore: async () => null, onMain: async () => true });
   assert.deepEqual(plan, { action: 'skip' });
+});
+
+// ---- sow-183: a MOVE has to carry the images with it (owner report 2026-08-27) ----
+//
+// Images are co-located, so an item's folder IS its images' folder: reassigning the author or changing the
+// slug moves them. Every lookup above points at the DESTINATION, where nothing is yet, so on a move the
+// session missed, the store missed (publish deletes the staged copy once it merges), and main missed. The
+// publish then refused with "no longer staged", and reassigning any item carrying an image was impossible.
+// Since co-location is universal here, that was most of them.
+const MOVED = {
+  name: 'lead.png',
+  item: 'prompt:grok',
+  commitPath: 'members/atwellpub/prompts/grok/images/lead.png',
+  oldPath: 'members/gbtilabs/prompts/grok/images/lead.png',
+};
+
+test('planPublishImage: on a move the committed copy in the ORIGIN folder is found and carried over', async () => {
+  // THE DISCRIMINATING CASE, and the exact state of every already-published item being reassigned: nothing
+  // in the tab, nothing staged, nothing at the destination, and the real bytes sitting in the old folder.
+  const plan = await planPublishImage(MOVED, {
+    fromSession: () => undefined,
+    fromStore: async () => null,
+    fromOldFolder: async () => 'OLD_FOLDER_B64',
+    onMain: async () => false,
+  });
+  assert.deepEqual(plan, { action: 'commit', contentBase64: 'OLD_FOLDER_B64' });
+});
+
+test('planPublishImage: a re-staged image still OUTRANKS the old folder copy', async () => {
+  // The order is the whole point. If the old folder were tried first, replacing an image DURING a
+  // reassignment would carry the picture being replaced into the new folder and report success. A test that
+  // only proved the old folder is consulted would pass with the order wrong.
+  const plan = await planPublishImage(MOVED, {
+    fromSession: () => undefined,
+    fromStore: async () => 'STORE_B64',
+    fromOldFolder: async () => { throw new Error('the old folder must not be consulted ahead of the store'); },
+    onMain: never,
+  });
+  assert.deepEqual(plan, { action: 'commit', contentBase64: 'STORE_B64' });
+});
+
+test('planPublishImageFiles: a move emits the new-path commit AND the old-path delete, never one alone', async () => {
+  // A half-move is the failure that would ship unnoticed. Committing without deleting leaves an orphaned
+  // image in a folder whose index.md is gone: nothing references it, so the build stays green and the repo
+  // quietly accumulates the images of every item ever reassigned.
+  const r = await planPublishImageFiles(
+    { ...MOVED, oldBase64: 'OLD_FOLDER_B64' },
+    { fromSession: () => undefined, fromStore: async () => null, onMain: async () => false },
+  );
+  assert.equal(r.action, 'commit');
+  assert.deepEqual(r.files, [
+    { path: 'members/atwellpub/prompts/grok/images/lead.png', contentBase64: 'OLD_FOLDER_B64' },
+    { path: 'members/gbtilabs/prompts/grok/images/lead.png', content: null },
+  ]);
+});
+
+test('planPublishImageFiles: a re-staged image on a move still clears the old folder', async () => {
+  // The bytes come from the store, so the old copy is not needed for the carry. It still has to GO: the
+  // delete is about the origin folder being emptied, not about where the new bytes came from.
+  const r = await planPublishImageFiles(
+    { ...MOVED, oldBase64: 'OLD_FOLDER_B64' },
+    { fromSession: () => undefined, fromStore: async () => 'STORE_B64', onMain: never },
+  );
+  assert.deepEqual(r.files, [
+    { path: 'members/atwellpub/prompts/grok/images/lead.png', contentBase64: 'STORE_B64' },
+    { path: 'members/gbtilabs/prompts/grok/images/lead.png', content: null },
+  ]);
+});
+
+test('planPublishImageFiles: during a move the ORIGIN folder outranks a copy already at the destination', async () => {
+  // The old folder is consulted BEFORE main, so a stray file at the destination does not short-circuit the
+  // carry. That is the right way round: the move already proved the destination index.md does not exist, so
+  // anything sitting in the destination images folder is debris from an aborted attempt, not the item's
+  // picture. Committing identical bytes over it is a no-op in the tree; trusting it could publish an unrelated
+  // image under this item's name.
+  const r = await planPublishImageFiles(
+    { ...MOVED, oldBase64: 'OLD_FOLDER_B64' },
+    { fromSession: () => undefined, fromStore: async () => null, onMain: async () => true },
+  );
+  assert.equal(r.action, 'commit');
+  assert.deepEqual(r.files, [
+    { path: 'members/atwellpub/prompts/grok/images/lead.png', contentBase64: 'OLD_FOLDER_B64' },
+    { path: 'members/gbtilabs/prompts/grok/images/lead.png', content: null },
+  ]);
+});
+
+test('planPublishImageFiles: a move with an EMPTY origin folder falls through to main and skips', async () => {
+  // The origin holding nothing is the only way main is reached on a move. It must still skip rather than
+  // refuse (the image is where the frontmatter says it is), and it must not emit a delete for a path that
+  // holds nothing.
+  const r = await planPublishImageFiles(
+    { ...MOVED, oldBase64: null },
+    { fromSession: () => undefined, fromStore: async () => null, onMain: async () => true },
+  );
+  assert.equal(r.action, 'skip');
+  assert.deepEqual(r.files, []);
+});
+
+test('planPublishImageFiles: a PLAIN edit emits the commit and never a delete', async () => {
+  // No oldPath means no move. The delete must be reachable only through a move, or an ordinary re-publish
+  // would delete the image it just committed.
+  const r = await planPublishImageFiles(
+    { name: 'lead.png', item: 'post:hello', commitPath: 'members/gwen/posts/hello/images/lead.png' },
+    { fromSession: () => 'SESSION_B64', fromStore: never, onMain: never },
+  );
+  assert.deepEqual(r.files, [{ path: 'members/gwen/posts/hello/images/lead.png', contentBase64: 'SESSION_B64' }]);
+});
+
+test('planPublishImageFiles: nothing anywhere still REFUSES, and fabricates no delete', async () => {
+  // An absent old copy must not produce a delete entry. Deleting a path that is not there is a file entry
+  // for a file that does not exist, which is the PR asking the repo to remove something it never had.
+  const r = await planPublishImageFiles(
+    { ...MOVED, oldBase64: null },
+    { fromSession: () => undefined, fromStore: async () => null, onMain: async () => false },
+  );
+  assert.equal(r.action, 'refuse');
+  assert.deepEqual(r.files, []);
+  assert.match(r.message, /lead\.png/);
+});
+
+test('planPublishImageFiles: an oldPath equal to the commit path is not a move', async () => {
+  // Defence against a caller that derives the origin folder wrongly and hands back the destination. Deleting
+  // that path would delete the file the same PR just committed, in the same PR.
+  const same = 'members/gwen/posts/hello/images/lead.png';
+  const r = await planPublishImageFiles(
+    { name: 'lead.png', item: 'post:hello', commitPath: same, oldPath: same, oldBase64: 'B64' },
+    { fromSession: () => 'SESSION_B64', fromStore: never, onMain: never },
+  );
+  assert.deepEqual(r.files, [{ path: same, contentBase64: 'SESSION_B64' }]);
 });
 
 test('planPublishImage: bytes nowhere and no file on main REFUSES, naming the image', async () => {

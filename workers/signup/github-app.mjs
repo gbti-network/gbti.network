@@ -330,7 +330,7 @@ export async function reviewPrFiles(request, env, deps = {}) {
   return { status: 200, body: { ok: true, files } };
 }
 
-/** GET /membership/file?path=P&ref=R -> { ok, text }: a content file at a ref (the PR head), for preview-as-merged.
+/** GET /membership/file?path=P&ref=R -> { ok, text, base64 }: a content file at a ref (the PR head), for preview-as-merged.
  *  Restricted to clean members/** paths so it can never be a general repo-file oracle (even though the repo is
  *  public). Returns text:null for a missing file. */
 export async function reviewFileContent(request, env, deps = {}) {
@@ -359,12 +359,21 @@ export async function reviewFileContent(request, env, deps = {}) {
   if (!res || !res.ok) return { status: 502, body: { error: 'file_failed', message: `GitHub returned ${res ? res.status : 'no response'}` } };
   const data = await res.json().catch(() => ({}));
   if (Array.isArray(data) || !data?.content) return { status: 200, body: { ok: true, text: null } };
+  // The RAW base64 is returned beside the decoded text. GitHub already sends it in this response, so this is
+  // not a second call, a wider scope, or a wider path allow-list: it is the bytes this handler had in hand and
+  // was throwing away. A BINARY file (an image) decodes to mojibake in `text` and is unrecoverable from it,
+  // which is why the caller needs this: an author reassignment has to carry the item's co-located images to
+  // its new folder, and there is no other way to read them back out of the repo.
+  //
+  // The allow-list above is unchanged and is what keeps this from being a general file oracle. Widening it
+  // here would be the mistake: `base64` reaches exactly the paths `text` already reached.
+  const base64 = String(data.content).replace(/\s+/g, '');
   let text = null;
   try {
-    const bin = atob(String(data.content).replace(/\s+/g, ''));
+    const bin = atob(base64);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
     text = new TextDecoder().decode(bytes);
   } catch { text = null; }
-  return { status: 200, body: { ok: true, text } };
+  return { status: 200, body: { ok: true, text, base64 } };
 }
