@@ -366,6 +366,31 @@ test('authorSelectValue: with no usable path it says UNKNOWN rather than guessin
   assert.equal(authorSelectValue({ itemPath: '', author: 'atwellpub' }), 'member:atwellpub');
 });
 
+test('authorSelectValue: a PENDING reassignment outranks the path, because that is what pending means', () => {
+  // THE BUG THIS CLOSES, reported by the owner 2026-08-26: pick a new author, Save draft, refresh, and the
+  // pick was gone. The item is still physically at the OLD owner's path until publish, so resolving from the
+  // path alone renders the owner the superadmin is moving AWAY from. To them that is indistinguishable from
+  // the choice having been silently discarded, and it was: nothing persisted it at all.
+  const at = 'members/gbtilabs/prompts/grok-skill-for-claude-code/index.md';
+  assert.equal(authorSelectValue({ itemPath: at, pendingTarget: { scope: 'member', username: 'atwellpub' } }), 'member:atwellpub');
+  assert.equal(authorSelectValue({ itemPath: 'members/atwellpub/posts/x/index.md', pendingTarget: { scope: 'house' } }), 'house');
+  // The frontmatter author must not beat a pending pick either.
+  assert.equal(authorSelectValue({ itemPath: '', author: 'gbtilabs', pendingTarget: { scope: 'member', username: 'atwellpub' } }), 'member:atwellpub');
+  assert.equal(authorSelectValue({ itemPath: at, pendingTarget: { scope: 'member', username: 'AtwellPub' } }), 'member:atwellpub', 'normalised like every other source');
+});
+
+test('authorSelectValue: a MALFORMED pending target falls through instead of resolving to a move', () => {
+  // Fail toward the item staying where it is. A junk value that resolved to a folder would be a move nobody
+  // chose, which is the exact class of defect the picker was just repaired for. The path answer is correct
+  // and safe, so it wins over anything unusable.
+  const at = 'members/atwellpub/posts/x/index.md';
+  for (const bad of [null, undefined, {}, { scope: 'member' }, { scope: 'member', username: '' }, { scope: 'nonsense' }, 'member:atwellpub', 42]) {
+    assert.equal(authorSelectValue({ itemPath: at, pendingTarget: bad }), 'member:atwellpub', `${JSON.stringify(bad)} must not decide the owner`);
+  }
+  // And with no path either, an unusable pending target still yields the inert placeholder, never a folder.
+  assert.equal(authorSelectValue({ itemPath: '', pendingTarget: { scope: 'member', username: '' } }), '');
+});
+
 test('authorTargetFor: an UNTOUCHED picker moves nothing, whatever it happens to be displaying', () => {
   // This is the second half of the 2026-08-24 defect and the backstop for the first. Even if the rendered
   // value were wrong again, an author who does not touch the control cannot reassign their own item.

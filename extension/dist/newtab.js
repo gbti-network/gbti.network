@@ -3071,7 +3071,13 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }).map((d) => ({ ...d, isDraft: true }));
     return [...Array.isArray(content) ? content : [], ...extra];
   }
-  function authorSelectValue({ itemPath, author } = {}) {
+  function authorSelectValue({ itemPath, author, pendingTarget } = {}) {
+    const pt = pendingTarget && typeof pendingTarget === "object" ? pendingTarget : null;
+    if (pt) {
+      if (pt.scope === "house") return "house";
+      const u = String(pt.username || "").trim().toLowerCase();
+      if (pt.scope === "member" && u) return `member:${u}`;
+    }
     const p = String(itemPath || "");
     const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(p);
     if (m) return `member:${m[1].toLowerCase()}`;
@@ -8983,7 +8989,7 @@ ${String(body ?? "")}`;
       }
       return out;
     }
-    load(type, input, body, path, { staged = false, scope, store: store2 = null } = {}) {
+    load(type, input, body, path, { staged = false, scope, store: store2 = null, authorTarget = null } = {}) {
       this.type = type || this.type;
       this.preset = { input: input || {}, body: body || "" };
       this.itemPath = path || null;
@@ -8991,6 +8997,7 @@ ${String(body ?? "")}`;
       this.itemStore = store2;
       this.staged = Boolean(staged);
       this._slugVal = null;
+      this._pendingAuthorTarget = authorTarget && typeof authorTarget === "object" ? authorTarget : null;
       if (this.isConnected) this.render();
     }
     // SOW-062 P6: resolve a cover value to a VIEWABLE url for the rail preview. An absolute or already-optimized
@@ -9065,7 +9072,11 @@ ${String(body ?? "")}`;
         } catch {
         }
       }
-      const ownerSelValue = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(p.author) });
+      const ownerSelValue = authorSelectValue({
+        itemPath: this.itemPath,
+        author: this.presetStr(p.author),
+        pendingTarget: this._pendingAuthorTarget
+      });
       this._ownerSelInitial = "";
       const headerKeys = /* @__PURE__ */ new Set(["title", "slug"]);
       const docSecKeys = DOC_SECTION_KEYS[this.type] || /* @__PURE__ */ new Set();
@@ -10139,6 +10150,7 @@ ${String(body ?? "")}`;
           const owner = authorSelectValue({ itemPath: res.path });
           if (owner.startsWith("member:")) this.preset.input.author = owner.slice(7);
         }
+        this._pendingAuthorTarget = null;
         if (res?.path) {
           this.itemPath = res.path;
           this.itemScope = res.path.startsWith("house/") ? "house" : "member";
@@ -10238,14 +10250,19 @@ ${String(body ?? "")}`;
         if (this.fields.some((f) => f.key === "status")) input.status = "draft";
         if (["post", "product", "prompt"].includes(type)) input.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
         const authorNote = this.$("#authornote")?.value ?? void 0;
+        const ownerSel = this.$("#ownerSelect");
+        const trueOwner = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(this.preset?.input?.author) });
+        const authorTarget = ownerSel ? authorTargetFor(ownerSel.value, trueOwner) ?? null : void 0;
         const res = await this.client.saveDraft({
           type,
           input,
           body,
           path: this.itemPath || void 0,
           // SOW-112 v2: a changed permalink stages on the item's own branch
-          ...typeof authorNote === "string" ? { authorNote } : {}
+          ...typeof authorNote === "string" ? { authorNote } : {},
+          ...authorTarget !== void 0 ? { authorTarget } : {}
         });
+        this._pendingAuthorTarget = authorTarget ?? this._pendingAuthorTarget;
         this._setChip(`${CHECK2} Draft saved`, "ok");
         if (res?.renamed) this._banner(`Draft saved with the pending permalink change: <b>${esc(res.renamed.from)}</b> becomes <b>${esc(res.renamed.to)}</b> when you publish. The old link will redirect.`);
         this.out(res?.renamed ? `<span class="tag ok">saved</span> Draft staged on your fork with the pending permalink change (${esc(res.renamed.from)} to ${esc(res.renamed.to)}); the rename happens when you publish.` : '<span class="tag ok">saved</span> Draft staged on your fork. Open <b>Drafts</b> to review or publish it.');
@@ -17216,7 +17233,7 @@ ${String(body ?? "")}`;
         });
         const ed = this.$("gbti-content-editor");
         const e = this._editing;
-        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store });
+        if (ed?.load) ed.load(e.type, e.frontmatter, e.body, e.path, { staged: e.staged, scope: e.path ? void 0 : this._scopeNow(), store: e.store, authorTarget: e.authorTarget ?? null });
         ed?.addEventListener?.("gbti-renamed", (ev) => {
           const r = ev?.detail || {};
           if (!r.path) return;
@@ -17544,7 +17561,7 @@ ${String(body ?? "")}`;
       this._draftMsg = null;
       try {
         const full = await this.client.readDraft({ type: d.type, slug: d.slug, store: d.store, path: d.path });
-        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: true, store: d.store };
+        this._editing = { type: d.type, frontmatter: full.frontmatter, body: full.body, path: full.path || d.path || "", staged: true, store: d.store, authorTarget: full.authorTarget ?? null };
         this._writeHash(`#tab=${encodeURIComponent(d.type)}&draft=${encodeURIComponent(d.type)}:${encodeURIComponent(d.slug)}`);
         try {
           const v = await this.client.validateContent({ type: d.type, input: full.frontmatter, body: full.body });

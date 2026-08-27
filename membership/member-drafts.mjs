@@ -10,6 +10,39 @@ export const DRAFTS_MAX_TOTAL_BYTES = 1_000_000;
 
 const TYPE_RE = /^(post|product|prompt|profile)$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
+// A github login, matched exactly as the folder segment it becomes. Deliberately the same shape the Author
+// picker's `member:<login>` value carries, so a value that round-trips through the store is one the picker
+// can render back without re-parsing it differently than it was written.
+const LOGIN_RE = /^[a-z0-9][a-z0-9-]{0,38}$/;
+
+/**
+ * Normalize a pending author reassignment, or null.
+ *
+ * WHAT THIS IS FOR. The superadmin Author picker is a PENDING choice: it takes effect at publish, not at
+ * save. Before this field existed the choice lived only in the DOM, so saving a draft and reloading silently
+ * discarded it, and publishing that draft from the Drafts list reassigned nothing while reporting success.
+ *
+ * THIS VALUE CONFERS NO AUTHORITY AND MUST NEVER BE READ AS THOUGH IT DID. The draft route is signed-in and
+ * non-banned only (workers/signup/membership-drafts.mjs), so any member can store any target here, including
+ * one naming somebody else's folder. That is deliberately harmless: the folder decision is re-resolved at
+ * publish from the caller's own identity (workers/signup/membership-author.mjs re-runs authorizeSuperadmin
+ * "rather than trusted from the request body"), and a non-superadmin who stored a foreign target gets a 400
+ * there. The invariant a future change must not break: nothing downstream may let this stored value
+ * influence whether a caller is allowed to write outside their own folder.
+ *
+ * So the validation below is a SHAPE check, keeping the store free of junk that the picker would then have
+ * to defend against. It is not a permission check and must not be mistaken for one.
+ */
+function normalizeAuthorTarget(v) {
+  if (v == null) return null;
+  if (typeof v !== 'object') throw new DraftError('the author target must be an object');
+  const scope = String(v.scope ?? '');
+  if (scope === 'house') return { scope: 'house' };
+  if (scope !== 'member') throw new DraftError('the author target scope must be house or member');
+  const username = String(v.username ?? '').trim().toLowerCase();
+  if (!LOGIN_RE.test(username)) throw new DraftError('the author target username is invalid');
+  return { scope: 'member', username };
+}
 
 export class DraftError extends Error {}
 
@@ -27,8 +60,8 @@ function utf8Bytes(s) {
 
 /**
  * Upsert one draft record. The record is the editor's restore state: { type, slug, pendingSlug?, path,
- * frontmatter, body, updatedAt }. Caps: per-draft bytes, item count, total bytes. Throws DraftError on any
- * violation (the handler maps it to a 400).
+ * frontmatter, body, authorTarget?, updatedAt }. Caps: per-draft bytes, item count, total bytes. Throws
+ * DraftError on any violation (the handler maps it to a 400).
  */
 export function applyDraftPut(state, draft, { now = () => new Date().toISOString() } = {}) {
   const d = draft ?? {};
@@ -50,12 +83,21 @@ export function applyDraftPut(state, draft, { now = () => new Date().toISOString
   const authorNote = typeof d.authorNote === 'string'
     ? d.authorNote
     : (typeof prev?.authorNote === 'string' ? prev.authorNote : null);
+  // The pending author reassignment travels with the draft, on exactly the authorNote terms above and for
+  // exactly the same reason: an ABSENT value PRESERVES what is stored rather than clearing it, because
+  // src/pages/workbench/preview.astro is a second saveDraft caller that knows nothing about this field and
+  // must not be able to destroy a superadmin's pending reassignment simply by saving. Clearing is explicit:
+  // send null, which is what the editor does once a publish has consumed the move.
+  const authorTarget = d.authorTarget !== undefined
+    ? normalizeAuthorTarget(d.authorTarget)
+    : (prev?.authorTarget ?? null);
   const record = {
     type, slug, pendingSlug,
     path: typeof d.path === 'string' ? d.path : null,
     frontmatter: d.frontmatter && typeof d.frontmatter === 'object' ? d.frontmatter : {},
     body: typeof d.body === 'string' ? d.body : '',
     ...(authorNote != null ? { authorNote } : {}),
+    ...(authorTarget != null ? { authorTarget } : {}),
     updatedAt: now(),
   };
   if (utf8Bytes(JSON.stringify(record)) > DRAFT_MAX_BYTES) throw new DraftError(`a draft may not exceed ${DRAFT_MAX_BYTES} bytes`);

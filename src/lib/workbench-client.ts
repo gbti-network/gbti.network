@@ -115,6 +115,9 @@ function mapDraftRecord(rec: any) {
     frontmatter: fm,
     body: rec?.body || '',
     authorNote: typeof rec?.authorNote === 'string' ? rec.authorNote : null,
+    // sow-183 follow-up: the PENDING author reassignment, so reopening a draft restores the superadmin's
+    // choice instead of silently showing the owner they were moving the item away from.
+    authorTarget: rec?.authorTarget && typeof rec.authorTarget === 'object' ? rec.authorTarget : null,
     pull: null,
     store: 'kv', // sow-194: the store discriminator, so a KV draft never collides with a repo draft on merge
     publishedAt: fm.publishedAt ? Number(fm.publishedAt) : null,
@@ -531,7 +534,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
       const r = await workerGet('/membership/author/targets');
       return { members: Array.isArray(r?.members) ? r.members : [] };
     },
-    async saveDraft({ type, input = {}, body = '', path, authorNote }: any) {
+    async saveDraft({ type, input = {}, body = '', path, authorNote, authorTarget }: any) {
       // A members-only draft is allowed: its plain body stays in the private, erasable KV draft store (SOW-157),
       // never git; publishDraft() encrypts it at publish time. So no members refusal here.
       const slug = String((input && input.slug) || '');
@@ -541,6 +544,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
           type, slug, path: path || null, frontmatter: input, body,
           // SOW-014: omitted rather than nulled, so a caller that does not know about the note cannot clear one.
           ...(typeof authorNote === 'string' ? { authorNote } : {}),
+          // Same contract for the pending author reassignment, and it matters more here: preview.astro saves
+          // drafts too and passes no authorTarget, so nulling on absence would let a Preview quietly throw
+          // away a reassignment the superadmin had already chosen. `null` is passed explicitly to CLEAR, which
+          // is what the editor does once a publish has consumed the move.
+          ...(authorTarget !== undefined ? { authorTarget } : {}),
         },
       });
       return { state: 'staged' };
@@ -568,7 +576,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
       const r = await workerGet('/membership/drafts');
       const rec = (Array.isArray(r?.drafts) ? r.drafts : []).find((d: any) => d.type === type && d.slug === slug);
       if (!rec) throw err('not-found', 'could not open that draft');
-      return { frontmatter: rec.frontmatter || {}, body: rec.body || '', path: rec.path || '', authorNote: typeof rec.authorNote === 'string' ? rec.authorNote : null };
+      return {
+        frontmatter: rec.frontmatter || {}, body: rec.body || '', path: rec.path || '',
+        authorNote: typeof rec.authorNote === 'string' ? rec.authorNote : null,
+        authorTarget: rec.authorTarget && typeof rec.authorTarget === 'object' ? rec.authorTarget : null,
+      };
     },
     discardDraft,
     async publishDraft({ type, slug, store, path }: any) {
@@ -584,6 +596,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
       const res = await publish({
         type, input: rec.frontmatter || {}, body: rec.body || '', path: rec.path || undefined,
         ...(typeof rec.authorNote === 'string' ? { authorNote: rec.authorNote } : {}),
+        // WITHOUT THIS LINE THE WHOLE FEATURE IS A LIE. The editor would show the pending reassignment,
+        // the store would hold it, and publishing the draft from the Drafts list would quietly publish it
+        // back to the original owner and report success. That silent no-op is the behaviour this change
+        // exists to remove, so it must be forwarded on EVERY publish path, not only the editor's.
+        ...(rec.authorTarget && typeof rec.authorTarget === 'object' ? { authorTarget: rec.authorTarget } : {}),
       });
       await discardDraft({ type, slug }).catch(() => {}); // best-effort: the draft is now a submitted PR
       return { prNumber: res.prNumber, prUrl: res.prUrl };

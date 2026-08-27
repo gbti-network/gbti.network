@@ -52,3 +52,39 @@ test('after a publish the owner is read back off the returned path, not from a h
   // its dependencies into the page bundle: measured at +535 KB on gbti-ui.js, for one string.
   assert.doesNotMatch(src, /from '\.\.\/\.\.\/\.\.\/client\/src\//, 'the editor now imports client/src, which bloats the page bundle');
 });
+
+// ---- the pending reassignment must travel WITH the draft (owner report 2026-08-26) ----
+//
+// The repair above stopped the picker moving items on its own, but the superadmin's pick still lived only in
+// the DOM: Save draft, refresh, and it was gone. These assert the editor writes it down and reads it back.
+// They are source-text guards on the wiring, exactly like the two above and for the same stated reason: the
+// pure decisions are tested in workspace-core.test.mjs and member-drafts.test.mjs, and a correct helper that
+// nothing calls would pass its own tests while the picker reverted just as before.
+
+const client = readFileSync(new URL('../src/lib/workbench-client.ts', import.meta.url), 'utf8');
+
+test('doDraft persists the pick, compared against the item TRUE owner rather than the rendered value', () => {
+  assert.match(src, /authorTargetFor\(ownerSel\.value,\s*trueOwner\)/, 'doDraft no longer computes a pending target');
+  // The baseline is load-bearing and is NOT the same one publish uses. Comparing against the rendered value
+  // would store nothing when a pending pick is reloaded and saved again untouched, silently dropping it on
+  // the second save; the rendered value already reflects the pending pick, so it always looks unchanged.
+  assert.match(src, /const trueOwner = authorSelectValue\(\{ itemPath: this\.itemPath/, 'the true-owner baseline is gone');
+  // undefined must PRESERVE (the picker does not render for a non-superadmin, nor on the extension host, and
+  // neither may clear a pending move it cannot see). Only an explicit null clears.
+  assert.match(src, /ownerSel \? \(authorTargetFor\([^)]*\) \?\? null\) : undefined/, 'the preserve-versus-clear contract changed');
+  assert.match(src, /\.\.\.\(authorTarget !== undefined \? \{ authorTarget \} : \{\}\)/, 'doDraft stopped omitting an absent target');
+});
+
+test('the picker prefers a pending target over the path, and a consumed move is cleared', () => {
+  assert.match(src, /pendingTarget: this\._pendingAuthorTarget/, 'the picker ignores the stored pending target');
+  assert.match(src, /this\._pendingAuthorTarget = null;/, 'a consumed move can re-arm: publish no longer clears the pending target');
+});
+
+test('EVERY publish path forwards the stored target, not only the editor', () => {
+  // Without this the feature is a lie in the most damaging direction: the editor shows the reassignment, the
+  // store holds it, and publishing that draft from the Drafts list republishes it to the ORIGINAL owner and
+  // reports success. A silent no-op on an action the superadmin believes they took.
+  assert.match(client, /rec\.authorTarget && typeof rec\.authorTarget === 'object' \? \{ authorTarget: rec\.authorTarget \}/, 'publishDraft dropped the stored reassignment');
+  assert.match(client, /async saveDraft\(\{.*authorTarget.*\}: any\)/, 'saveDraft stopped accepting a pending target');
+  assert.match(client, /\.\.\.\(authorTarget !== undefined \? \{ authorTarget \} : \{\}\)/, 'saveDraft stopped preserving an absent target');
+});

@@ -77,6 +77,55 @@ test('eraseMemberDrafts: a hard KV delete (SOW-024)', async () => {
   assert.equal(await kv.get(DRAFTS_KEY('77')), null);
 });
 
+// ---- the PENDING author reassignment (sow-183 follow-up, owner report 2026-08-26) ----
+//
+// THESE TESTS CROSS THE SERIALIZATION BOUNDARY, and that is the whole point of them. The bug was that the
+// superadmin's Author pick lived only in the DOM: a test that read the control and asserted the publish
+// payload in the same tick passed the entire time the bug was live. Nothing short of writing the value down
+// and reading it back can tell the fixed code from the broken code.
+
+test('applyDraftPut: a pending author reassignment SURVIVES the round trip', () => {
+  // The record is rebuilt from a closed whitelist, so a field that is not named is dropped. Before this the
+  // editor could have sent the pick and the store would still have swallowed it without complaint.
+  let s = applyDraftPut(normalizeDrafts(null), draft({ authorTarget: { scope: 'member', username: 'atwellpub' } }));
+  assert.deepEqual(listDraftRecords(s)[0].authorTarget, { scope: 'member', username: 'atwellpub' });
+
+  s = applyDraftPut(normalizeDrafts(null), draft({ authorTarget: { scope: 'house' } }));
+  assert.deepEqual(listDraftRecords(s)[0].authorTarget, { scope: 'house' }, 'a house target carries no username');
+});
+
+test('applyDraftPut: an ABSENT author target PRESERVES a stored one', () => {
+  // src/pages/workbench/preview.astro saves drafts too and knows nothing about this field. If absence cleared,
+  // pressing Preview would silently throw away a reassignment the superadmin had already chosen, which is a
+  // quieter version of the very bug being fixed. Same contract as authorNote, for the same reason.
+  let s = applyDraftPut(normalizeDrafts(null), draft({ authorTarget: { scope: 'member', username: 'atwellpub' } }));
+  s = applyDraftPut(s, draft({ body: 'edited by a caller that has never heard of authorTarget' }));
+  assert.deepEqual(listDraftRecords(s)[0].authorTarget, { scope: 'member', username: 'atwellpub' });
+  assert.equal(listDraftRecords(s)[0].body, 'edited by a caller that has never heard of authorTarget');
+});
+
+test('applyDraftPut: an EXPLICIT null CLEARS the pending target', () => {
+  // The other half of the contract, and it must work, or a superadmin who changes their mind back to the
+  // current owner is stuck with a move they no longer want. The editor sends null for exactly that case, and
+  // again once a publish has consumed the move.
+  let s = applyDraftPut(normalizeDrafts(null), draft({ authorTarget: { scope: 'member', username: 'atwellpub' } }));
+  s = applyDraftPut(s, draft({ authorTarget: null }));
+  assert.equal(listDraftRecords(s)[0].authorTarget, undefined, 'cleared, not merely overwritten with a falsy value');
+});
+
+test('applyDraftPut: a MALFORMED author target is refused rather than stored', () => {
+  // A shape check, NOT a permission check. The draft route is signed-in-only, so any member can store any
+  // target here; that is harmless because the folder decision is re-resolved at publish from the caller's own
+  // identity and never trusted from the record. What this keeps out is junk the picker would then have to
+  // defend against on the way back out.
+  for (const bad of [{ scope: 'nonsense' }, { scope: 'member' }, { scope: 'member', username: '' }, { scope: 'member', username: 'not a login!' }, { scope: 'member', username: '-leading' }, 'member:atwellpub', 7]) {
+    assert.throws(() => applyDraftPut(normalizeDrafts(null), draft({ authorTarget: bad })), DraftError, `${JSON.stringify(bad)} must be refused`);
+  }
+  // A well-formed target is normalised on the way in, so what comes back out is what the picker renders.
+  const s = applyDraftPut(normalizeDrafts(null), draft({ authorTarget: { scope: 'member', username: '  AtwellPub  ' } }));
+  assert.deepEqual(listDraftRecords(s)[0].authorTarget, { scope: 'member', username: 'atwellpub' });
+});
+
 // ---- the hosted publishFiles seam (branch -> itemId mapping) ----
 
 test('hostedPublishFiles: maps the gbti/ branch identity to the hosted itemId', async () => {

@@ -332,11 +332,24 @@ export function mergeTypeItems(content = [], drafts = []) {
  * told. '' is deliberate and must render as an inert placeholder rather than falling through to the first real
  * option, because the first real option is the one that moves the item.
  *
+ * Precedence: a PENDING reassignment stored on the draft, then the item's path, then the frontmatter author.
+ *
  * The path rules MIRROR renameOriginOf in src/lib/workbench-client-core.mjs, which is what publish() uses to
  * decide the item's origin. If these two disagreed, an untouched picker would look unchanged and still be read
  * as a move.
  */
-export function authorSelectValue({ itemPath, author } = {}) {
+export function authorSelectValue({ itemPath, author, pendingTarget } = {}) {
+  // A PENDING reassignment outranks where the item currently is, because that is precisely what it means: the
+  // superadmin has chosen a new owner and has not published it yet. Resolving the path first would render the
+  // OLD owner over a saved choice, which reads to the author as the choice having been silently dropped, and
+  // is the defect this parameter exists to close. It is checked first, and only a well-formed value is
+  // honoured: a malformed one falls through to the path rather than resolving to a folder move.
+  const pt = pendingTarget && typeof pendingTarget === 'object' ? pendingTarget : null;
+  if (pt) {
+    if (pt.scope === 'house') return 'house';
+    const u = String(pt.username || '').trim().toLowerCase();
+    if (pt.scope === 'member' && u) return `member:${u}`;
+  }
   const p = String(itemPath || '');
   const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(p);
   if (m) return `member:${m[1].toLowerCase()}`;

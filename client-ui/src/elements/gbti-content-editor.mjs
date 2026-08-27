@@ -186,7 +186,7 @@ class GbtiContentEditor extends GbtiElement {
     return out;
   }
 
-  load(type, input, body, path, { staged = false, scope, store = null } = {}) {
+  load(type, input, body, path, { staged = false, scope, store = null, authorTarget = null } = {}) {
     this.type = type || this.type;
     this.preset = { input: input || {}, body: body || '' };
     this.itemPath = path || null; // SOW-062 P6: the item's index.md path, to resolve a repo-relative cover for preview
@@ -196,6 +196,9 @@ class GbtiContentEditor extends GbtiElement {
     this.itemStore = store; // sow-194: 'repo' when opened from a committed repo draft; Preview reads it canonically
     this.staged = Boolean(staged); // SOW-106 QA: loaded from a fork draft branch (not live until published)
     this._slugVal = null; // SOW-112 v2: the pending permalink value follows the loaded item
+    // The PENDING author reassignment carried by a saved draft. Set per load, exactly like _slugVal above, so
+    // a value left over from a previously-open item can never be attributed to this one.
+    this._pendingAuthorTarget = authorTarget && typeof authorTarget === 'object' ? authorTarget : null;
     if (this.isConnected) this.render();
   }
 
@@ -290,7 +293,11 @@ class GbtiContentEditor extends GbtiElement {
     // The item's own path is where it actually IS, and it is persisted with a draft; the frontmatter author is
     // not (it is not a form field, so gather() drops it on every save). Deriving from the path is what stops an
     // untouched picker from reading as "House / GBTI Network". See authorSelectValue.
-    const ownerSelValue = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(p.author) });
+    // A pending reassignment outranks both, because it IS the unpublished choice: rendering the current owner
+    // over a saved pick is what made the choice look silently discarded.
+    const ownerSelValue = authorSelectValue({
+      itemPath: this.itemPath, author: this.presetStr(p.author), pendingTarget: this._pendingAuthorTarget,
+    });
     this._ownerSelInitial = ''; // reset per render: a stale value from a previous item must not read as "unchanged"
     // SOW-062 Phase 6: header = title + slug ONLY (the description moved into the rail Details per the mockup). The
     // rail renders the per-type RAIL_SCHEMA in order; fields NOT in the schema (nor header, nor publicStub which the
@@ -1414,6 +1421,10 @@ class GbtiContentEditor extends GbtiElement {
         const owner = authorSelectValue({ itemPath: res.path });
         if (owner.startsWith('member:')) this.preset.input.author = owner.slice(7);
       }
+      // The move has been consumed, so the pending target must not survive it. Left set, it would outrank the
+      // item's new path on the next render and show the item as still pending a move it already made, and a
+      // later draft save would write that stale target back into the store.
+      this._pendingAuthorTarget = null;
       // sow-183: keep itemPath/itemScope live from the Worker's own account of where the item now sits, so a
       // SECOND publish in the same session (no reload) targets the new location rather than the just-deleted
       // old one -- true for either a rename or a reassignment, and a harmless no-op for a plain edit.
@@ -1516,10 +1527,27 @@ class GbtiContentEditor extends GbtiElement {
       if (this.fields.some((f) => f.key === 'status')) input.status = 'draft'; // SOW-062 P6: status is action-driven (no rail dropdown)
       if (['post', 'product', 'prompt'].includes(type)) input.updatedAt = new Date().toISOString(); // SOW-062 P6: last-updated-locally
       const authorNote = this.$('#authornote')?.value ?? undefined;
+      // The pending author reassignment travels WITH the draft. Before this it lived only in the DOM, so saving
+      // and reloading discarded the superadmin's choice, and publishing that draft from the Drafts list
+      // reassigned nothing while reporting success.
+      //
+      // THE BASELINE IS THE ITEM'S TRUE OWNER, NOT THE RENDERED VALUE, and the difference is the whole
+      // semantics of the stored field: it means "the chosen owner differs from where this item actually is".
+      // Comparing against the rendered value instead would store nothing when a pending pick is reloaded and
+      // saved again untouched, quietly dropping it on the second save.
+      //
+      // undefined PRESERVES (the picker is not rendered at all for a non-superadmin, and for the extension
+      // host, neither of which may clear a pending move they cannot see). An explicit null CLEARS, which is
+      // what a pick that matches the true owner means.
+      const ownerSel = this.$('#ownerSelect');
+      const trueOwner = authorSelectValue({ itemPath: this.itemPath, author: this.presetStr(this.preset?.input?.author) });
+      const authorTarget = ownerSel ? (authorTargetFor(ownerSel.value, trueOwner) ?? null) : undefined;
       const res = await this.client.saveDraft({
         type, input, body, path: this.itemPath || undefined, // SOW-112 v2: a changed permalink stages on the item's own branch
         ...(typeof authorNote === 'string' ? { authorNote } : {}),
+        ...(authorTarget !== undefined ? { authorTarget } : {}),
       });
+      this._pendingAuthorTarget = authorTarget ?? this._pendingAuthorTarget;
       this._setChip(`${CHECK} Draft saved`, 'ok');
       // A pending rename is a big deal — say so in the top banner too (the bottom status line hides below the fold).
       if (res?.renamed) this._banner(`Draft saved with the pending permalink change: <b>${esc(res.renamed.from)}</b> becomes <b>${esc(res.renamed.to)}</b> when you publish. The old link will redirect.`);
