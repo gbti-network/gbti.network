@@ -19,6 +19,12 @@
 # superadmin-tier by intent; the two superadmins own them explicitly even if /house/ is later delegated.
 /house/content-channels.yml  @atwellpub @gbtilabs
 /house/moderation-flags.yml  @atwellpub @gbtilabs
+
+# sow-271: the site-wide presentation toggles are superadmin-tier by intent. This pin is what MAKES the
+# extension-CTA switch a superadmin setting: without it, "superadmin only" would be a claim the admin UI makes
+# and an admin could walk around it with a pull request. The endpoint rank check and this pin are the two
+# independent authorities, and the gate is the one that actually merges.
+/house/site-settings.yml     @atwellpub @gbtilabs
 # SOW-022: applets are a SUPERADMIN-only content type (GBTI does not host member code). Explicit so the rule
 # holds even if /house/ is later delegated to an admin team. The collection glob also excludes member folders,
 # and validate-content rejects any members/*/applets/.
