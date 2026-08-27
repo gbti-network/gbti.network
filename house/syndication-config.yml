@@ -109,10 +109,16 @@ syndication:
         "{title}"\n\n{short-description}\n\n{url}{author-note-block}\n\n{hashtags}
       share: 'Shared on the GBTI Network: "{title}"\n\n{short-description}\n\n{url}\n\n{hashtags}'
     reddit:
-      # sow-260 (2026-08-26): the stored recruitment-CTA first comment is GONE, and no reddit-comment key
-      # here means the code default applies, which is now empty. It used to append two more gbti.network
-      # links and a join-our-community pitch to every submission. Reddit banned the posting account for
-      # self-promotion on 2026-08-25 after only 7 automated posts in 25 days, so ratio rather than volume is
-      # the likely cause and this comment was the biggest single contributor. The member's own words are not
-      # lost: the author note now LEADS the post body, which is more prominent than a first comment was.
-      share: '{title} {shareurl}'
+      # sow-260 (2026-08-26): the stored recruitment-CTA first comment is GONE. It used to append two more
+      # gbti.network links and a join-our-community pitch to every submission. Reddit banned the posting
+      # account for self-promotion on 2026-08-25 after only 7 automated posts in 25 days, so ratio rather
+      # than volume is the likely cause and this comment was the biggest single contributor.
+      #
+      # No reddit-comment key here means the CODE default applies, which since 2026-08-27 is the author note
+      # alone, attributed and quoted, with no CTA of any kind.
+      #
+      # The share title is '{title}' and must NOT carry a url. Reddit puts the link in its own field, so a
+      # title holding it too duplicates it in the submission and spends part of the 300-character cap on it.
+      # This template said '{title} {shareurl}' until 2026-08-27 and was the last place that defect survived
+      # after the code default was fixed.
+      share: '{title}'

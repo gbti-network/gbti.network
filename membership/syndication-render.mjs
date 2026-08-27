@@ -50,10 +50,27 @@ export function renderRedditTitle(cfg, item = {}, { textOverride } = {}) {
 }
 
 /**
- * The Reddit post BODY: the description shown under the link. Since sow-260 this leads with the member's own
- * author note and carries the short description after it, so the note is the main content rather than a
- * decorative quote in a first comment. Empty is a legitimate result (an item with neither a note nor a blurb),
- * and callers must treat it as "post no body" rather than posting an empty string.
+ * The Reddit FIRST COMMENT: the author note, attributed to the member. Owner decision 2026-08-27.
+ *
+ * Reddit gives a MANUAL poster the link preview card OR body text, never both. The API could do both, which
+ * is why the pre-ban automated posts carry a card AND a description (kind=link with selftext attached), but
+ * the web composer has no such option and the OAuth app that reached the API is gone. The owner chose the
+ * card, so the note lives in a comment posted right after the link.
+ *
+ * Empty is a legitimate result (an item with no author note, which is every share), and callers must treat it
+ * as "there is no comment to post" rather than posting an empty string.
+ */
+export function renderRedditComment(cfg, item = {}) {
+  if (!cfg) return '';
+  const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
+  const tpl = templateFor(cfg, 'reddit-comment', 'reddit', { stub: stubish }) || '';
+  return String(renderTemplate(tpl, item, { limit: REDDIT_BODY_LIMIT }) || '').trim();
+}
+
+/**
+ * The Reddit post BODY: the description under the link, used ONLY by the dormant adapter's kind=self path.
+ * The MANUAL rail does not use it: a manual submission is a link post (for the card), which has no body, so
+ * renderRedditComment carries the note instead. Empty is legitimate; treat it as "post no body".
  */
 export function renderRedditBody(cfg, item = {}) {
   if (!cfg) return '';

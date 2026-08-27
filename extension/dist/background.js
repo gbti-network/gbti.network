@@ -21941,7 +21941,7 @@ var DEFAULT_DEVTO_INTRO = "**By {member-devto-handle}, [GBTI Network Member]({me
 var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
 var DEFAULT_DEVTO_BODY = "{body}";
 var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
-var DEFAULT_REDDIT_COMMENT = "";
+var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
 var DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_SHARE_FORMAT,
   // sow-180: content-first, no member credit

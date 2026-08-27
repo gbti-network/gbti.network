@@ -197,7 +197,7 @@ class GbtiSocialQueue extends GbtiElement {
     this.$$('[data-pg]').forEach((b) => b.addEventListener('click', () => { this._page += b.dataset.pg === 'next' ? 1 : -1; this.render(); }));
     this.$$('[data-assist]').forEach((b) => b.addEventListener('click', () => this._assist(b.dataset.assist)));
     this.$$('[data-copy]').forEach((b) => b.addEventListener('click', () => this._copy(b.dataset.copy)));
-    this.$$('[data-copybody]').forEach((b) => b.addEventListener('click', () => this._copy(b.dataset.copybody, 'bodyText')));
+    this.$$('[data-copybody]').forEach((b) => b.addEventListener('click', () => { const t = this._byId(b.dataset.copybody); this._copy(b.dataset.copybody, this._extra(t)?.field || 'bodyText'); }));
     this.$$('[data-done]').forEach((b) => b.addEventListener('click', () => this._action('done', b.dataset.done)));
     this.$$('[data-del]').forEach((b) => b.addEventListener('click', () => this._action('delete', b.dataset.del)));
     this.$$('[data-post]').forEach((b) => b.addEventListener('click', () => this._action('post', b.dataset.post)));
@@ -208,12 +208,22 @@ class GbtiSocialQueue extends GbtiElement {
   _byId(id) { return (this._data?.pending || []).find((t) => t.id === id) || (this._data?.done || []).find((t) => t.id === id) || null; }
   _chip(channel, status, big) { return `<span class="chip ${status === 'sent' ? 'sent' : status === 'failed' ? 'failed' : ''}${big ? ' big' : ''}">${socialIcon(CH_ICON[channel] || channel, big ? 14 : 12)}${esc(CH_LABEL[channel] || channel)}${status ? ` ${esc(status)}` : ''}</span>`; }
 
+  // sow-260: a Reddit task carries a SECOND thing to paste. Since 2026-08-27 that is the author note as a
+  // first COMMENT (a manual Reddit submission is a link post, which earns the preview card but has no body).
+  // Tasks queued before that date carry a `bodyText` instead, so both are read and the label follows the
+  // field rather than being written twice, which is how a label and its copy button drift apart.
+  _extra(t) {
+    if (t?.commentText) return { field: 'commentText', label: 'First comment', copy: 'Copy comment' };
+    if (t?.bodyText) return { field: 'bodyText', label: 'Body', copy: 'Copy body' };
+    return null;
+  }
   _todoRow(t) {
     // The primary action depends on the channel's capability: an AUTO channel (an On-Manual matrix cell put
     // it here for review) posts through its adapter with one click; a MANUAL channel (x, linkedin) opens the
     // free web composer (Assist) or falls back to Copy, and a human marks it done.
     const label = CH_LABEL[t.channel] || t.channel;
     const url = composeUrl(t);
+    const x = this._extra(t);
     const primary = channelCapability(t.channel) === 'auto'
       ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>`
       : url
@@ -222,8 +232,8 @@ class GbtiSocialQueue extends GbtiElement {
     return `<div class="task">
       <div class="top"><span class="src">${esc(SRC_LABEL[t.source] || t.source || '')}</span>${this._chip(t.channel, '', true)}<span class="ti">${esc(t.title || t.itemId || '(untitled)')}</span><span class="when">${t.createdAt ? esc(fmtDate(t.createdAt)) : ''}</span></div>
       <div class="txt">${esc(t.text || '')}</div>
-      ${t.bodyText ? `<div class="txt body"><span class="blabel">Body</span>${esc(t.bodyText)}</div>` : ''}
-      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${t.bodyText ? ' title' : ''}</button>${t.bodyText ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">Copy body</button>` : ''}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
+      ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(t[x.field])}</div>` : ''}
+      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${x ? ' title' : ''}</button>${x ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">${esc(x.copy)}</button>` : ''}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
     </div>`;
   }
   _doneRow(t) {
@@ -240,16 +250,21 @@ class GbtiSocialQueue extends GbtiElement {
     const url = composeUrl(t);
     if (url) { try { window.open(url, '_blank', 'noopener'); } catch { /* popup blocked */ } }
     // sow-260: a Reddit task has a body to paste after the prefill lands, so the instruction differs.
-    this._msg = t.bodyText
-      ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".'
-      : 'Opened the composer. Post it, then click "Mark done".';
+    // sow-260: a Reddit task is TWO actions. Assist opens the LINK composer, which is what earns the preview
+    // card; the author note cannot ride in a link post, so it is pasted as the first comment afterwards.
+    const x = this._extra(t);
+    this._msg = x?.field === 'commentText'
+      ? 'Opened Reddit with the title and link filled in. Post it, then paste the first comment below, then click "Mark done".'
+      : x
+        ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".'
+        : 'Opened the composer. Post it, then click "Mark done".';
     this.render();
   }
   // sow-260: `field` selects which part of the task to copy. Reddit tasks carry a body as well as a title, so
   // the row offers both; every other channel has only `text` and the default keeps its single Copy button.
   async _copy(id, field = 'text') {
     const t = this._byId(id); if (!t) return;
-    const what = field === 'bodyText' ? 'body' : 'post text';
+    const what = field === 'commentText' ? 'first comment' : field === 'bodyText' ? 'body' : 'post text';
     try { await navigator.clipboard?.writeText?.(t[field] || ''); this._msg = `Copied the ${what}.`; }
     catch { this._msg = 'Could not copy automatically; select the text to copy it.'; }
     this.render();

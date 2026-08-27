@@ -161,7 +161,7 @@ test('endpoint POST action=post: manual-capability channels, missing secrets, an
 // It is the FIRST manual channel whose submission is not one block of text: a Reddit post is a title, a url and
 // a description under the link. This asserts all three reach the queue, because a task carrying only the title
 // would send a superadmin to Reddit with nothing to paste and no way to know something was missing.
-test('sow-260: reddit enqueues a manual task carrying the title AND the body, and never calls an adapter', async () => {
+test('sow-260: reddit enqueues a manual task carrying the title AND the first comment, and never calls an adapter', async () => {
   const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
     auto_matrix: { post: { discord: 'off', 'discord-category': 'off', bluesky: 'off', devto: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
@@ -188,18 +188,22 @@ test('sow-260: reddit enqueues a manual task carrying the title AND the body, an
   // showed the URL glued onto the title. Assert the absence, not just the presence of the title.
   assert.ok(!tasks[0].text.includes('https://'), 'the url belongs in the url field, never in the title');
   assert.equal(tasks[0].url, 'https://gbti.network/articles/hello/', 'and it IS carried, separately');
-  // The BODY, author note FIRST (sow-260: the note is the main content, the blurb rides with it).
-  assert.ok(tasks[0].bodyText.includes('I built this because'), 'the author note is in the body');
-  assert.ok(tasks[0].bodyText.includes('A short description.'), 'the short description rides with it');
-  assert.ok(tasks[0].bodyText.indexOf('I built this') < tasks[0].bodyText.indexOf('A short description'),
-    'the author note LEADS; it is the main content, not a footnote');
-  // No recruitment CTA anywhere in what we hand the human to paste.
-  assert.ok(!/gbti\.network\/members/.test(tasks[0].bodyText), 'no join-our-community CTA in the body');
+  // The FIRST COMMENT (owner decision 2026-08-27). Reddit gives a manual poster the preview card OR body
+  // text, never both, so the post is a link post and the author note becomes the first comment.
+  assert.ok(tasks[0].commentText.includes('I built this because'), 'the author note IS the first comment');
+  assert.ok(tasks[0].commentText.startsWith('From '), 'it is attributed, so a reader knows whose words these are');
+  assert.ok(tasks[0].commentText.includes('> '), 'and quoted as a markdown blockquote, matching the owner reference post');
+  // The comment is the note, NOT the description. The description is the page's own; only the note is the
+  // member speaking, and duplicating the blurb here would just repeat what the link preview already shows.
+  assert.ok(!tasks[0].commentText.includes('A short description.'), 'the blurb does not ride along in the comment');
+  // No recruitment CTA anywhere in what we hand the human to paste. This is what drew the ban.
+  assert.ok(!/gbti\.network\/members/.test(tasks[0].commentText), 'no join-our-community CTA in the comment');
+  assert.ok(!/join our/i.test(tasks[0].commentText), 'and no pitch of any other wording');
 });
 
 // The note is optional (an article may have none), and sow-220 shipped after a note-less article posted a lone
 // `""` to Reddit. The blurb must stand alone cleanly, with no dangling punctuation and no leading blank line.
-test('sow-260/sow-220: a note-less item degrades to the description alone, with no empty-quote debris', async () => {
+test('sow-260/sow-220: a note-less item yields NO comment at all, with no dangling label or empty quote', async () => {
   const cfg = JSON.stringify({ syndication: { enabled: true, require_approval: false, hold_minutes: 60,
     auto_matrix: { post: { discord: 'off', 'discord-category': 'off', bluesky: 'off', devto: 'off', x: 'off', linkedin: 'off', dailydev: 'off', hashnode: 'off' } } } });
   const kv = fakeKV({ [SYND_CONFIG_KEY]: cfg });
@@ -209,6 +213,9 @@ test('sow-260/sow-220: a note-less item degrades to the description alone, with 
   }, { kv, now: at(0) });
   await drainSyndication({}, { kv, now: at(AFTER_HOLD), adapters: {} });
   const t = (await listTasks(kv))[0];
-  assert.equal(t.bodyText, 'Only a description.', 'the blurb stands alone, trimmed, with nothing around it');
-  assert.ok(!/["'']{2}/.test(t.bodyText), 'no empty quote pair, which is the sow-220 defect');
+  // sow-220 shipped after a note-less article posted a lone `""` to Reddit. The label now travels WITH the
+  // note, so no note means no comment at all rather than "From u/alice:" hanging over an empty quote.
+  assert.equal(t.commentText, '', 'no note means no comment, not a label over nothing');
+  assert.ok(!/From /.test(t.commentText), 'no dangling attribution label');
+  assert.ok(!/["'’]{2}/.test(t.commentText), 'no empty quote pair, which is the sow-220 defect');
 });

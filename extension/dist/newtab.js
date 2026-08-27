@@ -4619,7 +4619,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var DEFAULT_HASHNODE_INTRO = "**By [{fullName}]({member-url}), GBTI Network Member.** Originally published on [gbti.network]({url}).";
   var DEFAULT_DEVTO_BODY = "{body}";
   var DEFAULT_DEVTO_FOOTER = "---\n\nAre you a writer, musician, or product developer? We would love to support your work on the GBTI Network. For more information about how to join our community visit https://gbti.network\n\nTo follow {fullName}'s work more closely, consider joining our network and subscribing to them directly: {member-url}";
-  var DEFAULT_REDDIT_COMMENT = "";
+  var DEFAULT_REDDIT_COMMENT = "{author-note-attributed}";
   var DEFAULT_TEMPLATES = Object.freeze({
     share: DEFAULT_SHARE_FORMAT,
     // sow-180: content-first, no member credit
@@ -4942,7 +4942,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }));
       this.$$("[data-assist]").forEach((b) => b.addEventListener("click", () => this._assist(b.dataset.assist)));
       this.$$("[data-copy]").forEach((b) => b.addEventListener("click", () => this._copy(b.dataset.copy)));
-      this.$$("[data-copybody]").forEach((b) => b.addEventListener("click", () => this._copy(b.dataset.copybody, "bodyText")));
+      this.$$("[data-copybody]").forEach((b) => b.addEventListener("click", () => {
+        const t = this._byId(b.dataset.copybody);
+        this._copy(b.dataset.copybody, this._extra(t)?.field || "bodyText");
+      }));
       this.$$("[data-done]").forEach((b) => b.addEventListener("click", () => this._action("done", b.dataset.done)));
       this.$$("[data-del]").forEach((b) => b.addEventListener("click", () => this._action("delete", b.dataset.del)));
       this.$$("[data-post]").forEach((b) => b.addEventListener("click", () => this._action("post", b.dataset.post)));
@@ -4959,15 +4962,25 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     _chip(channel, status, big) {
       return `<span class="chip ${status === "sent" ? "sent" : status === "failed" ? "failed" : ""}${big ? " big" : ""}">${socialIcon(CH_ICON[channel] || channel, big ? 14 : 12)}${esc(CH_LABEL[channel] || channel)}${status ? ` ${esc(status)}` : ""}</span>`;
     }
+    // sow-260: a Reddit task carries a SECOND thing to paste. Since 2026-08-27 that is the author note as a
+    // first COMMENT (a manual Reddit submission is a link post, which earns the preview card but has no body).
+    // Tasks queued before that date carry a `bodyText` instead, so both are read and the label follows the
+    // field rather than being written twice, which is how a label and its copy button drift apart.
+    _extra(t) {
+      if (t?.commentText) return { field: "commentText", label: "First comment", copy: "Copy comment" };
+      if (t?.bodyText) return { field: "bodyText", label: "Body", copy: "Copy body" };
+      return null;
+    }
     _todoRow(t) {
       const label = CH_LABEL[t.channel] || t.channel;
       const url = composeUrl(t);
+      const x = this._extra(t);
       const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
       return `<div class="task">
       <div class="top"><span class="src">${esc(SRC_LABEL[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc(fmtDate(t.createdAt)) : ""}</span></div>
       <div class="txt">${esc(t.text || "")}</div>
-      ${t.bodyText ? `<div class="txt body"><span class="blabel">Body</span>${esc(t.bodyText)}</div>` : ""}
-      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${t.bodyText ? " title" : ""}</button>${t.bodyText ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">Copy body</button>` : ""}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
+      ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(t[x.field])}</div>` : ""}
+      <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${x ? " title" : ""}</button>${x ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">${esc(x.copy)}</button>` : ""}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
     </div>`;
     }
     _doneRow(t) {
@@ -4988,7 +5001,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         } catch {
         }
       }
-      this._msg = t.bodyText ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".' : 'Opened the composer. Post it, then click "Mark done".';
+      const x = this._extra(t);
+      this._msg = x?.field === "commentText" ? 'Opened Reddit with the title and link filled in. Post it, then paste the first comment below, then click "Mark done".' : x ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".' : 'Opened the composer. Post it, then click "Mark done".';
       this.render();
     }
     // sow-260: `field` selects which part of the task to copy. Reddit tasks carry a body as well as a title, so
@@ -4996,7 +5010,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     async _copy(id, field = "text") {
       const t = this._byId(id);
       if (!t) return;
-      const what = field === "bodyText" ? "body" : "post text";
+      const what = field === "commentText" ? "first comment" : field === "bodyText" ? "body" : "post text";
       try {
         await navigator.clipboard?.writeText?.(t[field] || "");
         this._msg = `Copied the ${what}.`;
@@ -18275,6 +18289,16 @@ From the author:
       // {member-reddit-handle} = the member's Reddit username as u/name (from profile links.reddit), else the
       // full name. Reddit renders u/name as a profile link natively; redditHandleFrom strictly validates.
       memberreddithandle: redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName,
+      // sow-260: {author-note-attributed} = the author note as an ATTRIBUTED markdown BLOCKQUOTE, addressed with
+      // the member's Reddit handle, or EMPTY when the item has no note. This is the whole Reddit FIRST COMMENT.
+      // Reddit gives a manual poster the preview card OR body text, never both (the API could do both via
+      // kind=link plus selftext; the web composer cannot), so the owner chose the card and moved the note into a
+      // comment. The label travels WITH the value on purpose: a template writing "From {member-reddit-handle}:"
+      // itself would leave that line dangling over nothing for a note-less item, which is the exact defect
+      // {author-note-block} and {author-note-quoted-italic} were both created to avoid.
+      authornoteattributed: String(item.authorNote || "").trim() ? `From ${redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName}:
+
+` + `"${sanitizeMentions(String(item.authorNote).trim())}"`.split("\n").map((l) => l.trim() ? `> ${l.trim()}` : ">").join("\n") : "",
       // SOW-140: {member-devto-handle} = the member's OWN dev.to @handle (from profile links.devto) rendered as a
       // native dev.to mention, else the sanitized full name (mirrors {member-x-handle}). Used in the dev.to byline.
       memberdevtohandle: devtoHandleFrom(item.authorDevto) ? `@${devtoHandleFrom(item.authorDevto)}` : fullName,

@@ -235,6 +235,18 @@ export function renderTemplate(template, item = {}, { limit = 2000, previewMenti
     // {member-reddit-handle} = the member's Reddit username as u/name (from profile links.reddit), else the
     // full name. Reddit renders u/name as a profile link natively; redditHandleFrom strictly validates.
     memberreddithandle: redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName,
+    // sow-260: {author-note-attributed} = the author note as an ATTRIBUTED markdown BLOCKQUOTE, addressed with
+    // the member's Reddit handle, or EMPTY when the item has no note. This is the whole Reddit FIRST COMMENT.
+    // Reddit gives a manual poster the preview card OR body text, never both (the API could do both via
+    // kind=link plus selftext; the web composer cannot), so the owner chose the card and moved the note into a
+    // comment. The label travels WITH the value on purpose: a template writing "From {member-reddit-handle}:"
+    // itself would leave that line dangling over nothing for a note-less item, which is the exact defect
+    // {author-note-block} and {author-note-quoted-italic} were both created to avoid.
+    authornoteattributed: String(item.authorNote || '').trim()
+      ? `From ${redditHandleFrom(item.authorReddit) ? `u/${redditHandleFrom(item.authorReddit)}` : fullName}:\n\n`
+        + `"${sanitizeMentions(String(item.authorNote).trim())}"`
+          .split('\n').map((l) => (l.trim() ? `> ${l.trim()}` : '>')).join('\n')
+      : '',
     // SOW-140: {member-devto-handle} = the member's OWN dev.to @handle (from profile links.devto) rendered as a
     // native dev.to mention, else the sanitized full name (mirrors {member-x-handle}). Used in the dev.to byline.
     memberdevtohandle: devtoHandleFrom(item.authorDevto) ? `@${devtoHandleFrom(item.authorDevto)}` : fullName,

@@ -23,11 +23,15 @@ function itemSnapshot(item) {
   return out;
 }
 
-// sow-260: `bodyText` is OPTIONAL and today only Reddit sets it. Every other channel posts one block of
-// text; a Reddit submission is a title plus a URL plus a description under the link, so the human needs
-// the description as a separate thing to paste. It is rendered upstream (membership/syndication-render.mjs
-// renderRedditBody) and carried here so the queue never resolves a template itself.
-export function buildSocialTask({ item = {}, channel, text, bodyText = '', trigger = 'auto', now } = {}) {
+// sow-260: `commentText` is OPTIONAL and today only Reddit sets it. Every other channel posts one block of
+// text and is done. A Reddit submission is TWO actions: the link post itself (which is what earns the preview
+// card) and then the author note as a first comment, because Reddit gives a manual poster the card OR body
+// text and never both. It is rendered upstream (membership/syndication-render.mjs renderRedditComment) and
+// carried here so the queue never resolves a template itself.
+//
+// `bodyText` is kept for tasks queued before 2026-08-27, which carry a body rather than a comment. Reading
+// both means an already-queued task still shows its pasteable text instead of silently losing it.
+export function buildSocialTask({ item = {}, channel, text, bodyText = '', commentText = '', trigger = 'auto', now } = {}) {
   const at = Number(now) || 0;
   const itemId = item.id ? String(item.id) : null;
   return {
@@ -40,6 +44,7 @@ export function buildSocialTask({ item = {}, channel, text, bodyText = '', trigg
     url: item.url || null,
     text: String(text || ''),
     bodyText: String(bodyText || ''),
+    commentText: String(commentText || ''),
     item: itemSnapshot(item),
     trigger: trigger === 'manual' ? 'manual' : 'auto',
     createdAt: at,

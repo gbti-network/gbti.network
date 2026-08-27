@@ -179,14 +179,20 @@ const DEFAULT_DEVTO_FOOTER = '---\n\nAre you a writer, musician, or product deve
 // author note when none exists, which is why a share got no crediting comment before.
 // The first comment credits the member's Reddit username when their profile lists one ({member-reddit-handle}
 // renders u/name, which Reddit links natively), falling back to the full name, matching X/Bluesky/Mastodon.
-// sow-260 (2026-08-26): EMPTY, deliberately. This used to append a recruitment CTA carrying two more
-// gbti.network links to every single submission. Reddit banned the posting account for self-promotion on
-// 2026-08-25; the automation had posted only 7 times in 25 days, so volume was not the trigger and RATIO
-// is the likely one, and this comment was the largest single contributor to it. The member credit it also
-// carried is not lost: the author note now leads the post BODY (DEFAULT_REDDIT_BODY above), which is more
-// prominent than a first comment was. Non-empty is still supported, and a superadmin-supplied
-// item.commentText still posts, so this is a default rather than a removal.
-const DEFAULT_REDDIT_COMMENT = '';
+// sow-260 (2026-08-26): the recruitment CTA is GONE. It used to append two more gbti.network links and a
+// join-our-community pitch to every single submission. Reddit banned the posting account for self-promotion
+// on 2026-08-25; the automation had posted only 7 times in 25 days, so volume was not the trigger and RATIO
+// is the likely one, and this comment was the largest single contributor to it.
+//
+// What replaces it is the author note alone, attributed to the member. Owner decision 2026-08-27, taken from
+// a post they made by hand as the reference: Reddit gives a MANUAL poster the link preview card OR body text
+// and never both. The API could do both (kind=link carrying selftext, which is how the old posts got a card
+// AND a description); the web composer offers no such option, and the app that could reach the API is gone.
+// The owner chose the card, so the note moves into the first comment, which is the only place left for it.
+//
+// The token carries its own "From u/name:" label and its own quotes, so a note-less item renders NOTHING
+// rather than a dangling label over an empty quote. That specific defect has now happened twice here.
+const DEFAULT_REDDIT_COMMENT = '{author-note-attributed}';
 export const DEFAULT_TEMPLATES = Object.freeze({
   share: DEFAULT_SHARE_FORMAT, // sow-180: content-first, no member credit
   post: DEFAULT_FORMAT,

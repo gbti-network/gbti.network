@@ -290,13 +290,15 @@ test('reddit-body: default template, config override, and the admin edit path', 
   // sow-260: the AUTHOR NOTE leads the body and the description follows it. The note is the member's own words
   // about their own work, so it is the main content rather than a pull-quote in a first comment.
   assert.equal(DEFAULT_TEMPLATES['reddit-body'], '{author-note}\n\n{short-description}');
-  // sow-260: the first comment is EMPTY by default. It used to append a recruitment CTA carrying two more
-  // gbti.network links to every submission, and Reddit banned the posting account for self-promotion on
-  // 2026-08-25 after only 7 automated posts in 25 days. Assert the CTA specifically, not just emptiness, so
-  // re-adding the pitch under a different wording still trips this.
-  assert.equal(DEFAULT_TEMPLATES['reddit-comment'], '');
+  // Owner decision 2026-08-27: the first comment carries the AUTHOR NOTE, attributed, and nothing else.
+  // Reddit gives a manual poster the preview card OR body text and never both, so the post is a link post
+  // (for the card) and the note is the only place left for the member's own words.
+  assert.equal(DEFAULT_TEMPLATES['reddit-comment'], '{author-note-attributed}');
+  // The recruitment CTA that likely drew the 2026-08-25 ban must not come back. Assert the CTA specifically
+  // rather than just comparing the string, so re-adding the pitch under different wording still trips this.
   assert.ok(!/gbti\.network/.test(DEFAULT_TEMPLATES['reddit-comment']), 'no second link back to our own site');
   assert.ok(!/\{member-url\}/.test(DEFAULT_TEMPLATES['reddit-comment']), 'no join-our-community CTA');
+  assert.ok(!/join|community|subscrib/i.test(DEFAULT_TEMPLATES['reddit-comment']), 'no pitch under any wording');
   assert.equal(templateFor(syndicationConfigFromParsed({}), 'reddit-body'), DEFAULT_TEMPLATES['reddit-body']);
   // SOW-140: the dev.to byline MENTIONS the member's dev.to profile ({member-devto-handle}); Hashnode keeps the
   // NAME-based byline ({fullName}), since a dev.to handle is the wrong platform to mention on Hashnode.
@@ -434,4 +436,32 @@ test('setSyndicationSettings: on-manual accepted anywhere; `on` rejected for a m
   assert.equal(r.next.syndication.auto_matrix.post.x, undefined);
   assert.throws(() => setSyndicationSettings({}, { autoMatrix: { post: { x: 'on' } } }, ctx), TErr);
   assert.throws(() => setSyndicationSettings({}, { autoMatrix: { post: { linkedin: 'on' } } }, ctx), TErr);
+});
+
+// sow-260 (2026-08-27): a guard on the REAL house/syndication-config.yml, not on the code defaults.
+//
+// The code default for a Reddit title was fixed to '{title}' after a live queue task shipped with the URL
+// glued onto the end of it. That fix did not reach Reddit's SHARE title, because the stored config overrode
+// the default with '{title} {shareurl}', and a test asserting DEFAULT_TEMPLATES cannot see a stored override.
+// The defect survived its own fix by living one layer up.
+//
+// Reddit carries the link in its own url field, so a title holding it duplicates it in the submission and
+// spends part of the 300-character cap on it. Assert the ABSENCE across every stored Reddit title template.
+test('house config: no stored Reddit TITLE template carries a url token', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const url = await import('node:url');
+  const yaml = (await import('js-yaml')).default;
+  const root = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), '..');
+  const raw = yaml.load(fs.readFileSync(path.join(root, 'house', 'syndication-config.yml'), 'utf8')) || {};
+  const reddit = ((raw.syndication || {}).channel_templates || {}).reddit || {};
+  // The per-content-type keys are TITLES. 'reddit-body' and 'reddit-comment' are not titles and may hold a url.
+  const titleKeys = Object.keys(reddit).filter((k) => !k.startsWith('reddit-'));
+  assert.ok(titleKeys.length > 0, 'the fixture is meaningful only if there IS a stored reddit title to check');
+  for (const k of titleKeys) {
+    const tpl = String(reddit[k] || '');
+    assert.ok(!/\{url\}/.test(tpl), `reddit title template "${k}" must not contain {url}: ${tpl}`);
+    assert.ok(!/\{shareurl\}/.test(tpl), `reddit title template "${k}" must not contain {shareurl}: ${tpl}`);
+    assert.ok(!/https?:\/\//.test(tpl), `reddit title template "${k}" must not hardcode a url: ${tpl}`);
+  }
 });
