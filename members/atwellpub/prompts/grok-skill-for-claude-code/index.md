@@ -22,7 +22,7 @@ tags:
   - writing
   - summarization
   - workflow
-image: members/atwellpub/images/stranger-in-a-strange-land-header.webp
+image: ./images/stranger-in-a-strange-land-header.webp
 publishedAt: '2026-08-26T15:54:50.000Z'
 updatedAt: '2026-08-27T00:22:08.659Z'
 type: prompt
