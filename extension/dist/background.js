@@ -19056,8 +19056,13 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
         }
       }
     }
-    effInput.publishedAt = priorFm?.publishedAt ?? nowIso;
-    if (priorFm) effInput.updatedAt = nowIso;
+    const priorPublished = Boolean(priorFm && priorFm.status === "published" && priorFm.publishedAt);
+    if (priorPublished) {
+      effInput.publishedAt = priorFm.publishedAt;
+      effInput.updatedAt = nowIso;
+    } else {
+      effInput.publishedAt = nowIso;
+    }
   }
   let built;
   try {

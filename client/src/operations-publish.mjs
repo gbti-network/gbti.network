@@ -284,9 +284,9 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   }
   // Date parity with the WorkBench editor (SOW-062 P6), which stamps publishedAt/updatedAt at publish. The
   // MCP/API path never did, so an add_* item landed DATELESS: bottom of every feed, no date chip (hit live
-  // 2026-07-09 with the /ci prompt). Preserve an existing item's publishedAt on a re-publish (read the
-  // canonical file when the caller sent no `path`); stamp now for a genuinely new item; updatedAt bumps
-  // whenever the item already existed.
+  // 2026-07-09 with the /ci prompt). Preserve an existing item's publishedAt ONLY when it was already
+  // published (read the canonical file when the caller sent no `path`); stamp now for a genuinely new item or
+  // the first publish of a draft; updatedAt bumps only on a genuine re-publish of an already-published item.
   if (['post', 'product', 'prompt'].includes(type) && !effInput.publishedAt) {
     const nowIso = new Date().toISOString();
     let priorFm = oldFm;
@@ -299,8 +299,17 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
       if (text == null) { try { text = (await repo.getFileContent(canonical)) ?? null; } catch { text = null; } }
       if (text != null) { try { priorFm = parseContentFile(text).frontmatter ?? {}; } catch { priorFm = null; } }
     }
-    effInput.publishedAt = priorFm?.publishedAt ?? nowIso;
-    if (priorFm) effInput.updatedAt = nowIso;
+    // A prior canonical file that is still a DRAFT carries a draft-time publishedAt, not a real publication
+    // moment: its first publish must stamp now (hit live 2026-08-26 with the /grok prompt, whose draft landed
+    // on the canonical repo as `status: draft` in #367 and then surfaced that draft date, hours before the
+    // real publish in #372, at the top of the feed). Preserve the date only when the prior version was PUBLISHED.
+    const priorPublished = Boolean(priorFm && priorFm.status === 'published' && priorFm.publishedAt);
+    if (priorPublished) {
+      effInput.publishedAt = priorFm.publishedAt; // keep the real publication moment across a re-publish
+      effInput.updatedAt = nowIso;                // a genuine re-publish of published content is an edit
+    } else {
+      effInput.publishedAt = nowIso;              // a new item, or the first publish of a draft
+    }
   }
   let built;
   try {

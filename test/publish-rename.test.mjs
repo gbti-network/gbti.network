@@ -349,3 +349,20 @@ test('publish stamps publishedAt for a NEW item; preserves it (+ bumps updatedAt
   const explicit = parseContentFile(repoC.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md').content).frontmatter;
   assert.match(String(explicit.publishedAt instanceof Date ? explicit.publishedAt.toISOString() : explicit.publishedAt), /^2026-06-01/);
 });
+
+// 2026-08-26: the /grok prompt showed its DRAFT date, not its publish time. A draft can land on the canonical
+// repo as `status: draft` (a staged/held publish), and its draft-time publishedAt is an artifact, not a real
+// publication moment: the FIRST true publish must stamp now, or the feed sorts it by a date it was never live.
+test('publish stamps publishedAt to now for the FIRST publish of a prior canonical draft', async () => {
+  const draftPrior = '---\ntype: prompt\ntitle: Fresh\nslug: fresh\nauthor: alice\nstatus: draft\nvisibility: public\nshortDescription: d\npublishedAt: 2026-01-01T00:00:00.000Z\n---\n\nDraft body.\n';
+  const startIso = new Date().toISOString();
+  const repoE = fakeRepo();
+  await publish(ctxFor({ repo: repoE, files: { 'members/alice/prompts/fresh/index.md': draftPrior } }),
+    { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd' }, body: 'B4' });
+  const fm = parseContentFile(repoE.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md').content).frontmatter;
+  const iso = String(fm.publishedAt instanceof Date ? fm.publishedAt.toISOString() : fm.publishedAt);
+  assert.ok(!iso.startsWith('2026-01-01'), 'the draft-time publishedAt is not surfaced as the publication date');
+  assert.ok(iso >= startIso, 'the first publish of a draft stamps publishedAt to now');
+  assert.ok(!fm.updatedAt, 'the first publish of a draft is not an edit (no updatedAt)');
+  assert.equal(fm.status, 'published', 'publish forces status published');
+});
