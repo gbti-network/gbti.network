@@ -28,12 +28,13 @@ export const FOOTER_FEED_LINKS: readonly [string, string][] = FEED_NAV
   .map((i) => [i.label, i.href] as [string, string]);
 
 /**
- * sow-187: the flat SIGNED-IN header nav (no Feeds dropdown, drops All + Network). News points at the GATED
- * interactive `/news/` experience (owner decision 2), not the public `/feeds/news/` list. "Products" keeps its
- * current label until sow-196 renames the content type to Projects and ships `/projects/` (owner decision 1).
+ * sow-187: the flat SIGNED-IN header nav (no Feeds dropdown, drops All + Network). News points at the unified
+ * `/feeds/news/` view: the interactive `/news/` page was retired into the feeds view (owner, 2026-08-27), so
+ * every News link now targets `/feeds/news/` directly rather than 301-ing through the retired route. "Products"
+ * keeps its current label until sow-196 renames the content type to Projects and ships `/projects/`.
  */
 export const SIGNED_IN_NAV: readonly { label: string; href: string }[] = [
-  { label: 'News', href: '/news/' },
+  { label: 'News', href: '/feeds/news/' },
   { label: 'Articles', href: '/feeds/articles/' },
   { label: 'Products', href: '/feeds/products/' },
   { label: 'Prompts', href: '/feeds/prompts/' },

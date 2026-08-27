@@ -29,7 +29,10 @@ export default defineConfig({
   // The About and Co-op pages were retired and folded into the Revenue Model lander; keep old links working.
   // One key per source (no trailing slash): with trailingSlash:'ignore' each serves both /x and /x/, and a
   // second key for the same path would collide ("route defined more than once" build warning).
-  redirects: { '/model': '/revenue-model', '/about': '/revenue-model', '/co-op': '/revenue-model' },
+  // The interactive /news/ member app was retired into the unified feeds view (owner, 2026-08-27); /news/
+  // now 301s to /feeds/news/. This key covers /news and /news/ but NOT /news/item/ (a distinct route the
+  // news feed deep-links into), so the news-detail page keeps working.
+  redirects: { '/model': '/revenue-model', '/about': '/revenue-model', '/co-op': '/revenue-model', '/news': '/feeds/news' },
   // SOW-062 5d: remarkContentBlocks renders the body ```callout / ```embed fences (runs on mdast, before Shiki).
   // sow-158 Phase 1a: member markdown is SANITIZED at build. ORDER IS LOAD-BEARING: rehypeRaw first
   // (parses the raw-HTML nodes the fences + Shiki emit into real elements; sanitize alone would DELETE

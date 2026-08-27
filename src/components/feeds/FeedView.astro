@@ -81,6 +81,22 @@ const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersSha
 
   {isNews ? (
     <>
+      {/* owner 2026-08-27: the signed-out personalize nudge. Following news channels and saving stories are
+          free member perks, so a signed-out reader gets a one-click sign-in that opens the install-aware
+          SigninModal (its copy IS the membership-options reveal). Reuses the .feed-cta surface; hidden for any
+          signed-in member via the html.is-gbti-member rule in gbti-v3.css. */}
+      <aside class="feed-cta news-personalize" data-news-personalize aria-label="Personalize your news">
+        <div class="feed-cta-inner">
+          <div>
+            <div class="fc-t"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><use href="#ico-mega"/></svg> Make this news feed yours</div>
+            <p class="fc-d">Follow the sources you care about and save the stories worth keeping. It is free with a GitHub account.</p>
+          </div>
+          <div class="fc-a">
+            <button type="button" class="btn btn-primary" data-signin>Sign in to personalize</button>
+            <span class="fc-n">Reading is free; following and saving are member perks</span>
+          </div>
+        </div>
+      </aside>
       <div class="feed-news" data-news-feed>
         <p class="feed-empty" style="margin-top:40px">Loading the news stream…</p>
       </div>

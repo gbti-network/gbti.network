@@ -880,8 +880,16 @@ a.who:hover { color: var(--fg); }
 .feed-item:hover .feed-title a { color: var(--green-700); }
 .feed-ex { font-size: 15px; line-height: 1.55; color: var(--fg-soft); margin-top: 10px; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.feed-foot { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+.feed-foot { display: flex; align-items: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
 .feed-foot .fsp { flex: 1; }
+/* Card view is a tight grid: the save/collect/follow pills go icon-only so three actions + the comment
+   count fit a column without wrapping into a ragged second line. Detailed/list views keep the labels. */
+.feed-page[data-view="card"] .feed-foot .col-label,
+.feed-page[data-view="card"] .feed-foot .follow-t { display: none; }
+.feed-page[data-view="card"] .feed-foot .col-pill,
+.feed-page[data-view="card"] .feed-foot .follow-pill { padding: 4px 7px; }
+/* No right-push in the card grid: the spacer would force the comment count onto a ragged second line. */
+.feed-page[data-view="card"] .feed-foot .fsp { display: none; }
 .feed-cover { width: 196px; height: 128px; border-radius: 10px; flex: none; overflow: hidden; display: block; background: linear-gradient(150deg, #ecebe7, #dbd9d4); }
 .feed-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 [data-theme="dark"] .feed-cover { background: linear-gradient(150deg, #34313c, #2a2731); }
@@ -1194,6 +1202,10 @@ a.hp-model:hover, a.hp-kind:hover { filter: brightness(.97); }
 /* Members (paid or trialing, via the SOW-030 presentation signal) see neither join surface. */
 html.is-gbti-member-active .feed-cta,
 html.is-gbti-member-active .feed-locked-shares { display: none; }
+
+/* The signed-out "personalize your news" nudge hides for ANY signed-in member (free included): a free
+   member already has follow + save, so the sign-in-to-personalize prompt is only for signed-out readers. */
+html.is-gbti-member .news-personalize { display: none; }
 
 /* trending-tag chips are links now (the /feeds/?tag= drilldown) */
 /* hover on the theme-flipping fg token, NOT --ink (structural, stays dark in dark mode). */

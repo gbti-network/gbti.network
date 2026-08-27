@@ -7,7 +7,7 @@ import { loadFeedItems } from '../../lib/feed-items';
 
 export function getStaticPaths() {
   return [
-    { params: { narrow: 'news' }, props: { title: 'News Feed', description: 'The curated developer news stream the GBTI Network follows, refreshed hourly.' } },
+    { params: { narrow: 'news' }, props: { title: 'News Feed', description: 'The member curated news stream the GBTI Network follows, refreshed hourly.' } },
     { params: { narrow: 'network' }, props: { title: 'Network Feed', description: 'Publications from across the GBTI Network: member and house articles, products, and prompts, newest first.' } },
     { params: { narrow: 'articles' }, props: { title: 'Articles Feed', description: 'Member articles across the GBTI Network, newest first.' } },
     { params: { narrow: 'products' }, props: { title: 'Products Feed', description: 'Member products, tools, and plugins across the GBTI Network, newest first.' } },

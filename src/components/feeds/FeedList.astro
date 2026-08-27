@@ -9,6 +9,7 @@
 // separators hidden) and restores it on clear.
 import Avatar from '../Avatar.astro';
 import FavoriteButton from '../FavoriteButton.astro';
+import CollectionButton from '../CollectionButton.astro';
 import { authorDisplay, authorHref } from '../../lib/authors';
 import { authorItem } from '../../lib/avatars';
 import type { AvatarIndex } from '../../lib/avatars';
@@ -62,7 +63,19 @@ const tagsAttr = (it: FeedItem) => (it.tags ?? []).map((t) => String(t).trim().t
                 </h2>
                 {it.excerpt && <p class="feed-ex">{it.excerpt}</p>}
                 <div class="feed-foot">
+                  {/* Save / collect / follow are free member perks (sow-060), so they act for any signed-in
+                      member and drive sign-up for a signed-out visitor (the light-DOM [data-signin] pills open
+                      the SigninModal until the feed bootstrap upgrades them for a member). */}
                   {!it.stub && <FavoriteButton targetType={it.targetType} targetSlug={it.slug} count={it.favorites} size="sm" />}
+                  {!it.stub && <CollectionButton targetType={it.targetType} targetSlug={it.slug} size="sm" />}
+                  {!it.stub && (
+                    <span class="feed-follow" data-follow-user={it.author}>
+                      <button type="button" class="follow-pill" data-signin data-tooltip="Follow" aria-label={`Follow ${authorDisplay(it.author)}`}>
+                        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#ico-mega"/></svg>
+                        <span class="follow-t">Follow</span>
+                      </button>
+                    </span>
+                  )}
                   <span class="rx rx-static"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#ico-chat"/></svg> {it.comments}<span class="sr-only"> comments</span></span>
                   <span class="fsp"></span>
                 </div>
@@ -120,4 +133,113 @@ const tagsAttr = (it: FeedItem) => (it.tags ?? []).map((t) => String(t).trim().t
       if (nextPager) nextPager.hidden = false;
     });
   });
+</script>
+
+<style is:global>
+  /* The follow pill mirrors the sm favorite/collection pills. Its sibling gbti-subscribe renders a fixed large
+     "Subscribe to activity" toggle that does not fit the feed foot, so the pill drives client.setFollow directly
+     over the same free-tier follow store; the feed bootstrap toggles .on. Unique class, so is:global is safe. */
+  .feed-follow { display: inline-flex; }
+  .follow-pill {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    font-family: var(--f-mono); font-size: 12px; font-weight: 600; color: var(--fg-mute);
+    background: var(--paper); border: 1.5px solid var(--line-2); border-radius: var(--r-pill);
+    padding: 4px 9px; transition: color .15s ease, border-color .15s ease;
+  }
+  .follow-pill:hover { color: var(--green-700); border-color: var(--green); }
+  .follow-pill svg { flex: none; }
+  .follow-pill.on { color: var(--green-700); border-color: var(--green); background: var(--green-tint); }
+  [data-theme="dark"] .follow-pill { background: transparent; border-color: var(--line-dark-2); color: var(--on-dark-soft); }
+  [data-theme="dark"] .follow-pill:hover,
+  [data-theme="dark"] .follow-pill.on { color: var(--green-mint); border-color: var(--green); }
+</style>
+
+<script>
+  // Feed member actions (owner 2026-08-27): save / collect / follow act for any signed-in member and drive
+  // sign-up for a signed-out visitor. Mirrors Comments.astro / SubscribeButton: a cookie session upgrades the
+  // inert client-ui elements and wires the follow pills; an anonymous visitor resolves to null, nothing loads,
+  // and the [data-signin] fallbacks keep opening the SigninModal. Free-tier is admitted server-side (sow-060:
+  // follows via authorizeMember, favorite/collection via authorizeMemberCheap; both deny banned).
+  import { onMemberSignal, currentIdentity, readMemberSignal } from '../../lib/member-signal';
+
+  function readCookie(name: string): string | null {
+    for (const part of document.cookie.split(';')) {
+      const eq = part.indexOf('=');
+      if (eq >= 0 && part.slice(0, eq).trim() === name) return part.slice(eq + 1).trim() || null;
+    }
+    return null;
+  }
+
+  function setFollowState(btn: HTMLElement, on: boolean) {
+    btn.classList.toggle('on', on);
+    const t = btn.querySelector('.follow-t');
+    if (t) t.textContent = on ? 'Following' : 'Follow';
+    btn.setAttribute('aria-pressed', String(on));
+  }
+
+  let wired = false;
+  async function upgradeFeedActions(signal: any) {
+    if (!signal || !signal.login || !readCookie('gbti_csrf')) return; // signed-out / extension-only: leave inert
+    if (wired) return;
+    wired = true;
+    const mine = String(signal.login).toLowerCase();
+    const signupBase = document.documentElement.dataset.signupBase || '';
+    const { createWorkbenchClient } = await import('../../lib/workbench-client');
+    const client = createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null });
+    const { setClient } = await import('../../../client-ui/src/base.mjs');
+    setClient(client);
+    // Upgrade the inert favorite + collection pills (they read no per-item state on connect, so upgrading
+    // every row is cheap; the follow list is fetched once in wireFollows).
+    await Promise.all([
+      import('../../../client-ui/src/elements/gbti-favorite.mjs'),
+      import('../../../client-ui/src/elements/gbti-collection.mjs'),
+    ]);
+    wireFollows(client, mine);
+  }
+
+  async function wireFollows(client: any, mine: string) {
+    const byUser = new Map<string, HTMLElement[]>();
+    document.querySelectorAll<HTMLElement>('.feed-follow').forEach((wrap) => {
+      const user = (wrap.dataset.followUser || '').trim().toLowerCase();
+      const btn = wrap.querySelector<HTMLElement>('.follow-pill');
+      if (!btn) return;
+      if (!user || user === mine) { wrap.style.display = 'none'; return; } // no follow-yourself
+      btn.removeAttribute('data-signin'); // signed-in: our handler owns the click, not the SigninModal
+      const list = byUser.get(user) ?? [];
+      list.push(btn);
+      byUser.set(user, list);
+    });
+    if (!byUser.size) return;
+    let following = new Set<string>();
+    try {
+      const r = await client.getFollows();
+      const arr = Array.isArray(r) ? r : (r?.following ?? []);
+      following = new Set(arr.map((e: any) => (e?.username || '').toLowerCase()).filter(Boolean));
+    } catch { /* leave all unfollowed; a click still attempts the toggle */ }
+    for (const [user, btns] of byUser) {
+      const on = following.has(user);
+      for (const b of btns) {
+        setFollowState(b, on);
+        b.addEventListener('click', (e) => { e.preventDefault(); toggleFollow(client, user, btns); });
+      }
+    }
+  }
+
+  async function toggleFollow(client: any, user: string, btns: HTMLElement[]) {
+    const next = !btns[0].classList.contains('on');
+    btns.forEach((b) => { setFollowState(b, next); (b as HTMLButtonElement).disabled = true; }); // optimistic, all rows by this author
+    try {
+      const r = await client.setFollow({ username: user, on: next });
+      const arr = Array.isArray(r) ? r : (r?.following ?? null);
+      const truth = arr ? arr.some((e: any) => (e?.username || '').toLowerCase() === user) : next;
+      btns.forEach((b) => setFollowState(b, truth));
+    } catch {
+      btns.forEach((b) => setFollowState(b, !next)); // revert
+    } finally {
+      btns.forEach((b) => { (b as HTMLButtonElement).disabled = false; });
+    }
+  }
+
+  upgradeFeedActions(currentIdentity(readMemberSignal()));
+  onMemberSignal(upgradeFeedActions);
 </script>
