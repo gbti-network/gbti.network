@@ -48,7 +48,7 @@ const outUrl = d.url ? utmUrl(d.url, { campaign: 'shares' }) : undefined;
 // a valid Referer, so it frames the provider directly. CSP frame-src already allows all four providers.
 const videoSrc = d.url ? embedUrl(d.url) : null;
 ---
-<BaseLayout title={title} description={desc ?? `A link ${authorDisplay(d.author)} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
+<BaseLayout preconnectMedia title={title} description={desc ?? `A link ${authorDisplay(d.author)} shared with the GBTI Network.`} ogImage={typeof d.image === 'string' && d.image ? d.image : undefined} ogType="article">
   <div class="wrap detail-page" data-gbti-reader-hash={`tab=share&read=${encodeURIComponent(slug)}`}>
     <nav class="share-crumb"><a href="/feeds/shares/" class="link">&larr; Shares feed</a></nav>
     <div class="detail-grid">

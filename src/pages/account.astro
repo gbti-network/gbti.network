@@ -32,7 +32,7 @@ const GRID = [
 // Loaded exactly as src/pages/feeds/index.astro loads it.
 const { contentItems, shareItems, membersShareCount, avatarIndex } = await loadFeedItems();
 ---
-<BaseLayout title="Account" description="Your GBTI Network account." noindex={true}>
+<BaseLayout preconnectMedia title="Account" description="Your GBTI Network account." noindex={true}>
   <section class="band">
     <div class="wrap acct-wrap">
       {/* Signed-OUT fallback (also the pre-hydration state; static SSG has no request-time cookie). */}

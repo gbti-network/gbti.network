@@ -29,6 +29,10 @@ interface Props {
   noindex?: boolean;
   /** When true, omit the site Header/Footer chrome (standalone landing pages that carry their own). */
   bare?: boolean;
+  /** When true, warm the connection to the third-party host that serves share cover images. Set it only
+      on pages that actually render a feed: an unused preconnect costs a wasted socket and a Lighthouse
+      warning, and 30 of the 37 pages using this layout never show one. */
+  preconnectMedia?: boolean;
 }
 
 const {
@@ -38,6 +42,7 @@ const {
   ogType = 'website',
   noindex = false,
   bare = false,
+  preconnectMedia = false,
 } = Astro.props;
 
 const siteName = SITE_NAME;
@@ -61,6 +66,13 @@ const ogImageUrl = new URL(ogImage || DEFAULT_OG_IMAGE, Astro.site).href;
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     {/* The signup Worker serves the public news feed + membership oracles; warm the connection early. */}
     <link rel="preconnect" href="https://signup.gbti.network" crossorigin />
+    {/* Share covers are hotlinked from the member's own link and 25 of 42 point at i.ytimg.com, so on a
+        feed page our one fetchpriority="high" image is frequently third-party. Without this the browser is
+        told to fetch it first and then made to do a cold DNS + TLS handshake before a byte arrives.
+        DELIBERATELY NO crossorigin: a plain <img> is a non-CORS request, and a crossorigin preconnect warms
+        a DIFFERENT connection that the image fetch will not reuse, which turns this into a silent no-op
+        that still looks correct in the HTML. */}
+    {preconnectMedia && <link rel="preconnect" href="https://i.ytimg.com" />}
     {/* Speculation Rules (owner directive, 2026-07-21): hover-triggered PRERENDER of news item shells
         runs their fetch chain before the click, so the first open feels instant; every other internal
         link gets a cheap hover prefetch. Browsers without the API ignore the script. Note: a
