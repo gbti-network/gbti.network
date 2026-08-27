@@ -10,7 +10,11 @@
 // PREREQ: the Reddit app (reddit.com/prefs/apps, a WEB app) must list the redirect uri
 // http://localhost:8976/callback — the old Radle install pointed it at the dead WordPress REST route.
 // Credentials come from the repo-root .env (REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET) or prompts.
-// Scopes: identity submit read (submit posts; identity/read for probing).
+// Scope: submit, and ONLY submit. Reddit's Data API policy requires an app to request only the actions it
+// needs, and an audit of the whole repo found exactly two OAuth calls, /api/submit and /api/comment, both
+// covered by `submit`. Nothing calls /api/v1/me (identity) and nothing reads a listing (read), so those two
+// were granting a write-only client the ability to read Reddit on our behalf for no reason. Scope is fixed
+// at authorization time and baked into the refresh token, so widening it later means re-minting.
 
 import http from 'node:http';
 import readline from 'node:readline';
@@ -28,7 +32,7 @@ try {
 
 const PORT = 8976;
 const REDIRECT = `http://localhost:${PORT}/callback`;
-const SCOPES = 'identity submit read';
+const SCOPES = 'submit';
 const USER_AGENT = 'cloudflare-worker:network.gbti.syndication:v0.1 (by /u/gbti-labs)';
 
 function ask(q) {
