@@ -40,3 +40,18 @@ export const SIGNED_IN_NAV: readonly { label: string; href: string }[] = [
   { label: 'Prompts', href: '/feeds/prompts/' },
   { label: 'Shares', href: '/feeds/shares/' },
 ];
+
+/**
+ * sow-131 follow-up (owner, 2026-08-27): the flat SIGNED-OUT header nav. It REPLACES the "Feeds" dropdown a
+ * logged-out visitor used to see, so the top-level browse surfaces are one click, not two. Distinct from the
+ * signed-in nav on purpose: a visitor gets Network (public member activity) rather than a personalized News
+ * tab, and "Prompts" is spelled out as "Prompts & Skills" to match the homepage label. Drops All (that is the
+ * /feeds/ index the brand mark already links) and does not carry News here (Network leads the anonymous feed).
+ */
+export const SIGNED_OUT_NAV: readonly { label: string; href: string }[] = [
+  { label: 'Network', href: '/feeds/network/' },
+  { label: 'Articles', href: '/feeds/articles/' },
+  { label: 'Products', href: '/feeds/products/' },
+  { label: 'Prompts & Skills', href: '/feeds/prompts/' },
+  { label: 'Shares', href: '/feeds/shares/' },
+];

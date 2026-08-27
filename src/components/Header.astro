@@ -6,18 +6,17 @@
 // standalone pages. The directories (/articles/, /products/, /prompts/) keep their URLs and footer
 // links; the feed views are the primary browse surface.
 // sow-187: the feed list is now the ONE consolidated source (src/lib/site-nav.ts), shared with the FeedView
-// tab strip + the footer. SIGNED_IN_NAV is the flat member nav that REPLACES the Feeds dropdown once identity
-// resolves (swapped in applyHeaderIdentity, mirroring the account-menu swap). Both navs ship in the static
-// HTML to everyone (labels + public hrefs only, nothing gated), so a signed-in member sees a brief flash.
-import { FEED_NAV, SIGNED_IN_NAV } from '../lib/site-nav';
+// tab strip + the footer. SIGNED_IN_NAV / SIGNED_OUT_NAV are the two FLAT header navs; identity swaps which is
+// shown (applyHeaderIdentity, mirroring the account-menu swap). Both navs ship in the static HTML to everyone
+// (labels + public hrefs only, nothing gated), so a signed-in member sees a brief flash of the signed-out nav.
+// sow-131 follow-up (owner, 2026-08-27): the signed-out nav is now flat links too, not a "Feeds" dropdown.
+import { SIGNED_IN_NAV, SIGNED_OUT_NAV } from '../lib/site-nav';
 import { extensionCtaEnabled } from '../lib/site-settings';
-const feedsMenu = FEED_NAV;
 // The signed-out standalone pages (kept out of the signed-in nav per the owner: only the five feed items there).
 // sow-201 (owner decision): Revenue Model comes OUT of the header nav and stays in the footer (Footer.astro).
 // sow-271: "Get Extension" is extension ADVERTISING, so it is governed by the superadmin site setting. With the
-// setting off this array is empty and the map below renders nothing -- and because sow-201 already moved Revenue
-// Model to the footer, the signed-out nav is then the Feeds dropdown ALONE. That is intended, not a bug; if the
-// slot should carry something else, add it here.
+// setting off this array is empty and the map below renders nothing, so the signed-out nav is SIGNED_OUT_NAV
+// alone. That is intended, not a bug; if the slot should carry something else, add it here.
 const extensionCtaShown = extensionCtaEnabled();
 const signedOutExtra = extensionCtaShown
   ? [{ label: 'Get Extension', href: '/extension/' }]
@@ -35,15 +34,7 @@ const signedOutExtra = extensionCtaShown
         visitor and a no-JS load both get the correct nav. */}
     <nav class="nav" aria-label="Primary">
       <div class="nav-set" data-nav-set="out">
-        <div class="nav-drop" data-dropdown>
-          <button type="button" class="nav-drop-btn" data-dropdown-btn aria-haspopup="true" aria-expanded="false">
-            Feeds
-            <svg class="nav-drop-caret" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
-          </button>
-          <div class="head-menu nav-drop-menu" data-dropdown-menu role="menu" hidden>
-            {feedsMenu.map((i) => <a class="hm-item" role="menuitem" href={i.href}>{i.label}</a>)}
-          </div>
-        </div>
+        {SIGNED_OUT_NAV.map((i) => <a href={i.href}>{i.label}</a>)}
         {signedOutExtra.map((i) => <a href={i.href}>{i.label}</a>)}
       </div>
       <div class="nav-set" data-nav-set="in" hidden>
@@ -101,11 +92,10 @@ const signedOutExtra = extensionCtaShown
 
   <nav class="head-mobile" data-mobile-menu hidden aria-label="Mobile">
     <div class="wrap">
-      {/* sow-187: mirror the two nav modes on mobile too. Signed-out = the Feeds group + standalone pages +
-          Sign in; signed-in = the flat member list, no group heading. Swapped by identity (script below). */}
+      {/* sow-187 + sow-131 follow-up: mirror the two nav modes on mobile too. Signed-out = the flat feed links +
+          any standalone pages + Sign in; signed-in = the flat member list. Swapped by identity (script below). */}
       <div data-mnav-set="out">
-        <span class="m-group">Feeds</span>
-        {feedsMenu.map((i) => <a href={i.href} class="m-sub">{i.label}</a>)}
+        {SIGNED_OUT_NAV.map((i) => <a href={i.href}>{i.label}</a>)}
         {signedOutExtra.map((i) => <a href={i.href}>{i.label}</a>)}
         <a href="/login/" class="m-join">Sign in / Join</a>
       </div>
