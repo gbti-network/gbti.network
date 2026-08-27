@@ -18,7 +18,7 @@ export const FEED_NAV: readonly FeedNavItem[] = [
   { key: 'network', label: 'Network', href: '/feeds/network/', inFooter: false },
   { key: 'articles', label: 'Articles', href: '/feeds/articles/', inFooter: true },
   { key: 'products', label: 'Products', href: '/feeds/products/', inFooter: true },
-  { key: 'prompts', label: 'Prompts', href: '/feeds/prompts/', inFooter: true },
+  { key: 'prompts', label: 'Prompts & Skills', href: '/feeds/prompts/', inFooter: true },
   { key: 'shares', label: 'Shares', href: '/feeds/shares/', inFooter: true },
 ];
 
@@ -37,7 +37,7 @@ export const SIGNED_IN_NAV: readonly { label: string; href: string }[] = [
   { label: 'News', href: '/feeds/news/' },
   { label: 'Articles', href: '/feeds/articles/' },
   { label: 'Products', href: '/feeds/products/' },
-  { label: 'Prompts', href: '/feeds/prompts/' },
+  { label: 'Prompts & Skills', href: '/feeds/prompts/' },
   { label: 'Shares', href: '/feeds/shares/' },
 ];
 
