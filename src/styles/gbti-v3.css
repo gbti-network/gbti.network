@@ -1258,6 +1258,25 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 @media (max-width: 620px)  { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 420px)  { .feed-page[data-view="card"] .feed-chunk { grid-template-columns: 1fr; } }
 
+/* A kind/tag filter flattens the ladder (all chunks revealed) then hides the non-matching items IN
+   each chunk. In CARD view every .feed-chunk is its own grid, so a chunk left with an uneven count of
+   matches renders a sparse, staircased partial row (a chunk with one match = a lone card in column 1,
+   the next chunk with three = a full row below it). Collapse the chunk boxes and grid the whole list
+   instead, so every visible card packs into ONE contiguous grid. Scoped to .feed-flat + card: the
+   un-filtered ladder keeps its per-chunk grids and its full-width pager (display:none while flat).
+   Hidden chunks keep display:none (Tailwind's [hidden]{display:none!important} outranks contents), so
+   this cannot reveal the collapsed ladder. Breakpoints mirror the .feed-chunk card grid above. */
+.feed-page.feed-flat[data-view="card"] .feed-chunk { display: contents; }
+.feed-page.feed-flat[data-view="card"] .feed-list  { display: grid; gap: 18px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1080px) { .feed-page.feed-flat[data-view="card"] .feed-list { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 900px)  { .feed-page.feed-flat[data-view="card"] .feed-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 620px)  { .feed-page.feed-flat[data-view="card"] .feed-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px)  { .feed-page.feed-flat[data-view="card"] .feed-list { grid-template-columns: 1fr; } }
+/* The homepage feed sits beside the 338px rail, so it caps at 3 columns (mirrors the home-feed chunk rules). */
+.feed-page.home-feed.feed-flat[data-view="card"] .feed-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1080px) { .feed-page.home-feed.feed-flat[data-view="card"] .feed-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px)  { .feed-page.home-feed.feed-flat[data-view="card"] .feed-list { grid-template-columns: 1fr; } }
+
 /* ---------- sow-139 + sow-131 QA: news rows, the member-content toggle, share pages ---------- */
 .kt-news { color: #b3661e; background: #fdf1e4; }
 [data-theme="dark"] .kt-news { color: #e8b079; background: rgba(179,102,30,.2); }
