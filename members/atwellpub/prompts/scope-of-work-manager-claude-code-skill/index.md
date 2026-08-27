@@ -1,5 +1,5 @@
 ---
-title: 'Manage Scopes of Work: a /sow Skill for Claude Code'
+title: '/SOW : An Agent Skill for Scopes of Work'
 slug: scope-of-work-manager-claude-code-skill
 shortDescription: >-
   A drop-in /sow skill for Claude Code: lane-based Scope of Work management (queue, progressing,

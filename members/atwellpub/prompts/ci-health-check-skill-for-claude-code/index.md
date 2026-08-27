@@ -1,5 +1,5 @@
 ---
-title: 'CI Health Check: a /ci Skill for Claude Code'
+title: '/CI : An Agent Skill for GitHub Actions Health'
 slug: ci-health-check-skill-for-claude-code
 shortDescription: >-
   A drop-in /ci skill for Claude Code that audits your GitHub Actions: a red/green health board,

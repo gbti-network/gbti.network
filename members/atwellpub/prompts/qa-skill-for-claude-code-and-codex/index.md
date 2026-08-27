@@ -1,5 +1,5 @@
 ---
-title: 'Resolve Open Questions: a /qa Skill for Claude Code'
+title: '/QA : An Agent Skill for Resolving Open Questions'
 slug: qa-skill-for-claude-code-and-codex
 shortDescription: >-
   A drop-in `/qa` skill for Claude Code that collects the questions your agent just raised and asks
