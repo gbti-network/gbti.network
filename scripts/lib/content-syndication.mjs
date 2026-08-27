@@ -42,7 +42,12 @@ export function publicUrlFor(item, siteOrigin = 'https://gbti.network') {
 /**
  * Build a syndication item from a classified path + the file's frontmatter. Metadata only (no body). Returns
  * { type, slug, author, title, visibility, hasPublicPage, shareUrl } or null when not publishable (draft / missing
- * title / type mismatch). `shareUrl` is the off-network link a Share carries (shares have no gbti.network page).
+ * title / type mismatch). `shareUrl` is the off-network article a Share points at. Note it is NOT the link a
+ * syndicated share carries: since sow-094 a PUBLIC share has its own page, so callers resolve the link through
+ * sharePageUrl and fall back to `shareUrl` only for a members-only share, which has no page.
+ *
+ * `hasPublicPage` stays FALSE for every share on purpose. It means "has a page under /articles|/products|/prompts",
+ * and formatPublishMessage reads it to pick the members-only Share heading. Do not widen it to mean /shares/.
  */
 export function buildSyndicationItem(path, frontmatter = {}) {
   const cls = classifyContentPath(path);
@@ -84,6 +89,25 @@ export function formatPublishMessage(item, { mention, siteOrigin = 'https://gbti
   if (url) return trunc(`📣 New ${label} published by network member ${who} 🎉${title}\n${url}`);
   // members-only / Mode A: title only, never the body, no public link.
   return trunc(`📣 New members-only ${label} by network member ${who} 🎉${title}\n_Members-only — open it in the GBTI client to read._`);
+}
+
+/**
+ * The share's own gbti.network page. sow-094 gave every PUBLIC share a deep-linked page at
+ * /shares/<author>/<id>/, which postdates the assumption elsewhere in this file that "shares have no
+ * gbti.network page". A syndicated share should link THAT, not the off-network article: the share page
+ * carries the discussion, the favorite and collect controls, and a "Read on <domain>" CTA that adds the
+ * sow-145 UTM attribution on the way out. Linking the article directly skips all of it.
+ *
+ * Fail-closed, matching src/lib/home-feed.mjs isPublicShare exactly: only a published share whose
+ * visibility is literally 'public' has a page. A members-only or draft share returns null, because
+ * getStaticPaths never emitted a page for it and the link would 404. Callers fall back to the
+ * off-network link there, which is the only link such a share has.
+ */
+export function sharePageUrl(item, siteOrigin = 'https://gbti.network') {
+  if (!item || item.type !== 'share') return null;
+  if (item.visibility !== 'public') return null;
+  if (!item.author || !item.slug) return null;
+  return `${String(siteOrigin).replace(/\/$/, '')}/shares/${item.author}/${item.slug}/`;
 }
 
 /** Resolve the Discord channel id for a content type from a { post, product, prompt, share } map. */

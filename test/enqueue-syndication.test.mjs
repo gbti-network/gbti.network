@@ -81,6 +81,20 @@ test('toQueueInput maps a published share (external url + category); content tak
   assert.equal(post.category, 'ai'); // the top-level taxonomy key
 });
 
+// sow-094 gave PUBLIC shares their own page at /shares/<author>/<id>/. A syndicated share must link THAT,
+// not the off-network article: the share page holds the discussion and the attributed read-on CTA, so
+// linking the article routes every reader straight past us. A members-only share has no page (covered by
+// the test above, which asserts it still falls back to its external link).
+test('toQueueInput: a PUBLIC share links its gbti.network share page, never the source article', () => {
+  const share = toQueueInput({
+    item: { type: 'share', slug: 's1', author: 'alice', title: 'A share', visibility: 'public', hasPublicPage: false, shareUrl: 'https://ext.com/x' },
+    fm: { shortDescription: 'A devops find.' },
+    rel: 'members/alice/shares/s1.md', mention: '@alice', siteOrigin: 'https://gbti.network',
+  });
+  assert.equal(share.url, 'https://gbti.network/shares/alice/s1/');
+  assert.ok(!share.url.includes('ext.com'), 'the source article must not be the link the post carries');
+});
+
 // SOW-087: the moderation word lists stamp flags from the POSTED surface (title + blurb) only.
 test('toQueueInput stamps moderation flags from title + blurb', () => {
   const moderation = { lists: { profanity: ['shit'], political: ['election'] } };
@@ -119,7 +133,7 @@ test('apply enqueues the share when its matrix cell is on', async () => {
   assert.equal(r.enqueued, 1);
   const share = JSON.parse(store.get([...store.keys()].find((k) => k.startsWith('synd:item:'))));
   assert.equal(share.source, 'share');
-  assert.equal(share.url, 'https://ext.com/x'); // the off-network link
+  assert.equal(share.url, 'https://gbti.network/shares/alice/s1/'); // sow-094: its OWN page, not the source article
   assert.equal(share.category, 'devops');
   assert.equal(share.authorName, 'Alice Q'); // from members/alice/profile.md
   assert.deepEqual(share.flags, []);

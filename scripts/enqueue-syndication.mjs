@@ -20,7 +20,7 @@ import yaml from 'js-yaml';
 
 import { parseContentFile } from '../client/src/content-ops.mjs';
 import { createStripeClient } from '../clients/stripe.mjs';
-import { buildSyndicationItem, publicUrlFor } from './lib/content-syndication.mjs';
+import { buildSyndicationItem, publicUrlFor, sharePageUrl } from './lib/content-syndication.mjs';
 import { reverseMembersIndex, createMentionResolver } from './lib/discord-mention.mjs';
 import { enqueueViaKvRest } from './lib/syndication-rest.mjs';
 import { flagText } from '../membership/moderation-flags.mjs'; // SOW-087: the moderation word-list gate
@@ -96,8 +96,14 @@ export function toQueueInput({ item, fm, rel, mention, siteOrigin, authorName = 
     tags: Array.isArray(fm.tags) ? fm.tags.filter((t) => typeof t === 'string') : null, // SOW-120: feeds {tags-hashtags}
     title,
     blurb,
-    // A share posts its off-network link; content posts its public page (null for Mode A members-only).
-    url: (item.type === 'share' ? item.shareUrl : publicUrlFor(item, siteOrigin)) || null,
+    // A PUBLIC share posts its own gbti.network share page (sow-094), NOT the off-network article: the
+    // share page is where the discussion and the attributed read-on CTA live, so the article link would
+    // route readers straight past us. A members-only share has no such page and falls back to its
+    // off-network link, which is the only link it has. Content posts its public page (null for Mode A).
+    // Both {url} and {shareurl} render this one value, so every channel and template moves together.
+    url: (item.type === 'share'
+      ? (sharePageUrl(item, siteOrigin) || item.shareUrl)
+      : publicUrlFor(item, siteOrigin)) || null,
     image: fm.coverImage || fm.image || null,
     category: categoryOf(item, fm), // SOW-087: routes the category-channel Discord post
     categoryPath: item.type === 'share' ? null : (Array.isArray(fm.categories) ? fm.categories.filter((c) => typeof c === 'string') : null), // SOW-088: leaf-first channel routing
