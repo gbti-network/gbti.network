@@ -7407,10 +7407,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // src/lib/staged-images.mjs
-  var STAGED_PATH_G = /members\/[A-Za-z0-9-]+\/images\/[^/"'\s)]+\.(?:png|jpe?g|webp|gif)/gi;
-  var STAGED_PATH = /^members\/[A-Za-z0-9-]+\/images\/[^/]+\.(?:png|jpe?g|webp|gif)$/i;
+  var NAME = String.raw`[^/"'\s)]+\.(?:png|jpe?g|webp|gif)`;
+  var CANONICAL_G = new RegExp(String.raw`\.\/images\/${NAME}`, "gi");
+  var FLAT_G = new RegExp(String.raw`members\/[A-Za-z0-9-]+\/images\/${NAME}`, "gi");
+  var CANONICAL = new RegExp(String.raw`^\.\/images\/[^/]+\.(?:png|jpe?g|webp|gif)$`, "i");
+  var FLAT = new RegExp(String.raw`^members\/[A-Za-z0-9-]+\/images\/[^/]+\.(?:png|jpe?g|webp|gif)$`, "i");
   function isStagedImagePath(v) {
-    return STAGED_PATH.test(String(v ?? ""));
+    const s = String(v ?? "");
+    return CANONICAL.test(s) || FLAT.test(s);
+  }
+  function stagedImageName(p) {
+    return isStagedImagePath(p) ? String(p).split("/").pop() : null;
   }
   function referencedDraftImages(frontmatter = {}, body = "") {
     let fm = "";
@@ -7419,8 +7426,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     } catch {
       fm = "";
     }
-    return [...new Set(`${fm}
-${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
+    const hay = `${fm}
+${String(body ?? "")}`;
+    return [.../* @__PURE__ */ new Set([...hay.match(CANONICAL_G) || [], ...hay.match(FLAT_G) || []])];
   }
   function stagedImageDataUrl(img) {
     const b64 = img?.dataBase64;
@@ -7431,10 +7439,11 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
     if (typeof read2 !== "function") return out;
     for (const raw of new Set(paths || [])) {
       const p = String(raw || "");
-      if (!isStagedImagePath(p) || have[p] || out[p]) continue;
+      const name = stagedImageName(p);
+      if (!name || have[p] || out[p]) continue;
       let img = null;
       try {
-        img = await read2(p);
+        img = await read2(name, p);
       } catch {
         img = null;
       }
@@ -7623,6 +7632,14 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
     get itemPath() {
       return this._itemPath || null;
     }
+    // The owning editor's `<type>:<slug>` draft token, which scopes the staged-image store. Set by
+    // gbti-content-editor alongside itemPath; a body image belongs to the same draft the rail fields do.
+    set item(v) {
+      this._item = v || null;
+    }
+    get item() {
+      return this._item || null;
+    }
     set value(md) {
       this._blocks = parseBlocks(md).map(withId);
       if (this.isConnected) {
@@ -7643,7 +7660,7 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
     async _rehydrateStaged() {
       const blocks = (this._blocks || []).filter((b) => b?.type === "image" && b.url);
       if (!blocks.length) return;
-      const found = await loadStagedImages(blocks.map((b) => b.url), (path) => this.client?.getStagedImage?.(path), this._stagedSrc || {});
+      const found = await loadStagedImages(blocks.map((b) => b.url), (name) => this.client?.getStagedImage?.(name, this.item), this._stagedSrc || {});
       if (!Object.keys(found).length) return;
       Object.assign(this._stagedSrc ||= {}, found);
       for (const b of blocks) {
@@ -8124,7 +8141,7 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
           r.onerror = () => rej(new Error("read failed"));
           r.readAsDataURL(file);
         });
-        const out = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath });
+        const out = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath, item: this.item });
         b.url = out.path;
         try {
           (this._stagedSrc ||= {})[b.url] = URL.createObjectURL(file);
@@ -8983,6 +9000,19 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
     resolveCover(value) {
       return this._stagedSrc && this._stagedSrc[value] || resolveContentAsset(value, this.itemPath);
     }
+    /**
+     * The draft this editor is editing, as the `<type>:<slug>` token the staged-image store scopes its keys by
+     * (the SAME identity membership/member-drafts.mjs keys a draft record with). Without it in the key, two
+     * unpublished drafts that both staged a `cover.png` overwrote each other and the wrong picture published.
+     *
+     * Read off the live controls rather than through gather(), which can THROW on a field that fails to coerce
+     * (sow-268) and would turn a picked image into a dead control with no message. Null when there is no slug
+     * yet, which the client refuses on: a draft with no permalink cannot be saved either.
+     */
+    get itemToken() {
+      const slug = String(this._slugVal ?? (this.$('[data-key="slug"]')?.value || this.presetStr(this.preset?.input?.slug) || "")).trim();
+      return this.type && slug ? `${this.type}:${slug}` : null;
+    }
     // An image that is staged but not yet published exists ONLY in the Worker's staged store, so on a reload
     // resolveCover falls through to a jsDelivr URL for a file that is not on main: the broken thumbnail the
     // author sees after saving a draft. Refill _stagedSrc from the store, then repaint just the thumbs that
@@ -8994,7 +9024,8 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
         ...this.$$(".galrow .gr-src").map((el) => el.value),
         ...referencedDraftImages(this.preset?.input || {}, this.$("#body")?.value || "")
       ];
-      const found = await loadStagedImages(paths, (path) => this.client?.getStagedImage?.(path), this._stagedSrc || {});
+      const item = this.itemToken;
+      const found = await loadStagedImages(paths, (name) => this.client?.getStagedImage?.(name, item), this._stagedSrc || {});
       if (!Object.keys(found).length) return;
       Object.assign(this._stagedSrc ||= {}, found);
       this.$$("[data-cover]").forEach((c) => {
@@ -9515,6 +9546,7 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
       const be = this.$("#body");
       if (be) {
         be.itemPath = this.itemPath;
+        be.item = this.itemToken;
         be.value = this.preset?.body ?? "";
       }
       const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));
@@ -10230,7 +10262,7 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
       if (!file) return;
       const dataBase64 = await fileToBase64(file);
       try {
-        const res = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath });
+        const res = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath, item: this.itemToken });
         const imgField = this.fields.find((f) => f.kind === "image");
         const el = imgField && this.$(`[data-key="${imgField.key}"]`);
         const wrap = imgField && this.$(`.field[data-fkey="${imgField.key}"]`);
@@ -10265,7 +10297,7 @@ ${String(body ?? "")}`.match(STAGED_PATH_G) || [])];
       const pick = control.querySelector("[data-cover-pick]");
       if (pick) pick.textContent = "Replace image";
       try {
-        const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(",")[1] || "", itemPath: this.itemPath });
+        const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(",")[1] || "", itemPath: this.itemPath, item: this.itemToken });
         (this._stagedSrc ||= {})[res.path] = dataUrl;
         const el = control.querySelector('[data-key][data-kind="image"]');
         if (el) el.value = res.path;

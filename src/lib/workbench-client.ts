@@ -28,7 +28,7 @@ import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImage, referencedImagePaths, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
+import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImage, referencedImages, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 
 const MAX_IMAGE_BYTES = 1_048_576; // 1 MB, matching the Worker gate + check-media
@@ -138,22 +138,24 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
   // This Map used to be the ONLY copy, and it is per-tab, so saving a draft persisted the image PATH and the
   // BYTES nowhere. A reload left the editor and the preview resolving that path to a jsDelivr URL for a file
   // that had never been committed: the broken thumbnail no amount of re-saving could fix. The bytes now also go
-  // to the Worker's staged-image store (`draftimg:<github_id>:<name>`), which survives the reload and the
-  // device. The Map stays as the same-session fast path so picking an image and publishing immediately needs no
-  // round trip, but it is a cache now, not the record.
+  // to the Worker's staged-image store (`draftimg:<github_id>:<type>:<slug>:<name>`), which survives the reload
+  // and the device. The Map stays as the same-session fast path so picking an image and publishing immediately
+  // needs no round trip, but it is a cache now, not the record.
+  //
+  // Keyed by file NAME, deliberately, while the store is keyed by item as well. A tab edits one item at a time,
+  // so a name is unambiguous here, and it keeps working across any number of permalink edits in the same
+  // session (the store lookup would miss, because the item token moves with the slug).
   const pendingImages = new Map<string, string>();
-  /** The staged-image name for an own-folder path (`members/<user>/images/<name>` -> `<name>`). */
-  const stagedName = (p: string) => String(p || '').split('/').pop() || '';
   /**
-   * Read a staged image back from the Worker store. Returns null when it is not staged, which is the NORMAL
-   * state once the image has been published and merged: publish deletes the key, and the caller then falls
-   * back to the CDN. A miss must therefore never read as a failure.
+   * Read a staged image back from the Worker store, scoped to the item it was staged for. Returns null when it
+   * is not staged, which is the NORMAL state once the image has been published and merged: publish deletes the
+   * key, and the caller then falls back to the CDN. A miss must therefore never read as a failure.
    */
-  async function readStagedImage(path: string) {
-    const name = stagedName(path);
+  async function readStagedImage(name: string, item?: string | null) {
     if (!name) return null;
     try {
-      const r = await workerGet(`/membership/draft-image?name=${encodeURIComponent(name)}`);
+      const q = `name=${encodeURIComponent(name)}${item ? `&item=${encodeURIComponent(item)}` : ''}`;
+      const r = await workerGet(`/membership/draft-image?${q}`);
       return r?.dataBase64 ? { dataBase64: r.dataBase64 as string, contentType: (r.contentType as string) || 'image/png' } : null;
     } catch {
       return null; // a 404 or an offline read is a fall-back-to-CDN, not a hard failure
@@ -259,6 +261,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     // A move (rename or reassignment) must not re-stamp publishedAt (feeds stay stable; the item is not new).
     // The editor stamps it on every publish, so restore the original for the move case only.
     if (moved && oldFm?.publishedAt) effInput.publishedAt = oldFm.publishedAt;
+    // sow-165 on the website: every image()-typed value becomes the canonical `./images/<file>` BEFORE the
+    // markdown is built. Astro resolves image() relative to the item's own index.md, so the repo-rooted path
+    // the stager used to write could not resolve and reddened the site build on main. Normalizing here also
+    // repairs a draft saved before the stager was fixed, which still holds the old flat value.
+    Object.assign(effInput, normalizeImageFields(effInput, user));
 
     let built: any;
     try {
@@ -284,18 +291,33 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     // live under the ACTING caller's own folder (stageImage), regardless of the target folder. planPublishImage
     // holds the commit / skip / REFUSE rule and the order the three sources are tried in; it is unit-tested in
     // test/workbench-client-core.test.mjs, and the three lookups it needs are wired here.
-    const stagedForCleanup: string[] = [];
-    for (const p of referencedImagePaths(built.frontmatter, user)) {
-      const plan = await planPublishImage(p, {
-        fromSession: (path: string) => pendingImages.get(path),
-        fromStore: async (path: string) => (await readStagedImage(path))?.dataBase64,
-        onMain: async (path: string) => (await readOwnFile(path)) != null,
+    //
+    // The commit folder is resolved HERE, from built.path, rather than at stage time: built.path is the real
+    // destination, so this is correct through a rename or an author reassignment that happened after the image
+    // was picked. The store is keyed by the draft's `<type>:<slug>`, which moves with a permalink edit, so a
+    // renamed item also asks under its previous slug before giving up.
+    const imagesDir = `${built.path.replace(/\/[^/]*$/, '')}/images`;
+    const itemTokens = [`${type}:${built.slug}`];
+    if (origin?.oldSlug && origin.oldSlug !== built.slug) itemTokens.push(`${type}:${origin.oldSlug}`);
+    const stagedForCleanup: Array<{ name: string; item: string }> = [];
+    for (const ref of referencedImages(built.frontmatter)) {
+      const commitPath = `${imagesDir}/${ref.name}`;
+      const plan = await planPublishImage({ name: ref.name, item: itemTokens[0], commitPath }, {
+        fromSession: (r: any) => pendingImages.get(r.name),
+        fromStore: async (r: any) => {
+          for (const it of itemTokens) {
+            const got = await readStagedImage(r.name, it);
+            if (got?.dataBase64) return got.dataBase64;
+          }
+          return null;
+        },
+        onMain: async (r: any) => (await readOwnFile(r.commitPath)) != null,
       });
       if (plan.action === 'refuse') throw err('bad-request', plan.message);
       if (plan.action === 'skip') continue;
-      files.push({ path: p, contentBase64: plan.contentBase64 });
-      pendingImages.delete(p);
-      stagedForCleanup.push(p);
+      files.push({ path: commitPath, contentBase64: plan.contentBase64 });
+      pendingImages.delete(ref.name);
+      for (const it of itemTokens) stagedForCleanup.push({ name: ref.name, item: it });
     }
     // Move cleanup: delete the old index.md + old .enc, and move the from-the-author intro (product/prompt), all
     // in the same PR. Fail closed if the original vanished from main (never a half-move).
@@ -321,8 +343,8 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     // Best effort, because a stale key is harmless (it is re-put on the next stage, swept by the SOW-024
     // erasure step, and ignored once the real file resolves on main) while a throw here would report a
     // successful publish as a failure.
-    for (const p of stagedForCleanup) {
-      try { await workerPost('/membership/draft-image', { op: 'delete', name: stagedName(p) }); } catch { /* see above */ }
+    for (const c of stagedForCleanup) {
+      try { await workerPost('/membership/draft-image', { op: 'delete', item: c.item, name: c.name }); } catch { /* see above */ }
     }
     return {
       prNumber: res.number, prUrl: res.html_url, branch: res.branch, updated: !!res.already, hosted: true,
@@ -748,24 +770,33 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     },
 
     // sow-158 image upload: stage an image binary for the next publish. The editor already shows a local data-URL
-    // preview; this validates + records the base64 (keyed by its own-folder path) and returns the path the field
-    // stores. The image is committed with the content in one PR (publish flushes referencedImagePaths). png/jpg/
-    // webp/gif only (no svg on web), <= 1 MB (the Worker + check-media re-enforce; this is the fast client refusal).
-    async stageImage({ filename, dataBase64 }: any) {
+    // preview; this validates + records the base64 and returns the value the field stores. The image is committed
+    // with the content in one PR (publish flushes referencedImages). png/jpg/webp/gif only (no svg on web),
+    // <= 1 MB (the Worker + check-media re-enforce; this is the fast client refusal).
+    //
+    // The value returned is the canonical CO-LOCATED `./images/<name>`, which Astro's image() resolves relative
+    // to the item's own index.md. This used to return the repo-rooted `members/<user>/images/<name>`, which
+    // image() cannot resolve at all: publishing one reddened the site build, and every render surface
+    // (resolveContentAsset, the preview's asset()) joined it onto the item folder and 404ed. The npm client was
+    // fixed for this in sow-165; only the website was left behind.
+    //
+    // `item` is the draft's `<type>:<slug>`, which scopes the stored bytes. A missing one is refused rather than
+    // defaulted: an image belongs to a draft, and the draft store itself will not accept a record without a slug.
+    async stageImage({ filename, dataBase64, item }: any) {
       const name = sanitizeImageName(filename);
       if (!name) throw err('bad-request', 'Use a PNG, JPG, WEBP, or GIF image (SVG is not supported on the web).');
       const b64 = String(dataBase64 || '');
       if (!b64) throw err('bad-request', 'That image had no data. Try choosing it again.');
       if (base64Bytes(b64) > MAX_IMAGE_BYTES) throw err('bad-request', 'That image is over 1 MB. Please optimize it (or pick a smaller one) first.');
-      const path = `members/${user}/images/${name}`;
-      pendingImages.set(path, b64);
+      if (!item) throw err('bad-request', 'Give this item a permalink before adding an image.');
+      pendingImages.set(name, b64);
       // Persist alongside the draft so the image survives a reload. The Worker re-validates and re-derives the
       // key from the authenticated identity, so this is not the only place the rules are enforced.
-      await workerPost('/membership/draft-image', { op: 'put', name, dataBase64: b64 });
-      return { ok: true, path };
+      await workerPost('/membership/draft-image', { op: 'put', item, name, dataBase64: b64 });
+      return { ok: true, path: `./images/${name}` };
     },
 
-    // The editor and the preview call this to rehydrate a thumbnail after a reload.
+    // The editor and the preview call this to rehydrate a thumbnail after a reload, scoped to their item.
     getStagedImage: readStagedImage,
   };
 }

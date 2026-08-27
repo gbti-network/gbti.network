@@ -3,7 +3,7 @@
 // filter/tier-gate, the comment-visibility coercion, and the favorite derivation. Uses a FAKE encrypt (no Worker).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planMemberFiles, planPublishImage, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImagePaths, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
+import { planMemberFiles, planPublishImage, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImages, normalizeImageFields, normalizeImageValue, IMAGE_FIELD_KEYS, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
 import { buildCommentFile, buildContentFile, buildShareFile, shareId, commentId, parseContentFile, serializeContentFile } from '../client/src/content-ops.mjs';
 
 const fakeEncrypt = async (plaintext, assetId) => ({ v: 1, kid: '1', iv: 'IV', aad: assetId, ct: 'CT(' + plaintext + ')' });
@@ -153,12 +153,66 @@ test('sanitizeImageName: cleans to an own-folder leaf, rejects svg + traversal +
   assert.equal(sanitizeImageName(''), null);
 });
 
-test('referencedImagePaths: collects only own-folder image-field values', () => {
-  const fm = { coverImage: 'members/gwen/images/cover.png', icon: 'members/gwen/images/icon.gif', banner: 'https://cdn/x.png', title: 'x', coverAlt: 'alt text' };
-  const got = referencedImagePaths(fm, 'gwen');
-  assert.ok(got.has('members/gwen/images/cover.png') && got.has('members/gwen/images/icon.gif'));
-  assert.equal(got.has('https://cdn/x.png'), false, 'an off-folder / remote image is not flushed');
-  assert.equal(referencedImagePaths({ coverImage: 'members/other/images/x.png' }, 'gwen').size, 0, 'another member\'s path is ignored');
+// Astro resolves an image() field RELATIVE to the markdown file that declares it, so `./images/<file>` beside
+// index.md is the only shape that works, and it is the shape all 78 committed values use. The website stager
+// wrote a repo-rooted `members/<login>/images/<file>` instead, which image() cannot resolve at all: publishing
+// one reddened the site build, and every render surface joined it onto the item folder and 404ed.
+test('normalizeImageValue: rewrites what the stager used to write, and leaves alone what it must', () => {
+  const n = (v) => normalizeImageValue(v, 'gwen');
+  assert.equal(n('members/gwen/images/cover.png'), './images/cover.png', 'the flat own-folder path is the defect');
+  assert.equal(n('images/cover.png'), './images/cover.png');
+  assert.equal(n('cover.png'), './images/cover.png');
+  assert.equal(n('members/gwen/images/Cover 1.PNG'), './images/cover-1.png', 'sanitized on the way through');
+  assert.equal(n('./images/cover.png'), './images/cover.png', 'already canonical, untouched');
+  // Left alone: a resolved URL, a build-optimized asset, another member's folder, a non-image, and empties.
+  for (const keep of ['https://cdn/x.png', '//cdn/x.png', '/_astro/x.hash.webp', '/img/x.png',
+    'members/other/images/x.png', 'members/gwen/images/notes.txt', '', null, undefined]) {
+    assert.equal(n(keep), keep, `${JSON.stringify(keep)} must pass through unchanged`);
+  }
+});
+
+test('normalizeImageFields: covers every image() field, including the gallery list, without mutating input', () => {
+  const fm = {
+    coverImage: 'members/gwen/images/cover.png',
+    icon: 'members/gwen/images/icon.gif',
+    iconLarge: 'members/gwen/images/icon-2x.png',
+    banner: 'https://cdn/x.png',
+    gallery: ['members/gwen/images/a.webp', { src: 'members/gwen/images/b.webp', caption: 'two' }, { caption: 'no src' }],
+    title: 'x', coverAlt: 'alt text',
+  };
+  const out = normalizeImageFields(fm, 'gwen');
+  assert.equal(out.coverImage, './images/cover.png');
+  assert.equal(out.icon, './images/icon.gif');
+  assert.equal(out.iconLarge, './images/icon-2x.png', 'iconLarge is an image() field and was being missed');
+  assert.equal(out.banner, 'https://cdn/x.png');
+  assert.deepEqual(out.gallery, ['./images/a.webp', { src: './images/b.webp', caption: 'two' }, { caption: 'no src' }]);
+  assert.equal(out.coverAlt, 'alt text', 'a text field is not a path');
+  assert.equal(fm.coverImage, 'members/gwen/images/cover.png', 'the input object is not mutated');
+});
+
+test('referencedImages: names every canonical image the content uses, deduped, and nothing else', () => {
+  const fm = {
+    coverImage: './images/cover.png', icon: './images/icon.gif', iconLarge: './images/icon-2x.png',
+    gallery: ['./images/shot.webp', { src: './images/cover.png' }],
+    banner: 'https://cdn/x.png', title: 'x', coverAlt: 'alt text',
+  };
+  assert.deepEqual(referencedImages(fm).map((r) => r.name),
+    ['cover.png', 'icon.gif', 'icon-2x.png', 'shot.webp'], 'the repeat of cover.png is one image, not two');
+  assert.equal(referencedImages(fm).find((r) => r.name === 'icon-2x.png').field, 'iconLarge');
+  // A remote or unresolvable value is not ours to flush into the PR.
+  assert.deepEqual(referencedImages({ banner: 'https://cdn/x.png', icon: 'members/gwen/images/x.png' }), []);
+  assert.deepEqual(referencedImages(), []);
+  assert.deepEqual(referencedImages({}), []);
+});
+
+test('every image() field in the content schemas is covered by the flush list', () => {
+  // The bug this pins: iconLarge and gallery were missing, so an image staged into either was never flushed
+  // into the publish PR and the .md committed a reference to a file the PR did not carry.
+  for (const k of ['coverImage', 'image', 'banner', 'featuredImage', 'icon', 'iconLarge']) {
+    assert.ok(IMAGE_FIELD_KEYS.includes(k), `${k} is an image() field in src/content.config.ts and must be flushed`);
+  }
+  const gal = referencedImages({ gallery: [{ src: './images/g.png' }] });
+  assert.deepEqual(gal.map((r) => r.name), ['g.png'], 'gallery is an image() field too');
 });
 
 test('base64Bytes: padding-aware decoded length', () => {
@@ -316,7 +370,10 @@ test('networkContent: a non-array input returns []', () => {
 // The publish-time image rule. Before this existed, publish read the in-tab Map and SILENTLY dropped anything
 // it did not find, opening a PR whose frontmatter named an image the PR did not carry. Astro's image() has to
 // resolve, so merging that broke the site build on main.
-const IMG = 'members/gwen/images/lead.png';
+// The descriptor publish hands it: the file name, the draft it was staged for, and the repo path it would
+// commit to. The three sources are keyed differently (the session Map and the store by name/item, main by the
+// resolved commit path), which is why each lookup gets the whole descriptor.
+const IMG = { name: 'lead.png', item: 'post:hello', commitPath: 'members/gwen/posts/hello/images/lead.png' };
 const never = () => { throw new Error('this source must not be consulted'); };
 
 test('planPublishImage: the in-tab bytes are used without touching the store or main', async () => {
@@ -350,4 +407,10 @@ test('planPublishImage: bytes nowhere and no file on main REFUSES, naming the im
   assert.match(plan.message, /choose it again before publishing/);
   // No lookup at all is the same refusal, not an accidental commit of undefined.
   assert.equal((await planPublishImage(IMG)).action, 'refuse');
+  // Each source is handed the descriptor, so publish can key them differently.
+  await planPublishImage(IMG, {
+    fromSession: (r) => { assert.equal(r.name, 'lead.png'); return undefined; },
+    fromStore: async (r) => { assert.equal(r.item, 'post:hello'); return null; },
+    onMain: async (r) => { assert.equal(r.commitPath, 'members/gwen/posts/hello/images/lead.png'); return false; },
+  });
 });

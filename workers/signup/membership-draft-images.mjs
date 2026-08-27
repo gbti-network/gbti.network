@@ -1,15 +1,19 @@
 // The staged-image store's IO half, modelled on membership-drafts.mjs (same shape of problem: per-member,
 // private, erasable, one read-modify-write behind an authorizer).
 //
-//   GET  /membership/draft-image?name=<file>            -> { ok, dataBase64, contentType } | 404
-//   POST /membership/draft-image {op:'put', name, dataBase64}   -> { ok, name, bytes }
-//   POST /membership/draft-image {op:'delete', name}            -> { ok }
+//   GET  /membership/draft-image?name=<file>&item=<type>:<slug>      -> { ok, dataBase64, contentType } | 404
+//   POST /membership/draft-image {op:'put', item, name, dataBase64}   -> { ok, name, bytes }
+//   POST /membership/draft-image {op:'delete', item, name}            -> { ok }
 //
 // Auth = SIGNED-IN, non-banned (authorizeMember), the same bar as the draft store itself: SOW-011 lets a
-// trial author drafts, and an image is part of a draft. Keyed `draftimg:<github_id>:<name>`, so the key is
-// built ENTIRELY from the authenticated identity plus a sanitized file name. A caller never supplies a path
-// and cannot address another member's key; there is no cross-member case to reject because there is no way
-// to express one.
+// trial author drafts, and an image is part of a draft. Keyed `draftimg:<github_id>:<type>:<slug>:<name>`, so
+// the key is built ENTIRELY from the authenticated identity plus validated input. A caller never supplies a
+// path and cannot address another member's key; there is no cross-member case to reject because there is no
+// way to express one.
+//
+// `item` is the draft store's own `<type>:<slug>` identity. Without it in the key, two unpublished drafts that
+// both staged a `cover.png` overwrote each other silently and the wrong picture got published. A READ falls
+// back to the pre-item key so an image staged before this shipped is still found; nothing writes that shape.
 //
 // Bytes travel as base64 inside JSON rather than as a raw body. That reuses the existing JSON plumbing on
 // both ends, needs no content-type or caching work, and the payload is capped at 1 MB anyway.
@@ -21,11 +25,15 @@
 
 import { authorizeMember } from './membership-content.mjs';
 import {
-  DraftImageError, draftImageKey, draftImagePrefix, imageNameOf,
+  DraftImageError, draftImageKey, draftImagePrefix, legacyDraftImageKey, imageNameOf, itemTokenOf,
   validateDraftImage, checkDraftImageQuota, contentTypeFor,
 } from '../../membership/draft-images.mjs';
 
-/** Every staged image a member holds, as `[{ name, bytes }]`, read from key metadata so no value is fetched. */
+/**
+ * Every staged image a member holds, as `[{ key, id, bytes }]`, read from key metadata so no value is fetched.
+ * `id` is the whole key tail (`<type>:<slug>:<name>` for a current key, a bare `<name>` for a pre-item one),
+ * which is what makes it a usable identity for the quota's replacement check and for erasure.
+ */
 export async function listStagedImages(kv, githubId) {
   const prefix = draftImagePrefix(githubId);
   const out = [];
@@ -37,7 +45,7 @@ export async function listStagedImages(kv, githubId) {
     let res;
     try { res = await kv.list({ prefix, cursor }); } catch { break; }
     for (const k of res?.keys || []) {
-      out.push({ name: String(k.name).slice(prefix.length), bytes: Number(k.metadata?.bytes) || 0 });
+      out.push({ key: String(k.name), id: String(k.name).slice(prefix.length), bytes: Number(k.metadata?.bytes) || 0 });
     }
     if (res?.list_complete || !res?.cursor) break;
     cursor = res.cursor;
@@ -53,9 +61,14 @@ export async function handleDraftImage(request, env, { kv = env?.SIGNUP_KV, now,
   const method = request.method;
 
   if (method === 'GET') {
-    const name = imageNameOf(new URL(request.url).searchParams.get('name'));
+    const params = new URL(request.url).searchParams;
+    const name = imageNameOf(params.get('name'));
     if (!name) return { status: 400, body: { error: 'bad_request', message: 'a valid image name is required' } };
-    const stored = await kv.get(draftImageKey(auth.githubId, name), 'json');
+    const item = itemTokenOf(params.get('item'));
+    // The item-scoped key first, then the pre-item key. A read has to find an image staged before the key
+    // shape changed, or an author's in-flight draft would lose its picture on the day this deployed.
+    let stored = item ? await kv.get(draftImageKey(auth.githubId, item, name), 'json') : null;
+    if (!stored) stored = await kv.get(legacyDraftImageKey(auth.githubId, name), 'json');
     // A miss is the NORMAL steady state, not an error: once the image is committed and merged, the key is
     // gone and the caller is expected to fall back to the CDN. Say so plainly so the client can tell the
     // difference between "not staged" and "something broke".
@@ -70,15 +83,24 @@ export async function handleDraftImage(request, env, { kv = env?.SIGNUP_KV, now,
   if (payload?.op === 'delete') {
     const name = imageNameOf(payload.name);
     if (!name) return { status: 400, body: { error: 'bad_request', message: 'a valid image name is required' } };
-    await kv.delete(draftImageKey(auth.githubId, name));
+    const item = itemTokenOf(payload.item);
+    // Both shapes: publish deletes what it just committed, and the pre-item copy must go with it or it would
+    // outlive the draft and keep answering reads for an image that is now on main.
+    if (item) await kv.delete(draftImageKey(auth.githubId, item, name));
+    await kv.delete(legacyDraftImageKey(auth.githubId, name));
     return { status: 200, body: { ok: true, name } };
   }
   if (payload?.op !== 'put') return { status: 400, body: { error: 'bad_request', message: 'op must be put or delete' } };
 
+  // A WRITE is always item-scoped. There is no legacy write path: admitting one would reopen the very
+  // collision the item segment exists to close.
+  const item = itemTokenOf(payload?.item);
+  if (!item) return { status: 400, body: { error: 'bad_request', message: 'a valid item is required to stage an image' } };
+
   let checked;
   try {
     checked = validateDraftImage({ name: payload.name, dataBase64: payload.dataBase64 });
-    checkDraftImageQuota(await listStagedImages(kv, auth.githubId), checked);
+    checkDraftImageQuota(await listStagedImages(kv, auth.githubId), { id: `${item}:${checked.name}`, bytes: checked.bytes });
   } catch (err) {
     if (err instanceof DraftImageError) return { status: 400, body: { error: 'invalid', message: err.message } };
     throw err;
@@ -88,7 +110,7 @@ export async function handleDraftImage(request, env, { kv = env?.SIGNUP_KV, now,
   const value = { dataBase64: String(payload.dataBase64), contentType: contentTypeFor(checked.name), bytes: checked.bytes, at };
   // The size also rides in key METADATA so the quota check above can total a member's usage from a list()
   // without fetching every image body.
-  await kv.put(draftImageKey(auth.githubId, checked.name), JSON.stringify(value), { metadata: { bytes: checked.bytes } });
+  await kv.put(draftImageKey(auth.githubId, item, checked.name), JSON.stringify(value), { metadata: { bytes: checked.bytes } });
   return { status: 200, body: { ok: true, name: checked.name, bytes: checked.bytes } };
 }
 
@@ -96,6 +118,7 @@ export async function handleDraftImage(request, env, { kv = env?.SIGNUP_KV, now,
 export async function eraseMemberDraftImages(env, githubId, { kv = env?.SIGNUP_KV } = {}) {
   if (!kv) return { ok: false, error: 'the staged image store is not configured' };
   const staged = await listStagedImages(kv, githubId);
-  for (const s of staged) await kv.delete(draftImageKey(githubId, s.name));
+  // Delete the key the listing actually returned rather than rebuilding one, so BOTH key shapes are erased.
+  for (const s of staged) await kv.delete(s.key);
   return { ok: true, deleted: staged.length, prefix: draftImagePrefix(githubId) };
 }

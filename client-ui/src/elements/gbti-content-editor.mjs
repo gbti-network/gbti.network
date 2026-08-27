@@ -209,6 +209,20 @@ class GbtiContentEditor extends GbtiElement {
     return (this._stagedSrc && this._stagedSrc[value]) || resolveContentAsset(value, this.itemPath);
   }
 
+  /**
+   * The draft this editor is editing, as the `<type>:<slug>` token the staged-image store scopes its keys by
+   * (the SAME identity membership/member-drafts.mjs keys a draft record with). Without it in the key, two
+   * unpublished drafts that both staged a `cover.png` overwrote each other and the wrong picture published.
+   *
+   * Read off the live controls rather than through gather(), which can THROW on a field that fails to coerce
+   * (sow-268) and would turn a picked image into a dead control with no message. Null when there is no slug
+   * yet, which the client refuses on: a draft with no permalink cannot be saved either.
+   */
+  get itemToken() {
+    const slug = String(this._slugVal ?? (this.$('[data-key="slug"]')?.value || this.presetStr(this.preset?.input?.slug) || '')).trim();
+    return this.type && slug ? `${this.type}:${slug}` : null;
+  }
+
   // An image that is staged but not yet published exists ONLY in the Worker's staged store, so on a reload
   // resolveCover falls through to a jsDelivr URL for a file that is not on main: the broken thumbnail the
   // author sees after saving a draft. Refill _stagedSrc from the store, then repaint just the thumbs that
@@ -222,7 +236,8 @@ class GbtiContentEditor extends GbtiElement {
       ...this.$$('.galrow .gr-src').map((el) => el.value),
       ...referencedDraftImages(this.preset?.input || {}, this.$('#body')?.value || ''),
     ];
-    const found = await loadStagedImages(paths, (path) => this.client?.getStagedImage?.(path), this._stagedSrc || {});
+    const item = this.itemToken;
+    const found = await loadStagedImages(paths, (name) => this.client?.getStagedImage?.(name, item), this._stagedSrc || {});
     if (!Object.keys(found).length) return;
     Object.assign((this._stagedSrc ||= {}), found);
     this.$$('[data-cover]').forEach((c) => {
@@ -804,7 +819,7 @@ class GbtiContentEditor extends GbtiElement {
     // sow-165: hand the body editor the item's path BEFORE its value, so a repo-relative image block
     // (`./images/x.webp`) resolves against the item folder on its first render instead of 404-ing against
     // the page url.
-    if (be) { be.itemPath = this.itemPath; be.value = this.preset?.body ?? ''; }
+    if (be) { be.itemPath = this.itemPath; be.item = this.itemToken; be.value = this.preset?.body ?? ''; }
 
     // Live-toggle conditional fields (e.g. the image-gen-only result image) as their dependency changes.
     const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));
@@ -1526,7 +1541,9 @@ class GbtiContentEditor extends GbtiElement {
     const dataBase64 = await fileToBase64(file);
     try {
       // sow-165: co-locate into the item folder so a dropped result image stores as ./images/x (native build).
-      const res = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath });
+      // itemPath is what the npm/extension host co-locates by; item is what the WEBSITE host scopes the staged
+      // store by. Both hosts share this component, so both travel.
+      const res = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath, item: this.itemToken });
       // If a visible, empty image field is on the form (e.g. a prompt result image), drop the staged path
       // straight into it; otherwise the path is for the author to reference in their body.
       const imgField = this.fields.find((f) => f.kind === 'image');
@@ -1565,7 +1582,7 @@ class GbtiContentEditor extends GbtiElement {
     try {
       // sow-165: co-locate into the item folder so the cover stores as the canonical ./images/x (the old
       // per-user path could not be resolved by Astro's image() and broke the site build).
-      const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(',')[1] || '', itemPath: this.itemPath });
+      const res = await this.client.stageImage({ filename: file.name, dataBase64: dataUrl.split(',')[1] || '', itemPath: this.itemPath, item: this.itemToken });
       // Preview the just-staged cover from the local data URL keyed by the stored path; a full re-render
       // otherwise resolves it to a jsDelivr URL that 404s until the PR merges.
       (this._stagedSrc ||= {})[res.path] = dataUrl;

@@ -273,11 +273,14 @@ const labelOf = CATEGORY_LABELS;
       // have to be in hand before the first paint or the preview shows the broken CDN URL and never repaints.
       // A miss is normal (published and merged, so the CDN has the real file) and simply leaves asset() alone.
       try {
-        const { loadStagedImages, referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
+        const { loadStagedImages, referencedDraftImages } = await import('../../lib/staged-images.mjs');
         Object.assign(stagedSrc, await loadStagedImages(
           referencedDraftImages(fm, String(draft.body || '')),
-          async (path: string) => {
-            const r = await fetch(`${base}/membership/draft-image?name=${encodeURIComponent(String(stagedImageName(path)))}`, { credentials: 'include' });
+          async (name: string) => {
+            // Scoped to THIS draft: the store is keyed by `<type>:<slug>` as well as the file name, so a
+            // same-named image staged for another draft can no longer answer for this preview.
+            const q = `name=${encodeURIComponent(name)}&item=${encodeURIComponent(`${type}:${slug}`)}`;
+            const r = await fetch(`${base}/membership/draft-image?${q}`, { credentials: 'include' });
             return r.ok ? await r.json() : null;
           },
         ));

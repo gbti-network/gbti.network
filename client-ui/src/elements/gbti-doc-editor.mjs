@@ -192,6 +192,10 @@ class GbtiDocEditor extends GbtiElement {
   // sow-165: the owning editor sets this so a repo-relative body image resolves against the item's folder.
   set itemPath(v) { this._itemPath = v || null; if (this.isConnected) this._render(); }
   get itemPath() { return this._itemPath || null; }
+  // The owning editor's `<type>:<slug>` draft token, which scopes the staged-image store. Set by
+  // gbti-content-editor alongside itemPath; a body image belongs to the same draft the rail fields do.
+  set item(v) { this._item = v || null; }
+  get item() { return this._item || null; }
   set value(md) { this._blocks = parseBlocks(md).map(withId); if (this.isConnected) { this._render(); this._rehydrateStaged().catch(() => {}); } }
   get value() { return serializeBlocks(this._blocks || []); } // serializeBlock ignores the non-serialized _id
 
@@ -203,7 +207,7 @@ class GbtiDocEditor extends GbtiElement {
   async _rehydrateStaged() {
     const blocks = (this._blocks || []).filter((b) => b?.type === 'image' && b.url);
     if (!blocks.length) return;
-    const found = await loadStagedImages(blocks.map((b) => b.url), (path) => this.client?.getStagedImage?.(path), this._stagedSrc || {});
+    const found = await loadStagedImages(blocks.map((b) => b.url), (name) => this.client?.getStagedImage?.(name, this.item), this._stagedSrc || {});
     if (!Object.keys(found).length) return;
     Object.assign((this._stagedSrc ||= {}), found);
     for (const b of blocks) {
@@ -571,7 +575,7 @@ class GbtiDocEditor extends GbtiElement {
       });
       // sow-165: pass the item path so the host CO-LOCATES the image in the item's ./images/ folder and returns
       // the canonical `./images/<file>` reference (native Astro resolution; the old per-user path broke the build).
-      const out = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath });
+      const out = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath, item: this.item });
       b.url = out.path;
       // A just-staged image is not on main yet, so its jsDelivr URL 404s until the PR merges. Preview it from the
       // local file via an object URL keyed by the stored path, which the renderer consults before jsDelivr.

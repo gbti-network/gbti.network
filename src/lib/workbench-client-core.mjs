@@ -22,8 +22,15 @@ export const COMMENT_TARGET_TYPES = new Set(['post', 'product', 'prompt', 'share
 export const AUTHOR_NOTE_TYPES = new Set(['post', 'product', 'prompt']);
 
 // sow-158 image upload: the frontmatter keys that hold an uploaded image path (per the editor RAIL_SCHEMA:
-// coverImage on a post; icon/featuredImage/banner on a product; image on a prompt). coverAlt is text, not a path.
-export const IMAGE_FIELD_KEYS = ['coverImage', 'image', 'banner', 'featuredImage', 'icon'];
+// coverImage on a post; icon/iconLarge/featuredImage/banner on a product; image on a prompt). coverAlt is text,
+// not a path. `gallery` is handled separately below because its entries are a list, not a scalar.
+//
+// iconLarge and gallery were MISSING here, so an image staged into either was never flushed into the publish
+// PR: the .md committed a reference to a file the PR did not carry, and Astro's image() has to resolve, so the
+// site build went red on main. Every image()-typed field in src/content.config.ts is now covered.
+export const IMAGE_FIELD_KEYS = ['coverImage', 'image', 'banner', 'featuredImage', 'icon', 'iconLarge'];
+/** The one image()-typed field whose value is a LIST (bare entries or `{ src, caption }`). */
+export const IMAGE_LIST_FIELD = 'gallery';
 const WEB_IMAGE_EXT_RE = /\.(?:png|jpe?g|webp|gif)$/;
 
 // sow-182: a NETWORK-authored index item, matched by PATH rather than by author string, because the network's
@@ -76,21 +83,83 @@ export function sanitizeImageName(filename) {
   return cleaned;
 }
 
-/** The set of own-folder image paths a content item's frontmatter references (members/<login>/images/...). Used to
- *  flush ONLY the pending images the content actually uses into the publish PR (never an unreferenced upload). */
-export function referencedImagePaths(frontmatter, login) {
-  const prefix = `members/${login}/images/`;
-  const out = new Set();
+// The canonical value shape for an image()-typed field: `./images/<file>`, resolved by Astro RELATIVE to the
+// markdown file that declares it. It is the only shape that works, and the only shape any committed content
+// uses (78 of 78 across members/** and house/**).
+const CANONICAL_IMAGE_RE = /^\.\/images\/([a-z0-9][a-z0-9._-]*)$/;
+
+/**
+ * Rewrite one image()-field value to the canonical `./images/<name>`, or return it untouched.
+ *
+ * Untouched means: an absolute or protocol-relative URL, a build-optimized /_astro/ path, an empty value, or
+ * anything whose file name is not a web image. A flat `members/<login>/images/<name>` IS rewritten, because
+ * that is what the website stager used to write and Astro cannot resolve it: the value is repo-rooted while
+ * image() resolves relative to the item's own index.md, so publishing one reddened the build on main.
+ * Another member's folder is left alone; only the acting caller's own uploads are ours to normalize.
+ */
+export function normalizeImageValue(value, login) {
+  const v = String(value ?? '').trim();
+  if (!v || /^(?:https?:)?\/\//.test(v) || v.startsWith('/')) return value;
+  if (CANONICAL_IMAGE_RE.test(v)) return v;
+  const isOwnFlat = v.startsWith(`members/${login}/images/`);
+  const isBareOrLocal = !v.includes('/') || /^\.?\/?images\//.test(v);
+  if (!isOwnFlat && !isBareOrLocal) return value;
+  const name = sanitizeImageName(v);
+  return name ? `./images/${name}` : value;
+}
+
+/**
+ * Normalize every image()-typed field on a frontmatter object, returning a NEW object (the input is not
+ * mutated). Runs before the markdown is built, so what publishes is always the resolvable shape. This is also
+ * what repairs a draft saved earlier that still holds a flat path.
+ */
+export function normalizeImageFields(frontmatter, login) {
+  const fm = { ...(frontmatter || {}) };
   for (const k of IMAGE_FIELD_KEYS) {
-    const v = frontmatter?.[k];
-    if (typeof v === 'string' && v.startsWith(prefix)) out.add(v);
+    if (typeof fm[k] === 'string') fm[k] = normalizeImageValue(fm[k], login);
   }
+  const list = fm[IMAGE_LIST_FIELD];
+  if (Array.isArray(list)) {
+    fm[IMAGE_LIST_FIELD] = list.map((row) => {
+      if (typeof row === 'string') return normalizeImageValue(row, login);
+      if (row && typeof row === 'object' && typeof row.src === 'string') return { ...row, src: normalizeImageValue(row.src, login) };
+      return row;
+    });
+  }
+  return fm;
+}
+
+/**
+ * Every staged image a content item's frontmatter references, as `[{ field, name }]` deduped by name. Used to
+ * flush ONLY the images the content actually uses into the publish PR (never an unreferenced upload).
+ *
+ * It returns NAMES rather than repo paths on purpose: the folder an image commits into is the item's own
+ * folder, which is known only after the build resolves the destination path, and an item can be renamed or
+ * reassigned between staging and publishing.
+ */
+export function referencedImages(frontmatter) {
+  const out = [];
+  const seen = new Set();
+  const take = (field, v) => {
+    const m = CANONICAL_IMAGE_RE.exec(String(v ?? '').trim());
+    if (!m || seen.has(m[1])) return;
+    seen.add(m[1]);
+    out.push({ field, name: m[1] });
+  };
+  for (const k of IMAGE_FIELD_KEYS) take(k, frontmatter?.[k]);
+  const list = frontmatter?.[IMAGE_LIST_FIELD];
+  if (Array.isArray(list)) for (const row of list) take(IMAGE_LIST_FIELD, typeof row === 'string' ? row : row?.src);
   return out;
 }
 
 /**
- * Decide what publish should do with ONE image path the content references. Pure over three injected lookups,
- * so the rule is testable without a Worker, a browser or a network.
+ * Decide what publish should do with ONE image the content references. Pure over three injected lookups, so
+ * the rule is testable without a Worker, a browser or a network.
+ *
+ * `ref` is the descriptor `{ name, item, commitPath }`: the file name, the draft it was staged for, and the
+ * repo path it would commit to. Each lookup is handed the whole descriptor and reads the part it needs, which
+ * is what lets the three sources be keyed differently (the session Map and the store by item + name, main by
+ * the resolved commit path).
  *
  * The order is load-bearing:
  *   1. `fromSession` -- the in-tab Map, for an image picked and published without a reload;
@@ -105,11 +174,11 @@ export function referencedImagePaths(frontmatter, login) {
  *
  * @returns {Promise<{action:'commit',contentBase64:string}|{action:'skip'}|{action:'refuse',message:string}>}
  */
-export async function planPublishImage(path, { fromSession, fromStore, onMain } = {}) {
-  const b64 = (fromSession ? fromSession(path) : null) || (fromStore ? await fromStore(path) : null);
+export async function planPublishImage(ref, { fromSession, fromStore, onMain } = {}) {
+  const b64 = (fromSession ? fromSession(ref) : null) || (fromStore ? await fromStore(ref) : null);
   if (b64) return { action: 'commit', contentBase64: b64 };
-  if (onMain && (await onMain(path))) return { action: 'skip' };
-  const name = String(path ?? '').split('/').pop() || 'that image';
+  if (onMain && (await onMain(ref))) return { action: 'skip' };
+  const name = ref?.name || 'that image';
   return { action: 'refuse', message: `the image ${name} is no longer staged; choose it again before publishing` };
 }
 

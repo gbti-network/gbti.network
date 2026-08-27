@@ -34,7 +34,7 @@ export const ACTIVITY_KEY = (githubId) => `activity:${githubId}`;
 export const FOLLOWS_KEY = (githubId) => `follows:${githubId}`; // SOW-023 subscription graph
 export const NOTIFICATIONS_KEY = (githubId) => `notifications:${githubId}`; // SOW-150/186 per-member notification store
 export const DRAFTS_KEY = (githubId) => `drafts:${githubId}`; // SOW-157 hosted draft staging
-export const DRAFT_IMAGES_PREFIX = (githubId) => `draftimg:${githubId}:`; // staged lead/cover image bytes, one key each
+export const DRAFT_IMAGES_PREFIX = (githubId) => `draftimg:${githubId}:`; // staged image bytes, one key per image per draft
 export const PREFS_KEY = (githubId) => `prefs:${githubId}`; // SOW-046 member prefs (categories + followed news channels)
 export const LOOKUP_KEY = (githubId) => `gh:${githubId}`; // the github_id -> Stripe customer_id lookup cache
 export const CONV_SNAPSHOT_KEY = (githubId) => `conv:${githubId}`; // SOW-059 P1c: the frozen conversion attribution snapshot
@@ -154,7 +154,10 @@ export async function eraseDrafts({ githubId, env = process.env, fetchImpl = glo
 }
 
 /**
- * Hard-delete a member's STAGED IMAGE bytes (`draftimg:<github_id>:*`, one key per image).
+ * Hard-delete a member's STAGED IMAGE bytes (`draftimg:<github_id>:<type>:<slug>:<file>`, one key per image).
+ *
+ * Swept by PREFIX, so it reaches every key shape the store has ever written, including the pre-item
+ * `draftimg:<github_id>:<file>` keys that predate the per-draft scoping.
  *
  * A separate step from eraseDrafts because it is a separate keyspace: the bytes could not live inside the draft
  * record (a draft is capped at 150,000 bytes, one image may be 1,048,576), so they sit beside it under their own

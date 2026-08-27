@@ -10,8 +10,9 @@
 // 150,000 bytes and the whole per-member store at 1,000,000, while one image alone may be a megabyte. So a
 // staged image gets its own key, and its own caps, next to the drafts rather than inside them.
 //
-// The key is built from the AUTHENTICATED github_id and a sanitized file name. A caller never supplies a
-// path, so there is no cross-member path to police: one member simply cannot address another member's key.
+// The key is built from the AUTHENTICATED github_id, the item the image belongs to, and a sanitized file name.
+// A caller never supplies a path, so there is no cross-member path to police: one member simply cannot address
+// another member's key.
 
 import { sanitizeImageName, base64Bytes } from '../src/lib/workbench-client-core.mjs';
 
@@ -26,8 +27,36 @@ export class DraftImageError extends Error {}
 /** The KV key prefix for one member's staged images (also the list() prefix for quota and erasure). */
 export const draftImagePrefix = (githubId) => `draftimg:${String(githubId)}:`;
 
-/** The KV key for one staged image. `name` MUST already be sanitized (see imageNameOf). */
-export const draftImageKey = (githubId, name) => `${draftImagePrefix(githubId)}${name}`;
+// The item a staged image belongs to, in the SAME `<type>:<slug>` form the draft store keys its records by
+// (membership/member-drafts.mjs draftKeyOf). Reusing that identity is deliberate: an image belongs to a draft,
+// applyDraftPut already refuses a draft with no valid slug, and a PENDING rename does not move the draft's key
+// (pendingSlug is a separate field), so images live and die with the draft they were staged for.
+const ITEM_TOKEN_RE = /^(post|product|prompt|profile):[a-z0-9][a-z0-9-]{0,79}$/;
+
+/** The validated item token, or null. Every caller treats null as a refusal rather than a default. */
+export function itemTokenOf(item) {
+  const t = String(item ?? '').trim().toLowerCase();
+  return ITEM_TOKEN_RE.test(t) ? t : null;
+}
+
+/**
+ * The KV key for one staged image: `draftimg:<github_id>:<type>:<slug>:<name>`.
+ *
+ * `item` and `name` MUST already be validated (itemTokenOf / imageNameOf). The key is built entirely from the
+ * AUTHENTICATED github_id plus validated input, so one member still cannot express another member's key.
+ *
+ * The item segment exists because the key used to be `draftimg:<id>:<name>`, with no item in it at all: two
+ * unpublished drafts that both staged a `cover.png` collided silently, the second overwriting the first, and
+ * the first item then previewed the wrong picture and published the wrong bytes into its own folder.
+ */
+export const draftImageKey = (githubId, item, name) => `${draftImagePrefix(githubId)}${item}:${name}`;
+
+/**
+ * The pre-item key shape, read-only. Kept so an image staged before the per-item key shipped is still found
+ * for the draft it belongs to, rather than silently going missing mid-edit. Nothing writes this shape any
+ * more, so these keys drain as their drafts are published or erased; remove this once they are gone.
+ */
+export const legacyDraftImageKey = (githubId, name) => `${draftImagePrefix(githubId)}${name}`;
 
 /**
  * The sanitized file name for a staged image, from either a bare name or a full repo path.
@@ -67,14 +96,16 @@ export function validateDraftImage({ name, dataBase64 } = {}) {
 
 /**
  * Enforce the per-member ceilings before a put. `existing` is the member's current staged images as
- * `[{ name, bytes }]`, which the handler reads from a KV prefix list rather than by fetching every value.
+ * `[{ id, bytes }]`, which the handler reads from a KV prefix list rather than by fetching every value. The
+ * `id` is the whole key tail (`<type>:<slug>:<name>`), so the same file name under two different drafts counts
+ * as the two separate images it is.
  *
- * Re-staging the SAME name is a replacement, so its old size comes out of the total before the new one goes
- * in. Without that, replacing one image ten times would count as ten images and the author would be told the
- * store is full while holding a single picture.
+ * Re-staging the SAME id is a replacement, so its old size comes out of the total before the new one goes in.
+ * Without that, replacing one image ten times would count as ten images and the author would be told the store
+ * is full while holding a single picture.
  */
-export function checkDraftImageQuota(existing, { name, bytes } = {}) {
-  const others = (existing || []).filter((e) => e && e.name !== name);
+export function checkDraftImageQuota(existing, { id, bytes } = {}) {
+  const others = (existing || []).filter((e) => e && e.id !== id);
   if (others.length + 1 > DRAFT_IMAGES_MAX_COUNT) {
     throw new DraftImageError(`staged image limit reached (${DRAFT_IMAGES_MAX_COUNT}); publish or discard a draft first`);
   }
