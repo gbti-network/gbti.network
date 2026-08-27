@@ -23,7 +23,7 @@ tags:
   - summarization
   - workflow
 image: ./images/stranger-in-a-strange-land-header.webp
-publishedAt: '2026-08-26T15:54:50.000Z'
+publishedAt: '2026-08-27T00:22:08.659Z'
 updatedAt: '2026-08-27T00:22:08.659Z'
 type: prompt
 author: atwellpub
