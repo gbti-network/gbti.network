@@ -59,6 +59,39 @@ const ANCHOR = /<a\s([^>]*?)>([\s\S]*?)<\/a>/g;
 const HREF = /href="([^"]*)"/;
 const MEMBER_HREF = /^\/members\/([^/]+)\/$/;
 
+// sow-215 Check A phase 2: the content-directory -> built-section routes. This is a ROUTE MAP mirroring the
+// site's own URLs, not a coverage target to keep in step by hand: the guard reads which of these content
+// directories actually hold items and derives its expectation from that, so adding a fourth content type
+// makes the guard demand coverage of it as soon as content exists, with no number to update.
+const CONTENT_SECTIONS = Object.freeze({ posts: 'articles', products: 'products', prompts: 'prompts' });
+
+/**
+ * The built sections that MUST yield at least one checked byline, derived from content on disk.
+ *
+ * WHY THIS EXISTS. The guard used to fail only when the WHOLE run checked zero bylines, and articles alone
+ * keep that non-zero. So a PARTIAL rename passed green: @UnifiedWorker reproduced it by giving a product
+ * page a byline class sharing no `cm-name` token, and the guard stayed green because the 50 article bylines
+ * carried the run. A per-section floor is what turns that from invisible into red.
+ *
+ * Derived from the CONTENT rather than from `dist`, deliberately. Most built sections legitimately carry no
+ * `ContentMeta` byline at all (measured: feeds, shares, members, account and the standalone pages all emit
+ * member links with no `cm-name`), so "every section in dist must yield a byline" would red on ten innocent
+ * folders. Only a section whose content type actually exists is required to prove itself.
+ */
+function sectionsRequiringBylines(root) {
+  const need = new Set();
+  const membersDir = path.join(root, 'members');
+  const owners = fs.existsSync(membersDir) ? fs.readdirSync(membersDir) : [];
+  for (const [dir, section] of Object.entries(CONTENT_SECTIONS)) {
+    const anyOwnerHasItems = owners.some((o) => {
+      const d = path.join(membersDir, o, dir);
+      try { return fs.statSync(d).isDirectory() && fs.readdirSync(d).length > 0; } catch { return false; }
+    });
+    if (anyOwnerHasItems) need.add(section);
+  }
+  return need;
+}
+
 export function checkBylineEquivalence({ root }) {
   const errors = [];
 
@@ -77,6 +110,7 @@ export function checkBylineEquivalence({ root }) {
   const files = walkHtml(distDir);
   let checked = 0;
   const pages = new Set();
+  const perSection = new Map(); // built section -> how many bylines it yielded
 
   for (const file of files) {
     const html = fs.readFileSync(file, 'utf8');
@@ -99,6 +133,8 @@ export function checkBylineEquivalence({ root }) {
 
       checked += 1;
       pages.add(rel);
+      const section = rel.split(path.sep)[0];
+      perSection.set(section, (perSection.get(section) || 0) + 1);
       const shown = decode(inner.replace(/<[^>]*>/g, ''));
       const expected = expectedName(username, profiles.get(username));
       if (shown !== expected) {
@@ -121,7 +157,21 @@ export function checkBylineEquivalence({ root }) {
     );
   }
 
-  return { errors, checked, pages: pages.size, files: files.length };
+  // sow-215 Check A phase 2: a per-section floor. The global `checked === 0` above cannot see a PARTIAL
+  // rename, because one healthy content type keeps the total non-zero while another silently stops being
+  // checked at all. Each content type that has items on disk must prove itself independently.
+  for (const section of sectionsRequiringBylines(root)) {
+    if ((perSection.get(section) || 0) === 0) {
+      errors.push(
+        `section "${section}/" has content on disk but yielded ZERO checked bylines, so nothing in it was ` +
+        'verified while other sections kept the total non-zero. Either its byline markup changed (the guard ' +
+        'keys on class="cm-name" in ContentMeta.astro) or its pages did not build. This is the partial-rename ' +
+        'hole; do not silence it by lowering the floor.'
+      );
+    }
+  }
+
+  return { errors, checked, pages: pages.size, files: files.length, perSection };
 }
 
 // CLI

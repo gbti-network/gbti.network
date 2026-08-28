@@ -18,8 +18,17 @@ const byline = (username, shown) =>
   `<a href="/members/${username}/" class="cm-name" data-astro-cid-pivxhkfe>${shown}</a>`;
 
 // Build a throwaway root with members/<u>/profile.md and dist/<page>.
-function fixture({ profiles = {}, pages = {} }) {
+function fixture({ profiles = {}, pages = {}, items = {} }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'byline-'));
+  // sow-215 phase 2: content ITEMS on disk, e.g. { atwellpub: ['posts', 'products'] }. The per-section floor
+  // derives which built sections must prove themselves from this, not from a hardcoded list.
+  for (const [username, dirs] of Object.entries(items)) {
+    for (const d of dirs) {
+      const items_dir = path.join(root, 'members', username, d, 'thing');
+      fs.mkdirSync(items_dir, { recursive: true });
+      fs.writeFileSync(path.join(items_dir, 'index.md'), '---\ntitle: t\n---\n');
+    }
+  }
   for (const [username, displayName] of Object.entries(profiles)) {
     const dir = path.join(root, 'members', username);
     fs.mkdirSync(dir, { recursive: true });
@@ -176,4 +185,79 @@ test('every offending page is reported, not just the first', () => {
   assert.equal(checked, 3);
   assert.equal(pages, 3);
   assert.equal(errors.length, 2, 'defect 1 hit 29 pages at once; a guard that stops at the first is half a guard');
+});
+
+
+// -------------------------------------------------------------------------------------------------
+// sow-215 Check A PHASE 2: the per-section coverage floor.
+//
+// The hole these cover is not hypothetical and was not caught by review. @QAmaster flagged it, then
+// @UnifiedWorker REPRODUCED it: rename one content type's byline class and the guard stays green, because
+// the other types keep the global `checked` count non-zero. A guard that cannot see a defect in a third of
+// its subject is worse than no guard, because its green is read as coverage.
+// -------------------------------------------------------------------------------------------------
+
+// The class the partial rename produces. `\b` treats a hyphen as a word boundary, so `cm-name-v2` would
+// still match the guard (deliberately tolerant); `byline-name` shares no `cm-name` token and does not.
+const renamedByline = (username, shown) =>
+  `<a href="/members/${username}/" class="byline-name">${shown}</a>`;
+
+test('PHASE 2 RED: a partial rename in ONE section, while the others stay healthy', () => {
+  const root = fixture({
+    profiles: { atwellpub: 'Hudson Atwell' },
+    items: { atwellpub: ['posts', 'products'] },
+    pages: {
+      'articles/a/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>`,
+      'products/p/index.html': `<main>${renamedByline('atwellpub', 'Hudson Atwell')}</main>`,
+    },
+  });
+  const { errors, checked } = checkBylineEquivalence({ root });
+  // The global counter is NON-ZERO and every byline it did check is correct, which is exactly why the old
+  // guard passed this. The failure must come from the per-section floor, not from a byline mismatch.
+  assert.equal(checked, 1, 'the article byline still counts, which is what used to mask this');
+  assert.equal(errors.length, 1, `expected exactly one error, got: ${JSON.stringify(errors)}`);
+  assert.match(errors[0], /products\//, 'the error must NAME the section that went uncovered');
+  assert.match(errors[0], /ZERO checked bylines/);
+});
+
+test('PHASE 2 GREEN: every content type on disk yields a byline', () => {
+  const root = fixture({
+    profiles: { atwellpub: 'Hudson Atwell' },
+    items: { atwellpub: ['posts', 'products', 'prompts'] },
+    pages: {
+      'articles/a/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>`,
+      'products/p/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>`,
+      'prompts/q/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>`,
+    },
+  });
+  const { errors, checked } = checkBylineEquivalence({ root });
+  assert.equal(checked, 3);
+  assert.deepEqual(errors, []);
+});
+
+test('PHASE 2 does NOT false-red on a content type with no items on disk', () => {
+  // The floor is derived from CONTENT, so a member with only posts is never asked to prove /products/.
+  // Without this the guard would red on any repo that has not published one of the three types.
+  const root = fixture({
+    profiles: { atwellpub: 'Hudson Atwell' },
+    items: { atwellpub: ['posts'] },
+    pages: { 'articles/a/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>` },
+  });
+  const { errors } = checkBylineEquivalence({ root });
+  assert.deepEqual(errors, [], 'a content type that does not exist must not be required');
+});
+
+test('PHASE 2 reds even when the renamed section built no byline-bearing page at all', () => {
+  // The other half of the same hole: the section stops emitting the byline entirely rather than renaming it.
+  const root = fixture({
+    profiles: { atwellpub: 'Hudson Atwell' },
+    items: { atwellpub: ['posts', 'prompts'] },
+    pages: {
+      'articles/a/index.html': `<main>${byline('atwellpub', 'Hudson Atwell')}</main>`,
+      'prompts/q/index.html': '<main><p>no byline here at all</p></main>',
+    },
+  });
+  const { errors } = checkBylineEquivalence({ root });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /prompts\//);
 });
