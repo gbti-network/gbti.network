@@ -21296,6 +21296,9 @@ function tableAlignments(line) {
   if (!cells.length || cells.some((c) => !/^:?-+:?$/.test(c))) return null;
   return cells.map((c) => c.startsWith(":") && c.endsWith(":") ? "center" : c.endsWith(":") ? "right" : c.startsWith(":") ? "left" : "");
 }
+function hardBreak(escaped, raw) {
+  return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
+}
 function renderMarkdown(md) {
   return renderDoc(md, false).html;
 }
@@ -21434,13 +21437,14 @@ function renderDoc(md, ids) {
     }
     flushList();
     const paraStart = i;
-    const para = [esc2];
+    const para = [hardBreak(esc2, line)];
     i++;
     while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i])) {
-      para.push(escapeKeepingLinks(lines[i], linkKeep));
+      para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
       i++;
     }
-    emit(`<p>${inline(para.join(" "), fn)}</p>`, paraStart, i - 1);
+    const joined2 = para.join(" ").replace(/\u0000BR\u0000\s*$/, "").replace(/\s+$/, "");
+    emit(`<p>${inline(joined2, fn).replace(/\u0000BR\u0000\s*/g, "<br />")}</p>`, paraStart, i - 1);
   }
   flushList();
   if (inCode) emit(renderFence(codeLang, codeBuf, fn), fenceStart, lines.length - 1);

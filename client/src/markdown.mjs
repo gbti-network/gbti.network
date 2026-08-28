@@ -218,6 +218,13 @@ export function renderMarkdownWithBlocks(md) {
   return renderDoc(md, true);
 }
 
+// CommonMark hard break. A source line ending in TWO OR MORE spaces breaks the line; the spaces themselves are
+// not content and are dropped. A NUL-wrapped marker is appended rather than a literal <br>, because the text is
+// about to go through inline() and a marker carrying no markdown characters cannot be mangled by it.
+function hardBreak(escaped, raw) {
+  return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, '') + '\u0000BR\u0000' : escaped;
+}
+
 export function renderMarkdown(md) {
   return renderDoc(md, false).html;
 }
@@ -306,13 +313,20 @@ function renderDoc(md, ids) {
     // paragraph: gather consecutive plain lines
     flushList();
     const paraStart = i;
-    const para = [esc];
+    const para = [hardBreak(esc, line)]; // the FIRST line can carry a hard break too
     i++;
     while (i < lines.length && !/^\s*$/.test(lines[i]) && !new RegExp(`^(#{1,6})\\s|^\\s*[-*]\\s|^\\s*\\d+\\.\\s|^\`\`\`|^\\s*>|^\\[\\^${FN_ID}\\]:`).test(lines[i])) {
-      para.push(escapeKeepingLinks(lines[i], linkKeep));
+      // CommonMark hard break: a line ending in TWO OR MORE spaces breaks the line. A marker is pushed rather
+      // than a <br> because the line is about to go through inline(), and the marker carries no markdown
+      // characters so nothing downstream can mangle it. Without this, every hard break in the repository was
+      // silently rendered as a space here while the published Astro page showed the break, so this renderer
+      // (the Preview, the in-extension reader and locked content) disagreed with the article it previews.
+      para.push(hardBreak(escapeKeepingLinks(lines[i], linkKeep), lines[i]));
       i++;
     }
-    emit(`<p>${inline(para.join(' '), fn)}</p>`, paraStart, i - 1);
+    // A trailing hard break at the very end of a paragraph is not a break, per CommonMark, so it is dropped.
+    const joined = para.join(' ').replace(/\u0000BR\u0000\s*$/, '').replace(/\s+$/, '');
+    emit(`<p>${inline(joined, fn).replace(/\u0000BR\u0000\s*/g, '<br />')}</p>`, paraStart, i - 1);
   }
   flushList();
   if (inCode) emit(renderFence(codeLang, codeBuf, fn), fenceStart, lines.length - 1);

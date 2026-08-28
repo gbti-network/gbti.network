@@ -29,7 +29,13 @@ test('md -> html emits real tags (not literal tokens)', () => {
 test('browser bold/italic variants (<b>/<i>) read back to Markdown', () => {
   assert.equal(inlineHtmlToMd('<b>x</b>'), '**x**');
   assert.equal(inlineHtmlToMd('<i>x</i>'), '*x*');
-  assert.equal(inlineHtmlToMd('<div>a</div><div>b</div>'), '\na\nb'); // contenteditable soft lines
+  // contenteditable wraps each visual line in a <div>. Two things changed here on 2026-08-28. The break is now
+  // a REAL CommonMark hard break (two trailing spaces), because a bare newline became a SOFT break that renders
+  // as a space, so writing one would have silently discarded a line the author deliberately made. And the
+  // leading break is gone: the first <div> opens the block rather than starting a new line, and emitting a
+  // break there put a stray blank at the head of every paragraph the browser had wrapped.
+  assert.equal(inlineHtmlToMd('<div>a</div><div>b</div>'), 'a  \nb');
+  assert.equal(inlineHtmlToMd('<div>only</div>'), 'only', 'a single wrapped line is not a break at all');
 });
 
 test('html-special characters in prose round-trip through the escape/unescape', () => {
@@ -172,4 +178,26 @@ test('widening the strong run leaves the neighbouring cases alone', () => {
   // Bare stars used as arithmetic or bullets are untouched by the strong rule.
   assert.equal(inlineMdToHtml('**unclosed bold'), '**unclosed bold');
   assert.equal(inlineMdToHtml('*outer **inner** outer*'), '<em>outer <strong>inner</strong> outer</em>');
+});
+
+// Soft versus hard breaks in the block editor's inline layer, the surface the 2026-08-28 report was filed
+// against: an article whose source had clause-per-line newlines showed a broken-up paragraph in the editor and
+// a flowing one when published.
+
+test('a soft newline renders as a space in the editor, exactly as the published page renders it', () => {
+  assert.equal(inlineMdToHtml('one\ntwo'), 'one two');
+});
+
+test('a hard break (two trailing spaces) still renders as a break', () => {
+  assert.equal(inlineMdToHtml('one  \ntwo'), 'one<br>two');
+});
+
+test('a hard break survives a full round trip, so an authored break is not lost on the next save', () => {
+  assert.equal(inlineHtmlToMd(inlineMdToHtml('one  \ntwo')), 'one  \ntwo');
+});
+
+test('a soft newline collapses on round trip, which is the reflow this change accepts', () => {
+  // Stated as a test rather than left implicit: editing a paragraph whose source was hard-wrapped rewrites it
+  // as one line. That is a whitespace-only change and it makes the stored source match what readers see.
+  assert.equal(inlineHtmlToMd(inlineMdToHtml('one\ntwo')), 'one two');
 });

@@ -275,3 +275,39 @@ test('italic nested inside bold parses instead of printing its asterisks', () =>
   assert.match(renderMarkdown('A <a href="https://x.com">**deep *dive* here**</a> link.'),
     /<strong>deep <em>dive<\/em> here<\/strong>/);
 });
+
+// CommonMark line breaks. Reported 2026-08-28: the WorkBench editor showed a break for every source newline
+// while the published page showed a space, so the editor disagreed with the article it was editing. Fixing that
+// required this renderer to learn hard breaks too, or the Preview would then have disagreed with both.
+//
+// The contract, which the published Astro pipeline already implements:
+//   a line ending in TWO OR MORE spaces is a HARD break and renders <br>
+//   any other newline inside a paragraph is a SOFT break and renders as a space
+
+test('a line ending in two spaces is a hard break', () => {
+  assert.match(renderMarkdown('one  \ntwo'), /one<br \/>|one<br>/);
+});
+
+test('an ordinary newline inside a paragraph stays a space, not a break', () => {
+  const html = renderMarkdown('one\ntwo');
+  assert.ok(!/<br/.test(html), `a soft newline must not produce a break, got ${html}`);
+  assert.match(html, /one two/);
+});
+
+test('the FIRST line of a paragraph can carry a hard break too', () => {
+  // Regression: the paragraph loop seeded its first line separately, so only continuation lines were checked
+  // and a break on the opening line was silently dropped.
+  const html = renderMarkdown('first  \nsecond\n\nnext para');
+  assert.match(html, /first<br \/>|first<br>/);
+});
+
+test('several hard breaks in one paragraph all survive', () => {
+  const html = renderMarkdown('a  \nb  \nc');
+  assert.equal((html.match(/<br/g) || []).length, 2);
+});
+
+test('the two spaces are not content, and a trailing break at the end of a paragraph is not a break', () => {
+  assert.ok(!/  <br/.test(renderMarkdown('one  \ntwo')), 'the marker spaces leaked into the output');
+  const html = renderMarkdown('trailing  ');
+  assert.ok(!/<br/.test(html), 'a hard break with nothing after it is not a break');
+});

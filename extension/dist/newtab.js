@@ -3468,7 +3468,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
     h = h.replace(/~~([^~]+)~~/g, "<s>$1</s>");
     h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
-    h = h.replace(/\n/g, "<br>");
+    h = h.replace(/ {2,}\n/g, "<br>");
+    h = h.replace(/\n/g, " ");
     return h.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");
   }
   function inlineHtmlToMd(html, { rendererAnchors = false } = {}) {
@@ -3487,8 +3488,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     s = s.replace(/<(em|i)>([\s\S]*?)<\/\1>/gi, "*$2*");
     s = s.replace(/<(s|strike|del)>([\s\S]*?)<\/\1>/gi, "~~$2~~");
     s = s.replace(/<code>([\s\S]*?)<\/code>/gi, "`$1`");
-    s = s.replace(/<br\s*\/?>/gi, "\n");
-    s = s.replace(/<div>/gi, "\n").replace(/<\/div>/gi, "");
+    s = s.replace(/<br\s*\/?>/gi, "  \n");
+    s = s.replace(/^\s*<div>/i, "");
+    s = s.replace(/<div>/gi, "  \n").replace(/<\/div>/gi, "");
     s = s.replace(/<[^>]+>/g, "");
     s = s.replace(/&nbsp;/gi, " ").replace(/&quot;/gi, '"').replace(/&(?:apos|#0*39);/gi, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
     return s.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? "");

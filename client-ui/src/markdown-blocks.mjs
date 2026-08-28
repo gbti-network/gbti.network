@@ -270,7 +270,12 @@ export function inlineMdToHtml(md) {
   h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
   h = h.replace(/~~([^~]+)~~/g, '<s>$1</s>');
   h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
-  h = h.replace(/\n/g, '<br>');
+  // CommonMark line breaks, matching what actually publishes. A line ending in TWO OR MORE spaces is a HARD
+  // break and becomes <br>; any other newline is a SOFT break and is just a space, exactly as the published
+  // Astro page renders it. Turning every newline into <br> was wrong and visible: an author whose source had
+  // ordinary clause-per-line newlines saw breaks in the editor that the published article does not have.
+  h = h.replace(/ {2,}\n/g, '<br>');
+  h = h.replace(/\n/g, ' ');
   return h.replace(/\u0000A(\d+)\u0000/g, (_m, i) => keep[Number(i)] ?? ''); // restore the protected anchors
 }
 export function inlineHtmlToMd(html, { rendererAnchors = false } = {}) {
@@ -296,8 +301,14 @@ export function inlineHtmlToMd(html, { rendererAnchors = false } = {}) {
   s = s.replace(/<(em|i)>([\s\S]*?)<\/\1>/gi, '*$2*');
   s = s.replace(/<(s|strike|del)>([\s\S]*?)<\/\1>/gi, '~~$2~~');
   s = s.replace(/<code>([\s\S]*?)<\/code>/gi, '`$1`');
-  s = s.replace(/<br\s*\/?>/gi, '\n');
-  s = s.replace(/<div>/gi, '\n').replace(/<\/div>/gi, ''); // contenteditable wraps soft lines in <div>
+  // A <br> the author actually made is written back as a REAL CommonMark hard break (two trailing spaces),
+  // not a bare newline. A bare newline now means "soft break", which the reader above renders as a space, so
+  // writing one here would silently discard the break on the next load and on the published page.
+  s = s.replace(/<br\s*\/?>/gi, '  \n');
+  // contenteditable wraps each visual line in a <div>. The FIRST one opens the block rather than starting a new
+  // line, so it contributes no break; emitting one there put a stray hard break at the head of the paragraph.
+  s = s.replace(/^\s*<div>/i, '');
+  s = s.replace(/<div>/gi, '  \n').replace(/<\/div>/gi, '');
   s = s.replace(/<[^>]+>/g, ''); // drop any stray markup (paste is hardened; nothing else should appear)
   // Decode NON-anchor text. &quot; and &#39; were missing, so an edited paragraph containing a double quote stored
   // the literal string "&quot;", which re-renders to &amp;quot; and shows the entity to the reader. &amp; stays LAST
