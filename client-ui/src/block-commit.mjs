@@ -24,6 +24,27 @@ export const EDITABLE_BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', '
  *  writing a paragraph over something that is not one. */
 const COMPATIBLE = { paragraph: 'paragraph', heading: 'heading', quote: 'quote', list: 'list', table: 'table', code: 'code' };
 
+/**
+ * Which source lines a block DELETE should remove. Pure, so the decision is tested here rather than in a browser.
+ *
+ * A block carries one blank-line separator with it, or two paragraphs fuse into one when it goes. The separator
+ * is normally the blank AFTER the block; for the last block in a document there is none, so the blank BEFORE it
+ * is taken instead. Returns null when the delete is refused, which includes any request that would empty the
+ * document: a document with no blocks has nowhere to put the caret, and recovering from that needs a rebuild.
+ */
+export function planBlockDelete(sourceText, range) {
+  if (!range || typeof range.start !== 'number' || typeof range.end !== 'number') return null;
+  const lines = String(sourceText ?? '').replace(/\r\n/g, '\n').split('\n');
+  if (range.start < 0 || range.end < range.start || range.end >= lines.length) return null;
+  let start = range.start;
+  let end = range.end;
+  if (end + 1 < lines.length && lines[end + 1].trim() === '') end++;
+  else if (start > 0 && lines[start - 1].trim() === '') start--;
+  const out = lines.slice(0, start).concat(lines.slice(end + 1));
+  if (!out.join('\n').trim()) return null; // never delete the last remaining content
+  return out;
+}
+
 export function isEditableBlockTag(tag) {
   return EDITABLE_BLOCK_TAGS.has(String(tag || '').toUpperCase());
 }

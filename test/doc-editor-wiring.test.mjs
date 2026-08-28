@@ -78,3 +78,36 @@ test('Preview Save resolves identity through the cookie-aware selector, not the 
   assert.match(preview, /currentIdentity\(readMemberSignal\(\)\)/,
     'Preview Save no longer routes identity through currentIdentity, so a cookie-only member cannot save');
 });
+
+// ---- the PREVIEW page's own editing surface -------------------------------------------------------------
+// preview.astro implements editing separately from gbti-doc-editor. Both defects below were reported on the
+// Preview surface on 2026-08-28, AFTER the equivalents had been fixed in the Visual editor, which is exactly
+// why they are pinned separately: a fix to one surface says nothing about the other.
+
+test('Preview makes every editable block contenteditable UP FRONT, not on click', () => {
+  // The selection toolbar's editableOf only recognises a block already carrying contenteditable="true". With
+  // the attribute set lazily in the click handler, dragging a selection across an untouched paragraph resolved
+  // to null and no toolbar appeared, so the author had to click a block before they could select inside it.
+  const wire = preview.slice(preview.indexOf('const wireBlocks ='), preview.indexOf('const wireEditing ='));
+  assert.notEqual(wire.length, 0, 'wireBlocks is gone, so this guard measures nothing');
+  const code = wire.replace(/^\s*\/\/.*$/gm, '');
+  const eager = code.indexOf("el.setAttribute('contenteditable', 'true');");
+  const click = code.indexOf("addEventListener('click'");
+  assert.notEqual(eager, -1, 'no block is made contenteditable at wire time');
+  assert.ok(click === -1 || eager < click,
+    'contenteditable is still set only inside a click handler, so selection before click finds nothing');
+});
+
+test('Preview blur leaves contenteditable in place, or the surface returns to click-first', () => {
+  const code = preview.replace(/^\s*\/\/.*$/gm, '');
+  assert.ok(!/blur[\s\S]{0,400}removeAttribute\('contenteditable'\)/.test(code),
+    'the blur handler strips contenteditable again, undoing the eager attribute on first use');
+});
+
+test('Preview handles Backspace in an empty block, and routes it through the pure planner', () => {
+  const code = preview.replace(/^\s*\/\/.*$/gm, '');
+  assert.match(code, /ev\.key !== 'Backspace'/, 'Preview has no Backspace handling');
+  assert.match(code, /isCollapsed/, 'the Backspace branch does not require a collapsed caret');
+  assert.match(code, /planBlockDelete\(/,
+    'the delete does not use the tested planner, so its line arithmetic is untested browser-only code');
+});

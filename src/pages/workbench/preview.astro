@@ -624,7 +624,7 @@ const labelOf = CATEGORY_LABELS;
       // writes EVERY store through the same client.saveDraft call, so there is only ever one write path.
       // sow-235: the block reader/committer and the shared selection toolbar. Loaded once here because
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
-      const { readBlockDom, applyBlockEdit, isEditableBlockTag } = await import('../../../client-ui/src/block-commit.mjs');
+      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete } = await import('../../../client-ui/src/block-commit.mjs');
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
       const { renderMarkdownWithBlocks: mdBlocks, renderMarkdown: mdPlain } = await import('../../../client/src/markdown.mjs');
       const { buildAuthorNoteHtml } = await import('../../lib/author-note.mjs');
@@ -673,6 +673,35 @@ const labelOf = CATEGORY_LABELS;
         apply();
         wireEditing();
       };
+      // Remove an emptied block outright, rather than leaving the blank line an empty commit writes. Blur already
+      // disposes of an empty paragraph (applyBlockEdit returns [''] and markdown collapses it), so this exists for
+      // the KEYBOARD: Backspace in an empty block should do immediately, and visibly, what clicking away does
+      // eventually. It shares commitIn's render path so a delete and an edit cannot diverge.
+      const deleteIn = async (doc: PvDoc, el: HTMLElement) => {
+        const idx = Number(el.dataset[doc.attr]);
+        const range = doc.ranges[idx];
+        if (!range) return false;
+        const next = planBlockDelete(doc.get(), range);
+        if (!next) return false; // refused: a bad range, or this is the last content in the document
+        doc.set(next.join('\n'));
+        markDirty();
+        if (doc === noteDoc) { renderNoteCard(); wireEditing(); return true; }
+        await renderFromSource();
+        apply();
+        wireEditing();
+        // Put the caret at the end of the preceding block, which is where the author expects it after a
+        // Backspace that joined two paragraphs. Best effort: a re-render may not offer the same index back.
+        const prev = idx > 0 ? (bodyEl?.querySelector(`[data-${doc.attr}="${idx - 1}"]`) as HTMLElement | null) : null;
+        if (prev) {
+          prev.focus();
+          try {
+            const r = document.createRange(); r.selectNodeContents(prev); r.collapse(false);
+            const sel = document.getSelection(); sel?.removeAllRanges(); sel?.addRange(r);
+          } catch { /* focus alone is enough */ }
+        }
+        return true;
+      };
+
       // The body keeps its own name because the selection toolbar's onCommit closes over it.
       const commitBlock = (el: HTMLElement) => commitIn(bodyDoc, el);
 
@@ -716,6 +745,13 @@ const labelOf = CATEGORY_LABELS;
           // hr has nothing to edit, and the footnotes section is synthesized and carries a null range.
           const range = doc.ranges[Number(el.dataset[doc.attr])];
           if (!range || !isEditableBlockTag(el.tagName)) return;
+          // sow-235 follow-up: contenteditable is set EAGERLY on every editable block while edit mode is on,
+          // rather than lazily on click. The selection toolbar's editableOf only recognises a block already
+          // carrying contenteditable="true", so with the attribute set on click a drag-selection across an
+          // untouched paragraph resolved to nothing and no toolbar appeared. The author had to click a block
+          // before they could select inside it, which is the reported defect. Setting it up front is what makes
+          // select-then-act work on first contact, and it is also what lets keydown reach an unclicked block.
+          el.setAttribute('contenteditable', 'true');
           // A click on a link inside an editable block opens the link manager rather than placing a caret:
           // inside contenteditable a link neither navigates nor shows anything, so it otherwise reads as dead.
           el.querySelectorAll('a[href]').forEach((a) => a.addEventListener('click', (ev) => {
@@ -728,14 +764,25 @@ const labelOf = CATEGORY_LABELS;
             ensureToolbar();
             seltb?.editLink(el, a as HTMLElement);
           }));
-          el.addEventListener('click', () => {
-            if (el.getAttribute('contenteditable') === 'true') return;
-            el.setAttribute('contenteditable', 'true');
-            el.focus();
-            // Baseline for the no-op check on blur, captured AFTER focus so the browser's own contenteditable
-            // normalization sits on both sides of the comparison.
-            el.dataset.pvSnap = el.innerHTML;
-          }, { once: false });
+          // Baseline for the no-op check on blur. Captured on FOCUS now that the attribute is set eagerly, so a
+          // block entered by keyboard (Tab, or a caret arriving from a neighbour) records a baseline exactly as a
+          // clicked one does. Captured after the browser's own contenteditable normalization, so the comparison
+          // has the same normalization on both sides.
+          el.addEventListener('focus', () => {
+            if (el.dataset.pvSnap === undefined) el.dataset.pvSnap = el.innerHTML;
+          });
+          // Backspace at the very start of an EMPTY block removes it. Without this the only way to dispose of an
+          // empty paragraph was to click away and let the blur commit collapse it, which works but gives no
+          // feedback at the moment the author presses the key, so the key reads as broken.
+          el.addEventListener('keydown', (ev: KeyboardEvent) => {
+            if (ev.key !== 'Backspace' || !editing) return;
+            const sel = document.getSelection();
+            if (!sel || !sel.isCollapsed || sel.focusOffset !== 0) return;
+            if (String(el.textContent || '').trim() !== '') return;
+            ev.preventDefault();
+            delete el.dataset.pvSnap; // the blur that follows the re-render must not try to commit this node
+            void deleteIn(doc, el);
+          });
           el.addEventListener('blur', () => {
             // The link panel takes focus from the block. Committing now would re-render the document and
             // destroy the saved range before Apply is ever pressed, so the commit waits for the panel to close
@@ -747,7 +794,9 @@ const labelOf = CATEGORY_LABELS;
             // could read back different, rewrite draft.body, and re-render the whole document -- destroying the
             // node the author was clicking next. Comparing the DOM against itself cannot have that failure mode.
             const untouched = el.dataset.pvSnap === el.innerHTML;
-            el.removeAttribute('contenteditable');
+            // contenteditable is NOT removed here any more: it is owned by edit mode, and wireBlocks strips it
+            // from every block the moment editing is turned off. Removing it on blur would put the surface back
+            // into the click-first state this change exists to fix.
             delete el.dataset.pvSnap;
             if (untouched) return;
             void commitIn(doc, el);
