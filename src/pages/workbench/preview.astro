@@ -130,6 +130,16 @@ const labelOf = CATEGORY_LABELS;
        outline paints outside the box and takes no space, so it cannot reflow the article. If a rule below
        ever needs to change spacing, the rule is wrong rather than the guarantee. */
     .pv-edit-msg { flex: 0 1 auto; }
+    /* Save draft is only ever in the DOM when there is something to save (markDirty unhides it, a completed save
+       hides it again), so whenever it is visible it is the primary action on the bar. The shared .pv-view button
+       style is a muted grey built for an inactive segmented control, which made a live Save read as disabled at
+       exactly the moment the author needed to press it. */
+    .pv-edit-ctl [data-pv-save] { background: var(--green-700); color: #fff; }
+    .pv-edit-ctl [data-pv-save]:hover { filter: brightness(1.1); }
+    .pv-edit-ctl [data-pv-save]:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+    /* The title is frontmatter rather than a body block, so it gets the same editable affordance by hand. */
+    [data-pv-title][contenteditable="true"] { cursor: text; outline: 2px dashed var(--ink-3); outline-offset: 6px; }
+    [data-pv-title][contenteditable="true"]:focus { outline: 2px solid var(--green-700); }
     /* sow-235: the selection toolbar and link panel position absolutely against this element. `relative`
        establishes the containing block and takes no space, so the no-reflow guarantee above still holds. */
     [data-pv-body] { position: relative; }
@@ -628,6 +638,7 @@ const labelOf = CATEGORY_LABELS;
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
       const { renderMarkdownWithBlocks: mdBlocks, renderMarkdown: mdPlain } = await import('../../../client/src/markdown.mjs');
       const { buildAuthorNoteHtml } = await import('../../lib/author-note.mjs');
+      const { planTitleEdit } = await import('../../lib/preview-title.mjs');
 
       const editCtl = $('[data-pv-editctl]') as HTMLElement | null;
       const editBtn = $('[data-pv-edit-toggle]') as HTMLButtonElement | null;
@@ -804,11 +815,42 @@ const labelOf = CATEGORY_LABELS;
         });
       };
 
+      // The TITLE is editable in place too, and it is a different kind of thing from every block around it: it
+      // is frontmatter, not body source, so it has no line range and never goes through commitIn. The edit
+      // writes fm.title, which is the very object the Save handler sends as `input`, so nothing else has to
+      // learn about it. Held to one line of plain text on purpose: the value becomes an h1 and a document
+      // title, and neither can render markup or a newline.
+      const wireTitle = () => {
+        const el = $('[data-pv-title]') as HTMLElement | null;
+        if (!el) return;
+        if (!editing) { el.removeAttribute('contenteditable'); return; }
+        el.setAttribute('contenteditable', 'true');
+        if (el.dataset.pvTitleWired === '1') return; // wireEditing re-runs after every commit
+        el.dataset.pvTitleWired = '1';
+        el.addEventListener('keydown', (ev: KeyboardEvent) => {
+          // Enter commits rather than inserting a line break, and Escape abandons the edit.
+          if (ev.key === 'Enter') { ev.preventDefault(); el.blur(); }
+          if (ev.key === 'Escape') { ev.preventDefault(); el.textContent = String(fm.title || slug); el.blur(); }
+        });
+        el.addEventListener('blur', () => {
+          // textContent, so pasted markup cannot survive the commit whatever the browser allowed on the way in.
+          // What the value MEANS is planTitleEdit's decision, tested in test/preview-title.test.mjs.
+          const plan = planTitleEdit(el.textContent, fm.title, slug);
+          el.textContent = plan.display;
+          if (!plan.changed) return;
+          fm.title = plan.title;
+          const bn = $('[data-pv-barname]'); if (bn) bn.textContent = plan.title;
+          document.title = `Preview: ${plan.title}`;
+          markDirty();
+        });
+      };
+
       const wireEditing = () => {
         if (editing) ensureToolbar(); else seltb?.hide();
         if (bodyEl) wireBlocks(bodyEl, bodyDoc);
         const card = $('[data-pv-note-card]');
         if (card) wireBlocks(card, noteDoc);
+        wireTitle();
       };
 
       // The note card, rebuilt from its own source the same way the body is. Two details matter. The renderer
