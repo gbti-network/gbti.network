@@ -188,12 +188,19 @@ const sub = blurb ?? 'One email a week: new member articles, products and prompt
     margin: 0 0 18px;
   }
 
-  /* Inside a content page's closing column, under the discussion. */
+  /* Inside a content page's closing column, ABOVE the discussion (owner request, 2026-08-28). It wears the
+     same card chrome as FollowNetwork.astro so the two closing blocks read as one family. The card is
+     THEME-AWARE rather than literally white: both --paper (#ffffff -> #2d2a34) and --line-2 flip under
+     [data-theme="dark"], so this needs no dark-mode rule of its own. */
   .dsub-inline {
-    border-top: 1px solid var(--line);
-    padding: 26px 0 4px;
-    margin: 26px 0 0;
+    max-width: 820px;
+    margin: 40px auto 0;
+    padding: 28px 32px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-lg);
+    background: var(--paper);
   }
+  @media (max-width: 520px) { .dsub-inline { padding: 22px 18px; } }
 
   /* Homepage sidebar rail: the wrapper (a .card.side-card) supplies the chrome and the signed-out gate, so
      the section itself is chromeless here. Stack the field above a full-width button for the ~256px column. */

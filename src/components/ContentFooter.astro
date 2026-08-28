@@ -1,7 +1,7 @@
 ---
 // SOW-050: the unified closing block shared by every content detail page (articles / products / prompts) so the
 // discussion + author region reads the same everywhere: the member-aware Community Invite, then the "Written by"
-// AuthorBox, then the Comments thread (same centered reading width on all three — the prompt page drops its old
+// AuthorBox, then the digest capture, then the Comments thread, closing with the social-follow block (same centered reading width on all three — the prompt page drops its old
 // `wide`). Post-only extras (OpenHistory / RelatedPosts / ContributionCredits) stay on the article page, after
 // this block.
 import { getCollection } from 'astro:content';
@@ -33,14 +33,17 @@ const skipAuthorBox = hideAuthor || hasAuthorNote(await getCollection('comment')
 ---
 <CommunityInvite author={author} via={viaTag} />
 {!skipAuthorBox && <AuthorBox author={author} publishedAt={publishedAt} />}
-{/* The social-follow block sits under the author box and above the comments (was hand-copied, and stale,
-    inside individual article markdown; now one shared mount bound to SOCIAL_LINKS). */}
-<FollowNetwork />
-<Comments targetType={type} targetSlug={slug} author={author} wide={wide} aliases={aliases} />
-{/* sow-166 / sow-202: the digest capture, below the discussion. Mounted HERE rather than on each of
-    the three page templates, because this component is already the one shared closing block for
-    articles, products and prompts, so one mount covers all three and cannot drift between them.
+{/* sow-166 / sow-202: the digest capture. Mounted HERE rather than on each of the three page templates,
+    because this component is already the one shared closing block for articles, products and prompts, so
+    one mount covers all three and cannot drift between them.
+    ORDER (owner request, 2026-08-28): the digest now sits ABOVE the discussion, in the slot the
+    social-follow block used to hold, and it wears that block's card chrome so the two read as one family.
     quietTurnstile: the visible challenge box is hidden here (owner request) while the token is still
     produced and verified; each content page also carries a sidebar digest, and the component's load
     guard keeps the two instances from loading Turnstile twice. */}
 <DigestSubscribe variant="inline" quietTurnstile />
+<Comments targetType={type} targetSlug={slug} author={author} wide={wide} aliases={aliases} />
+{/* The social-follow block CLOSES the page, under the discussion (owner request, 2026-08-28; it used to
+    sit above the comments, where the digest is now). Was hand-copied, and stale, inside individual
+    article markdown; now one shared mount bound to SOCIAL_LINKS. */}
+<FollowNetwork />
