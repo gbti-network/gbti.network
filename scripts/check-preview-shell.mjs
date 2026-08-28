@@ -35,7 +35,18 @@ import { ARTICLE_LAYOUTS, articleShell } from '../src/lib/article-page.mjs';
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const SKELETON = path.join(ROOT, 'scripts/fixtures/preview-skeleton.html');
 
-function skip(msg) { console.log('· check:preview-shell skipped: ' + msg); process.exit(0); }
+// A GUARD THAT SKIPS GREEN IN CI IS WORSE THAN NO GUARD (@QAmaster, 2026-08-28). There are TWO skip paths
+// here, not one: the playwright import, and the Chromium launch below, which catches ANY exception, so a
+// sandbox restriction or an OOM would come back green as readily as a missing browser. Wiring this into CI
+// without closing that would buy a permanent silent skip reporting success forever, which is the exact
+// vacuous-pass class sow-215 exists to catch. REQUIRE_BROWSER=1 turns every skip into a failure, and the
+// workflow sets it. Locally the skip stays, so anyone without a browser installed can still run the check.
+const REQUIRE_BROWSER = process.env.REQUIRE_BROWSER === '1';
+function skip(msg) {
+  if (REQUIRE_BROWSER) die(`REQUIRE_BROWSER is set, so a missing browser is a failure rather than a skip: ${msg}`);
+  console.log('· check:preview-shell skipped: ' + msg);
+  process.exit(0);
+}
 function die(msg) { console.error('✗ check:preview-shell: ' + msg); process.exit(1); }
 
 // A MISSING FIXTURE IS A FAILURE, NOT A SKIP. A skip is only ever for a missing browser. If the skeleton is

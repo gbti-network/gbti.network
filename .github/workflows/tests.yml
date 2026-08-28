@@ -23,3 +23,25 @@ jobs:
       # invokes esbuild. --omit=optional made that binary absent, failing the build-define guards in CI only.
       - run: npm ci --ignore-scripts
       - run: npm test
+
+  # sow-215 Check B: the WorkBench preview must APPLY the article shell contract, not merely import it.
+  # Its own job because it is the only check here that needs a browser, and because a browser install should
+  # not sit in front of the secret-free unit suite. It needs no dist, no network and no secrets: the harness
+  # serves a skeleton page and drives the real applyPreviewShell, so it is as safe on fork PRs as `npm test`.
+  #
+  # REQUIRE_BROWSER=1 is the point of the job. The script skips green when Playwright or Chromium is missing,
+  # which is right on a laptop and wrong here: without the flag a CI box that never ran `playwright install`
+  # would report success forever, which is the vacuous pass this SOW exists to catch. The flag turns both
+  # skip paths, the import and the launch, into failures.
+  preview-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - run: npm run check:preview-shell
+        env:
+          REQUIRE_BROWSER: '1'
