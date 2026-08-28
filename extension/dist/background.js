@@ -19030,7 +19030,7 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
     if (merged.length) effInput.redirectFrom = merged;
     if (renaming && oldFm.publishedAt) effInput.publishedAt = oldFm.publishedAt;
   }
-  if (["post", "product", "prompt"].includes(type) && !effInput.publishedAt) {
+  if (["post", "product", "prompt"].includes(type)) {
     const nowIso = (/* @__PURE__ */ new Date()).toISOString();
     let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === "string" && effInput.slug) {
@@ -19058,9 +19058,9 @@ async function publish(ctx, { type, input, body, message, title, prBody: prBody2
     }
     const priorPublished = Boolean(priorFm && priorFm.status === "published" && priorFm.publishedAt);
     if (priorPublished) {
-      effInput.publishedAt = priorFm.publishedAt;
+      if (!effInput.publishedAt) effInput.publishedAt = priorFm.publishedAt;
       effInput.updatedAt = nowIso;
-    } else {
+    } else if (!effInput.publishedAt) {
       effInput.publishedAt = nowIso;
     }
   }
