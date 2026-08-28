@@ -376,3 +376,48 @@ export function authorTargetFor(selected, initial) {
   }
   return undefined;
 }
+
+// sow-204: the extension stops being an authoring host, but the workspace PAGE stays.
+//
+// This is the narrow part of the owner's ruling and it is easy to get wrong in the expensive direction.
+// Saved (favorites and collections) and Following (follows and membership) exist ONLY as tabs of
+// <gbti-workspace>; no other extension surface hosts them. So deleting the page, which one reading of the
+// 2026-08-24 wording invited, would have removed saving, collecting and following from the extension
+// outright. The owner confirmed on 2026-08-28 that only AUTHORING leaves. The page stays and the authoring
+// tabs hide, per host.
+//
+// DEFAULT DIRECTION, chosen so a mistake fails toward the status quo rather than toward silently stripping a
+// host: authoring is ON everywhere EXCEPT the extension. An absent attribute therefore leaves the website and
+// the npm CMS exactly as they are, and a host that mounts this component in future keeps authoring unless it
+// opts out. An explicit attribute overrides in both directions, which is what makes this testable without a
+// browser and what lets the website state its intent rather than rely on a negative.
+
+/**
+ * Is the authoring half of the workspace available in this host?
+ * @param {string|null|undefined} attr the `authoring` attribute value: absent, 'off', or anything else
+ * @param {boolean} isExtension whether the component is running inside the browser extension
+ */
+export function authoringEnabled(attr, isExtension) {
+  if (attr === null || attr === undefined) return !isExtension;
+  return String(attr).trim().toLowerCase() !== 'off';
+}
+
+/**
+ * The tabs to render. Drops every tab flagged `authoring` when authoring is off; everything else is untouched,
+ * IN ORDER, so curation keeps its position rather than being re-sorted into a different surface.
+ */
+export function visibleTabs(tabs, authoring) {
+  const all = Array.isArray(tabs) ? tabs : [];
+  return authoring ? all.slice() : all.filter((t) => !t?.authoring);
+}
+
+/**
+ * The tab to land on, given the tab a caller asked for. A deep link (`#tab=post`) or a persisted tab can name
+ * a tab this host no longer shows, and rendering an empty body would look like a broken page rather than a
+ * removed feature. Falls back to the first visible tab.
+ */
+export function resolveTab(requested, tabs, authoring) {
+  const vis = visibleTabs(tabs, authoring);
+  if (!vis.length) return null;
+  return vis.some((t) => t?.id === requested) ? requested : vis[0].id;
+}

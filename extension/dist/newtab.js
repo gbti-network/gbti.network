@@ -3095,6 +3095,19 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     }
     return void 0;
   }
+  function authoringEnabled(attr, isExtension) {
+    if (attr === null || attr === void 0) return !isExtension;
+    return String(attr).trim().toLowerCase() !== "off";
+  }
+  function visibleTabs(tabs, authoring) {
+    const all = Array.isArray(tabs) ? tabs : [];
+    return authoring ? all.slice() : all.filter((t) => !t?.authoring);
+  }
+  function resolveTab(requested, tabs, authoring) {
+    const vis = visibleTabs(tabs, authoring);
+    if (!vis.length) return null;
+    return vis.some((t) => t?.id === requested) ? requested : vis[0].id;
+  }
 
   // client-ui/src/topic-picker-core.mjs
   function topicsFromJson(data) {
@@ -16793,13 +16806,13 @@ ${String(body ?? "")}`;
   var TABS = [
     { id: "overview", label: "Overview" },
     // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
-    { id: "post", label: "Articles", type: "post" },
-    { id: "prompt", label: "Prompts", type: "prompt" },
-    { id: "product", label: "Products", type: "product" },
+    { id: "post", label: "Articles", type: "post", authoring: true },
+    { id: "prompt", label: "Prompts", type: "prompt", authoring: true },
+    { id: "product", label: "Products", type: "product", authoring: true },
     // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
     // type's list (a draft article under Articles), reached by the per-type Drafts filter.
     { id: "prs", label: "Pull requests" },
-    { id: "inbox", label: "Inbox" },
+    { id: "inbox", label: "Inbox", authoring: true },
     { id: "saved", label: "Saved" },
     // SOW-037: favorites + collections
     { id: "subs", label: "Following" },
@@ -16807,6 +16820,7 @@ ${String(body ?? "")}`;
     { id: "earnings", label: "Earnings" }
     // SOW-052: placeholder for referrals + rewards (SOW-007/008)
   ];
+  var isExtensionHost = () => typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
   var MEMBERSHIP_LABEL = { paid: "Paid member", trial: "Trial", trialing: "Trial", expired: "Expired", cancelled: "Cancelled", none: "Not a member", banned: "Suspended", unknown: "Not signed in" };
   var CSS35 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
@@ -17358,7 +17372,9 @@ ${String(body ?? "")}`;
         });
         return;
       }
-      const tabs = TABS.map((t) => {
+      const shown = visibleTabs(TABS, this._authoring());
+      this._tab = resolveTab(this._tab, TABS, this._authoring()) ?? this._tab;
+      const tabs = shown.map((t) => {
         const n = this._tabCount(t);
         const badge = n ? `<span class="tbadge">${esc(n)}</span>` : "";
         return `<button class="tab ${t.id === this._tab ? "on" : ""}" data-tab="${t.id}" type="button" role="tab" aria-selected="${t.id === this._tab}">${esc(t.label)}${badge}</button>`;
@@ -17374,6 +17390,10 @@ ${String(body ?? "")}`;
         this._ensureTab(this._tab);
       }));
       this._wireBody();
+    }
+    /** sow-204: authoring is ON everywhere except the extension; an explicit attribute overrides either way. */
+    _authoring() {
+      return authoringEnabled(this.getAttribute("authoring"), isExtensionHost());
     }
     _profileHtml() {
       if (!this._profile) return "";

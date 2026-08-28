@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
@@ -21,17 +21,24 @@ import './gbti-subscriptions.mjs';
 
 const TABS = [
   { id: 'overview', label: 'Overview' }, // SOW-052: the WorkBench hub (tiles + counts + PRs needing attention)
-  { id: 'post', label: 'Articles', type: 'post' },
-  { id: 'prompt', label: 'Prompts', type: 'prompt' },
-  { id: 'product', label: 'Products', type: 'product' },
+  { id: 'post', label: 'Articles', type: 'post', authoring: true },
+  { id: 'prompt', label: 'Prompts', type: 'prompt', authoring: true },
+  { id: 'product', label: 'Products', type: 'product', authoring: true },
   // SOW-085: the standalone Drafts tab is retired; fork-staged drafts (SOW-082) now merge into their content
   // type's list (a draft article under Articles), reached by the per-type Drafts filter.
   { id: 'prs', label: 'Pull requests' },
-  { id: 'inbox', label: 'Inbox' },
+  { id: 'inbox', label: 'Inbox', authoring: true },
   { id: 'saved', label: 'Saved' }, // SOW-037: favorites + collections
   { id: 'subs', label: 'Following' }, // SOW-037: follows + membership (network members + news channels)
   { id: 'earnings', label: 'Earnings' }, // SOW-052: placeholder for referrals + rewards (SOW-007/008)
 ];
+
+// sow-204: `authoring: true` above marks the four tabs the owner's Option A removes from the EXTENSION
+// (Articles, Prompts, Products, Inbox). Saved and Following are deliberately NOT flagged: they are the
+// curation surface the same ruling keeps, and they exist nowhere else in the extension, so flagging them
+// would delete favorites, collections and follows from that host entirely. The decision logic is pure and
+// lives in workspace-core (authoringEnabled / visibleTabs / resolveTab) so it is testable without a browser.
+const isExtensionHost = () => typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
 
 // SOW-052: the overview tiles — each is a section of the WorkBench. `count` is filled from the loaded data;
 // `href` deep-links (the workbench rail + the element both honor #tab=). Settings/Admin are separate pages.
@@ -584,7 +591,11 @@ class GbtiWorkspace extends GbtiElement {
       this.$('gbti-contrib-review')?.addEventListener('contrib-decided', () => { this._reviewing = null; this.render(); this._loadInboxCount(); });
       return;
     }
-    const tabs = TABS.map((t) => {
+    const shown = visibleTabs(TABS, this._authoring());
+    // A deep link (#tab=post) or a persisted tab can name a tab this host no longer shows; landing on
+    // it would paint an empty body, which reads as a broken page rather than a removed feature.
+    this._tab = resolveTab(this._tab, TABS, this._authoring()) ?? this._tab;
+    const tabs = shown.map((t) => {
       // SOW-085: count badges on the content tabs + Pull requests (+ the existing Inbox), from already-loaded
       // data only; hidden while unknown or 0.
       const n = this._tabCount(t);
@@ -595,6 +606,9 @@ class GbtiWorkspace extends GbtiElement {
     this.$$('[data-tab]').forEach((b) => b.addEventListener('click', () => { this._tab = b.dataset.tab; this._msg = null; this._draftMsg = null; this._page = 0; this._statusFilter = 'all'; this.render(); this._ensureTab(this._tab); })); // SOW-085: a direct tab click resets the page + filter (was a gap)
     this._wireBody();
   }
+
+  /** sow-204: authoring is ON everywhere except the extension; an explicit attribute overrides either way. */
+  _authoring() { return authoringEnabled(this.getAttribute('authoring'), isExtensionHost()); }
 
   _profileHtml() {
     if (!this._profile) return '';
