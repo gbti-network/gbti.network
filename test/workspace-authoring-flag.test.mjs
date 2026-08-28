@@ -95,3 +95,21 @@ test('sow-204: the component TABS actually carry the flags this fixture assumes'
       + 'the extension, so flagging it would remove the feature rather than an affordance');
   }
 });
+
+// REGRESSION (2026-08-28): `_authoring()` read the attribute unguarded, and render() calls it, so a DOM-free
+// instance threw `this.getAttribute is not a function`. That reddened test/ui-mount-safety.test.mjs and main
+// stayed red for seven commits, because only the Unit job sees it and Deploy stayed green throughout.
+// ui-mount-safety asserts render() as a whole; this asserts the specific method, so the next failure names the
+// cause rather than the symptom. base.mjs falls back to `class {}` when HTMLElement is undefined, which is
+// exactly the node environment this suite runs in.
+test('gbti-workspace: _authoring() survives a DOM-free instance and defaults to on', async () => {
+  const { GbtiWorkspace } = await import('../client-ui/src/elements/gbti-workspace.mjs');
+  const el = new GbtiWorkspace();
+  // Control: if the element ever gains a getAttribute in this environment, the guard below stops being the
+  // thing under test and this assertion says so rather than passing for the wrong reason.
+  assert.equal(typeof el.getAttribute, 'undefined',
+    'this test is only meaningful on a DOM-free instance; getAttribute now exists, so re-point it');
+  let got;
+  assert.doesNotThrow(() => { got = el._authoring(); });
+  assert.equal(got, true, 'no attribute and no chrome.runtime means the website default, authoring on');
+});

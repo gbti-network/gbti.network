@@ -17425,8 +17425,13 @@ ${String(body ?? "")}`;
       this._wireBody();
     }
     /** sow-204: authoring is ON everywhere except the extension; an explicit attribute overrides either way. */
+    // render() calls this, and render() must survive a DOM-FREE instance: base.mjs falls back to `class {}`
+    // when HTMLElement is undefined, so in the node suite there is no getAttribute to call. That contract is
+    // what test/ui-mount-safety.test.mjs enforces, and reading the attribute unguarded broke it. No attribute
+    // is reachable in that environment, so null is the honest answer and authoringEnabled applies its default.
     _authoring() {
-      return authoringEnabled(this.getAttribute("authoring"), isExtensionHost());
+      const attr = typeof this.getAttribute === "function" ? this.getAttribute("authoring") : null;
+      return authoringEnabled(attr, isExtensionHost());
     }
     _profileHtml() {
       if (!this._profile) return "";
