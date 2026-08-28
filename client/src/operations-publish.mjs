@@ -287,7 +287,12 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
   // 2026-07-09 with the /ci prompt). Preserve an existing item's publishedAt ONLY when it was already
   // published (read the canonical file when the caller sent no `path`); stamp now for a genuinely new item or
   // the first publish of a draft; updatedAt bumps only on a genuine re-publish of an already-published item.
-  if (['post', 'product', 'prompt'].includes(type) && !effInput.publishedAt) {
+  // The outer guard is intentionally NOT `&& !effInput.publishedAt`: a faithful re-publish round-trips the
+  // existing frontmatter, which INCLUDES publishedAt (the MCP/API shape), and the old guard then skipped this
+  // whole block so updatedAt never bumped (SOW-258, hit live 2026-08-18 on the /qa prompt; DeployStatusNotice
+  // and the "Recently updated" sort both read updatedAt and went stale). The two publishedAt WRITES stay guarded
+  // by `!effInput.publishedAt`, so a supplied publishedAt is preserved; only the updatedAt stamp is newly reached.
+  if (['post', 'product', 'prompt'].includes(type)) {
     const nowIso = new Date().toISOString();
     let priorFm = oldFm;
     if (!priorFm && typeof effInput.slug === 'string' && effInput.slug) {
@@ -305,9 +310,9 @@ export async function publish(ctx, { type, input, body, message, title, prBody, 
     // real publish in #372, at the top of the feed). Preserve the date only when the prior version was PUBLISHED.
     const priorPublished = Boolean(priorFm && priorFm.status === 'published' && priorFm.publishedAt);
     if (priorPublished) {
-      effInput.publishedAt = priorFm.publishedAt; // keep the real publication moment across a re-publish
-      effInput.updatedAt = nowIso;                // a genuine re-publish of published content is an edit
-    } else {
+      if (!effInput.publishedAt) effInput.publishedAt = priorFm.publishedAt; // keep the real publication moment
+      effInput.updatedAt = nowIso;                // a genuine re-publish of published content is an edit (SOW-258)
+    } else if (!effInput.publishedAt) {
       effInput.publishedAt = nowIso;              // a new item, or the first publish of a draft
     }
   }

@@ -366,3 +366,21 @@ test('publish stamps publishedAt to now for the FIRST publish of a prior canonic
   assert.ok(!fm.updatedAt, 'the first publish of a draft is not an edit (no updatedAt)');
   assert.equal(fm.status, 'published', 'publish forces status published');
 });
+
+// SOW-258 (hit live 2026-08-18, the /qa prompt): a faithful re-publish round-trips the existing frontmatter,
+// which INCLUDES publishedAt. The old `!effInput.publishedAt` outer guard then skipped the whole date block, so
+// updatedAt never bumped and DeployStatusNotice + the "Recently updated" sort silently went stale. A re-publish
+// that SUPPLIES publishedAt must still stamp updatedAt to now, while preserving the supplied publishedAt.
+test('re-publish that SUPPLIES publishedAt still bumps updatedAt (SOW-258)', async () => {
+  const existing = '---\ntype: prompt\ntitle: Fresh\nslug: fresh\nauthor: alice\nstatus: published\nvisibility: public\nshortDescription: d\npublishedAt: 2026-07-01T00:00:00.000Z\n---\n\nOld body.\n';
+  const startIso = new Date().toISOString();
+  const repo = fakeRepo();
+  await publish(ctxFor({ repo, files: { 'members/alice/prompts/fresh/index.md': existing } }),
+    { type: 'prompt', input: { title: 'Fresh', slug: 'fresh', shortDescription: 'd', publishedAt: '2026-07-01T00:00:00.000Z' }, body: 'B2' });
+  const fm = parseContentFile(repo.puts.find((f) => f.path === 'members/alice/prompts/fresh/index.md').content).frontmatter;
+  const pub = String(fm.publishedAt instanceof Date ? fm.publishedAt.toISOString() : fm.publishedAt);
+  assert.match(pub, /^2026-07-01/, 'the supplied publishedAt is preserved (not re-stamped)');
+  assert.ok(fm.updatedAt, 'a re-publish that round-trips publishedAt still bumps updatedAt');
+  const upd = String(fm.updatedAt instanceof Date ? fm.updatedAt.toISOString() : fm.updatedAt);
+  assert.ok(upd >= startIso, 'updatedAt is stamped to now');
+});
