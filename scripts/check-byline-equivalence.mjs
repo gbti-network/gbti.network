@@ -59,10 +59,21 @@ const ANCHOR = /<a\s([^>]*?)>([\s\S]*?)<\/a>/g;
 const HREF = /href="([^"]*)"/;
 const MEMBER_HREF = /^\/members\/([^/]+)\/$/;
 
-// sow-215 Check A phase 2: the content-directory -> built-section routes. This is a ROUTE MAP mirroring the
-// site's own URLs, not a coverage target to keep in step by hand: the guard reads which of these content
-// directories actually hold items and derives its expectation from that, so adding a fourth content type
-// makes the guard demand coverage of it as soon as content exists, with no number to update.
+// sow-215 Check A phase 2: the content-directory -> built-section routes.
+//
+// THIS MAP IS HAND-MAINTAINED. An earlier version of this comment claimed the guard "demands coverage of a
+// fourth content type as soon as content exists", which is FALSE and was caught in review: nothing here
+// discovers a new type, and a comment claiming self-extension is worse than no comment because the next
+// person trusts it. What the map DOES do is scale coverage to the content that exists: a type listed here
+// is only required to prove itself once a member actually has items of it.
+//
+// `shares` IS ALREADY A FOURTH MEMBER-AUTHORED TYPE ON DISK (three owners have `members/<u>/shares/`) and is
+// EXCLUDED DELIBERATELY. Share pages emit member links but no ContentMeta byline at all: measured across the
+// built site, ~180 member-href anchors in `shares/` and zero carrying `cm-name`. Requiring it would red on
+// every build for a byline that was never there.
+//
+// SO: if `shares` (or any new type) ever gains a ContentMeta byline, ADD IT HERE. Until someone does, the
+// guard will keep silently not checking it, which is this SOW's own partial-rename hole one level up.
 const CONTENT_SECTIONS = Object.freeze({ posts: 'articles', products: 'products', prompts: 'prompts' });
 
 /**
@@ -76,7 +87,8 @@ const CONTENT_SECTIONS = Object.freeze({ posts: 'articles', products: 'products'
  * Derived from the CONTENT rather than from `dist`, deliberately. Most built sections legitimately carry no
  * `ContentMeta` byline at all (measured: feeds, shares, members, account and the standalone pages all emit
  * member links with no `cm-name`), so "every section in dist must yield a byline" would red on ten innocent
- * folders. Only a section whose content type actually exists is required to prove itself.
+ * folders. Only a section whose content type actually exists is required to prove itself. The set of types
+ * considered is the hand-maintained CONTENT_SECTIONS above, NOT auto-discovered; see its comment.
  */
 function sectionsRequiringBylines(root) {
   const need = new Set();
