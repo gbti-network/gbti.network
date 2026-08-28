@@ -76,6 +76,18 @@ export function applyPreviewShell(document, { type, fm, slug, cats, labels, catP
     const grid = document.querySelector('.pd-grid');
     const rail = document.querySelector('.pd-rail');
     const col = document.querySelector('.pd-col');
+    // sow-215 Check B: adopt the published page's OUTER band too, not only the grid.
+    //
+    // This was the article branch's half of a fix the PROMPT branch already made below, and the omission was
+    // invisible because nothing asserted applied output. `.pd-wrap` is the product measure (1000px, 34px
+    // padding); `shell.grid` carries `art-wrap` (1140px, 34px). Leaving the wrapper in place nested the two,
+    // so every article preview rendered 140px narrower with doubled side padding than the page it previewed.
+    // The published markup is `section.art-shell.band > div.art-j-grid.art-wrap` with nothing between, and
+    // `shell.section` is the contract's own record of that outer class, previously the one shell field this
+    // branch never read. Line breaks and column width are things an author previews, which is the same
+    // reasoning the prompt branch states for its own version of this.
+    const wrap = grid?.parentElement;
+    if (wrap && shell.section) wrap.className = shell.section;
     if (grid) grid.className = shell.grid;
     if (col) (col).className = shell.column;
     // Card has no contents rail on the published page, so the preview must not invent one. Hiding rather

@@ -41,7 +41,8 @@
     "syndicate-shares": "node --env-file-if-exists=.env scripts/syndicate-shares.mjs",
     "test": "node --test 'test/**/*.test.mjs'",
     "unpeg-startup": "node client/src/autostart.mjs remove",
-    "verify:dist": "node scripts/check-build-secrets.mjs && node scripts/check-redirects.mjs && node scripts/check-extension.mjs && node scripts/check-extension-hooks.mjs && node scripts/check-headers.mjs && node scripts/check-article-closing-slot.mjs && node scripts/check-byline-equivalence.mjs && node scripts/check-lcp-priority.mjs && node scripts/check-extension-cta.mjs"
+    "verify:dist": "node scripts/check-build-secrets.mjs && node scripts/check-redirects.mjs && node scripts/check-extension.mjs && node scripts/check-extension-hooks.mjs && node scripts/check-headers.mjs && node scripts/check-article-closing-slot.mjs && node scripts/check-byline-equivalence.mjs && node scripts/check-lcp-priority.mjs && node scripts/check-extension-cta.mjs",
+    "check:preview-shell": "node scripts/check-preview-shell.mjs"
   },
   "dependencies": {
     "@astrojs/mdx": "^4.3.14",
