@@ -3,7 +3,8 @@
 // applier in createSelectionToolbar is a thin translation of the plan, and positioning is left to the browser pass.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { linkRel, planLinkEdit, SELECTION_TOOLBAR_CSS } from '../client-ui/src/selection-toolbar.mjs';
+import fs from 'node:fs';
+import { linkRel, planLinkEdit, SELECTION_TOOLBAR_CSS, createSelectionToolbar } from '../client-ui/src/selection-toolbar.mjs';
 
 test('target=_blank always carries noopener, or the new tab can reach back through window.opener', () => {
   assert.equal(linkRel({ blank: true }), 'noopener');
@@ -58,4 +59,31 @@ test('the popover CSS names its own tokens with fallbacks, so it renders in both
   assert.match(SELECTION_TOOLBAR_CSS, /--s-surface, var\(--paper/);
   assert.match(SELECTION_TOOLBAR_CSS, /--s-line, var\(--line/);
   assert.match(SELECTION_TOOLBAR_CSS, /--s-green, var\(--green-700/);
+});
+
+// The no-host stub. createSelectionToolbar resolves its host EAGERLY and, when there is none, returns an inert
+// object instead of throwing. That path needs no DOM, so it is testable here, and it is worth testing because a
+// stub whose shape does not match the real object is worse than no stub: the caller's `?.` guard passes and the
+// call throws anyway.
+test('the no-host stub is inert rather than throwing', () => {
+  const tb = createSelectionToolbar({ root: null, host: () => null, editableOf: () => null });
+  assert.equal(tb.isPanelOpen(), false);
+  assert.doesNotThrow(() => tb.hide());
+  assert.doesNotThrow(() => tb.destroy());
+});
+
+test('the no-host stub carries EVERY method of the real object, because ?. does not guard a missing method', () => {
+  // The failure this pins: `this._seltb?.editLink(...)` reads as guarded, but optional chaining only guards a
+  // missing OBJECT. With editLink absent from the stub, a link click threw "editLink is not a function".
+  const tb = createSelectionToolbar({ root: null, host: () => null, editableOf: () => null });
+  const src = fs.readFileSync(new URL('../client-ui/src/selection-toolbar.mjs', import.meta.url), 'utf8');
+  // The LAST `return {` in the module is the real object; collect the method names it exposes.
+  const realBlock = src.slice(src.lastIndexOf('  return {'));
+  const methods = [...realBlock.matchAll(/^    ([A-Za-z_$][\w$]*)[(:]/gm)].map((m) => m[1]);
+  assert.ok(methods.includes('editLink'), 'the real object must still expose editLink, or this guard is measuring nothing');
+  assert.ok(methods.length >= 4, `expected the real object to expose at least 4 members, saw ${methods.join(', ')}`);
+  for (const name of methods) {
+    assert.equal(typeof tb[name], 'function', `the stub is missing ${name}, so a caller guarded only by ?. will throw`);
+  }
+  assert.doesNotThrow(() => tb.editLink(null, null));
 });

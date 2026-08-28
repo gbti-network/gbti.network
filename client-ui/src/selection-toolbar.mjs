@@ -104,7 +104,10 @@ export function planLinkEdit({ url = '', text = '', nofollow = false, blank = fa
  */
 export function createSelectionToolbar({ root, host, editableOf, allowInline = () => true, onCommit = () => {} }) {
   const hostEl = () => (typeof host === 'function' ? host() : host);
-  if (!hostEl()) return { destroy() {}, isPanelOpen: () => false, hide() {} };
+  // The stub must carry EVERY method of the real object below, not just the three a caller happened to
+  // optional-chain. `?.` guards a missing OBJECT, never a missing METHOD, so an absent editLink here threw
+  // `editLink is not a function` on a link click rather than doing nothing. Keep the two shapes in step.
+  if (!hostEl()) return { destroy() {}, isPanelOpen: () => false, hide() {}, editLink() {} };
 
   /** Append (or re-append) a popover to the CURRENT host. A re-rendered surface leaves the old node orphaned. */
   const mount = (node) => {

@@ -219,8 +219,14 @@ class GbtiDocEditor extends GbtiElement {
 
   connectedCallback() {
     if (!this._blocks) this._blocks = [];
+    super.connectedCallback?.();
+    this._render();
     // sow-235: the selection toolbar + link manager live in selection-toolbar.mjs so the WorkBench Preview can
     // drive the same code. The host is passed as a FUNCTION because _render() replaces this subtree wholesale.
+    // Built AFTER _render(), and that ordering is load-bearing: createSelectionToolbar resolves its host
+    // EAGERLY (selection-toolbar.mjs) and returns an inert stub when the host is missing. _render() is what
+    // creates .doc-blocks, so constructing the toolbar first captured that stub for the life of the element
+    // and left bold, italic, inline code and the link panel permanently dead on a freshly opened editor.
     this._seltb = this._seltb || createSelectionToolbar({
       root: this.root,
       host: () => this.$('.doc-blocks'),
@@ -237,8 +243,6 @@ class GbtiDocEditor extends GbtiElement {
         this._change();
       },
     });
-    super.connectedCallback?.();
-    this._render();
   }
 
   disconnectedCallback() {
@@ -444,11 +448,7 @@ class GbtiDocEditor extends GbtiElement {
     }));
     this.$$('[data-up]').forEach((el) => el.addEventListener('click', () => this._move(el.dataset.up, -1)));
     this.$$('[data-down]').forEach((el) => el.addEventListener('click', () => this._move(el.dataset.down, 1)));
-    this.$$('[data-del]').forEach((el) => el.addEventListener('click', () => {
-      const i = this._indexOf(el.dataset.del);
-      if (i < 0) return;
-      this._blocks.splice(i, 1); this._render(); this._change();
-    }));
+    this.$$('[data-del]').forEach((el) => el.addEventListener('click', () => this._deleteBlock(el.dataset.del)));
     // Add block menu.
     const menuBtn = this.$('[data-addmenu]'); const pop = this.$('[data-addpop]');
     if (menuBtn && pop) {
@@ -528,6 +528,32 @@ class GbtiDocEditor extends GbtiElement {
         if (e.key === 'Enter') { e.preventDefault(); return this._pickSlash(this._slash.idx); }
         if (e.key === 'Escape') { e.preventDefault(); return this._closeSlash(); }
       }
+      // Backspace at the very start of an EMPTY block. Every block body is its own contenteditable host, so
+      // the browser cannot merge across the boundary on its own and the key does nothing at all without this.
+      // Emptiness is tested on the MODEL, never on innerHTML: Chrome leaves a bare <br> behind in a block the
+      // author has just cleared, so an innerHTML test reports that block as non-empty exactly when it matters.
+      if (e.key === 'Backspace') {
+        const b = this._byId(el.dataset.id);
+        const sel = this.root.getSelection ? this.root.getSelection() : document.getSelection();
+        const atStart = sel && sel.isCollapsed && sel.focusOffset === 0;
+        if (b && atStart && !String(b.text || '')) {
+          // A non-paragraph block converts to a paragraph FIRST rather than vanishing. One stray Backspace
+          // should not silently destroy a heading or a quote the author is about to type into.
+          if (b.type !== 'paragraph') {
+            e.preventDefault();
+            const i = this._indexOf(b._id);
+            this._blocks[i] = { ...emptyBlock('paragraph'), _id: b._id };
+            this._render(); this._focusBlock(b._id); this._change();
+            return;
+          }
+          // An empty paragraph is removed, but never the first block: deleting it would leave nowhere to type.
+          if (this._indexOf(b._id) > 0) {
+            e.preventDefault();
+            this._deleteBlock(b._id, { focusPrev: true });
+            return;
+          }
+        }
+      }
       if (e.key === 'Enter' && !e.shiftKey) {
         const b = this._byId(el.dataset.id);
         const sel = this.root.getSelection ? this.root.getSelection() : document.getSelection();
@@ -551,6 +577,22 @@ class GbtiDocEditor extends GbtiElement {
       const r = document.createRange(); r.selectNodeContents(el); r.collapse(false);
       const sel = document.getSelection(); sel.removeAllRanges(); sel.addRange(r);
     } catch { /* input focus is enough */ }
+  }
+
+  /**
+   * Remove a block. The X button and Backspace-in-an-empty-block both land here, so the two cannot drift.
+   * `focusPrev` puts the caret at the END of the preceding block, which is what makes Backspace feel like
+   * ordinary text deletion rather than a structural edit.
+   */
+  _deleteBlock(id, { focusPrev = false } = {}) {
+    const i = this._indexOf(id);
+    if (i < 0) return false;
+    const prev = i > 0 ? this._blocks[i - 1] : null;
+    this._blocks.splice(i, 1);
+    this._render();
+    if (focusPrev && prev) this._focusBlock(prev._id);
+    this._change();
+    return true;
   }
 
   _move(id, dir) {

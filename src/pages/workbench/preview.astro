@@ -36,8 +36,9 @@ const labelOf = CATEGORY_LABELS;
           <button type="button" data-pv-as="member">As a member</button>
         </div>
         <!-- sow-235: editing is OFF by default, so the default preview renders byte-identically to what it
-             always did. Only a committed repo draft can be edited, because that is the only store this page
-             can read back and write to, so the control stays hidden otherwise. -->
+             always did. The control is revealed for any draft whose path this page resolved, which is both a
+             committed repo draft and a KV or fork draft, since all of them save through one client.saveDraft
+             call. A draft with no path stays read-only. -->
         <div class="pv-view pv-edit-ctl" role="group" aria-label="Edit" hidden data-pv-editctl>
           <button type="button" data-pv-edit-toggle>Edit</button>
           <button type="button" data-pv-save hidden>Save draft</button>
@@ -617,9 +618,10 @@ const labelOf = CATEGORY_LABELS;
       apply();
 
       // ---- sow-235: edit in place -------------------------------------------------------------------
-      // Only a committed repo draft is editable: it is the one store this page can read a canonical file
-      // from and write back to. A KV or fork draft would need a second write path to the same item, which
-      // is how two stores start disagreeing about one draft.
+      // Editability follows the resolved item path rather than the store it came from. The original rule here
+      // was repo-only, on the grounds that a KV or fork draft would need a second write path and two stores
+      // would then disagree about one draft. That reasoning no longer matches the code: the Save handler below
+      // writes EVERY store through the same client.saveDraft call, so there is only ever one write path.
       // sow-235: the block reader/committer and the shared selection toolbar. Loaded once here because
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
       const { readBlockDom, applyBlockEdit, isEditableBlockTag } = await import('../../../client-ui/src/block-commit.mjs');
@@ -631,7 +633,14 @@ const labelOf = CATEGORY_LABELS;
       const editBtn = $('[data-pv-edit-toggle]') as HTMLButtonElement | null;
       const saveBtn = $('[data-pv-save]') as HTMLButtonElement | null;
       const editMsg = $('[data-pv-edit-msg]') as HTMLElement | null;
-      const canEdit = store === 'repo' && Boolean(repoPath);
+      // Editability follows the RESOLVED item, not how the URL happened to be written. The old test read the
+      // two raw query parameters, so an item that is perfectly editable became read-only the moment Preview was
+      // reached by a bookmark, browser history, or a typed address, none of which carry them. `itemPath` is the
+      // path this page already resolved above: `repoPath` for a committed repo draft, and the persisted record
+      // path for a KV or fork draft. Both stores save through the same client.saveDraft call below, so the
+      // original repo-only restriction no longer describes what this page can actually write.
+      // Fails closed: a draft with no path at all stays read-only rather than offering a Save with no target.
+      const canEdit = Boolean(itemPath);
       if (editCtl && canEdit) editCtl.hidden = false;
 
       let dirty = false;
@@ -798,8 +807,13 @@ const labelOf = CATEGORY_LABELS;
           // bare. Same source the rest of the site uses (sow-030's member signal), so a save from here is
           // attributed exactly as a save from the editor is.
           const { createWorkbenchClient } = await import('../../lib/workbench-client');
-          const { readMemberSignal } = await import('../../lib/member-signal');
-          const who = readMemberSignal();
+          // currentIdentity, not readMemberSignal alone. readMemberSignal reads ONLY the extension content
+          // script's data-gbti-member attribute, so a member signed in with the website cookie session had no
+          // identity here and Save answered "Sign in to save this draft" to someone already signed in.
+          // currentIdentity applies the cookie-wins precedence, and BaseLayout has already run
+          // hydrateMemberSignal by click time. Same pairing the rest of the site uses (see account.astro).
+          const { readMemberSignal, currentIdentity } = await import('../../lib/member-signal');
+          const who = currentIdentity(readMemberSignal());
           if (!who?.login) { setMsg('Sign in to save this draft.'); return; }
           const client: any = createWorkbenchClient({
             signupBase: base,

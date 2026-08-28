@@ -610,6 +610,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     const hostEl = () => typeof host === "function" ? host() : host;
     if (!hostEl()) return { destroy() {
     }, isPanelOpen: () => false, hide() {
+    }, editLink() {
     } };
     const mount2 = (node) => {
       const h = hostEl();
@@ -1130,6 +1131,8 @@ ${String(body ?? "")}`;
     }
     connectedCallback() {
       if (!this._blocks) this._blocks = [];
+      super.connectedCallback?.();
+      this._render();
       this._seltb = this._seltb || createSelectionToolbar({
         root: this.root,
         host: () => this.$(".doc-blocks"),
@@ -1150,8 +1153,6 @@ ${String(body ?? "")}`;
           this._change();
         }
       });
-      super.connectedCallback?.();
-      this._render();
     }
     disconnectedCallback() {
       this._seltb?.destroy();
@@ -1425,13 +1426,7 @@ ${String(body ?? "")}`;
       }));
       this.$$("[data-up]").forEach((el) => el.addEventListener("click", () => this._move(el.dataset.up, -1)));
       this.$$("[data-down]").forEach((el) => el.addEventListener("click", () => this._move(el.dataset.down, 1)));
-      this.$$("[data-del]").forEach((el) => el.addEventListener("click", () => {
-        const i = this._indexOf(el.dataset.del);
-        if (i < 0) return;
-        this._blocks.splice(i, 1);
-        this._render();
-        this._change();
-      }));
+      this.$$("[data-del]").forEach((el) => el.addEventListener("click", () => this._deleteBlock(el.dataset.del)));
       const menuBtn = this.$("[data-addmenu]");
       const pop = this.$("[data-addpop]");
       if (menuBtn && pop) {
@@ -1549,6 +1544,27 @@ ${String(body ?? "")}`;
             return this._closeSlash();
           }
         }
+        if (e.key === "Backspace") {
+          const b = this._byId(el.dataset.id);
+          const sel = this.root.getSelection ? this.root.getSelection() : document.getSelection();
+          const atStart = sel && sel.isCollapsed && sel.focusOffset === 0;
+          if (b && atStart && !String(b.text || "")) {
+            if (b.type !== "paragraph") {
+              e.preventDefault();
+              const i = this._indexOf(b._id);
+              this._blocks[i] = { ...emptyBlock("paragraph"), _id: b._id };
+              this._render();
+              this._focusBlock(b._id);
+              this._change();
+              return;
+            }
+            if (this._indexOf(b._id) > 0) {
+              e.preventDefault();
+              this._deleteBlock(b._id, { focusPrev: true });
+              return;
+            }
+          }
+        }
         if (e.key === "Enter" && !e.shiftKey) {
           const b = this._byId(el.dataset.id);
           const sel = this.root.getSelection ? this.root.getSelection() : document.getSelection();
@@ -1578,6 +1594,21 @@ ${String(body ?? "")}`;
         sel.addRange(r);
       } catch {
       }
+    }
+    /**
+     * Remove a block. The X button and Backspace-in-an-empty-block both land here, so the two cannot drift.
+     * `focusPrev` puts the caret at the END of the preceding block, which is what makes Backspace feel like
+     * ordinary text deletion rather than a structural edit.
+     */
+    _deleteBlock(id, { focusPrev = false } = {}) {
+      const i = this._indexOf(id);
+      if (i < 0) return false;
+      const prev = i > 0 ? this._blocks[i - 1] : null;
+      this._blocks.splice(i, 1);
+      this._render();
+      if (focusPrev && prev) this._focusBlock(prev._id);
+      this._change();
+      return true;
     }
     _move(id, dir) {
       const i = this._indexOf(id);
