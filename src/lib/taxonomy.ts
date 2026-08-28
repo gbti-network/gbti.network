@@ -46,6 +46,19 @@ export function breadcrumb(pathArr: string[] | undefined): string[] {
   return (pathArr ?? []).map(categoryLabel);
 }
 
+/**
+ * Breadcrumb crumbs for a path KEEPING THE KEYS, e.g. ["devops","ide-plugins"] ->
+ * [{key:"devops",label:"DevOps"},{key:"ide-plugins",label:"IDE Plugins"}].
+ *
+ * sow-174: `breadcrumb()` above maps straight to labels and throws the keys away, and the keys are exactly
+ * what an href needs, so a crumb could not be linked without re-deriving them. This is the key-preserving
+ * sibling; `breadcrumb()` stays for callers that only want text. An unknown key falls back to itself as its
+ * own label (the `categoryLabel` contract), so a crumb never renders blank.
+ */
+export function breadcrumbPairs(pathArr: string[] | undefined): { key: string; label: string }[] {
+  return (pathArr ?? []).map((key) => ({ key, label: categoryLabel(key) }));
+}
+
 /** The top-level key of a path (used for grouping + directory filters), or '' if uncategorized. */
 export function topKey(pathArr: string[] | undefined): string {
   return pathArr?.[0] ?? '';

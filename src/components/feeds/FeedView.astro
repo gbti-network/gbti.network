@@ -14,6 +14,8 @@ import { FIRST_TOUCH_PCT, SIGNUP_BASE } from '../../lib/membership';
 import { FEED_NAV } from '../../lib/site-nav'; // sow-187: the one consolidated feed-nav source
 import FeedChrome from './FeedChrome.astro'; // sow-205: the shared lab + tab nav (was inline here)
 import DigestSubscribe from '../mail/DigestSubscribe.astro'; // sow-166: the weekly-digest CTA at the foot of the prompts grid
+import { categoryLabel } from '../../lib/taxonomy';
+import { catKey } from '../../lib/feed-filter.mjs';
 
 interface Props {
   narrow: 'all' | 'news' | 'network' | 'articles' | 'products' | 'prompts' | 'shares';
@@ -29,8 +31,16 @@ const currentHref = FEED_NAV.find((i) => i.key === narrow)?.href ?? '/feeds/';
 const isNews = narrow === 'news';
 const narrowed = sortByNewest(items.filter((it) => matchesNarrow(it, narrow))) as FeedItem[];
 const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersShareCount > 0;
+// sow-174: the labels for every category key present in THIS view, so the ?cat= banner can read
+// "Filtered by IDE Plugins" from a clean `/feeds/?cat=ide-plugins` URL. Scoped to the keys actually on the
+// page rather than the whole tree, and built here because the taxonomy is a build-time source.
+const catLabels: Record<string, string> = {};
+for (const it of narrowed) for (const k of it.categories ?? []) {
+  const key = catKey(k);
+  if (key && !catLabels[key]) catLabels[key] = categoryLabel(key);
+}
 ---
-<div class="wrap feedwrap feed-page" data-feedview data-view="card" data-signup-base={SIGNUP_BASE}>
+<div class="wrap feedwrap feed-page" data-feedview data-view="card" data-signup-base={SIGNUP_BASE} data-cat-labels={JSON.stringify(catLabels)}>
   {!isNews && (
     <div class="feed-topbar">
       <button type="button" class="members-toggle" data-members-toggle aria-pressed="false">
@@ -145,7 +155,8 @@ const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersSha
 </div>
 
 <script>
-  // Per-view chrome: visibility chips, the ?tag= drilldown, and the persisted density toggle. While a
+  import { catKey, rowMatchesCat } from '../../lib/feed-filter.mjs';
+  // Per-view chrome: visibility chips, the ?tag= and ?cat= drilldowns, and the persisted density toggle. While a
   // filter is active the ladder flattens (chunks all visible via .feed-flat CSS, pagers hidden); when
   // the filter clears, the chunk/pager hidden attributes are untouched, so the ladder state restores.
   document.querySelectorAll<HTMLElement>('[data-feedview]').forEach((view) => {
@@ -161,9 +172,11 @@ const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersSha
     const membersCta = view.querySelector<HTMLElement>('[data-members-cta]');
     let vis = 'all'; // 'all' | 'members' (the top-right member-content toggle)
     let tag = '';
+    let cat = ''; // sow-174: the ?cat= breadcrumb drilldown (product + article crumbs link here)
+    let catLabel = '';
 
     function apply() {
-      const filtered = vis !== 'all' || !!tag;
+      const filtered = vis !== 'all' || !!tag || !!cat;
       view.classList.toggle('feed-flat', filtered);
       // Flatten the ladder by lifting the chunks' hidden attribute (and restoring it on clear).
       // CSS cannot do this: Tailwind's preflight sets [hidden]{display:none !important} inside
@@ -181,12 +194,15 @@ const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersSha
         let ok = true;
         if (vis === 'members') ok = r.getAttribute('data-visibility') === 'members';
         if (ok && tag) ok = (' ' + (r.getAttribute('data-tags') || '') + ' ').includes(' ' + tag + ' ');
+        // sow-174: matched against the row's DATA, never against a sidebar control, so a leaf crumb
+        // (`?cat=ide-plugins`) filters exactly like a top-level one instead of silently doing nothing.
+        if (ok && cat) ok = rowMatchesCat(r.getAttribute('data-cats'), cat);
         r.hidden = filtered && !ok;
         if (!r.hidden) shown++;
       });
       if (empty) empty.hidden = !(filtered && shown === 0);
-      if (banner) banner.hidden = !tag;
-      if (bannerLabel) bannerLabel.textContent = tag ? '#' + tag : '';
+      if (banner) banner.hidden = !tag && !cat;
+      if (bannerLabel) bannerLabel.textContent = tag ? '#' + tag : cat ? catLabel || cat : '';
       // The become-a-member CTA rides with the toggle (active members never see it via the
       // is-gbti-member-active CSS hide).
       if (membersCta) membersCta.hidden = vis !== 'members';
@@ -204,6 +220,8 @@ const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersSha
     view.querySelector('[data-tag-clear]')?.addEventListener('click', (e) => {
       e.preventDefault();
       tag = '';
+      cat = ''; // sow-174: one banner, one Clear, so it must clear whichever drilldown put it there
+      catLabel = '';
       history.replaceState(null, '', location.pathname);
       apply();
     });
@@ -212,6 +230,18 @@ const showLockedShares = (narrow === 'all' || narrow === 'shares') && membersSha
     const params = new URLSearchParams(location.search);
     const qTag = (params.get('tag') || '').trim().toLowerCase();
     if (qTag) tag = qTag;
+    // sow-174: /feeds/?cat=<key> from a product or article breadcrumb. `catLabel` is the human label the
+    // crumb was showing, passed along so the banner reads "Filtered by IDE Plugins" rather than a raw key;
+    // it is display-only and the key alone does the filtering, so a missing label degrades and never breaks.
+    const qCat = catKey(params.get('cat'));
+    if (qCat) {
+      cat = qCat;
+      // The label comes from the build-time map on the view, so the URL stays a clean `?cat=<key>`. A key
+      // that is not on this page has no label and the banner falls back to the raw key, which is correct:
+      // the filter still runs and simply shows nothing, rather than pretending the category does not exist.
+      try { catLabel = (JSON.parse(view.getAttribute('data-cat-labels') || '{}') || {})[cat] || ''; }
+      catch { catLabel = ''; }
+    }
     if (params.get('vis') === 'members' && membersToggle) vis = 'members';
     apply();
 

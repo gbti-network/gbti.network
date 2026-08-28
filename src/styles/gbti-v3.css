@@ -1661,6 +1661,21 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 }
 .pd-frames::-webkit-scrollbar { display: none; }
 .pd-frame { flex: 0 0 100%; scroll-snap-align: center; }
+
+/* sow-174: linked breadcrumbs (CategoryCrumbs.astro). GLOBAL rather than component-scoped on purpose: the
+   WorkBench preview builds these same nodes client-side to match the published hero, and an Astro-scoped
+   style would not reach them, so the preview would silently diverge. Type is inherited entirely from the
+   caller's eyebrow class, so only the interactive affordance is added and the hero rhythm is unchanged. */
+.cat-crumbs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .4em; }
+.cc-crumb {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  transition: border-color .15s ease, opacity .15s ease;
+}
+.cc-crumb:hover, .cc-crumb:focus-visible { border-bottom-color: currentColor; }
+.cc-crumb:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; border-radius: 2px; }
+.cc-sep { opacity: .55; }
 /* sow-175: the carousel trigger is a focusable div, so give the keyboard path a ring that survives a dark
    screenshot behind it. The UA default outline is easily lost against the image it sits on top of. */
 .pd-frame:focus-visible { outline: 2px solid var(--brand); outline-offset: -3px; border-radius: 6px; }

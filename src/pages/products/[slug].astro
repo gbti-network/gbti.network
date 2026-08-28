@@ -28,7 +28,7 @@ import { refCodeForAuthor } from '../../lib/referral';
 import { defaultFeatureImage } from '../../lib/feature-image';
 import LockedBody from '../../components/LockedBody.astro';
 import { hasPublicPage, isStub, contentRepoPath } from '../../lib/content';
-import { breadcrumb } from '../../lib/taxonomy';
+import CategoryCrumbs from '../../components/CategoryCrumbs.astro'; // sow-174: linked hero crumbs
 import { favoriteCount } from '../../lib/favorites';
 import FavoritedBy from '../../components/FavoritedBy.astro'; // SOW-114: the opt-in favoriter list
 import DigestSubscribe from '../../components/mail/DigestSubscribe.astro'; // sow-166: the weekly-digest sidebar CTA
@@ -69,7 +69,6 @@ const asideLinks = railLinks(links, primary, d.pricingUrl, d.pricing);
 // required 16:10 spotlight cover, then the existing default gradient) — resolveHero() picks exactly one.
 const hero = resolveHero(d.banner, d.bannerPreset, d.featuredImage);
 const markImage = d.iconLarge ?? d.icon;
-const category = breadcrumb(d.categories).join(' › ');
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const favs = favoriteCount('product', d.slug, aliasSlugsOf(d));
 
@@ -134,7 +133,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
       <div class="pd-wrap pd-hero-in">
         <Image src={markImage} alt={`${d.title} icon`} width={124} height={124} class="pd-mark" />
         <div class="pd-hero-txt">
-          {category && <p class="pd-eyebrow">{category}</p>}
+          <CategoryCrumbs categories={d.categories} class="pd-eyebrow" />
           <h1 data-gbti-region="title" class="pd-title">{d.title}</h1>
           <p class="pd-pitch">{d.shortDescription}</p>
         </div>

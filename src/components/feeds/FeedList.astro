@@ -15,6 +15,7 @@ import { authorItem } from '../../lib/avatars';
 import type { AvatarIndex } from '../../lib/avatars';
 import type { FeedItem } from '../../lib/feed-items';
 import { chunkPages, relativeTime } from '../../lib/home-feed.mjs';
+import { catsAttr } from '../../lib/feed-filter.mjs';
 
 interface Props {
   items: FeedItem[];
@@ -30,6 +31,8 @@ const pages = chunks.length;
 const NOW = Date.now();
 const kindLabel: Record<string, string> = { article: 'article', product: 'product', prompt: 'prompt' };
 const tagsAttr = (it: FeedItem) => (it.tags ?? []).map((t) => String(t).trim().toLowerCase()).filter(Boolean).join(' ');
+// sow-174: every segment of the category path, so a breadcrumb at any depth can drill down here.
+const catsOf = (it: FeedItem) => catsAttr(it.categories);
 ---
 <div class="feed-list" data-feedlist>
   {chunks.map((chunk, ci) => (
@@ -45,6 +48,7 @@ const tagsAttr = (it: FeedItem) => (it.tags ?? []).map((t) => String(t).trim().t
               data-comments={it.comments ?? 0}
               data-visibility={it.stub ? 'members' : 'public'}
               data-tags={tagsAttr(it)}
+              data-cats={catsOf(it)}
               data-share-slug={it.kind === 'share' ? it.slug : undefined}
             >
               <div class="feed-main">

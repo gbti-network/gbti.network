@@ -15,6 +15,7 @@ import ArticleContents from './ArticleContents.astro';
 import { favoriteCount } from '../../lib/favorites';
 import { aliasSlugsOf } from '../../lib/content-index.mjs';
 import { breadcrumb, topKey } from '../../lib/taxonomy';
+import CategoryCrumbs from '../CategoryCrumbs.astro'; // sow-174: the inert full breadcrumb becomes linked crumbs
 import { ART_OVERVIEW_ID, coverDimensions } from '../../lib/article-page.mjs';
 import { contentRepoPath } from '../../lib/content';
 
@@ -49,7 +50,7 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
         </a>
       )}
       <div class="art-e-hero-in">
-        {category && <div class="art-e-cats"><span class="art-e-cat">{category}</span></div>}
+        <div class="art-e-cats"><CategoryCrumbs categories={d.categories} class="art-e-cat" /></div>
         <h1 data-gbti-region="title" class="art-e-title">{d.title}</h1>
         <ContentMeta author={d.author} publishedAt={d.publishedAt} stack={stack} dark />
       </div>
@@ -62,7 +63,7 @@ const editHref = editPath ? `/workbench/#tab=post&edit=${encodeURIComponent(edit
           Edit
         </a>
       )}
-      {category && <div class="art-e-cats"><span class="art-e-cat">{category}</span></div>}
+      <div class="art-e-cats"><CategoryCrumbs categories={d.categories} class="art-e-cat" /></div>
       <h1 data-gbti-region="title" class="art-e-title">{d.title}</h1>
       <ContentMeta author={d.author} publishedAt={d.publishedAt} stack={stack} />
     </div>

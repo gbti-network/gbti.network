@@ -333,7 +333,33 @@ const labelOf = CATEGORY_LABELS;
       const dsc = $('[data-pv-desc]'); if (dsc) dsc.textContent = fm.shortDescription || fm.excerpt || '';
 
       const eb = $('[data-pv-eyebrow]');
-      if (eb) eb.textContent = cats.length ? catPath : type;
+      if (eb) {
+        // sow-174: mirror the published hero, whose crumbs are now links to /feeds/?cat=<key>. The preview's
+        // whole job is matching the live page (sow-169 phase 4), so an inert string here would be a visible
+        // divergence the moment a crumb gains an underline. Built with DOM nodes rather than innerHTML
+        // because `labels` is author-supplied taxonomy text and this page renders unpublished content.
+        eb.textContent = '';
+        if (cats.length) {
+          eb.classList.add('cat-crumbs');
+          cats.forEach((c: string, i: number) => {
+            if (i > 0) {
+              const sep = document.createElement('span');
+              sep.className = 'cc-sep';
+              sep.setAttribute('aria-hidden', 'true');
+              sep.textContent = '\u203a';
+              eb.appendChild(sep);
+            }
+            const a = document.createElement('a');
+            a.className = 'cc-crumb';
+            a.href = '/feeds/?cat=' + encodeURIComponent(c);
+            a.textContent = labels[c] || c;
+            eb.appendChild(a);
+          });
+        } else {
+          eb.classList.remove('cat-crumbs');
+          eb.textContent = type;
+        }
+      }
 
       const cap = (s: string) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
       const show = (sel: string, text: string) => {

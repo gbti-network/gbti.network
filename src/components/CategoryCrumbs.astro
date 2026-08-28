@@ -1,0 +1,34 @@
+---
+// sow-174: one breadcrumb renderer, shared by the product hero and the article editorial layout.
+//
+// It exists because the same flattened-string pattern was written three times: `breadcrumb(cats).join(' › ')`
+// produced one inert string, so no crumb could be linked and the keys an href needs were already thrown away.
+// `breadcrumbPairs` keeps the keys; this renders them.
+//
+// DESTINATION: the cross-type feed, `/feeds/?cat=<key>`. Owner decision 2026-08-24, option B. The products
+// directory is a curated slider with no filtering at all, and bolting a grid onto it is a larger visual change
+// than the ask; the feed already filters and already serves `?tag=`, so it is one destination for every type.
+//
+// EVERY CRUMB LINKS, LEAF INCLUDED, and that is safe here specifically because the feed matches against row
+// DATA rather than against a sidebar control. The prompts directory dropped any `?cat=` without a matching
+// button, so a leaf crumb rendered an unfiltered page that looked broken. See src/lib/feed-filter.mjs.
+import { breadcrumbPairs } from '../lib/taxonomy';
+
+interface Props {
+  categories: string[] | undefined;
+  /** Class for the wrapping element, so each caller keeps its own eyebrow styling and the hero shape. */
+  class?: string;
+}
+const { categories, class: cls } = Astro.props;
+const crumbs = breadcrumbPairs(categories);
+---
+{crumbs.length > 0 && (
+  <p class:list={['cat-crumbs', cls]}>
+    {crumbs.map((c, i) => (
+      <>
+        {i > 0 && <span class="cc-sep" aria-hidden="true">›</span>}
+        <a class="cc-crumb" href={`/feeds/?cat=${encodeURIComponent(c.key)}`}>{c.label}</a>
+      </>
+    ))}
+  </p>
+)}

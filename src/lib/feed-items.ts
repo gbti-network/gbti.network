@@ -28,6 +28,7 @@ export type FeedItem = {
   upvotes: number;
   comments: number;
   tags: string[];
+  categories: string[]; // sow-174: the full category PATH, so any breadcrumb depth can filter
   thumb: string | null; // small square (always resolvable, branded fallback)
   cover: string | null; // wide feed cover (only when the item has a real image)
   srcDomain?: string; // share: the shared link's hostname
@@ -54,6 +55,7 @@ async function contentItem(entry: any, kind: 'article' | 'product' | 'prompt', c
     upvotes: 0,
     comments: commentThreadCount(comments, tt, d.slug, d.author),
     tags: d.tags ?? [],
+    categories: d.categories ?? [],
     thumb: thumbs.thumb,
     cover: hasImage ? thumbs.thumbCard : null,
     read: kind === 'article' ? readMinutes(entry.body) : undefined,
@@ -82,6 +84,8 @@ function shareItem(entry: any, comments: CollectionEntry<'comment'>[]): FeedItem
     upvotes: upvoteCount(slug),
     comments: commentThreadCount(comments, 'share', slug, d.author),
     tags: d.tags ?? [],
+    // sow-174: shares are uncategorized today, so they simply never match a ?cat= drilldown.
+    categories: d.categories ?? [],
     // thumb keeps a branded fallback (the card grid needs every tile imaged); cover stays real-only
     // so detailed rows without an image keep their text-only layout.
     thumb: typeof d.image === 'string' && d.image ? d.image : defaultFeatureImage('share'),
