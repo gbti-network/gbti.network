@@ -57,10 +57,23 @@ jobs:
           DISCORD_MEMBER_ROLE_ID: "1511810502970441900"
           DISCORD_TRIAL_ROLE_ID: "1511800465107583198"
           DISCORD_LOCKED_ROLE_ID: "1512558475341987990"
-          # sow-185: the Content-Creator badge role. Committed now but INERT: shouldSyncCreatorRole gates it on a
-          # populated Stripe price map, and this workflow passes no price env yet, so the badge stays off until the
-          # prices are wired in here (else an empty price map would resolve every paid member to creator).
+          # sow-185: the Content-Creator badge role. LIVE as of 2026-08-28 (owner-questions.md Q33). It was
+          # committed INERT because shouldSyncCreatorRole gates it on a populated Stripe price map and this
+          # workflow passed no price env; the five vars below are what activate it.
           DISCORD_CREATOR_ROLE_ID: "1536102140802633788"
+          # sow-185: FIVE price vars, not four, and the fifth is the one that is easy to drop. The four
+          # PRICE_ENV vars name the new member/creator prices; STRIPE_PRICE_ID is the LEGACY $150 annual and
+          # buildEnvPriceTierMap seeds it as CREATOR (membership/tier-gate.mjs:33), which is deliberate: it is
+          # the price every pre-tier paying member is on, and they keep full access. Omitting it would not
+          # merely leave them unbadged, it would resolve their price to `none` (tierForPrice fails closed
+          # since 2026-08-11) and demote them. Copy all five as a block; never retype one.
+          # PUBLIC, non-secret price ids, already committed in workers/signup/wrangler.toml
+          # [env.production.vars]. Keep in sync with it and with pr-membership-gate.yml.
+          STRIPE_PRICE_ID: price_1Tg5NHBFxyhSkuibXFrQyqaN
+          STRIPE_PRICE_MEMBER_MONTHLY: price_1U2d31BFxyhSkuibpiaNGku5
+          STRIPE_PRICE_MEMBER_ANNUAL: price_1U2d31BFxyhSkuibfNpQKcX0
+          STRIPE_PRICE_CREATOR_MONTHLY: price_1U2d32BFxyhSkuibQJHXnU3F
+          STRIPE_PRICE_CREATOR_ANNUAL: price_1U2d32BFxyhSkuibPBqOdOZs
           # Resolve a grandfathered/banned member's Discord user id when they have NO Stripe customer (so
           # their managed role still syncs). Same login->discord_user_id map the content-syndication
           # workflow uses; discord_user_id is kept OUT of the public repo, so it rides this Actions secret.
