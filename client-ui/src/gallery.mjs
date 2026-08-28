@@ -53,3 +53,25 @@ export function galleryValueFromRows(rows) {
   }
   return out;
 }
+
+/**
+ * sow-268: move the row at `from` so it sits at index `to`, returning a NEW array.
+ *
+ * Extracted rather than done in the DOM because the index arithmetic is where reordering actually goes
+ * wrong, and it is invisible once it is tangled up with drag events. The subtle case is a DOWNWARD move:
+ * removing the row first shifts every later index by one, so a naive splice-out-splice-in lands one short.
+ *
+ * Out-of-range and no-op moves return an equal array rather than throwing, because both are reachable from
+ * real input: dragging a row onto itself, or pressing ArrowUp on the first row.
+ */
+export function moveGalleryRow(rows, from, to) {
+  const out = Array.isArray(rows) ? rows.slice() : [];
+  const n = out.length;
+  if (!Number.isInteger(from) || !Number.isInteger(to)) return out;
+  if (from < 0 || from >= n) return out;
+  const dest = Math.max(0, Math.min(n - 1, to));
+  if (dest === from) return out;
+  const [item] = out.splice(from, 1);
+  out.splice(dest, 0, item);
+  return out;
+}

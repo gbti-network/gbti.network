@@ -15,7 +15,7 @@ import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* e
 import { BANNER_PRESETS } from '../../../src/lib/banner-presets.mjs'; // sow-174: the curated banner-color swatches
 import { detectLinkSource } from '../../../src/lib/product-page.mjs'; // sow-175: wordpress.org/github.com URL detection
 import { publicUrlFor } from '../public-url.mjs'; // SOW-265: the shared live-URL scheme (also used by the My Content table)
-import { galleryRowsFromValue, galleryValueFromRows } from '../gallery.mjs'; // sow-268: gallery rows parse/serialize (round-trips a json field that a comma-join used to break)
+import { galleryRowsFromValue, galleryValueFromRows, moveGalleryRow } from '../gallery.mjs'; // sow-268: gallery rows parse/serialize (round-trips a json field that a comma-join used to break)
 import { loadStagedImages, referencedDraftImages } from '../../../src/lib/staged-images.mjs'; // a staged (uploaded, unpublished) image reads back from the Worker store, not from the CDN
 
 // SOW-062 P6: inline icons for the edhead toolbar + section headers (the design's sprite is not in the shadow root).
@@ -31,8 +31,7 @@ const LOCK = _svg(`<rect x="5" y="11" width="14" height="9" rx="2.2" ${S} stroke
 const INFO = _svg(`<circle cx="12" cy="12" r="8.2" ${S} stroke-width="1.7"/><path d="M12 11v5" ${S} stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="8" r="1.05" fill="currentColor"/>`);
 const X = _svg(`<path d="M6 6l12 12M18 6L6 18" ${S} stroke-width="2" stroke-linecap="round"/>`);
 const CHEV = _svg(`<path d="M6 9l6 6 6-6" ${S} stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`);
-const CHEV_UP = _svg(`<path d="M6 15l6-6 6 6" ${S} stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`); // sow-268: gallery row move up
-const CHEV_DOWN = _svg(`<path d="M6 9l6 6 6-6" ${S} stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>`); // sow-268: gallery row move down
+const GRIP = _svg(`<circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>`); // sow-268: gallery drag handle (owner chose drag over up/down buttons)
 const TAG = _svg(`<path d="M4 11.5V5a1 1 0 0 1 1-1h6.5l8 8-7.5 7.5-8-8z" ${S} stroke-width="1.7" stroke-linejoin="round"/><circle cx="8.5" cy="8.5" r="1.3" fill="currentColor"/>`);
 const COIN = _svg(`<circle cx="12" cy="12" r="8" ${S} stroke-width="1.8"/><path d="M12 7.5v9M14.5 9.3c-.6-.7-1.5-1-2.5-1-1.4 0-2.5.7-2.5 1.9 0 2.6 5 1.4 5 4 0 1.2-1.1 2-2.5 2-1 0-2-.4-2.6-1.1" ${S} stroke-width="1.6" stroke-linecap="round"/>`);
 const LINK = _svg(`<path d="M10 14a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5L11 8" ${S} stroke-width="1.7" stroke-linecap="round"/><path d="M14 10a3.5 3.5 0 0 0-5 0l-2.5 2.5a3.5 3.5 0 0 0 5 5L13 16" ${S} stroke-width="1.7" stroke-linecap="round"/>`);
@@ -594,8 +593,15 @@ class GbtiContentEditor extends GbtiElement {
         .galrow .gr-fields { flex:1; min-width:0; display:flex; flex-direction:column; gap:6px; }
         .galrow .gr-fields .inp { padding:7px 9px; font-size:12.5px; }
         .galrow .gr-ctl { flex:none; display:flex; align-items:center; gap:4px; }
-        .gr-mv { width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; border:1.5px solid var(--s-line-2); border-radius:7px; background:var(--s-surface); color:var(--s-fg-mute); cursor:pointer; }
-        .gr-mv:hover { color:var(--s-fg); border-color:var(--s-fg-mute); } .gr-mv svg { width:15px; height:15px; }
+        /* sow-268: the drag handle. It is a real <button> so it is tabbable and announced, and it carries the
+           keyboard reorder (ArrowUp/ArrowDown) as well as the pointer drag, because the owner's choice of drag
+           over up/down buttons removed the keyboard path that buttons gave for free. */
+        .gr-grip { width:30px; height:30px; display:inline-flex; align-items:center; justify-content:center; border:1.5px solid var(--s-line-2); border-radius:7px; background:var(--s-surface); color:var(--s-fg-mute); cursor:grab; touch-action:none; }
+        .gr-grip:hover { color:var(--s-fg); border-color:var(--s-fg-mute); }
+        .gr-grip:active { cursor:grabbing; }
+        .gr-grip:focus-visible { outline:2px solid var(--s-green); outline-offset:2px; color:var(--s-fg); }
+        .gr-grip svg { width:15px; height:15px; fill:currentColor; }
+        .galrow.dragging { opacity:.5; border-color:var(--s-green); }
         /* SOW-062 P6 rail-2 + sow-184: the stat tiles, now inside the Activity card (design 3a), 2-up per the mockup. */
         .rail-stats { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
         .rstat { display:flex; flex-direction:column; align-items:center; gap:3px; padding:12px 6px; border:1.5px solid var(--s-line); border-radius:8px; background:var(--s-surface); }
@@ -1107,8 +1113,9 @@ class GbtiContentEditor extends GbtiElement {
         <input class="inp gr-cap" type="text" placeholder="Caption (optional)" value="${esc(caption)}" />
       </div>
       <div class="gr-ctl">
-        <button class="gr-mv" type="button" data-grup title="Move up" aria-label="Move up">${CHEV_UP}</button>
-        <button class="gr-mv" type="button" data-grdown title="Move down" aria-label="Move down">${CHEV_DOWN}</button>
+        <button class="gr-grip" type="button" data-grdrag draggable="true"
+          title="Drag to reorder, or focus and use the arrow keys"
+          aria-label="Reorder screenshot. Drag, or press the up and down arrow keys.">${GRIP}</button>
         <button class="lr-del" type="button" data-grdel title="Remove">${TRASH}</button>
       </div>
     </div>`;
@@ -1147,11 +1154,64 @@ class GbtiContentEditor extends GbtiElement {
     wrap.addEventListener('click', (e) => {
       const del = e.target.closest('[data-grdel]');
       if (del) { e.preventDefault(); del.closest('.galrow')?.remove(); this._serializeGallery(); return; }
-      const up = e.target.closest('[data-grup]');
-      if (up) { e.preventDefault(); const row = up.closest('.galrow'); const prev = row?.previousElementSibling; if (prev) prev.before(row); this._serializeGallery(); return; }
-      const down = e.target.closest('[data-grdown]');
-      if (down) { e.preventDefault(); const row = down.closest('.galrow'); const next = row?.nextElementSibling; if (next) next.after(row); this._serializeGallery(); }
     });
+
+    // sow-268: reordering. The owner chose DRAG HANDLES over the up/down buttons that shipped first, and the
+    // consequence is not optional: buttons were keyboard-reachable for free and a drag target is not. So the
+    // handle is ONE control serving both modalities. It is a real <button>, so it is tabbable and announced,
+    // it carries draggable="true" for the pointer path, and ArrowUp/ArrowDown move the row while keeping
+    // focus on it. Both paths funnel through the same pure moveGalleryRow, so they cannot drift apart.
+    const galRows = () => Array.from(wrap.querySelectorAll('.galrow'));
+    const applyOrder = (from, to, keepFocus) => {
+      const before = galRows();
+      const after = moveGalleryRow(before, from, to);
+      if (after.every((r, i) => r === before[i])) return; // a no-op move: leave the DOM alone
+      after.forEach((r) => wrap.appendChild(r)); // appendChild MOVES an existing node, so this reorders in place
+      this._serializeGallery();
+      // The moved row is the same DOM node, so focus follows it to its new position without a lookup.
+      if (keepFocus) before[from]?.querySelector('[data-grdrag]')?.focus();
+    };
+
+    wrap.addEventListener('keydown', (e) => {
+      const grip = e.target.closest?.('[data-grdrag]');
+      if (!grip) return;
+      const dir = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+      if (!dir) return;
+      e.preventDefault(); // stop the rail scrolling under the author while they reorder
+      const i = galRows().indexOf(grip.closest('.galrow'));
+      if (i >= 0) applyOrder(i, i + dir, true);
+    });
+
+    let dragFrom = -1;
+    wrap.addEventListener('dragstart', (e) => {
+      const grip = e.target.closest?.('[data-grdrag]');
+      if (!grip) return;
+      const row = grip.closest('.galrow');
+      dragFrom = galRows().indexOf(row);
+      row?.classList.add('dragging');
+      // Firefox refuses to start a drag unless data is set; the value is unused.
+      try { e.dataTransfer.setData('text/plain', String(dragFrom)); e.dataTransfer.effectAllowed = 'move'; } catch {}
+    });
+    wrap.addEventListener('dragover', (e) => {
+      if (dragFrom < 0) return;
+      e.preventDefault(); // required, or the drop never fires
+      const over = e.target.closest?.('.galrow');
+      if (!over) return;
+      const rows = galRows();
+      const to = rows.indexOf(over);
+      if (to < 0 || to === dragFrom) return;
+      // Reorder live as the pointer passes, so the author sees the result rather than guessing at it.
+      applyOrder(dragFrom, to, false);
+      dragFrom = to;
+    });
+    const endDrag = () => {
+      if (dragFrom < 0) return;
+      wrap.querySelector('.galrow.dragging')?.classList.remove('dragging');
+      dragFrom = -1;
+      this._serializeGallery();
+    };
+    wrap.addEventListener('drop', (e) => { e.preventDefault(); endDrag(); });
+    wrap.addEventListener('dragend', endDrag);
     this.$('[data-addshot]')?.addEventListener('click', (e) => {
       e.preventDefault();
       const tmp = document.createElement('div');
