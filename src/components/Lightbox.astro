@@ -125,7 +125,9 @@
     };
     const go = (delta) => { if (group.length) { idx = (idx + delta + group.length) % group.length; render(); } };
 
+    let lastTrigger = null;
     const open = (el) => {
+      lastTrigger = el;
       group = groupFor(el);
       idx = Math.max(0, group.indexOf(el));
       render();
@@ -142,6 +144,17 @@
       open(el);
     });
 
+    // sow-175: the carousel trigger is a <div>, so Enter and Space do not activate it the way a native
+    // control would and a keyboard user could not open the lightbox at all. Scoped to role="button" so the
+    // grid's real <a href> keeps its own native Enter handling instead of firing this as well.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+      const el = e.target.closest && e.target.closest('[data-lightbox][role="button"]');
+      if (!el) return;
+      e.preventDefault();
+      open(el);
+    });
+
     prevBtn.addEventListener('click', () => go(-1));
     nextBtn.addEventListener('click', () => go(1));
     dlg.querySelector('[data-lb-close]').addEventListener('click', close);
@@ -153,6 +166,10 @@
     dlg.addEventListener('close', () => {
       document.documentElement.style.overflow = '';
       imgEl.removeAttribute('src'); // free the decoded image
+      // sow-175: <dialog> restores focus to whatever was focused when it opened, which was <body> while the
+      // trigger was an unfocusable div. Restore explicitly so this holds regardless of whether the browser
+      // focuses a tabindex element on click.
+      if (lastTrigger && typeof lastTrigger.focus === 'function') lastTrigger.focus();
     });
   })();
 </script>

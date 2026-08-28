@@ -321,7 +321,7 @@ const lockedHint = (l: { encrypted?: boolean }) =>
                   <div class="pd-stage">
                     <div class="pd-frames" data-pd-frames>
                       {shots.map((s, i) => (
-                        <div class="pd-frame" data-lightbox data-lightbox-group="pd-gallery" data-full={s.src.src} data-cap={s.caption || ''}>
+                        <div class="pd-frame" data-lightbox data-lightbox-group="pd-gallery" data-full={s.src.src} data-cap={s.caption || ''} role="button" tabindex="0" aria-label={`Enlarge ${s.caption || `${d.title} screenshot ${i + 1}`}`}>
                           <Image src={s.src} widths={[660, 1320]} sizes="(max-width:900px) 100vw, 660px" alt={s.caption || `${d.title} screenshot ${i + 1}`} />
                         </div>
                       ))}

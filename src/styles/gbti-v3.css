@@ -1661,6 +1661,9 @@ a.tag:hover { border-color: var(--fg); color: var(--fg); }
 }
 .pd-frames::-webkit-scrollbar { display: none; }
 .pd-frame { flex: 0 0 100%; scroll-snap-align: center; }
+/* sow-175: the carousel trigger is a focusable div, so give the keyboard path a ring that survives a dark
+   screenshot behind it. The UA default outline is easily lost against the image it sits on top of. */
+.pd-frame:focus-visible { outline: 2px solid var(--brand); outline-offset: -3px; border-radius: 6px; }
 .pd-frame img { width: 100%; aspect-ratio: 16/9.4; object-fit: contain; display: block; }
 .pd-arrow {
   position: absolute; top: 50%; transform: translateY(-50%);
