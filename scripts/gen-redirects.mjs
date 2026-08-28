@@ -144,6 +144,23 @@ const EXTRA = [
   // and this link is a hybrid of the two, so it was probably broken on WordPress as well. Pointed at the
   // WP-CLI developers page its sibling rule used, on the consolidated MzT91 code like the rest.
   ['/outsourcing/codeable/wp-cli', 'https://www.codeable.io/developers/wp-cli/?ref=MzT91'],
+
+  // Cloudways, added 2026-08-28 on the owner's affiliate account (id=644779, a_bid=f7340e91) with our own
+  // channel tag chan=gbti, so clicks arriving through this path are attributable to us. Unlike every entry
+  // above, this is a NEW partner rather than a restored legacy rule: no WordPress redirect ever existed for
+  // it, so there is no legacy destination to recover and nothing here is being corrected.
+  //
+  // The destination is EXACTLY the URL the affiliate program issued, apex and all. Measured 2026-08-28: the
+  // apex answers 301 to https://www.cloudways.com/?id=644779&a_bid=f7340e91&chan=gbti with every parameter
+  // preserved, so the extra hop is Cloudways' own canonicalisation and not a fault on our side. Pointing at
+  // the issued URL rather than that canonical one is deliberate: www.cloudways.com returns 403 to a scripted
+  // request AND to a deliberately bad control path, so that response cannot tell a live URL from a dead one,
+  // and swapping a verified destination for an unverifiable one is precisely how the BugHerd entry above
+  // went wrong. If the hop is ever worth removing, verify the www URL from a real browser first.
+  //
+  // The affiliate snippet also ships an impression pixel (affiliate/scripts/imp.php). A redirect cannot fire
+  // a pixel, so this path tracks CLICKS only; impression tracking would need the banner rendered on a page.
+  ['/outbound/cloudways', 'https://cloudways.com?id=644779&a_bid=f7340e91&chan=gbti'],
 ];
 for (const [oldPath, newPath] of EXTRA) { lines.push(`${oldPath} ${newPath} 301`); n++; }
 
