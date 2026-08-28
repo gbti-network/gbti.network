@@ -158,9 +158,17 @@ const EXTRA = [
   // and swapping a verified destination for an unverifiable one is precisely how the BugHerd entry above
   // went wrong. If the hop is ever worth removing, verify the www URL from a real browser first.
   //
+  // THE EXPLICIT `/` BEFORE THE QUERY IS LOAD-BEARING AND WAS FOUND LIVE, NOT REASONED. Shipped first as
+  // `https://cloudways.com?id=...` with no path, the deployed redirect answered
+  // `location: https://cloudways.com?id=644779&a_bid=f7340e91&chan=gbti/`: Cloudflare Pages appends a
+  // trailing slash to a pathless destination, and with no path to land on it lands at the END of the query,
+  // silently turning our channel tag into `chan=gbti/`. The control that pinned it is `/outbound/codeable`,
+  // whose destination carries `/` before `?` and comes back untouched. Every partner destination here must
+  // keep an explicit path, and this is the only line that ever lacked one.
+  //
   // The affiliate snippet also ships an impression pixel (affiliate/scripts/imp.php). A redirect cannot fire
   // a pixel, so this path tracks CLICKS only; impression tracking would need the banner rendered on a page.
-  ['/outbound/cloudways', 'https://cloudways.com?id=644779&a_bid=f7340e91&chan=gbti'],
+  ['/outbound/cloudways', 'https://cloudways.com/?id=644779&a_bid=f7340e91&chan=gbti'],
 ];
 for (const [oldPath, newPath] of EXTRA) { lines.push(`${oldPath} ${newPath} 301`); n++; }
 
