@@ -18,7 +18,7 @@ Like a lot of other developers working with WordPress, I like to build locally w
 
 I also am a fan UI management tools that help manage my workflows like [SourceTree](https://www.sourcetreeapp.com/) which It helps me manage my git repos:
 
-[![](./images/SourceTreeScreenShot.webp)](./images/SourceTreeScreenShot.webp)
+![](./images/SourceTreeScreenShot.webp)
 
 SourceTree App – A Git Repository Management Tool
 

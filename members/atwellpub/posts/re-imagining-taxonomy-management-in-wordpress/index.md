@@ -30,7 +30,7 @@ Channel management on platforms like Slack and Discord have made me spoiled over
   
 Let’s take a quick look at what the core WordPress category manager looks like (click to open).
 
-[![](./images/image-4.webp)](./images/image-4.webp)
+![](./images/image-4.webp)
 
 > With over 81 categories to manage, the majority being child categories, the PHP powered native category manager experience felt antiquated after working with Discord channel management; even untenable.
 
@@ -40,11 +40,11 @@ And that’s exactly what’s been done here, with the [Advanced Taxonomy Manage
   
 Get ready… this screenshot of Advanced Taxonomy Manager is large… _click to expand_:
 
-[![](./images/image-2.webp)](./images/image-2.webp)
+![](./images/image-2.webp)
 
 And here is a screenshot of what the edit screen looks like (click to open).
 
-[![](./images/image-3.webp)](./images/image-3.webp)
+![](./images/image-3.webp)
 
 This WordPress category management plugin is _mostly_ powered by AJAX and JavaScript, there are zero hard refreshes required when editing categories. There is only a small refresh when adding new ones.
 

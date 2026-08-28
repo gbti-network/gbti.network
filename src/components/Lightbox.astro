@@ -72,6 +72,8 @@
 </style>
 
 <script>
+  import { widestFromSrcset } from '../lib/lightbox-src.mjs';
+
   (() => {
     const dlg = document.getElementById('gbti-lightbox');
     if (!dlg || typeof dlg.showModal !== 'function') return; // no <dialog> support: body-image links still work
@@ -95,7 +97,11 @@
       if (el.dataset && el.dataset.full) return el.dataset.full;
       if (el.tagName === 'A' && el.getAttribute('href')) return el.href;
       const img = el.tagName === 'IMG' ? el : el.querySelector('img');
-      return img ? (img.currentSrc || img.src) : '';
+      if (!img) return '';
+      // sow-175: prefer the WIDEST srcset candidate. `currentSrc` is whatever the browser picked for the
+      // image's rendered box, so on a desktop viewport an image shipping 640w..1280w used to "enlarge" to a
+      // mid-range variant no bigger than what was already on screen. Falls back when there is no srcset.
+      return widestFromSrcset(img.getAttribute('srcset')) || img.currentSrc || img.src || '';
     };
     const capOf = (el) => {
       if (el.dataset && el.dataset.cap != null) return el.dataset.cap;
