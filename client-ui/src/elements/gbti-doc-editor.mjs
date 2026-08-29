@@ -9,7 +9,8 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { parseBlocks, serializeBlocks, emptyBlock, CALLOUT_VARIANTS, inlineMdToHtml, inlineHtmlToMd } from '../markdown-blocks.mjs';
 import { createSelectionToolbar } from '../selection-toolbar.mjs'; // sow-235: the toolbar + link manager, shared with the WorkBench Preview
-import { resolveContentAsset } from '../assets.mjs'; // sow-165: repo-relative body images need the item folder to resolve
+import { resolveContentAsset } from '../assets.mjs';
+import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath } from '../media-picker.mjs'; // sow-165 Q36: reuse an image from the member's own published items // sow-165: repo-relative body images need the item folder to resolve
 import { loadStagedImages } from '../../../src/lib/staged-images.mjs'; // a body image staged but not yet published reads back from the Worker store, not from the CDN
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
 
@@ -159,6 +160,15 @@ const CSS = `
      moved to selection-toolbar.mjs, which injects them into this shadow root. */
   .slash-pop { position:absolute; z-index:20; background:var(--s-surface); border:1.5px solid var(--s-line); border-radius:10px; box-shadow:0 12px 34px rgba(0,0,0,.2); }
   .slash-pop { min-width:268px; max-height:300px; overflow:auto; padding:5px; }
+  /* sow-165 Q36: the image reuse grid, sized so a member scans thumbnails rather than filenames. */
+  .media-pop { min-width:330px; width:330px; max-height:340px; padding:8px; }
+  .media-q { width:100%; box-sizing:border-box; margin:0 0 8px; padding:6px 9px; font:inherit; font-size:12.5px; border:1.5px solid var(--s-line); border-radius:8px; background:var(--s-bg); color:var(--s-fg); }
+  .media-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:7px; }
+  .media-cell { display:flex; flex-direction:column; gap:3px; padding:0; border:1.5px solid var(--s-line); border-radius:8px; background:var(--s-bg); cursor:pointer; overflow:hidden; text-align:left; }
+  .media-cell:hover, .media-cell:focus-visible { border-color:var(--s-accent); }
+  .media-cell img { width:100%; height:62px; object-fit:cover; display:block; background:var(--s-line); }
+  .media-cell span { padding:3px 5px 5px; font-size:10.5px; line-height:1.25; color:var(--s-mute); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .media-load { padding:14px 8px; font-size:12.5px; color:var(--s-mute); text-align:center; }
   /* SOW-062 P6: rich palette rows (icon box + name + description), shared by the add-block + slash menus */
   .mi { display:flex; align-items:center; gap:11px; padding:8px 9px; border-radius:8px; cursor:pointer; }
   .mi:hover, .mi.on { background:var(--s-surface-2); }
@@ -350,7 +360,7 @@ class GbtiDocEditor extends GbtiElement {
           + `</div>`
           + `<input data-edit="url" data-id="${b._id}" value="${esc(b.url || '')}" placeholder="Image URL or repo path" />`
           + `<input data-edit="alt" data-id="${b._id}" value="${esc(b.alt || '')}" placeholder="Alt text" />`
-          + `<div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg('img')} ${hasUrl ? 'Replace image' : 'Choose image'}</button><span class="up-st" data-imgst="${b._id}"></span></div></div>`;
+          + `<div class="up"><button type="button" class="up-btn" data-imgpick="${b._id}">${svg('img')} ${hasUrl ? 'Replace image' : 'Choose image'}</button><button type="button" class="up-btn" data-imgreuse="${b._id}">${svg('img')} Reuse</button><span class="up-st" data-imgst="${b._id}"></span></div></div>`;
       }
       case 'embed':
         return `<div class="card"><div class="card-h">${svg('video')} Video / embed</div>`
@@ -494,6 +504,10 @@ class GbtiDocEditor extends GbtiElement {
       el.addEventListener('click', () => fileEl?.click());
       fileEl?.addEventListener('change', (e) => this._uploadImage(e.target.files?.[0], id));
     });
+    // sow-165 Q36: Reuse opens a grid of the images this member's own published items already use.
+    this.$$('[data-imgreuse]').forEach((el) => {
+      el.addEventListener('click', () => this._openMediaPicker(el, el.dataset.imgreuse));
+    });
     // SOW-062 P6: the empty-image drop-zone: click to open the picker, or drag-drop an image file (reuses _uploadImage).
     this.$$('[data-imgdrop]').forEach((zone) => {
       const id = zone.dataset.imgdrop;
@@ -623,6 +637,105 @@ class GbtiDocEditor extends GbtiElement {
       this._render(); this._change();
     } catch {
       if (st) st.textContent = 'Upload failed';
+    }
+  }
+
+  // --- sow-165 Q36: reuse an image from this member's own published items ---------------------------------
+  //
+  // The index is fetched ONCE per editor session and cached on the instance. It is a public build artifact
+  // (no token, CORS `*`), so a failure here is a missing picker rather than a broken editor: every path below
+  // fail-softs to an empty grid with a reason, never an exception into render().
+  async _loadMediaIndex() {
+    if (this._mediaRows) return this._mediaRows;
+    // An explicit `author` wins (a host that knows the signed-in login can set it); otherwise the item's own
+    // folder identifies its owner, which is the same key the index groups by. A house item yields neither.
+    const me = (typeof this.author === 'string' && this.author) || authorFromItemPath(this.itemPath);
+    if (!me) { this._mediaErr = 'Reuse is available on your own items.'; return (this._mediaRows = []); }
+    try {
+      const res = await fetch(MEDIA_INDEX_URL, { cache: 'no-cache' });
+      if (!res.ok) throw new Error(String(res.status));
+      this._mediaRows = mediaFor(await res.json(), me);
+      if (!this._mediaRows.length) this._mediaErr = 'No images yet. Images appear here once an item using them is published.';
+    } catch {
+      this._mediaRows = [];
+      this._mediaErr = 'Could not load your image library.';
+    }
+    return this._mediaRows;
+  }
+
+  async _openMediaPicker(btn, id) {
+    this._closeMediaPicker();
+    const blk = btn.closest('.blk') || btn.parentElement;
+    if (!blk) return;
+    const pop = document.createElement('div');
+    pop.className = 'slash-pop media-pop';
+    pop.innerHTML = '<div class="media-load">Loading your images...</div>';
+    blk.appendChild(pop);
+    this._mediaPop = pop;
+
+    const rows = await this._loadMediaIndex();
+    if (this._mediaPop !== pop) return; // closed while loading
+    const draw = (q) => {
+      const shown = filterMedia(rows, q);
+      pop.querySelector('.media-grid').innerHTML = shown.length
+        ? shown.map((r, i) => {
+          const plan = reusePlan(r, this.itemPath);
+          return `<button type="button" class="media-cell" data-mi="${i}" title="${esc(r.name)} (from ${esc(r.itemTitle || r.slug || '')})">`
+            + `<img src="${esc(plan?.sourceUrl || '')}" alt="" loading="lazy" /><span>${esc(r.name)}</span></button>`;
+        }).join('')
+        : `<div class="media-load">${esc(rows.length ? 'Nothing matches that.' : (this._mediaErr || 'No images.'))}</div>`;
+      pop.querySelectorAll('[data-mi]').forEach((cell) => {
+        cell.addEventListener('click', () => { this._closeMediaPicker(); this._reuseImage(shown[Number(cell.dataset.mi)], id); });
+        // A thumbnail can legitimately fail: the file was deleted, or jsDelivr has not caught up with a recent
+        // merge. Hide the broken <img> so the cell falls back to its filename, which is still selectable and
+        // still copies correctly. A browser broken-image glyph reads as "this app is broken" instead.
+        cell.querySelector('img')?.addEventListener('error', (e) => { e.target.style.display = 'none'; });
+      });
+    };
+    pop.innerHTML = `<input class="media-q" type="search" placeholder="Search your images" aria-label="Search your images" /><div class="media-grid"></div>`;
+    const q = pop.querySelector('.media-q');
+    q?.addEventListener('input', () => draw(q.value));
+    draw('');
+    q?.focus();
+    this._onMediaEsc = (e) => { if (e.key === 'Escape') this._closeMediaPicker(); };
+    document.addEventListener('keydown', this._onMediaEsc);
+  }
+
+  _closeMediaPicker() {
+    this._mediaPop?.remove();
+    this._mediaPop = null;
+    if (this._onMediaEsc) { document.removeEventListener('keydown', this._onMediaEsc); this._onMediaEsc = null; }
+  }
+
+  // Selecting a row COPIES the file into the item being edited, through the same client.stageImage the upload
+  // path uses, so co-location and the publish flush stay in one place. An image already in THIS item needs no
+  // copy: re-staging it would upload a byte-identical file over itself and, on a host that de-duplicates by
+  // name, would look like it worked while doing nothing.
+  async _reuseImage(record, id) {
+    const b = this._byId(id);
+    const plan = reusePlan(record, this.itemPath);
+    if (!b || !plan) return;
+    const st = this.$(`[data-imgst="${id}"]`);
+    if (plan.alreadyHere) {
+      b.url = plan.ref;
+      if (!b.alt) b.alt = plan.name.replace(/\.[^.]+$/, '');
+      this._render(); this._change();
+      return;
+    }
+    if (!this.client?.stageImage) { if (st) st.textContent = 'Reuse is not available in this client'; return; }
+    if (st) st.textContent = 'Copying...';
+    try {
+      const res = await fetch(plan.sourceUrl);
+      if (!res.ok) throw new Error(String(res.status));
+      const buf = new Uint8Array(await res.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < buf.length; i += 1) bin += String.fromCharCode(buf[i]);
+      const out = await this.client.stageImage({ filename: plan.name, dataBase64: btoa(bin), itemPath: this.itemPath, item: this.item });
+      b.url = out.path;
+      if (!b.alt) b.alt = plan.name.replace(/\.[^.]+$/, '');
+      this._render(); this._change();
+    } catch {
+      if (st) st.textContent = 'Could not copy that image';
     }
   }
 
