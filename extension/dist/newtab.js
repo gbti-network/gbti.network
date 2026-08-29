@@ -3192,6 +3192,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       publishedAt: createdAt
     };
   }
+  var SHARE_LOCKED_STATES = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  function shareComposerView({ hasClient = false, membership, tier = null } = {}) {
+    if (!hasClient) return "no-client";
+    if (membership === void 0) return "loading";
+    if (SHARE_LOCKED_STATES.has(membership)) return "locked";
+    if (membership === "trialing") return "trial";
+    if (tier && tier !== "creator") return "not-creator";
+    return "composer";
+  }
 
   // client-ui/src/markdown-blocks.mjs
   var MEMBERS_MARKER = "<!-- members-only -->";
@@ -3497,7 +3506,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/elements/gbti-share-composer.mjs
-  var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var SITE = "https://gbti.network";
   var IC = {
     bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10.5H12z"/></svg>',
@@ -3648,13 +3656,20 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this.render();
     }
     render() {
-      const m = this._membership;
-      if (!this.client) return this.set(this.css(CSS) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
-      if (m === void 0) return this.set(this.css(CSS) + `<div class="card"><p class="sub">Loading…</p></div>`);
-      if (LOCKED.has(m)) return this._renderLocked();
-      if (m === "trialing") return this._renderTrial();
-      if (this._tier && this._tier !== "creator") return this._renderNotCreator();
-      return this._renderComposer();
+      switch (shareComposerView({ hasClient: Boolean(this.client), membership: this._membership, tier: this._tier })) {
+        case "no-client":
+          return this.set(this.css(CSS) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
+        case "loading":
+          return this.set(this.css(CSS) + `<div class="card"><p class="sub">Loading…</p></div>`);
+        case "locked":
+          return this._renderLocked();
+        case "trial":
+          return this._renderTrial();
+        case "not-creator":
+          return this._renderNotCreator();
+        default:
+          return this._renderComposer();
+      }
     }
     _noticeHtml(title, body, glyph) {
       return `<div class="notice"><span class="lock">${glyph}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
@@ -8378,7 +8393,7 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-comment-box.mjs
-  var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  var LOCKED = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var CSS8 = `
   :host { display: block; font-family: var(--font-body); color: var(--fg); }
   .nudge { margin-top: 20px; padding: 16px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--panel); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); font-size: 13.5px; color: var(--muted); }
@@ -8447,7 +8462,7 @@ ${String(body ?? "")}`;
     }
     // ---- COMPOSE mode ----
     _renderCompose() {
-      if (LOCKED2.has(this._membership)) {
+      if (LOCKED.has(this._membership)) {
         this.set(this.css(CSS8) + `<div class="nudge">Your membership has lapsed. <a href="https://gbti.network/membership/">Renew</a> to comment.</div>`);
         return;
       }
@@ -11055,7 +11070,7 @@ ${String(body ?? "")}`;
 
   // client-ui/src/elements/gbti-account.mjs
   var SITE7 = "https://gbti.network";
-  var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  var LOCKED2 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var WELCOME_PREFIX = "gbti-welcome";
   var STATUS_LABEL = {
     paid: "Paid member",
@@ -11271,7 +11286,7 @@ ${String(body ?? "")}`;
     // Membership row (the design's memrow): avatar + identity + status pill + a "Manage membership" portal link.
     _billingSec() {
       const m = this._membership;
-      const cls = m === "paid" ? "paid" : LOCKED3.has(m) ? "warn" : "";
+      const cls = m === "paid" ? "paid" : LOCKED2.has(m) ? "warn" : "";
       const portal = this._billing?.portal;
       const initial = esc((this._login || "G").trim().charAt(0).toUpperCase() || "G");
       return `<section class="sec">
@@ -15949,7 +15964,7 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-shares-feed.mjs
-  var LOCKED4 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var CSS29 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
@@ -16087,7 +16102,7 @@ ${String(body ?? "")}`;
         this._role = "member";
         this._me = "";
       }
-      this._locked = LOCKED4.has(membership);
+      this._locked = LOCKED3.has(membership);
       if (this._locked) return quiet ? void 0 : this._splash();
       try {
         const r = await this.client.listShares();

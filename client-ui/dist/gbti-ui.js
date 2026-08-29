@@ -9518,9 +9518,17 @@ ${String(body ?? "")}`;
       publishedAt: createdAt
     };
   }
+  var SHARE_LOCKED_STATES = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  function shareComposerView({ hasClient = false, membership, tier = null } = {}) {
+    if (!hasClient) return "no-client";
+    if (membership === void 0) return "loading";
+    if (SHARE_LOCKED_STATES.has(membership)) return "locked";
+    if (membership === "trialing") return "trial";
+    if (tier && tier !== "creator") return "not-creator";
+    return "composer";
+  }
 
   // client-ui/src/elements/gbti-share-composer.mjs
-  var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var SITE6 = "https://gbti.network";
   var IC = {
     bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4.5 13.5H11l-1 8.5L18.5 10.5H12z"/></svg>',
@@ -9671,13 +9679,20 @@ ${String(body ?? "")}`;
       this.render();
     }
     render() {
-      const m = this._membership;
-      if (!this.client) return this.set(this.css(CSS21) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
-      if (m === void 0) return this.set(this.css(CSS21) + `<div class="card"><p class="sub">Loading…</p></div>`);
-      if (LOCKED3.has(m)) return this._renderLocked();
-      if (m === "trialing") return this._renderTrial();
-      if (this._tier && this._tier !== "creator") return this._renderNotCreator();
-      return this._renderComposer();
+      switch (shareComposerView({ hasClient: Boolean(this.client), membership: this._membership, tier: this._tier })) {
+        case "no-client":
+          return this.set(this.css(CSS21) + this._noticeHtml("Open in the GBTI client", "Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.", "🧩"));
+        case "loading":
+          return this.set(this.css(CSS21) + `<div class="card"><p class="sub">Loading…</p></div>`);
+        case "locked":
+          return this._renderLocked();
+        case "trial":
+          return this._renderTrial();
+        case "not-creator":
+          return this._renderNotCreator();
+        default:
+          return this._renderComposer();
+      }
     }
     _noticeHtml(title, body, glyph) {
       return `<div class="notice"><span class="lock">${glyph}</span><div><h3>${esc(title)}</h3><p class="sub" style="margin:0">${body}</p></div></div>`;
@@ -10646,7 +10661,7 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/elements/gbti-shares-feed.mjs
-  var LOCKED4 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
+  var LOCKED3 = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
   var CSS24 = `
   :host { display:block; font-family:var(--font-body); color:var(--fg); }
   .head { display:flex; align-items:baseline; justify-content:space-between; margin:4px 0 12px; }
@@ -10784,7 +10799,7 @@ ${String(body ?? "")}`;
         this._role = "member";
         this._me = "";
       }
-      this._locked = LOCKED4.has(membership);
+      this._locked = LOCKED3.has(membership);
       if (this._locked) return quiet ? void 0 : this._splash();
       try {
         const r = await this.client.listShares();

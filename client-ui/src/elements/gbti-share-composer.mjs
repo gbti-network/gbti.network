@@ -11,13 +11,14 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { topicsFromJson } from '../topic-picker-core.mjs'; // SOW-087: the flat topic vocabulary for the category select
-import { optimisticShareItem } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect
+import { optimisticShareItem, shareComposerView } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect
 // sow-192 Phase E: the Note step's Write/Preview toggle renders markdown with the SAME node-free, escape-first,
 // XSS-hardened helpers the block editor uses (no client.preview needed, so the preview is portable to the
 // cookie-adapter hosts that lack it).
 import { parseBlocks, inlineMdToHtml, isDangerousUrl } from '../markdown-blocks.mjs';
 
-const LOCKED = new Set(['expired', 'cancelled', 'none', 'banned']);
+// sow-204: the locked-state list moved to SHARE_LOCKED_STATES in share-post-core.mjs with the branch
+// decision that read it. Two copies of a membership-state list is how the affordance and the gate drift apart.
 const SITE = 'https://gbti.network';
 
 // sow-192 Phase E: inline glyphs for the wizard chrome. The shadow DOM cannot reach the site's light-DOM sprite
@@ -207,19 +208,20 @@ class GbtiShareComposer extends GbtiElement {
   }
 
   render() {
-    const m = this._membership;
-    if (!this.client) return this.set(this.css(CSS) + this._noticeHtml('Open in the GBTI client', 'Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.', '🧩'));
-    if (m === undefined) return this.set(this.css(CSS) + `<div class="card"><p class="sub">Loading…</p></div>`);
-    if (LOCKED.has(m)) return this._renderLocked();
-    if (m === 'trialing') return this._renderTrial();
-    // sow-218: paid is necessary but no longer sufficient. Posting a Share is Content Creator work at the PR
-    // gate (a share PR reports TYPE_OTHER, so requiredTierFor demands creator), and without this check a
-    // Network Member would compose a whole Share and only meet that wall AFTER submitting, as a rejected PR.
-    // Fail-closed the other way here though: an ABSENT tier still shows the composer, matching the existing
-    // `unknown` behaviour. A down oracle must not silently strip posting from a real Content Creator, and the
-    // gate remains the authority either way.
-    if (this._tier && this._tier !== 'creator') return this._renderNotCreator();
-    return this._renderComposer(); // paid creator, or an unresolved tier
+    // sow-204: the branch CHOICE lives in shareComposerView (share-post-core.mjs) so it can be unit-tested.
+    // sow-218 built the Content Creator gate and the owner narrowed it again on 2026-08-28, and nothing in the
+    // suite asserted any of it, because a decision inside a 583-line element is unreachable from node --test.
+    // The rendering stays here; only the question "which state is this member in" moved.
+    switch (shareComposerView({ hasClient: Boolean(this.client), membership: this._membership, tier: this._tier })) {
+      case 'no-client':
+        return this.set(this.css(CSS) + this._noticeHtml('Open in the GBTI client', 'Shares are posted from the GBTI browser extension or the desktop client. Open it to share an update.', '🧩'));
+      case 'loading':
+        return this.set(this.css(CSS) + `<div class="card"><p class="sub">Loading…</p></div>`);
+      case 'locked': return this._renderLocked();
+      case 'trial': return this._renderTrial();
+      case 'not-creator': return this._renderNotCreator();
+      default: return this._renderComposer(); // paid creator, or an unresolved tier
+    }
   }
 
   _noticeHtml(title, body, glyph) {
