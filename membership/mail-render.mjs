@@ -446,13 +446,22 @@ function footerHtml(p, ctx, links) {
   // The unsubscribe url is NOT tracked: it is an opt-out on the Worker, not a campaign click on the website.
   const unsub = safeUrl(ctx.unsubscribeUrl);
   const feedAbs = trackUrl('/feeds/', links, 'footer-feed');
+  // sow-267: the preferences destination is the sow-186 page, a static sign-in-gated route, so unlike
+  // unsubscribeUrl (per-recipient, token-minted by the drain) it is resolved here and needs no ctx field.
+  // It IS tracked, like every other link to our own site. The unsubscribe url above is the exception because
+  // it is an opt-out endpoint on the Worker; a settings page is an ordinary destination, and the sow-273
+  // invariant that every gbti.network link carries source, medium and campaign is deliberate.
+  const prefsAbs = trackUrl('/account/notifications/', links, 'footer-prefs');
   // A real url renders a one-click Unsubscribe link; without one a managed-subscription line with NO link. That
   // fallback is NOT permission to send without an opt-out (the drain must refuse such a recipient); in a real
   // send this branch is unreachable, and it exists for the web archive and as a no-dead-link fail-safe.
   const unsubLink = unsub
     ? `<a href="${escapeHtml(unsub)}" style="color:${p.footerLink};text-decoration:underline">Unsubscribe</a>`
     : `manage your subscription from <a href="${escapeHtml(trackUrl('/', links, 'footer-home'))}" style="color:${p.footerLink};text-decoration:underline">gbti.network</a>`;
-  const footerLinks = `<a href="${escapeHtml(feedAbs)}" style="color:${p.footerLink};text-decoration:underline">Open the feed</a> &middot; ${unsubLink}`;
+  const prefsLink = prefsAbs
+    ? `<a href="${escapeHtml(prefsAbs)}" style="color:${p.footerLink};text-decoration:underline">Notification preferences</a> &middot; `
+    : '';
+  const footerLinks = `<a href="${escapeHtml(feedAbs)}" style="color:${p.footerLink};text-decoration:underline">Open the feed</a> &middot; ${prefsLink}${unsubLink}`;
   // The CAN-SPAM postal slot. Rendered ONLY when the drain supplies ctx.postalAddress (from the MAIL_POSTAL_ADDRESS
   // secret); absent means no address line. The value is never defaulted or hardcoded here (see the header note).
   const postal = str(ctx.postalAddress).trim();
@@ -558,6 +567,9 @@ export function renderIssue(issue, ctx = {}) {
   const unsubText = unsub
     ? `Unsubscribe from the weekly digest: ${unsub}`
     : 'Manage your subscription from the GBTI Network site.';
+  // sow-267: the text alternative carries the same preferences link, tagged the same way as the html footer.
+  const prefsUrl = trackUrl('/account/notifications/', links, 'footer-prefs');
+  const prefsText = prefsUrl ? `Notification preferences: ${prefsUrl}\n` : '';
   const postal = str(ctx.postalAddress).trim();
   const postalText = postal ? `\n${postal}` : '';
   const greetingText = str(ctx.greeting).trim() || 'This week on the network';
@@ -573,7 +585,7 @@ export function renderIssue(issue, ctx = {}) {
   const text = `GBTI DIGEST${range ? ` (${range.short})` : ''}\n`
     + `${greetingText}\n${headerLineText}\n${launchText}\n`
     + `${filledText}${emptyText}${ctaText}\n\n`
-    + `----\n${trackUrl('/', links, 'footer-home')}\n${unsubText}${postalText}\n`;
+    + `----\n${trackUrl('/', links, 'footer-home')}\n${prefsText}${unsubText}${postalText}\n`;
 
   return { subject, html, text };
 }

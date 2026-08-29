@@ -679,3 +679,47 @@ test('sow-273: the text alternative is tagged the same way, so a text-client cli
   assert.equal(u.searchParams.get('utm_campaign'), 'weekly-2026-08-24');
   assert.equal(u.searchParams.get('utm_content'), 'item');
 });
+
+// sow-267: the footer "Notification preferences" link. Its destination is the sow-186 page at
+// /account/notifications/, a static sign-in-gated route, so unlike unsubscribeUrl it is resolved in the
+// renderer and needs no per-recipient ctx field.
+test('sow-267: both footers carry a notification-preferences link to the sow-186 page', () => {
+  const { html, text } = renderIssue(issueFixture(), { siteUrl: 'https://gbti.network' });
+  const href = /href="([^"]*)"[^>]*>Notification preferences</.exec(html);
+  assert.ok(href, 'the html footer renders the link');
+  assert.equal(new URL(href[1]).pathname, '/account/notifications/');
+  assert.match(text, /Notification preferences: https:\/\/gbti\.network\/account\/notifications\//);
+});
+
+// It is an ordinary link to our own site, so it obeys the sow-273 tagging invariant rather than carving an
+// exemption out of it. The unsubscribe url is the exception because it is an opt-out endpoint on the Worker.
+// Pinned here as well as in the sow-273 sweep so that removing the tag names THIS link in the failure.
+test('sow-267: the preferences link is utm-tagged like every other site link', () => {
+  const { html } = renderIssue(issueFixture(), { siteUrl: 'https://gbti.network', issueId: '2026-08-25' });
+  const raw = /href="([^"]*)"[^>]*>Notification preferences</.exec(html)[1];
+  const u = new URL(raw.replace(/&amp;/g, '&')); // the href is html-escaped; the suite's hrefs() helper does the same
+  assert.equal(u.searchParams.get('utm_source'), 'digest');
+  assert.equal(u.searchParams.get('utm_medium'), 'email');
+  assert.equal(u.searchParams.get('utm_content'), 'footer-prefs'); // separable from the adjacent footer-feed click
+});
+
+// And it routes through the click counter when one is wired, exactly as the adjacent feed link does. The
+// control matters: without it a render where the counter was never active would pass by accident.
+test('sow-267: the preferences link goes through the click counter when clickBase is set', () => {
+  const { html } = renderIssue(issueFixture(), {
+    siteUrl: 'https://gbti.network',
+    clickBase: 'https://signup.gbti.network',
+  });
+  assert.match(html, /https:\/\/signup\.gbti\.network\/c\//, 'the counter must be active for this to mean anything');
+  const href = /href="([^"]*)"[^>]*>Notification preferences</.exec(html)[1];
+  assert.match(href, /^https:\/\/signup\.gbti\.network\/c\//);
+});
+
+// A bare fixture with no siteUrl still renders a working absolute link rather than a relative href, which no
+// email client can resolve.
+test('sow-267: the preferences link is absolute even with no ctx.siteUrl', () => {
+  const { html, text } = renderIssue(issueFixture(), {});
+  const href = /href="([^"]*)"[^>]*>Notification preferences</.exec(html)[1];
+  assert.equal(new URL(href).origin, 'https://gbti.network');
+  assert.match(text, /Notification preferences: https:\/\/gbti\.network\/account\/notifications\//);
+});

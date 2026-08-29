@@ -46,6 +46,9 @@ export const FIXED_TARGETS = Object.freeze({
   'membership-cta': '/membership/',
   'footer-home': '/',
   'footer-feed': '/feeds/',
+  // sow-267: the footer notification-preferences link (sow-186's page). A tracked link MUST be registered
+  // here or the route cannot resolve its hash and silently bounces the reader to the site root.
+  'footer-prefs': '/account/notifications/',
   'section-feed': '/feeds/',
 });
 
