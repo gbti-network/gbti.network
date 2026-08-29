@@ -46,6 +46,7 @@ import './elements/gbti-subscriptions.mjs';
 import './elements/gbti-topic-picker.mjs'; // SOW-054: the followed-topics control (onboarding + settings)
 import './elements/gbti-card-list.mjs';
 import './elements/gbti-activity-bell.mjs';
+import './elements/gbti-notification-bell.mjs'; // SOW-186 C2: the SITE header notification bell (compute-on-read)
 import './elements/gbti-news.mjs';
 import './elements/gbti-news-reader.mjs'; // SOW-046 G: the in-extension expanded news view (opened from the feed)
 import './elements/gbti-discussion.mjs';
