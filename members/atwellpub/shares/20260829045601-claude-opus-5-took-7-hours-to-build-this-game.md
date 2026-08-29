@@ -4,7 +4,7 @@ url: https://youtu.be/MsFYd8EdAXw
 visibility: public
 title: Claude Opus 5 Took 7 Hours to Build This Game
 shortDescription: A video by RemakeBench on YouTube
-image: https://i.ytimg.com/vi/MsFYd8EdAXw/hqdefault.jpg
+image: https://i.ytimg.com/vi/MsFYd8EdAXw/maxresdefault.jpg
 category: ai
 id: 20260829045601-claude-opus-5-took-7-hours-to-build-this-game
 createdAt: '2026-08-29T04:56:01.650Z'

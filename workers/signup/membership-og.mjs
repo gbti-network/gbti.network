@@ -14,7 +14,7 @@
 import { githubFetchUser } from './oauth.mjs';
 import { resolveIdentity } from './identity.mjs'; // sow-158 Phase 1b shared choke point: bearer OR cookie + CSRF
 import { scrapeOgPreview } from '../lib/og-scrape.mjs';
-import { oembedEndpointFor, previewFromOembed } from '../lib/oembed-providers.mjs'; // SOW-102: provider fallback
+import { oembedEndpointFor, previewFromOembed, maxresThumbCandidate } from '../lib/oembed-providers.mjs'; // SOW-102: provider fallback
 import { mediumFeedUrlFor, previewFromMediumFeed } from '../lib/medium-preview.mjs'; // Medium RSS fallback (bot-challenged pages)
 import { suggestTopic } from './topic-suggest.mjs';
 
@@ -109,6 +109,27 @@ export async function handleOgPreview(request, env, {
       if (res && res.ok) preview = previewFromOembed(await res.json());
     } catch { /* fall through to the generic scrape */ }
     finally { clearTimeout(ot); }
+
+    // YouTube's oEmbed only ever names the 480x360 hqdefault thumbnail, which several scrapers reject as too
+    // small and replace with nothing (daily.dev did exactly that to a share X previewed correctly). Most
+    // videos also have the 1280x720 maxresdefault, but a video uploaded below 720p does not and YouTube 404s
+    // it, so the larger image is CONFIRMED before it is used and the original is kept on any failure. One
+    // extra HEAD against a CDN host, edge-cached for a day, only on a matched provider link.
+    const bigger = preview && maxresThumbCandidate(preview.image);
+    if (bigger) {
+      const bc = new AbortController();
+      const bt = setTimeout(() => bc.abort(), timeoutMs);
+      try {
+        const res = await fetchImpl(bigger, {
+          method: 'HEAD',
+          signal: bc.signal,
+          headers: { 'User-Agent': 'gbti-link-preview/0.1 (+https://gbti.network)' },
+          cf: { cacheTtl: 86400, cacheEverything: true },
+        });
+        if (res && res.ok) preview = { ...preview, image: bigger };
+      } catch { /* keep the hqdefault thumbnail */ }
+      finally { clearTimeout(bt); }
+    }
   }
 
   // Medium fallback: Medium bot-challenges EVERY page fetch (so the generic scrape below always comes back

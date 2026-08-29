@@ -16,6 +16,7 @@ import { SITE_NAME } from '../lib/brand';
 import CookieConsent from '../components/CookieConsent.astro';
 import Lightbox from '../components/Lightbox.astro';
 import CloudflareAnalytics from '../components/CloudflareAnalytics.astro';
+import { knownImageSize } from '../lib/og-image-size.mjs';
 import { SIGNUP_BASE } from '../lib/membership'; // sow-158 Phase 2: the Worker origin, stamped site-wide for the cookie hydrator
 
 interface Props {
@@ -53,6 +54,11 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
 // the default, so the homepage + any page without its own image previews as a proper large card.
 const DEFAULT_OG_IMAGE = '/og-image.png';
 const ogImageUrl = new URL(ogImage || DEFAULT_OG_IMAGE, Astro.site).href;
+// og:image:width/height are advisory but load-bearing for the strict scrapers: several apply a minimum-width
+// floor and will not fetch the image to measure it themselves, so an undeclared thumbnail is dropped in
+// favour of their own or of nothing. Emitted ONLY for a URL whose size we actually know (knownImageSize
+// returns null otherwise), because a wrong number is worse than a missing one.
+const ogImageSize = knownImageSize(ogImage || DEFAULT_OG_IMAGE);
 ---
 
 <!doctype html>
@@ -107,7 +113,10 @@ const ogImageUrl = new URL(ogImage || DEFAULT_OG_IMAGE, Astro.site).href;
     <meta property="og:type" content={ogType} />
     <meta property="og:url" content={canonical} />
     {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+    {ogImageSize && <meta property="og:image:width" content={String(ogImageSize.width)} />}
+    {ogImageSize && <meta property="og:image:height" content={String(ogImageSize.height)} />}
     <meta name="twitter:card" content={ogImageUrl ? 'summary_large_image' : 'summary'} />
+    {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
 
     <meta name="generator" content={Astro.generator} />
 

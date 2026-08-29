@@ -5,7 +5,7 @@ title: What's even Graph and Loop Engineering?
 shortDescription: A video by lustoykov on YouTube
 url: https://www.youtube.com/watch?v=w2HL2RauMwE
 category: video
-image: https://i.ytimg.com/vi/w2HL2RauMwE/hqdefault.jpg
+image: https://i.ytimg.com/vi/w2HL2RauMwE/maxresdefault.jpg
 id: 20260806144002-what-s-even-graph-and-loop-engineering
 createdAt: '2026-08-06T14:40:02.971Z'
 type: share

@@ -4,7 +4,7 @@ url: https://youtu.be/FL2cCHJtiDk
 visibility: public
 title: How One Programmer Created The Most Complex Zombie Game
 shortDescription: A video by Gazorpian on YouTube
-image: https://i.ytimg.com/vi/FL2cCHJtiDk/hqdefault.jpg
+image: https://i.ytimg.com/vi/FL2cCHJtiDk/maxresdefault.jpg
 category: open-source
 id: 20260829044327-how-one-programmer-created-the-most-complex-zomb
 createdAt: '2026-08-29T04:43:27.042Z'

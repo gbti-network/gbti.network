@@ -6,7 +6,7 @@ visibility: public
 title: Old TVs Were Particle Accelerators
 shortDescription: An impressive presentation on the technology of television screens and monitor screens.
 url: https://youtu.be/20ZhzyT2HR0
-image: https://i.ytimg.com/vi/20ZhzyT2HR0/hqdefault.jpg
+image: https://i.ytimg.com/vi/20ZhzyT2HR0/maxresdefault.jpg
 category: hardware
 tags:
   - crt

@@ -7,7 +7,7 @@ shortDescription: >-
   recorded live at the Barbican Centre on Sunday 24 September 2017.
 url: https://www.youtube.com/watch?v=EkwqPJZe8ms
 category: video
-image: https://i.ytimg.com/vi/EkwqPJZe8ms/hqdefault.jpg
+image: https://i.ytimg.com/vi/EkwqPJZe8ms/maxresdefault.jpg
 id: 20260727185959-stravinsky-the-rite-of-spring-london-symphony-or
 createdAt: '2026-07-27T18:59:59.550Z'
 type: share

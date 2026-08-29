@@ -8,7 +8,7 @@ shortDescription: >-
   demonstrate
 url: https://www.youtube.com/watch?v=fp-jHYiTUVY
 category: energy
-image: https://i.ytimg.com/vi/fp-jHYiTUVY/hqdefault.jpg
+image: https://i.ytimg.com/vi/fp-jHYiTUVY/maxresdefault.jpg
 id: 20260812155206-the-most-powerful-laser-you-ve-never-heard-of
 createdAt: '2026-08-12T15:52:06.411Z'
 type: share

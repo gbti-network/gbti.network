@@ -47,3 +47,23 @@ export function previewFromOembed(json) {
   const description = author ? `A ${kind} by ${author}${provider ? ` on ${provider}` : ''}` : null;
   return { image, title, description, tags: [] };
 }
+
+/** YouTube's oEmbed only ever hands back the 480x360 `hqdefault` thumbnail. That is under the minimum-width
+ *  floor several scrapers apply before they will use an image at all, so a shared link previews with the
+ *  video thumbnail on X and with nothing on daily.dev. The same video usually also has a 1280x720
+ *  `maxresdefault` at a predictable path, but ONLY when it was uploaded at 720p or above: YouTube answers
+ *  404 for the rest, and there is no field in the oEmbed response that says which.
+ *
+ *  So this returns the CANDIDATE url and nothing more. The caller must confirm it with a request before
+ *  swapping it in, and keep the original when the check does not come back OK. Returns null for a URL that
+ *  is not a recognized YouTube thumbnail, including one already at maxres. */
+export function maxresThumbCandidate(thumbUrl) {
+  let u;
+  try { u = new URL(String(thumbUrl || '')); } catch { return null; }
+  if (u.protocol !== 'https:') return null;
+  const host = u.hostname.toLowerCase().replace(/^www\./, '');
+  if (host !== 'i.ytimg.com' && host !== 'i9.ytimg.com' && host !== 'img.youtube.com') return null;
+  const m = /^\/vi\/([\w-]+)\/(hqdefault|sddefault|mqdefault|default)\.jpg$/.exec(u.pathname);
+  if (!m) return null;
+  return `https://i.ytimg.com/vi/${m[1]}/maxresdefault.jpg`;
+}

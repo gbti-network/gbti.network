@@ -4,7 +4,7 @@ url: https://youtu.be/yzNl4SLoSDI
 visibility: public
 title: Can Qwen 3.8 Max Beat Fable 5?
 shortDescription: Side-by-side comparisons people actually posted on X, rather than vendor benchmark charts.
-image: https://i.ytimg.com/vi/yzNl4SLoSDI/hqdefault.jpg
+image: https://i.ytimg.com/vi/yzNl4SLoSDI/maxresdefault.jpg
 category: ai
 tags:
   - qwen

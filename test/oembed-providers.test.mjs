@@ -3,7 +3,7 @@
 // the empty-signal suggester skip. No network: injected fetch fakes.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { oembedEndpointFor, previewFromOembed } from '../workers/lib/oembed-providers.mjs';
+import { oembedEndpointFor, previewFromOembed, maxresThumbCandidate } from '../workers/lib/oembed-providers.mjs';
 import { handleOgPreview } from '../workers/signup/membership-og.mjs';
 
 const OWNER_URL = 'https://www.youtube.com/watch?v=N_GfH09iP9c&list=RDN_GfH09iP9c&start_radio=1';
@@ -101,4 +101,73 @@ test('handler: ZERO scraped signal skips the suggester (no hallucinated category
   assert.equal(r.body.title, null);
   assert.equal(r.body.suggestedCategory, null);
   assert.equal(suggested, false, 'the suggester never runs without title/description/tags');
+});
+
+// The maxres thumbnail upgrade. YouTube's oEmbed only names hqdefault (480x360), which strict scrapers
+// reject as too small; maxresdefault (1280x720) exists for most but not all videos, so this helper only ever
+// proposes a candidate and the caller confirms it.
+test('maxresThumbCandidate proposes the 1280x720 variant for a YouTube thumbnail', () => {
+  assert.equal(
+    maxresThumbCandidate('https://i.ytimg.com/vi/MsFYd8EdAXw/hqdefault.jpg'),
+    'https://i.ytimg.com/vi/MsFYd8EdAXw/maxresdefault.jpg',
+  );
+  // every smaller variant upgrades, and the alternate hosts normalize onto i.ytimg.com
+  assert.equal(maxresThumbCandidate('https://i.ytimg.com/vi/abc-1_2/sddefault.jpg'), 'https://i.ytimg.com/vi/abc-1_2/maxresdefault.jpg');
+  assert.equal(maxresThumbCandidate('https://img.youtube.com/vi/abc/mqdefault.jpg'), 'https://i.ytimg.com/vi/abc/maxresdefault.jpg');
+});
+
+test('maxresThumbCandidate returns null for anything that is not an upgradable YouTube thumbnail', () => {
+  assert.equal(maxresThumbCandidate('https://i.ytimg.com/vi/abc/maxresdefault.jpg'), null); // already there
+  assert.equal(maxresThumbCandidate('https://example.com/vi/abc/hqdefault.jpg'), null);     // not YouTube
+  assert.equal(maxresThumbCandidate('http://i.ytimg.com/vi/abc/hqdefault.jpg'), null);      // not https
+  assert.equal(maxresThumbCandidate('https://i.ytimg.com/vi_webp/abc/hqdefault.webp'), null); // not the jpg path
+  assert.equal(maxresThumbCandidate('https://vimeo.com/thumb.jpg'), null);
+  assert.equal(maxresThumbCandidate(''), null);
+  assert.equal(maxresThumbCandidate(null), null);
+});
+
+// Handler level: the upgrade is only taken when the bigger image is CONFIRMED to exist. A video uploaded
+// below 720p has no maxresdefault and YouTube 404s it, so the second test here is the one that matters:
+// a failed check must leave the working hqdefault in place rather than shipping a dead image URL.
+const HQ_JSON = { ...OEMBED_JSON, thumbnail_url: 'https://i.ytimg.com/vi/vid123/hqdefault.jpg' };
+
+test('handler: an hqdefault thumbnail is upgraded to maxresdefault once a HEAD confirms it exists', async () => {
+  const seen = [];
+  const r = await handleOgPreview(req({ url: OWNER_URL }), {}, {
+    fetchUser,
+    fetchImpl: async (url, opts) => {
+      seen.push({ url, method: opts?.method || 'GET' });
+      if (url.includes('/oembed')) return { ok: true, async json() { return HQ_JSON; } };
+      return { ok: true }; // the HEAD against i.ytimg.com
+    },
+    suggest: async () => null,
+  });
+  assert.equal(r.body.image, 'https://i.ytimg.com/vi/vid123/maxresdefault.jpg');
+  const head = seen.find((s) => s.method === 'HEAD');
+  assert.ok(head, 'the larger image is confirmed before it is used');
+  assert.equal(head.url, 'https://i.ytimg.com/vi/vid123/maxresdefault.jpg');
+});
+
+test('handler: a 404 on maxresdefault keeps the hqdefault thumbnail, never a dead URL', async () => {
+  const r = await handleOgPreview(req({ url: OWNER_URL }), {}, {
+    fetchUser,
+    fetchImpl: async (url) => {
+      if (url.includes('/oembed')) return { ok: true, async json() { return HQ_JSON; } };
+      return { ok: false, status: 404 }; // this video was uploaded below 720p
+    },
+    suggest: async () => null,
+  });
+  assert.equal(r.body.image, 'https://i.ytimg.com/vi/vid123/hqdefault.jpg');
+});
+
+test('handler: a thrown HEAD keeps the hqdefault thumbnail too', async () => {
+  const r = await handleOgPreview(req({ url: OWNER_URL }), {}, {
+    fetchUser,
+    fetchImpl: async (url) => {
+      if (url.includes('/oembed')) return { ok: true, async json() { return HQ_JSON; } };
+      throw new Error('network');
+    },
+    suggest: async () => null,
+  });
+  assert.equal(r.body.image, 'https://i.ytimg.com/vi/vid123/hqdefault.jpg');
 });
