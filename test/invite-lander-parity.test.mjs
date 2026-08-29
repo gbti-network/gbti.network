@@ -62,14 +62,21 @@ function boundTier(src) {
 }
 
 /**
- * The coupon code a lander ships as its default, or null when the code field is hand-entered.
+ * The CAMPAIGN a lander is bound to, or null when the code field is hand-entered.
+ *
+ * sow-291: this used to be read as a coupon CODE and looked up in `house/coupons.yml`. It is now read as a
+ * campaign ID and looked up in the code-free manifest, and the rename is the point rather than tidying. The
+ * coupon registry is moving off this public repository because a coupon code is a bearer credential, so
+ * after the rotation the only campaign name that will still appear in a lander's source is its ID. A guard
+ * that keeps looking up a code would stop matching on the day the code changes, and it would go quiet rather
+ * than red: `checked` would fall and only the floor at the bottom would catch it.
  *
  * `coupon=CODE` is excluded deliberately: it is the placeholder in the page's own explanatory comment, not a
- * real code. Matching it would bind every lander to a coupon named CODE, which does not exist, and rules 3
- * and 4 would then be enforced against a lookup that always misses. That is the failure this repo keeps
- * hitting: a check that runs, finds nothing, and reports success.
+ * real campaign. Matching it would bind every lander to a campaign named CODE, which does not exist, and
+ * rules 3 and 4 would then be enforced against a lookup that always misses. That is the failure this repo
+ * keeps hitting: a check that runs, finds nothing, and reports success.
  */
-function defaultCouponCode(src) {
+function defaultCampaignId(src) {
   const codes = new Set([...src.matchAll(/coupon=([A-Z0-9]{3,32})/g)].map((m) => m[1]).filter((c) => c !== 'CODE'));
   return codes.size === 1 ? [...codes][0] : null;
 }
@@ -92,17 +99,34 @@ test('the lander discovery finds the real pages, so the rules below are not vacu
   }
 });
 
-test('every ACTIVE coupon names a tier that exists in the tier registry', () => {
-  const coupons = loadYaml('house/coupons.yml')?.coupons ?? [];
+test('every ACTIVE campaign names a tier that exists in the tier registry', () => {
+  const campaigns = loadYaml('house/campaigns.yml')?.campaigns ?? [];
   const tierKeys = new Set((loadYaml('house/membership-tiers.yml')?.tiers ?? []).map((t) => t.key));
   assert.ok(tierKeys.size >= 2, 'the tier registry must have loaded');
 
-  const active = coupons.filter((c) => c.active);
-  assert.ok(active.length > 0, 'there must be at least one active coupon, or this test proves nothing');
+  const active = campaigns.filter((c) => c.active);
+  assert.ok(active.length > 0, 'there must be at least one active campaign, or this test proves nothing');
   for (const c of active) {
-    assert.ok(c.tier, `active coupon ${c.code} must name a tier`);
-    assert.ok(tierKeys.has(c.tier), `coupon ${c.code} grants tier "${c.tier}", which is not in membership-tiers.yml`);
+    assert.ok(c.tier, `active campaign ${c.id} must name a tier`);
+    assert.ok(tierKeys.has(c.tier), `campaign ${c.id} grants tier "${c.tier}", which is not in membership-tiers.yml`);
   }
+});
+
+test('an active campaign points at a lander page that actually exists', () => {
+  // sow-291: the reverse direction, which the manifest made checkable and the coupon registry never could.
+  // Rules 3 and 4 below read PAGE -> campaign. This reads CAMPAIGN -> page, and catches the mapping being
+  // wrong from the other end: a campaign whose lander resolves to a route nobody ships sends its invitees
+  // to a 404, and no page-driven check can see that, because the broken campaign appears on no page.
+  const campaigns = (loadYaml('house/campaigns.yml')?.campaigns ?? []).filter((c) => c.active);
+  const routes = new Set(landers().map((l) => `/${l.dir}/`));
+  assert.ok(routes.size >= 3, `expected at least three lander routes, found ${routes.size}`);
+  let checked = 0;
+  for (const c of campaigns) {
+    assert.ok(c.lander, `campaign ${c.id} resolves no lander at all, so there is no page describing what it grants`);
+    assert.ok(routes.has(c.lander), `campaign ${c.id} points at ${c.lander}, which is not a lander page (${[...routes].join(', ')})`);
+    checked += 1;
+  }
+  assert.ok(checked >= 3, `expected at least three active campaigns, checked ${checked}`);
 });
 
 test('every lander binds its tier to the registry rather than writing the label and price by hand', () => {
@@ -121,26 +145,26 @@ test('every lander binds its tier to the registry rather than writing the label 
   }
 });
 
-test('a lander shipping a default coupon code advertises EXACTLY the tier that code grants', () => {
+test('a lander shipping a default campaign advertises EXACTLY the tier that campaign grants', () => {
   // The parity assertion proper, and the one that would have caught the original defect. It compares two
   // registries against the page rather than reading the page's prose, so it is indifferent to how the claim
   // is worded, which is exactly why the prose version got through.
-  const byCode = new Map((loadYaml('house/coupons.yml')?.coupons ?? []).map((c) => [c.code, c]));
+  const byId = new Map((loadYaml('house/campaigns.yml')?.campaigns ?? []).map((c) => [c.id, c]));
   let checked = 0;
   for (const l of landers()) {
-    const code = defaultCouponCode(l.src);
-    if (!code) continue;
-    const coupon = byCode.get(code);
-    assert.ok(coupon, `${l.id} ships coupon ${code}, which is not in house/coupons.yml`);
+    const id = defaultCampaignId(l.src);
+    if (!id) continue;
+    const campaign = byId.get(id);
+    assert.ok(campaign, `${l.id} ships campaign ${id}, which is not in house/campaigns.yml`);
     const { tier } = boundTier(l.src);
-    assert.equal(tier, coupon.tier,
-      `${l.id} advertises tier "${tier}" but coupon ${code} grants "${coupon.tier}". `
+    assert.equal(tier, campaign.tier,
+      `${l.id} advertises tier "${tier}" but campaign ${id} grants "${campaign.tier}". `
       + 'A visitor redeeming that link would receive less than the page promised.');
     checked += 1;
   }
   // Never let this pass on zero. If the code extraction stops matching, every comparison above is skipped
   // and the test reports success having compared nothing.
-  assert.ok(checked >= 2, `expected at least two coupon-bound landers, checked ${checked}`);
+  assert.ok(checked >= 2, `expected at least two campaign-bound landers, checked ${checked}`);
 });
 
 test('a coupon-bound lander renders its benefits FROM the registry, never by hand', () => {
@@ -151,7 +175,7 @@ test('a coupon-bound lander renders its benefits FROM the registry, never by han
   let checked = 0;
   for (const l of landers()) {
     if (BENEFIT_RULE_EXEMPT.has(l.id)) continue;
-    if (!defaultCouponCode(l.src)) continue;
+    if (!defaultCampaignId(l.src)) continue;
     assert.match(l.src, /\.benefits/,
       `${l.id} must render its benefit list from house/membership-tiers.yml. A hand-written list cannot be `
       + 'checked for accuracy by any test, because the test would have to already know what is true.');
