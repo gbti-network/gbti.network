@@ -48,7 +48,10 @@ export async function handleFollows(request, env, { kv = env?.SIGNUP_KV, now = D
   const stored = normalizeFollows(await kv.get(key, 'json'));
   let next;
   try {
-    next = applyFollow(stored, { username: payload?.username, on: payload?.on !== false }, { now });
+    // SOW-186 C3: thread the optional per-follow notification matrix through. applyFollow sets it on a new
+    // follow and UPDATES it on an existing one (a null/empty notify clears back to the global default); an
+    // absent notify leaves a member's chosen prefs untouched, so a plain re-follow never wipes them.
+    next = applyFollow(stored, { username: payload?.username, on: payload?.on !== false, notify: payload?.notify }, { now });
   } catch (err) {
     if (err instanceof FollowError) return { status: 400, body: { error: 'invalid', message: err.message } };
     throw err;

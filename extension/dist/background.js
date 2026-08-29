@@ -19219,8 +19219,8 @@ async function call4(method, body, { token, signupBase, fetch: fetch2 = globalTh
 async function getFollows(opts) {
   return call4("GET", null, opts);
 }
-async function setFollow({ username, on = true, ...opts }) {
-  return call4("POST", { username, on }, opts);
+async function setFollow({ username, on = true, notify, ...opts }) {
+  return call4("POST", { username, on, notify }, opts);
 }
 
 // client/src/member-upvote-client.mjs
@@ -19772,11 +19772,11 @@ async function getFollows2(ctx) {
     throw mapFollowsError(err);
   }
 }
-async function setFollow2(ctx, { username, on = true } = {}) {
+async function setFollow2(ctx, { username, on = true, notify } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   try {
-    const r = await setFollow({ username, on, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    const r = await setFollow({ username, on, notify, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
     return r?.following ?? [];
   } catch (err) {
     throw mapFollowsError(err);
@@ -19872,11 +19872,11 @@ async function getPrefs(ctx) {
     mapNewsErr(err, "read your preferences");
   }
 }
-async function setPrefs(ctx, { categories, followChannel, publicFavorites } = {}) {
+async function setPrefs(ctx, { categories, followChannel, publicFavorites, notify } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.("githubToken");
   try {
-    return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel, publicFavorites } });
+    return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel, publicFavorites, notify } });
   } catch (err) {
     mapNewsErr(err, "save your preferences");
   }

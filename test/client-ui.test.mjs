@@ -39,6 +39,19 @@ test('http client: maps methods to the existing /api routes with the bearer toke
   assert.deepEqual(calls[5].body, { action: 'ban', githubId: '9' });
 });
 
+test('http client: setFollow posts /api/follows and carries the SOW-186 per-follow notify matrix', async () => {
+  const calls = [];
+  const c = createHttpClient({ baseUrl: 'http://localhost:4500', token: 'tok', fetch: fakeFetch(calls) });
+  const notify = { article: { api: true, email: true }, share: { api: false, email: false } };
+  await c.setFollow({ username: 'alice', on: true, notify });
+  await c.setFollow({ username: 'bob', on: true }); // no notify -> JSON.stringify drops it, so the wire body omits it (leaves prefs untouched)
+
+  assert.equal(calls[0].url, 'http://localhost:4500/api/follows');
+  assert.equal(calls[0].method, 'POST');
+  assert.deepEqual(calls[0].body, { username: 'alice', on: true, notify });
+  assert.deepEqual(calls[1].body, { username: 'bob', on: true }); // notify:undefined is omitted on the wire
+});
+
 test('http client: throws a coded error on a non-ok response', async () => {
   const c = createHttpClient({
     token: 'tok',

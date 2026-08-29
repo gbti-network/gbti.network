@@ -128,7 +128,7 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     deleteCollection: ({ id }) => request('POST', '/api/activity', { action: 'collection.delete', id }), // returns { activity }
     // SOW-023: the follow graph (subscriptions) in the deletable edge store (paid-only).
     getFollows: () => request('GET', '/api/follows'), // returns { following: [{ username, addedAt }] }
-    setFollow: ({ username, on = true }) => request('POST', '/api/follows', { username, on }), // returns { following }
+    setFollow: ({ username, on = true, notify }) => request('POST', '/api/follows', { username, on, notify }), // SOW-186 C3: optional per-follow notify matrix; returns { following }
     // SOW-026: first-run onboarding readiness (token/fork/install) from durable GitHub state.
     onboardingStatus: () => request('GET', '/api/onboarding-status'), // returns { appMode, signedIn, forkReady, installReady, activeStep, ready, ... }
     getSettings: () => request('GET', '/api/settings'),

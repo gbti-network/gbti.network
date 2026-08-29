@@ -7,6 +7,7 @@
 // (the Worker denies the read) falls back to the membership route. The followed username is observed, so the
 // JS-driven prompts directory hero can set it.
 import { GbtiElement, define } from '../base.mjs';
+import { openNotifyModal } from './gbti-notify-modal.mjs'; // SOW-186 C3: the tune button opens the per-follow modal
 
 // SOW-143: route the "become a member" fallback safely from ANY host. On gbti.network keep the relative nav
 // (unchanged behavior). Inside an extension page (chrome-extension:// origin, this element's first non-site
@@ -22,8 +23,11 @@ function goMembership() {
 
 // Megaphone inlined: a Shadow-DOM <use href="#ico-mega"> cannot reach the page sprite across the shadow boundary.
 const mega = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="margin-right:6px"><path d="M3 11v2a1 1 0 0 0 1 1h2l3.5 3.5V6.5L6 10H4a1 1 0 0 0-1 1zM14 8v8c1.7-.6 3-2.4 3-4s-1.3-3.4-3-4zm0-4.2v2.1c2.9.9 5 3.7 5 6.1s-2.1 5.2-5 6.1v2.1c4-.9 7-4.4 7-8.2s-3-7.3-7-8.2z" fill="currentColor"/></svg>`;
+// SOW-186 C3: sliders glyph for the tune split-button (shown only while following).
+const tune = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="14" cy="18" r="2" fill="currentColor" stroke="none"/></g></svg>`;
 
 const CSS = `
+  .wrap { display:inline-flex; align-items:center; gap:8px; }
   .btn { display:inline-flex; align-items:center; cursor:pointer; font-family:var(--font-body);
     font-size:14px; font-weight:600; border-radius:10px; padding:9px 16px;
     border:1.5px solid var(--brand); background:var(--brand); color:#08231a;
@@ -32,6 +36,10 @@ const CSS = `
   .btn.on { background:transparent; color:var(--brand); }
   .btn.on:hover { border-color:var(--danger); color:var(--danger); }
   .btn[disabled] { opacity:.6; cursor:default; }
+  .tune { display:inline-flex; align-items:center; justify-content:center; cursor:pointer; width:38px; height:38px;
+    border-radius:10px; border:1.5px solid var(--line); background:var(--panel); color:var(--muted);
+    transition:color .15s ease, border-color .15s ease; }
+  .tune:hover { color:var(--brand); border-color:var(--brand); }
 `;
 
 class GbtiSubscribe extends GbtiElement {
@@ -55,11 +63,18 @@ class GbtiSubscribe extends GbtiElement {
     const known = this._following !== undefined; // we have resolved the caller's follow state (paid)
     const label = !known ? 'Subscribe to activity' : following ? 'Following' : 'Subscribe to activity';
     const onCls = following ? 'on' : '';
+    // SOW-186 C3: while following, a tune split-button opens the per-follow notification modal (what this member
+    // sends you). It appears only once the live follow state is resolved (a signed-in follower), never on the
+    // visitor fallback path.
+    const tuneBtn = following && this._canFollow !== false
+      ? `<button class="tune" type="button" data-tune aria-label="Notification settings for this member">${tune}</button>`
+      : '';
     this.set(
       this.css(CSS) +
-        `<button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? '' : 'disabled'} aria-label="${label}">${mega}<span class="t">${label}</span></button>`,
+        `<span class="wrap"><button class="btn ${onCls}" type="button" aria-pressed="${following}" ${username ? '' : 'disabled'} aria-label="${label}">${mega}<span class="t">${label}</span></button>${tuneBtn}</span>`,
     );
     this.on('.btn', 'click', () => this._onClick());
+    this.on('[data-tune]', 'click', () => { if (username) openNotifyModal(username, () => this._loadState(username)); });
     // Lazily resolve the caller's follow state once (paid members get the live toggle; others fall back).
     if (this.client && username && !this._loaded) this._loadState(username);
   }

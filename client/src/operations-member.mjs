@@ -100,11 +100,11 @@ export async function getFollows(ctx) {
 
 
 /** Follow (on:true) or unfollow (on:false) a member by username. Returns the updated following list. */
-export async function setFollow(ctx, { username, on = true } = {}) {
+export async function setFollow(ctx, { username, on = true, notify } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
   try {
-    const r = await workerSetFollow({ username, on, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+    const r = await workerSetFollow({ username, on, notify, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
     return r?.following ?? [];
   } catch (err) {
     throw mapFollowsError(err);
@@ -238,12 +238,14 @@ export async function getPrefs(ctx) {
   catch (err) { mapNewsErr(err, 'read your preferences'); }
 }
 
-export async function setPrefs(ctx, { categories, followChannel, publicFavorites } = {}) {
+export async function setPrefs(ctx, { categories, followChannel, publicFavorites, notify } = {}) {
   requireIdentity(ctx);
   const token = ctx.store?.get?.('githubToken');
   // SOW-114: publicFavorites = the member's opt-in to the public "Favorited by" list. JSON.stringify drops
   // undefined keys, so an absent field never touches the stored value.
-  try { return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel, publicFavorites } }); }
+  // SOW-186 C3: notify = the member's global notification defaults matrix ({ [event]: { api?, email? } });
+  // the Worker's member-prefs normalizes it, and an absent field leaves the stored value untouched (same rule).
+  try { return await workerSetPrefs({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, patch: { categories, followChannel, publicFavorites, notify } }); }
   catch (err) { mapNewsErr(err, 'save your preferences'); }
 }
 

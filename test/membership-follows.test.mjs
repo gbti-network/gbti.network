@@ -40,6 +40,20 @@ test('POST: follow persists under follows:<github_id> and dedupes', async () => 
   assert.equal(r.body.following.length, 1);
 });
 
+test('POST: the SOW-186 per-follow notify matrix is threaded through and persisted', async () => {
+  const kv = fakeKv();
+  const notify = { article: { api: true, email: true }, share: { api: false, email: false } };
+  let r = await handleFollows(req('POST', { username: 'Alice', notify }), {}, { kv, authorize: paid, now });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.following, [{ username: 'alice', addedAt: 5000, notify }]);
+  // a plain re-follow (no notify field) leaves the stored matrix untouched
+  r = await handleFollows(req('POST', { username: 'alice' }), {}, { kv, authorize: paid, now });
+  assert.deepEqual(r.body.following, [{ username: 'alice', addedAt: 5000, notify }], 're-follow preserves the matrix');
+  // an explicit null notify clears the override back to the global default
+  r = await handleFollows(req('POST', { username: 'alice', notify: null }), {}, { kv, authorize: paid, now });
+  assert.deepEqual(r.body.following, [{ username: 'alice', addedAt: 5000 }], 'null clears the override');
+});
+
 test('POST on:false unfollows', async () => {
   const kv = fakeKv({ [FOLLOWS_KEY('42')]: JSON.stringify({ following: [{ username: 'alice', addedAt: 1 }], updatedAt: 1 }) });
   const r = await handleFollows(req('POST', { username: 'alice', on: false }), {}, { kv, authorize: paid, now });

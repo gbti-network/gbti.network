@@ -28,6 +28,6 @@ export async function getFollows(opts) {
 }
 
 /** Follow (on:true) or unfollow (on:false) a member by username. */
-export async function setFollow({ username, on = true, ...opts }) {
-  return call('POST', { username, on }, opts);
+export async function setFollow({ username, on = true, notify, ...opts }) {
+  return call('POST', { username, on, notify }, opts); // SOW-186 C3: optional per-follow notify matrix
 }

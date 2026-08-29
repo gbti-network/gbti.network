@@ -768,7 +768,7 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
 
     // ----- SOW-023/046: the follow graph + prefs (Following), cookie-ready KV -----
     getFollows() { return workerGet('/membership/follows'); }, // { following }
-    setFollow({ username, on = true }: any) { return workerPost('/membership/follows', { username, on }); },
+    setFollow({ username, on = true, notify }: any) { return workerPost('/membership/follows', { username, on, notify }); }, // SOW-186 C3: optional per-follow notify matrix
     // UNWRAP the envelope. `/membership/prefs` answers `{ ok, prefs: { categories, followedChannels } }`,
     // but every consumer of client.getPrefs/setPrefs reads `.categories` off the TOP level: the comment on
     // these two lines has always said `{ categories, followedChannels }`, and client/src/news-client.mjs
