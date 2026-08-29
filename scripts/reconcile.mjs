@@ -31,7 +31,7 @@ import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '
 import { buildEnvPriceTierMap, resolveEffectiveTier } from '../membership/tier-gate.mjs'; // sow-185: price map + override-aware tier
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorCouponsToKv } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorCouponsToKv, gitOwnedSections } from './lib/kv-mirror.mjs';
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
 import { syncCouponGrants, readGrandfatheredFromDisk, readCouponsFromDisk, listCouponRedemptions, planCouponGrants } from './lib/coupon-grants.mjs'; // SOW-119 (+ sow-218: pre-apply, sow-185: explicit tier)
 import { syncEnrollments } from './lib/enroll-members.mjs'; // SOW-157: hosted-member index enrollment
@@ -695,7 +695,8 @@ async function main() {
     console.log(`reconcile: DRY RUN would mirror overrides to KV (${JSON.stringify(blob).length} bytes, key overrides:mirror).`);
   } else {
     try {
-      const r = await mirrorOverridesToKv({ raw: rawOverrides, env, now });
+      // sow-213 Phase 3: preserve, never rebuild, a section git no longer owns (see kv-mirror.sectionFor).
+      const r = await mirrorOverridesToKv({ raw: rawOverrides, env, now, ownedByGit: gitOwnedSections(ROOT) });
       console.log(r.written ? `reconcile: mirrored overrides to KV (${r.bytes} bytes).` : `reconcile: overrides KV mirror SKIPPED (${r.reason}).`);
     } catch (e) {
       console.error('reconcile: overrides KV mirror FAILED:', e?.message ?? e);

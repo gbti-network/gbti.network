@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { loadOverridesRaw } from '../membership/overrides.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorCouponsToKv } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorCouponsToKv, gitOwnedSections } from './lib/kv-mirror.mjs';
 import { toSyndicationMirror } from '../membership/syndication-config.mjs';
 import { toCouponsMirror } from '../membership/coupons.mjs';
 
@@ -29,11 +29,16 @@ import { toCouponsMirror } from '../membership/coupons.mjs';
  */
 export async function syncOverridesMirror({ root, env = process.env, fetchImpl, now = new Date(), dryRun = false } = {}) {
   const raw = loadOverridesRaw(root);
-  const blob = buildOverridesMirror(raw, now);
+  // sow-213 Phase 3: a section whose git file is GONE is preserved from KV, never rebuilt from an empty read.
+  // Derived from the checkout so the flip needs no flag change; see kv-mirror.sectionFor for why.
+  const ownedByGit = gitOwnedSections(root);
   if (dryRun) {
-    return { dryRun: true, bytes: JSON.stringify(blob).length, roles: Object.keys(blob.roles ?? {}).length, generatedAt: blob.generatedAt };
+    // The dry run reports on the git-owned shape only. It cannot read KV, so it must not pretend to know what
+    // a preserved section holds; passing ownership here would make it throw on the very state it is reporting.
+    const blob = buildOverridesMirror(raw, now);
+    return { dryRun: true, bytes: JSON.stringify(blob).length, roles: Object.keys(blob.roles ?? {}).length, generatedAt: blob.generatedAt, ownedByGit };
   }
-  return mirrorOverridesToKv({ raw, env, now, ...(fetchImpl ? { fetchImpl } : {}) });
+  return mirrorOverridesToKv({ raw, env, now, ownedByGit, ...(fetchImpl ? { fetchImpl } : {}) });
 }
 
 /**

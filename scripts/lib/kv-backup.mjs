@@ -30,13 +30,18 @@ export const BACKUP_PREFIX = 'backup:';
 //   forever after; losing it un-burns a redeemed coupon and, pre-fold, silently reverts the member to a plain trial).
 // Excluded ON PURPOSE: earnings: (recomputable by the payout job from conv: + Stripe + git), touch: (ephemeral, 90-day
 //   TTL, cleared at conversion -- backing it up would EXTEND its retention, GDPR-adverse), gh: (the Stripe-lookup
-//   cache) + overrides:mirror (both regenerable), redemptions: (the per-code counter, recomputable by counting
+//   cache), redemptions: (the per-code counter, recomputable by counting
 //   redemption: records), and the erasure-audit log (write-once, handled separately).
 //   invite: (sow-231 issued invite links -- the ONLY record that a seat was given to a named person, carrying
 //   the superadmin's administration note about the outreach. It cannot be rebuilt from git or Stripe: the
 //   campaign is in house/coupons.yml but WHO was invited, when, by whom and with what note exists nowhere
 //   else, and losing it also un-burns every single-use link that had already been redeemed).
-export const BACKED_UP_PREFIXES = ['activity:', 'follows:', 'prefs:', 'conv:', 'coupon-grant:', 'redemption:', 'invite:'];
+// sow-213 Phase 3: `overrides:` (the overrides:mirror blob) was excluded here as "regenerable", and it was:
+// regenerable FROM GIT, by re-running the mirror sync over house/bans.yml and house/grandfathered.yml. Phase 3
+// DELETES that source, so the justification expires at the instant of that commit and the blob becomes the
+// ONLY copy of every ban and every grandfather grant. THE REASON A CONTROL WAS SAFE CAN EXPIRE WITHOUT THE
+// CONTROL ITSELF CHANGING, which is why this line moved in the same pass rather than in a later cleanup.
+export const BACKED_UP_PREFIXES = ['activity:', 'follows:', 'prefs:', 'conv:', 'coupon-grant:', 'redemption:', 'invite:', 'overrides:'];
 export const DEFAULT_RETENTION_SECONDS = 30 * 24 * 60 * 60; // 30 days
 export const SNAPSHOT_KEY = (iso) => `${BACKUP_PREFIX}${iso}`;
 

@@ -47,7 +47,7 @@ test('buildSnapshot shapes a versioned, counted, timestamped blob', () => {
   assert.equal(s.takenAt, NOW.toISOString());
 });
 
-test('collectSnapshot gathers activity:/follows:/prefs:/conv:/coupon-grant:/redemption: and is a no-op without creds', async () => {
+test('collectSnapshot gathers activity:/follows:/prefs:/conv:/coupon-grant:/redemption:/overrides: and is a no-op without creds', async () => {
   const kv = fakeKv({
     'activity:1': '{"favorites":[]}', 'follows:2': '{"following":[]}', 'prefs:4': '{}', 'conv:5': '{"member":"5"}',
     'coupon-grant:8': '{"code":"CODEABLEYEAR","until":"2027-07-21T00:00:00.000Z"}',
@@ -58,9 +58,13 @@ test('collectSnapshot gathers activity:/follows:/prefs:/conv:/coupon-grant:/rede
   assert.equal(c.available, true);
   const keys = c.snapshot.records.map((r) => r.key).sort();
   // conv: (irreplaceable money attribution) + prefs: + the SOW-119 coupon records (the free-period grant + the
-  // one-per-github_id lock) are backed up; earnings: (recomputable), touch: (ephemeral), gh: + overrides:mirror
-  // (regenerable), and redemptions: (a counter recomputable from redemption: records) are NOT.
-  assert.deepEqual(keys, ['activity:1', 'conv:5', 'coupon-grant:8', 'follows:2', 'prefs:4', 'redemption:CODEABLEYEAR:8']);
+  // one-per-github_id lock) are backed up; earnings: (recomputable), touch: (ephemeral), gh: (the Stripe-lookup
+  // cache), and redemptions: (a counter recomputable from redemption: records) are NOT.
+  // sow-213 Phase 3 INVERTED overrides:mirror. It was excluded here as "regenerable", and it was: regenerable
+  // FROM GIT. Phase 3 deletes house/bans.yml + house/grandfathered.yml, so the blob becomes the ONLY copy of
+  // every ban and grandfather grant. This assertion used to prove it was absent; it now proves it is present,
+  // and that inversion is the point rather than an incidental fixture update.
+  assert.deepEqual(keys, ['activity:1', 'conv:5', 'coupon-grant:8', 'follows:2', 'overrides:mirror', 'prefs:4', 'redemption:CODEABLEYEAR:8']);
   const none = await collectSnapshot({ env: {}, fetchImpl: async () => { throw new Error('no fetch'); } });
   assert.equal(none.available, false);
   assert.match(none.reason, /CF_ACCOUNT_ID/);

@@ -6,6 +6,8 @@
 // Writes via the Cloudflare KV REST API, gated behind CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN. If
 // those are not set (local dry-runs, tests), it is a no-op that reports the reason. Injected fetch for tests.
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { toSyndicationMirror } from '../../membership/syndication-config.mjs';
 import { toTopicsMirror, TOPICS_MIRROR_KEY } from '../../membership/topics-vocab.mjs';
 import { toCouponsMirror, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs';
@@ -39,8 +41,52 @@ export const COUPONS_KV_KEY = COUPONS_MIRROR_KEY; // SOW-119: house/coupons.yml 
  * git-native by owner ruling as the root of trust for the anti-escalation model. Delete it then, rather than
  * leaving a merge that silently does nothing and still reads as load-bearing.
  */
+const isSection = (x) => x != null && typeof x === 'object' && !Array.isArray(x);
+
+/**
+ * sow-213 Phase 3: which override sections GIT still owns, read from the real checkout.
+ *
+ * This is derived rather than configured on purpose. The flip is "delete two files", and anything that also
+ * required someone to remember to change a flag would eventually be done half way, in the direction that
+ * erases live entitlements.
+ */
+export function gitOwnedSections(root) {
+  const has = (f) => fs.existsSync(path.join(root, 'house', f));
+  return { bans: has('bans.yml'), grandfathered: has('grandfathered.yml') };
+}
+
+/**
+ * sow-213 Phase 3: THE SECTION GIT NO LONGER OWNS IS PRESERVED VERBATIM, NOT REBUILT.
+ *
+ * `readYaml` returns {} for a missing file, so once bans.yml and grandfathered.yml are deleted, `raw.bans` and
+ * `raw.grandfathered` are indistinguishable from "the file exists and is empty". Rebuilding from that would
+ * write an EMPTY section over the live one, erasing every ban and grandfather grant in the store, with a green
+ * workflow run and nothing reporting it. The 25 entries live there today carry no `source: 'kv'` mark (they
+ * came from git), so mergeOverridesSection would not save them either.
+ *
+ * And a one-time migration marking them `source: 'kv'` does NOT work, which is worth recording because it is
+ * the obvious move: while the files still exist, the next sync filters those entries back out as duplicates of
+ * the git entries and rewrites the unmarked git version. The migration is undone before it is ever used.
+ *
+ * So the rule is a property. If git does not own the section, KV is the source and this writer does not touch
+ * it. If there is nothing usable to preserve, the whole write ABORTS, because writing an empty section is the
+ * exact erase this exists to prevent.
+ *
+ * What an abort costs, stated precisely rather than waved at: the blob stops being refreshed, so a transient
+ * one is absorbed by the Worker's 48h freshness window and a PERSISTENT one ages the blob out and denies every
+ * effective-paid member, superadmins included. That is the safe direction and it is LOUD (the 6-hourly job
+ * exits non-zero, so it reds four times a day), which is the whole difference from the alternative: an erase
+ * that lifts every ban and strips every grant on a GREEN run with nobody watching.
+ */
+function sectionFor(ownedByGit, gitSection, existingSection, listKey) {
+  if (ownedByGit) return mergeOverridesSection(gitSection, existingSection, listKey);
+  if (!isSection(existingSection) || !Array.isArray(existingSection[listKey])) {
+    throw new Error(`refusing to write the overrides mirror: house/${listKey === 'bans' ? 'bans' : 'grandfathered'}.yml is absent and KV carries no usable ${listKey} section to preserve`);
+  }
+  return existingSection;
+}
+
 export function mergeOverridesSection(gitSection, existingSection, listKey) {
-  const isSection = (x) => x != null && typeof x === 'object' && !Array.isArray(x);
   const base = isSection(gitSection) ? gitSection : {};
   const git = Array.isArray(base[listKey]) ? base[listKey] : [];
   const existing = isSection(existingSection) && Array.isArray(existingSection[listKey]) ? existingSection[listKey] : [];
@@ -56,12 +102,12 @@ export function mergeOverridesSection(gitSection, existingSection, listKey) {
 
 /** Build the compact mirror blob the Worker reads. Stores the RAW parsed YAML (the Worker rebuilds Maps).
  *  `existing` is the blob currently in KV; pass it so KV-native entries are not clobbered (see above). */
-export function buildOverridesMirror(raw, now = new Date(), existing = null) {
+export function buildOverridesMirror(raw, now = new Date(), existing = null, ownedByGit = { bans: true, grandfathered: true }) {
   return {
     generatedAt: now.toISOString(),
-    roles: raw?.roles ?? {},
-    bans: mergeOverridesSection(raw?.bans ?? {}, existing?.bans, 'bans'),
-    grandfathered: mergeOverridesSection(raw?.grandfathered ?? {}, existing?.grandfathered, 'grandfathered'),
+    roles: raw?.roles ?? {}, // roles.yml stays git-native by owner ruling, so this section is always rebuilt
+    bans: sectionFor(ownedByGit?.bans !== false, raw?.bans ?? {}, existing?.bans, 'bans'),
+    grandfathered: sectionFor(ownedByGit?.grandfathered !== false, raw?.grandfathered ?? {}, existing?.grandfathered, 'grandfathered'),
   };
 }
 
@@ -69,7 +115,7 @@ export function buildOverridesMirror(raw, now = new Date(), existing = null) {
  * PUT the mirror to Cloudflare KV. Returns { written, key, bytes, reason }. Throws only on a real API error
  * (so the reconcile can fail the run); a missing-credentials situation is a reported no-op, not a throw.
  */
-export async function mirrorOverridesToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = OVERRIDES_KV_KEY } = {}) {
+export async function mirrorOverridesToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = OVERRIDES_KV_KEY, ownedByGit } = {}) {
   const accountId = env.CF_ACCOUNT_ID;
   const namespaceId = env.CF_KV_NAMESPACE_ID;
   const apiToken = env.CF_API_TOKEN;
@@ -93,7 +139,7 @@ export async function mirrorOverridesToKv({ raw, env = process.env, now = new Da
     throw new Error(`KV mirror read failed, refusing to overwrite an unknown ban list: ${err?.message || 'unknown'}`);
   }
 
-  const blob = buildOverridesMirror(raw, now, existing);
+  const blob = buildOverridesMirror(raw, now, existing, ownedByGit);
   const body = JSON.stringify(blob);
   const res = await fetchImpl(url, {
     method: 'PUT',
