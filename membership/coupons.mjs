@@ -218,8 +218,19 @@ export function mergeCouponsList(gitCoupons, existingCoupons) {
 export function toCouponsMirror(raw, now = new Date(), existing = null, ownedByGit = true) {
   const generatedAt = now.toISOString();
   if (!ownedByGit) {
-    const kept = Array.isArray(existing?.coupons) ? existing.coupons : null;
-    if (!kept || kept.length === 0) {
+    // NO ARRAY AT ALL and AN EMPTY ARRAY are different, and only the first is a fault. This aborted on both
+    // until SecurityMaster pointed out that the abort buys no safety in the empty case: zero coupons already
+    // means nothing is redeemable, so refusing to write does not protect anything, it only makes a legitimate
+    // state unreachable. "Every campaign has ended" is a real admin action, and under the old rule it would
+    // have red the six-hourly job four times a day forever, with no legitimate way to clear it except putting
+    // a coupon back. That job also carries the overrides mirror, so a permanently red run there is a genuine
+    // failure nobody would look at any more.
+    //
+    // The case the abort EXISTS for is untouched by the split: a Phase 2 flip performed before KV was
+    // populated leaves no coupons array at all (a 404 read, or a blob of another shape), and that still
+    // aborts. That is the ordering mistake worth being loud about.
+    const kept = existing?.coupons;
+    if (!Array.isArray(kept)) {
       throw new Error('refusing to write coupons:config: house/coupons.yml is absent and KV carries no coupon registry to preserve');
     }
     return { generatedAt, coupons: kept };

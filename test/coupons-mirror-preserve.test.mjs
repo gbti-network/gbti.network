@@ -68,12 +68,22 @@ test('an ABSENT registry preserves KV verbatim instead of rebuilding it empty', 
   assert.equal(m.generatedAt, AT.toISOString(), 'the stamp is still REFRESHED, or the blob ages past the 48h gate');
 });
 
-test('an absent registry with NOTHING to preserve ABORTS rather than writing empty', () => {
+test('an absent registry with NO ARRAY AT ALL aborts; an EMPTY array is a legitimate state', () => {
   // The abort costs a skipped refresh, which the Worker's 48h window absorbs and which then fails coupons
-  // CLOSED, loudly (the six-hourly job reds four times a day). Writing empty fails them OPEN-looking: every
-  // coupon silently dead on a green run.
-  assert.throws(() => toCouponsMirror({}, AT, { coupons: [] }, false), /no coupon registry to preserve/);
+  // CLOSED, loudly (the six-hourly job reds four times a day). It exists for ONE case: a Phase 2 flip
+  // performed before KV was populated, which reads back as a 404 or a blob of another shape.
   assert.throws(() => toCouponsMirror({}, AT, null, false), /no coupon registry to preserve/);
+  assert.throws(() => toCouponsMirror({}, AT, {}, false), /no coupon registry to preserve/);
+  assert.throws(() => toCouponsMirror({}, AT, { coupons: 'nope' }, false), /no coupon registry to preserve/);
+
+  // But an EMPTY registry is not a fault, and this aborted on it until SecurityMaster pointed out that the
+  // abort buys nothing there: zero coupons already means nothing is redeemable, so refusing to write protects
+  // nothing and only makes "every campaign has ended" unreachable. Under the old rule that legitimate admin
+  // action would have red the six-hourly job four times a day forever, and that job also carries the overrides
+  // mirror, so the noise would land on a check that matters.
+  const m = toCouponsMirror({}, AT, { coupons: [] }, false);
+  assert.deepEqual(m.coupons, []);
+  assert.equal(m.generatedAt, AT.toISOString(), 'and the stamp still refreshes, so the blob does not age out');
 });
 
 test('loadCouponsRaw distinguishes ABSENT from UNPARSEABLE, which the old catch collapsed', () => {
