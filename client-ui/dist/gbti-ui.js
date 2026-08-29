@@ -72,7 +72,7 @@ var GbtiUI = (() => {
   var EDITOR_SURFACE = `
 :host {
   --s-app:#f4f2ef; --s-surface:#ffffff; --s-surface-2:#f7f6f4; --s-surface-3:#efedea;
-  --s-line:#e7e4e0; --s-line-2:#ddd9d4; --s-fg:#24222a; --s-fg-soft:#57545e; --s-fg-mute:#8a8792;
+  --s-line:#e7e4e0; --s-line-2:#ddd9d4; --s-fg:#24222a; --s-fg-soft:#57545e; --s-fg-mute:#6c6976; /* sow-249: was #8a8792, which measured 3.01:1 on --s-surface-3 and failed AA. This is the same value src/styles/gbti-v3.css:44 already uses site-side for the identical reason. */
   --s-green:#1f9e5f; --s-green-fg:#0f6f40; --s-tint:#e9f6ef; --s-tint-2:#dcefe3; --s-canvas:#ffffff;
   --s-amber-fg:#8a5500; /* sow-184: a readable amber for TEXT (the Staged pill) -- the golden #d9a13c fails AA on a light tint */
   --s-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04);
@@ -82,7 +82,7 @@ var GbtiUI = (() => {
 }
 :host-context([data-theme="dark"]) {
   --s-app:#18161d; --s-surface:#232029; --s-surface-2:#2a2731; --s-surface-3:#322f3a;
-  --s-line:rgba(255,255,255,.085); --s-line-2:rgba(255,255,255,.16); --s-fg:#f3f2f0; --s-fg-soft:#bdbac4; --s-fg-mute:#847f8d;
+  --s-line:rgba(255,255,255,.085); --s-line-2:rgba(255,255,255,.16); --s-fg:#f3f2f0; --s-fg-soft:#bdbac4; --s-fg-mute:#9a96a1; /* sow-249: was #847f8d, 3.37:1 on --s-surface-3. Lightened (dark theme) to clear AA. */
   --s-green:#28b06d; --s-green-fg:#5fd49a; --s-tint:rgba(95,212,154,.13); --s-tint-2:rgba(95,212,154,.22); --s-canvas:#201d27;
   --s-amber-fg:#e6b45c; /* sow-184: light amber text for the Staged pill on the dark card tint */
   --s-shadow:none; --s-shadow-md:0 18px 40px rgba(0,0,0,.4); --s-pop:0 18px 50px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.4);
@@ -1147,7 +1147,7 @@ ${String(body ?? "")}`;
   .blk.drop-over { box-shadow:inset 0 2.5px 0 var(--s-green); }
   /* the editing surfaces: borderless, "document" feel */
   .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--s-green); color:var(--s-fg); padding:2px 0; border-radius:6px; }
-  .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.5; pointer-events:none; }
+  .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); pointer-events:none; } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
   .ce:focus { background:transparent; }
   .ce-p { font-size:17px; line-height:1.65; padding:6px 40px 6px 0; }
   .ce-h1 { font-family:var(--font-display, var(--font-body)); font-weight:800; font-size:30px; line-height:1.2; letter-spacing:-.01em; padding:12px 0 4px; }
@@ -1243,7 +1243,7 @@ ${String(body ?? "")}`;
   .tbl .corner { border:0; background:transparent; width:0; }
   .tbl td.row-ctl { border:0; background:transparent; width:28px; text-align:center; }
   .tbl .tc { min-width:80px; padding:7px 9px; outline:none; color:var(--s-fg); }
-  .tbl .tc:empty::before { content:attr(data-ph); color:var(--s-fg-mute,#8a8792); }
+  .tbl .tc:empty::before { content:attr(data-ph); color:var(--s-fg-mute,#6c6976); }
   .tbl th .th-ctl { display:flex; gap:2px; justify-content:flex-end; padding:2px 4px; border-top:1px dashed var(--s-line); }
   .tbtn { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 4px; border:1px solid var(--s-line); border-radius:5px; background:var(--s-surface); color:var(--s-fg-soft); font-size:11px; font-weight:700; cursor:pointer; }
   .tbtn svg { width:12px; height:12px; }
@@ -3348,9 +3348,9 @@ ${String(body ?? "")}`;
         @container (max-width:1100px) { .edgrid { grid-template-columns:1fr; } .edhead { position:static; } }
         .doc { min-width:0; background:var(--s-canvas); border:1.5px solid var(--s-line); border-radius:12px; box-shadow:var(--s-shadow-md); padding:40px 46px 52px; color:var(--s-fg); }
         .doc-title { font-family:var(--font-display); font-weight:800; font-size:34px; line-height:1.14; letter-spacing:-.015em; color:var(--s-fg); outline:none; margin-bottom:6px; }
-        .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.55; }
+        .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); } /* sow-249: dropped opacity:.55, which put this at 1.86:1 */
         .doc-tagline { font-size:18px; line-height:1.5; font-weight:500; color:var(--s-fg-soft); outline:none; margin:2px 0 14px; }
-        .doc-tagline:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.5; }
+        .doc-tagline:empty::before { content:attr(data-ph); color:var(--s-fg-mute); } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
         .doc-slug { display:flex; align-items:center; gap:9px; flex-wrap:wrap; font-family:var(--font-mono,monospace); font-size:12.5px; color:var(--s-fg-mute); margin-bottom:6px; }
         .doc-slug .slug-val { color:var(--s-green-fg); font-weight:600; outline:none; border-bottom:1.5px dashed transparent; }
         .doc-slug .slug-val:hover { border-bottom-color:var(--s-line-2); }

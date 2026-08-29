@@ -8,6 +8,7 @@
 // gbti-social-close for the overlay to catch.
 import { GbtiElement, define, esc } from '../base.mjs';
 import { socialIcon } from '../social-icons.mjs';
+import { applyQueueAction, revertQueueAction } from '../social-queue-core.mjs'; // sow-282: optimistic done/delete
 import { channelCapability } from '../../../membership/syndication-config-core.mjs'; // Post now is auto-capability only
 
 // The free web composer for a manual-assist channel (X opens the intent composer, pre-filled).
@@ -112,7 +113,7 @@ class GbtiSocialQueue extends GbtiElement {
     this._page = 0;
     this._fType = 'all'; this._fChannel = 'all'; this._fQ = '';
     this._data = null; this._auto = null;
-    this._msg = ''; this._err = false; this._busy = false;
+    this._msg = ''; this._err = false; this._rowBusy = null; // sow-282: busy is per-row now, never the whole panel
     if (this.client) this.load(); else this.render();
   }
 
@@ -182,7 +183,7 @@ class GbtiSocialQueue extends GbtiElement {
         <input data-f="q" type="search" placeholder="Search titles" value="${esc(this._fQ)}" aria-label="Search titles" />
         <span class="count">${filtered.length} item${filtered.length === 1 ? '' : 's'}</span>
       </div>
-      <div class="${this._busy ? 'busy' : ''}">${rows}</div>
+      <div>${rows}</div>
       ${pages > 1 ? `<div class="pager"><button data-pg="prev" type="button" ${this._page === 0 ? 'disabled' : ''}>Prev</button><span class="pg">Page ${this._page + 1} of ${pages}</span><button data-pg="next" type="button" ${this._page >= pages - 1 ? 'disabled' : ''}>Next</button></div>` : ''}
     `));
     this._wire();
@@ -229,7 +230,7 @@ class GbtiSocialQueue extends GbtiElement {
       : url
         ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>`
         : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
-    return `<div class="task">
+    return `<div class="task${this._rowBusy === t.id ? ' busy' : ''}">
       <div class="top"><span class="src">${esc(SRC_LABEL[t.source] || t.source || '')}</span>${this._chip(t.channel, '', true)}<span class="ti">${esc(t.title || t.itemId || '(untitled)')}</span><span class="when">${t.createdAt ? esc(fmtDate(t.createdAt)) : ''}</span></div>
       <div class="txt">${esc(t.text || '')}</div>
       ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(t[x.field])}</div>` : ''}
@@ -277,10 +278,29 @@ class GbtiSocialQueue extends GbtiElement {
       const label = t ? (CH_LABEL[t.channel] || t.channel) : 'the channel';
       if (typeof confirm === 'function' && !confirm(`Post this to ${label} now? The reviewed text above is exactly what goes out.`)) return;
     }
-    this._busy = true; this.render();
-    try { await this.client.socialQueueAction({ action, id }); this._msg = action === 'done' ? 'Marked done.' : action === 'post' ? 'Posted.' : 'Deleted.'; await this.load(); }
+    // sow-282: `done` and `delete` are exactly the transformation the server performs (the same branches in
+    // membership/social-queue.mjs `applyTaskAction`), so apply them locally NOW and let the Worker settle
+    // behind the click. No panel freeze and no refetch. On failure we put the row back where it was.
+    const opt = applyQueueAction(this._data, action, id);
+    if (opt) {
+      this._data = opt.next;
+      this._msg = action === 'done' ? 'Marked done.' : 'Deleted.';
+      this.render();
+      try { await this.client.socialQueueAction({ action, id }); }
+      catch (e) {
+        this._data = revertQueueAction(this._data, opt.undo);
+        this._msg = e?.message || 'Action failed.';
+        this.render();
+      }
+      return;
+    }
+    // `post` drives an external adapter (capability + secrets + a postingAt claim), so its outcome is NOT
+    // locally computable and must not be emulated: a green result could report a post that never went out.
+    // It keeps waiting and keeps refetching, but the wait is now scoped to its own row.
+    this._rowBusy = id; this.render();
+    try { await this.client.socialQueueAction({ action, id }); this._msg = action === 'post' ? 'Posted.' : 'Done.'; await this.load(); }
     catch (e) { this._msg = e?.message || 'Action failed.'; }
-    finally { this._busy = false; this.render(); }
+    finally { this._rowBusy = null; this.render(); }
   }
 }
 

@@ -37,7 +37,7 @@
   var EDITOR_SURFACE = `
 :host {
   --s-app:#f4f2ef; --s-surface:#ffffff; --s-surface-2:#f7f6f4; --s-surface-3:#efedea;
-  --s-line:#e7e4e0; --s-line-2:#ddd9d4; --s-fg:#24222a; --s-fg-soft:#57545e; --s-fg-mute:#8a8792;
+  --s-line:#e7e4e0; --s-line-2:#ddd9d4; --s-fg:#24222a; --s-fg-soft:#57545e; --s-fg-mute:#6c6976; /* sow-249: was #8a8792, which measured 3.01:1 on --s-surface-3 and failed AA. This is the same value src/styles/gbti-v3.css:44 already uses site-side for the identical reason. */
   --s-green:#1f9e5f; --s-green-fg:#0f6f40; --s-tint:#e9f6ef; --s-tint-2:#dcefe3; --s-canvas:#ffffff;
   --s-amber-fg:#8a5500; /* sow-184: a readable amber for TEXT (the Staged pill) -- the golden #d9a13c fails AA on a light tint */
   --s-shadow:0 1px 2px rgba(37,35,43,.06),0 1px 1px rgba(37,35,43,.04);
@@ -47,7 +47,7 @@
 }
 :host-context([data-theme="dark"]) {
   --s-app:#18161d; --s-surface:#232029; --s-surface-2:#2a2731; --s-surface-3:#322f3a;
-  --s-line:rgba(255,255,255,.085); --s-line-2:rgba(255,255,255,.16); --s-fg:#f3f2f0; --s-fg-soft:#bdbac4; --s-fg-mute:#847f8d;
+  --s-line:rgba(255,255,255,.085); --s-line-2:rgba(255,255,255,.16); --s-fg:#f3f2f0; --s-fg-soft:#bdbac4; --s-fg-mute:#9a96a1; /* sow-249: was #847f8d, 3.37:1 on --s-surface-3. Lightened (dark theme) to clear AA. */
   --s-green:#28b06d; --s-green-fg:#5fd49a; --s-tint:rgba(95,212,154,.13); --s-tint-2:rgba(95,212,154,.22); --s-canvas:#201d27;
   --s-amber-fg:#e6b45c; /* sow-184: light amber text for the Staged pill on the dark card tint */
   --s-shadow:none; --s-shadow-md:0 18px 40px rgba(0,0,0,.4); --s-pop:0 18px 50px rgba(0,0,0,.55),0 4px 12px rgba(0,0,0,.4);
@@ -1112,7 +1112,7 @@ ${String(body ?? "")}`;
   .blk.drop-over { box-shadow:inset 0 2.5px 0 var(--s-green); }
   /* the editing surfaces: borderless, "document" feel */
   .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--s-green); color:var(--s-fg); padding:2px 0; border-radius:6px; }
-  .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.5; pointer-events:none; }
+  .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); pointer-events:none; } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
   .ce:focus { background:transparent; }
   .ce-p { font-size:17px; line-height:1.65; padding:6px 40px 6px 0; }
   .ce-h1 { font-family:var(--font-display, var(--font-body)); font-weight:800; font-size:30px; line-height:1.2; letter-spacing:-.01em; padding:12px 0 4px; }
@@ -1208,7 +1208,7 @@ ${String(body ?? "")}`;
   .tbl .corner { border:0; background:transparent; width:0; }
   .tbl td.row-ctl { border:0; background:transparent; width:28px; text-align:center; }
   .tbl .tc { min-width:80px; padding:7px 9px; outline:none; color:var(--s-fg); }
-  .tbl .tc:empty::before { content:attr(data-ph); color:var(--s-fg-mute,#8a8792); }
+  .tbl .tc:empty::before { content:attr(data-ph); color:var(--s-fg-mute,#6c6976); }
   .tbl th .th-ctl { display:flex; gap:2px; justify-content:flex-end; padding:2px 4px; border-top:1px dashed var(--s-line); }
   .tbtn { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 4px; border:1px solid var(--s-line); border-radius:5px; background:var(--s-surface); color:var(--s-fg-soft); font-size:11px; font-weight:700; cursor:pointer; }
   .tbtn svg { width:12px; height:12px; }
@@ -3313,9 +3313,9 @@ ${String(body ?? "")}`;
         @container (max-width:1100px) { .edgrid { grid-template-columns:1fr; } .edhead { position:static; } }
         .doc { min-width:0; background:var(--s-canvas); border:1.5px solid var(--s-line); border-radius:12px; box-shadow:var(--s-shadow-md); padding:40px 46px 52px; color:var(--s-fg); }
         .doc-title { font-family:var(--font-display); font-weight:800; font-size:34px; line-height:1.14; letter-spacing:-.015em; color:var(--s-fg); outline:none; margin-bottom:6px; }
-        .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.55; }
+        .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); } /* sow-249: dropped opacity:.55, which put this at 1.86:1 */
         .doc-tagline { font-size:18px; line-height:1.5; font-weight:500; color:var(--s-fg-soft); outline:none; margin:2px 0 14px; }
-        .doc-tagline:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.5; }
+        .doc-tagline:empty::before { content:attr(data-ph); color:var(--s-fg-mute); } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
         .doc-slug { display:flex; align-items:center; gap:9px; flex-wrap:wrap; font-family:var(--font-mono,monospace); font-size:12.5px; color:var(--s-fg-mute); margin-bottom:6px; }
         .doc-slug .slug-val { color:var(--s-green-fg); font-weight:600; outline:none; border-bottom:1.5px dashed transparent; }
         .doc-slug .slug-val:hover { border-bottom-color:var(--s-line-2); }
@@ -19125,6 +19125,48 @@ From the author:
     };
   }
 
+  // client-ui/src/social-queue-core.mjs
+  var LISTS = ["pending", "done"];
+  function locate(data, id) {
+    for (const list of LISTS) {
+      const arr = Array.isArray(data?.[list]) ? data[list] : [];
+      const index = arr.findIndex((r) => r && r.id === id);
+      if (index !== -1) return { list, index, row: arr[index] };
+    }
+    return null;
+  }
+  function applyQueueAction(data, action, id, { now = null } = {}) {
+    if (!data || !id) return null;
+    if (action !== "done" && action !== "delete") return null;
+    const found = locate(data, id);
+    if (!found) return null;
+    const next = { ...data };
+    for (const list of LISTS) next[list] = Array.isArray(data[list]) ? [...data[list]] : [];
+    next[found.list].splice(found.index, 1);
+    const undo = { removed: { list: found.list, index: found.index, row: found.row }, added: null };
+    if (action === "done") {
+      if (found.list === "done") return null;
+      const stamped = { ...found.row, doneAt: found.row.doneAt ?? (now ?? Date.now()) };
+      next.done = [stamped, ...next.done];
+      undo.added = { list: "done", id };
+    }
+    return { next, undo };
+  }
+  function revertQueueAction(data, undo) {
+    if (!data || !undo?.removed) return data;
+    const next = { ...data };
+    for (const list2 of LISTS) next[list2] = Array.isArray(data[list2]) ? [...data[list2]] : [];
+    if (undo.added) {
+      const arr = next[undo.added.list];
+      const at = arr.findIndex((r) => r && r.id === undo.added.id);
+      if (at !== -1) arr.splice(at, 1);
+    }
+    const { list, index, row } = undo.removed;
+    const target = next[list];
+    target.splice(Math.min(index, target.length), 0, row);
+    return next;
+  }
+
   // client-ui/src/elements/gbti-social-queue.mjs
   var REDDIT_SUB = "GBTI_network";
   var composeUrl = (task) => {
@@ -19221,7 +19263,7 @@ From the author:
       this._auto = null;
       this._msg = "";
       this._err = false;
-      this._busy = false;
+      this._rowBusy = null;
       if (this.client) this.load();
       else this.render();
     }
@@ -19306,7 +19348,7 @@ From the author:
         <input data-f="q" type="search" placeholder="Search titles" value="${esc(this._fQ)}" aria-label="Search titles" />
         <span class="count">${filtered.length} item${filtered.length === 1 ? "" : "s"}</span>
       </div>
-      <div class="${this._busy ? "busy" : ""}">${rows}</div>
+      <div>${rows}</div>
       ${pages > 1 ? `<div class="pager"><button data-pg="prev" type="button" ${this._page === 0 ? "disabled" : ""}>Prev</button><span class="pg">Page ${this._page + 1} of ${pages}</span><button data-pg="next" type="button" ${this._page >= pages - 1 ? "disabled" : ""}>Next</button></div>` : ""}
     `));
       this._wire();
@@ -19372,7 +19414,7 @@ From the author:
       const url = composeUrl(t);
       const x = this._extra(t);
       const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
-      return `<div class="task">
+      return `<div class="task${this._rowBusy === t.id ? " busy" : ""}">
       <div class="top"><span class="src">${esc(SRC_LABEL2[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc(fmtDate2(t.createdAt)) : ""}</span></div>
       <div class="txt">${esc(t.text || "")}</div>
       ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(t[x.field])}</div>` : ""}
@@ -19423,16 +19465,30 @@ From the author:
         const label = t ? CH_LABEL[t.channel] || t.channel : "the channel";
         if (typeof confirm === "function" && !confirm(`Post this to ${label} now? The reviewed text above is exactly what goes out.`)) return;
       }
-      this._busy = true;
+      const opt = applyQueueAction(this._data, action, id);
+      if (opt) {
+        this._data = opt.next;
+        this._msg = action === "done" ? "Marked done." : "Deleted.";
+        this.render();
+        try {
+          await this.client.socialQueueAction({ action, id });
+        } catch (e) {
+          this._data = revertQueueAction(this._data, opt.undo);
+          this._msg = e?.message || "Action failed.";
+          this.render();
+        }
+        return;
+      }
+      this._rowBusy = id;
       this.render();
       try {
         await this.client.socialQueueAction({ action, id });
-        this._msg = action === "done" ? "Marked done." : action === "post" ? "Posted." : "Deleted.";
+        this._msg = action === "post" ? "Posted." : "Done.";
         await this.load();
       } catch (e) {
         this._msg = e?.message || "Action failed.";
       } finally {
-        this._busy = false;
+        this._rowBusy = null;
         this.render();
       }
     }
