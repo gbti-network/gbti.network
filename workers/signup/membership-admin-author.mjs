@@ -26,6 +26,7 @@ import { isCleanPath } from '../../membership/classify-pr.mjs';
 import { adminHostedBranchFor } from '../../membership/hosted-author.mjs';
 import { ban, unban, grandfather, revokeGrandfather, grantRole } from '../../membership/superadmin-actions.mjs'; // sow-161 increments 2-3
 import { PAID_GRANT_TIERS } from '../../membership/tier-gate.mjs'; // sow-213: the paid tiers a grandfather grant may name
+import { writeOverrideToKv, appendModerationLog } from './membership-override-kv.mjs'; // sow-213 Phase 2b + 2c
 import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-edits.mjs'; // sow-161 increment 4
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
@@ -51,6 +52,10 @@ const CONTENT_ITEM_RE = /^(?:members\/[a-z0-9][a-z0-9-]*|house)\/(?:posts|produc
 const GITHUB_ID_RE = /^\d{1,20}$/;
 const VALID_ROLES = new Set(['member', 'moderator', 'admin', 'superadmin']);
 const GOV_ACTIONS = new Set(['ban', 'unban', 'grandfather', 'ungrandfather', 'role']);
+// sow-213 Phase 2b: the overrides-mirror section each governance action dual-writes. `role` is null on
+// purpose: house/roles.yml stays git-native by owner ruling as the root of trust, so it has no KV half.
+const GOV_KV_SECTION = { ban: 'bans', unban: 'bans', grandfather: 'grandfathered', ungrandfather: 'grandfathered', role: null };
+const GOV_KV_REMOVES = new Set(['unban', 'ungrandfather']);
 const GOV_OP = {
   ban: { path: 'house/bans.yml', rank: ROLE_RANK.admin, fn: ban, args: (t) => ({ githubId: t.targetId, reason: t.reason }) },
   unban: { path: 'house/bans.yml', rank: ROLE_RANK.admin, fn: unban, args: (t) => ({ githubId: t.targetId }) },
@@ -240,6 +245,7 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
 
   // Compute the file change + the branch slug SERVER-SIDE, per action category.
   let file, branchSlug;
+  let govKv = null; // sow-213 Phase 2b: the KV half of a governance dual-write, applied after the git write lands
   if (isContent) {
     const path = String(payload?.path || '');
     if (!isCleanPath(path) || !CONTENT_ITEM_RE.test(path)) {
@@ -292,6 +298,23 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     try { result = op.fn(load.parsed, op.args({ targetId, reason, role: roleVal, until, tier }), { actor: { githubId }, now: Date.now() }); }
     catch (e) { return { status: 400, body: { error: 'bad_request', message: e?.message || 'invalid action' } }; }
     if (!result.changed) return { status: 200, body: { ok: true, noop: true, message: `no change (${action})` } };
+
+    // sow-213 Phase 2c: THE MODERATION LOG IS WRITTEN BEFORE THE ACTION IS ENACTED, and a failure REFUSES the
+    // action. Owner decision 2026-08-27: no window may exist in which a ban is enacted with no record of who
+    // did it and why. Logging afterwards cannot satisfy that, because the action has already landed by then.
+    // The consequence, stated rather than buried: while KV is unreachable, no governance action can be taken
+    // at all. That is the fail-closed direction and it is the same posture as every other membership check
+    // here. The record is of the ATTEMPT: the git write below can still fail, leaving a logged action that did
+    // not land, which is the safe way round.
+    const logged = await appendModerationLog({ kv, audit: result.audit });
+    if (!logged.written) {
+      return { status: 503, body: { error: 'unavailable', message: `the action was refused because the moderation log could not be written (${logged.reason})` } };
+    }
+
+    govKv = GOV_KV_SECTION[action]
+      ? { section: GOV_KV_SECTION[action], githubId: targetId, remove: GOV_KV_REMOVES.has(action),
+          entry: (result.next?.[GOV_KV_SECTION[action]] ?? []).find((e) => String(e?.github_id) === targetId) ?? null }
+      : null;
     file = { path: op.path, content: yaml.dump(result.next, { lineWidth: 100, noRefs: true }) };
     branchSlug = `${action}-${targetId}`;
   } else {
@@ -344,9 +367,26 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     body: JSON.stringify({ title, head: branch, base: 'main', body, maintainer_can_modify: false }),
   });
   const prData = await pr.json().catch(() => ({}));
-  if (pr.status === 422) return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true } };
+  if (pr.status === 422) return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true, ...(await dualWrite(kv, govKv)) } };
   if (!pr.ok) return { status: 502, body: { error: 'open_pr_failed', message: `GitHub returned ${pr.status}` } };
-  return { status: 200, body: { ok: true, branch, number: prData.number, html_url: prData.html_url } };
+  return { status: 200, body: { ok: true, branch, number: prData.number, html_url: prData.html_url, ...(await dualWrite(kv, govKv)) } };
+}
+
+/**
+ * sow-213 Phase 2b: the KV half of the governance dual-write, run only after the git half has landed.
+ *
+ * A FAILURE HERE IS REPORTED, NOT THROWN, and it never discards the git write. Git is authoritative through
+ * the transition, so a failed KV write degrades to exactly the pre-Phase-2 behaviour: the ban is real, it is
+ * in the file, and it reaches KV at the next scheduled mirror sync instead of within the second. Throwing
+ * would turn a narrowed window into a refused moderation action, which is strictly worse.
+ *
+ * It is reported rather than swallowed because a silent false here reopens the window this phase exists to
+ * close, and a caller that cannot see the difference cannot tell a dual-write from a git-only write.
+ */
+async function dualWrite(kv, plan) {
+  if (!plan) return {}; // a role change has no KV half
+  const r = await writeOverrideToKv({ kv, ...plan });
+  return { kvWritten: r.written, kvReason: r.reason };
 }
 
 // sow-161 increment 4: the quote-manager pool READ. Admin-gated (cookie or bearer); returns the FULL pool from
