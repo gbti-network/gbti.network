@@ -638,8 +638,9 @@ const labelOf = CATEGORY_LABELS;
       // writes EVERY store through the same client.saveDraft call, so there is only ever one write path.
       // sow-235: the block reader/committer and the shared selection toolbar. Loaded once here because
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
-      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete } = await import('../../../client-ui/src/block-commit.mjs');
+      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert } = await import('../../../client-ui/src/block-commit.mjs');
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
+      const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
       const { renderMarkdownWithBlocks: mdBlocks, renderMarkdown: mdPlain } = await import('../../../client/src/markdown.mjs');
       const { buildAuthorNoteHtml } = await import('../../lib/author-note.mjs');
       const { planTitleEdit } = await import('../../lib/preview-title.mjs');
@@ -738,6 +739,31 @@ const labelOf = CATEGORY_LABELS;
         return true;
       };
 
+      // sow-235: splice a computed replacement over ONE block's source range, sharing commitIn's serialization
+      // guard and render path so a heading retype or an image insert cannot race a text commit (the same stale-range
+      // window that duplicated a paragraph on 2026-08-28). computeNext(before) returns the replacement LINES, or
+      // null to abort. This is the write path for the toolbar's block-level controls, which change or add a block
+      // rather than editing its text in place.
+      const spliceBlock = async (doc: PvDoc, el: HTMLElement, computeNext: (before: string[]) => string[] | null) => {
+        if (committing || !el.isConnected) return;
+        committing = true;
+        try {
+          const range = doc.ranges[Number(el.dataset[doc.attr])];
+          if (!range) return;
+          const lines = doc.get().replace(/\r\n/g, '\n').split('\n');
+          const before = lines.slice(range.start, range.end + 1);
+          const next = computeNext(before);
+          if (!next || next.join('\n') === before.join('\n')) return;
+          lines.splice(range.start, range.end - range.start + 1, ...next);
+          doc.set(lines.join('\n'));
+          markDirty();
+          if (doc === noteDoc) { renderNoteCard(); wireEditing(); return; }
+          await renderFromSource();
+          apply();
+          wireEditing();
+        } finally { committing = false; }
+      };
+
       // The body keeps its own name because the selection toolbar's onCommit closes over it.
       const commitBlock = (el: HTMLElement) => commitIn(bodyDoc, el);
 
@@ -764,6 +790,32 @@ const labelOf = CATEGORY_LABELS;
             // it just marks the document dirty and lets the existing blur commit pick it up.
             if (reason === 'link') { void commitBlock(el); return; }
             markDirty();
+          },
+          // sow-235: promote a paragraph to a heading (or demote it back), through the toolbar's explicit H2/H3/P
+          // controls. Any uncommitted text edit in the block is folded in first (applyBlockEdit), then the type is
+          // changed; planBlockRetype refuses anything that is not a paragraph or heading, so the control is a safe
+          // no-op over a list, a table or a fence.
+          onRetype: (el: HTMLElement, toType: string, level: number | null) => {
+            void spliceBlock(bodyDoc, el, (before: string[]) => {
+              const edited = applyBlockEdit(before.join('\n'), readBlockDom(el));
+              return planBlockRetype((edited || before).join('\n'), toType, level);
+            });
+          },
+          // sow-235: the images ALREADY attached to this item, offered by the insert-image picker. Sourced from the
+          // same referenced-path scan that fed stagedSrc and resolved through asset(), so a staged (unpublished)
+          // image shows its bytes and a published one its CDN file. No new Worker route: the picker only ever lists
+          // what this page already holds.
+          listItemImages: () => referencedDraftImages(fm, String(bodyDoc.get() || ''))
+            .map((p: string) => {
+              const name = stagedImageName(p) || String(p).split('/').pop() || '';
+              return { name, ref: p, src: asset(p, itemPath), alt: name.replace(/\.[a-z0-9]+$/i, '') };
+            })
+            .filter((im: { src: string }) => im.src),
+          onInsertImage: (el: HTMLElement, { ref, alt }: { ref: string; alt: string }) => {
+            void spliceBlock(bodyDoc, el, (before: string[]) => {
+              const edited = applyBlockEdit(before.join('\n'), readBlockDom(el));
+              return planImageInsert((edited || before).join('\n'), ref, alt);
+            });
           },
         });
       };

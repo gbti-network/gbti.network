@@ -116,3 +116,45 @@ export function applyBlockEdit(sourceText, read) {
   }
   return serializeBlocks([b]).split('\n');
 }
+
+/**
+ * sow-235: change a single block's TYPE, deliberately, between paragraph and heading. Returns the replacement
+ * LINES, or null when the change is refused. Pure: no DOM.
+ *
+ * This is the ONE place applyBlockEdit's rule "a heading keeps its level from the source" is deliberately broken,
+ * which is the whole point of the control: the level comes from the CALLER, not the source. Only paragraph and
+ * heading convert into each other. Anything else (a list, a fence, a table, a quote) is refused, so a stray click
+ * on the control cannot flatten it. A multi-line paragraph cannot become a one-line heading, so that is refused too.
+ */
+export function planBlockRetype(sourceText, toType, level) {
+  if (toType !== 'paragraph' && toType !== 'heading') return null;
+  const blocks = parseBlocks(String(sourceText ?? ''));
+  if (blocks.length !== 1) return null;
+  const b = blocks[0];
+  if (b.type !== 'paragraph' && b.type !== 'heading') return null;
+  const text = String(b.text ?? '');
+  if (toType === 'heading') {
+    if (text.includes('\n')) return null;                         // a heading is a single line
+    const lvl = Math.min(6, Math.max(1, Number(level) || 2));
+    return serializeBlocks([{ type: 'heading', level: lvl, text }]).split('\n');
+  }
+  return serializeBlocks([{ type: 'paragraph', text }]).split('\n');
+}
+
+/**
+ * sow-235: insert an image block AFTER a single anchor block, from an image already attached to the item. Returns
+ * the anchor block's replacement LINES (the block verbatim, a blank separator, then the image line) so the caller
+ * splices it over the block's range with the SAME machinery applyBlockEdit uses. This is an insert, not an edit
+ * of an existing block, so it is a distinct planner rather than a mode of applyBlockEdit. Pure: no DOM. Refused on
+ * an empty ref or a range that does not parse to exactly one block.
+ */
+export function planImageInsert(sourceText, imageRef, alt) {
+  const url = String(imageRef ?? '').trim();
+  if (!url) return null;
+  const blocks = parseBlocks(String(sourceText ?? ''));
+  if (blocks.length !== 1) return null;
+  const kept = String(sourceText ?? '').replace(/\r\n/g, '\n').split('\n');
+  while (kept.length && kept[kept.length - 1].trim() === '') kept.pop();   // own the separator we are about to add
+  const imageLine = serializeBlocks([{ type: 'image', alt: String(alt ?? ''), url }]);
+  return [...kept, '', imageLine];
+}

@@ -253,6 +253,22 @@ class GbtiDocEditor extends GbtiElement {
         if (reason === 'link') { this._render(); this._focusBlock(b._id); }
         this._change();
       },
+      // sow-235: select-to-promote parity with the WorkBench Preview. This surface already creates headings by
+      // typing `# ` and through the block palette; the toolbar control is the third, in-selection way. Only a
+      // paragraph and a heading convert into each other (MODEL-IS-TRUTH: mutate the block, re-render); the image
+      // control is left to this surface's own richer media flow, so listItemImages is deliberately not passed.
+      onRetype: (ce, toType, level) => {
+        const b = this._byId(ce.dataset.id);
+        if (!b || (b.type !== 'paragraph' && b.type !== 'heading')) return;
+        const text = inlineHtmlToMd(ce.innerHTML).replace(/\n$/, '');
+        if (toType === 'heading') {
+          if (text.includes('\n')) return;                 // a heading is a single line
+          b.type = 'heading'; b.level = Math.min(6, Math.max(1, Number(level) || 2)); b.text = text;
+        } else {
+          b.type = 'paragraph'; delete b.level; b.text = text;
+        }
+        this._render(); this._focusBlock(b._id); this._change();
+      },
     });
   }
 

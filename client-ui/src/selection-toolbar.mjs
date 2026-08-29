@@ -46,6 +46,15 @@ export const SELECTION_TOOLBAR_CSS = `
   cursor: pointer; border: 1px solid var(--stb-line); background: var(--stb-pop-2); color: var(--stb-fg);
 }
 .gbti-lp button[data-lk-apply] { border-color: var(--stb-accent); background: var(--stb-accent); color: #fff; }
+.gbti-stb-sep { width: 1px; align-self: stretch; margin: 3px 3px; background: rgba(255,255,255,.18); }
+.gbti-ip { min-width: 300px; max-width: 360px; }
+.gbti-ip .ip-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--stb-fg-soft); }
+.gbti-ip .ip-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 260px; overflow: auto; }
+.gbti-ip .ip-thumb { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--stb-line); border-radius: 8px; background: var(--stb-pop-2); cursor: pointer; font: inherit; }
+.gbti-ip .ip-thumb:hover { border-color: var(--stb-accent); }
+.gbti-ip .ip-thumb img { width: 100%; height: 58px; object-fit: cover; border-radius: 5px; display: block; }
+.gbti-ip .ip-thumb span { font-size: 11px; color: var(--stb-fg-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gbti-ip .ip-empty { font-size: 13px; color: var(--stb-fg-soft); }
 `;
 
 /** Inject the stylesheet once per root. A shadow root needs its own copy; the light DOM shares one in <head>. */
@@ -101,8 +110,19 @@ export function planLinkEdit({ url = '', text = '', nofollow = false, blank = fa
  * @param editableOf  (node) => the editable element containing node, or null. Decides where the toolbar shows.
  * @param allowInline (el) => whether inline formatting applies here. False inside a code block, which stays literal.
  * @param onCommit    (el, reason) => write the edited element back. reason is 'format' or 'link'.
+ * @param onRetype    (el, toType, level) => change el's block TYPE (paragraph <-> heading). sow-235: OPT-IN. When
+ *                    provided, the toolbar shows explicit H2 / H3 / P controls; a surface with its own block
+ *                    palette (the doc editor) may still opt in for select-to-promote, or leave it off.
+ * @param listItemImages () => [{ name, src, ref, alt }] of images ALREADY attached to this item. sow-235: OPT-IN.
+ *                    When provided, the toolbar shows an image control opening a picker of these; `src` is the
+ *                    thumbnail (a data: URL is fine), `ref` is the Markdown path to insert. No fetching happens
+ *                    here: the toolbar only ever offers what the host already holds, so there is no new route.
+ * @param onInsertImage (el, { ref, alt }) => insert the chosen image after el's block.
  */
-export function createSelectionToolbar({ root, host, editableOf, allowInline = () => true, onCommit = () => {} }) {
+export function createSelectionToolbar({
+  root, host, editableOf, allowInline = () => true, onCommit = () => {},
+  onRetype = null, listItemImages = null, onInsertImage = () => {},
+}) {
   const hostEl = () => (typeof host === 'function' ? host() : host);
   // The stub must carry EVERY method of the real object below, not just the three a caller happened to
   // optional-chain. `?.` guards a missing OBJECT, never a missing METHOD, so an absent editLink here threw
@@ -119,6 +139,8 @@ export function createSelectionToolbar({ root, host, editableOf, allowInline = (
   let tb = null;      // the B / I / code / Link bar
   let lp = null;      // the link panel
   let lk = null;      // the pending link edit: { range, el, existing }
+  let ip = null;      // sow-235: the image picker panel
+  let ik = null;      // sow-235: the pending image insert: { el }
 
   const getSel = () => {
     try { return root?.getSelection?.() ?? document.getSelection(); } catch { return null; }
@@ -136,22 +158,38 @@ export function createSelectionToolbar({ root, host, editableOf, allowInline = (
 
   const hideTb = () => { if (tb) tb.style.display = 'none'; };
   const hidePanel = () => { if (lp) lp.style.display = 'none'; lk = null; };
+  const hideImagePanel = () => { if (ip) ip.style.display = 'none'; ik = null; };
+  const anyPanelOpen = () => (!!lp && lp.style.display !== 'none') || (!!ip && ip.style.display !== 'none');
 
   // --- the toolbar -------------------------------------------------------------------------------------------
   function buildTb() {
     const el = document.createElement('div');
     el.className = 'gbti-stb';
-    el.innerHTML = '<button type="button" data-w="bold" title="Bold">B</button>'
+    let html = '<button type="button" data-w="bold" title="Bold">B</button>'
       + '<button type="button" data-w="italic" title="Italic" style="font-style:italic">I</button>'
       + '<button type="button" data-w="code" title="Inline code" style="font-family:var(--f-mono,monospace)">&lt;&gt;</button>'
       + '<button type="button" data-w="link" title="Link">Link</button>';
+    // sow-235: the deliberate heading control. Present only when the host opts in with onRetype, so a paragraph
+    // becomes a heading through a click and never as a side effect of typing.
+    if (typeof onRetype === 'function') {
+      html += '<span class="gbti-stb-sep" aria-hidden="true"></span>'
+        + '<button type="button" data-w="h2" title="Heading">H2</button>'
+        + '<button type="button" data-w="h3" title="Subheading">H3</button>'
+        + '<button type="button" data-w="p" title="Body text">P</button>';
+    }
+    // sow-235: insert an image already attached to this item. Present only when the host supplies listItemImages.
+    if (typeof listItemImages === 'function') {
+      html += '<span class="gbti-stb-sep" aria-hidden="true"></span>'
+        + '<button type="button" data-w="image" title="Insert image">Img</button>';
+    }
+    el.innerHTML = html;
     // mousedown + preventDefault, not click: the selection must survive pressing the button.
     el.querySelectorAll('button').forEach((b) => b.addEventListener('mousedown', (e) => { e.preventDefault(); wrap(b.dataset.w); }));
     return el;
   }
 
   function update() {
-    if (lp && lp.style.display !== 'none') return;   // the panel owns the screen while it is open
+    if (anyPanelOpen()) return;   // a panel owns the screen while it is open
     const sel = getSel();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) { hideTb(); return; }
     const el = editableOf(sel.anchorNode);
@@ -167,6 +205,15 @@ export function createSelectionToolbar({ root, host, editableOf, allowInline = (
     if (!sel || sel.isCollapsed) return;
     const el = editableOf(sel.anchorNode);
     if (!el) return;
+    // sow-235: the block-level controls act on the WHOLE block, not the inline selection, so they run before the
+    // allowInline gate (which is about inline formatting inside a code block). The host's callback + the pure
+    // planner refuse a block that cannot take the change, so a stray click is a safe no-op.
+    if (w === 'image') { openImagePanel(sel, el); return; }
+    if (w === 'h2' || w === 'h3' || w === 'p') {
+      if (typeof onRetype === 'function') onRetype(el, w === 'p' ? 'paragraph' : 'heading', w === 'h2' ? 2 : w === 'h3' ? 3 : null);
+      hideTb();
+      return;
+    }
     if (!allowInline(el)) return;                    // a code block stays literal
     if (w === 'link') { openPanel(sel, el); return; } // applies + commits on its own
     if (w === 'code') toggleInline(sel, 'code');
@@ -278,12 +325,55 @@ export function createSelectionToolbar({ root, host, editableOf, allowInline = (
     onCommit(el, 'link');
   }
 
+  // --- the image picker (sow-235) ----------------------------------------------------------------------------
+  // A picker over the images the host says are ALREADY attached to this item. It never fetches: the host passes
+  // the list, so there is no new route and nothing that can leak a non-attached image. Modeled on the link panel.
+  function buildImagePanel() {
+    const el = document.createElement('div');
+    el.className = 'gbti-lp gbti-ip';
+    el.innerHTML = '<div class="ip-head">Insert image</div><div class="ip-grid" data-ip-grid></div>'
+      + '<div class="ip-empty" data-ip-empty hidden>No images are attached to this item yet. Add one in the editor first.</div>';
+    // A click on the panel chrome (not a thumbnail) must not blur the block and pull focus away mid-insert.
+    el.addEventListener('mousedown', (e) => { if (!(e.target.closest && e.target.closest('.ip-thumb'))) e.preventDefault(); });
+    return el;
+  }
+
+  function openImagePanel(sel, el) {
+    const range = sel.getRangeAt(0).cloneRange();
+    ik = { el };
+    if (!ip) ip = buildImagePanel();
+    const grid = ip.querySelector('[data-ip-grid]');
+    const empty = ip.querySelector('[data-ip-empty]');
+    grid.textContent = '';
+    let images = [];
+    try { images = listItemImages() || []; } catch { images = []; }
+    empty.hidden = images.length > 0;
+    for (const img of images) {
+      const ref = String(img?.ref ?? img?.src ?? '').trim();
+      if (!ref) continue;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ip-thumb';
+      b.title = String(img?.name || ref);
+      const im = document.createElement('img');
+      im.src = String(img?.src || ref); im.alt = '';
+      const cap = document.createElement('span');
+      cap.textContent = String(img?.name || '');
+      b.append(im, cap);
+      const alt = String(img?.alt ?? img?.name ?? '').replace(/\.[a-z0-9]+$/i, '');
+      b.addEventListener('click', () => { const target = ik?.el; hideImagePanel(); if (target) onInsertImage(target, { ref, alt }); });
+      grid.appendChild(b);
+    }
+    place(ip, range.getBoundingClientRect(), false);
+    hideTb();
+  }
+
   const onSel = () => update();
   document.addEventListener('selectionchange', onSel);
 
   return {
-    isPanelOpen: () => !!lp && lp.style.display !== 'none',
-    hide() { hideTb(); hidePanel(); },
+    isPanelOpen: () => anyPanelOpen(),
+    hide() { hideTb(); hidePanel(); hideImagePanel(); },
     /**
      * Open the link manager for an existing anchor, without going through the selection. A single click on a link
      * inside a contenteditable neither navigates (Chrome and Firefox both suppress that) nor shows anything, so
@@ -299,8 +389,8 @@ export function createSelectionToolbar({ root, host, editableOf, allowInline = (
     },
     destroy() {
       document.removeEventListener('selectionchange', onSel);
-      tb?.remove(); lp?.remove();
-      tb = null; lp = null; lk = null;
+      tb?.remove(); lp?.remove(); ip?.remove();
+      tb = null; lp = null; lk = null; ip = null; ik = null;
     },
   };
 }

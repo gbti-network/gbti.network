@@ -580,6 +580,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   cursor: pointer; border: 1px solid var(--stb-line); background: var(--stb-pop-2); color: var(--stb-fg);
 }
 .gbti-lp button[data-lk-apply] { border-color: var(--stb-accent); background: var(--stb-accent); color: #fff; }
+.gbti-stb-sep { width: 1px; align-self: stretch; margin: 3px 3px; background: rgba(255,255,255,.18); }
+.gbti-ip { min-width: 300px; max-width: 360px; }
+.gbti-ip .ip-head { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--stb-fg-soft); }
+.gbti-ip .ip-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 260px; overflow: auto; }
+.gbti-ip .ip-thumb { display: flex; flex-direction: column; gap: 4px; padding: 4px; border: 1px solid var(--stb-line); border-radius: 8px; background: var(--stb-pop-2); cursor: pointer; font: inherit; }
+.gbti-ip .ip-thumb:hover { border-color: var(--stb-accent); }
+.gbti-ip .ip-thumb img { width: 100%; height: 58px; object-fit: cover; border-radius: 5px; display: block; }
+.gbti-ip .ip-thumb span { font-size: 11px; color: var(--stb-fg-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gbti-ip .ip-empty { font-size: 13px; color: var(--stb-fg-soft); }
 `;
   function ensureStyles(host) {
     const root = host.getRootNode ? host.getRootNode() : document;
@@ -607,8 +616,18 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       text: wanted && wanted !== String(existingText ?? "") ? wanted : null
     };
   }
-  function createSelectionToolbar({ root, host, editableOf, allowInline = () => true, onCommit = () => {
-  } }) {
+  function createSelectionToolbar({
+    root,
+    host,
+    editableOf,
+    allowInline = () => true,
+    onCommit = () => {
+    },
+    onRetype = null,
+    listItemImages = null,
+    onInsertImage = () => {
+    }
+  }) {
     const hostEl = () => typeof host === "function" ? host() : host;
     if (!hostEl()) return { destroy() {
     }, isPanelOpen: () => false, hide() {
@@ -622,6 +641,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     let tb = null;
     let lp = null;
     let lk = null;
+    let ip = null;
+    let ik = null;
     const getSel = () => {
       try {
         return root?.getSelection?.() ?? document.getSelection();
@@ -646,10 +667,22 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (lp) lp.style.display = "none";
       lk = null;
     };
+    const hideImagePanel = () => {
+      if (ip) ip.style.display = "none";
+      ik = null;
+    };
+    const anyPanelOpen = () => !!lp && lp.style.display !== "none" || !!ip && ip.style.display !== "none";
     function buildTb() {
       const el = document.createElement("div");
       el.className = "gbti-stb";
-      el.innerHTML = '<button type="button" data-w="bold" title="Bold">B</button><button type="button" data-w="italic" title="Italic" style="font-style:italic">I</button><button type="button" data-w="code" title="Inline code" style="font-family:var(--f-mono,monospace)">&lt;&gt;</button><button type="button" data-w="link" title="Link">Link</button>';
+      let html = '<button type="button" data-w="bold" title="Bold">B</button><button type="button" data-w="italic" title="Italic" style="font-style:italic">I</button><button type="button" data-w="code" title="Inline code" style="font-family:var(--f-mono,monospace)">&lt;&gt;</button><button type="button" data-w="link" title="Link">Link</button>';
+      if (typeof onRetype === "function") {
+        html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="h2" title="Heading">H2</button><button type="button" data-w="h3" title="Subheading">H3</button><button type="button" data-w="p" title="Body text">P</button>';
+      }
+      if (typeof listItemImages === "function") {
+        html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="image" title="Insert image">Img</button>';
+      }
+      el.innerHTML = html;
       el.querySelectorAll("button").forEach((b) => b.addEventListener("mousedown", (e) => {
         e.preventDefault();
         wrap(b.dataset.w);
@@ -657,7 +690,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       return el;
     }
     function update() {
-      if (lp && lp.style.display !== "none") return;
+      if (anyPanelOpen()) return;
       const sel = getSel();
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
         hideTb();
@@ -680,6 +713,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!sel || sel.isCollapsed) return;
       const el = editableOf(sel.anchorNode);
       if (!el) return;
+      if (w === "image") {
+        openImagePanel(sel, el);
+        return;
+      }
+      if (w === "h2" || w === "h3" || w === "p") {
+        if (typeof onRetype === "function") onRetype(el, w === "p" ? "paragraph" : "heading", w === "h2" ? 2 : w === "h3" ? 3 : null);
+        hideTb();
+        return;
+      }
       if (!allowInline(el)) return;
       if (w === "link") {
         openPanel(sel, el);
@@ -808,13 +850,61 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       hidePanel();
       onCommit(el, "link");
     }
+    function buildImagePanel() {
+      const el = document.createElement("div");
+      el.className = "gbti-lp gbti-ip";
+      el.innerHTML = '<div class="ip-head">Insert image</div><div class="ip-grid" data-ip-grid></div><div class="ip-empty" data-ip-empty hidden>No images are attached to this item yet. Add one in the editor first.</div>';
+      el.addEventListener("mousedown", (e) => {
+        if (!(e.target.closest && e.target.closest(".ip-thumb"))) e.preventDefault();
+      });
+      return el;
+    }
+    function openImagePanel(sel, el) {
+      const range = sel.getRangeAt(0).cloneRange();
+      ik = { el };
+      if (!ip) ip = buildImagePanel();
+      const grid = ip.querySelector("[data-ip-grid]");
+      const empty = ip.querySelector("[data-ip-empty]");
+      grid.textContent = "";
+      let images = [];
+      try {
+        images = listItemImages() || [];
+      } catch {
+        images = [];
+      }
+      empty.hidden = images.length > 0;
+      for (const img of images) {
+        const ref = String(img?.ref ?? img?.src ?? "").trim();
+        if (!ref) continue;
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "ip-thumb";
+        b.title = String(img?.name || ref);
+        const im = document.createElement("img");
+        im.src = String(img?.src || ref);
+        im.alt = "";
+        const cap = document.createElement("span");
+        cap.textContent = String(img?.name || "");
+        b.append(im, cap);
+        const alt = String(img?.alt ?? img?.name ?? "").replace(/\.[a-z0-9]+$/i, "");
+        b.addEventListener("click", () => {
+          const target = ik?.el;
+          hideImagePanel();
+          if (target) onInsertImage(target, { ref, alt });
+        });
+        grid.appendChild(b);
+      }
+      place(ip, range.getBoundingClientRect(), false);
+      hideTb();
+    }
     const onSel = () => update();
     document.addEventListener("selectionchange", onSel);
     return {
-      isPanelOpen: () => !!lp && lp.style.display !== "none",
+      isPanelOpen: () => anyPanelOpen(),
       hide() {
         hideTb();
         hidePanel();
+        hideImagePanel();
       },
       /**
        * Open the link manager for an existing anchor, without going through the selection. A single click on a link
@@ -833,9 +923,12 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         document.removeEventListener("selectionchange", onSel);
         tb?.remove();
         lp?.remove();
+        ip?.remove();
         tb = null;
         lp = null;
         lk = null;
+        ip = null;
+        ik = null;
       }
     };
   }
@@ -1193,6 +1286,28 @@ ${String(body ?? "")}`;
             this._render();
             this._focusBlock(b._id);
           }
+          this._change();
+        },
+        // sow-235: select-to-promote parity with the WorkBench Preview. This surface already creates headings by
+        // typing `# ` and through the block palette; the toolbar control is the third, in-selection way. Only a
+        // paragraph and a heading convert into each other (MODEL-IS-TRUTH: mutate the block, re-render); the image
+        // control is left to this surface's own richer media flow, so listItemImages is deliberately not passed.
+        onRetype: (ce, toType, level) => {
+          const b = this._byId(ce.dataset.id);
+          if (!b || b.type !== "paragraph" && b.type !== "heading") return;
+          const text = inlineHtmlToMd(ce.innerHTML).replace(/\n$/, "");
+          if (toType === "heading") {
+            if (text.includes("\n")) return;
+            b.type = "heading";
+            b.level = Math.min(6, Math.max(1, Number(level) || 2));
+            b.text = text;
+          } else {
+            b.type = "paragraph";
+            delete b.level;
+            b.text = text;
+          }
+          this._render();
+          this._focusBlock(b._id);
           this._change();
         }
       });

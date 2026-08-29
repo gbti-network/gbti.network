@@ -4,7 +4,7 @@
 // that. Pure + node-safe (no DOM): readBlockDom is the thin browser half and is exercised in the browser pass.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyBlockEdit, isEditableBlockTag, EDITABLE_BLOCK_TAGS, planBlockDelete } from '../client-ui/src/block-commit.mjs';
+import { applyBlockEdit, isEditableBlockTag, EDITABLE_BLOCK_TAGS, planBlockDelete, planBlockRetype, planImageInsert } from '../client-ui/src/block-commit.mjs';
 import { renderMarkdownWithBlocks } from '../client/src/markdown.mjs';
 import { parseBlocks, serializeBlocks } from '../client-ui/src/markdown-blocks.mjs';
 
@@ -145,4 +145,62 @@ test('a range that does not fit the document is refused rather than guessed at',
   assert.equal(planBlockDelete('A\n\nB', { start: 2, end: 0 }), null, 'end before start');
   assert.equal(planBlockDelete('A', null), null);
   assert.equal(planBlockDelete('A', { start: 0 }), null, 'a half-built range must not be treated as line 0');
+});
+
+// planBlockRetype: a paragraph becomes a heading (and back), only through the explicit control, with the LEVEL
+// coming from the control rather than the source. This is the deliberate exception to applyBlockEdit's "a heading
+// keeps its level from the source" rule; the two live side by side on purpose.
+test('a paragraph becomes a heading at the level the control names, keeping its text', () => {
+  assert.deepEqual(planBlockRetype('Just some text', 'heading', 2), ['## Just some text']);
+  assert.deepEqual(planBlockRetype('Just some text', 'heading', 3), ['### Just some text']);
+});
+
+test('a heading becomes a paragraph, dropping its hashes and keeping its text', () => {
+  assert.deepEqual(planBlockRetype('### A sub heading', 'paragraph'), ['A sub heading']);
+});
+
+test('a heading re-levels, and the level is clamped to 1..6 with a falsy level falling back to 2', () => {
+  assert.deepEqual(planBlockRetype('## Two', 'heading', 3), ['### Two']);
+  assert.deepEqual(planBlockRetype('## Two', 'heading', 9), ['###### Two']);
+  assert.deepEqual(planBlockRetype('## Two', 'heading', 0), ['## Two'], '0 is falsy, so it falls back to the default 2');
+});
+
+test('retype refuses anything that is not a paragraph or heading, and never a multi-block range', () => {
+  assert.equal(planBlockRetype('- a\n- b', 'heading', 2), null, 'a list');
+  assert.equal(planBlockRetype('> quoted', 'heading', 2), null, 'a quote');
+  assert.equal(planBlockRetype('```\ncode\n```', 'paragraph'), null, 'a fence');
+  assert.equal(planBlockRetype('A\n\nB', 'heading', 2), null, 'two blocks');
+  assert.equal(planBlockRetype('one\nstill one', 'heading', 2), null, 'a multi-line paragraph cannot be one heading');
+  assert.equal(planBlockRetype('text', 'list', 2), null, 'an unsupported target type');
+});
+
+// planImageInsert: add an image block AFTER a single anchor block, from an image already attached to the item. The
+// anchor is preserved verbatim so the caller can splice the result over the block's range like any other commit.
+test('an image is inserted after the anchor block, separated by a blank line', () => {
+  assert.deepEqual(
+    planImageInsert('A paragraph.', './images/hero.webp', 'A hero'),
+    ['A paragraph.', '', '![A hero](./images/hero.webp)'],
+  );
+});
+
+test('the anchor block is preserved verbatim, including a multi-line block', () => {
+  assert.deepEqual(
+    planImageInsert('- one\n- two', './images/x.png', ''),
+    ['- one', '- two', '', '![](./images/x.png)'],
+  );
+});
+
+test('image insert is refused on an empty ref or a multi-block range', () => {
+  assert.equal(planImageInsert('A paragraph.', '', 'alt'), null, 'no ref');
+  assert.equal(planImageInsert('A paragraph.', '   ', 'alt'), null, 'a whitespace-only ref');
+  assert.equal(planImageInsert('A\n\nB', './images/x.png', ''), null, 'two blocks: no single anchor');
+});
+
+// The whole design rests on the inserted image round-tripping: the source line parseBlocks reads back as one image
+// block, so after a re-render it is a real, separate block rather than fused into the paragraph above it.
+test('the inserted image line re-parses to a single image block', () => {
+  const next = planImageInsert('A paragraph.', './images/hero.webp', 'A hero');
+  const blocks = parseBlocks(next.join('\n'));
+  assert.equal(blocks.length, 2);
+  assert.deepEqual(blocks[1], { type: 'image', alt: 'A hero', url: './images/hero.webp' });
 });
