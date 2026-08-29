@@ -1,7 +1,7 @@
 // <gbti-activity-bell> (SOW-042 P3): the shell top-bar activity bell. v1 is a CLIENT-SIDE aggregator (no new Worker
 // route): it fans out IN PARALLEL to four existing per-member reads, each fail-closed to [], normalizes them, and
 // (via activity-bell.mjs) computes an unread badge + a grouped dropdown that deep-links into the relevant surface.
-//   - To review  -> client.listContributions()        -> workspace.html#tab=inbox
+//   - To review  -> RETIRED in the extension (sow-204); buildBell still accepts the source, nothing feeds it
 //   - Your PRs    -> client.listPRs() (resolved only)  -> the PR's GitHub URL
 //   - Replies     -> replies on the caller's OWN Shares -> the Shares filter on the unified feed (newtab.html#tab=share)
 //   - Following   -> getFollows() ∩ the activity-index -> the in-extension reader (newtab feed deep-link)
@@ -109,7 +109,12 @@ class GbtiActivityBell extends GbtiElement {
 
   async _fetchSources(login) {
     const [review, prs, following, replies, approvals] = await Promise.all([
-      this._safe(() => this._review()),
+      // sow-204: ALWAYS EMPTY in this host, and this element is mounted only by the extension shell.
+      // Contribution review is authoring: the Inbox tab is flagged `authoring` (hidden in the extension) and
+      // /api/contributions is no longer routed here, so fetching it would 404 and the lane's deep-link
+      // (workspace.html#tab=inbox) would land on a tab resolveTab redirects away from. buildBell is left
+      // generic and still understands a `review` source, so a host that keeps authoring can feed it again.
+      Promise.resolve([]),
       this._safe(() => this._prs()),
       this._safe(() => this._following(login)),
       this._safe(() => this._replies(login)),
@@ -138,17 +143,6 @@ class GbtiActivityBell extends GbtiElement {
         href: 'admin.html#tab=syndication',
       };
     });
-  }
-
-  async _review() {
-    const { contributions = [] } = (await this.client.listContributions()) || {};
-    return contributions.map((c) => ({
-      id: `c${c.number}`,
-      ts: toMs(c.updatedAt ?? c.createdAt),
-      title: c.title || `Contribution #${c.number}`,
-      sub: c.author?.login ? `from @${c.author.login}` : 'awaiting your review',
-      href: 'workspace.html#tab=inbox',
-    }));
   }
 
   async _prs() {

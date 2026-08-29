@@ -421,3 +421,57 @@ export function resolveTab(requested, tabs, authoring) {
   if (!vis.length) return null;
   return vis.some((t) => t?.id === requested) ? requested : vis[0].id;
 }
+
+/**
+ * sow-204: the Overview hub's tiles, filtered to the tabs this host actually shows.
+ *
+ * The hub advertises nine destinations, three of which (Articles, Prompts, Products) point at tabs the
+ * authoring flag hides in the extension. A tile linking to a hidden tab is worse than no tile: `resolveTab`
+ * silently lands the member somewhere else, so the click appears to do the wrong thing rather than to be
+ * unavailable.
+ *
+ * The rule is DERIVED from the tab list rather than restated as a second list of names, so flagging a tab
+ * `authoring` removes its tile in the same edit and the two cannot drift. A tile whose href is not a
+ * `#tab=` link (Settings, Admin tools) is not a tab and is always kept.
+ *
+ * The hub itself is deliberately NOT flagged authoring. It also carries Pull requests, Saved, Following,
+ * Earnings, Settings, Admin and the PR attention list, every one of which survives, so hiding the hub would
+ * remove working navigation in order to fix a copy problem.
+ */
+export function visibleTiles(tiles, tabs, authoring) {
+  const shown = new Set(visibleTabs(tabs, authoring).map((t) => t?.id));
+  return (Array.isArray(tiles) ? tiles : []).filter((t) => {
+    const m = /^#tab=([a-z]+)$/.exec(String(t?.href ?? ''));
+    return !m || shown.has(m[1]);
+  });
+}
+
+/**
+ * sow-204: the Overview trial banner, as DATA rather than markup, so the copy decision is testable.
+ *
+ * The banner is the only place a trial member is told why they cannot publish, so deleting it in the
+ * extension would remove the explanation along with the affordance. What it must not do is keep saying
+ * "author and stage drafts on your own fork now" in a host that no longer authors: same membership fact,
+ * false sentence. With authoring off it names the host that CAN author instead.
+ *
+ * @param {string|undefined} membership the effective membership from the overview payload
+ * @param {boolean} authoring whether this host authors (see authoringEnabled)
+ * @returns {{headline: string, body: string, ctaLabel: string, ctaHref: string}|null} null = render nothing
+ */
+export function trialBanner(membership, authoring) {
+  if (membership !== 'trialing') return null;
+  const headline = 'You are on the free trial';
+  return authoring
+    ? {
+      headline,
+      body: 'Author and stage drafts on your own fork now. Publishing to gbti.network (opening canonical pull requests) requires a paid membership.',
+      ctaLabel: 'Upgrade to publish',
+      ctaHref: 'https://gbti.network/membership/',
+    }
+    : {
+      headline,
+      body: 'Writing happens in the WorkBench on gbti.network. You can author and stage drafts there now, and publishing requires a paid membership.',
+      ctaLabel: 'Open the WorkBench',
+      ctaHref: 'https://gbti.network/workbench/',
+    };
+}

@@ -6,7 +6,7 @@
 // injected client) so it runs in the extension now and the npm CMS later. Fail-soft: every read falls back to an
 // empty state, never throws.
 import { GbtiElement, define, esc, getIdentity } from '../base.mjs';
-import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab } from '../workspace-core.mjs';
+import { classifyPull, classifyDraft, prLifecycle, prEvent, sortPullsByEvent, shouldPollPr, parseWorkspaceTab, parseWorkspaceNew, parseWorkspaceEdit, parseWorkspaceDraft, planHashRoute, typeForContentPath, publicPathFor, submitAck, sortItems, filterByStatus, mergeTypeItems, sortModeFor, WORKSPACE_SORT_KEY, scopeFor, WORKSPACE_SCOPE_KEY, authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner } from '../workspace-core.mjs';
 import { relTime, absTime } from '../time-core.mjs'; // sow-221: the shared "time ago" + its tooltip stamp
 import { wbCacheGet, wbCacheSet, wbCacheInvalidateMany } from '../workbench-cache.mjs'; // SOW-073: SWR workbench cache
 
@@ -162,7 +162,7 @@ class GbtiWorkspace extends GbtiElement {
     // the superadmin toggle. _ensureTab loads it only on the Overview tab, so a deep-link straight to a content
     // tab (the avatar menu's "My prompts" etc.) would never resolve the scope — load it eagerly in that case.
     if (this._tab !== 'overview') this._ensureOverview();
-    this._loadInboxCount();
+    if (this._authoring()) this._loadInboxCount(); // sow-204: Inbox is authoring; no tab AND no route where it is off
     // SOW-052: the WorkBench rail deep-links to #tab=<id>; switch the tab on a same-document hash change.
     this._onHash = () => {
       const h = typeof location !== 'undefined' ? location.hash : '';
@@ -809,19 +809,21 @@ class GbtiWorkspace extends GbtiElement {
       { nm: 'Settings', href: settingsHref, n: null },
       ...(isStaff ? [{ nm: 'Admin tools', href: adminHref, n: null }] : []),
     ];
-    const tileHtml = tiles.map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? '' : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join('');
+    const tileHtml = visibleTiles(tiles, TABS, this._authoring()) // sow-204: see visibleTiles in workspace-core
+      .map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? '' : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join('');
     const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? '' : 's'} in progress</span>` : '';
     // SOW-075: a trial member can author + stage drafts on their own fork but cannot publish; the Overview gave no
     // explanation. This banner makes the fork-only / paid-to-publish reality clear where the trial member spends time.
-    const trialBanner = ov.membership === 'trialing'
-      ? `<div class="ov-trial"><div><b>You are on the free trial</b><br/><span>Author and stage drafts on your own fork now. Publishing to gbti.network (opening canonical pull requests) requires a paid membership.</span></div><a class="ov-up" href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a></div>`
-      : '';
+    const tb = trialBanner(ov.membership, this._authoring()); // sow-204: the copy decision lives in workspace-core
+    const trialHtml = !tb ? ''
+      : `<div class="ov-trial"><div><b>${esc(tb.headline)}</b><br/><span>${esc(tb.body)}</span></div>`
+        + `<a class="ov-up" href="${esc(tb.ctaHref)}" target="_blank" rel="noopener">${esc(tb.ctaLabel)}</a></div>`;
     const att = ov.attention.length
       ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc(a.tone)}">${esc(a.label)}</span> <a href="${esc(a.url || '#')}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join('')}</ul>`
       : `<p class="muted">No pull requests need your attention.</p>`;
     return `<div class="ov">
       <div class="ov-hero"><div><b>Your WorkBench</b><br/><span class="muted">Membership: ${esc(mLabel)}</span></div>${draft}</div>
-      ${trialBanner}
+      ${trialHtml}
       <div class="ov-tiles">${tileHtml}</div>
       <h3 class="ov-h3">Pull requests</h3>
       ${att}

@@ -5858,7 +5858,7 @@ function handleIntersectionResults(result, left, right) {
       result.issues.push(iss);
     }
   }
-  const bothKeys = [...unrecKeys].filter(([, f2]) => f2.l && f2.r).map(([k]) => k);
+  const bothKeys = [...unrecKeys].filter(([, f]) => f.l && f.r).map(([k]) => k);
   if (bothKeys.length && unrecIssue) {
     result.issues.push({ ...unrecIssue, keys: bothKeys });
   }
@@ -12743,8 +12743,8 @@ var $ZodRegistry = class {
     if (p) {
       const pm = { ...this.get(p) ?? {} };
       delete pm.id;
-      const f2 = { ...pm, ...this._map.get(schema) };
-      return Object.keys(f2).length ? f2 : void 0;
+      const f = { ...pm, ...this._map.get(schema) };
+      return Object.keys(f).length ? f : void 0;
     }
     return this._map.get(schema);
   }
@@ -17782,8 +17782,8 @@ function createRepoClient({ token, upstream, fetch: fetch2 = globalThis.fetch, b
         if (!r.fork) throw new GitHubError(409, `${full} is not a fork of ${upstream}; rename it and make your copy from the extension.`);
         return { full_name: r.full_name, owner: r.owner?.login, default_branch: r.default_branch };
       }
-      const f2 = await req("POST", `/repos/${upstream}/forks`);
-      return { full_name: f2.full_name, owner: f2.owner?.login, default_branch: f2.default_branch };
+      const f = await req("POST", `/repos/${upstream}/forks`);
+      return { full_name: f.full_name, owner: f.owner?.login, default_branch: f.default_branch };
     },
     /** Upstream's default branch name (e.g. "main"). */
     async getDefaultBranch(repoFullName = upstream) {
@@ -17900,11 +17900,11 @@ function createRepoClient({ token, upstream, fetch: fetch2 = globalThis.fetch, b
         return p.files ?? [];
       }
       const files = await req("GET", `/repos/${upstream}/pulls/${prNumber}/files?per_page=100`);
-      return (files ?? []).map((f2) => ({
-        filename: f2.filename,
-        status: f2.status,
-        additions: f2.additions ?? 0,
-        deletions: f2.deletions ?? 0
+      return (files ?? []).map((f) => ({
+        filename: f.filename,
+        status: f.status,
+        additions: f.additions ?? 0,
+        deletions: f.deletions ?? 0
       }));
     },
     /** The gate status for a PR: { state, meaning, sha }. App mode (SOW-026): the Worker reads the upstream PR +
@@ -17946,12 +17946,12 @@ function createRepoClient({ token, upstream, fetch: fetch2 = globalThis.fetch, b
         return p.files ?? [];
       }
       const files = await req("GET", `/repos/${upstream}/pulls/${prNumber}/files?per_page=100`);
-      return (files ?? []).map((f2) => ({
-        filename: f2.filename,
-        status: f2.status,
-        additions: f2.additions ?? 0,
-        deletions: f2.deletions ?? 0,
-        patch: f2.patch ?? null
+      return (files ?? []).map((f) => ({
+        filename: f.filename,
+        status: f.status,
+        additions: f.additions ?? 0,
+        deletions: f.deletions ?? 0,
+        patch: f.patch ?? null
       }));
     },
     /** The decoded text of a file at a ref (the PR head SHA), or null if it does not exist there (a removed file).
@@ -18571,15 +18571,14 @@ async function listShareComments(ctx, { targetSlug, limit } = {}) {
   return listComments(ctx, { targetType: "share", targetSlug, limit });
 }
 var COMMENT_TARGET_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share", "news"]);
-var AUTHOR_NOTE_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt"]);
 var COMMENTS_INDEX_URL = "https://gbti.network/comments-index.json";
 var COMMENTS_INDEX_TTL_MS = 6e4;
 var commentsIndexCache = null;
 async function fetchCommentsIndex(ctx) {
   const now = Date.now();
   if (commentsIndexCache && now - commentsIndexCache.at < COMMENTS_INDEX_TTL_MS) return commentsIndexCache.items;
-  const f2 = ctx.fetch ?? globalThis.fetch;
-  const res = await f2(COMMENTS_INDEX_URL, { cache: "no-cache" });
+  const f = ctx.fetch ?? globalThis.fetch;
+  const res = await f(COMMENTS_INDEX_URL, { cache: "no-cache" });
   if (!res.ok) throw new Error(`comments index ${res.status}`);
   const data = await res.json();
   const items = Array.isArray(data?.items) ? data.items : [];
@@ -18626,28 +18625,12 @@ async function getContentItem(ctx, { path } = {}) {
   if (!item) throw new OperationError("not-found", "no such item in your folder");
   return item;
 }
-function validateContent(ctx, { type, input, body } = {}) {
-  const id = requireIdentity(ctx);
-  try {
-    const built = buildContentFile({ type, username: id.username, input, body });
-    return { valid: true, path: built.path };
-  } catch (err) {
-    if (err instanceof ContentValidationError) return { valid: false, error: err.message, issues: err.issues };
-    return { valid: false, error: err.message };
-  }
-}
 
 // client/src/publish.mjs
 function branchName(type, slug, scope = "member") {
   if (type === "profile") return "gbti/profile";
   const prefix = scope === "house" ? "gbti/house-" : "gbti/";
   return `${prefix}${type}-${slug}`;
-}
-function defaultMessage(change) {
-  return change.type === "profile" ? "Update profile" : `${change.slug ? "Update" : "Add"} ${change.type}: ${change.slug ?? ""}`.trim();
-}
-function defaultTitle(change) {
-  return change.type === "profile" ? `Update ${change.username}'s profile` : `${change.type}: ${change.slug}`;
 }
 async function commitToBranchOnFork({ repo, branch, files, message, resetStale = false, clobberOpenPull = false }) {
   if (!branch) throw new Error("commitToBranchOnFork: a branch name is required");
@@ -18668,39 +18651,20 @@ async function commitToBranchOnFork({ repo, branch, files, message, resetStale =
     }
   }
   await repo.ensureBranch(fork.full_name, branch, baseSha);
-  for (const f2 of files) {
-    const existingSha = await repo.getFileSha(fork.full_name, f2.path, branch);
-    if (f2.content === null) {
-      if (existingSha) await repo.deleteFile(fork.full_name, f2.path, { message: message ?? `Remove ${f2.path}`, branch, sha: existingSha });
+  for (const f of files) {
+    const existingSha = await repo.getFileSha(fork.full_name, f.path, branch);
+    if (f.content === null) {
+      if (existingSha) await repo.deleteFile(fork.full_name, f.path, { message: message ?? `Remove ${f.path}`, branch, sha: existingSha });
     } else {
-      await repo.putFile(fork.full_name, f2.path, {
-        message: message ?? `Update ${f2.path}`,
-        contentBase64: toBase64(f2.content),
+      await repo.putFile(fork.full_name, f.path, {
+        message: message ?? `Update ${f.path}`,
+        contentBase64: toBase64(f.content),
         branch,
         sha: existingSha ?? void 0
       });
     }
   }
   return { fork: fork.full_name, owner: fork.owner, branch, base: base3 };
-}
-async function publishContent({ repo, change, message, title, body }) {
-  if (!change?.path || !change?.markdown) throw new Error("publishContent: a built content change is required");
-  const branch = branchName(change.type, change.slug, change.scope);
-  const { fork, owner, base: base3 } = await commitToBranchOnFork({
-    repo,
-    branch,
-    files: [{ path: change.path, content: change.markdown }],
-    message: message ?? defaultMessage(change),
-    resetStale: true
-    // a leftover branch from a merged PR must not seed a conflicting new PR
-  });
-  const head = `${owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) {
-    return { prNumber: existing.number, prUrl: existing.html_url, branch, fork, updated: true };
-  }
-  const pull = await repo.openPull({ title: title ?? defaultTitle(change), head, base: base3, body: body ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, fork, updated: false };
 }
 async function publishFiles({ repo, branch, files, message, title, body, clobberOpenPull = false }) {
   if (!branch) throw new Error("publishFiles: a branch name is required");
@@ -18738,66 +18702,13 @@ async function workerListDrafts(opts) {
 async function workerPutDraft({ draft, ...opts }) {
   return call2("POST", { op: "put", draft }, opts);
 }
-async function workerDeleteDraft({ type, slug, ...opts }) {
-  return call2("POST", { op: "delete", type, slug }, opts);
-}
-
-// client/src/repo-drafts-client.mjs
-var trimBase3 = (b) => String(b || "").replace(/\/$/, "");
-var RepoDraftsClientError = class extends Error {
-};
-async function workerListRepoDrafts({ token, signupBase, fetch: fetch2 = globalThis.fetch } = {}) {
-  if (!token || !signupBase) throw new RepoDraftsClientError("not signed in");
-  const res = await fetch2(trimBase3(signupBase) + "/membership/repo-drafts", { headers: { Authorization: "Bearer " + token } });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-  }
-  if (!res.ok) throw new RepoDraftsClientError(data?.message || data?.error || `repo-drafts request failed (${res.status})`);
-  return data;
-}
-
-// client/src/repo-drafts-core.mjs
-function mapRepoDraftItem(item = {}) {
-  const type = item?.type;
-  const slug = item?.slug;
-  return {
-    type,
-    slug,
-    branch: null,
-    path: typeof item?.path === "string" ? item.path : null,
-    pendingSlug: null,
-    title: typeof item?.title === "string" && item.title ? item.title : slug || type || "",
-    visibility: item?.visibility === "members" ? "members" : "public",
-    status: "draft",
-    owner: item?.owner ?? null,
-    valid: true,
-    invalidReason: null,
-    pull: null,
-    store: "repo"
-  };
-}
-function mergeRepoDrafts(existing = [], repoItems = [], { type = null } = {}) {
-  const rows = Array.isArray(existing) ? [...existing] : [];
-  const seen = new Set(rows.map((d) => `${d?.type}:${d?.slug}`));
-  for (const item of Array.isArray(repoItems) ? repoItems : []) {
-    if (!item || !item.type || !item.slug) continue;
-    if (type && item.type !== type) continue;
-    const key = `${item.type}:${item.slug}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    rows.push(mapRepoDraftItem(item));
-  }
-  return rows;
-}
 
 // client/src/fork-sync-client.mjs
-var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase3 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 async function workerSyncFork({ token, signupBase, fetch: fetch2 = globalThis.fetch, branch = "main" } = {}) {
   if (!token || !signupBase) return { ok: false, synced: false, reason: "not-signed-in" };
   try {
-    const res = await fetch2(`${trimBase4(signupBase)}/membership/sync-fork`, {
+    const res = await fetch2(`${trimBase3(signupBase)}/membership/sync-fork`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ branch })
@@ -18811,9 +18722,6 @@ async function workerSyncFork({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 
 // client/src/hosted-publish.mjs
-function hostedItemId(type, slug) {
-  return type === "profile" ? "profile" : `${type}-${slug}`;
-}
 function hostedPublishFiles(ctx, { branch, files, title }) {
   const itemId = String(branch || "").replace(/^gbti\//, "");
   return hostedAuthor({
@@ -18838,8 +18746,6 @@ async function hostedAuthor({ token, itemId, files, title, signupBase = SIGNUP_B
 }
 
 // client/src/operations-publish.mjs
-var RENAME_URL_BASE = { post: "/articles", product: "/products", prompt: "/prompts" };
-var SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 function renameOriginOf({ path, username, type }) {
   const m = OWN_STATUS_PATH_RE.exec(String(path || ""));
   if (!m) return null;
@@ -18847,141 +18753,7 @@ function renameOriginOf({ path, username, type }) {
   if (m[2].slice(0, -1) !== type) return null;
   return { oldSlug: m[3], oldPath: String(path) };
 }
-async function introMoveFiles(ctx, { username, type, oldSlug, newSlug }) {
-  if (!["product", "prompt"].includes(type)) return [];
-  const oldIntro = `members/${username}/comments/intro-${oldSlug}.md`;
-  const introText = await ctx.reader?.readFile?.(oldIntro);
-  if (introText == null) return [];
-  const intro = parseContentFile(introText);
-  const introFm = { ...intro.frontmatter ?? {}, id: `intro-${newSlug}`, targetSlug: newSlug };
-  return [
-    { path: `members/${username}/comments/intro-${newSlug}.md`, content: serializeContentFile(introFm, intro.body) },
-    { path: oldIntro, content: null }
-  ];
-}
-async function renameContent(ctx, { path: rel, newSlug } = {}) {
-  const id = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
-  const m = OWN_STATUS_PATH_RE.exec(String(rel || ""));
-  if (!m) throw new OperationError("bad-request", "path must be members/<you>/(posts|products|prompts)/<slug>/index.md");
-  if (m[1] !== String(id.username).toLowerCase()) {
-    throw new OperationError("forbidden", "you may only rename your own content");
-  }
-  const type = m[2].slice(0, -1);
-  const oldSlug = m[3];
-  const slug = String(newSlug || "").trim();
-  if (!SLUG_RE.test(slug)) throw new OperationError("bad-request", "the new permalink must be lowercase letters, digits, and hyphens");
-  if (slug === oldSlug) return { ok: true, noop: true, slug };
-  const membership = await membershipOf(ctx);
-  if (isBlockedFromPublishing(membership)) {
-    throw new OperationError("membership-required", "Renaming a published item requires a paid membership.", { membership });
-  }
-  const hosted = isHostedCtx(ctx);
-  if (!hosted) {
-    const fork2 = await repo.ensureFork();
-    for (const s of [oldSlug, slug]) {
-      const branch2 = branchName(type, s);
-      const staged = await repo.getBranchSha(fork2.full_name, branch2).catch(() => null);
-      if (staged) throw new OperationError("bad-request", `a staged draft exists for "${s}" — publish or discard it first`);
-      const pull = await repo.findOpenPull({ head: `${fork2.owner}:${branch2}` }).catch(() => null);
-      if (pull) throw new OperationError("bad-request", `an open pull request exists for "${s}" — wait for it to merge or close it first`);
-    }
-  }
-  const newPath = contentPath(type, id.username, slug);
-  const collision = await repo.getFileContent(newPath).catch(() => null);
-  if (collision != null) throw new OperationError("bad-request", `the permalink "${slug}" is already taken`);
-  const oldText = await ctx.reader?.readFile?.(rel);
-  if (oldText == null) throw new OperationError("not-found", `no such file: ${rel}`);
-  const { frontmatter, body } = parseContentFile(oldText);
-  const fm = { ...frontmatter ?? {} };
-  const oldUrl = `${RENAME_URL_BASE[type]}/${oldSlug}/`;
-  fm.slug = slug;
-  fm.redirectFrom = [.../* @__PURE__ */ new Set([...Array.isArray(fm.redirectFrom) ? fm.redirectFrom : [], oldUrl])];
-  fm.updatedAt = ctx.now?.() ?? (/* @__PURE__ */ new Date()).toISOString();
-  const files = [];
-  if (typeof fm.encryptedBody === "string" && fm.encryptedBody) {
-    const oldEnc = fm.encryptedBody;
-    const encText = await ctx.reader?.readFile?.(oldEnc);
-    if (encText == null) throw new OperationError("not-found", `the encrypted body is missing: ${oldEnc}`);
-    const { path: newEnc } = encAssetFor(type, id.username, slug);
-    fm.encryptedBody = newEnc;
-    files.push({ path: newEnc, content: encText }, { path: oldEnc, content: null });
-  }
-  files.push({ path: newPath, content: serializeContentFile(fm, body) }, { path: rel, content: null });
-  files.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug, newSlug: slug }));
-  const branch = `gbti/rename-${type}-${oldSlug}`;
-  if (hosted) {
-    const pr2 = await hostedPublishFiles(ctx, { branch, files, title: `Rename: ${oldSlug} -> ${slug}` });
-    return { ...pr2, ok: true, type, oldSlug, slug, path: newPath };
-  }
-  await syncForkIfCreatingBranch(ctx, repo, branch);
-  const fork = await repo.ensureFork();
-  const base3 = await repo.getDefaultBranch(repo.upstream);
-  const baseSha = await repo.getBranchSha(fork.full_name, base3).catch(() => null);
-  const oldOnBase = baseSha ? await repo.getFileSha(fork.full_name, rel, base3).catch(() => null) : null;
-  if (!oldOnBase) {
-    throw new OperationError("bad-request", "the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — try again later or contact the co-op");
-  }
-  const pr = await publishFiles({
-    repo,
-    branch,
-    files,
-    message: `Rename ${type} ${oldSlug} -> ${slug}`,
-    title: `Rename: ${oldSlug} -> ${slug}`,
-    body: `Permalink rename (SOW-112). ${oldUrl} redirects to ${RENAME_URL_BASE[type]}/${slug}/ after the next deploy.`
-  });
-  return { ...pr, ok: true, type, oldSlug, slug, path: newPath };
-}
 var OWN_STATUS_PATH_RE = /^members\/([a-z0-9][a-z0-9-]*)\/(posts|products|prompts)\/([a-z0-9][a-z0-9-]*)\/index\.md$/;
-async function setOwnContentStatus(ctx, { path: rel, status } = {}) {
-  const id = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
-  if (status !== "published" && status !== "draft") {
-    throw new OperationError("bad-request", 'status must be "published" or "draft"');
-  }
-  const houseTarget = isNetworkContentPath(rel);
-  let type, slug, branch;
-  if (houseTarget) {
-    const hm = NETWORK_CONTENT_PATH_RE.exec(String(rel || ""));
-    if (!hm) throw new OperationError("bad-request", "invalid house content path");
-    await requireSuperadminForHouse(ctx);
-    type = hm[1].slice(0, -1);
-    slug = String(rel).split("/")[2];
-    branch = `gbti/status-house-${type}-${slug}`;
-  } else {
-    const m = OWN_STATUS_PATH_RE.exec(String(rel || ""));
-    if (!m) throw new OperationError("bad-request", "path must be members/<you>/(posts|products|prompts)/<slug>/index.md");
-    if (m[1] !== String(id.username).toLowerCase()) {
-      throw new OperationError("forbidden", "you may only change the status of your own content");
-    }
-    type = m[2].slice(0, -1);
-    slug = m[3];
-    branch = `gbti/status-${type}-${slug}`;
-  }
-  const membership = await membershipOf(ctx);
-  if (isBlockedFromPublishing(membership)) {
-    throw new OperationError("membership-required", "Changing a published item requires a paid membership.", { membership });
-  }
-  const text = await ctx.reader?.readFile?.(rel);
-  if (text == null) throw new OperationError("not-found", `no such file: ${rel}`);
-  const flip = flipContentStatus(text, status);
-  if (!flip.changed) return { ok: true, noop: true, status };
-  const verb = status === "draft" ? "Unpublish" : "Republish";
-  if (isHostedCtx(ctx)) {
-    const pr2 = await hostedPublishFiles(ctx, { branch, files: [{ path: rel, content: flip.content }], title: `${verb}: ${slug}` });
-    return { ...pr2, ok: true, status };
-  }
-  await syncForkIfCreatingBranch(ctx, repo, branch);
-  const pr = await publishFiles({
-    repo,
-    branch,
-    files: [{ path: rel, content: flip.content }],
-    message: `${verb} ${slug}`,
-    title: `${verb}: ${slug}`,
-    body: status === "draft" ? "Member unpublish: a reversible status flip to draft (SOW-106). The file stays in the repo; republishing reverses it." : "Member republish: the status flips back to published (SOW-106)."
-  });
-  return { ...pr, ok: true, status };
-}
 async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = workerSyncFork } = {}) {
   try {
     const fork = await repo.ensureFork();
@@ -19000,198 +18772,6 @@ async function syncForkIfCreatingBranch(ctx, repo, branch, { sync = workerSyncFo
   } catch {
     return { synced: false, reason: "error" };
   }
-}
-async function publish(ctx, { type, input, body, message, title, prBody: prBody2, authorNote, path, scope } = {}) {
-  const id = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
-  const houseTarget = scope === "house" || isNetworkContentPath(path);
-  const targetScope = houseTarget ? "house" : "member";
-  if (houseTarget) await requireSuperadminForHouse(ctx);
-  const membership = await membershipOf(ctx);
-  if (isBlockedFromPublishing(membership)) {
-    throw new OperationError(
-      "membership-required",
-      "Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.",
-      { membership }
-    );
-  }
-  const origin = houseTarget ? null : renameOriginOf({ path, username: id.username, type });
-  let oldFm = null;
-  if (origin) {
-    const oldText = await ctx.reader?.readFile?.(origin.oldPath);
-    if (oldText != null) oldFm = parseContentFile(oldText).frontmatter ?? {};
-  }
-  const effInput = { ...input ?? {} };
-  const renaming = Boolean(oldFm) && typeof effInput.slug === "string" && effInput.slug !== origin.oldSlug;
-  if (oldFm) {
-    const keep = Array.isArray(oldFm.redirectFrom) ? oldFm.redirectFrom : [];
-    const oldUrl = renaming ? `${RENAME_URL_BASE[type]}/${origin.oldSlug}/` : null;
-    const merged = [.../* @__PURE__ */ new Set([...keep, ...Array.isArray(effInput.redirectFrom) ? effInput.redirectFrom : [], ...oldUrl ? [oldUrl] : []])];
-    if (merged.length) effInput.redirectFrom = merged;
-    if (renaming && oldFm.publishedAt) effInput.publishedAt = oldFm.publishedAt;
-  }
-  if (["post", "product", "prompt"].includes(type)) {
-    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-    let priorFm = oldFm;
-    if (!priorFm && typeof effInput.slug === "string" && effInput.slug) {
-      const canonical = contentPath(type, id.username, effInput.slug, targetScope);
-      let text = null;
-      try {
-        text = await ctx.reader?.readFile?.(canonical) ?? null;
-      } catch {
-        text = null;
-      }
-      if (text == null) {
-        try {
-          text = await repo.getFileContent(canonical) ?? null;
-        } catch {
-          text = null;
-        }
-      }
-      if (text != null) {
-        try {
-          priorFm = parseContentFile(text).frontmatter ?? {};
-        } catch {
-          priorFm = null;
-        }
-      }
-    }
-    const priorPublished = Boolean(priorFm && priorFm.status === "published" && priorFm.publishedAt);
-    if (priorPublished) {
-      if (!effInput.publishedAt) effInput.publishedAt = priorFm.publishedAt;
-      effInput.updatedAt = nowIso;
-    } else if (!effInput.publishedAt) {
-      effInput.publishedAt = nowIso;
-    }
-  }
-  let built;
-  try {
-    built = buildContentFile({ type, username: id.username, input: { ...effInput, status: effInput.status || "published" }, body, scope: targetScope });
-  } catch (err) {
-    throw new OperationError("invalid-content", err.message, err instanceof ContentValidationError ? err.issues : void 0);
-  }
-  if (renaming) {
-    const collision = await repo.getFileContent(built.path).catch(() => null);
-    if (collision != null) throw new OperationError("bad-request", `the permalink "${built.slug}" is already taken`);
-  }
-  const token = ctx.store?.get?.("githubToken");
-  const encrypt = (plaintext, assetId) => encryptViaWorker({ plaintext, assetId, token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-  let plan;
-  try {
-    plan = await planMemberFiles({ built, body, encrypt });
-  } catch (err) {
-    if (err instanceof MemberContentLockedError) {
-      throw new OperationError("membership-required", "Publishing member-only content requires a paid membership. Your draft is saved; upgrade at https://gbti.network and publish.", { membership });
-    }
-    throw err;
-  }
-  const introFile = buildIntroCommentFile({ username: id.username, built, authorNote, now: ctx.now?.() });
-  const desc = describeContentPublish(built, { hasIntro: Boolean(introFile) });
-  const msg = message ?? desc.message;
-  const ttl = title ?? desc.title;
-  const bdy = prBody2 ?? desc.body;
-  if (isHostedCtx(ctx)) {
-    const hostedRenameFiles = [];
-    if (renaming) {
-      const onMain = await ctx.reader?.readFile?.(origin.oldPath) != null;
-      if (!onMain) throw new OperationError("bad-request", "the original item could not be found on the network — refresh and try the rename again");
-      hostedRenameFiles.push({ path: origin.oldPath, content: null });
-      if (typeof oldFm?.encryptedBody === "string" && oldFm.encryptedBody) hostedRenameFiles.push({ path: oldFm.encryptedBody, content: null });
-      if (!introFile) {
-        hostedRenameFiles.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
-      } else {
-        const oldIntro = `members/${id.username}/comments/intro-${origin.oldSlug}.md`;
-        if (await ctx.reader?.readFile?.(oldIntro) != null) hostedRenameFiles.push({ path: oldIntro, content: null });
-      }
-    }
-    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(hostedRenameFiles);
-    const r = await hostedAuthor({
-      token: ctx.store?.get?.("githubToken"),
-      itemId: hostedItemId(built.type, renaming ? origin.oldSlug : built.slug),
-      files,
-      title: ttl,
-      signupBase: SIGNUP_BASE,
-      fetchImpl: ctx.fetch ?? globalThis.fetch
-    });
-    return renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
-  }
-  const branch = branchName(built.type, renaming ? origin.oldSlug : built.slug, built.scope);
-  await syncForkIfCreatingBranch(ctx, repo, branch);
-  let renameFiles = [];
-  if (renaming) {
-    const fork = await repo.ensureFork();
-    const base3 = await repo.getDefaultBranch(repo.upstream);
-    const token2 = ctx.store?.get?.("githubToken");
-    await workerSyncFork({ token: token2, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-    const onMain = await repo.getFileSha(fork.full_name, origin.oldPath, base3).catch(() => null);
-    if (!onMain) {
-      throw new OperationError("bad-request", "the rename needs your fork to sync with the network first (the publisher app needs its updated permissions approved) — your draft is saved; try publishing again later or contact the co-op");
-    }
-    const branchSha = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
-    if (branchSha) {
-      const pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` }).catch(() => null);
-      if (pull) throw new OperationError("bad-request", `an open pull request exists for this item (#${pull.number}) — wait for it to merge or close it, then publish the rename`);
-      await repo.deleteBranch(fork.full_name, branch).catch(() => {
-      });
-    }
-    renameFiles.push({ path: origin.oldPath, content: null });
-    if (typeof oldFm.encryptedBody === "string" && oldFm.encryptedBody) renameFiles.push({ path: oldFm.encryptedBody, content: null });
-    if (!introFile) {
-      renameFiles.push(...await introMoveFiles(ctx, { username: id.username, type, oldSlug: origin.oldSlug, newSlug: built.slug }));
-    } else {
-      const oldIntro = `members/${id.username}/comments/intro-${origin.oldSlug}.md`;
-      if (await ctx.reader?.readFile?.(oldIntro) != null) renameFiles.push({ path: oldIntro, content: null });
-    }
-  }
-  const withRename = (r) => renaming ? { ...r, renamed: { from: origin.oldSlug, to: built.slug } } : r;
-  if (introFile || renaming) {
-    const files = (plan ? plan.files : [{ path: built.path, content: built.markdown }]).concat(introFile ? [introFile] : []).concat(renameFiles);
-    return withRename(await publishFiles({ repo, branch, files, message: msg, title: ttl, body: bdy }));
-  }
-  if (plan) {
-    return withRename(await publishFiles({ repo, branch, files: plan.files, message: msg, title: ttl, body: bdy }));
-  }
-  return publishContent({ repo, change: built, message: msg, title: ttl, body: bdy });
-}
-function describeContentPublish(built, { hasIntro } = {}) {
-  const LABEL = { post: "article", product: "product", prompt: "prompt", profile: "profile" };
-  const label = LABEL[built?.type] ?? built?.type ?? "content";
-  if (built?.type === "profile") {
-    const t = `Update the ${built.username} member profile`;
-    return { title: t, message: t, body: `Update the ${built.username} member profile.` };
-  }
-  const name = built?.frontmatter?.title || built?.slug || label;
-  const title = `Publish ${label}: ${name}`;
-  const blurb = built?.frontmatter?.shortDescription || built?.frontmatter?.excerpt || "";
-  const cats = Array.isArray(built?.frontmatter?.categories) ? built.frontmatter.categories.join(" > ") : "";
-  const lines = [`## ${name}`, ""];
-  if (blurb) lines.push(blurb, "");
-  lines.push(`- Type: ${label}`);
-  if (cats) lines.push(`- Category: ${cats}`);
-  lines.push(`- Path: \`${built?.path ?? ""}\``);
-  if (hasIntro) lines.push("- Includes the from-the-author intro comment.");
-  lines.push("", "_Published through the GBTI Network client._");
-  return { title, message: title, body: lines.join("\n") };
-}
-function buildIntroCommentFile({ username, built, authorNote, now } = {}) {
-  const note = String(authorNote ?? "").trim();
-  if (!note || !built?.slug || !AUTHOR_NOTE_TYPES.has(built.type)) return null;
-  const introBuilt = buildCommentFile({
-    username,
-    // SOW-145: a house product/prompt intro lands at house/comments/ with author 'gbti' (mirrors the item scope).
-    scope: built.scope || "member",
-    input: {
-      id: `intro-${built.slug}`,
-      targetType: built.type,
-      targetSlug: built.slug,
-      createdAt: now ?? (/* @__PURE__ */ new Date()).toISOString(),
-      status: "published",
-      visibility: "public",
-      authorNote: true
-    },
-    body: note
-  });
-  return { path: introBuilt.path, content: introBuilt.markdown };
 }
 async function planMemberFiles({ built, body, encrypt }) {
   if (!built?.slug) return null;
@@ -19230,11 +18810,6 @@ async function planMemberFiles({ built, body, encrypt }) {
 }
 
 // client/src/operations-drafts.mjs
-function draftMetaFromBranch(branch) {
-  if (branch === "gbti/profile") return { type: "profile", slug: null };
-  const m = String(branch || "").match(/^gbti\/(post|product|prompt)-(.+)$/);
-  return m ? { type: m[1], slug: m[2] } : null;
-}
 async function saveDraft(ctx, { type, input, body, message, path } = {}) {
   const id = requireIdentity(ctx);
   const repo = requireRepo(ctx);
@@ -19285,145 +18860,10 @@ async function saveDraft(ctx, { type, input, body, message, path } = {}) {
     throw err;
   }
   let files = plan ? plan.files : [{ path: built.path, content: built.markdown }];
-  if (staging) files = files.map((f2) => f2.path === built.path ? { ...f2, path: staging.oldPath } : f2);
+  if (staging) files = files.map((f) => f.path === built.path ? { ...f, path: staging.oldPath } : f);
   await syncForkIfCreatingBranch(ctx, repo, branch);
   await commitToBranchOnFork({ repo, branch, files, message: message ?? `Draft: ${built.slug ?? built.type}` });
   return { ok: true, branch, type: built.type, slug: built.slug ?? null, path: staging ? staging.oldPath : built.path, state: "staged", ...staging ? { renamed: { from: staging.oldSlug, to: built.slug } } : {} };
-}
-async function forkContentMatchesLive(ctx, path, forkText) {
-  try {
-    const staged = parseContentFile(forkText);
-    if (staged.frontmatter?.encryptedBody) return false;
-    const live = await ctx.reader?.read?.(path);
-    if (!live) return false;
-    return String(staged.body ?? "").trim() === String(live.body ?? "").trim() && JSON.stringify(staged.frontmatter ?? {}) === JSON.stringify(live.frontmatter ?? {});
-  } catch {
-    return false;
-  }
-}
-async function foldRepoDrafts(ctx, drafts, type) {
-  let items = [];
-  try {
-    const token = ctx.store?.get?.("githubToken");
-    const r = await workerListRepoDrafts({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-    items = Array.isArray(r?.items) ? r.items : [];
-  } catch {
-    items = [];
-  }
-  return mergeRepoDrafts(drafts, items, { type });
-}
-async function listDrafts(ctx, { type } = {}) {
-  const id = requireIdentity(ctx);
-  if (isHostedCtx(ctx)) {
-    const opts = { token: ctx.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch };
-    const { drafts: recs } = await workerListDrafts(opts);
-    const drafts2 = [];
-    for (const r of recs ?? []) {
-      if (type && r.type !== type) continue;
-      let valid = true;
-      let invalidReason = null;
-      try {
-        buildContentFile({ type: r.type, username: id.username, input: r.frontmatter ?? {}, body: r.body ?? "" });
-      } catch (err) {
-        valid = false;
-        invalidReason = err?.message || "this draft no longer matches the current schema";
-      }
-      let rowPath = r.path;
-      if (!rowPath) {
-        try {
-          rowPath = contentPath(r.type, id.username, r.slug);
-        } catch {
-          rowPath = null;
-        }
-      }
-      drafts2.push({
-        type: r.type,
-        slug: r.slug,
-        branch: branchName(r.type, r.slug),
-        path: rowPath,
-        pendingSlug: r.pendingSlug ?? null,
-        title: r.frontmatter?.title || r.frontmatter?.displayName || r.slug || r.type,
-        visibility: r.frontmatter?.visibility || "public",
-        status: r.frontmatter?.status || "draft",
-        valid,
-        invalidReason,
-        pull: null,
-        store: "kv"
-        // sow-194: the store discriminator, so a repo draft never collides with a KV draft
-      });
-    }
-    return { drafts: await foldRepoDrafts(ctx, drafts2, type) };
-  }
-  const repo = requireRepo(ctx);
-  const fork = await repo.ensureFork();
-  const refs = await repo.listMatchingRefs(fork.full_name, "gbti/");
-  const drafts = [];
-  for (const { branch, sha } of refs) {
-    const meta3 = draftMetaFromBranch(branch);
-    if (!meta3) continue;
-    if (type && meta3.type !== type) continue;
-    let path;
-    try {
-      path = contentPath(meta3.type, id.username, meta3.slug);
-    } catch {
-      continue;
-    }
-    let text = null;
-    try {
-      text = await repo.getForkFileContent(fork.full_name, path, sha || branch);
-    } catch {
-      text = null;
-    }
-    if (!text) continue;
-    let fm = {};
-    let draftBody = "";
-    try {
-      const parsed = parseContentFile(text);
-      fm = parsed.frontmatter ?? {};
-      draftBody = parsed.body ?? "";
-    } catch {
-      fm = {};
-    }
-    let valid = true;
-    let invalidReason = null;
-    try {
-      buildContentFile({ type: meta3.type, username: id.username, input: fm, body: draftBody });
-    } catch (err) {
-      valid = false;
-      invalidReason = err?.message || "this draft no longer matches the current schema";
-    }
-    let pull = null;
-    try {
-      pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
-    } catch {
-      pull = null;
-    }
-    if (!pull && await forkContentMatchesLive(ctx, path, text)) {
-      try {
-        await repo.deleteBranch(fork.full_name, branch);
-      } catch {
-      }
-      continue;
-    }
-    drafts.push({
-      type: meta3.type,
-      slug: meta3.slug,
-      branch,
-      path,
-      // SOW-112 v2: a frontmatter slug that differs from the branch identity is a PENDING RENAME (it applies
-      // when the draft publishes). Surfaced so same-titled drafts are tellable apart in the Drafts tab.
-      pendingSlug: typeof fm.slug === "string" && fm.slug !== meta3.slug ? fm.slug : null,
-      title: fm.title || fm.displayName || meta3.slug || meta3.type,
-      visibility: fm.visibility || "public",
-      status: fm.status || "draft",
-      valid,
-      invalidReason,
-      pull: pull ? { number: pull.number, html_url: pull.html_url } : null,
-      store: "fork"
-      // sow-194: the store discriminator, so a repo draft never collides with a fork draft
-    });
-  }
-  return { drafts: await foldRepoDrafts(ctx, drafts, type) };
 }
 async function readDraft(ctx, { type, slug, store, path: repoPath } = {}) {
   const id = requireIdentity(ctx);
@@ -19490,93 +18930,6 @@ async function readDraft(ctx, { type, slug, store, path: repoPath } = {}) {
     }
   }
   return { path, branch, frontmatter, body };
-}
-async function discardDraft(ctx, { type, slug, store } = {}) {
-  requireIdentity(ctx);
-  if (!type) throw new OperationError("bad-request", "type is required");
-  if (store === "repo") throw new OperationError("unsupported", "This draft is committed to the network and cannot be discarded here. Publish it, or open a removal request.");
-  if (isHostedCtx(ctx)) {
-    await workerDeleteDraft({ type, slug, token: ctx.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-    return { ok: true, branch: branchName(type, slug), hosted: true };
-  }
-  const repo = requireRepo(ctx);
-  const branch = branchName(type, slug);
-  const fork = await repo.ensureFork();
-  let pull = null;
-  try {
-    pull = await repo.findOpenPull({ head: `${fork.owner}:${branch}` });
-  } catch {
-    pull = null;
-  }
-  if (pull) throw new OperationError("bad-request", "This draft has an open pull request; withdraw it from review before discarding.", { prNumber: pull.number });
-  try {
-    await repo.deleteBranch(fork.full_name, branch);
-  } catch (err) {
-    const still = await repo.getBranchSha(fork.full_name, branch).catch(() => null);
-    if (still) throw err;
-    return { ok: true, branch, alreadyGone: true };
-  }
-  return { ok: true, branch };
-}
-async function publishDraft(ctx, { type, slug, title, prBody: prBody2, store, path } = {}) {
-  const id = requireIdentity(ctx);
-  if (store === "repo") {
-    let rel = path;
-    if (!rel) {
-      try {
-        rel = contentPath(type, id.username, slug);
-      } catch {
-        rel = null;
-      }
-    }
-    if (!rel) throw new OperationError("bad-request", "a repo draft needs its path to publish");
-    return setOwnContentStatus(ctx, { path: rel, status: "published" });
-  }
-  const repo = requireRepo(ctx);
-  const membership = await membershipOf(ctx);
-  if (isBlockedFromPublishing(membership)) {
-    throw new OperationError("membership-required", "Publishing on gbti.network requires a paid membership. Your draft is saved on your own fork. Upgrade to a paid membership at https://gbti.network, and your client publishes your staged drafts.", { membership });
-  }
-  if (isHostedCtx(ctx)) {
-    const opts = { token: ctx.store?.get?.("githubToken"), signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch };
-    const { drafts: recs } = await workerListDrafts(opts);
-    const rec = (recs ?? []).find((r2) => r2.type === type && r2.slug === slug);
-    if (!rec) throw new OperationError("not-found", "no such draft");
-    const r = await publish(ctx, {
-      type,
-      input: rec.frontmatter ?? {},
-      body: rec.body ?? "",
-      title,
-      prBody: prBody2,
-      ...rec.pendingSlug && rec.path ? { path: rec.path } : {}
-      // a pending rename applies at the publish event (SOW-112)
-    });
-    try {
-      await workerDeleteDraft({ type, slug, ...opts });
-    } catch {
-    }
-    return { ...r, ok: true, hosted: true };
-  }
-  const branch = branchName(type, slug);
-  const fork = await repo.ensureFork();
-  const head = `${fork.owner}:${branch}`;
-  const existing = await repo.findOpenPull({ head });
-  if (existing) return { prNumber: existing.number, prUrl: existing.html_url, branch, updated: true };
-  if (type !== "profile") {
-    const oldPath = contentPath(type, id.username, slug);
-    const text = await repo.getForkFileContent(fork.full_name, oldPath, branch).catch(() => null);
-    if (text != null) {
-      const parsed = parseContentFile(text);
-      const fm = parsed.frontmatter ?? {};
-      if (typeof fm.slug === "string" && fm.slug !== slug) {
-        return publish(ctx, { type, input: { ...fm, status: "published" }, body: parsed.body, path: oldPath, title, prBody: prBody2 });
-      }
-    }
-  }
-  const base3 = await repo.getDefaultBranch(repo.upstream);
-  const titleText = title ?? (type === "profile" ? `Update ${id.username}'s profile` : `${type}: ${slug}`);
-  const pull = await repo.openPull({ title: titleText, head, base: base3, body: prBody2 ?? "" });
-  return { prNumber: pull.number, prUrl: pull.html_url, branch, updated: false };
 }
 var ENC_PATH_RE = /^(members\/[a-z0-9][a-z0-9-]*|house)\/_enc\/[a-z0-9][a-z0-9._-]*\.enc$/;
 async function decryptMemberAsset(ctx, { encPath } = {}) {
@@ -19789,12 +19142,12 @@ async function editComment(ctx, { id, body, authorNote } = {}) {
 }
 
 // client/src/member-activity-client.mjs
-var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase4 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var ActivityClientError = class extends Error {
 };
 async function call3(method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new ActivityClientError("not signed in");
-  const res = await fetch2(trimBase5(signupBase) + "/membership/activity", {
+  const res = await fetch2(trimBase4(signupBase) + "/membership/activity", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -19827,12 +19180,12 @@ async function setCollectionItem({ id, targetType, targetSlug, on = true, ...opt
 }
 
 // client/src/member-earnings-client.mjs
-var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase5 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var EarningsClientError = class extends Error {
 };
 async function getEarnings({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new EarningsClientError("not signed in");
-  const res = await fetch2(trimBase6(signupBase) + "/membership/earnings", {
+  const res = await fetch2(trimBase5(signupBase) + "/membership/earnings", {
     headers: { Authorization: "Bearer " + token }
   });
   let data = null;
@@ -19845,12 +19198,12 @@ async function getEarnings({ token, signupBase, fetch: fetch2 = globalThis.fetch
 }
 
 // client/src/member-follows-client.mjs
-var trimBase7 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase6 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var FollowsClientError = class extends Error {
 };
 async function call4(method, body, { token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new FollowsClientError("not signed in");
-  const res = await fetch2(trimBase7(signupBase) + "/membership/follows", {
+  const res = await fetch2(trimBase6(signupBase) + "/membership/follows", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -19871,12 +19224,12 @@ async function setFollow({ username, on = true, ...opts }) {
 }
 
 // client/src/member-upvote-client.mjs
-var trimBase8 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase7 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var UpvoteClientError = class extends Error {
 };
 async function upvote({ type = "share", slug, on = true, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new UpvoteClientError("not signed in");
-  const res = await fetch2(trimBase8(signupBase) + "/membership/upvote", {
+  const res = await fetch2(trimBase7(signupBase) + "/membership/upvote", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ type, slug, on })
@@ -19891,12 +19244,12 @@ async function upvote({ type = "share", slug, on = true, token, signupBase, fetc
 }
 
 // client/src/member-og-client.mjs
-var trimBase9 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase8 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var OgClientError = class extends Error {
 };
 async function ogPreview({ url: url2, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new OgClientError("not signed in");
-  const res = await fetch2(trimBase9(signupBase) + "/membership/og-preview", {
+  const res = await fetch2(trimBase8(signupBase) + "/membership/og-preview", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ url: url2 })
@@ -19911,12 +19264,12 @@ async function ogPreview({ url: url2, token, signupBase, fetch: fetch2 = globalT
 }
 
 // client/src/member-invite-client.mjs
-var trimBase10 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase9 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var InviteClientError = class extends Error {
 };
 async function getDiscordInvite({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new InviteClientError("not signed in");
-  const res = await fetch2(trimBase10(signupBase) + "/membership/discord-invite", {
+  const res = await fetch2(trimBase9(signupBase) + "/membership/discord-invite", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -20107,9 +19460,9 @@ var STEPS = {
 // membership/member-activity.mjs
 var CONTENT_TYPES = /* @__PURE__ */ new Set(["post", "product", "prompt", "share"]);
 var MAX_NAME_LEN = 80;
-var SLUG_RE2 = /^[a-z0-9-]+$/;
+var SLUG_RE = /^[a-z0-9-]+$/;
 var SHARE_SLUG_RE = /^[a-z0-9-]+\/[a-z0-9-]+$/;
-var slugOk = (type, slug) => (type === "share" ? SHARE_SLUG_RE : SLUG_RE2).test(slug);
+var slugOk = (type, slug) => (type === "share" ? SHARE_SLUG_RE : SLUG_RE).test(slug);
 function emptyActivity() {
   return { favorites: [], upvotes: [], collections: [], updatedAt: null };
 }
@@ -20117,12 +19470,12 @@ function normalizeTargetList(raw) {
   const out = [];
   if (!Array.isArray(raw)) return out;
   const seen = /* @__PURE__ */ new Set();
-  for (const f2 of raw) {
-    if (!f2 || !isTarget(f2.type, f2.slug)) continue;
-    const k = targetKey(f2);
+  for (const f of raw) {
+    if (!f || !isTarget(f.type, f.slug)) continue;
+    const k = targetKey(f);
     if (seen.has(k)) continue;
     seen.add(k);
-    out.push({ type: f2.type, slug: f2.slug, addedAt: Number(f2.addedAt) || 0 });
+    out.push({ type: f.type, slug: f.slug, addedAt: Number(f.addedAt) || 0 });
   }
   return out;
 }
@@ -20160,19 +19513,19 @@ function filterActivity(activity, types2) {
   const a = normalizeActivity(activity);
   if (!Array.isArray(types2) || types2.length === 0) return a;
   const allow = new Set(types2);
-  a.favorites = a.favorites.filter((f2) => allow.has(f2.type));
+  a.favorites = a.favorites.filter((f) => allow.has(f.type));
   a.upvotes = a.upvotes.filter((u) => allow.has(u.type));
   a.collections = a.collections.map((c) => ({ ...c, items: c.items.filter((it) => allow.has(it.type)) }));
   return a;
 }
 
 // client/src/member-admin-client.mjs
-var trimBase11 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
+var trimBase10 = (signupBase) => String(signupBase || "").replace(/\/$/, "");
 var AdminClientError = class extends Error {
 };
 async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/admin/statuses", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/statuses", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -20186,7 +19539,7 @@ async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis
 }
 async function getDiscordChannels({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/discord-channels", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/discord-channels", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -20200,7 +19553,7 @@ async function getDiscordChannels({ token, signupBase, fetch: fetch2 = globalThi
 }
 async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, params }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/admin/ops", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/ops", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify(params ? { action, params } : { action })
@@ -20216,7 +19569,7 @@ async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function getCouponUsage({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/admin/coupon-usage", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/coupon-usage", {
     method: "GET",
     headers: { Authorization: "Bearer " + token }
   });
@@ -20230,7 +19583,7 @@ async function getCouponUsage({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function inviteAdminRequest({ token, signupBase, method = "GET", body = null, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/admin/invites", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/invites", {
     method,
     headers: { Authorization: "Bearer " + token, ...body ? { "Content-Type": "application/json" } : {} },
     ...body ? { body: JSON.stringify(body) } : {}
@@ -20245,7 +19598,7 @@ async function inviteAdminRequest({ token, signupBase, method = "GET", body = nu
 }
 async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  const res = await fetch2(trimBase10(signupBase) + "/membership/syndication", { method: "GET", headers: { Authorization: "Bearer " + token } });
   let data = null;
   try {
     data = await res.json();
@@ -20256,7 +19609,7 @@ async function getSyndicationQueue({ token, signupBase, fetch: fetch2 = globalTh
 }
 async function getSyndicateNow({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/syndicate-now", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  const res = await fetch2(trimBase10(signupBase) + "/membership/syndicate-now", { method: "GET", headers: { Authorization: "Bearer " + token } });
   let data = null;
   try {
     data = await res.json();
@@ -20267,7 +19620,7 @@ async function getSyndicateNow({ token, signupBase, fetch: fetch2 = globalThis.f
 }
 async function syndicateNow({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoStubTemplate, devtoDraft, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/syndicate-now", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/syndicate-now", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ destination, item, template, channelId, forwardChannelId, redditKind, bodyTemplate, commentTemplate, devtoIntroTemplate, devtoFooterTemplate, devtoStubTemplate, devtoDraft })
@@ -20282,7 +19635,7 @@ async function syndicateNow({ destination, item, template, channelId, forwardCha
 }
 async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/syndication/cancel", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/syndication/cancel", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ id })
@@ -20297,7 +19650,7 @@ async function cancelSyndication({ id, token, signupBase, fetch: fetch2 = global
 }
 async function approveSyndication({ id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/syndication/approve", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/syndication/approve", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ id })
@@ -20312,7 +19665,7 @@ async function approveSyndication({ id, token, signupBase, fetch: fetch2 = globa
 }
 async function getSocialQueue({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/social-queue", { method: "GET", headers: { Authorization: "Bearer " + token } });
+  const res = await fetch2(trimBase10(signupBase) + "/membership/social-queue", { method: "GET", headers: { Authorization: "Bearer " + token } });
   let data = null;
   try {
     data = await res.json();
@@ -20323,7 +19676,7 @@ async function getSocialQueue({ token, signupBase, fetch: fetch2 = globalThis.fe
 }
 async function socialQueueAction({ action, id, token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
-  const res = await fetch2(trimBase11(signupBase) + "/membership/social-queue", {
+  const res = await fetch2(trimBase10(signupBase) + "/membership/social-queue", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({ action, id })
@@ -20656,23 +20009,7 @@ var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 
 var isTier = (t) => Object.prototype.hasOwnProperty.call(RANK2, t);
 
 // membership/classify-pr.mjs
-var CONTENT_DIRS = ["posts", "products", "prompts", "comments"];
 var ROLE_RANK = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
-function isCleanPath(p) {
-  if (typeof p !== "string" || p.length === 0) return false;
-  if (p.startsWith("/")) return false;
-  if (p.includes("\\")) return false;
-  if (p.includes("\0")) return false;
-  return p.split("/").every((seg) => seg !== "" && seg !== "." && seg !== "..");
-}
-function isContributionToFolder(paths, ownerFolder) {
-  if (!ownerFolder || !Array.isArray(paths) || paths.length === 0) return false;
-  const prefix = `members/${ownerFolder}/`;
-  return paths.every((p) => {
-    if (!isCleanPath(p) || !p.startsWith(prefix)) return false;
-    return CONTENT_DIRS.includes(p.slice(prefix.length).split("/")[0]);
-  });
-}
 
 // membership/checkout-prices.mjs
 var BILLING_PERIODS = Object.freeze(["monthly", "annual"]);
@@ -20869,141 +20206,6 @@ async function triggerAdminOp2(ctx, { action, params } = {}) {
     throw new OperationError("admin-op-failed", err?.message || "could not trigger the operation");
   }
 }
-async function listIncomingContributions(ctx) {
-  const id = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
-  const open = await repo.listOpenPulls();
-  const myId = id.githubId != null ? String(id.githubId) : null;
-  const myLogin = String(id.login || "").toLowerCase();
-  const out = [];
-  for (const pr of open) {
-    const aId = pr.author?.id != null ? String(pr.author.id) : null;
-    const aLogin = String(pr.author?.login || "").toLowerCase();
-    if (myId && aId && aId === myId || myLogin && aLogin && aLogin === myLogin) continue;
-    let files;
-    try {
-      files = await repo.listPullFiles(pr.number);
-    } catch {
-      continue;
-    }
-    const paths = files.map((f2) => f2.filename);
-    if (!isContributionToFolder(paths, id.username)) continue;
-    out.push({
-      number: pr.number,
-      title: pr.title,
-      html_url: pr.html_url,
-      author: pr.author ?? null,
-      headSha: pr.headSha ?? null,
-      createdAt: pr.createdAt ?? null,
-      updatedAt: pr.updatedAt ?? null,
-      files,
-      fileCount: files.length,
-      additions: files.reduce((s, f2) => s + (f2.additions || 0), 0),
-      deletions: files.reduce((s, f2) => s + (f2.deletions || 0), 0)
-    });
-  }
-  return { contributions: out };
-}
-async function loadOwnContribution(ctx, number4) {
-  const id = requireIdentity(ctx);
-  const repo = requireRepo(ctx);
-  const n = Number(number4);
-  if (!Number.isInteger(n) || n <= 0) throw new OperationError("bad-request", "a positive PR number is required");
-  const pr = await repo.getPull(n);
-  const aId = pr.author?.id != null ? String(pr.author.id) : null;
-  const aLogin = String(pr.author?.login || "").toLowerCase();
-  const myId = id.githubId != null ? String(id.githubId) : null;
-  const myLogin = String(id.login || "").toLowerCase();
-  if (myId && aId && aId === myId || myLogin && aLogin && aLogin === myLogin) {
-    throw new OperationError("forbidden", "this is your own pull request, not an incoming contribution");
-  }
-  const files = await repo.getPullDiffFiles(n);
-  if (!isContributionToFolder(files.map((f2) => f2.filename), id.username)) {
-    throw new OperationError("forbidden", "this pull request is not a contribution to your folder");
-  }
-  return { id, repo, n, pr, files };
-}
-async function getContributionReview(ctx, { number: number4 } = {}) {
-  const { repo, n, pr, files } = await loadOwnContribution(ctx, number4);
-  const proposed = [];
-  for (const f2 of files) {
-    if (!/\.md$/i.test(f2.filename) || f2.status === "removed") continue;
-    let text = null;
-    try {
-      text = await repo.getFileContent(f2.filename, pr.headSha);
-    } catch {
-      text = null;
-    }
-    if (text == null) continue;
-    const { body } = parseContentFile(text);
-    proposed.push({ filename: f2.filename, body });
-  }
-  return {
-    number: n,
-    title: pr.title,
-    html_url: pr.html_url,
-    headSha: pr.headSha,
-    author: pr.author,
-    files: files.map((f2) => ({ filename: f2.filename, status: f2.status, additions: f2.additions, deletions: f2.deletions, patch: f2.patch ?? null })),
-    proposed,
-    // SOW-028: only the classic account-wide token can post a review the gate honors by the member's
-    // github_id. App mode (fork-scoped) and hosted mode (SOW-157, identity-only) both decide on github.com.
-    canActInClient: authModeFor(ctx) === "classic"
-  };
-}
-var DECLINE_NOTE = "Thank you for the contribution. The folder owner has decided not to merge this change right now. You are welcome to discuss it here or open a revised proposal.";
-async function reviewContribution(ctx, { number: number4, decision, message } = {}) {
-  if (authModeFor(ctx) !== "classic") {
-    throw new OperationError("forbidden", "approve or decline this contribution on github.com (the gate records your GitHub identity as the reviewer)");
-  }
-  const { repo, n, pr } = await loadOwnContribution(ctx, number4);
-  const msg = typeof message === "string" ? message.trim() : "";
-  switch (decision) {
-    case "approve":
-      await repo.submitReview(n, { event: "APPROVE", body: msg, commitId: pr.headSha });
-      return { ok: true, decision, number: n };
-    case "request-changes":
-      if (!msg) throw new OperationError("bad-request", "request-changes needs a message describing what to change");
-      await repo.submitReview(n, { event: "REQUEST_CHANGES", body: msg, commitId: pr.headSha });
-      return { ok: true, decision, number: n };
-    case "decline":
-      await repo.submitReview(n, { event: "REQUEST_CHANGES", body: msg || DECLINE_NOTE, commitId: pr.headSha });
-      try {
-        await repo.closePull(n);
-      } catch {
-      }
-      return { ok: true, decision, number: n };
-    default:
-      throw new OperationError("bad-request", `unknown decision "${decision}" (approve | request-changes | decline)`);
-  }
-}
-var IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;
-function itemImagesDir(itemPath, username) {
-  const p = String(itemPath || "").replace(/^\/+/, "");
-  if (!p || p.includes("..") || p.includes("\\")) return null;
-  const folder = p.replace(/\/[^/]*$/, "");
-  if (!folder || folder === p) return null;
-  const inOwn = !!username && folder.startsWith(`members/${username}/`);
-  const inNetwork = folder.startsWith(`members/${NETWORK_CONTENT_OWNER}/`) || folder === "house" || folder.startsWith("house/");
-  if (!inOwn && !inNetwork) return null;
-  return `${folder}/images`;
-}
-function stageImage(ctx, { filename, dataBase64, itemPath } = {}) {
-  const id = requireIdentity(ctx);
-  if (!ctx.stager) throw new OperationError("bad-request", "Image upload is not available in this client yet.");
-  if (!filename || /[\\/]/.test(filename) || filename.includes("..")) throw new OperationError("bad-request", "invalid filename");
-  if (!IMAGE_EXT.test(filename)) throw new OperationError("bad-request", "unsupported image type (png/jpg/gif/webp/svg)");
-  if (!dataBase64) throw new OperationError("bad-request", "no image data");
-  const dir = itemImagesDir(itemPath, id.username);
-  if (dir) {
-    const rel2 = `${dir}/${filename}`;
-    ctx.stager.writeImage(rel2, dataBase64);
-    return { ok: true, path: `./images/${filename}`, repoPath: rel2 };
-  }
-  const rel = `members/${id.username}/images/${filename}`;
-  ctx.stager.writeImage(rel, dataBase64);
-  return { ok: true, path: rel, repoPath: rel };
-}
 
 // client/src/account-ops.mjs
 var SITE_BASE = globalThis.process?.env?.GBTI_SITE_BASE || "https://gbti.network";
@@ -21027,108 +20229,6 @@ function getReferral(ctx) {
     terms: `${SITE_BASE}/referral-terms/`,
     note: "Share your invite link to earn a flat 10% lifetime commission on every member who joins through it. You also earn from your published work: 30% when it is the first content that brought a member in, and 10% when it is the last. Earnings and payout status appear here once payouts are enabled."
   };
-}
-
-// client/src/form-fields.mjs
-var f = (key, label, kind, extra = {}) => ({ key, label, kind, ...extra });
-var STATUS2 = f("status", "Status", "enum", { options: ["draft", "published"] });
-var VISIBILITY2 = f("visibility", "Visibility", "enum", { options: ["public", "members"] });
-var TAGS = f("tags", "Tags", "array", { placeholder: "comma,separated" });
-var FIELDS = Object.freeze({
-  post: [
-    f("title", "Title", "text", { required: true }),
-    f("slug", "Slug", "text", { required: true, placeholder: "kebab-case" }),
-    STATUS2,
-    VISIBILITY2,
-    f("publicStub", "Public stub (when members-only)", "boolean"),
-    // SOW-016: true = a public stub page; false = no public page
-    f("excerpt", "Excerpt", "textarea"),
-    f("categories", "Categories", "array"),
-    TAGS,
-    // sow-179/sow-183: which of the three article layouts renders this post. Defaults to journal (see
-    // src/content.config.ts); editorial and card are the other two, see src/components/blog/Article*.astro.
-    f("layout", "Layout", "enum", { options: ["editorial", "journal", "card"], hint: "How this article page is laid out. Editorial: full-width cover hero. Journal: sticky rail beside a single reading column. Card: a centered card, no rail." }),
-    f("coverImage", "Cover image", "image"),
-    f("coverAlt", "Cover image alt text", "text", { placeholder: "Describe the image for screen readers" }),
-    f("video", "Video (YouTube/Vimeo URL)", "text"),
-    f("featured", "Featured", "boolean"),
-    f("publishedAt", "Published at", "date"),
-    f("canonicalUrl", "Canonical URL", "text")
-  ],
-  product: [
-    f("title", "Title", "text", { required: true }),
-    f("slug", "Slug", "text", { required: true, placeholder: "kebab-case" }),
-    f("shortDescription", "Short description", "textarea", { required: true }),
-    f("categories", "Categories", "array", { placeholder: "devops, frameworks, wordpress" }),
-    STATUS2,
-    VISIBILITY2,
-    f("publicStub", "Public stub (when members-only)", "boolean"),
-    // SOW-016
-    f("pricing", "Pricing", "enum", { options: ["free", "freemium", "paid"] }),
-    f("pricingUrl", "Pricing/upgrade URL", "text"),
-    f("version", "Version", "text"),
-    TAGS,
-    f("platforms", "Platforms", "array"),
-    // Per-field aspect ratios, taken from what each render surface actually asks for rather than one shared
-    // 4:3/Hero toggle. `frame` locks the editor preview so it cannot misrepresent the crop. Icon is square and
-    // small, so it also carries the two real display sizes.
-    f("icon", "Icon (small, 1:1)", "image", { required: true, frame: "1/1", previewPx: 96, hint: "Square. Rendered at 56 on cards and 96 on the product page. 128x128 or larger." }),
-    f("iconLarge", "Icon (large, 1:1)", "image", { frame: "1/1", previewPx: 96, hint: "Optional crisper square for the 96px product-page slot on high-density screens. 192x192 or 256x256." }),
-    f("featuredImage", "Featured cover (spotlight)", "image", { required: true, frame: "16/10", hint: "Represents this product wherever it is linked: the homepage, feed cards, and social/link previews (the og:image). Also the page hero if you set no banner. Must be 16:10 (1280x800), it fills the spotlight box without cropping." }),
-    f("banner", "Banner", "image", { frame: "3/1", hint: "Only the wide strip behind the title at the top of THIS product page. Optional, or pick a Banner color instead. 3:1 (1200x400), cropped to fill." }),
-    // sow-174: a curated color alternative to uploading a banner image, mutually exclusive with `banner` in
-    // the editor (rendered as its own swatch row folded into the banner field, not a generic dropdown).
-    f("bannerPreset", "Banner color", "enum", { options: BANNER_PRESET_KEYS }),
-    // sow-172/174: gallery entries carry optional captions, so this is `json`, not `array` -- `array` coerces
-    // through String(), which would flatten a captioned entry to "[object Object]" and destroy the caption
-    // the first time an author re-saved a captioned product.
-    f("gallery", 'Gallery (JSON array of "image.png" or {src,caption})', "json", { placeholder: '["./images/shot-1.webp", {"src": "./images/shot-2.webp", "caption": "The settings panel"}]' }),
-    f("galleryStyle", "Gallery style", "enum", { options: ["grid", "carousel"], hint: "Leave unset to pick by count: 6 or more screenshots use the carousel, fewer use the captioned grid." }),
-    f("sidebarPosition", "Sidebar position", "enum", { options: ["left", "right"], hint: "Which side the Contents rail renders on for this product page." }),
-    f("video", "Video (YouTube/Vimeo URL)", "text"),
-    f("links", "Links (JSON array: {type,url,visibility:public|members,primary,label})", "json"),
-    f("publishedAt", "Published at", "date")
-  ],
-  prompt: [
-    f("title", "Title", "text", { required: true }),
-    f("slug", "Slug", "text", { required: true, placeholder: "kebab-case" }),
-    f("shortDescription", "Short description", "textarea", { required: true }),
-    // SOW-025: required by the schema (one-liner on cards + the feed)
-    f("categories", "Categories", "array", { placeholder: "devops, accessibility" }),
-    STATUS2,
-    VISIBILITY2,
-    f("publicStub", "Public stub (when members-only)", "boolean"),
-    // SOW-016
-    f("pricing", "Pricing", "enum", { options: ["free", "freemium", "paid"] }),
-    f("targets", "Targets (models/tools)", "array"),
-    TAGS,
-    f("variables", "Variables", "array"),
-    f("exampleOutput", "Example output", "textarea"),
-    // Lead image, offered on every prompt. It was once hidden behind a showIf keyed to the image-gen
-    // target list, and because gather() skips fields that are not visible, a Claude Code prompt did not
-    // merely have the image rejected, it never submitted one. The showIf mechanism itself stays available
-    // to other fields; the prompt image simply no longer uses it.
-    f("image", "Lead image (recommended 4:3)", "image", { placeholder: "1200x900 (4:3) crops cleanest" }),
-    f("sourceUrl", "Source URL", "text"),
-    f("links", "Links (JSON array: {type,url,visibility:public|members,primary,label})", "json"),
-    f("publishedAt", "Published at", "date")
-  ],
-  profile: [
-    f("displayName", "Display name", "text", { required: true }),
-    STATUS2,
-    VISIBILITY2,
-    f("headline", "Headline", "text"),
-    f("avatar", "Avatar", "image"),
-    f("location", "Location", "text"),
-    f("forHire", "For hire", "boolean"),
-    f("directory", "List in member directory", "boolean"),
-    f("skills", "Skills", "array"),
-    f("roles", "Roles", "array"),
-    f("links", "Links (JSON: github/website/x/linkedin/…)", "json")
-  ]
-});
-function fieldsFor(type) {
-  return FIELDS[type] ?? null;
 }
 
 // client/src/video-embed.mjs
@@ -21215,10 +20315,10 @@ function collectFootnoteIds(lines) {
   const ids = /* @__PURE__ */ new Set();
   let fence = 0;
   for (const line of lines) {
-    const f2 = /^(`{3,})(.*)$/.exec(line);
-    if (f2) {
-      if (!fence) fence = f2[1].length;
-      else if (f2[1].length >= fence && !f2[2].trim()) fence = 0;
+    const f = /^(`{3,})(.*)$/.exec(line);
+    if (f) {
+      if (!fence) fence = f[1].length;
+      else if (f[1].length >= fence && !f[2].trim()) fence = 0;
       continue;
     }
     if (fence) continue;
@@ -21448,12 +20548,12 @@ function renderDoc(md, ids) {
   }
   flushList();
   if (inCode) emit(renderFence(codeLang, codeBuf, fn), fenceStart, lines.length - 1);
-  const referenced = footnotes.filter((f2) => (fn.counts.get(f2.id) ?? 0) > 0);
+  const referenced = footnotes.filter((f) => (fn.counts.get(f.id) ?? 0) > 0);
   if (referenced.length) {
-    const items = referenced.map((f2) => {
-      const n = fn.counts.get(f2.id);
-      const backs = Array.from({ length: n }, (_v, k) => `<a class="md-fn-back" href="#fnref-${f2.id}${k ? `-${k + 1}` : ""}" aria-label="Back to reference${k ? ` ${k + 1}` : ""}">&#8617;${k ? `<sup>${k + 1}</sup>` : ""}</a>`).join(" ");
-      return `<li id="fn-${f2.id}">${f2.html} ${backs}</li>`;
+    const items = referenced.map((f) => {
+      const n = fn.counts.get(f.id);
+      const backs = Array.from({ length: n }, (_v, k) => `<a class="md-fn-back" href="#fnref-${f.id}${k ? `-${k + 1}` : ""}" aria-label="Back to reference${k ? ` ${k + 1}` : ""}">&#8617;${k ? `<sup>${k + 1}</sup>` : ""}</a>`).join(" ");
+      return `<li id="fn-${f.id}">${f.html} ${backs}</li>`;
     }).join("");
     emit(`<section class="md-footnotes"><h2>Footnotes</h2><ol>${items}</ol></section>`, null, null);
   }
@@ -23155,31 +22255,12 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
       // shared op (parity with the npm host /api/read)
       case "/api/members-content":
         return ok(await listMembersOnly(ctx));
-      case "/api/form-fields":
-        return ok({ fields: fieldsFor(query.type) ?? [] });
       case "/api/preview":
         return ok({ html: renderMarkdown(body?.body ?? "") });
-      case "/api/validate":
-        return ok(validateContent(ctx, body));
-      // reader-free
-      case "/api/publish":
-        return ok(await publish(ctx, body));
-      // reader-free (uses content-ops + the repo client)
-      case "/api/content/status":
-        return ok(await setOwnContentStatus(ctx, body ?? {}));
-      case "/api/content/rename":
-        return ok(await renameContent(ctx, body ?? {}));
-      case "/api/image":
-        return ok(await stageImage(ctx, body ?? {}));
-      // SOW-082: universal draft staging (Save to the fork without a PR; review; Publish from the staged branch).
-      case "/api/drafts":
-        return ok(await listDrafts(ctx, { type: query.type }));
+      // SOW-082 + sow-204: what survives of draft staging in the EXTENSION is this read/save pair, which the
+      // reader uses. The list, discard and publish-from-draft routes were authoring and left with the rest.
       case "/api/draft":
         return ok(method === "POST" ? await saveDraft(ctx, body) : await readDraft(ctx, { type: query.type, slug: query.slug, store: query.store, path: query.path }));
-      case "/api/draft/discard":
-        return ok(await discardDraft(ctx, body));
-      case "/api/draft/publish":
-        return ok(await publishDraft(ctx, body));
       case "/api/share":
         return ok(await publishShare(ctx, body));
       // SOW-018: reader-free; members Share encrypts via the Worker
@@ -23240,12 +22321,6 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(getReferral(ctx));
       case "/api/prs":
         return ok({ prs: await requireRepo3(ctx).listMyPulls(id.login) });
-      case "/api/contributions":
-        return ok(await listIncomingContributions(ctx));
-      case "/api/contribution":
-        return ok(await getContributionReview(ctx, { number: query.number }));
-      case "/api/contribution-review":
-        return ok(await reviewContribution(ctx, body));
       case "/api/overrides":
         return ok(await getOverridesRoster(ctx));
       // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).

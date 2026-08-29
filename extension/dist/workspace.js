@@ -1963,6 +1963,28 @@ ${String(body ?? "")}`;
     if (!vis.length) return null;
     return vis.some((t) => t?.id === requested) ? requested : vis[0].id;
   }
+  function visibleTiles(tiles, tabs, authoring) {
+    const shown = new Set(visibleTabs(tabs, authoring).map((t) => t?.id));
+    return (Array.isArray(tiles) ? tiles : []).filter((t) => {
+      const m = /^#tab=([a-z]+)$/.exec(String(t?.href ?? ""));
+      return !m || shown.has(m[1]);
+    });
+  }
+  function trialBanner(membership, authoring) {
+    if (membership !== "trialing") return null;
+    const headline = "You are on the free trial";
+    return authoring ? {
+      headline,
+      body: "Author and stage drafts on your own fork now. Publishing to gbti.network (opening canonical pull requests) requires a paid membership.",
+      ctaLabel: "Upgrade to publish",
+      ctaHref: "https://gbti.network/membership/"
+    } : {
+      headline,
+      body: "Writing happens in the WorkBench on gbti.network. You can author and stage drafts there now, and publishing requires a paid membership.",
+      ctaLabel: "Open the WorkBench",
+      ctaHref: "https://gbti.network/workbench/"
+    };
+  }
 
   // client-ui/src/editor-core.mjs
   function fmtDate(value) {
@@ -15194,7 +15216,7 @@ ${String(body ?? "")}`;
       this._loadProfile();
       this._ensureTab(this._tab);
       if (this._tab !== "overview") this._ensureOverview();
-      this._loadInboxCount();
+      if (this._authoring()) this._loadInboxCount();
       this._onHash = () => {
         const h = typeof location !== "undefined" ? location.hash : "";
         const plan = planHashRoute(h, { editing: !!this._editing, reviewing: this._reviewing != null, tab: this._tab });
@@ -15813,13 +15835,14 @@ ${String(body ?? "")}`;
         { nm: "Settings", href: settingsHref, n: null },
         ...isStaff ? [{ nm: "Admin tools", href: adminHref, n: null }] : []
       ];
-      const tileHtml = tiles.map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? "" : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join("");
+      const tileHtml = visibleTiles(tiles, TABS, this._authoring()).map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? "" : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join("");
       const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? "" : "s"} in progress</span>` : "";
-      const trialBanner = ov.membership === "trialing" ? `<div class="ov-trial"><div><b>You are on the free trial</b><br/><span>Author and stage drafts on your own fork now. Publishing to gbti.network (opening canonical pull requests) requires a paid membership.</span></div><a class="ov-up" href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a></div>` : "";
+      const tb = trialBanner(ov.membership, this._authoring());
+      const trialHtml = !tb ? "" : `<div class="ov-trial"><div><b>${esc(tb.headline)}</b><br/><span>${esc(tb.body)}</span></div><a class="ov-up" href="${esc(tb.ctaHref)}" target="_blank" rel="noopener">${esc(tb.ctaLabel)}</a></div>`;
       const att = ov.attention.length ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc(a.tone)}">${esc(a.label)}</span> <a href="${esc(a.url || "#")}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join("")}</ul>` : `<p class="muted">No pull requests need your attention.</p>`;
       return `<div class="ov">
       <div class="ov-hero"><div><b>Your WorkBench</b><br/><span class="muted">Membership: ${esc(mLabel)}</span></div>${draft}</div>
-      ${trialBanner}
+      ${trialHtml}
       <div class="ov-tiles">${tileHtml}</div>
       <h3 class="ov-h3">Pull requests</h3>
       ${att}
@@ -16162,7 +16185,12 @@ ${String(body ?? "")}`;
     }
     async _fetchSources(login) {
       const [review, prs, following, replies, approvals] = await Promise.all([
-        this._safe(() => this._review()),
+        // sow-204: ALWAYS EMPTY in this host, and this element is mounted only by the extension shell.
+        // Contribution review is authoring: the Inbox tab is flagged `authoring` (hidden in the extension) and
+        // /api/contributions is no longer routed here, so fetching it would 404 and the lane's deep-link
+        // (workspace.html#tab=inbox) would land on a tab resolveTab redirects away from. buildBell is left
+        // generic and still understands a `review` source, so a host that keeps authoring can feed it again.
+        Promise.resolve([]),
         this._safe(() => this._prs()),
         this._safe(() => this._following(login)),
         this._safe(() => this._replies(login)),
@@ -16190,16 +16218,6 @@ ${String(body ?? "")}`;
           href: "admin.html#tab=syndication"
         };
       });
-    }
-    async _review() {
-      const { contributions = [] } = await this.client.listContributions() || {};
-      return contributions.map((c) => ({
-        id: `c${c.number}`,
-        ts: toMs(c.updatedAt ?? c.createdAt),
-        title: c.title || `Contribution #${c.number}`,
-        sub: c.author?.login ? `from @${c.author.login}` : "awaiting your review",
-        href: "workspace.html#tab=inbox"
-      }));
     }
     async _prs() {
       const { prs = [] } = await this.client.listPRs() || {};
@@ -19574,7 +19592,7 @@ From the author:
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
     </div>
-    <button class="nt-icobtn" data-compose data-ico="plus" title="Create" aria-label="Create" aria-haspopup="dialog"></button>
+    <button class="nt-icobtn" data-compose data-ico="plus" title="Post a Share" aria-label="Post a Share" aria-haspopup="dialog"></button>
   </div>`;
   }
   function brandHtml() {
@@ -19667,7 +19685,6 @@ From the author:
     _lastStatus = status;
     const signedIn = !shouldGate(status);
     if (root) applyAccount(root, signedIn ? status : null);
-    if (signedIn) prefetchCreateRecent();
     return signedIn ? status : null;
   }
   function shellLogin(onPrompt) {
@@ -19860,161 +19877,8 @@ From the author:
     document.body.appendChild(overlay);
     overlay.querySelector("gbti-share-composer")?.querySelector?.("input, textarea")?.focus?.();
   }
-  var cSvg = (inner, { size = 21, sw = 1.75 } = {}) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
-  var CREATE_CARDS = [
-    { type: "share", cls: "share", t: "New Share", s: "A quick update", svg: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>' },
-    { type: "post", cls: "article", t: "New article", s: "Write a post", svg: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>' },
-    { type: "prompt", cls: "prompt", t: "New prompt", s: "Share a prompt", svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
-    { type: "product", cls: "product", t: "New product", s: "List a product", svg: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' }
-  ];
-  var CREATE_FILE_ICO = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>';
-  var CREATE_TYPE_LABEL = { post: "Article", prompt: "Prompt", product: "Product" };
-  function openCreateModal() {
-    if (document.querySelector(".compose-modal")) return;
-    const overlay = document.createElement("div");
-    overlay.className = "compose-modal create-modal";
-    const cards = CREATE_CARDS.map((c, i) => `<button class="cc-card${i === 0 ? " sel" : ""}" data-new="${c.type}" type="button">
-      <span class="cc-ico ${c.cls}">${cSvg(c.svg)}</span>
-      <span class="cc-tx"><span class="cc-t">${c.t}</span><span class="cc-s">${c.s}</span></span>
-    </button>`).join("");
-    overlay.innerHTML = `<div class="compose-panel create-panel">
-    <button class="create-x" type="button" aria-label="Close">${cSvg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', { size: 17, sw: 2 })}</button>
-    <div class="create-eyebrow">Create</div>
-    <h2 class="create-h2">What would you like to create today?</h2>
-    <p class="create-sub">Choose a format to start a new post.</p>
-    <div class="create-grid">${cards}</div>
-    <div class="create-search">${cSvg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.4-3.4"/>', { size: 17, sw: 2 })}
-      <input type="text" placeholder="Search through my workbench files to find my content quickly." data-create-search aria-label="Search my workbench" />
-      <span class="create-kbd">&#8984;K</span>
-    </div>
-    <div class="create-recent" data-create-recent hidden>
-      <div class="create-recent-h">Recent drafts</div>
-      <div data-create-recent-list></div>
-    </div>
-  </div>`;
-    const onEsc = (e) => {
-      if (e.key === "Escape") close();
-    };
-    const close = () => {
-      overlay.remove();
-      document.removeEventListener("keydown", onEsc);
-    };
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
-    });
-    overlay.querySelector(".create-x")?.addEventListener("click", close);
-    overlay.querySelectorAll("[data-new]").forEach((b) => b.addEventListener("click", () => {
-      close();
-      const t = b.dataset.new;
-      if (t === "share") openComposeModal();
-      else window.location.href = `workspace.html#new=${t}`;
-    }));
-    document.addEventListener("keydown", onEsc);
-    document.body.appendChild(overlay);
-    overlay.querySelector("[data-create-search]")?.focus?.();
-    loadCreateRecent(overlay);
-  }
-  var CREATE_RECENT_KEY = "gbti:create-recent";
-  var CREATE_RECENT_TTL = 24 * 60 * 60 * 1e3;
-  function createCacheGet(key) {
-    return new Promise((res) => {
-      try {
-        chrome.storage.local.get(key, (o) => res(o?.[key] ?? null));
-      } catch {
-        res(null);
-      }
-    });
-  }
-  function createCacheSet(key, val) {
-    return new Promise((res) => {
-      try {
-        chrome.storage.local.set({ [key]: val }, () => res());
-      } catch {
-        res();
-      }
-    });
-  }
-  async function fetchCreateContent() {
-    const types2 = ["post", "prompt", "product"];
-    const [draftsRes, ...results] = await Promise.all([
-      api("/api/drafts"),
-      ...types2.map((t) => api("/api/content", { type: t }))
-    ]);
-    const items = [];
-    const stagedKeys = /* @__PURE__ */ new Set();
-    for (const d of Array.isArray(draftsRes?.drafts) ? draftsRes.drafts : []) {
-      stagedKeys.add(`${d.type}:${d.slug}`);
-      items.push({ type: d.type, title: d.title || d.slug || "Untitled", status: "draft" });
-    }
-    const mk = _lastStatus?.identity?.githubId || _lastStatus?.identity?.login || null;
-    results.forEach((r, i) => {
-      const full = Array.isArray(r?.items) ? r.items : null;
-      if (mk && full) {
-        try {
-          wbCacheSet(String(mk), types2[i], full, { allowEmpty: true });
-        } catch {
-        }
-      }
-      for (const it of full || []) {
-        if (stagedKeys.has(`${types2[i]}:${it.slug}`)) continue;
-        items.push({ type: types2[i], title: it.title || it.slug || "Untitled", status: it.status || "" });
-      }
-    });
-    return items;
-  }
-  async function getCreateRecent({ force = false } = {}) {
-    try {
-      const c = await createCacheGet(CREATE_RECENT_KEY);
-      if (!force && c && Array.isArray(c.items) && c.items.length && Date.now() - (c.at || 0) < CREATE_RECENT_TTL) return c.items;
-    } catch {
-    }
-    const items = await fetchCreateContent();
-    if (items.length) await createCacheSet(CREATE_RECENT_KEY, { at: Date.now(), items });
-    return items;
-  }
-  function prefetchCreateRecent() {
-    try {
-      getCreateRecent();
-    } catch {
-    }
-  }
-  var CREATE_STATE = (s) => s === "draft" ? { cls: "draft", label: "Draft" } : s === "published" ? { cls: "pub", label: "Published" } : null;
-  async function loadCreateRecent(overlay) {
-    const wrap = overlay.querySelector("[data-create-recent]");
-    const list = overlay.querySelector("[data-create-recent-list]");
-    const search = overlay.querySelector("[data-create-search]");
-    if (!wrap || !list) return;
-    const all = await getCreateRecent();
-    if (!all.length) {
-      wrap.hidden = true;
-      return;
-    }
-    const draftsFirst = (arr) => [...arr.filter((x) => x.status === "draft"), ...arr.filter((x) => x.status !== "draft")];
-    const rowHtml = (x) => {
-      const st = CREATE_STATE(x.status);
-      const meta = `${CREATE_TYPE_LABEL[x.type] || ""}${st ? ` <span class="create-state ${st.cls}">${st.label}</span>` : ""}`;
-      return `<button class="create-row" data-go="${x.type}" type="button">
-      <span class="create-row-ico">${cSvg(CREATE_FILE_ICO, { size: 15, sw: 1.9 })}</span>
-      <span class="create-row-tx"><span class="create-row-t">${esc2(x.title)}</span><span class="create-row-s">${meta}</span></span>
-      ${cSvg('<path d="m9 6 6 6-6 6"/>', { size: 17, sw: 2 })}
-    </button>`;
-    };
-    const wireRows = () => list.querySelectorAll("[data-go]").forEach((b) => b.addEventListener("click", () => {
-      window.location.href = `workspace.html#tab=${b.dataset.go}`;
-    }));
-    const render = (q) => {
-      const ql = String(q || "").trim().toLowerCase();
-      const matched = ql ? all.filter((x) => x.title.toLowerCase().includes(ql)) : all;
-      const rows = draftsFirst(matched).slice(0, 3);
-      list.innerHTML = rows.length ? rows.map(rowHtml).join("") : `<div class="create-empty">No matching files.</div>`;
-      wireRows();
-    };
-    wrap.hidden = false;
-    render("");
-    search?.addEventListener("input", () => render(search.value));
-  }
   function wireCompose(root) {
-    root.querySelector("[data-compose]")?.addEventListener("click", () => openCreateModal());
+    root.querySelector("[data-compose]")?.addEventListener("click", () => openComposeModal());
   }
   async function wireApps(root) {
     const apps = root.querySelector("[data-apps]");

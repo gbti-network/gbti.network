@@ -1998,6 +1998,28 @@ ${String(body ?? "")}`;
     if (!vis.length) return null;
     return vis.some((t) => t?.id === requested) ? requested : vis[0].id;
   }
+  function visibleTiles(tiles, tabs, authoring) {
+    const shown = new Set(visibleTabs(tabs, authoring).map((t) => t?.id));
+    return (Array.isArray(tiles) ? tiles : []).filter((t) => {
+      const m = /^#tab=([a-z]+)$/.exec(String(t?.href ?? ""));
+      return !m || shown.has(m[1]);
+    });
+  }
+  function trialBanner(membership, authoring) {
+    if (membership !== "trialing") return null;
+    const headline = "You are on the free trial";
+    return authoring ? {
+      headline,
+      body: "Author and stage drafts on your own fork now. Publishing to gbti.network (opening canonical pull requests) requires a paid membership.",
+      ctaLabel: "Upgrade to publish",
+      ctaHref: "https://gbti.network/membership/"
+    } : {
+      headline,
+      body: "Writing happens in the WorkBench on gbti.network. You can author and stage drafts there now, and publishing requires a paid membership.",
+      ctaLabel: "Open the WorkBench",
+      ctaHref: "https://gbti.network/workbench/"
+    };
+  }
 
   // client-ui/src/editor-core.mjs
   function fmtDate(value) {
@@ -15229,7 +15251,7 @@ ${String(body ?? "")}`;
       this._loadProfile();
       this._ensureTab(this._tab);
       if (this._tab !== "overview") this._ensureOverview();
-      this._loadInboxCount();
+      if (this._authoring()) this._loadInboxCount();
       this._onHash = () => {
         const h = typeof location !== "undefined" ? location.hash : "";
         const plan = planHashRoute(h, { editing: !!this._editing, reviewing: this._reviewing != null, tab: this._tab });
@@ -15848,13 +15870,14 @@ ${String(body ?? "")}`;
         { nm: "Settings", href: settingsHref, n: null },
         ...isStaff ? [{ nm: "Admin tools", href: adminHref, n: null }] : []
       ];
-      const tileHtml = tiles.map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? "" : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join("");
+      const tileHtml = visibleTiles(tiles, TABS, this._authoring()).map((t) => `<a class="ov-tile" href="${esc(t.href)}"><span class="ov-n">${t.n == null ? "" : esc(t.n)}</span><span class="ov-nm">${esc(t.nm)}</span></a>`).join("");
       const draft = c.drafts ? `<span class="ov-draft">${esc(c.drafts)} draft${c.drafts === 1 ? "" : "s"} in progress</span>` : "";
-      const trialBanner = ov.membership === "trialing" ? `<div class="ov-trial"><div><b>You are on the free trial</b><br/><span>Author and stage drafts on your own fork now. Publishing to gbti.network (opening canonical pull requests) requires a paid membership.</span></div><a class="ov-up" href="https://gbti.network/membership/" target="_blank" rel="noopener">Upgrade to publish</a></div>` : "";
+      const tb = trialBanner(ov.membership, this._authoring());
+      const trialHtml = !tb ? "" : `<div class="ov-trial"><div><b>${esc(tb.headline)}</b><br/><span>${esc(tb.body)}</span></div><a class="ov-up" href="${esc(tb.ctaHref)}" target="_blank" rel="noopener">${esc(tb.ctaLabel)}</a></div>`;
       const att = ov.attention.length ? `<ul class="ov-att">${ov.attention.map((a) => `<li><span class="tag ${esc(a.tone)}">${esc(a.label)}</span> <a href="${esc(a.url || "#")}" target="_blank" rel="noopener">${esc(a.title)}</a></li>`).join("")}</ul>` : `<p class="muted">No pull requests need your attention.</p>`;
       return `<div class="ov">
       <div class="ov-hero"><div><b>Your WorkBench</b><br/><span class="muted">Membership: ${esc(mLabel)}</span></div>${draft}</div>
-      ${trialBanner}
+      ${trialHtml}
       <div class="ov-tiles">${tileHtml}</div>
       <h3 class="ov-h3">Pull requests</h3>
       ${att}
@@ -16197,7 +16220,12 @@ ${String(body ?? "")}`;
     }
     async _fetchSources(login) {
       const [review, prs, following, replies, approvals] = await Promise.all([
-        this._safe(() => this._review()),
+        // sow-204: ALWAYS EMPTY in this host, and this element is mounted only by the extension shell.
+        // Contribution review is authoring: the Inbox tab is flagged `authoring` (hidden in the extension) and
+        // /api/contributions is no longer routed here, so fetching it would 404 and the lane's deep-link
+        // (workspace.html#tab=inbox) would land on a tab resolveTab redirects away from. buildBell is left
+        // generic and still understands a `review` source, so a host that keeps authoring can feed it again.
+        Promise.resolve([]),
         this._safe(() => this._prs()),
         this._safe(() => this._following(login)),
         this._safe(() => this._replies(login)),
@@ -16225,16 +16253,6 @@ ${String(body ?? "")}`;
           href: "admin.html#tab=syndication"
         };
       });
-    }
-    async _review() {
-      const { contributions = [] } = await this.client.listContributions() || {};
-      return contributions.map((c) => ({
-        id: `c${c.number}`,
-        ts: toMs(c.updatedAt ?? c.createdAt),
-        title: c.title || `Contribution #${c.number}`,
-        sub: c.author?.login ? `from @${c.author.login}` : "awaiting your review",
-        href: "workspace.html#tab=inbox"
-      }));
     }
     async _prs() {
       const { prs = [] } = await this.client.listPRs() || {};

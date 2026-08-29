@@ -2,14 +2,17 @@
 // createHttpClient with a MESSAGING fetch, so it produces the same /api/* requests the npm host serves; this
 // dispatcher answers them in the background worker. It mirrors client/src/api.mjs's routes, but is
 // async-reader-aware (the extension reads content over the GitHub Contents API, which is async, whereas the
-// npm reader is sync fs). Reader-free operations (validate, publish) are reused from the core UNCHANGED; the
+// npm reader is sync fs). sow-204 removed this host's AUTHORING routes, so the reader-free ops they used
 // reader-dependent reads (status' role, content, content/item, members) call the async reader directly. Pure
 // over the injected ctx, so it is unit-tested in node with a fake ctx.
 
-import { OperationError, listContent, listMembersOnly, getContentItem, validateContent, publish, saveDraft, listDrafts, readDraft, discardDraft, publishDraft, publishShare, listShares, listShareComments, readContent, publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow, upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus,
-  discordUnlink, getNews, getNewsSources, getPrefs, setPrefs, publishNews, reflectNewsDiscussion, recordNewsOpen, recordContentOpen, setOwnContentStatus, renameContent, deleteComment, stageImage, listDiscordChannels, getOnboardingStatus, listIncomingContributions, getContributionReview, reviewContribution, getOverridesRoster, getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue, socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp } from '../../client/src/operations.mjs';
+import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft, readDraft, publishShare, listShares, listShareComments, readContent,
+  publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow,
+  upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getPrefs, setPrefs,
+  publishNews, reflectNewsDiscussion, recordNewsOpen, recordContentOpen, deleteComment, listDiscordChannels, getOnboardingStatus, getOverridesRoster,
+  getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue,
+  socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp } from '../../client/src/operations.mjs';
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
-import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { roleOf, rolesFromText, curatorsFromText, canCurateNews } from '../../client/src/roles.mjs';
 import { banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, addNewsSource, removeNewsSource, setNewsSourceEnabled, getQuotePool, addQuote, removeQuote, setQuoteEnabled, getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool, setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates, getNewsEngagementSettings, setNewsEngagementSettings, getContentEngagementSettings, setContentEngagementSettings, getSyndicationSettings, setSyndicationSettings, getCouponPool } from '../../client/src/admin-ops.mjs';
@@ -123,29 +126,12 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         // sow-193: was `await ctx.reader.listMembersOnly()` directly, bypassing the shared op because that op
         // forgot to await. The op awaits now, so both hosts go through it and the identity check it performs.
         return ok(await listMembersOnly(ctx));
-      case '/api/form-fields':
-        return ok({ fields: fieldsFor(query.type) ?? [] });
       case '/api/preview':
         return ok({ html: renderMarkdown(body?.body ?? '') });
-      case '/api/validate':
-        return ok(validateContent(ctx, body)); // reader-free
-      case '/api/publish':
-        return ok(await publish(ctx, body)); // reader-free (uses content-ops + the repo client)
-      case '/api/content/status': // SOW-106 Phase B: member self-unpublish/republish (a reversible own-folder status flip via the gated PR). The route landed in client/src/api.mjs but was never added here, so the extension WorkBench's Unpublish/Republish row actions fell to default: not_found (404). This brings the extension host to parity with the website + npm hosts.
-        return ok(await setOwnContentStatus(ctx, body ?? {}));
-      case '/api/content/rename': // SOW-112: the permalink rename op. Latent today (rename is folded into the publish event, and renameContent has no UI call site), routed here for parity so it cannot 404 in the extension host if a caller ever returns. Mirrors client/src/api.mjs.
-        return ok(await renameContent(ctx, body ?? {}));
-      case '/api/image': // SOW-006 / sow-165: stage an editor image (drop, paste, or the cover picker). The shared editor calls client.stageImage unconditionally, so in the extension this used to hit default: 404. Routed for parity; the extension has no local stager yet, so stageImage returns a clear "not available in this client" bad-request the editor's failHint surfaces, instead of a raw 404. Real extension image staging (in-memory pending flushed at publish, as the website does) is a follow-up.
-        return ok(await stageImage(ctx, body ?? {}));
-      // SOW-082: universal draft staging (Save to the fork without a PR; review; Publish from the staged branch).
-      case '/api/drafts':
-        return ok(await listDrafts(ctx, { type: query.type }));
+      // SOW-082 + sow-204: what survives of draft staging in the EXTENSION is this read/save pair, which the
+      // reader uses. The list, discard and publish-from-draft routes were authoring and left with the rest.
       case '/api/draft':
         return ok(method === 'POST' ? await saveDraft(ctx, body) : await readDraft(ctx, { type: query.type, slug: query.slug, store: query.store, path: query.path }));
-      case '/api/draft/discard':
-        return ok(await discardDraft(ctx, body));
-      case '/api/draft/publish':
-        return ok(await publishDraft(ctx, body));
       case '/api/share':
         return ok(await publishShare(ctx, body)); // SOW-018: reader-free; members Share encrypts via the Worker
       case '/api/shares':
@@ -200,12 +186,6 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(getReferral(ctx));
       case '/api/prs':
         return ok({ prs: await requireRepo(ctx).listMyPulls(id.login) });
-      case '/api/contributions': // SOW-028: the owner's incoming-contribution review inbox (open PRs against their folder)
-        return ok(await listIncomingContributions(ctx));
-      case '/api/contribution': // SOW-028: one contribution's diff + proposed body for the in-client review
-        return ok(await getContributionReview(ctx, { number: query.number }));
-      case '/api/contribution-review': // SOW-028: the owner's decision (approve | request-changes | decline)
-        return ok(await reviewContribution(ctx, body));
       case '/api/overrides': // SOW-038 P2: superadmin dashboard roster (admin-gated; reads the public house/*.yml)
         return ok(await getOverridesRoster(ctx));
       // SOW-079: /api/taxonomy, /api/news-source-pool, /api/quote-pool moved ABOVE the identity gate (public reads).

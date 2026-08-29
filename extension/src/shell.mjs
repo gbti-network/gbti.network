@@ -10,7 +10,6 @@ import '../../client-ui/src/elements/gbti-activity-bell.mjs'; // SOW-042 P3: the
 import '../../client-ui/src/elements/gbti-social-queue.mjs'; // SOW-121: the avatar-menu Social Queue popup
 import '../../client-ui/src/elements/gbti-debug-panel.mjs'; // SOW-124: the superadmin Debug panel (devlog viewer)
 import '../../client-ui/src/elements/gbti-welcome.mjs'; // SOW-048: dual-purposed as the forced-sign-in login splash
-import { wbCacheSet } from '../../client-ui/src/workbench-cache.mjs'; // SOW-073 P5: warm the workbench cache from the create-recent prefetch
 import { expiryPopupDecision, expiryPopupCopy } from '../../client-ui/src/membership-expiry.mjs'; // SOW-119 QA: the coupon-expiry countdown
 import { devlog, devlogFlagOn, setDevlogFlag } from './devlog.mjs'; // SOW-124: the page realm's devlog + the shared flag
 
@@ -156,7 +155,7 @@ function controlsHtml() {
         <button class="mi mi-signout" role="menuitem" type="button" data-me-signout>Sign out</button>
       </div>
     </div>
-    <button class="nt-icobtn" data-compose data-ico="plus" title="Create" aria-label="Create" aria-haspopup="dialog"></button>
+    <button class="nt-icobtn" data-compose data-ico="plus" title="Post a Share" aria-label="Post a Share" aria-haspopup="dialog"></button>
   </div>`;
 }
 
@@ -283,7 +282,6 @@ export async function loadShellAccount(root = document.querySelector('[data-shel
   _lastStatus = status;
   const signedIn = !shouldGate(status);
   if (root) applyAccount(root, signedIn ? status : null);
-  if (signedIn) prefetchCreateRecent(); // SOW-064: warm the 24h Recent-drafts cache before the "+" is opened
   return signedIn ? status : null;
 }
 
@@ -428,152 +426,19 @@ function openComposeModal() {
   document.body.appendChild(overlay);
   overlay.querySelector('gbti-share-composer')?.querySelector?.('input, textarea')?.focus?.();
 }
-// SOW-064: the "+" opens a CENTERED create popup, following the "Content Creation Popup" Claude Design: a header
-// ("Create" eyebrow + "What would you like to create today?" + sub), four COLOR-CODED format cards in one row
-// (Share=green, article=blue, prompt=purple, product=amber) with Share pre-selected, a workbench search input, and
-// a "Recent drafts" list loaded from the member's content. Cards: Share -> the composer modal; the others navigate
-// to the WorkBench (#new=<type>, a blank <gbti-content-editor>). Reuses the .compose-modal overlay (centered,
-// backdrop + Esc).
-const cSvg = (inner, { size = 21, sw = 1.75 } = {}) =>
-  `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
-const CREATE_CARDS = [
-  { type: 'share', cls: 'share', t: 'New Share', s: 'A quick update', svg: '<path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>' },
-  { type: 'post', cls: 'article', t: 'New article', s: 'Write a post', svg: '<path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/>' },
-  { type: 'prompt', cls: 'prompt', t: 'New prompt', s: 'Share a prompt', svg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
-  { type: 'product', cls: 'product', t: 'New product', s: 'List a product', svg: '<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>' },
-];
-const CREATE_FILE_ICO = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/>';
-const CREATE_TYPE_LABEL = { post: 'Article', prompt: 'Prompt', product: 'Product' };
-
-function openCreateModal() {
-  if (document.querySelector('.compose-modal')) return; // already open
-  const overlay = document.createElement('div');
-  overlay.className = 'compose-modal create-modal';
-  const cards = CREATE_CARDS.map((c, i) => `<button class="cc-card${i === 0 ? ' sel' : ''}" data-new="${c.type}" type="button">
-      <span class="cc-ico ${c.cls}">${cSvg(c.svg)}</span>
-      <span class="cc-tx"><span class="cc-t">${c.t}</span><span class="cc-s">${c.s}</span></span>
-    </button>`).join('');
-  overlay.innerHTML = `<div class="compose-panel create-panel">
-    <button class="create-x" type="button" aria-label="Close">${cSvg('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', { size: 17, sw: 2 })}</button>
-    <div class="create-eyebrow">Create</div>
-    <h2 class="create-h2">What would you like to create today?</h2>
-    <p class="create-sub">Choose a format to start a new post.</p>
-    <div class="create-grid">${cards}</div>
-    <div class="create-search">${cSvg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.4-3.4"/>', { size: 17, sw: 2 })}
-      <input type="text" placeholder="Search through my workbench files to find my content quickly." data-create-search aria-label="Search my workbench" />
-      <span class="create-kbd">&#8984;K</span>
-    </div>
-    <div class="create-recent" data-create-recent hidden>
-      <div class="create-recent-h">Recent drafts</div>
-      <div data-create-recent-list></div>
-    </div>
-  </div>`;
-  const onEsc = (e) => { if (e.key === 'Escape') close(); };
-  const close = () => { overlay.remove(); document.removeEventListener('keydown', onEsc); };
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); }); // backdrop click
-  overlay.querySelector('.create-x')?.addEventListener('click', close);
-  overlay.querySelectorAll('[data-new]').forEach((b) => b.addEventListener('click', () => {
-    close();
-    const t = b.dataset.new;
-    if (t === 'share') openComposeModal();
-    else window.location.href = `workspace.html#new=${t}`; // a blank editor of that type (works from any page)
-  }));
-  document.addEventListener('keydown', onEsc);
-  document.body.appendChild(overlay);
-  overlay.querySelector('[data-create-search]')?.focus?.();
-  loadCreateRecent(overlay); // best-effort; populates / hides the Recent drafts list + wires the search filter
-}
-
-// SOW-064: the member's WorkBench content powers the popup's Recent drafts + search. It is fetched once and cached
-// in chrome.storage.local for 24h, warmed by prefetchCreateRecent() on shell load, so the "+" popup renders the
-// list instantly. Only a non-empty result is cached, so a signed-out / pre-auth miss never poisons the cache.
-const CREATE_RECENT_KEY = 'gbti:create-recent';
-const CREATE_RECENT_TTL = 24 * 60 * 60 * 1000; // 24h
-function createCacheGet(key) {
-  return new Promise((res) => { try { chrome.storage.local.get(key, (o) => res(o?.[key] ?? null)); } catch { res(null); } });
-}
-function createCacheSet(key, val) {
-  return new Promise((res) => { try { chrome.storage.local.set({ [key]: val }, () => res()); } catch { res(); } });
-}
-async function fetchCreateContent() {
-  const types = ['post', 'prompt', 'product'];
-  // The WorkBench "Drafts" tab lists the member's FORK-STAGED drafts (listDrafts / gbti/<type>-<slug> branches),
-  // which are NOT in the committed /api/content set. Fetch them too and list them FIRST, so the popup's Recent
-  // drafts matches the Drafts tab (staged drafts before committed content). One extra request, cached 24h.
-  const [draftsRes, ...results] = await Promise.all([
-    api('/api/drafts'),
-    ...types.map((t) => api('/api/content', { type: t })),
-  ]);
-  const items = [];
-  // Staged drafts first (forced status 'draft' so they badge as drafts and sort ahead of published content).
-  const stagedKeys = new Set();
-  for (const d of (Array.isArray(draftsRes?.drafts) ? draftsRes.drafts : [])) {
-    stagedKeys.add(`${d.type}:${d.slug}`);
-    items.push({ type: d.type, title: d.title || d.slug || 'Untitled', status: 'draft' });
-  }
-  // SOW-073 P5: the workbench SWR cache reads the SAME per-type content. Warm it here from the FULL items this
-  // prefetch already fetched (free, no extra request), so the first workbench open is an instant cache hit.
-  // Success-only: api() returns null on failure, so a missing items array never poisons the cache.
-  const mk = _lastStatus?.identity?.githubId || _lastStatus?.identity?.login || null;
-  results.forEach((r, i) => {
-    const full = Array.isArray(r?.items) ? r.items : null;
-    if (mk && full) { try { wbCacheSet(String(mk), types[i], full, { allowEmpty: true }); } catch { /* best-effort */ } }
-    for (const it of full || []) {
-      if (stagedKeys.has(`${types[i]}:${it.slug}`)) continue; // already shown as a staged draft above
-      items.push({ type: types[i], title: it.title || it.slug || 'Untitled', status: it.status || '' });
-    }
-  });
-  return items;
-}
-async function getCreateRecent({ force = false } = {}) {
-  try {
-    const c = await createCacheGet(CREATE_RECENT_KEY);
-    if (!force && c && Array.isArray(c.items) && c.items.length && (Date.now() - (c.at || 0)) < CREATE_RECENT_TTL) return c.items;
-  } catch { /* fall through to a fresh fetch */ }
-  const items = await fetchCreateContent();
-  if (items.length) await createCacheSet(CREATE_RECENT_KEY, { at: Date.now(), items });
-  return items;
-}
-/** Warm the 24h cache on shell load (signed-in) so the "+" popup's Recent drafts render instantly. */
-function prefetchCreateRecent() { try { getCreateRecent(); } catch { /* best-effort */ } }
-
-// Populate the popup's "Recent drafts" + wire the workbench search. With no query it shows ALL DRAFTS first, then
-// published; each row is badged with its publish state. Typing filters by title (drafts still first). A row opens
-// that type's WorkBench list. Best-effort: an empty content set leaves the section hidden.
-const CREATE_STATE = (s) => (s === 'draft' ? { cls: 'draft', label: 'Draft' } : (s === 'published' ? { cls: 'pub', label: 'Published' } : null));
-async function loadCreateRecent(overlay) {
-  const wrap = overlay.querySelector('[data-create-recent]');
-  const list = overlay.querySelector('[data-create-recent-list]');
-  const search = overlay.querySelector('[data-create-search]');
-  if (!wrap || !list) return;
-  const all = await getCreateRecent();
-  if (!all.length) { wrap.hidden = true; return; }
-  const draftsFirst = (arr) => [...arr.filter((x) => x.status === 'draft'), ...arr.filter((x) => x.status !== 'draft')];
-  const rowHtml = (x) => {
-    const st = CREATE_STATE(x.status);
-    const meta = `${CREATE_TYPE_LABEL[x.type] || ''}${st ? ` <span class="create-state ${st.cls}">${st.label}</span>` : ''}`;
-    return `<button class="create-row" data-go="${x.type}" type="button">
-      <span class="create-row-ico">${cSvg(CREATE_FILE_ICO, { size: 15, sw: 1.9 })}</span>
-      <span class="create-row-tx"><span class="create-row-t">${esc(x.title)}</span><span class="create-row-s">${meta}</span></span>
-      ${cSvg('<path d="m9 6 6 6-6 6"/>', { size: 17, sw: 2 })}
-    </button>`;
-  };
-  const wireRows = () => list.querySelectorAll('[data-go]').forEach((b) =>
-    b.addEventListener('click', () => { window.location.href = `workspace.html#tab=${b.dataset.go}`; }));
-  const render = (q) => {
-    const ql = String(q || '').trim().toLowerCase();
-    const matched = ql ? all.filter((x) => x.title.toLowerCase().includes(ql)) : all;
-    const rows = draftsFirst(matched).slice(0, 3); // show at most three (drafts first, then published)
-    list.innerHTML = rows.length ? rows.map(rowHtml).join('') : `<div class="create-empty">No matching files.</div>`;
-    wireRows();
-  };
-  wrap.hidden = false;
-  render('');
-  search?.addEventListener('input', () => render(search.value));
-}
+// sow-204: the "+" opens the SHARE COMPOSER directly, and the SOW-064 create popup is gone from the extension.
+//
+// The owner's Option A ruling keeps the share composer and moves article, prompt and product authoring to the
+// website. That left the popup offering four formats of which one still worked, and a chooser with one card is
+// worse than no chooser. The popup and its Recent-drafts machinery are removed rather than trimmed, because
+// fetchCreateContent was the extension's last caller of /api/drafts, which this same change removes from
+// ext-dispatch; trimming the cards but keeping the list would have left a caller of a route that answers 404.
+// (It also called /api/content, which STAYS: that route backs the reader, not authoring.)
+//
+// The website and npm hosts are untouched: this file is extension-only, and their create flows live elsewhere.
 
 function wireCompose(root) {
-  root.querySelector('[data-compose]')?.addEventListener('click', () => openCreateModal());
+  root.querySelector('[data-compose]')?.addEventListener('click', () => openComposeModal());
 }
 
 async function wireApps(root) {

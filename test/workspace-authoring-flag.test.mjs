@@ -3,7 +3,7 @@
 // because they exist nowhere else in the extension.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { authoringEnabled, visibleTabs, resolveTab } from '../client-ui/src/workspace-core.mjs';
+import { authoringEnabled, visibleTabs, resolveTab, visibleTiles, trialBanner } from '../client-ui/src/workspace-core.mjs';
 
 // The real TABS shape, with the four Option A authoring tabs flagged. Kept here as a fixture rather than
 // imported, so a change to the component's tab list fails the ELEMENT test below rather than silently
@@ -112,4 +112,127 @@ test('gbti-workspace: _authoring() survives a DOM-free instance and defaults to 
   let got;
   assert.doesNotThrow(() => { got = el._authoring(); });
   assert.equal(got, true, 'no attribute and no chrome.runtime means the website default, authoring on');
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// sow-204 increment 2 item 1: the Overview TILES.
+//
+// Hiding a tab without hiding its tile is worse than doing nothing: the hub keeps advertising Articles,
+// Prompts and Products, and clicking one lands on a tab resolveTab has already redirected away from. The hub
+// itself is deliberately NOT flagged authoring, because it also carries Pull requests, Saved, Following,
+// Earnings, Settings, Admin tools and the PR attention list, every one of which survives Option A. Removing
+// the hub to fix a copy problem would remove working navigation.
+// ---------------------------------------------------------------------------------------------------------
+
+const TILE_FIXTURE = [
+  { nm: 'Articles', href: '#tab=post' },
+  { nm: 'Prompts', href: '#tab=prompt' },
+  { nm: 'Products', href: '#tab=product' },
+  { nm: 'Pull requests', href: '#tab=prs' },
+  { nm: 'Saved', href: '#tab=saved' },
+  { nm: 'Settings', href: 'account.html' },
+  { nm: 'Admin tools', href: 'admin.html' },
+];
+const TAB_FIXTURE = [
+  { id: 'overview' }, { id: 'post', authoring: true }, { id: 'prompt', authoring: true },
+  { id: 'product', authoring: true }, { id: 'prs' }, { id: 'inbox', authoring: true }, { id: 'saved' },
+];
+
+test('sow-204: with authoring OFF the authoring tiles go, and everything else survives in order', () => {
+  const got = visibleTiles(TILE_FIXTURE, TAB_FIXTURE, false).map((t) => t.nm);
+  assert.deepEqual(got, ['Pull requests', 'Saved', 'Settings', 'Admin tools'],
+    'exactly the three authoring tiles are dropped, order preserved, non-tab hrefs untouched');
+});
+
+test('sow-204: a tile whose href is not a #tab= link is never filtered', () => {
+  // Settings and Admin tools point at extension PAGES (account.html, admin.html) or website routes, not at a
+  // workspace tab. They have no tab to be hidden with, so the filter must leave them alone in both directions.
+  for (const authoring of [true, false]) {
+    const got = visibleTiles(TILE_FIXTURE, TAB_FIXTURE, authoring).map((t) => t.nm);
+    assert.ok(got.includes('Settings') && got.includes('Admin tools'), `page-href tiles dropped with authoring=${authoring}`);
+  }
+});
+
+test('sow-204: with authoring ON nothing is removed', () => {
+  assert.deepEqual(visibleTiles(TILE_FIXTURE, TAB_FIXTURE, true).map((t) => t.nm), TILE_FIXTURE.map((t) => t.nm));
+});
+
+test('sow-204: a tile pointing at a tab that does not exist is dropped', () => {
+  // Deliberate: a #tab= link to an id no longer in TABS is already broken (resolveTab would redirect), so
+  // keeping it would advertise a dead destination. Dropping it means a deleted tab cannot leave a live tile.
+  const got = visibleTiles([...TILE_FIXTURE, { nm: 'Ghost', href: '#tab=ghost' }], TAB_FIXTURE, true).map((t) => t.nm);
+  assert.ok(!got.includes('Ghost'), 'a tile for a nonexistent tab must not render');
+});
+
+test('sow-204: degenerate tile inputs do not throw', () => {
+  assert.deepEqual(visibleTiles(null, TAB_FIXTURE, false), []);
+  assert.deepEqual(visibleTiles(undefined, null, true), []);
+  assert.deepEqual(visibleTiles([{ href: null }, {}], TAB_FIXTURE, false).length, 2, 'a tile with no href has no tab to hide with');
+});
+
+test('sow-204: the component tiles actually link to the tabs this fixture assumes', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../client-ui/src/elements/gbti-workspace.mjs', import.meta.url), 'utf8');
+  const block = /const tiles = \[([\s\S]*?)\n {4}\];/.exec(src);
+  assert.ok(block, 'could not find the tiles block; this guard is pointed at the wrong shape');
+
+  const hrefs = [...block[1].matchAll(/href:\s*'#tab=([a-z]+)'/g)].map((m) => m[1]);
+  // Control: a regex that matched nothing would make the assertion below vacuous, which is exactly how a guard
+  // passes while asserting nothing.
+  assert.ok(hrefs.length >= 6, `parsed ${hrefs.length} tab tiles, expected at least 6`);
+
+  // The real linkage: every authoring-flagged tab that HAS a tile must lose that tile when authoring is off.
+  // This is what stops the two lists drifting apart in a later edit.
+  const tabsBlock = /const TABS = \[([\s\S]*?)\n\];/.exec(src);
+  const realTabs = [...tabsBlock[1].matchAll(/\{\s*id:\s*'([a-z]+)'[^}]*\}/g)]
+    .map((m) => ({ id: m[1], authoring: /authoring:\s*true/.test(m[0]) }));
+  const flagged = realTabs.filter((t) => t.authoring).map((t) => t.id);
+  const kept = visibleTiles(hrefs.map((id) => ({ href: `#tab=${id}` })), realTabs, false).map((t) => t.href);
+  for (const id of flagged) {
+    assert.ok(!kept.includes(`#tab=${id}`), `#tab=${id} is an authoring tab but its tile survives with authoring off`);
+  }
+  assert.ok(kept.length > 0 && kept.length < hrefs.length,
+    `the filter must remove SOME tiles and keep SOME: kept ${kept.length} of ${hrefs.length}`);
+});
+
+// sow-204 increment 2 item 1, the other half of the Overview: the trial banner said "Author and stage drafts
+// on your own fork now", which the authoring flag turns into a false sentence in the extension. The copy is a
+// decision, so it lives in workspace-core as data and is asserted here rather than being grepped out of a
+// template string in a 997-line element.
+
+test('sow-204: the trial banner renders only for a trial member, on both hosts', () => {
+  for (const authoring of [true, false]) {
+    for (const m of ['active', 'expired', 'cancelled', 'none', 'banned', undefined, null, '']) {
+      assert.equal(trialBanner(m, authoring), null, `membership ${JSON.stringify(m)} must not get a trial banner`);
+    }
+    assert.ok(trialBanner('trialing', authoring), `a trial member gets a banner with authoring=${authoring}`);
+  }
+});
+
+test('sow-204: with authoring OFF the banner stops claiming this host can author', () => {
+  const off = trialBanner('trialing', false);
+  assert.doesNotMatch(off.body, /on your own fork now/,
+    'the extension banner must not tell a member to stage drafts in a host that no longer authors');
+  assert.match(off.body, /WorkBench on gbti\.network/, 'it must name the host that CAN author');
+  assert.equal(off.ctaHref, 'https://gbti.network/workbench/');
+
+  const on = trialBanner('trialing', true);
+  assert.match(on.body, /on your own fork now/, 'the website and npm hosts keep the original copy unchanged');
+  assert.equal(on.ctaHref, 'https://gbti.network/membership/');
+
+  // The membership FACT is the same on both hosts; only the instruction differs. A banner that dropped the
+  // paid-only rule would be a friendlier lie.
+  for (const b of [on, off]) {
+    assert.match(b.body, /paid membership/, 'both variants must still say publishing requires a paid membership');
+    assert.equal(b.headline, 'You are on the free trial');
+  }
+});
+
+test('sow-204: banner copy follows the writing conventions (no dashes, no contractions)', () => {
+  for (const b of [trialBanner('trialing', true), trialBanner('trialing', false)]) {
+    for (const s of [b.headline, b.body, b.ctaLabel]) {
+      assert.doesNotMatch(s, /[–—]/, `em or en dash in user-facing copy: ${s}`);
+      assert.doesNotMatch(s, /\b\w+'(t|s|re|ve|ll|d|m)\b/, `contraction in user-facing copy: ${s}`);
+    }
+  }
 });

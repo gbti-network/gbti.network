@@ -82,18 +82,37 @@ test('content + item: lists + reads via the async reader, own-folder scoped', as
   assert.equal(other.status, 404);
 });
 
-test('SOW-106 Phase B: /api/content/status is ROUTED in the extension host (was a 404 route miss)', async () => {
-  const ctx = ctxFor({ repo: {}, files: { 'members/alice/posts/hello/index.md': POST } }); // POST is status: published
-  // Republishing an already-published item is a no-op flip, so it reaches setOwnContentStatus and returns WITHOUT
-  // needing a live repo publish. Before the fix, ext-dispatch had no case, so this fell to `default: 404 not_found`.
-  const r = await dispatch(ctx, { method: 'POST', pathname: '/api/content/status', body: { path: 'members/alice/posts/hello/index.md', status: 'published' } });
-  assert.equal(r.status, 200);
-  assert.equal(r.json.noop, true);
-  assert.equal(r.json.status, 'published');
-  // A foreign folder is refused by the OP (forbidden), not by a missing route (not_found): proves the route is wired.
-  const foreign = await dispatch(ctx, { method: 'POST', pathname: '/api/content/status', body: { path: 'members/bob/posts/x/index.md', status: 'draft' } });
-  assert.equal(foreign.json.error, 'forbidden');
-  assert.notEqual(foreign.json.error, 'not_found');
+// sow-204 (owner Option A, 2026-08-28): the extension stops being an AUTHORING host, so twelve routes were
+// removed from ext-dispatch on purpose. Three tests here previously asserted the OPPOSITE, each written when
+// its route was added to close a real 404 (SOW-106 content/status, SOW-006 image, and the publish/validate/
+// form-fields trio). Those tests were right about the behaviour of their day; the behaviour changed by owner
+// decision, not by regression, so they are INVERTED rather than deleted: the removal is now the assertion.
+//
+// This matters because a route can vanish two ways. Deliberately, as here, or by an import breaking and a case
+// silently never being reached. Pinning the 404 means the next accidental disappearance of a SURVIVING route
+// still fails, and re-adding one of the twelve without reopening the decision fails too (the host manifest in
+// test/ext-dispatch-route-parity.test.mjs is the other half of that pair).
+const REMOVED_BY_SOW_204 = [
+  ['POST', '/api/publish'], ['POST', '/api/validate'], ['GET', '/api/form-fields'], ['POST', '/api/image'],
+  ['POST', '/api/content/status'], ['POST', '/api/content/rename'],
+  ['GET', '/api/drafts'], ['POST', '/api/draft/discard'], ['POST', '/api/draft/publish'],
+  ['GET', '/api/contributions'], ['GET', '/api/contribution'], ['POST', '/api/contribution-review'],
+];
+
+test('sow-204: the twelve authoring routes are GONE from the extension host (404 not_found, not a silent 200)', async () => {
+  const ctx = ctxFor({ repo: {}, files: { 'members/alice/posts/hello/index.md': POST } });
+  for (const [method, pathname] of REMOVED_BY_SOW_204) {
+    const r = await dispatch(ctx, { method, pathname, body: {}, query: {} });
+    assert.equal(r.status, 404, `${pathname} still answers ${r.status} in the extension; authoring moved to the website`);
+    assert.equal(r.json.error, 'not_found', `${pathname} answered with ${r.json.error} rather than not_found, so something still routes it`);
+  }
+
+  // POSITIVE CONTROL. Without this the loop above would pass just as happily against a dispatcher that 404s
+  // EVERYTHING (a broken import, a mangled switch), which is the failure mode that looks identical to success.
+  const kept = await dispatch(ctx, { method: 'POST', pathname: '/api/preview', body: { body: '# Hi' } });
+  assert.equal(kept.status, 200, 'the surviving reader routes must still work; a blanket 404 would satisfy the loop above');
+  const item = await dispatch(ctx, { pathname: '/api/content/item', query: { path: 'members/alice/posts/hello/index.md' } });
+  assert.equal(item.status, 200, '/api/content/item is entangled with the reader and deliberately SURVIVES the authoring removal');
 });
 
 test('SOW-112 QA: /api/comment/delete is ROUTED in the extension host (was a 404 route miss; gbti-discussion deletes 404d)', async () => {
@@ -105,17 +124,6 @@ test('SOW-112 QA: /api/comment/delete is ROUTED in the extension host (was a 404
   assert.notEqual(r.json.error, 'not_found');
 });
 
-test('SOW-006: /api/image is ROUTED in the extension host (was a 404 route miss; editor drop/paste 404d)', async () => {
-  const ctx = ctxFor();
-  // The extension has no local stager, so stageImage rejects with bad-request ("not available in this client
-  // yet"); before the fix ext-dispatch had no case, so this returned the router's not_found (404). bad-request
-  // proves the request REACHED the op, i.e. the route is wired. (Functional extension image staging is a
-  // separate unbuilt feature; this closes the 404 and the route-parity gap.)
-  const r = await dispatch(ctx, { method: 'POST', pathname: '/api/image', body: { filename: 'x.png', dataBase64: 'AAAA' } });
-  assert.equal(r.json.error, 'bad-request');
-  assert.notEqual(r.json.error, 'not_found');
-});
-
 test('SOW-185 Phase 2: /api/status surfaces the resolved paidTier (fail-closed to none)', async () => {
   const base = ctxFor({ files: { 'house/roles.yml': '' } });
   assert.equal((await dispatch(base, { pathname: '/api/status' })).json.paidTier, 'none'); // no ctx.paidTier accessor -> fail-closed
@@ -123,34 +131,15 @@ test('SOW-185 Phase 2: /api/status surfaces the resolved paidTier (fail-closed t
   assert.equal((await dispatch(creatorCtx, { pathname: '/api/status' })).json.paidTier, 'creator');
 });
 
-test('validate + preview + form-fields: reader-free routes work', async () => {
+test('preview: the one reader-free route that SURVIVES the sow-204 authoring removal', async () => {
+  // This test used to cover validate + preview + form-fields together. validate and form-fields are authoring
+  // and left with the rest (asserted absent above); preview is the reader's markdown renderer and stays.
+  // The publish route's own case here was removed for the same reason. The publish OPERATION keeps its
+  // coverage: test/client-api.test.mjs drives it through the website/npm router, and publish-intro-comment,
+  // publish-rename and membership-client call it directly. What is gone is only the extension ROUTING of it.
   const ctx = ctxFor();
-  const good = await dispatch(ctx, { pathname: '/api/validate', body: { type: 'post', input: { title: 'T', slug: 'ok' } } });
-  assert.equal(good.json.valid, true);
-  const bad = await dispatch(ctx, { pathname: '/api/validate', body: { type: 'post', input: { title: 'T', slug: 'Bad Slug' } } });
-  assert.equal(bad.json.valid, false);
   const prev = await dispatch(ctx, { pathname: '/api/preview', body: { body: '# Hi' } });
   assert.match(prev.json.html, /<h1/);
-  const ff = await dispatch(ctx, { pathname: '/api/form-fields', query: { type: 'post' } });
-  assert.ok(ff.json.fields.some((f) => f.key === 'categories'));
-});
-
-test('publish: builds + opens a PR via the repo client (nested path)', async () => {
-  const puts = [];
-  const repo = {
-    upstream: 'gbti-network/gbti.network',
-    async ensureFork() { return { full_name: 'alice/gbti.network', owner: 'alice' }; },
-    async getDefaultBranch() { return 'main'; },
-    async getBranchSha() { return 'sha'; },
-    async ensureBranch() {},
-    async getFileSha() { return null; },
-    async putFile(r, p) { puts.push(p); },
-    async findOpenPull() { return null; },
-    async openPull() { return { number: 7, html_url: 'u' }; },
-  };
-  const r = await dispatch(ctxFor({ repo }), { pathname: '/api/publish', body: { type: 'post', input: { title: 'T', slug: 'my-post' }, body: 'x' } });
-  assert.equal(r.json.prNumber, 7);
-  assert.deepEqual(puts, ['members/alice/posts/my-post/index.md']);
 });
 
 test('no identity -> 409; unknown route -> 404', async () => {
