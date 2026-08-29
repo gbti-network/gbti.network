@@ -61,14 +61,31 @@ export async function membershipAdminOps(request, env, { authorize = authorizeAd
     };
   }
 
-  const token = env.REGATE_DISPATCH_TOKEN;
-  const repo = env.GITHUB_CONTENT_REPO;
-  if (!token || !repo) return { status: 500, body: { error: 'misconfigured', message: 'operations dispatch is not configured yet' } };
-
   // NOTE: for reconcile, client_payload carries `by` (the actor), NOT `github_id` — reconcile's targetedGithubId
   // only narrows to a single member when client_payload.github_id is present, so admin-reconcile runs a FULL --apply.
+  const fired = await fireRepositoryDispatch({ env, eventType, clientPayload, fetchImpl: fetch });
+  if (fired.reason === 'not configured') return { status: 500, body: { error: 'misconfigured', message: 'operations dispatch is not configured yet' } };
+  if (!fired.fired) return { status: 502, body: { error: 'dispatch_failed', message: fired.reason } };
+  return { status: 200, body: { ok: true, triggered: action } };
+}
+
+/**
+ * sow-213 Phase 2b: fire one repository_dispatch. Extracted from membershipAdminOps so the admin AUTHOR
+ * endpoint can reuse it after a role change without a second copy of the dispatch call.
+ *
+ * WHY A ROLE CHANGE NEEDS THIS AND A BAN NO LONGER DOES. Bans and grandfather grants are now dual-written
+ * straight into overrides:mirror by the author endpoint, so they reach the edge within the request. Roles are
+ * deliberately NOT dual-written: house/roles.yml is the root of trust for the anti-escalation model, and
+ * letting the Worker write staff status into KV would create an escalation path that does not exist today, one
+ * that bypasses CODEOWNERS entirely. So the role change goes to git, and this asks the workflow to re-derive
+ * the mirror FROM git. Authority stays where it was; only the latency changes, from six hours to about a second.
+ */
+export async function fireRepositoryDispatch({ env, eventType, clientPayload = {}, fetchImpl = globalThis.fetch }) {
+  const token = env?.REGATE_DISPATCH_TOKEN;
+  const repo = env?.GITHUB_CONTENT_REPO;
+  if (!token || !repo) return { fired: false, reason: 'not configured' };
   try {
-    const res = await fetch(`https://api.github.com/repos/${repo}/dispatches`, {
+    const res = await fetchImpl(`https://api.github.com/repos/${repo}/dispatches`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -79,9 +96,9 @@ export async function membershipAdminOps(request, env, { authorize = authorizeAd
       },
       body: JSON.stringify({ event_type: eventType, client_payload: clientPayload }),
     });
-    if (res.status === 204) return { status: 200, body: { ok: true, triggered: action } };
-    return { status: 502, body: { error: 'dispatch_failed', message: `GitHub returned ${res.status}` } };
+    if (res.status === 204) return { fired: true, reason: null };
+    return { fired: false, reason: `GitHub returned ${res.status}` };
   } catch {
-    return { status: 502, body: { error: 'dispatch_failed', message: 'could not reach GitHub' } };
+    return { fired: false, reason: 'could not reach GitHub' };
   }
 }

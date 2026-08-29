@@ -27,6 +27,7 @@ import { adminHostedBranchFor } from '../../membership/hosted-author.mjs';
 import { ban, unban, grandfather, revokeGrandfather, grantRole } from '../../membership/superadmin-actions.mjs'; // sow-161 increments 2-3
 import { PAID_GRANT_TIERS } from '../../membership/tier-gate.mjs'; // sow-213: the paid tiers a grandfather grant may name
 import { writeOverrideToKv, appendModerationLog } from './membership-override-kv.mjs'; // sow-213 Phase 2b + 2c
+import { fireRepositoryDispatch } from './membership-admin-ops.mjs'; // sow-213 Phase 2b: the post-role-change mirror refresh
 import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-edits.mjs'; // sow-161 increment 4
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
@@ -246,6 +247,7 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
   // Compute the file change + the branch slug SERVER-SIDE, per action category.
   let file, branchSlug;
   let govKv = null; // sow-213 Phase 2b: the KV half of a governance dual-write, applied after the git write lands
+  let govRefresh = false; // sow-213 Phase 2b: a role change has no KV half, so it asks the mirror workflow to re-derive from git
   if (isContent) {
     const path = String(payload?.path || '');
     if (!isCleanPath(path) || !CONTENT_ITEM_RE.test(path)) {
@@ -311,6 +313,7 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
       return { status: 503, body: { error: 'unavailable', message: `the action was refused because the moderation log could not be written (${logged.reason})` } };
     }
 
+    govRefresh = action === 'role';
     govKv = GOV_KV_SECTION[action]
       ? { section: GOV_KV_SECTION[action], githubId: targetId, remove: GOV_KV_REMOVES.has(action),
           entry: (result.next?.[GOV_KV_SECTION[action]] ?? []).find((e) => String(e?.github_id) === targetId) ?? null }
@@ -367,9 +370,10 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     body: JSON.stringify({ title, head: branch, base: 'main', body, maintainer_can_modify: false }),
   });
   const prData = await pr.json().catch(() => ({}));
-  if (pr.status === 422) return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true, ...(await dualWrite(kv, govKv)) } };
+  const post = { ...(await dualWrite(kv, govKv)), ...(await refreshMirror(env, govRefresh, fetchImpl)) };
+  if (pr.status === 422) return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true, ...post } };
   if (!pr.ok) return { status: 502, body: { error: 'open_pr_failed', message: `GitHub returned ${pr.status}` } };
-  return { status: 200, body: { ok: true, branch, number: prData.number, html_url: prData.html_url, ...(await dualWrite(kv, govKv)) } };
+  return { status: 200, body: { ok: true, branch, number: prData.number, html_url: prData.html_url, ...post } };
 }
 
 /**
@@ -383,6 +387,22 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
  * It is reported rather than swallowed because a silent false here reopens the window this phase exists to
  * close, and a caller that cannot see the difference cannot tell a dual-write from a git-only write.
  */
+/**
+ * sow-213 Phase 2b: a ROLE change has no KV half, deliberately. house/roles.yml is the root of trust for the
+ * anti-escalation model, and letting this endpoint write staff status into KV would create an escalation path
+ * that bypasses CODEOWNERS and does not exist today. So the role lands in git and we ask the mirror workflow
+ * to re-derive from git, which drops the lag from six hours to about a second WITHOUT moving the authority.
+ *
+ * BEST EFFORT, and reported. The role change is already committed; a failed refresh only means the edge picks
+ * it up on the next 6-hourly tick, which is the pre-existing behaviour. Reported rather than swallowed so an
+ * admin can tell "live now" from "live within six hours".
+ */
+async function refreshMirror(env, wanted, fetchImpl) {
+  if (!wanted) return {};
+  const r = await fireRepositoryDispatch({ env, eventType: 'sync-mirror', clientPayload: { reason: 'role-change' }, fetchImpl });
+  return { mirrorRefreshed: r.fired, mirrorReason: r.reason };
+}
+
 async function dualWrite(kv, plan) {
   if (!plan) return {}; // a role change has no KV half
   const r = await writeOverrideToKv({ kv, ...plan });

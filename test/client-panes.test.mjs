@@ -76,18 +76,42 @@ test('api: settings GET/POST + members-content', async () => {
   assert.equal((await handleApi({ method: 'GET', pathname: '/api/members-content', query: {} }, ctx)).status, 200);
 });
 
-test('api /api/admin: dispatch is role-gated and rejects unknown actions', async () => {
+// sow-213 Phase 2b: the SUBJECT of this test changed and the old assertion is now the thing that must be
+// FALSE. A ban used to be written by the LOCAL writer here (asserted as prNumber 77 off fakeRepo). That path
+// holds a GitHub token and no KV credential, so it wrote the git half of a ban and could not write the KV half
+// or the moderation log at all. Both hosts now route governance to the Worker; leaving this one behind would
+// simply have moved the gap from the extension to the website.
+test('api /api/admin: governance goes to the WORKER and is role-gated; unknown actions are rejected', async () => {
   const repoPath = tmp();
   fs.mkdirSync(path.join(repoPath, 'house'), { recursive: true });
   fs.writeFileSync(path.join(repoPath, 'house', 'bans.yml'), 'bans: []\n');
+  // requireAdmin derives the caller's role from roles.yml rather than from a host-provided role(), so the
+  // admin case needs the caller (github_id 1) listed there.
+  fs.writeFileSync(path.join(repoPath, 'house', 'roles.yml'), 'superadmins: []\nadmins:\n  - github_id: "1"\nmoderators: []\n');
 
-  const asMember = await handleApi({ method: 'POST', pathname: '/api/admin', body: { action: 'ban', githubId: '9' } }, ctxFor({ role: 'member', repoPath, repo: fakeRepo() }));
+  const calls = [];
+  const workerFetch = async (url) => {
+    calls.push(String(url));
+    return { ok: true, status: 200, async json() { return { ok: true, number: 77, html_url: 'https://x/pull/77', kvWritten: true, kvReason: null }; } };
+  };
+  const withWorker = (over) => ({ ...ctxFor(over), fetch: workerFetch });
+
+  // A caller absent from roles.yml resolves to member -> forbidden, and never reaches the Worker.
+  const memberPath = tmp();
+  fs.mkdirSync(path.join(memberPath, 'house'), { recursive: true });
+  fs.writeFileSync(path.join(memberPath, 'house', 'bans.yml'), 'bans: []\n');
+  const asMember = await handleApi({ method: 'POST', pathname: '/api/admin', body: { action: 'ban', githubId: '9' } }, withWorker({ role: 'member', repoPath: memberPath, repo: fakeRepo() }));
   assert.equal(asMember.status, 403);
+  assert.equal(calls.length, 0, 'a rejected caller never reaches the Worker');
 
-  const asAdmin = await handleApi({ method: 'POST', pathname: '/api/admin', body: { action: 'ban', githubId: '9', reason: 'spam' } }, ctxFor({ role: 'admin', repoPath, repo: fakeRepo() }));
+  const recording = { ...fakeRepo(), puts: [], async putFile(p2, c) { this.puts.push({ path: p2, content: c }); } };
+  const asAdmin = await handleApi({ method: 'POST', pathname: '/api/admin', body: { action: 'ban', githubId: '9', reason: 'spam' } }, withWorker({ role: 'admin', repoPath, repo: recording }));
   assert.equal(asAdmin.status, 200);
   assert.equal(asAdmin.json.prNumber, 77);
+  assert.equal(asAdmin.json.kvWritten, true, 'both halves landed, which the local writer could never report');
+  assert.match(calls[0], /\/membership\/admin\/author$/);
+  assert.equal(recording.puts.length, 0, 'THE POINT: the local git-only writer was not used');
 
-  const unknown = await handleApi({ method: 'POST', pathname: '/api/admin', body: { action: 'frobnicate' } }, ctxFor({ role: 'admin', repoPath, repo: fakeRepo() }));
+  const unknown = await handleApi({ method: 'POST', pathname: '/api/admin', body: { action: 'frobnicate' } }, withWorker({ role: 'admin', repoPath, repo: fakeRepo() }));
   assert.equal(unknown.status, 400);
 });

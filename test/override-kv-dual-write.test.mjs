@@ -221,6 +221,7 @@ function wgh(record, govFile, { prFails = false } = {}) {
     if (/\/git\/refs$/.test(url) && method === 'POST') { record.push({ method, url }); return { ok: true, status: 201, async json() { return {}; } }; }
     if (/\/contents\/.+\?ref=/.test(url) && method === 'GET') return { ok: true, status: 200, async json() { return { sha: 'oldsha' }; } };
     if (/\/contents\//.test(url) && method === 'PUT') { record.push({ method, url, body: JSON.parse(init.body) }); return { ok: true, status: 201, async json() { return {}; } }; }
+    if (/\/dispatches$/.test(url) && method === 'POST') { record.push({ method, url, event: JSON.parse(init.body).event_type }); return { ok: true, status: 204, async json() { return {}; } }; }
     if (/\/pulls$/.test(url) && method === 'POST') {
       record.push({ method, url });
       if (prFails) return { ok: false, status: 500, async json() { return {}; } };
@@ -309,4 +310,48 @@ test('sow-213 endpoint CONTROL: a ROLE change has no KV half, so it reports none
   assert.equal(r.status, 200);
   assert.equal('kvWritten' in r.body, false, 'roles.yml stays git-native by owner ruling and has no KV half');
   assert.equal(modlogKeys(kv).length, 1, 'a role change is still recorded in the moderation log');
+});
+
+// ---- the role-change mirror refresh ----
+
+const DENV = { ...wenv, REGATE_DISPATCH_TOKEN: 'dispatch-tok', GITHUB_CONTENT_REPO: 'gbti-network/gbti.network' };
+const superAuth = async () => ({ ok: true, githubId: '1', role: 'superadmin' });
+const ROLES = 'superadmins: []\nadmins: []\nmoderators: []\n';
+
+test('sow-213: a ROLE change fires the sync-mirror dispatch, because roles have no KV half by design', async () => {
+  const kv = fakeKv();
+  kv.store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror()));
+  const record = [];
+  const r = await membershipAdminAuthor(wreq({ action: 'role', githubId: '55', role: 'moderator' }), DENV, {
+    fetchImpl: wgh(record, ROLES), authorize: superAuth, kv, limiter: async () => ({ allowed: true }), signJwt: async () => 'j',
+  });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.mirrorRefreshed, true);
+  assert.equal(record.find((c) => c.event)?.event, 'sync-mirror', 'the exact type sync-overrides-mirror.yml listens for');
+  // The decisive one: authority did NOT move. The Worker asked the workflow to re-derive FROM GIT and did not
+  // write staff status into KV itself, which would bypass CODEOWNERS.
+  assert.deepEqual(JSON.parse(kv.store.get(OVERRIDES_KV_KEY)).roles, mirror().roles, 'roles in KV were not touched by the Worker');
+});
+
+test('sow-213 CONTROL: a BAN does not fire the dispatch, because it dual-writes the KV half directly', async () => {
+  const kv = fakeKv();
+  kv.store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror()));
+  const record = [];
+  const r = await membershipAdminAuthor(wreq({ action: 'ban', githubId: '555', reason: 'spam' }), DENV, {
+    fetchImpl: wgh(record, 'bans: []\n'), authorize: staffAdmin, kv, limiter: async () => ({ allowed: true }), signJwt: async () => 'j',
+  });
+  assert.equal(r.body.kvWritten, true);
+  assert.equal('mirrorRefreshed' in r.body, false, 'no dispatch needed: the edge already agrees');
+  assert.equal(record.some((c) => c.event), false);
+});
+
+test('sow-213: an unconfigured or failing dispatch is REPORTED, and the role change still stands', async () => {
+  const kv = fakeKv();
+  kv.store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror()));
+  const r = await membershipAdminAuthor(wreq({ action: 'role', githubId: '55', role: 'moderator' }), wenv, {
+    fetchImpl: wgh([], ROLES), authorize: superAuth, kv, limiter: async () => ({ allowed: true }), signJwt: async () => 'j',
+  });
+  assert.equal(r.status, 200, 'the role change landed in git regardless');
+  assert.equal(r.body.mirrorRefreshed, false);
+  assert.equal(r.body.mirrorReason, 'not configured', 'an admin can tell "live now" from "live within six hours"');
 });

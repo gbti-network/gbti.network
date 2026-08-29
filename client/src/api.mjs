@@ -61,8 +61,7 @@ import {
   listInvitesOp,
   createInviteOp,
   updateInviteOp,
-  refreshCouponUntil,
-} from './operations.mjs';
+  refreshCouponUntil, governanceAdminOp } from './operations.mjs';
 import { getSettings, updateSettings, getBilling, getReferral } from './settings-ops.mjs';
 import { fieldsFor } from './form-fields.mjs';
 import { renderMarkdown } from './markdown.mjs';
@@ -77,6 +76,8 @@ import {
 
 export { CLIENT_VERSION } from './operations.mjs';
 
+// sow-213 Phase 2b: served by the Worker (see the '/api/admin' route), not by ADMIN_ACTIONS.
+const GOVERNANCE_ACTIONS = new Set(['ban', 'unban', 'grandfather', 'ungrandfather', 'role']);
 const ADMIN_ACTIONS = {
   ban: banMember,
   unban: unbanMember,
@@ -227,6 +228,11 @@ export async function handleApi(reqInfo, ctx) {
 
   // Role-gated admin/superadmin actions (the operations enforce the capability; the gate is authoritative).
   if (method === 'POST' && pathname === '/api/admin') {
+    // sow-213 Phase 2b: the five GOVERNANCE actions go to the Worker, exactly as in the extension host. The
+    // local writer holds a GitHub token and no KV credential, so it writes the git half of a ban or grant and
+    // cannot write the KV half at all, and it cannot write the private moderation log either. Both hosts must
+    // take the same path or the gap simply moves to whichever host was left behind.
+    if (GOVERNANCE_ACTIONS.has(body?.action)) return run(() => governanceAdminOp(ctx, body ?? {}));
     const fn = ADMIN_ACTIONS[body?.action];
     if (!fn) return { status: 400, json: { error: 'bad-request', message: `unknown admin action: ${body?.action}` } };
     return run(() => fn(ctx, body ?? {}));

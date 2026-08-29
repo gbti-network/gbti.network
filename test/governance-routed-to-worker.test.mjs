@@ -102,3 +102,22 @@ test('sow-213 routing: the governance branch is reached BEFORE the local ADMIN_A
   assert.ok(branch > 0 && fallback > 0, 'both branches are present');
   assert.ok(branch < fallback, 'a governance action must never fall through to the local git-only writer');
 });
+
+const apiHost = readFileSync(fileURLToPath(new URL('../client/src/api.mjs', import.meta.url)), 'utf8');
+
+test('sow-213 routing: the npm/website host reroutes governance too, or the gap just moves hosts', () => {
+  const set = apiHost.match(/const GOVERNANCE_ACTIONS = new Set\(\[([^\]]*)\]\)/);
+  assert.ok(set, 'GOVERNANCE_ACTIONS is declared in the website host');
+  for (const a of ['ban', 'unban', 'grandfather', 'ungrandfather', 'role']) {
+    assert.match(set[1], new RegExp(`'${a}'`), `${a} is routed to the Worker in the website host`);
+  }
+  const branch = apiHost.indexOf('GOVERNANCE_ACTIONS.has(body?.action)');
+  const fallback = apiHost.indexOf('const fn = ADMIN_ACTIONS[body?.action];');
+  assert.ok(branch > 0 && fallback > 0);
+  assert.ok(branch < fallback, 'governance must not fall through to the local git-only writer');
+});
+
+test('sow-213 routing: BOTH hosts route the SAME five actions, so neither can drift', () => {
+  const pick = (src) => (src.match(/const GOVERNANCE_ACTIONS = new Set\(\[([^\]]*)\]\)/)[1].match(/'[a-z]+'/g) || []).sort();
+  assert.deepEqual(pick(extDispatch), pick(apiHost), 'the extension and website hosts must agree on the governance set');
+});
