@@ -111,3 +111,49 @@ test('Preview handles Backspace in an empty block, and routes it through the pur
   assert.match(code, /planBlockDelete\(/,
     'the delete does not use the tested planner, so its line arithmetic is untested browser-only code');
 });
+
+// --- 2026-08-29: the block toolbar sat on top of the text it was meant to sit beside -----------------------
+//
+// Measured in a browser harness before the fix, not estimated: the toolbar was 225px wide, of which the
+// "Turn into" <select> alone was 147px, while the text reserved 40px of right padding on paragraphs and NOTHING
+// at all on headings. The controls therefore covered the words. The fix reserves a real right gutter (the thing
+// the CSS comment had claimed since it was written) and shrinks the toolbar to five 24px icon controls, the
+// type control carrying the block's current type as its icon so the <select>'s label is not simply lost.
+//
+// This guard is arithmetic, not decoration. It fails if a sixth control is added without widening the gutter,
+// which is precisely how the overlap comes back.
+const BT_PX = 24;      // .bt { width:24px }
+const GAP_PX = 2;      // .blk-tools { gap:2px }
+const PAD_PX = 2;      // .blk-tools { padding:2px }
+const BORDER_PX = 1;   // .blk-tools { border:1px }
+
+test('the block toolbar fits inside the gutter reserved for it', () => {
+  const gutter = /--blk-gutter:\s*(\d+)px/.exec(editor);
+  assert.ok(gutter, 'the --blk-gutter property is gone, so nothing reserves space for the toolbar');
+  const tools = methodBody(editor, '_tools(b)').replace(/^\s*\/\/.*$/gm, '');
+  const controls = (tools.match(/class="bt(?![\w-])/g) || []).length;
+  assert.ok(controls >= 5, `expected the toolbar to still carry its controls, counted ${controls}`);
+  const needed = controls * BT_PX + (controls - 1) * GAP_PX + PAD_PX * 2 + BORDER_PX * 2;
+  assert.ok(Number(gutter[1]) >= needed,
+    `--blk-gutter is ${gutter[1]}px but ${controls} controls need ${needed}px, so the toolbar overlaps the text`);
+});
+
+test('the toolbar reserves its space through the gutter, not through the old partial padding', () => {
+  // 40px was a reservation for a 225px toolbar: far too small to work, and large enough to look deliberate.
+  assert.ok(!/\.ce \{[^}]*padding:2px 40px/.test(editor),
+    'the old 40px right padding is back alongside the gutter, so the space is reserved twice');
+  assert.match(editor, /\.blk-tools \{[^}]*right:calc\(var\(--blk-gutter\)/,
+    'the toolbar is not positioned into the gutter, so widening the gutter alone would not move it');
+});
+
+test('the type control is an icon button opening a palette, not the dropdown that caused the overlap', () => {
+  // Comments are stripped first: the explanatory note above _tools mentions the old <select> by name, and
+  // without this the guard matches that prose and fails on a file that is completely correct. This exact trap
+  // is why the other guards in this file strip comments too.
+  const tools = methodBody(editor, '_tools(b)').replace(/^\s*\/\/.*$/gm, '');
+  assert.ok(!/<select/.test(tools), 'the <select> is back; measured at 147px it cannot fit the gutter');
+  assert.match(tools, /data-convert=/, 'the Turn into control is gone entirely');
+  assert.match(editor, /_openConvert\(/, 'no _openConvert, so the type button opens nothing');
+  // Conversion must stay in one place, or the palette and any other caller drift apart.
+  assert.match(editor, /_convertBlock\(id, row\.dataset\.ck\)/, 'the palette does not route through _convertBlock');
+});

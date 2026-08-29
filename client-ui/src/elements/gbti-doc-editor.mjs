@@ -70,11 +70,14 @@ const ic = {
 const svg = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ic[k]}</svg>`;
 
 const CSS = `
-  :host { display:block; font-family:var(--font-body); color:var(--s-fg); }
-  .doc-blocks { display:flex; flex-direction:column; position:relative; }
+  /* --blk-gutter reserves the column the hover toolbar lives in. Measured, not guessed: the toolbar measures 134px
+     (five 24px controls plus gaps, padding and border), and 142px leaves it a little breathing room. Before this existed the toolbar was 225px wide over a gutter of
+     40px on paragraphs and ZERO on headings, so it covered the text it was meant to sit beside. */
+  :host { display:block; font-family:var(--font-body); color:var(--s-fg); --blk-gutter:142px; }
+  .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); }
   /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
   .blk { position:relative; padding:2px 0; margin:2px 0; }
-  .blk-tools { position:absolute; top:0; right:0; display:flex; gap:2px; align-items:center; padding:2px;
+  .blk-tools { position:absolute; top:0; right:calc(var(--blk-gutter) * -1); display:flex; gap:2px; align-items:center; padding:2px;
     background:var(--s-surface); border:1px solid var(--s-line); border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.08);
     opacity:0; pointer-events:none; transition:opacity .12s ease; z-index:2; }
   .blk:hover > .blk-tools, .blk:focus-within > .blk-tools { opacity:1; pointer-events:auto; }
@@ -85,10 +88,8 @@ const CSS = `
   .bt svg { width:16px; height:16px; }
   .grip { cursor:grab; } .grip:active { cursor:grabbing; }
   .blk.drop-over { box-shadow:inset 0 2.5px 0 var(--s-green); }
-  .bt-type { font:inherit; font-size:12px; padding:2px 4px; border:0; border-radius:6px; background:transparent; color:var(--s-fg-mute); cursor:pointer; }
-  .bt-type:hover { background:var(--s-surface-2); color:var(--s-fg); }
   /* the editing surfaces: borderless, "document" feel */
-  .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--s-green); color:var(--s-fg); padding:2px 40px 2px 0; border-radius:6px; }
+  .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--s-green); color:var(--s-fg); padding:2px 0; border-radius:6px; }
   .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.5; pointer-events:none; }
   .ce:focus { background:transparent; }
   .ce-p { font-size:17px; line-height:1.65; padding:6px 40px 6px 0; }
@@ -274,10 +275,12 @@ class GbtiDocEditor extends GbtiElement {
 
   _tools(b) {
     const id = b._id;
-    const opts = CONVERT.map((c) => `<option value="${c.key}" ${convertKey(b) === c.key ? 'selected' : ''}>${esc(c.label)}</option>`).join('');
+    // The type control shows the block's CURRENT type as an icon. That keeps the at-a-glance "what is this block"
+    // the old <select> gave through its selected label, at 24px instead of 147px.
+    const cur = CONVERT.find((c) => c.key === convertKey(b)) || CONVERT[0];
     return `<div class="blk-tools">
       <span class="bt grip" draggable="true" data-grip="${id}" title="Drag to reorder">${svg('grip')}</span>
-      <select class="bt-type" data-convert="${id}" title="Turn into">${opts}</select>
+      <button class="bt" type="button" data-convert="${id}" title="Turn into (now: ${esc(cur.label)})">${svg(cur.icon)}</button>
       <button class="bt" type="button" data-up="${id}" title="Move up">${svg('up')}</button>
       <button class="bt" type="button" data-down="${id}" title="Move down">${svg('down')}</button>
       <button class="bt danger" type="button" data-del="${id}" title="Delete">${svg('x')}</button>
@@ -414,17 +417,11 @@ class GbtiDocEditor extends GbtiElement {
         });
       }
     });
-    // Convert (Turn into): re-render + restore focus to the converted block.
-    this.$$('[data-convert]').forEach((el) => el.addEventListener('change', () => {
-      const i = this._indexOf(el.dataset.convert);
-      if (i < 0) return;
-      const cur = this._blocks[i];
-      const next = withId(blockFromKey(el.value));
-      if (cur.text != null && 'text' in next) next.text = cur.text;
-      if (cur.text != null && next.type === 'code') next.code = cur.text;
-      if (cur.text != null && next.type === 'list') next.items = String(cur.text).split('\n');
-      this._blocks[i] = next;
-      this._render(); this._focusBlock(next._id); this._change();
+    // Convert (Turn into): opens the shared palette. The conversion itself lives in _convertBlock so the button
+    // and the palette cannot drift apart.
+    this.$$('[data-convert]').forEach((el) => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._openConvert(el, el.dataset.convert);
     }));
     this.$$('[data-cvar]').forEach((el) => el.addEventListener('click', () => {
       const b = this._byId(el.dataset.cvar);
@@ -630,6 +627,51 @@ class GbtiDocEditor extends GbtiElement {
   }
 
   // --- SOW-062 5c-2: slash menu (type "/" in a fresh paragraph -> a filtered block picker) ---
+  // "Turn into", as a palette rather than a dropdown. Reuses paletteRow and .slash-pop so it looks and behaves
+  // like the slash menu and the add-block menu instead of being a third pattern.
+  _openConvert(btn, id) {
+    this._closeConvert();
+    const b = this._byId(id);
+    const host = this.$('.doc-blocks');
+    const blk = btn.closest('.blk');
+    if (!b || !host || !blk) return;
+    const pop = document.createElement('div');
+    pop.className = 'slash-pop';
+    pop.innerHTML = CONVERT.map((c) => paletteRow(c, `data-ck="${c.key}"`, convertKey(b) === c.key)).join('');
+    pop.style.top = `${blk.offsetTop + blk.offsetHeight + 4}px`;
+    pop.style.left = `${Math.max(0, blk.offsetLeft + blk.offsetWidth - 268)}px`;
+    pop.querySelectorAll('[data-ck]').forEach((row) => row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._convertBlock(id, row.dataset.ck);
+    }));
+    host.appendChild(pop);
+    // Armed on EACH open, and deferred by a tick so the click that opened it does not immediately close it.
+    // The add-block menu learned this the hard way: a {once:true} listener stopped dismissing after one cycle.
+    const away = () => this._closeConvert();
+    setTimeout(() => document.addEventListener('click', away), 0);
+    this._conv = { pop, away };
+  }
+
+  _closeConvert() {
+    if (!this._conv) return;
+    this._conv.pop.remove();
+    document.removeEventListener('click', this._conv.away);
+    this._conv = null;
+  }
+
+  _convertBlock(id, key) {
+    const i = this._indexOf(id);
+    if (i < 0) return;
+    const cur = this._blocks[i];
+    const next = withId(blockFromKey(key));
+    if (cur.text != null && 'text' in next) next.text = cur.text;
+    if (cur.text != null && next.type === 'code') next.code = cur.text;
+    if (cur.text != null && next.type === 'list') next.items = String(cur.text).split('\n');
+    this._blocks[i] = next;
+    this._closeConvert();
+    this._render(); this._focusBlock(next._id); this._change();
+  }
+
   _openSlash(el, query) {
     const q = String(query || '').toLowerCase();
     const matches = CONVERT.filter((c) => `${c.label} ${c.key}`.toLowerCase().includes(q));
