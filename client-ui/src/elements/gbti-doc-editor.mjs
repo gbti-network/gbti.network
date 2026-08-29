@@ -91,7 +91,7 @@ const CSS = `
   .blk.drop-over { box-shadow:inset 0 2.5px 0 var(--s-green); }
   /* the editing surfaces: borderless, "document" feel */
   .ce { outline:0; white-space:pre-wrap; word-break:break-word; caret-color:var(--s-green); color:var(--s-fg); padding:2px 0; border-radius:6px; }
-  .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.5; pointer-events:none; }
+  .ce:empty::before { content:attr(data-ph); color:var(--s-fg-mute); pointer-events:none; } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
   .ce:focus { background:transparent; }
   .ce-p { font-size:17px; line-height:1.65; padding:6px 40px 6px 0; }
   .ce-h1 { font-family:var(--font-display, var(--font-body)); font-weight:800; font-size:30px; line-height:1.2; letter-spacing:-.01em; padding:12px 0 4px; }
@@ -187,7 +187,7 @@ const CSS = `
   .tbl .corner { border:0; background:transparent; width:0; }
   .tbl td.row-ctl { border:0; background:transparent; width:28px; text-align:center; }
   .tbl .tc { min-width:80px; padding:7px 9px; outline:none; color:var(--s-fg); }
-  .tbl .tc:empty::before { content:attr(data-ph); color:var(--s-fg-mute,#8a8792); }
+  .tbl .tc:empty::before { content:attr(data-ph); color:var(--s-fg-mute,#6c6976); }
   .tbl th .th-ctl { display:flex; gap:2px; justify-content:flex-end; padding:2px 4px; border-top:1px dashed var(--s-line); }
   .tbtn { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:20px; padding:0 4px; border:1px solid var(--s-line); border-radius:5px; background:var(--s-surface); color:var(--s-fg-soft); font-size:11px; font-weight:700; cursor:pointer; }
   .tbtn svg { width:12px; height:12px; }

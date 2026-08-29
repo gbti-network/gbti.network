@@ -425,9 +425,9 @@ class GbtiContentEditor extends GbtiElement {
         @container (max-width:1100px) { .edgrid { grid-template-columns:1fr; } .edhead { position:static; } }
         .doc { min-width:0; background:var(--s-canvas); border:1.5px solid var(--s-line); border-radius:12px; box-shadow:var(--s-shadow-md); padding:40px 46px 52px; color:var(--s-fg); }
         .doc-title { font-family:var(--font-display); font-weight:800; font-size:34px; line-height:1.14; letter-spacing:-.015em; color:var(--s-fg); outline:none; margin-bottom:6px; }
-        .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.55; }
+        .doc-title:empty::before { content:attr(data-ph); color:var(--s-fg-mute); } /* sow-249: dropped opacity:.55, which put this at 1.86:1 */
         .doc-tagline { font-size:18px; line-height:1.5; font-weight:500; color:var(--s-fg-soft); outline:none; margin:2px 0 14px; }
-        .doc-tagline:empty::before { content:attr(data-ph); color:var(--s-fg-mute); opacity:.5; }
+        .doc-tagline:empty::before { content:attr(data-ph); color:var(--s-fg-mute); } /* sow-249: dropped opacity:.5, which put this at 1.75:1 */
         .doc-slug { display:flex; align-items:center; gap:9px; flex-wrap:wrap; font-family:var(--font-mono,monospace); font-size:12.5px; color:var(--s-fg-mute); margin-bottom:6px; }
         .doc-slug .slug-val { color:var(--s-green-fg); font-weight:600; outline:none; border-bottom:1.5px dashed transparent; }
         .doc-slug .slug-val:hover { border-bottom-color:var(--s-line-2); }
