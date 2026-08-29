@@ -72,6 +72,7 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
     notes.push('dist/ not found, skipped the build-output scan (run after `npm run build`).');
   }
 
+  const modeAItemPaths = []; // sow-165: filled by the Mode A walk below, read by the media-index check after it
   // SOW-016: a Mode A item (visibility: members, no public stub) must have NO public page. Assert none exists
   // in dist for any such item (a backstop if getStaticPaths were reverted to plain isPublic-without-stub).
   if (fs.existsSync(distDir)) {
@@ -99,11 +100,37 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
           // Mode A = members + not a stub. Parse publicStub case-insensitively (YAML accepts true/True/TRUE).
           if (fmField(txt, 'visibility') !== 'members' || /^true$/i.test(String(fmField(txt, 'publicStub') ?? ''))) continue;
           const slug = fmField(txt, 'slug') || slugDir;
+          modeAItemPaths.push(path.relative(root, idx).split(path.sep).join('/'));
           const page = path.join(distDir, distSeg, slug, 'index.html');
           if (fs.existsSync(page)) {
             errors.push(`Mode A item (members, no stub) has a public page in dist: ${path.relative(root, page)} (it must not be built). See SOW-016.`);
           }
         }
+      }
+    }
+  }
+
+  // sow-165: /media-index.json backs the editor's image reuse picker and SHIPS IN DIST, so a Mode A item's
+  // path in it would disclose that the item exists. The endpoint filters with isListed, and this is the guard
+  // on that filter, because a filter with no guard is what rots.
+  //
+  // This was added after a planted-subject control showed the Mode A page check above does NOT cover this
+  // file: a Mode A path pushed into dist/media-index.json passed the whole guard green. That is worth
+  // recording, because the file had a comment claiming it was covered, and the comment read as protection.
+  const mediaIndexPath = path.join(distDir, 'media-index.json');
+  if (fs.existsSync(mediaIndexPath)) {
+    let parsed = null;
+    try { parsed = JSON.parse(fs.readFileSync(mediaIndexPath, 'utf8')); }
+    catch (e) { errors.push(`dist/media-index.json is not valid JSON (${e?.message}); the picker cannot read it and this guard cannot check it.`); }
+    if (parsed) {
+      const rows = Object.values(parsed.byAuthor || {}).flat();
+      // Vacuity control: an empty or absent index would satisfy every assertion below while proving nothing.
+      // The corpus has hundreds of referenced images, so a near-zero count means the endpoint broke, not that
+      // the content changed.
+      if (rows.length < 100) errors.push(`dist/media-index.json carries only ${rows.length} rows; the last measured figure was 368. This guard cannot prove anything about an empty index, so a collapse is a failure here rather than a silent pass.`);
+      const seen = new Set(rows.map((r) => r && r.itemPath));
+      for (const modeA of modeAItemPaths) {
+        if (seen.has(modeA)) errors.push(`Mode A item (members, no stub) appears in dist/media-index.json: ${modeA}. That index ships publicly, so listing the item discloses it exists. The endpoint must filter it with isListed.`);
       }
     }
   }
