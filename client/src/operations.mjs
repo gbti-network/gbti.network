@@ -99,6 +99,7 @@ export {
   updateInviteOp,
   refreshCouponUntil,
   triggerAdminOp,
+  governanceAdminOp, // sow-213 Phase 2b: governance goes to the Worker, which holds SIGNUP_KV and the moderation log
   listPRs,
   prStatus,
   listIncomingContributions,

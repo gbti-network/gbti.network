@@ -11477,6 +11477,7 @@ ${String(body ?? "")}`;
         try {
           const res = await this.client.admin(action, args());
           if (res?.changed === false || res?.noop) this.out(`<span class="tag ok">No change</span> ${esc(res.message || "already in that state")}`);
+          else if (res?.kvWritten === false) this.out(`<span class="tag ok">PR opened</span> <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a> <span class="tag">not yet live</span> The change is committed, but it did not reach the live store (${esc(res.kvReason || "reason not reported")}), so it takes effect at the next sync rather than now.`);
           else this.out(`<span class="tag ok">PR opened</span> <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a>`);
         } catch (err) {
           this.out(esc(err.message), "danger");

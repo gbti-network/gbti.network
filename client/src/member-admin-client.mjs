@@ -56,6 +56,31 @@ export async function triggerAdminOp({ token, signupBase, fetch = globalThis.fet
   return data;
 }
 
+/**
+ * sow-213 Phase 2b: a GOVERNANCE mutation (ban / unban / grandfather / ungrandfather / role) via the Worker's
+ * POST /membership/admin/author.
+ *
+ * WHY THIS EXISTS RATHER THAN THE LOCAL WRITER. The local path (client/src/admin-ops.mjs) holds a GitHub token
+ * and nothing else, so it can write the git half of a governance record and CANNOT write the KV half at all.
+ * Through the sow-213 transition every ban and grant must land in both. The Worker holds SIGNUP_KV, so routing
+ * these five actions through it makes both halves land in one action, and it is also the only path that can
+ * write the private moderation log. Owner decision 2026-08-29.
+ *
+ * The Worker re-checks the caller's rank server-side; this only relays. Returns the Worker body as-is.
+ */
+export async function postAdminGovernance({ token, signupBase, fetch = globalThis.fetch, action, payload = {} }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/admin/author', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...payload, action }),
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `governance action failed (${res.status})`);
+  return data ?? {};
+}
+
 /** SOW-119: per-coupon usage (counts + redemption records), admin-gated. Sharing needs no server state
  *  since the 2026-07-18 QA feedback: the share URL is the plain visible /codeable-invite/?coupon=<CODE>. */
 export async function getCouponUsage({ token, signupBase, fetch = globalThis.fetch }) {

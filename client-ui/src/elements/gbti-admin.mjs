@@ -112,6 +112,11 @@ class GbtiAdmin extends GbtiElement {
         const res = await this.client.admin(action, args());
         // SOW-038 P4: a governance action is idempotent — already-in-that-state returns changed:false (no PR).
         if (res?.changed === false || res?.noop) this.out(`<span class="tag ok">No change</span> ${esc(res.message || 'already in that state')}`);
+        // sow-213 Phase 2b: a governance action writes git AND KV. When the KV half did not land the action is
+        // still real and in git, it just does not reach the paid oracle and the PR gate until the next
+        // scheduled mirror sync. Say so rather than reporting a plain success: an admin who cannot see the
+        // difference cannot tell a dual-write from a git-only write, which is the window this phase closes.
+        else if (res?.kvWritten === false) this.out(`<span class="tag ok">PR opened</span> <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a> <span class="tag">not yet live</span> The change is committed, but it did not reach the live store (${esc(res.kvReason || 'reason not reported')}), so it takes effect at the next sync rather than now.`);
         else this.out(`<span class="tag ok">PR opened</span> <a href="${esc(res.prUrl)}" target="_blank" rel="noopener">#${esc(res.prNumber)}</a>`);
       } catch (err) {
         this.out(esc(err.message), 'danger');

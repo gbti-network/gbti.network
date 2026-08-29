@@ -10,7 +10,7 @@ import { SIGNUP_BASE, authModeFor } from './signup-base.mjs';
 import { isContributionToFolder } from '../../membership/classify-pr.mjs';
 import yaml from 'js-yaml';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, postAdminGovernance } from './member-admin-client.mjs';
 import { OperationError, requireAdmin, requireIdentity, requireRepo } from './operations-core.mjs';
 
 export async function getOverridesRoster(ctx) {
@@ -139,6 +139,38 @@ export async function refreshCouponUntil(ctx) {
   return { couponUntil: couponUntil ?? null };
 }
 
+
+/**
+ * sow-213 Phase 2b: the five governance actions, routed to the Worker so both halves of the record land in one
+ * action (git via the PR, KV via overrides:mirror) and the private moderation log is written.
+ *
+ * The local writer is deliberately NOT used for these any more. It cannot reach KV, so a ban issued here used
+ * to be invisible to the paid oracle and the PR gate until the next scheduled mirror sync, up to six hours
+ * later, with nothing reporting the gap.
+ *
+ * `kvWritten: false` is passed through rather than hidden. It means the ban IS real and in git and simply has
+ * not reached KV yet, which is the pre-transition behaviour; a caller that cannot see it cannot tell a
+ * dual-write from a git-only write.
+ */
+export async function governanceAdminOp(ctx, body = {}) {
+  await requireAdmin(ctx);
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) throw new OperationError('not-authenticated', 'sign in first');
+  const { action, ...payload } = body ?? {};
+  let r;
+  try {
+    r = await postAdminGovernance({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, action, payload });
+  } catch (err) {
+    throw new OperationError('admin-op-failed', err?.message || 'the governance action failed');
+  }
+  if (r?.noop) return { changed: false, noop: true, message: r.message || `no change (${action})` };
+  return {
+    changed: true,
+    prNumber: r?.number ?? null,
+    prUrl: r?.html_url ?? null,
+    ...(r?.kvWritten === undefined ? {} : { kvWritten: r.kvWritten, kvReason: r.kvReason ?? null }),
+  };
+}
 
 export async function triggerAdminOp(ctx, { action, params } = {}) {
   await requireAdmin(ctx);

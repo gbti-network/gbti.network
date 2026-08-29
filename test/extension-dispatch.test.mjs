@@ -210,19 +210,31 @@ function adminRepo() {
   };
 }
 
-test('admin: an admin (per roles.yml, async-read) bans via a bans.yml PR; a plain member is forbidden', async () => {
+// sow-213 Phase 2b: THIS TEST'S SUBJECT CHANGED, and the old assertion is kept below as the thing that must
+// now be FALSE. It used to assert the extension banned through the LOCAL writer, asserting on repo.puts. That
+// path holds a GitHub token and no KV credential, so it writes the git half of a ban and cannot write the KV
+// half at all, leaving the ban invisible to the paid oracle and the PR gate until the next scheduled mirror
+// sync. Governance now goes to the Worker, which holds SIGNUP_KV and writes the private moderation log.
+test('admin: a ban goes to the WORKER, never to the local git writer; a plain member is still forbidden', async () => {
   const repo = adminRepo();
+  const calls = [];
+  const workerFetch = async (url, init = {}) => {
+    calls.push(String(url));
+    return { ok: true, status: 200, async json() { return { ok: true, number: 88, html_url: 'https://x/pull/88', kvWritten: true, kvReason: null }; } };
+  };
   const files = { 'house/roles.yml': 'admins:\n  - github_id: "1"\n', 'house/bans.yml': 'bans: []\n' };
-  const r = await dispatch(ctxFor({ repo, files }), { pathname: '/api/admin', method: 'POST', body: { action: 'ban', githubId: '999', reason: 'spam' } });
+  const r = await dispatch(ctxFor({ repo, files, fetch: workerFetch }), { pathname: '/api/admin', method: 'POST', body: { action: 'ban', githubId: '999', reason: 'spam' } });
   assert.equal(r.status, 200);
   assert.equal(r.json.prNumber, 88);
-  assert.equal(repo.puts[0].path, 'house/bans.yml');
-  assert.match(repo.puts[0].content, /999/);
+  assert.equal(r.json.kvWritten, true, 'both halves landed, which the local writer could never report');
+  assert.match(calls[0], /\/membership\/admin\/author$/);
+  assert.equal(repo.puts.length, 0, 'THE POINT: the local git-only writer was not used at all');
 
   // A caller NOT in roles.yml resolves to 'member' -> forbidden (UX gate; the PR gate is the real boundary).
-  const member = await dispatch(ctxFor({ repo: adminRepo(), files: { 'house/bans.yml': 'bans: []\n' } }), { pathname: '/api/admin', method: 'POST', body: { action: 'ban', githubId: '999' } });
+  const member = await dispatch(ctxFor({ repo: adminRepo(), files: { 'house/bans.yml': 'bans: []\n' }, fetch: workerFetch }), { pathname: '/api/admin', method: 'POST', body: { action: 'ban', githubId: '999' } });
   assert.equal(member.status, 403);
   assert.equal(member.json.error, 'forbidden');
+  assert.equal(calls.length, 1, 'the rejected caller never reached the Worker');
 });
 
 test('overrides (SOW-038 P2): an admin caller gets the roster; a non-admin is forbidden', async () => {

@@ -19567,6 +19567,21 @@ async function triggerAdminOp({ token, signupBase, fetch: fetch2 = globalThis.fe
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `operation failed (${res.status})`);
   return data;
 }
+async function postAdminGovernance({ token, signupBase, fetch: fetch2 = globalThis.fetch, action, payload = {} }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/author", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ ...payload, action })
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `governance action failed (${res.status})`);
+  return data ?? {};
+}
 async function getCouponUsage({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase10(signupBase) + "/membership/admin/coupon-usage", {
@@ -20195,6 +20210,25 @@ async function refreshCouponUntil(ctx) {
   if (status === "unknown") throw new OperationError("oracle-unreachable", "the membership oracle did not answer");
   ctx.store?.set?.({ couponUntil: couponUntil ?? null });
   return { couponUntil: couponUntil ?? null };
+}
+async function governanceAdminOp(ctx, body = {}) {
+  await requireAdmin(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  if (!token) throw new OperationError("not-authenticated", "sign in first");
+  const { action, ...payload } = body ?? {};
+  let r;
+  try {
+    r = await postAdminGovernance({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch, action, payload });
+  } catch (err) {
+    throw new OperationError("admin-op-failed", err?.message || "the governance action failed");
+  }
+  if (r?.noop) return { changed: false, noop: true, message: r.message || `no change (${action})` };
+  return {
+    changed: true,
+    prNumber: r?.number ?? null,
+    prUrl: r?.html_url ?? null,
+    ...r?.kvWritten === void 0 ? {} : { kvWritten: r.kvWritten, kvReason: r.kvReason ?? null }
+  };
 }
 async function triggerAdminOp2(ctx, { action, params } = {}) {
   await requireAdmin(ctx);
@@ -22170,6 +22204,7 @@ async function setContentEngagementSettings(ctx, { enabled, threshold, tier, sig
 }
 
 // extension/src/ext-dispatch.mjs
+var GOVERNANCE_ACTIONS = /* @__PURE__ */ new Set(["ban", "unban", "grandfather", "ungrandfather", "role"]);
 var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "content-engagement-set": setContentEngagementSettings, "syndication-settings-set": setSyndicationSettings2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
@@ -22358,6 +22393,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
         return ok(await requireRepo3(ctx).gateStatus(n));
       }
       case "/api/admin": {
+        if (GOVERNANCE_ACTIONS.has(body?.action)) return ok(await governanceAdminOp(ctx, body ?? {}));
         const role = await computeRole(ctx);
         const adminCtx = { ...ctx, role: () => role, store: { get: (k) => k === "repoPath" ? "extension" : ctx.store?.get(k) } };
         const fn = ADMIN_ACTIONS[body?.action];

@@ -10,7 +10,7 @@ import { OperationError, listContent, listMembersOnly, getContentItem, saveDraft
   publishComment, editComment, getComment, decryptMemberAsset, getMemberActivity, getMemberEarnings, mutateMemberActivity, getFollows, setFollow,
   upvoteContent, ogPreview, getDiscordInvite, getDiscordLinkUrl, getDiscordLinkStatus, discordUnlink, getNews, getNewsSources, getPrefs, setPrefs,
   publishNews, reflectNewsDiscussion, recordNewsOpen, recordContentOpen, deleteComment, listDiscordChannels, getOnboardingStatus, getOverridesRoster,
-  getOpenPulls, triggerAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue,
+  getOpenPulls, triggerAdminOp, governanceAdminOp, getSyndicationQueue, cancelSyndication, approveSyndication, getSyndicateNowInfo, syndicateNow, getSocialQueue,
   socialQueueAction, listComments, getCouponUsageOp, refreshCouponUntil, listInvitesOp, createInviteOp, updateInviteOp } from '../../client/src/operations.mjs';
 import { getBilling, getReferral } from '../../client/src/account-ops.mjs'; // SOW-040: account surface (Stripe portal + referral link); node-free so the MV3 bundle stays autostart-free
 import { renderMarkdown } from '../../client/src/markdown.mjs';
@@ -21,6 +21,8 @@ import { canSeeNews, canFollow, canSave, canBrowse, canStageDrafts } from '../..
 // SOW-036/038: role-gated governance, available from the extension too. admin-ops reads via ctx.reader (now
 // host-portable / async-safe) and commits via the repo client; capability is UX-gated here while the SOW-005
 // gate + CODEOWNERS stay the real boundary (an extension can no more merge a forbidden PR than the npm host can).
+// sow-213 Phase 2b: these five are served by the Worker (see the '/api/admin' case), not by ADMIN_ACTIONS.
+const GOVERNANCE_ACTIONS = new Set(['ban', 'unban', 'grandfather', 'ungrandfather', 'role']);
 const ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, 'category-batch': applyCategoryBatch, 'tag-edit': applyTagEdit, 'category-add': addContentCategory, 'category-rename': renameContentCategoryLabel, 'news-source-add': addNewsSource, 'news-source-remove': removeNewsSource, 'news-source-toggle': setNewsSourceEnabled, 'quote-add': addQuote, 'quote-remove': removeQuote, 'quote-toggle': setQuoteEnabled, 'content-channel-set': setContentChannel, 'content-channel-remove': removeContentChannel, 'flag-term-add': addModerationFlagTerm, 'flag-term-remove': removeModerationFlagTerm, 'syndication-template-set': setSyndicationTemplate, 'syndication-templates-set': setSyndicationTemplates, 'news-engagement-set': setNewsEngagementSettings, 'content-engagement-set': setContentEngagementSettings, 'syndication-settings-set': setSyndicationSettings };
 
 const CODE_STATUS = Object.freeze({
@@ -225,6 +227,15 @@ export async function dispatch(ctx, { method = 'GET', pathname, query = {}, body
         return ok(await requireRepo(ctx).gateStatus(n));
       }
       case '/api/admin': {
+        // sow-213 Phase 2b: the five GOVERNANCE actions go to the Worker, not to the local writer.
+        //
+        // The local writer holds a GitHub token and no KV credential, so it can write the git half of a ban or
+        // grant and cannot write the KV half at all. Through this transition both halves must land, and only
+        // the Worker can write the private moderation log. Routing all five rather than only the two the
+        // owner asked about keeps one write path for five sibling actions: `role` has no KV half (roles.yml
+        // stays git-native by owner ruling) but it still earns a moderation-log record.
+        if (GOVERNANCE_ACTIONS.has(body?.action)) return ok(await governanceAdminOp(ctx, body ?? {}));
+
         // SOW-036/038: governance from the extension. admin-ops expects a SYNC role() and a configured repoPath;
         // the extension computes role async (from the GitHub-read roles.yml) and has no local clone (it commits
         // via the repo client), so wrap ctx with a precomputed role() + a repoPath sentinel for this one call.
