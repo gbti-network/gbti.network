@@ -624,6 +624,10 @@ const labelOf = CATEGORY_LABELS;
         asMemberNow = (b as HTMLElement).dataset.pvAs === 'member';
         root.querySelectorAll('[data-pv-as]').forEach((x) => x.classList.toggle('on', x === b));
         apply();
+        // apply() replaces the body's innerHTML, so every editing listener left with the old nodes. Without
+        // this, switching the visitor/member view while editing silently turned editing off: the blocks still
+        // looked editable (contenteditable is re-applied) but nothing committed.
+        wireEditing();
       }));
       apply();
 
@@ -667,7 +671,27 @@ const labelOf = CATEGORY_LABELS;
       // table, a fence and a wrapped paragraph editable: the earlier version replaced a whole range with one
       // line, which would have collapsed a list to a single bullet. It also carries through everything the
       // rendered HTML cannot express, notably a table's alignment row and a fence's language.
+      // A block's CONTENT identity, and the basis for deciding whether it actually changed. Deliberately the
+      // read-back rather than innerHTML: a grammar extension (Grammarly, LanguageTool) decorates the paragraph
+      // it is checking with its own markup, which changes innerHTML without changing a word the author wrote.
+      // Comparing innerHTML therefore reported every scanned block as edited. inlineHtmlToMd drops that
+      // decoration, so both sides of the comparison see the text the author sees.
+      const readKey = (el: HTMLElement) => { try { return JSON.stringify(readBlockDom(el)); } catch { return ''; } };
+
+      // Commits are SERIALIZED, and this is load-bearing rather than tidiness. commitIn writes the source
+      // synchronously but only refreshes doc.ranges after renderFromSource() resolves, so a second commit
+      // entering that window splices using ranges that describe the document as it stood BEFORE the first one.
+      // That leaves the original block where it was and writes the edited copy over a neighbour, which is the
+      // duplicated paragraph reported on 2026-08-28 while applying a Grammarly correction. Two guards, because
+      // they fail differently: `committing` closes the async window, and isConnected refuses a node that a
+      // re-render has already replaced.
+      let committing = false;
       const commitIn = async (doc: PvDoc, el: HTMLElement) => {
+        if (committing || !el.isConnected) return;
+        committing = true;
+        try { await commitInner(doc, el); } finally { committing = false; }
+      };
+      const commitInner = async (doc: PvDoc, el: HTMLElement) => {
         const range = doc.ranges[Number(el.dataset[doc.attr])];
         if (!range) return;
         const lines = doc.get().replace(/\r\n/g, '\n').split('\n');
@@ -689,6 +713,7 @@ const labelOf = CATEGORY_LABELS;
       // the KEYBOARD: Backspace in an empty block should do immediately, and visibly, what clicking away does
       // eventually. It shares commitIn's render path so a delete and an edit cannot diverge.
       const deleteIn = async (doc: PvDoc, el: HTMLElement) => {
+        if (committing) return false; // same stale-range window as commitIn; see the note there
         const idx = Number(el.dataset[doc.attr]);
         const range = doc.ranges[idx];
         if (!range) return false;
@@ -763,6 +788,12 @@ const labelOf = CATEGORY_LABELS;
           // before they could select inside it, which is the reported defect. Setting it up front is what makes
           // select-then-act work on first contact, and it is also what lets keydown reach an unclicked block.
           el.setAttribute('contenteditable', 'true');
+          // Listeners are registered once per NODE. wireEditing() re-runs after every commit, and the note
+          // branch of commitIn re-renders ONLY the note card, so without this guard every body block collects a
+          // second set of listeners and a single blur commits twice. The contenteditable line above is
+          // deliberately outside the guard: it is owned by edit mode and must be re-applied on every pass.
+          if (el.dataset.pvWired === '1') return;
+          el.dataset.pvWired = '1';
           // A click on a link inside an editable block opens the link manager rather than placing a caret:
           // inside contenteditable a link neither navigates nor shows anything, so it otherwise reads as dead.
           el.querySelectorAll('a[href]').forEach((a) => a.addEventListener('click', (ev) => {
@@ -770,7 +801,7 @@ const labelOf = CATEGORY_LABELS;
             ev.preventDefault();
             if (el.getAttribute('contenteditable') !== 'true') {
               el.setAttribute('contenteditable', 'true');
-              el.dataset.pvSnap = el.innerHTML;
+              el.dataset.pvSnap = readKey(el);
             }
             ensureToolbar();
             seltb?.editLink(el, a as HTMLElement);
@@ -780,7 +811,7 @@ const labelOf = CATEGORY_LABELS;
           // clicked one does. Captured after the browser's own contenteditable normalization, so the comparison
           // has the same normalization on both sides.
           el.addEventListener('focus', () => {
-            if (el.dataset.pvSnap === undefined) el.dataset.pvSnap = el.innerHTML;
+            if (el.dataset.pvSnap === undefined) el.dataset.pvSnap = readKey(el);
           });
           // Backspace at the very start of an EMPTY block removes it. Without this the only way to dispose of an
           // empty paragraph was to click away and let the blur commit collapse it, which works but gives no
@@ -804,7 +835,10 @@ const labelOf = CATEGORY_LABELS;
             // source line, and the renderer is not a perfect inverse for every construct, so an untouched block
             // could read back different, rewrite draft.body, and re-render the whole document -- destroying the
             // node the author was clicking next. Comparing the DOM against itself cannot have that failure mode.
-            const untouched = el.dataset.pvSnap === el.innerHTML;
+            // No snapshot means this blur has already been handled, or the block was never focused. Without
+            // this an extra blur reads `undefined !== <the html>` as "edited" and commits the block a second time.
+            if (el.dataset.pvSnap === undefined) return;
+            const untouched = el.dataset.pvSnap === readKey(el);
             // contenteditable is NOT removed here any more: it is owned by edit mode, and wireBlocks strips it
             // from every block the moment editing is turned off. Removing it on blur would put the surface back
             // into the click-first state this change exists to fix.
