@@ -21,17 +21,39 @@ export function normalizeCouponCode(code) {
 /** Coupon codes are 3-32 chars of A-Z 0-9 (post-normalization). Anything else is rejected everywhere. */
 export const COUPON_CODE_RE = /^[A-Z0-9]{3,32}$/;
 
-/** One parsed entry -> a normalized coupon object, or null when structurally unusable (fail closed). */
+/**
+ * One parsed entry -> a normalized coupon object, or null when structurally unusable (fail closed).
+ *
+ * sow-291: A CAMPAIGN HAS TWO NAMES, AND ONLY ONE OF THEM IS A SECRET.
+ *   `id`   is the campaign's stable public identity. It appears in house/grandfathered.yml as
+ *          `reason: coupon:<ID>`, in an invite record's `campaign` field, in LANDER_BY_CAMPAIGN, and in the
+ *          code-free manifest the Astro build and the lander parity guard read. It is not a credential and
+ *          it never changes.
+ *   `code` is the redeemable string. Holding it IS the authorization, so it is a bearer credential, and
+ *          sow-291 moves it off the public repository and makes it rotatable.
+ *
+ * They are the SAME today, and `id` defaults to `code` for exactly that reason: every record written before
+ * this field existed keeps working, and no fixture, mirror blob or committed entry has to be rewritten to
+ * introduce the split. They diverge at the rotation, and from then on changing a code costs nothing but the
+ * code, because everything that refers to a campaign by name refers to the id.
+ */
 function normalizeEntry(e) {
   const code = normalizeCouponCode(e?.code);
   const freeDays = Number(e?.freeDays);
   if (!COUPON_CODE_RE.test(code)) return null;
+  // An explicit id is held to the same shape as a code. An unusable one is REJECTED rather than silently
+  // falling back to the code: a typo'd id would otherwise mint a second campaign identity that resolves no
+  // lander and matches no existing grant reason, and it would do it quietly.
+  const rawId = e?.id === undefined || e?.id === null || e?.id === '' ? null : normalizeCouponCode(e.id);
+  if (rawId !== null && !COUPON_CODE_RE.test(rawId)) return null;
+  const id = rawId ?? code;
   if (!Number.isInteger(freeDays) || freeDays < 1 || freeDays > 3650) return null;
   const maxRedemptions = e?.maxRedemptions === undefined || e?.maxRedemptions === null
     ? null
     : Number(e.maxRedemptions);
   if (maxRedemptions !== null && (!Number.isInteger(maxRedemptions) || maxRedemptions < 1)) return null;
   return {
+    id,
     code,
     freeDays,
     active: e?.active === true,
@@ -116,11 +138,21 @@ export function validateCoupons(parsed, { file = 'coupons.yml' } = {}) {
     return errors;
   }
   const seen = new Set();
+  const seenIds = new Set();
   list.forEach((e, i) => {
     const code = normalizeCouponCode(e?.code);
     if (!COUPON_CODE_RE.test(code)) errors.push(`${file}: coupons[${i}] code must be 3-32 chars A-Z 0-9 (got "${e?.code ?? ''}")`);
     else if (seen.has(code)) errors.push(`${file}: duplicate coupon code ${code}`);
     else seen.add(code);
+    // sow-291: the id is the campaign's stable public identity, so a DUPLICATE id is worse than a duplicate
+    // code. Two campaigns sharing an id make `reason: coupon:<ID>` in a grandfather grant ambiguous after the
+    // fact, and no later read can tell which campaign a member actually came in on.
+    if (e?.id !== undefined && e?.id !== null && e?.id !== '') {
+      const id = normalizeCouponCode(e.id);
+      if (!COUPON_CODE_RE.test(id)) errors.push(`${file}: coupons[${i}] id must be 3-32 chars A-Z 0-9 when set (got "${e.id}")`);
+      else if (seenIds.has(id)) errors.push(`${file}: duplicate campaign id ${id}`);
+      else seenIds.add(id);
+    }
     const days = Number(e?.freeDays);
     if (!Number.isInteger(days) || days < 1 || days > 3650) errors.push(`${file}: coupons[${i}] freeDays must be an integer 1-3650`);
     if (typeof e?.active !== 'boolean') errors.push(`${file}: coupons[${i}] active must be true or false`);

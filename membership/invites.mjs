@@ -19,7 +19,7 @@
 // before either OAuth hop, so a bound invite could only be REFUSED after the recipient had already
 // authorized GitHub and Discord. See sow-231 open questions 1 and 2.
 
-import { normalizeCouponCode, COUPON_CODE_RE } from './coupons.mjs';
+import { normalizeCouponCode, COUPON_CODE_RE, couponsFromParsed } from './coupons.mjs';
 
 /**
  * The code alphabet, deliberately NOT the full A-Z 0-9 that COUPON_CODE_RE allows. `0/O`, `1/I/L` and `U`
@@ -257,9 +257,47 @@ export const LANDER_BY_CAMPAIGN = Object.freeze({
  * not confer, which is the exact defect this exists to prevent, so a caller must handle "no lander" rather
  * than be handed a plausible wrong one.
  */
-export function landerFor({ code, tier } = {}) {
-  const c = normalizeCouponCode(code);
+export function landerFor({ code, id, tier } = {}) {
+  // sow-291: keyed by the campaign's stable ID, falling back to the code. A per-campaign lander is a property
+  // of the CAMPAIGN, not of the string someone redeems, so it must survive a code rotation untouched. `id`
+  // defaults to `code` throughout the coupon core, so every existing caller passing only `code` is unchanged.
+  const c = normalizeCouponCode(id || code);
   return LANDER_BY_CAMPAIGN[c] || LANDER_BY_TIER[tier] || null;
+}
+
+/**
+ * sow-291: the CODE-FREE campaign manifest, projected from the parsed coupon registry.
+ *
+ * WHY A PROJECTION AND NOT A SECOND REGISTRY. Two consumers cannot reach KV and would otherwise be left
+ * reading nothing once the registry moves off the public repository:
+ *   - `test/invite-lander-parity.test.mjs`, a unit test with no network and no secrets by project rule, and
+ *     the only guard stopping an invite lander from advertising a tier its campaign does not grant;
+ *   - the Astro build, which resolves lander copy on a runner with no KV binding.
+ * Both need to know which campaigns exist, what tier each confers and which page describes it. NONE of them
+ * needs the redeemable code, which is the whole point: this carries identity and terms, never the credential.
+ *
+ * It is a PROJECTION, so it is generated and drift-guarded rather than hand-maintained. A hand-maintained
+ * copy of a registry disagrees with it eventually, and the disagreement is invisible until somebody reads a
+ * lander describing a tier they were not given, which is the defect that already shipped once here.
+ *
+ * `code` is deliberately absent from the returned shape rather than emptied, so a caller that wants it gets
+ * `undefined` and fails, instead of silently reading a blank string as a valid code.
+ */
+export function campaignManifest(parsed) {
+  const campaigns = [];
+  const seen = new Set();
+  for (const c of couponsFromParsed(parsed).values()) {
+    if (seen.has(c.id)) continue; // first wins, mirroring couponsFromParsed's own duplicate rule
+    seen.add(c.id);
+    campaigns.push({
+      id: c.id,
+      tier: c.tier,
+      active: c.active,
+      lander: landerFor({ id: c.id, tier: c.tier }),
+    });
+  }
+  campaigns.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)); // stable output, so a regenerate is a no-op diff
+  return { campaigns };
 }
 
 export function inviteLink(siteBase, code, path = '/codeable-invite/') {

@@ -13471,8 +13471,8 @@ ${String(body ?? "")}`;
   var LANDER_BY_CAMPAIGN = Object.freeze({
     CODEABLEYEAR: "/codeable-invite/"
   });
-  function landerFor({ code, tier } = {}) {
-    const c = normalizeCouponCode(code);
+  function landerFor({ code, id, tier } = {}) {
+    const c = normalizeCouponCode(id || code);
     return LANDER_BY_CAMPAIGN[c] || LANDER_BY_TIER[tier] || null;
   }
 
