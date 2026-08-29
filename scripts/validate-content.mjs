@@ -113,6 +113,50 @@ function checkMemberGating(fm, rel, body = '') {
   }
 }
 
+// sow-165: a body image reference whose file is not in the repository does NOT render as a broken image.
+// Astro resolves relative markdown images at build time and throws:
+//
+//   [ImageNotFound] Could not find requested image `./images/x.webp`. Does it exist?
+//
+// so the site build exits 1. That matters here rather than somewhere else because of what is downstream: a
+// hosted publish AUTO-MERGES, no workflow builds the site on a pull request (content-check, tests and
+// extension-check all build zero site pages; only deploy.yml builds, on push to main), and the Astro schemas
+// validate frontmatter rather than body assets. So a single missing body image reds main and stops every
+// deploy, for everybody, until someone notices. `fdf91096` fixed the one path that produced it, the website
+// publish flushing frontmatter images only, but any other route to the same shape lands the same way: a
+// hand-authored pull request, a migration, a rename that leaves a body reference behind.
+//
+// BOTH markdown forms are checked, `![alt](./images/x)` and the link form `[text](./images/x)`, because both
+// name a file the item expects to be there. Only the image form breaks the build; a link-form reference to a
+// file that is not committed is the 404-on-click defect sow-165 already had to fix four times by hand.
+// Catching them with one rule costs nothing and the message says which form was found.
+const BODY_IMAGE_REF_RE = /(!?)\[[^\]]*\]\((\.\/images\/[^)\s]+)\)/g;
+
+// Counts what the rule actually examined. A guard that reports "passed" after inspecting zero subjects is
+// this repo's most-recorded failure, and nothing downstream disagrees with it, so the number is printed.
+const bodyImageStats = { refs: 0, files: 0 };
+
+function checkBodyImages(file, rel, body) {
+  if (typeof body !== 'string' || !body) return;
+  const dir = path.dirname(file);
+  const seen = new Set();
+  const before = bodyImageStats.refs;
+  for (const m of body.matchAll(BODY_IMAGE_REF_RE)) {
+    const ref = m[2];
+    if (seen.has(ref)) continue;
+    seen.add(ref);
+    bodyImageStats.refs++;
+    const abs = path.join(dir, ref.replace(/^\.\//, ''));
+    if (fs.existsSync(abs)) continue;
+    const form = m[1] === '!' ? 'image' : 'link';
+    const consequence = m[1] === '!'
+      ? 'the site build FAILS with [ImageNotFound], so this would red main and stop the deploy'
+      : 'the link 404s for every reader, because Astro only emits assets for the ![] image form';
+    errors.push(`${rel}: the body references ${ref} (markdown ${form} form) but that file is not committed; ${consequence}. Publish via the client so the image ships in the same PR. See sow-165.`);
+  }
+  if (bodyImageStats.refs > before) bodyImageStats.files++;
+}
+
 /** Each content item's `categories` must be a valid ordered path in the canonical taxonomy. */
 function checkCategories(fm, rel) {
   const cats = fm?.categories;
@@ -187,6 +231,7 @@ function checkContent(file, owner, type) {
     checkEncryptedLinks(fm, rel);
     if (type === 'product') checkNewsFeed(fm, rel); // sow-140
     checkMemberGating(fm, rel, bodyOf(txt)); // SOW-016
+    checkBodyImages(file, rel, bodyOf(txt)); // sow-165
   } else if (type === 'comment' || type === 'share') {
     // SOW-016: encryptedBody resolves to a real v1 envelope + no members-only marker leaks into the body.
     // SOW-018: a Share is gated the same way (a members Share encrypts its body); author scoping above
@@ -555,4 +600,10 @@ if (errors.length) {
   process.exit(1);
 }
 if (JSON_OUT) console.log(JSON.stringify({ ok: true, errors: [] }));
-else console.log('✓ content validation passed (author scoping, unique slugs, valid status/visibility, canonical categories)');
+else {
+  // sow-165: say what the body-image rule actually looked at. A rule that inspected nothing reports "passed"
+  // exactly like one that inspected everything, and a zero here would mean the scan is pointed at the wrong
+  // thing (an empty bodyOf, a changed call site) rather than that the content is clean.
+  console.log(`· body-image references checked: ${bodyImageStats.refs} across ${bodyImageStats.files} items.`);
+  console.log('✓ content validation passed (author scoping, unique slugs, valid status/visibility, canonical categories)');
+}
