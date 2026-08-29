@@ -169,6 +169,13 @@ const EXTRA = [
   // The affiliate snippet also ships an impression pixel (affiliate/scripts/imp.php). A redirect cannot fire
   // a pixel, so this path tracks CLICKS only; impression tracking would need the banner rendered on a page.
   ['/outbound/cloudways', 'https://cloudways.com/?id=644779&a_bid=f7340e91&chan=gbti'],
+
+  // Tailscale, added 2026-08-28. PLACEHOLDER DESTINATION, owner-flagged as such: this points at the bare
+  // product page and carries NO affiliate or referral parameters, so a click through it credits nobody
+  // today. It exists so the path can be published and linked now and repointed once a real referral URL
+  // is issued. Do not cite it as a tracked affiliate link, and when the real URL arrives keep the explicit
+  // path before any query, per the Cloudways note above.
+  ['/outbound/tailscale', 'https://tailscale.com/'],
 ];
 for (const [oldPath, newPath] of EXTRA) { lines.push(`${oldPath} ${newPath} 301`); n++; }
 
