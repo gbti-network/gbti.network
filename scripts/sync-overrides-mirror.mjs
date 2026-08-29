@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { loadOverridesRaw } from '../membership/overrides.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorCouponsToKv, gitOwnedSections } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw } from './lib/kv-mirror.mjs';
 import { toSyndicationMirror } from '../membership/syndication-config.mjs';
 import { toCouponsMirror } from '../membership/coupons.mjs';
 
@@ -82,13 +82,17 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     // 3) coupons:config — SOW-119: signup validates coupon codes against this, so a coupon edit
     // (create, deactivate, freeDays change) goes live at the next tick without a redeploy.
     try {
-      let rawCoupons = {};
-      try { rawCoupons = yaml.load(fs.readFileSync(path.join(ROOT, 'house', 'coupons.yml'), 'utf8')) || {}; } catch { rawCoupons = {}; }
+      // sow-291 Phase 2: ABSENT and UNPARSEABLE are different states, and the old `catch { {} }` collapsed
+      // them into the one that erases the registry. loadCouponsRaw throws on unreadable and reports absence.
+      const { raw: rawCoupons, ownedByGit } = loadCouponsRaw(ROOT);
       if (dryRun) {
+        // Like the overrides dry run, this reports the GIT-owned shape only: it cannot read KV, so it must not
+        // pretend to know what a preserved registry holds, and passing ownership would make it throw on the
+        // very state it is reporting.
         const m = toCouponsMirror(rawCoupons);
-        console.log(`sync-mirror: DRY RUN would write coupons:config (${m.coupons.length} coupon${m.coupons.length === 1 ? '' : 's'}).`);
+        console.log(`sync-mirror: DRY RUN would write coupons:config (${m.coupons.length} coupon${m.coupons.length === 1 ? '' : 's'}, git-owned=${ownedByGit}).`);
       } else {
-        const c = await mirrorCouponsToKv({ raw: rawCoupons });
+        const c = await mirrorCouponsToKv({ raw: rawCoupons, ownedByGit });
         if (c.written) console.log(`sync-mirror: wrote coupons:config (${c.bytes} bytes).`);
         else { console.error(`sync-mirror: coupons:config NOT written (${c.reason}).`); process.exitCode = 1; }
       }

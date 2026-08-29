@@ -8,6 +8,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import yaml from 'js-yaml';
 import { toSyndicationMirror } from '../../membership/syndication-config.mjs';
 import { toTopicsMirror, TOPICS_MIRROR_KEY } from '../../membership/topics-vocab.mjs';
 import { toCouponsMirror, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs';
@@ -199,7 +200,53 @@ export async function mirrorTopicsToKv({ raw, env = process.env, now = new Date(
   return putKvJson({ label: 'topics vocabulary', body: JSON.stringify(toTopicsMirror(raw, () => now.toISOString())), env, fetchImpl, key });
 }
 
-/** SOW-119: PUT house/coupons.yml -> KV coupons:config, so signup validates coupon codes against live values. */
-export async function mirrorCouponsToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = COUPONS_KV_KEY } = {}) {
-  return putKvJson({ label: 'coupons', body: JSON.stringify(toCouponsMirror(raw, now)), env, fetchImpl, key });
+/**
+ * sow-291 Phase 2: does GIT still own the coupon registry, and is the file READABLE?
+ *
+ * Two states that a bare `try { load } catch { {} }` collapses into one, in the direction that erases the
+ * registry. ABSENT is the Phase 2 flip: KV is the source and the mirror must preserve rather than rebuild.
+ * UNPARSEABLE is a bad edit, and it must ABORT: a YAML syntax error merged into house/coupons.yml would
+ * otherwise mirror an empty registry over the live one at the next six-hourly tick, taking every coupon down
+ * within six hours, silently, on a green run. Derived from the checkout so the flip needs no flag to be
+ * remembered, exactly as gitOwnedSections is.
+ *
+ * @returns `{ raw, ownedByGit }`. Throws on an unreadable-but-present file.
+ */
+export function loadCouponsRaw(root) {
+  const file = path.join(root, 'house', 'coupons.yml');
+  if (!fs.existsSync(file)) return { raw: {}, ownedByGit: false };
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch (err) {
+    throw new Error(`refusing to mirror coupons: house/coupons.yml exists but could not be read: ${err?.message || 'unknown'}`);
+  }
+  try { return { raw: yaml.load(text) || {}, ownedByGit: true }; } catch (err) {
+    throw new Error(`refusing to mirror coupons: house/coupons.yml exists but is not valid YAML: ${err?.message || 'unknown'}`);
+  }
+}
+
+/**
+ * SOW-119: PUT house/coupons.yml -> KV coupons:config, so signup validates coupon codes against live values.
+ *
+ * sow-291 Phase 2: READ BEFORE WRITE, for the reason mirrorOverridesToKv does. A read failure ABORTS rather
+ * than falling back to a git-only blob, because "we could not read the current coupons" must never resolve to
+ * "overwrite them". A skipped sync is absorbed by the Worker's 48h freshness window; a blind overwrite is not
+ * harmless, because it looks like success.
+ */
+export async function mirrorCouponsToKv({ raw, env = process.env, now = new Date(), fetchImpl = globalThis.fetch, key = COUPONS_KV_KEY, ownedByGit = true } = {}) {
+  const accountId = env.CF_ACCOUNT_ID;
+  const namespaceId = env.CF_KV_NAMESPACE_ID;
+  const apiToken = env.CF_API_TOKEN;
+  if (!accountId || !namespaceId || !apiToken) {
+    return { written: false, key, bytes: 0, reason: 'CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN not set' };
+  }
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
+  let existing = null;
+  try {
+    const cur = await fetchImpl(url, { headers: { Authorization: `Bearer ${apiToken}` } });
+    if (cur?.ok) existing = await cur.json();
+    else if (cur && cur.status !== 404) throw new Error(`status ${cur.status}`); // 404 is the legitimate first write
+  } catch (err) {
+    throw new Error(`coupons mirror read failed, refusing to overwrite an unknown coupon registry: ${err?.message || 'unknown'}`);
+  }
+  return putKvJson({ label: 'coupons', body: JSON.stringify(toCouponsMirror(raw, now, existing, ownedByGit)), env, fetchImpl, key });
 }

@@ -727,7 +727,9 @@ async function main() {
   for (const { file, run, key } of [
     { file: 'content-channels.yml', run: mirrorContentChannelsToKv, key: 'synd:channels' },
     { file: 'topics.yml', run: mirrorTopicsToKv, key: 'topics:vocab' },
-    { file: 'coupons.yml', run: mirrorCouponsToKv, key: 'coupons:config' }, // SOW-119
+    // sow-291 Phase 2: coupons.yml is NOT in this loop any more. The loop's `catch { {} }` treats an
+    // unreadable file as an empty one, which for the coupon registry means mirroring an EMPTY registry over
+    // the live one and disabling every coupon on a green run. It gets its own block below.
   ]) {
     let rawDoc = {};
     try { rawDoc = yaml.load(fs.readFileSync(path.join(ROOT, 'house', file), 'utf8')) || {}; } catch { rawDoc = {}; }
@@ -740,6 +742,25 @@ async function main() {
       console.log(r.written ? `reconcile: mirrored house/${file} to KV (${r.bytes} bytes).` : `reconcile: house/${file} KV mirror SKIPPED (${r.reason}).`);
     } catch (e) {
       console.error(`reconcile: house/${file} KV mirror FAILED:`, e?.message ?? e);
+      process.exitCode = 1;
+    }
+  }
+
+  // SOW-119 + sow-291 Phase 2: house/coupons.yml -> KV coupons:config, with ABSENT and UNPARSEABLE kept
+  // distinct. Absent is the Phase 2 flip (KV is the source, preserve rather than rebuild); unparseable is a bad
+  // edit and must abort loudly rather than mirror an empty registry. The failure direction matters more here
+  // than for the other mirrors: an empty coupons:config disables every invite link in circulation.
+  {
+    try {
+      const { raw: rawCoupons, ownedByGit } = loadCouponsRaw(ROOT);
+      if (dryRun) {
+        console.log(`reconcile: DRY RUN would mirror house/coupons.yml to KV (key coupons:config, git-owned=${ownedByGit}).`);
+      } else {
+        const r = await mirrorCouponsToKv({ raw: rawCoupons, env, ownedByGit });
+        console.log(r.written ? `reconcile: mirrored coupons to KV (${r.bytes} bytes, git-owned=${ownedByGit}).` : `reconcile: coupons KV mirror SKIPPED (${r.reason}).`);
+      }
+    } catch (e) {
+      console.error('reconcile: coupons KV mirror FAILED:', e?.message ?? e);
       process.exitCode = 1;
     }
   }

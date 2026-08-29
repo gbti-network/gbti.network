@@ -175,9 +175,57 @@ export function validateCoupons(parsed, { file = 'coupons.yml' } = {}) {
 }
 
 /** The coupons:config mirror blob shape ({ generatedAt, coupons }), from the raw parsed yaml. */
-export function toCouponsMirror(raw, now = new Date()) {
+/**
+ * sow-291 Phase 2: A KV-NATIVE COUPON SURVIVES THE GIT SYNC.
+ *
+ * The same hazard sow-213 met on the overrides blob, on the coupon registry. `toCouponsMirror` rebuilt
+ * `coupons:config` wholesale from git, which is correct only while git is the sole writer. The moment an admin
+ * action writes a coupon straight to KV, the next run of the six-hourly mirror ERASES it: the coupon works,
+ * then quietly stops within six hours, on a green run, with nothing reporting it.
+ *
+ * The fix is sow-213's, because the shape is sow-213's: a PROPERTY RATHER THAN A DISCIPLINE. An entry marked
+ * `source: 'kv'` is preserved, so this writer can add and update git-sourced coupons but can never delete a
+ * KV-native one. Nobody has to remember a rule at the moment the writers invert.
+ *
+ * Identity here is the CODE, not the id, because the code is what a redemption looks up (`couponsFromParsed`
+ * keys on it). An unmarked existing entry is treated as a stale copy of a git one and dropped, which is what
+ * keeps a REMOVAL in git effective: deactivating a coupon in git must still deactivate it, or this would trade
+ * one silent failure for another.
+ */
+export function mergeCouponsList(gitCoupons, existingCoupons) {
+  const git = Array.isArray(gitCoupons) ? gitCoupons : [];
+  const existing = Array.isArray(existingCoupons) ? existingCoupons : [];
+  const codeOf = (c) => (c && c.code != null && c.code !== '' ? String(c.code) : null);
+  const gitCodes = new Set(git.map(codeOf).filter(Boolean));
+  const kvNative = existing.filter((c) => c?.source === 'kv' && codeOf(c) && !gitCodes.has(codeOf(c)));
+  return kvNative.length === 0 ? git : [...git, ...kvNative];
+}
+
+/**
+ * Build the `coupons:config` blob the signup Worker reads.
+ *
+ * `existing` is the blob currently in KV; pass it so a KV-native coupon is not clobbered. `ownedByGit` says
+ * whether `house/coupons.yml` still exists in the checkout: sow-291 Phase 2 deletes it, and from that moment a
+ * rebuild from the empty read would write an EMPTY registry over the live one, taking every coupon down within
+ * six hours on a green run. So when git does not own the registry, KV is the source and this does not rebuild
+ * it. If there is nothing usable to preserve, the write ABORTS rather than writing empty.
+ *
+ * What an abort costs, stated rather than waved at: the blob stops being refreshed, so a transient failure is
+ * absorbed by the Worker's 48h freshness window and a persistent one ages the blob out and fails every coupon
+ * CLOSED. That is the safe direction and it is LOUD (the six-hourly job exits non-zero, so it reds four times a
+ * day). The alternative is an erase that disables every coupon on a GREEN run with nobody watching.
+ */
+export function toCouponsMirror(raw, now = new Date(), existing = null, ownedByGit = true) {
+  const generatedAt = now.toISOString();
+  if (!ownedByGit) {
+    const kept = Array.isArray(existing?.coupons) ? existing.coupons : null;
+    if (!kept || kept.length === 0) {
+      throw new Error('refusing to write coupons:config: house/coupons.yml is absent and KV carries no coupon registry to preserve');
+    }
+    return { generatedAt, coupons: kept };
+  }
   return {
-    generatedAt: now.toISOString(),
-    coupons: [...couponsFromParsed(raw).values()],
+    generatedAt,
+    coupons: mergeCouponsList([...couponsFromParsed(raw).values()], existing?.coupons),
   };
 }
