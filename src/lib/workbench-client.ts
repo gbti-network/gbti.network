@@ -28,7 +28,7 @@ import { fieldsFor } from '../../client/src/form-fields.mjs';
 import { renderMarkdown } from '../../client/src/markdown.mjs';
 import { canPublish, canStageDrafts } from '../../client/src/membership.mjs';
 import { memberContent } from '../../client-ui/src/member-view-core.mjs';
-import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
+import { planMemberFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, AUTHOR_NOTE_TYPES, MEMBER_READ_TIER, sanitizeImageName, planPublishImageFiles, referencedImages, bodyImageCandidates, planImageRefs, normalizeImageFields, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, introFolderFor, networkContent } from './workbench-client-core.mjs';
 import { mergeRepoDrafts } from '../../client/src/repo-drafts-core.mjs';
 
 const MAX_IMAGE_BYTES = 1_048_576; // 1 MB, matching the Worker gate + check-media
@@ -248,9 +248,23 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     // publishedAt preservation, the old .enc path, and (with authorTarget) the old owner to move away from.
     const origin = renameOriginOf({ path, username: user, type, allowAnyFolder });
     let oldFm: any = null;
+    // sow-165: the previously committed BODY, kept from the read that already happens here rather than paid
+    // for again. It is what makes the body-image scan below free in the common case: a reference that is
+    // already in it is already committed, so it needs no lookup at all. Null when the item is not on main
+    // yet, or when the parse fails, and both of those correctly mean "treat every reference as new".
+    // A members item's index.md carries only the PUBLIC half (the gated half lives in the sibling .enc), so a
+    // gated body image reads as new every publish. That costs one lookup that resolves to skip; it is not a
+    // correctness gap, and reading the .enc would mean decrypting it just to save a round-trip.
+    let oldBody: string | null = null;
     if (origin) {
       const oldText = await readOwnFile(origin.oldPath);
-      if (oldText != null) { try { oldFm = parseContentFile(oldText).frontmatter ?? {}; } catch { oldFm = null; } }
+      if (oldText != null) {
+        try {
+          const parsed = parseContentFile(oldText);
+          oldFm = parsed.frontmatter ?? {};
+          oldBody = parsed.body ?? '';
+        } catch { oldFm = null; oldBody = null; }
+      }
     }
     // The TARGET folder for this publish. An explicit authorTarget (an existing item, superadmin) wins; else the
     // loaded origin's own folder (a plain edit, unchanged); else the workspace's create-time scope (a NEW item),
@@ -318,9 +332,25 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     const itemTokens = [`${type}:${built.slug}`];
     if (origin?.oldSlug && origin.oldSlug !== built.slug) itemTokens.push(`${type}:${origin.oldSlug}`);
     const stagedForCleanup: Array<{ name: string; item: string }> = [];
-    for (const ref of referencedImages(built.frontmatter)) {
+    // sow-165: the body is scanned too, and it is the half that was missing. referencedImages reads the
+    // frontmatter only, so a body image was staged and then never committed, and the merged PR carried
+    // markdown pointing at a file that is not in the repository. Astro does not render that as a broken
+    // image: the site build fails with [ImageNotFound], so on an auto-merged publish it reds main and stops
+    // the deploy. Confirmed by building one on purpose rather than inferred.
+    //
+    // The frontmatter refs keep the sow-183 MOVE treatment and the body refs deliberately do not. A move has
+    // to carry the bytes (the hosted API has no rename primitive) and HOSTED_MAX_IMAGE_TOTAL_BYTES is 4 MB
+    // per request, while one real article already holds 9717 KB of body images and two more sit within 3% of
+    // the ceiling. Moving them would hard-fail the rename outright, which is worse than today's behaviour of
+    // leaving them orphaned at the old folder. That half needs a chunked or Worker-side move, and sow-165
+    // records the measurement.
+    const imageRefs: Array<{ name: string; move: boolean }> = planImageRefs(
+      referencedImages(built.frontmatter),
+      bodyImageCandidates(body, oldBody, new Set(pendingImages.keys())),
+    );
+    for (const ref of imageRefs) {
       const commitPath = `${imagesDir}/${ref.name}`;
-      const oldPath = oldImagesDir ? `${oldImagesDir}/${ref.name}` : null;
+      const oldPath = ref.move && oldImagesDir ? `${oldImagesDir}/${ref.name}` : null;
       // ONE read answers both halves of the move: it is the fallback bytes for the copy into the new folder,
       // and it is the proof there is something at the old path worth deleting.
       const oldBase64 = oldPath && oldPath !== commitPath ? await readOwnFileBase64(oldPath) : null;

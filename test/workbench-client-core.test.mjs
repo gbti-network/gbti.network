@@ -3,7 +3,7 @@
 // filter/tier-gate, the comment-visibility coercion, and the favorite derivation. Uses a FAKE encrypt (no Worker).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { planMemberFiles, planPublishImage, planPublishImageFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImages, normalizeImageFields, normalizeImageValue, IMAGE_FIELD_KEYS, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
+import { planMemberFiles, planPublishImage, planPublishImageFiles, reassembleMemberBody, filterThreadComments, coerceCommentInput, favoritedFrom, COMMENT_TARGET_TYPES, MEMBER_READ_TIER, sanitizeImageName, referencedImages, bodyImageRefs, bodyImageCandidates, planImageRefs, normalizeImageFields, normalizeImageValue, IMAGE_FIELD_KEYS, base64Bytes, renameOriginOf, mergedRedirectFrom, renameIntroMoveFiles, isNetworkPath, networkContent } from '../src/lib/workbench-client-core.mjs';
 import { buildCommentFile, buildContentFile, buildShareFile, shareId, commentId, parseContentFile, serializeContentFile } from '../client/src/content-ops.mjs';
 
 const fakeEncrypt = async (plaintext, assetId) => ({ v: 1, kid: '1', iv: 'IV', aad: assetId, ct: 'CT(' + plaintext + ')' });
@@ -213,6 +213,72 @@ test('every image() field in the content schemas is covered by the flush list', 
   }
   const gal = referencedImages({ gallery: [{ src: './images/g.png' }] });
   assert.deepEqual(gal.map((r) => r.name), ['g.png'], 'gallery is an image() field too');
+});
+
+// sow-165: the BODY half of the flush list. referencedImages reads frontmatter only, so a body image was
+// staged and then never committed, and the merged PR carried markdown pointing at a file that is not in the
+// repository. That is not a broken image: `npm run build` fails with [ImageNotFound], verified by building
+// one on purpose, so on an auto-merged publish it reds main and stops the deploy.
+test('bodyImageRefs: both markdown forms, deduped, and nothing that is not ours', () => {
+  assert.deepEqual(bodyImageRefs('![alt](./images/one.webp)').map((r) => r.name), ['one.webp']);
+  // THE LINK FORM COUNTS. Astro emits an asset only for the image form, so a link-form-only reference
+  // renders fine and 404s on click, and four live defects on this site came from exactly that. The question
+  // here is "does the item reference this file", not "does Astro emit it", so scoping to `![]` would leave
+  // that image uncommitted and the failure invisible until somebody clicked.
+  assert.deepEqual(bodyImageRefs('see [the full size](./images/two.png) here').map((r) => r.name), ['two.png']);
+  // The click-to-enlarge idiom is BOTH forms pointing at one file: one image, not two.
+  assert.deepEqual(bodyImageRefs('[![](./images/x.webp)](./images/x.webp)').map((r) => r.name), ['x.webp']);
+  assert.deepEqual(bodyImageRefs('![a](./images/a.png)\n\n![b](./images/b.png)\n\n![a again](./images/a.png)')
+    .map((r) => r.name), ['a.png', 'b.png'], 'deduped, in first-seen order');
+  // Not ours to flush: a remote host, a site-absolute path, another folder, and an uppercase name (which the
+  // hosted validator rejects anyway, so matching it here would produce a request that fails at the Worker).
+  assert.deepEqual(bodyImageRefs('![](https://cdn/x.png) ![](/media/y.webp) ![](./other/z.png) ![](./images/Photo.webp)'), []);
+  assert.deepEqual(bodyImageRefs(''), []);
+  assert.deepEqual(bodyImageRefs(null), []);
+});
+
+test('bodyImageRefs: a members item is scanned on BOTH sides of the marker', () => {
+  // planMemberFiles splits here and encrypts the second half, but the images it references are ordinary files
+  // that still have to be committed. Scanning built.markdown instead of the raw body would miss every one.
+  const body = '![](./images/public.webp)\n\n<!-- members-only -->\n\n![](./images/gated.webp)';
+  assert.deepEqual(bodyImageRefs(body).map((r) => r.name), ['public.webp', 'gated.webp']);
+});
+
+test('bodyImageCandidates: an unchanged re-publish looks nothing up', () => {
+  // THE COST PROPERTY, asserted rather than described. Every candidate costs the publish loop up to three
+  // lookups, two of them network reads. The largest article in this repo carries 50 body images, so a naive
+  // scan would spend about a hundred round-trips per publish learning they are all already committed.
+  const body = '![](./images/a.webp)\n![](./images/b.webp)\n![](./images/c.webp)';
+  assert.deepEqual(bodyImageCandidates(body, body, []), [], 'nothing changed, so nothing needs looking up');
+  // A reference the committed body does not have is new, and only that one is a candidate.
+  assert.deepEqual(bodyImageCandidates(body, '![](./images/a.webp)', []).map((r) => r.name), ['b.webp', 'c.webp']);
+  // A name staged in THIS session is a candidate even when the body is unchanged: the author replaced the
+  // file under the same name, so the bytes on main are stale.
+  assert.deepEqual(bodyImageCandidates(body, body, ['b.webp']).map((r) => r.name), ['b.webp']);
+  // A NEW item has no committed body, so every reference is new by definition. Not the expensive case it
+  // looks like: its images were staged in the same session and resolve from memory with no network call.
+  assert.deepEqual(bodyImageCandidates(body, null, []).map((r) => r.name), ['a.webp', 'b.webp', 'c.webp']);
+});
+
+test('planImageRefs: frontmatter images move on a rename, body images deliberately do not', () => {
+  const refs = planImageRefs(
+    [{ field: 'coverImage', name: 'cover.png' }],
+    [{ name: 'inline.webp' }, { name: 'cover.png' }],
+  );
+  assert.deepEqual(refs, [
+    { name: 'cover.png', move: true },
+    { name: 'inline.webp', move: false },
+  ], 'a name in both lists is ONE image and keeps the frontmatter move treatment');
+
+  // THE MOVE EXCLUSION IS THE POINT, and it is a measurement rather than a preference. A move carries the
+  // bytes (the hosted API has no rename primitive) against a 4 MB per-request ceiling, and one real article
+  // already holds 9717 KB of body images. Moving them would hard-fail the rename outright, which is worse
+  // than today's behaviour of orphaning them. If this ever flips to true, the rename breaks on real content.
+  const body = planImageRefs([], [{ name: 'a.webp' }, { name: 'b.webp' }]);
+  assert.deepEqual(body.map((r) => r.move), [false, false]);
+
+  assert.deepEqual(planImageRefs([], []), []);
+  assert.deepEqual(planImageRefs(null, null), []);
 });
 
 test('base64Bytes: padding-aware decoded length', () => {

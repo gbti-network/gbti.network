@@ -152,6 +152,98 @@ export function referencedImages(frontmatter) {
   return out;
 }
 
+// The same canonical `./images/<file>` shape as CANONICAL_IMAGE_RE, matched INSIDE a markdown body rather than
+// anchored to a whole field value. It deliberately matches the closing `](` of BOTH markdown forms:
+//
+//     ![alt](./images/x.webp)     the image form, which Astro turns into an asset
+//     [text](./images/x.webp)     the LINK form, which Astro never emits
+//
+// Matching only the image form would be the natural reading and it would be wrong here. The question this
+// scan answers is "does the item reference this file", not "does Astro emit it", so a link-form-only image
+// would be left uncommitted and the failure would be invisible until somebody clicked. The link form is a
+// real idiom in this corpus (the click-to-enlarge `[![](x)](x)` pattern) and it has already produced four
+// live 404s, recorded in sow-165. `g` because a body has many; the leading `!` is simply not part of the
+// pattern, which is what makes one expression cover both.
+const BODY_IMAGE_RE = /\]\(\.\/images\/([a-z0-9][a-z0-9._-]*)\)/g;
+
+/**
+ * sow-165: every staged image a content item's BODY references, as `[{ name }]` deduped, in first-seen order.
+ *
+ * referencedImages above reads the FRONTMATTER only, and its signature says so: there is no body to scan
+ * with. That was the whole defect. On the hosted website path stageImage does not write anything, it stashes
+ * bytes and returns `./images/<name>`, and the publish loop is what commits them, so a body image was staged
+ * and then never committed. The merged PR carried markdown pointing at a file that is not in the repository,
+ * and Astro does not render that as a broken image: the site build FAILS with `[ImageNotFound]`, which on an
+ * auto-merged PR means a red main and a stopped deploy. Verified by building one on purpose.
+ *
+ * Takes the RAW body, never built.markdown: planMemberFiles splits a members item at the `<!-- members-only -->`
+ * marker and encrypts the gated half, and the images that half references still have to be committed.
+ *
+ * Names, not paths, for the same reason referencedImages returns names: the destination folder is not known
+ * until the build resolves it, and an item can be renamed between staging and publishing.
+ */
+export function bodyImageRefs(markdown) {
+  const out = [];
+  const seen = new Set();
+  for (const m of String(markdown ?? '').matchAll(BODY_IMAGE_RE)) {
+    if (seen.has(m[1])) continue;
+    seen.add(m[1]);
+    out.push({ name: m[1] });
+  }
+  return out;
+}
+
+/**
+ * Which of a body's image references this publish actually has to look up. Pure, and the reason it exists is
+ * COST rather than correctness.
+ *
+ * Every candidate costs the publish loop up to three lookups, two of them network reads, to discover where its
+ * bytes are. That was affordable for frontmatter, which is at most six fields plus a gallery. It is not
+ * affordable for a body: the largest article in this repo carries 50 body images, and re-publishing it
+ * unchanged would spend about a hundred sequential round-trips learning that every one of them is already
+ * committed.
+ *
+ * A reference needs looking up only when it is NEW to this publish, or when it is sitting in the session's
+ * staged map (an image the author just replaced under the same filename, where the bytes on main are stale).
+ * Anything else already appears in the committed body, so its file is already in the item's folder.
+ *
+ * `oldBody` is the item's previously committed markdown, or null for a NEW item, where every reference is new
+ * by definition. That is not the expensive case it looks like: a new item's images were staged in this same
+ * session, so they resolve from the in-memory map with no network call at all.
+ */
+export function bodyImageCandidates(body, oldBody, stagedNames) {
+  const staged = stagedNames instanceof Set ? stagedNames : new Set(stagedNames || []);
+  if (oldBody == null) return bodyImageRefs(body);
+  const already = new Set(bodyImageRefs(oldBody).map((r) => r.name));
+  return bodyImageRefs(body).filter((r) => staged.has(r.name) || !already.has(r.name));
+}
+
+/**
+ * The full list of images ONE publish has to resolve, each flagged for whether the sow-183 move applies.
+ *
+ * Extracted so the decision is testable. Left inline in publish() it would be glue no unit test can reach,
+ * and its absence from the suite would look like coverage elsewhere, which is a failure this repo has
+ * shipped before.
+ *
+ * A frontmatter reference MOVES on a rename: it is one file, the budget is not a concern, and sow-183 built
+ * that. A BODY reference deliberately does not. A move has to carry the bytes, HOSTED_MAX_IMAGE_TOTAL_BYTES
+ * is 4 MB per request, and one real article already holds 9717 KB of body images with two more inside 3% of
+ * the ceiling, so moving them would hard-fail the rename outright. Today it merely orphans them at the old
+ * folder, which is worse than nothing but better than a rename that cannot succeed. sow-165 records the
+ * numbers and the chunked move is its own item.
+ *
+ * A name in both lists is ONE image and takes the frontmatter's move treatment, never two entries.
+ */
+export function planImageRefs(frontmatterRefs, bodyRefs) {
+  const fm = Array.isArray(frontmatterRefs) ? frontmatterRefs : [];
+  const body = Array.isArray(bodyRefs) ? bodyRefs : [];
+  const fmNames = new Set(fm.map((r) => r?.name));
+  return [
+    ...fm.map((r) => ({ name: r.name, move: true })),
+    ...body.filter((r) => !fmNames.has(r?.name)).map((r) => ({ name: r.name, move: false })),
+  ];
+}
+
 /**
  * Decide what publish should do with ONE image the content references. Pure over three injected lookups, so
  * the rule is testable without a Worker, a browser or a network.
