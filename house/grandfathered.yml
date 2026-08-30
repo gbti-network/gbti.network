@@ -137,3 +137,10 @@ grandfathered:
     reason: e2e test account (non-staff paid member)
     until: null
     tier: member
+
+  # SOW-119: coupon grants folded in from KV redemptions by reconcile (2026-08-30). Auto-appended.
+  - github_id: "1852711"        # github.com/mehul0810
+    login: mehul0810
+    reason: coupon:CODEABLEYEAR
+    until: "2027-08-30T06:41:36.048Z"
+    tier: member
