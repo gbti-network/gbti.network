@@ -469,7 +469,8 @@ const labelOf = CATEGORY_LABELS;
       // The body. A members-only draft keeps its plain body in the private draft store, so the MEMBER view
       // shows it and the VISITOR view shows the stub the published page would serve.
       const bodyEl = $('[data-pv-body]');
-      const membersOnly = fm.visibility === 'members';
+      const { previewMemberProjection } = await import('../../lib/preview-member-projection.mjs');
+      const markdownTools = await import('../../../client/src/markdown.mjs');
 
       // sow-235: the body is re-rendered from source on every edit, so the source is the state and the DOM is
       // only ever a view of it. renderMarkdownWithBlocks returns the same HTML the read view uses plus each
@@ -489,29 +490,28 @@ const labelOf = CATEGORY_LABELS;
       const noteDoc: PvDoc = { attr: 'nblk', ranges: [], get: () => String(draft.authorNote || ''), set: (v) => { draft.authorNote = v; } };
       let noteMeta: any = null;
       const renderFromSource = async () => {
-        const { renderMarkdownWithBlocks, renderMarkdown } = await import('../../../client/src/markdown.mjs');
         const src = String(draft.body || '');
         if (editing) {
-          const r = renderMarkdownWithBlocks(src);
+          const r = markdownTools.renderMarkdownWithBlocks(src);
           bodyDoc.ranges = r.blocks;
           draft.__html = r.html;
         } else {
           bodyDoc.ranges = [];
-          draft.__html = renderMarkdown(src);
+          draft.__html = markdownTools.renderMarkdown(src);
         }
         draft.__html = String(draft.__html).replace(/src="(\.\/[^"]+)"/g, (_m: string, q: string) => `src="${asset(q, itemPath)}"`);
       };
 
       try {
-        const { renderMarkdown } = await import('../../../client/src/markdown.mjs');
-        draft.__html = renderMarkdown(String(draft.body || ''));
+        draft.__html = markdownTools.renderMarkdown(String(draft.body || ''));
         // Repo-relative body images need the item folder, exactly as the editor's blocks do.
         draft.__html = String(draft.__html).replace(/src="(\.\/[^"]+)"/g, (_m: string, p: string) => `src="${asset(p, itemPath)}"`);
       } catch { draft.__html = '<p class="muted">The body could not be rendered.</p>'; }
 
       const renderBody = (asMember: boolean) => {
         if (!bodyEl) return;
-        if (membersOnly && !asMember) {
+        const projection = previewMemberProjection(bodyDoc.get(), { visibility: fm.visibility, asMember, editing });
+        if (projection.gate === 'whole') {
           bodyEl.innerHTML = `<div class="pd-teaser"><span class="pd-gate-lab">Members only</span>`
             + `<h2 class="pd-gate-title">This write-up lives inside the network</h2>`
             + `<p class="pd-gate-sub">${esc(fm.shortDescription || '')}</p>`
@@ -519,7 +519,14 @@ const labelOf = CATEGORY_LABELS;
             + `<p style="margin-top:16px"><a class="btn btn-primary" href="/membership/">Become a member</a></p></div>`;
           return;
         }
-        bodyEl.innerHTML = draft.__html || '';
+        let html = editing ? String(draft.__html || '') : markdownTools.renderMarkdown(projection.markdown);
+        html = html.replace(/src="(\.\/[^\"]+)"/g, (_m: string, p: string) => `src="${asset(p, itemPath)}"`);
+        if (projection.gate === 'tail') {
+          html += `<div class="pd-locked-tail"><span class="pd-gate-lab">Members-only section</span>`
+            + `<h2 class="pd-gate-title">Continue reading as a member</h2>`
+            + `<p class="pd-gate-sub">Switch to “As a member” above to preview the gated section.</p></div>`;
+        }
+        bodyEl.innerHTML = html;
       };
 
       // Contents rail. The published page reuses the ids Astro generated at build; the client-side renderer
@@ -539,7 +546,7 @@ const labelOf = CATEGORY_LABELS;
         // still stamped with ids, so in-body anchors keep working; only the rail is withheld.
         if (!shellHasToc(type)) { list.innerHTML = ''; nav.hidden = true; return; }
         const toc = buildToc(headings, {
-          hasBody: !(membersOnly && !asMember),
+          hasBody: previewMemberProjection(bodyDoc.get(), { visibility: fm.visibility, asMember }).gate !== 'whole',
           hasGallery: usable.length > 0,
           hasDiscussion: false, // the preview omits the discussion, so it must not be offered as an anchor
         });
@@ -644,7 +651,7 @@ const labelOf = CATEGORY_LABELS;
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
       const { transferHasFiles, firstImageFile, processImageFile, blobToBase64, processedImageDataUrl } = await import('../../../client-ui/src/image-intake.mjs');
       const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
-      const { renderMarkdownWithBlocks: mdBlocks, renderMarkdown: mdPlain } = await import('../../../client/src/markdown.mjs');
+      const { renderMarkdownWithBlocks: mdBlocks, renderMarkdown: mdPlain } = markdownTools;
       const { buildAuthorNoteHtml } = await import('../../lib/author-note.mjs');
       const { planTitleEdit } = await import('../../lib/preview-title.mjs');
 
