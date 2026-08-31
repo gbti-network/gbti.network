@@ -26,7 +26,10 @@ const port = await new Promise((resolve) => {
 const server = http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
   if (url === '/') {
-    res.writeHead(200, { 'content-type': 'text/html' });
+    res.writeHead(200, {
+      'content-type': 'text/html',
+      'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; img-src 'self' data:",
+    });
     res.end('<!doctype html><title>image intake check</title>');
     return;
   }
@@ -75,22 +78,32 @@ try {
     withExif.set(original.subarray(2), 2 + app1.length);
     const contains = (bytes) => new TextDecoder('latin1').decode(bytes).includes(marker);
     const file = new File([withExif], 'phone-photo.jpg', { type: 'image/jpeg' });
-    const { processImageFile } = await import('/client-ui/src/image-intake.mjs');
+    const { processImageFile, blobToBase64, processedImageDataUrl } = await import('/client-ui/src/image-intake.mjs');
     const processed = await processImageFile(file);
     const output = new Uint8Array(await processed.blob.arrayBuffer());
+    const previewUrl = processedImageDataUrl(processed.blob, await blobToBase64(processed.blob));
+    const preview = new Image();
+    const previewLoaded = await new Promise((resolve) => {
+      preview.onload = () => resolve(true);
+      preview.onerror = () => resolve(false);
+      preview.src = previewUrl;
+    });
     return {
       inputHasMarker: contains(withExif),
       outputHasMarker: contains(output),
       type: processed.type,
       size: processed.blob.size,
       reencoded: processed.reencoded,
+      previewLoaded,
+      previewScheme: previewUrl.split(':')[0],
     };
   });
   if (!result.inputHasMarker) die('positive-control EXIF marker is missing from the input');
   if (result.outputHasMarker) die('EXIF marker survived the image processor');
   if (!result.reencoded || result.type !== 'image/webp') die(`expected re-encoded WebP, got ${result.type}`);
   if (result.size > 1_048_576) die(`processed output exceeds 1MB (${result.size} bytes)`);
-  console.log(`✓ image intake removed EXIF marker and produced ${result.size}-byte WebP`);
+  if (!result.previewLoaded || result.previewScheme !== 'data') die('processed preview did not load under the production image CSP');
+  console.log(`✓ image intake removed EXIF marker and loaded the ${result.size}-byte WebP preview under production CSP`);
 } finally {
   await browser.close();
   server.close();

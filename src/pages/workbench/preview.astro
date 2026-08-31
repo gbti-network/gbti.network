@@ -642,7 +642,7 @@ const labelOf = CATEGORY_LABELS;
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
       const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, planMemberSplitInsert } = await import('../../../client-ui/src/block-commit.mjs');
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
-      const { transferHasFiles, firstImageFile, processImageFile, blobToBase64 } = await import('../../../client-ui/src/image-intake.mjs');
+      const { transferHasFiles, firstImageFile, processImageFile, blobToBase64, processedImageDataUrl } = await import('../../../client-ui/src/image-intake.mjs');
       const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
       const { renderMarkdownWithBlocks: mdBlocks, renderMarkdown: mdPlain } = await import('../../../client/src/markdown.mjs');
       const { buildAuthorNoteHtml } = await import('../../lib/author-note.mjs');
@@ -800,9 +800,10 @@ const labelOf = CATEGORY_LABELS;
             .filter(Boolean);
           const processed = await processImageFile(file, { usedNames });
           const client: any = await getWriteClient();
+          const dataBase64 = await blobToBase64(processed.blob);
           const out = await client.stageImage({
             filename: processed.name,
-            dataBase64: await blobToBase64(processed.blob),
+            dataBase64,
             itemPath,
             item: `${type}:${slug}`,
           });
@@ -811,7 +812,7 @@ const labelOf = CATEGORY_LABELS;
           if (!next) throw new Error('The image could not be placed at that block.');
           lines.splice(range.start, range.end - range.start + 1, ...next);
           bodyDoc.set(lines.join('\n'));
-          try { stagedSrc[out.path] = URL.createObjectURL(processed.blob); } catch { /* URL is optional */ }
+          stagedSrc[out.path] = processedImageDataUrl(processed.blob, dataBase64);
           markDirty();
           await renderFromSource();
           apply();

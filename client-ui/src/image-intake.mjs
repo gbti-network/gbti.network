@@ -129,6 +129,18 @@ export async function blobToBase64(blob) {
   return btoa(binary);
 }
 
+// Production CSP intentionally allows data: images but not blob: URLs. Build
+// the transient preview from the processed bytes already sent to the stager so
+// the editor can display it immediately without weakening that policy.
+export function processedImageDataUrl(blob, dataBase64) {
+  const type = String(blob?.type || '').toLowerCase().replace('image/jpg', 'image/jpeg');
+  const payload = String(dataBase64 || '');
+  if (!INPUT_TYPES.has(type) || !payload) {
+    throw new Error('The processed image preview could not be created.');
+  }
+  return `data:${type};base64,${payload}`;
+}
+
 export async function processImageFile(file, {
   usedNames = [],
   decode = (value) => createImageBitmap(value),

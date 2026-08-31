@@ -1174,6 +1174,14 @@ ${String(body ?? "")}`;
     }
     return btoa(binary);
   }
+  function processedImageDataUrl(blob, dataBase64) {
+    const type = String(blob?.type || "").toLowerCase().replace("image/jpg", "image/jpeg");
+    const payload = String(dataBase64 || "");
+    if (!INPUT_TYPES.has(type) || !payload) {
+      throw new Error("The processed image preview could not be created.");
+    }
+    return `data:${type};base64,${payload}`;
+  }
   async function processImageFile(file, {
     usedNames = [],
     decode = (value) => createImageBitmap(value),
@@ -2069,10 +2077,7 @@ ${String(body ?? "")}`;
         });
         if (this._indexOf(id) < 0) return;
         b.url = out.path;
-        try {
-          (this._stagedSrc ||= {})[b.url] = URL.createObjectURL(processed.blob);
-        } catch {
-        }
+        (this._stagedSrc ||= {})[b.url] = processedImageDataUrl(processed.blob, dataBase64);
         if (!b.alt) b.alt = String(file.name || processed.name).replace(/\.[^.]+$/, "");
         this._render();
         const done = status();

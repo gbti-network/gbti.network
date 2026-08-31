@@ -6,6 +6,7 @@ import {
   firstImageFile,
   planReencode,
   outputNameFor,
+  processedImageDataUrl,
   processImageFile,
 } from '../client-ui/src/image-intake.mjs';
 
@@ -58,6 +59,12 @@ test('processing draws decoded pixels and returns only the re-encoded blob', asy
   assert.deepEqual(calls, [{ x: 0, y: 0, w: 2400, h: 1600 }, { type: 'image/webp', quality: 0.82 }]);
   assert.equal(closed, true);
   assert.match(result.message, /Embedded metadata removed/);
+});
+
+test('processed previews use a CSP-compatible data URL, not a blob URL', () => {
+  const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/webp' });
+  assert.equal(processedImageDataUrl(blob, 'AQID'), 'data:image/webp;base64,AQID');
+  assert.throws(() => processedImageDataUrl(blob, ''), /preview could not be created/);
 });
 
 test('a processed image over 1MB is refused and the original is never substituted', async () => {

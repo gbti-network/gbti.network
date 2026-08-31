@@ -124,6 +124,17 @@ test('both editing surfaces route dropped and pasted files through the shared im
     'Preview does not stage processed bytes against the current draft');
 });
 
+test('both editing surfaces immediately preview processed bytes with a CSP-compatible data URL', () => {
+  assert.match(editor, /processedImageDataUrl\(processed\.blob, dataBase64\)/,
+    'the document editor does not retain an immediate processed-byte preview');
+  assert.match(preview, /processedImageDataUrl\(processed\.blob, dataBase64\)/,
+    'Preview does not retain an immediate processed-byte preview');
+  assert.ok(!/createObjectURL\(processed\.blob\)/.test(editor),
+    'the document editor still creates blob: previews blocked by production CSP');
+  assert.ok(!/createObjectURL\(processed\.blob\)/.test(preview),
+    'Preview still creates blob: previews blocked by production CSP');
+});
+
 test('Preview blur leaves contenteditable in place, or the surface returns to click-first', () => {
   const code = preview.replace(/^\s*\/\/.*$/gm, '');
   assert.ok(!/blur[\s\S]{0,400}removeAttribute\('contenteditable'\)/.test(code),

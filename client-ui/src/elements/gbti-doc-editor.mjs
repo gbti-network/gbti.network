@@ -12,7 +12,7 @@ import { createSelectionToolbar } from '../selection-toolbar.mjs'; // sow-235: t
 import { resolveContentAsset } from '../assets.mjs';
 import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath } from '../media-picker.mjs'; // sow-165 Q36: reuse an image from the member's own published items // sow-165: repo-relative body images need the item folder to resolve
 import { loadStagedImages } from '../../../src/lib/staged-images.mjs'; // a body image staged but not yet published reads back from the Worker store, not from the CDN
-import { transferHasFiles, firstImageFile, processImageFile, blobToBase64 } from '../image-intake.mjs'; // sow-290: shared drop, paste, metadata removal, and encoding
+import { transferHasFiles, firstImageFile, processImageFile, blobToBase64, processedImageDataUrl } from '../image-intake.mjs'; // sow-290: shared drop, paste, metadata removal, and encoding
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
 
 let UID = 0;
@@ -732,8 +732,9 @@ class GbtiDocEditor extends GbtiElement {
       });
       if (this._indexOf(id) < 0) return;
       b.url = out.path;
-      // Preview the exact processed bytes, never the metadata-bearing original file.
-      try { (this._stagedSrc ||= {})[b.url] = URL.createObjectURL(processed.blob); } catch { /* no URL in this host */ }
+      // Preview the exact processed bytes, never the metadata-bearing original
+      // file. A data URL fits the production CSP; blob: URLs are blocked there.
+      (this._stagedSrc ||= {})[b.url] = processedImageDataUrl(processed.blob, dataBase64);
       if (!b.alt) b.alt = String(file.name || processed.name).replace(/\.[^.]+$/, '');
       this._render();
       const done = status();
