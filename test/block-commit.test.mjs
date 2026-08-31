@@ -4,7 +4,7 @@
 // that. Pure + node-safe (no DOM): readBlockDom is the thin browser half and is exercised in the browser pass.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyBlockEdit, isEditableBlockTag, EDITABLE_BLOCK_TAGS, planBlockDelete, planBlockRetype, planImageInsert } from '../client-ui/src/block-commit.mjs';
+import { applyBlockEdit, isEditableBlockTag, EDITABLE_BLOCK_TAGS, planBlockDelete, planBlockRetype, planImageInsert, planMemberSplitInsert } from '../client-ui/src/block-commit.mjs';
 import { renderMarkdownWithBlocks } from '../client/src/markdown.mjs';
 import { parseBlocks, serializeBlocks } from '../client-ui/src/markdown-blocks.mjs';
 
@@ -203,4 +203,29 @@ test('the inserted image line re-parses to a single image block', () => {
   const blocks = parseBlocks(next.join('\n'));
   assert.equal(blocks.length, 2);
   assert.deepEqual(blocks[1], { type: 'image', alt: 'A hero', url: './images/hero.webp' });
+});
+
+test('member-only starts at the selected anchor block and uses the canonical marker', () => {
+  assert.deepEqual(
+    planMemberSplitInsert('The first gated paragraph.'),
+    ['<!-- members-only -->', '', 'The first gated paragraph.'],
+  );
+});
+
+test('member-only preserves a multi-line anchor block verbatim', () => {
+  assert.deepEqual(
+    planMemberSplitInsert('- one\n- two'),
+    ['<!-- members-only -->', '', '- one', '- two'],
+  );
+});
+
+test('member-only refuses a multi-block range or an existing split', () => {
+  assert.equal(planMemberSplitInsert('A\n\nB'), null);
+  assert.equal(planMemberSplitInsert('<!-- members-only -->'), null);
+});
+
+test('the member-only insertion round-trips as a split followed by the original block', () => {
+  const blocks = parseBlocks(planMemberSplitInsert('Gated.').join('\n'));
+  assert.deepEqual(blocks.map((b) => b.type), ['members', 'paragraph']);
+  assert.equal(blocks[1].text, 'Gated.');
 });

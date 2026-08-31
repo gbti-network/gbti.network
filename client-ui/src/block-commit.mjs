@@ -14,7 +14,7 @@
 // parseBlocks, replace only the text-bearing fields with what the author edited, and re-serialize. Everything the
 // DOM cannot express is carried through untouched because it never left the source. parseBlocks/serializeBlocks
 // are the doc editor's existing model, reused rather than reimplemented.
-import { parseBlocks, serializeBlocks, inlineHtmlToMd } from './markdown-blocks.mjs';
+import { parseBlocks, serializeBlocks, inlineHtmlToMd, MEMBERS_MARKER } from './markdown-blocks.mjs';
 
 /** Rendered tags the Preview can edit. hr has nothing to edit; a callout/embed renders as a div and is not text. */
 export const EDITABLE_BLOCK_TAGS = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'UL', 'OL', 'TABLE', 'PRE']);
@@ -157,4 +157,20 @@ export function planImageInsert(sourceText, imageRef, alt) {
   while (kept.length && kept[kept.length - 1].trim() === '') kept.pop();   // own the separator we are about to add
   const imageLine = serializeBlocks([{ type: 'image', alt: String(alt ?? ''), url }]);
   return [...kept, '', imageLine];
+}
+
+/**
+ * Insert the canonical member-only split BEFORE one anchor block. The marker gates this block and everything
+ * after it, matching the document editor and the publish-time splitMemberMarkdown contract. Pure: no DOM.
+ *
+ * A range that contains more than one block is refused. An existing marker is also refused here; each document
+ * has one split, and the host checks the whole source before calling this anchor-level planner.
+ */
+export function planMemberSplitInsert(sourceText) {
+  const source = String(sourceText ?? '').replace(/\r\n/g, '\n');
+  const blocks = parseBlocks(source);
+  if (blocks.length !== 1 || blocks[0]?.type === 'members' || source.includes(MEMBERS_MARKER)) return null;
+  const kept = source.split('\n');
+  while (kept.length && kept[kept.length - 1].trim() === '') kept.pop();
+  return [MEMBERS_MARKER, '', ...kept];
 }

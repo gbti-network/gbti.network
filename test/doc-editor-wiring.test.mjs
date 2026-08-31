@@ -98,6 +98,17 @@ test('Preview makes every editable block contenteditable UP FRONT, not on click'
     'contenteditable is still set only inside a click handler, so selection before click finds nothing');
 });
 
+test('both editing surfaces wire the shared member-only action to their own document model', () => {
+  assert.match(editor, /onMemberSplit:\s*\(ce\)\s*=>/,
+    'the document editor does not expose member-only placement from the shared toolbar');
+  assert.match(editor, /splice\(at, 0, withId\(\{ type: 'members' \}\)\)/,
+    'the document editor does not insert the canonical members block before the selected block');
+  assert.match(preview, /onMemberSplit:\s*\(el: HTMLElement\)\s*=>/,
+    'Preview does not expose member-only placement from the shared toolbar');
+  assert.match(preview, /planMemberSplitInsert\(/,
+    'Preview does not route member-only placement through the pure source planner');
+});
+
 test('Preview blur leaves contenteditable in place, or the surface returns to click-first', () => {
   const code = preview.replace(/^\s*\/\/.*$/gm, '');
   assert.ok(!/blur[\s\S]{0,400}removeAttribute\('contenteditable'\)/.test(code),

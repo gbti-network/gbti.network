@@ -638,7 +638,7 @@ const labelOf = CATEGORY_LABELS;
       // writes EVERY store through the same client.saveDraft call, so there is only ever one write path.
       // sow-235: the block reader/committer and the shared selection toolbar. Loaded once here because
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
-      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert } = await import('../../../client-ui/src/block-commit.mjs');
+      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, planMemberSplitInsert } = await import('../../../client-ui/src/block-commit.mjs');
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
       const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
       const { renderMarkdownWithBlocks: mdBlocks, renderMarkdown: mdPlain } = await import('../../../client/src/markdown.mjs');
@@ -799,6 +799,16 @@ const labelOf = CATEGORY_LABELS;
             void spliceBlock(bodyDoc, el, (before: string[]) => {
               const edited = applyBlockEdit(before.join('\n'), readBlockDom(el));
               return planBlockRetype((edited || before).join('\n'), toType, level);
+            });
+          },
+          // Owner QA 2026-08-31: Preview previously had no way to author the SOW-016 split. Insert the canonical
+          // marker before the selected block through the same source splice and save path as every other block
+          // operation. One document has one split; a second request is a safe no-op.
+          onMemberSplit: (el: HTMLElement) => {
+            if (String(bodyDoc.get() || '').includes('<!-- members-only -->')) return;
+            void spliceBlock(bodyDoc, el, (before: string[]) => {
+              const edited = applyBlockEdit(before.join('\n'), readBlockDom(el));
+              return planMemberSplitInsert((edited || before).join('\n'));
             });
           },
           // sow-235: the images ALREADY attached to this item, offered by the insert-image picker. Sourced from the

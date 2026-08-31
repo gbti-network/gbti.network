@@ -113,6 +113,8 @@ export function planLinkEdit({ url = '', text = '', nofollow = false, blank = fa
  * @param onRetype    (el, toType, level) => change el's block TYPE (paragraph <-> heading). sow-235: OPT-IN. When
  *                    provided, the toolbar shows explicit H2 / H3 / P controls; a surface with its own block
  *                    palette (the doc editor) may still opt in for select-to-promote, or leave it off.
+ * @param onMemberSplit (el) => make el and every following block member-only by inserting the canonical split
+ *                    immediately before el. Optional because some rich-text hosts do not author gated content.
  * @param listItemImages () => [{ name, src, ref, alt }] of images ALREADY attached to this item. sow-235: OPT-IN.
  *                    When provided, the toolbar shows an image control opening a picker of these; `src` is the
  *                    thumbnail (a data: URL is fine), `ref` is the Markdown path to insert. No fetching happens
@@ -121,7 +123,7 @@ export function planLinkEdit({ url = '', text = '', nofollow = false, blank = fa
  */
 export function createSelectionToolbar({
   root, host, editableOf, allowInline = () => true, onCommit = () => {},
-  onRetype = null, listItemImages = null, onInsertImage = () => {},
+  onRetype = null, onMemberSplit = null, listItemImages = null, onInsertImage = () => {},
 }) {
   const hostEl = () => (typeof host === 'function' ? host() : host);
   // The stub must carry EVERY method of the real object below, not just the three a caller happened to
@@ -177,6 +179,12 @@ export function createSelectionToolbar({
         + '<button type="button" data-w="h3" title="Subheading">H3</button>'
         + '<button type="button" data-w="p" title="Body text">P</button>';
     }
+    // Member-only is a document split, so the label states the direction instead of implying that only the
+    // selected characters are wrapped. Both authoring surfaces opt in through the same callback.
+    if (typeof onMemberSplit === 'function') {
+      html += '<span class="gbti-stb-sep" aria-hidden="true"></span>'
+        + '<button type="button" data-w="members" title="Make members-only from here">Members</button>';
+    }
     // sow-235: insert an image already attached to this item. Present only when the host supplies listItemImages.
     if (typeof listItemImages === 'function') {
       html += '<span class="gbti-stb-sep" aria-hidden="true"></span>'
@@ -209,6 +217,11 @@ export function createSelectionToolbar({
     // allowInline gate (which is about inline formatting inside a code block). The host's callback + the pure
     // planner refuse a block that cannot take the change, so a stray click is a safe no-op.
     if (w === 'image') { openImagePanel(sel, el); return; }
+    if (w === 'members') {
+      if (typeof onMemberSplit === 'function') onMemberSplit(el);
+      hideTb();
+      return;
+    }
     if (w === 'h2' || w === 'h3' || w === 'p') {
       if (typeof onRetype === 'function') onRetype(el, w === 'p' ? 'paragraph' : 'heading', w === 'h2' ? 2 : w === 'h3' ? 3 : null);
       hideTb();

@@ -269,6 +269,18 @@ class GbtiDocEditor extends GbtiElement {
         }
         this._render(); this._focusBlock(b._id); this._change();
       },
+      // Owner QA 2026-08-31: the bottom-row control can only create a gated section at the document end. The
+      // shared selection toolbar now lets an author place the same canonical split before the selected block.
+      onMemberSplit: (ce) => {
+        if (this._blocks.some((b) => b.type === 'members')) return;
+        const at = this._indexOf(ce.dataset.id);
+        if (at < 0) return;
+        this._blocks.splice(at, 0, withId({ type: 'members' }));
+        this._render();
+        const next = this._blocks[at + 1];
+        if (next) this._focusBlock(next._id);
+        this._change();
+      },
     });
   }
 

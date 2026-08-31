@@ -7090,6 +7090,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     onCommit = () => {
     },
     onRetype = null,
+    onMemberSplit = null,
     listItemImages = null,
     onInsertImage = () => {
     }
@@ -7145,6 +7146,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (typeof onRetype === "function") {
         html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="h2" title="Heading">H2</button><button type="button" data-w="h3" title="Subheading">H3</button><button type="button" data-w="p" title="Body text">P</button>';
       }
+      if (typeof onMemberSplit === "function") {
+        html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="members" title="Make members-only from here">Members</button>';
+      }
       if (typeof listItemImages === "function") {
         html += '<span class="gbti-stb-sep" aria-hidden="true"></span><button type="button" data-w="image" title="Insert image">Img</button>';
       }
@@ -7181,6 +7185,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (!el) return;
       if (w === "image") {
         openImagePanel(sel, el);
+        return;
+      }
+      if (w === "members") {
+        if (typeof onMemberSplit === "function") onMemberSplit(el);
+        hideTb();
         return;
       }
       if (w === "h2" || w === "h3" || w === "p") {
@@ -7774,6 +7783,18 @@ ${String(body ?? "")}`;
           }
           this._render();
           this._focusBlock(b._id);
+          this._change();
+        },
+        // Owner QA 2026-08-31: the bottom-row control can only create a gated section at the document end. The
+        // shared selection toolbar now lets an author place the same canonical split before the selected block.
+        onMemberSplit: (ce) => {
+          if (this._blocks.some((b) => b.type === "members")) return;
+          const at = this._indexOf(ce.dataset.id);
+          if (at < 0) return;
+          this._blocks.splice(at, 0, withId({ type: "members" }));
+          this._render();
+          const next = this._blocks[at + 1];
+          if (next) this._focusBlock(next._id);
           this._change();
         }
       });
