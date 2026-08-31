@@ -146,6 +146,8 @@ const labelOf = CATEGORY_LABELS;
     [data-pv-body].pv-editing [data-blk] { cursor: text; }
     [data-pv-body].pv-editing [data-blk]:hover { outline: 2px dashed var(--ink-3); outline-offset: 4px; }
     [data-pv-body].pv-editing [data-blk][contenteditable="true"] { outline: 2px solid var(--green-700); outline-offset: 4px; }
+    [data-pv-body].pv-editing.pv-image-drag,
+    [data-pv-body].pv-editing [data-blk].pv-image-drag { outline: 3px solid var(--green-500); outline-offset: 5px; }
     /* The footnotes section is synthesized from definitions elsewhere in the document, so it has no source
        lines to edit and carries no data-blk. It is excluded by that alone; this only removes the cursor. */
     [data-pv-body].pv-editing .md-footnotes { cursor: default; }
@@ -640,6 +642,7 @@ const labelOf = CATEGORY_LABELS;
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
       const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, planMemberSplitInsert } = await import('../../../client-ui/src/block-commit.mjs');
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
+      const { transferHasFiles, firstImageFile, processImageFile, blobToBase64 } = await import('../../../client-ui/src/image-intake.mjs');
       const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
       const { renderMarkdownWithBlocks: mdBlocks, renderMarkdown: mdPlain } = await import('../../../client/src/markdown.mjs');
       const { buildAuthorNoteHtml } = await import('../../lib/author-note.mjs');
@@ -662,6 +665,21 @@ const labelOf = CATEGORY_LABELS;
       let dirty = false;
       const setMsg = (t: string) => { if (editMsg) editMsg.textContent = t; };
       const markDirty = () => { dirty = true; if (saveBtn) saveBtn.hidden = false; setMsg('Unsaved changes.'); };
+      let writeClientPromise: Promise<any> | null = null;
+      const getWriteClient = () => {
+        if (!writeClientPromise) writeClientPromise = (async () => {
+          const { createWorkbenchClient } = await import('../../lib/workbench-client');
+          const { readMemberSignal, currentIdentity } = await import('../../lib/member-signal');
+          const who = currentIdentity(readMemberSignal());
+          if (!who?.login) throw new Error('Sign in to edit this draft.');
+          return createWorkbenchClient({
+            signupBase: base,
+            login: String(who.login),
+            githubId: who.githubId != null ? String(who.githubId) : null,
+          });
+        })().catch((error) => { writeClientPromise = null; throw error; });
+        return writeClientPromise;
+      };
 
       // Commit one edited block back into the SOURCE, then re-render the whole document. Editing the source
       // rather than the DOM is what keeps footnotes, reference numbering and every other cross-block
@@ -764,6 +782,49 @@ const labelOf = CATEGORY_LABELS;
         } finally { committing = false; }
       };
 
+      // sow-290: local image intake shares the document editor's decode, resize, metadata-removal and naming rules.
+      // Hold the same serialization guard used by text commits while processing and staging, so the captured source range
+      // cannot become stale. Existing attached-image insertion above remains a byte-preserving reuse path.
+      const stageLocalImage = async (file: File, el: HTMLElement, position: 'before' | 'after' = 'after') => {
+        if (committing || !el.isConnected) return;
+        const range = bodyDoc.ranges[Number(el.dataset.blk)];
+        if (!range) return;
+        const lines = bodyDoc.get().replace(/\r\n/g, '\n').split('\n');
+        const before = lines.slice(range.start, range.end + 1);
+        if (!planImageInsert(before.join('\n'), './images/check.png', '', { position })) return;
+        committing = true;
+        setMsg('Processing image...');
+        try {
+          const usedNames = referencedDraftImages(fm, bodyDoc.get())
+            .map((path: string) => stagedImageName(path))
+            .filter(Boolean);
+          const processed = await processImageFile(file, { usedNames });
+          const client: any = await getWriteClient();
+          const out = await client.stageImage({
+            filename: processed.name,
+            dataBase64: await blobToBase64(processed.blob),
+            itemPath,
+            item: `${type}:${slug}`,
+          });
+          const alt = String(file.name || processed.name).replace(/\.[^.]+$/, '');
+          const next = planImageInsert(before.join('\n'), out.path, alt, { position });
+          if (!next) throw new Error('The image could not be placed at that block.');
+          lines.splice(range.start, range.end - range.start + 1, ...next);
+          bodyDoc.set(lines.join('\n'));
+          try { stagedSrc[out.path] = URL.createObjectURL(processed.blob); } catch { /* URL is optional */ }
+          markDirty();
+          await renderFromSource();
+          apply();
+          wireEditing();
+          setMsg(`${processed.message} Unsaved changes.`);
+        } catch (error: any) {
+          setMsg(`Could not add image: ${error?.message || 'unknown error'}`);
+        } finally {
+          committing = false;
+          el.classList.remove('pv-image-drag');
+        }
+      };
+
       // The body keeps its own name because the selection toolbar's onCommit closes over it.
       const commitBlock = (el: HTMLElement) => commitIn(bodyDoc, el);
 
@@ -842,7 +903,28 @@ const labelOf = CATEGORY_LABELS;
           // A range spanning several lines is fine now that commitBlock rebuilds the block from its source.
           // hr has nothing to edit, and the footnotes section is synthesized and carries a null range.
           const range = doc.ranges[Number(el.dataset[doc.attr])];
-          if (!range || !isEditableBlockTag(el.tagName)) return;
+          if (!range) return;
+          if (doc === bodyDoc && el.dataset.pvImageWired !== '1') {
+            el.dataset.pvImageWired = '1';
+            el.addEventListener('dragover', (ev: DragEvent) => {
+              if (!editing || !transferHasFiles(ev.dataTransfer)) return;
+              ev.preventDefault();
+              if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+              el.classList.add('pv-image-drag');
+            });
+            el.addEventListener('dragleave', () => el.classList.remove('pv-image-drag'));
+            el.addEventListener('drop', (ev: DragEvent) => {
+              if (!editing || !transferHasFiles(ev.dataTransfer)) return;
+              ev.preventDefault();
+              ev.stopPropagation();
+              el.classList.remove('pv-image-drag');
+              const image = firstImageFile(ev.dataTransfer);
+              if (!image) { setMsg('Use a PNG, JPG, WebP, or GIF image.'); return; }
+              const position = ev.clientY < el.getBoundingClientRect().top + (el.offsetHeight / 2) ? 'before' : 'after';
+              void stageLocalImage(image, el, position);
+            });
+          }
+          if (!isEditableBlockTag(el.tagName)) return;
           // sow-235 follow-up: contenteditable is set EAGERLY on every editable block while edit mode is on,
           // rather than lazily on click. The selection toolbar's editableOf only recognises a block already
           // carrying contenteditable="true", so with the attribute set on click a drag-selection across an
@@ -887,6 +969,13 @@ const labelOf = CATEGORY_LABELS;
             delete el.dataset.pvSnap; // the blur that follows the re-render must not try to commit this node
             void deleteIn(doc, el);
           });
+          el.addEventListener('paste', (ev: ClipboardEvent) => {
+            if (!editing || doc !== bodyDoc) return;
+            const image = firstImageFile(ev.clipboardData);
+            if (!image) return;
+            ev.preventDefault();
+            void stageLocalImage(image, el, 'after');
+          });
           el.addEventListener('blur', () => {
             // The link panel takes focus from the block. Committing now would re-render the document and
             // destroy the saved range before Apply is ever pressed, so the commit waits for the panel to close
@@ -908,6 +997,28 @@ const labelOf = CATEGORY_LABELS;
             if (untouched) return;
             void commitIn(doc, el);
           });
+        });
+      };
+
+      const wireBodyImageSurface = () => {
+        if (!bodyEl || bodyEl.dataset.pvImageSurfaceWired === '1') return;
+        bodyEl.dataset.pvImageSurfaceWired = '1';
+        bodyEl.addEventListener('dragover', (ev: DragEvent) => {
+          if (!editing || !transferHasFiles(ev.dataTransfer) || (ev.target as Element)?.closest?.('[data-blk]')) return;
+          ev.preventDefault();
+          if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+          bodyEl.classList.add('pv-image-drag');
+        });
+        bodyEl.addEventListener('dragleave', () => bodyEl.classList.remove('pv-image-drag'));
+        bodyEl.addEventListener('drop', (ev: DragEvent) => {
+          if (!editing || !transferHasFiles(ev.dataTransfer) || (ev.target as Element)?.closest?.('[data-blk]')) return;
+          ev.preventDefault();
+          bodyEl.classList.remove('pv-image-drag');
+          const image = firstImageFile(ev.dataTransfer);
+          const blocks = bodyEl.querySelectorAll<HTMLElement>('[data-blk]');
+          const anchor = blocks.item(blocks.length - 1);
+          if (!image) { setMsg('Use a PNG, JPG, WebP, or GIF image.'); return; }
+          if (anchor) void stageLocalImage(image, anchor, 'after');
         });
       };
 
@@ -944,6 +1055,7 @@ const labelOf = CATEGORY_LABELS;
       const wireEditing = () => {
         if (editing) ensureToolbar(); else seltb?.hide();
         if (bodyEl) wireBlocks(bodyEl, bodyDoc);
+        wireBodyImageSurface();
         const card = $('[data-pv-note-card]');
         if (card) wireBlocks(card, noteDoc);
         wireTitle();
@@ -977,7 +1089,7 @@ const labelOf = CATEGORY_LABELS;
         editing = !editing;
         editBtn.textContent = editing ? 'Done editing' : 'Edit';
         editBtn.classList.toggle('on', editing);
-        setMsg(editing ? 'Click a block to edit it. Highlight text for formatting and links.' : (dirty ? 'Unsaved changes.' : ''));
+        setMsg(editing ? 'Click a block to edit it, or drop and paste images. Highlight text for formatting and links.' : (dirty ? 'Unsaved changes.' : ''));
         await renderFromSource();
         apply();
         renderNoteCard();
@@ -993,20 +1105,12 @@ const labelOf = CATEGORY_LABELS;
           // The client is identity-scoped, so it needs the signed-in member rather than being constructed
           // bare. Same source the rest of the site uses (sow-030's member signal), so a save from here is
           // attributed exactly as a save from the editor is.
-          const { createWorkbenchClient } = await import('../../lib/workbench-client');
           // currentIdentity, not readMemberSignal alone. readMemberSignal reads ONLY the extension content
           // script's data-gbti-member attribute, so a member signed in with the website cookie session had no
           // identity here and Save answered "Sign in to save this draft" to someone already signed in.
           // currentIdentity applies the cookie-wins precedence, and BaseLayout has already run
           // hydrateMemberSignal by click time. Same pairing the rest of the site uses (see account.astro).
-          const { readMemberSignal, currentIdentity } = await import('../../lib/member-signal');
-          const who = currentIdentity(readMemberSignal());
-          if (!who?.login) { setMsg('Sign in to save this draft.'); return; }
-          const client: any = createWorkbenchClient({
-            signupBase: base,
-            login: String(who.login),
-            githubId: who.githubId != null ? String(who.githubId) : null,
-          });
+          const client: any = await getWriteClient();
           await client.saveDraft({
             type, input: fm, body: String(draft.body || ''), path: itemPath,
             ...(typeof draft.authorNote === 'string' ? { authorNote: draft.authorNote } : {}),

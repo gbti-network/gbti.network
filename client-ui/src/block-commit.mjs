@@ -142,13 +142,13 @@ export function planBlockRetype(sourceText, toType, level) {
 }
 
 /**
- * sow-235: insert an image block AFTER a single anchor block, from an image already attached to the item. Returns
- * the anchor block's replacement LINES (the block verbatim, a blank separator, then the image line) so the caller
+ * sow-235/290: insert an image block next to a single anchor block, from an image already attached or freshly staged.
+ * Returns the anchor block's replacement LINES so the caller
  * splices it over the block's range with the SAME machinery applyBlockEdit uses. This is an insert, not an edit
  * of an existing block, so it is a distinct planner rather than a mode of applyBlockEdit. Pure: no DOM. Refused on
  * an empty ref or a range that does not parse to exactly one block.
  */
-export function planImageInsert(sourceText, imageRef, alt) {
+export function planImageInsert(sourceText, imageRef, alt, { position = 'after' } = {}) {
   const url = String(imageRef ?? '').trim();
   if (!url) return null;
   const blocks = parseBlocks(String(sourceText ?? ''));
@@ -156,7 +156,7 @@ export function planImageInsert(sourceText, imageRef, alt) {
   const kept = String(sourceText ?? '').replace(/\r\n/g, '\n').split('\n');
   while (kept.length && kept[kept.length - 1].trim() === '') kept.pop();   // own the separator we are about to add
   const imageLine = serializeBlocks([{ type: 'image', alt: String(alt ?? ''), url }]);
-  return [...kept, '', imageLine];
+  return position === 'before' ? [imageLine, '', ...kept] : [...kept, '', imageLine];
 }
 
 /**

@@ -183,6 +183,13 @@ test('an image is inserted after the anchor block, separated by a blank line', (
   );
 });
 
+test('a dropped image can be inserted before the anchor block', () => {
+  assert.deepEqual(
+    planImageInsert('A paragraph.', './images/hero.webp', 'A hero', { position: 'before' }),
+    ['![A hero](./images/hero.webp)', '', 'A paragraph.'],
+  );
+});
+
 test('the anchor block is preserved verbatim, including a multi-line block', () => {
   assert.deepEqual(
     planImageInsert('- one\n- two', './images/x.png', ''),

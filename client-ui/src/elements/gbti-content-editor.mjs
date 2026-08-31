@@ -832,7 +832,13 @@ class GbtiContentEditor extends GbtiElement {
     // sow-165: hand the body editor the item's path BEFORE its value, so a repo-relative image block
     // (`./images/x.webp`) resolves against the item folder on its first render instead of 404-ing against
     // the page url.
-    if (be) { be.itemPath = this.itemPath; be.item = this.itemToken; be.value = this.preset?.body ?? ''; }
+    if (be) {
+      be.itemPath = this.itemPath;
+      be.item = this.itemToken;
+      be.usedImageNames = referencedDraftImages(this.preset?.input || {}, this.preset?.body || '')
+        .map((value) => String(value).split('/').pop());
+      be.value = this.preset?.body ?? '';
+    }
 
     // Live-toggle conditional fields (e.g. the image-gen-only result image) as their dependency changes.
     const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));

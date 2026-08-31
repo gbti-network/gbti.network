@@ -12,6 +12,7 @@ import { createSelectionToolbar } from '../selection-toolbar.mjs'; // sow-235: t
 import { resolveContentAsset } from '../assets.mjs';
 import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath } from '../media-picker.mjs'; // sow-165 Q36: reuse an image from the member's own published items // sow-165: repo-relative body images need the item folder to resolve
 import { loadStagedImages } from '../../../src/lib/staged-images.mjs'; // a body image staged but not yet published reads back from the Worker store, not from the CDN
+import { transferHasFiles, firstImageFile, processImageFile, blobToBase64 } from '../image-intake.mjs'; // sow-290: shared drop, paste, metadata removal, and encoding
 import { EDITOR_SURFACE } from '../tokens.mjs'; // SOW-062 P6: the solid --s-* editor palette (decoupled from glass)
 
 let UID = 0;
@@ -75,7 +76,8 @@ const CSS = `
      (five 24px controls plus gaps, padding and border), and 142px leaves it a little breathing room. Before this existed the toolbar was 225px wide over a gutter of
      40px on paragraphs and ZERO on headings, so it covered the text it was meant to sit beside. */
   :host { display:block; font-family:var(--font-body); color:var(--s-fg); --blk-gutter:142px; }
-  .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); }
+  .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); border-radius:10px; }
+  .doc-blocks.file-drag { box-shadow:0 0 0 2px var(--s-green); }
   /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
   .blk { position:relative; padding:2px 0; margin:2px 0; }
   .blk-tools { position:absolute; top:0; right:calc(var(--blk-gutter) * -1); display:flex; gap:2px; align-items:center; padding:2px;
@@ -149,6 +151,7 @@ const CSS = `
   .blk.in-members { border-left:2px solid var(--green-tint-2, rgba(31,158,95,.35)); padding-left:12px; margin-left:2px; }
   /* add row */
   .add-row { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0 4px; }
+  .intake-help { flex-basis:100%; color:var(--s-fg-mute); font-size:11.5px; line-height:1.4; }
   .add-btn { display:inline-flex; align-items:center; gap:7px; font:inherit; font-weight:600; font-size:13.5px; padding:9px 14px;
     border:1.5px dashed var(--s-line); border-radius:10px; background:transparent; color:var(--s-fg-mute); cursor:pointer; }
   .add-btn:hover { border-color:var(--s-green); color:var(--s-green); }
@@ -207,6 +210,8 @@ class GbtiDocEditor extends GbtiElement {
   // gbti-content-editor alongside itemPath; a body image belongs to the same draft the rail fields do.
   set item(v) { this._item = v || null; }
   get item() { return this._item || null; }
+  set usedImageNames(v) { this._usedNames = Array.isArray(v) ? v : []; }
+  get usedImageNames() { return this._usedNames || []; }
   set value(md) { this._blocks = parseBlocks(md).map(withId); if (this.isConnected) { this._render(); this._rehydrateStaged().catch(() => {}); } }
   get value() { return serializeBlocks(this._blocks || []); } // serializeBlock ignores the non-serialized _id
 
@@ -305,6 +310,7 @@ class GbtiDocEditor extends GbtiElement {
     const addRow = `<div class="add-row">
       <div class="add-menu"><button class="add-btn" data-addmenu type="button">${svg('plus')} Add block</button><div class="add-pop" data-addpop hidden></div></div>
       ${hasMembers ? '' : `<button class="add-btn" data-addmembers type="button">${svg('lock')} Add members-only section</button>`}
+      <span class="intake-help">Drop or paste an image anywhere. Photos and PNGs remove embedded metadata; photos are resized to 2400 px and encoded as WebP. Animated GIFs stay unchanged.</span>
     </div>`;
     this._slash = null; // the slash popover lived in the old DOM (this.set replaced it); the selection toolbar remounts itself
     this.set(this.css(EDITOR_SURFACE + CSS) + `<div class="doc-blocks">${parts.join('')}${addRow}</div>`);
@@ -449,6 +455,12 @@ class GbtiDocEditor extends GbtiElement {
       if (el.classList.contains('ce') || el.classList.contains('tc')) {
         // paste as PLAIN TEXT only (never author HTML -> CSP + round-trip safe)
         el.addEventListener('paste', (e) => {
+          const image = firstImageFile(e.clipboardData);
+          if (image) {
+            e.preventDefault();
+            void this._insertImageFile(image, el.dataset.id, 'after');
+            return;
+          }
           e.preventDefault();
           const t = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
           document.execCommand('insertText', false, t);
@@ -512,10 +524,29 @@ class GbtiDocEditor extends GbtiElement {
       g.addEventListener('dragend', () => { this._dragId = null; this.$$('.blk.drop-over').forEach((b) => b.classList.remove('drop-over')); });
     });
     this.$$('.blk[data-id]').forEach((blk) => {
-      blk.addEventListener('dragover', (e) => { if (this._dragId != null) { e.preventDefault(); blk.classList.add('drop-over'); } });
+      blk.addEventListener('dragover', (e) => {
+        if (transferHasFiles(e.dataTransfer)) {
+          e.preventDefault();
+          blk.classList.add('drop-over');
+          return;
+        }
+        if (this._dragId != null) { e.preventDefault(); blk.classList.add('drop-over'); }
+      });
       blk.addEventListener('dragleave', () => blk.classList.remove('drop-over'));
       blk.addEventListener('drop', (e) => {
-        e.preventDefault(); blk.classList.remove('drop-over');
+        blk.classList.remove('drop-over');
+        if (transferHasFiles(e.dataTransfer)) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.$('.doc-blocks')?.classList.remove('file-drag');
+          const file = firstImageFile(e.dataTransfer);
+          if (!file) return;
+          const box = blk.getBoundingClientRect();
+          const position = Number(e.clientY) < box.top + box.height / 2 ? 'before' : 'after';
+          void this._insertImageFile(file, blk.dataset.id, position);
+          return;
+        }
+        e.preventDefault();
         if (this._dragId == null || this._dragId === blk.dataset.id) { this._dragId = null; return; }
         const from = this._indexOf(this._dragId);
         if (from < 0) return;
@@ -525,12 +556,34 @@ class GbtiDocEditor extends GbtiElement {
         this._dragId = null; this._render(); this._change();
       });
     });
+    // sow-290: the blank space after the final block is a valid drop target too.
+    const surface = this.$('.doc-blocks');
+    surface?.addEventListener('dragover', (e) => {
+      if (!transferHasFiles(e.dataTransfer)) return;
+      e.preventDefault();
+      surface.classList.add('file-drag');
+    });
+    surface?.addEventListener('dragleave', (e) => {
+      if (!surface.contains(e.relatedTarget)) surface.classList.remove('file-drag');
+    });
+    surface?.addEventListener('drop', (e) => {
+      surface.classList.remove('file-drag');
+      if (!transferHasFiles(e.dataTransfer) || e.target.closest?.('.blk')) return;
+      e.preventDefault();
+      const file = firstImageFile(e.dataTransfer);
+      if (!file) return;
+      const last = this._blocks[this._blocks.length - 1];
+      void this._insertImageFile(file, last?._id, 'after');
+    });
     // Image upload (reused from the Phase-4 editor).
     this.$$('[data-imgpick]').forEach((el) => {
       const id = el.dataset.imgpick;
       const fileEl = this.$(`[data-imgfile="${id}"]`);
       el.addEventListener('click', () => fileEl?.click());
-      fileEl?.addEventListener('change', (e) => this._uploadImage(e.target.files?.[0], id));
+      fileEl?.addEventListener('change', (e) => {
+        void this._uploadImage(e.target.files?.[0], id);
+        e.target.value = '';
+      });
     });
     // sow-165 Q36: Reuse opens a grid of the images this member's own published items already use.
     this.$$('[data-imgreuse]').forEach((el) => {
@@ -545,8 +598,8 @@ class GbtiDocEditor extends GbtiElement {
       zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
       zone.addEventListener('drop', (e) => {
         e.preventDefault(); e.stopPropagation(); zone.classList.remove('drag');
-        const f = e.dataTransfer?.files?.[0];
-        if (f && f.type.startsWith('image/')) this._uploadImage(f, id);
+        const f = firstImageFile(e.dataTransfer);
+        if (f) void this._uploadImage(f, id);
       });
     });
     // A single click on a link opens its editor directly, matching what every other WYSIWYG (Docs, Notion)
@@ -642,29 +695,53 @@ class GbtiDocEditor extends GbtiElement {
     this._render(); this._change();
   }
 
+  _usedImageNames() {
+    return [...this.usedImageNames, ...(this._blocks || [])
+      .filter((block) => block?.type === 'image' && block.url)
+      .map((block) => String(block.url).split('/').pop())];
+  }
+
+  async _insertImageFile(file, anchorId, position = 'after') {
+    if (!file) return;
+    const anchor = this._indexOf(anchorId);
+    const at = anchor < 0 ? this._blocks.length : anchor + (position === 'before' ? 0 : 1);
+    const block = withId(emptyBlock('image'));
+    this._blocks.splice(at, 0, block);
+    this._render();
+    this._change();
+    await this._uploadImage(file, block._id);
+  }
+
   async _uploadImage(file, id) {
     const b = this._byId(id);
     if (!file || !b || !this.client?.stageImage) return;
-    const st = this.$(`[data-imgst="${id}"]`);
-    if (st) st.textContent = 'Uploading...';
+    const status = () => this.$(`[data-imgst="${id}"]`);
+    const firstStatus = status();
+    if (firstStatus) firstStatus.textContent = 'Processing image...';
     try {
-      const dataBase64 = await new Promise((res, rej) => {
-        const r = new FileReader();
-        r.onload = () => res(String(r.result).split(',')[1] || '');
-        r.onerror = () => rej(new Error('read failed'));
-        r.readAsDataURL(file);
-      });
+      const processed = await processImageFile(file, { usedNames: this._usedImageNames() });
+      if (this._indexOf(id) < 0) return;
+      const dataBase64 = await blobToBase64(processed.blob);
       // sow-165: pass the item path so the host CO-LOCATES the image in the item's ./images/ folder and returns
       // the canonical `./images/<file>` reference (native Astro resolution; the old per-user path broke the build).
-      const out = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath, item: this.item });
+      const out = await this.client.stageImage({
+        filename: processed.name,
+        dataBase64,
+        itemPath: this.itemPath,
+        item: this.item,
+      });
+      if (this._indexOf(id) < 0) return;
       b.url = out.path;
-      // A just-staged image is not on main yet, so its jsDelivr URL 404s until the PR merges. Preview it from the
-      // local file via an object URL keyed by the stored path, which the renderer consults before jsDelivr.
-      try { (this._stagedSrc ||= {})[b.url] = URL.createObjectURL(file); } catch { /* no URL in this host */ }
-      if (!b.alt) b.alt = file.name.replace(/\.[^.]+$/, '');
-      this._render(); this._change();
-    } catch {
-      if (st) st.textContent = 'Upload failed';
+      // Preview the exact processed bytes, never the metadata-bearing original file.
+      try { (this._stagedSrc ||= {})[b.url] = URL.createObjectURL(processed.blob); } catch { /* no URL in this host */ }
+      if (!b.alt) b.alt = String(file.name || processed.name).replace(/\.[^.]+$/, '');
+      this._render();
+      const done = status();
+      if (done) done.textContent = processed.message;
+      this._change();
+    } catch (error) {
+      const failed = status();
+      if (failed) failed.textContent = error?.message || 'Upload failed';
     }
   }
 

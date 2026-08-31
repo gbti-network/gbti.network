@@ -6,6 +6,8 @@
 
 import { serializeContentFile, parseContentFile, byCommentOldest, NETWORK_CONTENT_OWNER } from '../../client/src/content-ops.mjs';
 import { splitMemberMarkdown, encAssetFor, MEMBER_MARKER } from '../../client/src/member-content.mjs';
+import { sanitizeImageName } from './image-name.mjs';
+export { sanitizeImageName } from './image-name.mjs';
 
 // SOW-027: the valid comment targets (mirrors operations.listComments' COMMENT_TARGET_TYPES).
 // sow-158 News track: 'news' enables the shared <gbti-discussion> news thread on the website (read is public;
@@ -31,7 +33,6 @@ export const AUTHOR_NOTE_TYPES = new Set(['post', 'product', 'prompt']);
 export const IMAGE_FIELD_KEYS = ['coverImage', 'image', 'banner', 'featuredImage', 'icon', 'iconLarge'];
 /** The one image()-typed field whose value is a LIST (bare entries or `{ src, caption }`). */
 export const IMAGE_LIST_FIELD = 'gallery';
-const WEB_IMAGE_EXT_RE = /\.(?:png|jpe?g|webp|gif)$/;
 
 // sow-182: a NETWORK-authored index item, matched by PATH rather than by author string, because the network's
 // content is not an individual to filter by the way memberContent (client-ui/src/member-view-core.mjs) filters a
@@ -76,13 +77,6 @@ export function networkContent(items, cap = 24) {
  * Returns the clean name or null (reject). Mirrors the Worker gate (validateHostedRequest IMAGE_PATH_TAIL_RE), so
  * the client and the security wall agree on what an image filename is.
  */
-export function sanitizeImageName(filename) {
-  const base = String(filename ?? '').trim().toLowerCase().split(/[\\/]/).pop() || '';
-  const cleaned = base.replace(/[^a-z0-9._-]+/g, '-').replace(/^[.-]+/, '').replace(/-+/g, '-');
-  if (!/^[a-z0-9]/.test(cleaned) || !WEB_IMAGE_EXT_RE.test(cleaned)) return null;
-  return cleaned;
-}
-
 // The canonical value shape for an image()-typed field: `./images/<file>`, resolved by Astro RELATIVE to the
 // markdown file that declares it. It is the only shape that works, and the only shape any committed content
 // uses (78 of 78 across members/** and house/**).

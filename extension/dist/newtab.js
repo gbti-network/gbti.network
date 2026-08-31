@@ -7514,6 +7514,200 @@ ${String(body ?? "")}`;
     return out;
   }
 
+  // src/lib/image-name.mjs
+  var WEB_IMAGE_EXT_RE = /\.(?:png|jpe?g|webp|gif)$/;
+  function sanitizeImageName(filename) {
+    const base = String(filename ?? "").trim().toLowerCase().split(/[\\/]/).pop() || "";
+    const cleaned = base.replace(/[^a-z0-9._-]+/g, "-").replace(/^[.-]+/, "").replace(/-+/g, "-");
+    if (!/^[a-z0-9]/.test(cleaned) || !WEB_IMAGE_EXT_RE.test(cleaned)) return null;
+    return cleaned;
+  }
+
+  // client-ui/src/image-intake.mjs
+  var IMAGE_MAX_BYTES = 1048576;
+  var IMAGE_MAX_EDGE = 2400;
+  var IMAGE_WEBP_QUALITY = 0.82;
+  var INPUT_TYPES = /* @__PURE__ */ new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+  var OUTPUT_EXT = {
+    "image/jpeg": "webp",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif"
+  };
+  var INPUT_EXT_TYPE = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif"
+  };
+  function imageMimeForFile(file) {
+    const stated = String(file?.type || "").toLowerCase().replace("image/jpg", "image/jpeg");
+    if (INPUT_TYPES.has(stated)) return stated;
+    const ext = String(file?.name || "").toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || "";
+    return INPUT_EXT_TYPE[ext] || "";
+  }
+  function isSupportedImage(file) {
+    return Boolean(file && imageMimeForFile(file));
+  }
+  function transferHasFiles(transfer) {
+    if (!transfer) return false;
+    const types2 = Array.from(transfer.types || []);
+    return types2.includes("Files") || Boolean(transfer.files?.length);
+  }
+  function firstImageFile(transfer) {
+    if (!transferHasFiles(transfer)) return null;
+    const direct = Array.from(transfer.files || []).find(isSupportedImage);
+    if (direct) return direct;
+    for (const item of Array.from(transfer.items || [])) {
+      if (item?.kind !== "file") continue;
+      const file = item.getAsFile?.();
+      if (isSupportedImage(file)) return file;
+    }
+    return null;
+  }
+  function planReencode({ width, height, type } = {}) {
+    const w = Number(width);
+    const h = Number(height);
+    const mime = String(type || "").toLowerCase().replace("image/jpg", "image/jpeg");
+    if (!INPUT_TYPES.has(mime) || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null;
+    if (mime === "image/gif") {
+      return { passthrough: true, width: Math.round(w), height: Math.round(h), outputType: mime, quality: null };
+    }
+    const scale = Math.min(1, IMAGE_MAX_EDGE / Math.max(w, h));
+    return {
+      passthrough: false,
+      width: Math.max(1, Math.round(w * scale)),
+      height: Math.max(1, Math.round(h * scale)),
+      outputType: mime === "image/png" ? "image/png" : "image/webp",
+      quality: mime === "image/png" ? null : IMAGE_WEBP_QUALITY
+    };
+  }
+  var leafName = (value) => String(value || "").split(/[\\/]/).pop().toLowerCase();
+  function outputNameFor(name, type, usedNames = []) {
+    const clean = sanitizeImageName(name);
+    const ext = OUTPUT_EXT[String(type || "").toLowerCase().replace("image/jpg", "image/jpeg")];
+    if (!clean || !ext) return null;
+    const stem = clean.replace(/\.[^.]+$/, "");
+    const used = new Set(Array.from(usedNames || [], leafName));
+    let candidate = `${stem}.${ext}`;
+    let copy = 2;
+    while (used.has(candidate.toLowerCase())) {
+      candidate = `${stem}-${copy}.${ext}`;
+      copy += 1;
+    }
+    return candidate;
+  }
+  function formatImageBytes(bytes) {
+    const n = Math.max(0, Number(bytes) || 0);
+    return n >= 1048576 ? `${(n / 1048576).toFixed(2)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+  }
+  function defaultCanvas(width, height) {
+    if (typeof OffscreenCanvas !== "undefined") return new OffscreenCanvas(width, height);
+    if (typeof document !== "undefined") {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      return canvas;
+    }
+    throw new Error("Image processing is not available in this browser.");
+  }
+  async function encodeCanvas(canvas, type, quality) {
+    if (typeof canvas.convertToBlob === "function") {
+      return canvas.convertToBlob({ type, ...quality == null ? {} : { quality } });
+    }
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => blob ? resolve(blob) : reject(new Error("The browser could not encode this image.")),
+        type,
+        quality == null ? void 0 : quality
+      );
+    });
+  }
+  async function blobToBase64(blob) {
+    if (typeof FileReader !== "undefined") {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+        reader.onerror = () => reject(new Error("The processed image could not be read."));
+        reader.readAsDataURL(blob);
+      });
+    }
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += 32768) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
+    }
+    return btoa(binary);
+  }
+  async function processImageFile(file, {
+    usedNames = [],
+    decode = (value) => createImageBitmap(value),
+    makeCanvas = defaultCanvas
+  } = {}) {
+    const type = imageMimeForFile(file);
+    if (!type) throw new Error("Use a PNG, JPG, WebP, or GIF image.");
+    const fallbackName = `pasted-image.${OUTPUT_EXT[type]}`;
+    const sourceName = String(file?.name || "").trim() || fallbackName;
+    const beforeBytes = Number(file?.size) || 0;
+    if (type === "image/gif") {
+      if (beforeBytes > IMAGE_MAX_BYTES) {
+        throw new Error("This animated GIF is over 1 MB. Compress it before uploading so its animation is preserved.");
+      }
+      const name2 = outputNameFor(sourceName, type, usedNames);
+      if (!name2) throw new Error("Use a PNG, JPG, WebP, or GIF image.");
+      return {
+        blob: file,
+        name: name2,
+        type,
+        width: null,
+        height: null,
+        beforeBytes,
+        afterBytes: beforeBytes,
+        reencoded: false,
+        message: `Animated GIF kept unchanged at ${formatImageBytes(beforeBytes)}.`
+      };
+    }
+    let bitmap;
+    try {
+      bitmap = await decode(file);
+    } catch {
+      throw new Error("This image could not be decoded. No original bytes were uploaded.");
+    }
+    const plan = planReencode({ width: bitmap?.width, height: bitmap?.height, type });
+    if (!plan) {
+      bitmap?.close?.();
+      throw new Error("This image had invalid dimensions. No original bytes were uploaded.");
+    }
+    let blob;
+    try {
+      const canvas = makeCanvas(plan.width, plan.height);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Image processing is not available in this browser.");
+      context.drawImage(bitmap, 0, 0, plan.width, plan.height);
+      blob = await encodeCanvas(canvas, plan.outputType, plan.quality);
+    } finally {
+      bitmap?.close?.();
+    }
+    if (!blob || blob.size > IMAGE_MAX_BYTES) {
+      const got = formatImageBytes(blob?.size || 0);
+      throw new Error(`This image is still over 1 MB after processing (${got}). Choose a smaller image.`);
+    }
+    const name = outputNameFor(sourceName, plan.outputType, usedNames);
+    if (!name) throw new Error("Use a PNG, JPG, WebP, or GIF image.");
+    return {
+      blob,
+      name,
+      type: plan.outputType,
+      width: plan.width,
+      height: plan.height,
+      beforeBytes,
+      afterBytes: blob.size,
+      reencoded: true,
+      message: `Processed ${formatImageBytes(beforeBytes)} to ${formatImageBytes(blob.size)}. Embedded metadata removed.`
+    };
+  }
+
   // client-ui/src/elements/gbti-doc-editor.mjs
   var UID = 0;
   var withId = (b) => {
@@ -7571,7 +7765,8 @@ ${String(body ?? "")}`;
      (five 24px controls plus gaps, padding and border), and 142px leaves it a little breathing room. Before this existed the toolbar was 225px wide over a gutter of
      40px on paragraphs and ZERO on headings, so it covered the text it was meant to sit beside. */
   :host { display:block; font-family:var(--font-body); color:var(--s-fg); --blk-gutter:142px; }
-  .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); }
+  .doc-blocks { display:flex; flex-direction:column; position:relative; padding-right:var(--blk-gutter); border-radius:10px; }
+  .doc-blocks.file-drag { box-shadow:0 0 0 2px var(--s-green); }
   /* a block = its content + a contextual hover toolbar in the right gutter; NO bordered box around each block */
   .blk { position:relative; padding:2px 0; margin:2px 0; }
   .blk-tools { position:absolute; top:0; right:calc(var(--blk-gutter) * -1); display:flex; gap:2px; align-items:center; padding:2px;
@@ -7645,6 +7840,7 @@ ${String(body ?? "")}`;
   .blk.in-members { border-left:2px solid var(--green-tint-2, rgba(31,158,95,.35)); padding-left:12px; margin-left:2px; }
   /* add row */
   .add-row { display:flex; gap:10px; flex-wrap:wrap; margin:12px 0 4px; }
+  .intake-help { flex-basis:100%; color:var(--s-fg-mute); font-size:11.5px; line-height:1.4; }
   .add-btn { display:inline-flex; align-items:center; gap:7px; font:inherit; font-weight:600; font-size:13.5px; padding:9px 14px;
     border:1.5px dashed var(--s-line); border-radius:10px; background:transparent; color:var(--s-fg-mute); cursor:pointer; }
   .add-btn:hover { border-color:var(--s-green); color:var(--s-green); }
@@ -7710,6 +7906,12 @@ ${String(body ?? "")}`;
     }
     get item() {
       return this._item || null;
+    }
+    set usedImageNames(v) {
+      this._usedNames = Array.isArray(v) ? v : [];
+    }
+    get usedImageNames() {
+      return this._usedNames || [];
     }
     set value(md) {
       this._blocks = parseBlocks(md).map(withId);
@@ -7827,6 +8029,7 @@ ${String(body ?? "")}`;
       const addRow = `<div class="add-row">
       <div class="add-menu"><button class="add-btn" data-addmenu type="button">${svg("plus")} Add block</button><div class="add-pop" data-addpop hidden></div></div>
       ${hasMembers ? "" : `<button class="add-btn" data-addmembers type="button">${svg("lock")} Add members-only section</button>`}
+      <span class="intake-help">Drop or paste an image anywhere. Photos and PNGs remove embedded metadata; photos are resized to 2400 px and encoded as WebP. Animated GIFs stay unchanged.</span>
     </div>`;
       this._slash = null;
       this.set(this.css(EDITOR_SURFACE + CSS7) + `<div class="doc-blocks">${parts.join("")}${addRow}</div>`);
@@ -7972,6 +8175,12 @@ ${String(body ?? "")}`;
         });
         if (el.classList.contains("ce") || el.classList.contains("tc")) {
           el.addEventListener("paste", (e) => {
+            const image = firstImageFile(e.clipboardData);
+            if (image) {
+              e.preventDefault();
+              void this._insertImageFile(image, el.dataset.id, "after");
+              return;
+            }
             e.preventDefault();
             const t = (e.clipboardData || window.clipboardData)?.getData("text/plain") || "";
             document.execCommand("insertText", false, t);
@@ -8108,6 +8317,11 @@ ${String(body ?? "")}`;
       });
       this.$$(".blk[data-id]").forEach((blk) => {
         blk.addEventListener("dragover", (e) => {
+          if (transferHasFiles(e.dataTransfer)) {
+            e.preventDefault();
+            blk.classList.add("drop-over");
+            return;
+          }
           if (this._dragId != null) {
             e.preventDefault();
             blk.classList.add("drop-over");
@@ -8115,8 +8329,19 @@ ${String(body ?? "")}`;
         });
         blk.addEventListener("dragleave", () => blk.classList.remove("drop-over"));
         blk.addEventListener("drop", (e) => {
-          e.preventDefault();
           blk.classList.remove("drop-over");
+          if (transferHasFiles(e.dataTransfer)) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.$(".doc-blocks")?.classList.remove("file-drag");
+            const file = firstImageFile(e.dataTransfer);
+            if (!file) return;
+            const box = blk.getBoundingClientRect();
+            const position = Number(e.clientY) < box.top + box.height / 2 ? "before" : "after";
+            void this._insertImageFile(file, blk.dataset.id, position);
+            return;
+          }
+          e.preventDefault();
           if (this._dragId == null || this._dragId === blk.dataset.id) {
             this._dragId = null;
             return;
@@ -8131,11 +8356,32 @@ ${String(body ?? "")}`;
           this._change();
         });
       });
+      const surface = this.$(".doc-blocks");
+      surface?.addEventListener("dragover", (e) => {
+        if (!transferHasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        surface.classList.add("file-drag");
+      });
+      surface?.addEventListener("dragleave", (e) => {
+        if (!surface.contains(e.relatedTarget)) surface.classList.remove("file-drag");
+      });
+      surface?.addEventListener("drop", (e) => {
+        surface.classList.remove("file-drag");
+        if (!transferHasFiles(e.dataTransfer) || e.target.closest?.(".blk")) return;
+        e.preventDefault();
+        const file = firstImageFile(e.dataTransfer);
+        if (!file) return;
+        const last = this._blocks[this._blocks.length - 1];
+        void this._insertImageFile(file, last?._id, "after");
+      });
       this.$$("[data-imgpick]").forEach((el) => {
         const id = el.dataset.imgpick;
         const fileEl = this.$(`[data-imgfile="${id}"]`);
         el.addEventListener("click", () => fileEl?.click());
-        fileEl?.addEventListener("change", (e) => this._uploadImage(e.target.files?.[0], id));
+        fileEl?.addEventListener("change", (e) => {
+          void this._uploadImage(e.target.files?.[0], id);
+          e.target.value = "";
+        });
       });
       this.$$("[data-imgreuse]").forEach((el) => {
         el.addEventListener("click", () => this._openMediaPicker(el, el.dataset.imgreuse));
@@ -8154,8 +8400,8 @@ ${String(body ?? "")}`;
           e.preventDefault();
           e.stopPropagation();
           zone.classList.remove("drag");
-          const f = e.dataTransfer?.files?.[0];
-          if (f && f.type.startsWith("image/")) this._uploadImage(f, id);
+          const f = firstImageFile(e.dataTransfer);
+          if (f) void this._uploadImage(f, id);
         });
       });
       this.$$('.ce[data-edit="text"] a[href]').forEach((a) => a.addEventListener("click", (e) => {
@@ -8258,29 +8504,49 @@ ${String(body ?? "")}`;
       this._render();
       this._change();
     }
+    _usedImageNames() {
+      return [...this.usedImageNames, ...(this._blocks || []).filter((block) => block?.type === "image" && block.url).map((block) => String(block.url).split("/").pop())];
+    }
+    async _insertImageFile(file, anchorId, position = "after") {
+      if (!file) return;
+      const anchor = this._indexOf(anchorId);
+      const at = anchor < 0 ? this._blocks.length : anchor + (position === "before" ? 0 : 1);
+      const block = withId(emptyBlock("image"));
+      this._blocks.splice(at, 0, block);
+      this._render();
+      this._change();
+      await this._uploadImage(file, block._id);
+    }
     async _uploadImage(file, id) {
       const b = this._byId(id);
       if (!file || !b || !this.client?.stageImage) return;
-      const st = this.$(`[data-imgst="${id}"]`);
-      if (st) st.textContent = "Uploading...";
+      const status = () => this.$(`[data-imgst="${id}"]`);
+      const firstStatus = status();
+      if (firstStatus) firstStatus.textContent = "Processing image...";
       try {
-        const dataBase64 = await new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload = () => res(String(r.result).split(",")[1] || "");
-          r.onerror = () => rej(new Error("read failed"));
-          r.readAsDataURL(file);
+        const processed = await processImageFile(file, { usedNames: this._usedImageNames() });
+        if (this._indexOf(id) < 0) return;
+        const dataBase64 = await blobToBase64(processed.blob);
+        const out = await this.client.stageImage({
+          filename: processed.name,
+          dataBase64,
+          itemPath: this.itemPath,
+          item: this.item
         });
-        const out = await this.client.stageImage({ filename: file.name, dataBase64, itemPath: this.itemPath, item: this.item });
+        if (this._indexOf(id) < 0) return;
         b.url = out.path;
         try {
-          (this._stagedSrc ||= {})[b.url] = URL.createObjectURL(file);
+          (this._stagedSrc ||= {})[b.url] = URL.createObjectURL(processed.blob);
         } catch {
         }
-        if (!b.alt) b.alt = file.name.replace(/\.[^.]+$/, "");
+        if (!b.alt) b.alt = String(file.name || processed.name).replace(/\.[^.]+$/, "");
         this._render();
+        const done = status();
+        if (done) done.textContent = processed.message;
         this._change();
-      } catch {
-        if (st) st.textContent = "Upload failed";
+      } catch (error) {
+        const failed = status();
+        if (failed) failed.textContent = error?.message || "Upload failed";
       }
     }
     // --- sow-165 Q36: reuse an image from this member's own published items ---------------------------------
@@ -9911,6 +10177,7 @@ ${String(body ?? "")}`;
       if (be) {
         be.itemPath = this.itemPath;
         be.item = this.itemToken;
+        be.usedImageNames = referencedDraftImages(this.preset?.input || {}, this.preset?.body || "").map((value) => String(value).split("/").pop());
         be.value = this.preset?.body ?? "";
       }
       const deps = new Set(this.fields.filter((f) => f.showIf?.field).map((f) => f.showIf.field));

@@ -109,6 +109,21 @@ test('both editing surfaces wire the shared member-only action to their own docu
     'Preview does not route member-only placement through the pure source planner');
 });
 
+test('both editing surfaces route dropped and pasted files through the shared image processor', () => {
+  assert.match(editor, /processImageFile\(file, \{ usedNames:/,
+    'the document editor does not process local images before staging them');
+  assert.match(editor, /firstImageFile\(e\.clipboardData\)/,
+    'the document editor does not accept pasted image files');
+  assert.match(editor, /transferHasFiles\(e\.dataTransfer\)/,
+    'the document editor does not distinguish file drops from block reordering');
+  assert.match(preview, /processImageFile\(file, \{ usedNames \}\)/,
+    'Preview does not process local images before staging them');
+  assert.match(preview, /firstImageFile\(ev\.clipboardData\)/,
+    'Preview does not accept pasted image files');
+  assert.match(preview, /stageImage\(\{[\s\S]{0,300}itemPath,[\s\S]{0,100}item:/,
+    'Preview does not stage processed bytes against the current draft');
+});
+
 test('Preview blur leaves contenteditable in place, or the surface returns to click-first', () => {
   const code = preview.replace(/^\s*\/\/.*$/gm, '');
   assert.ok(!/blur[\s\S]{0,400}removeAttribute\('contenteditable'\)/.test(code),
