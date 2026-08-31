@@ -3250,6 +3250,26 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
   var isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
   var isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
+  var listDepth = (line) => {
+    const lead = String(line ?? "").match(/^[\t ]*/)?.[0] || "";
+    const spaces = lead.replace(/\t/g, "    ").length;
+    return Math.max(0, Math.floor(spaces / 4));
+  };
+  function listTree(items = [], depths = []) {
+    const roots = [];
+    const lastAt = [];
+    Array.from(items || []).forEach((text, index) => {
+      const requested = Math.max(0, Number(depths?.[index]) || 0);
+      const previous = index ? lastAt.length - 1 : 0;
+      const depth = index ? Math.min(requested, previous + 1) : 0;
+      const node = { text: String(text ?? ""), depth, children: [] };
+      if (depth > 0 && lastAt[depth - 1]) lastAt[depth - 1].children.push(node);
+      else roots.push(node);
+      lastAt.length = depth;
+      lastAt[depth] = node;
+    });
+    return roots;
+  }
   function serializeBlocks(blocks) {
     return (Array.isArray(blocks) ? blocks : []).map(serializeBlock).join("\n\n");
   }
@@ -3272,7 +3292,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         return String(b.text ?? "").split("\n").map((l) => l ? `> ${l}` : ">").join("\n");
       case "list": {
         const items = Array.isArray(b.items) ? b.items : String(b.text ?? "").split("\n").filter((x) => x !== "");
-        return items.map((it, i) => (b.ordered ? `${i + 1}. ` : "- ") + it).join("\n");
+        const tree = listTree(items, b.depths);
+        const lines = [];
+        const write2 = (nodes, depth) => {
+          nodes.forEach((node, index) => {
+            const marker = b.ordered ? `${index + 1}. ` : "- ";
+            lines.push(`${"    ".repeat(depth)}${marker}${node.text}`);
+            write2(node.children, depth + 1);
+          });
+        };
+        write2(tree, 0);
+        return lines.join("\n");
       }
       case "table": {
         const head = Array.isArray(b.head) ? b.head : [];
@@ -3354,11 +3384,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       if (isListItem(line)) {
         const ordered = /^\s*\d+\.\s+/.test(line);
         const items = [];
+        const depths = [];
         while (i < n && isListItem(lines[i])) {
+          const rawDepth = listDepth(lines[i]);
+          const previous = depths.length ? depths[depths.length - 1] : 0;
+          depths.push(depths.length ? Math.min(rawDepth, previous + 1) : 0);
           items.push(lines[i].replace(/^\s*([-*]|\d+\.)\s+/, ""));
           i++;
         }
-        blocks.push({ type: "list", ordered, items });
+        const block = { type: "list", ordered, items };
+        if (depths.some(Boolean)) block.depths = depths;
+        blocks.push(block);
         continue;
       }
       if (isTableStart(lines, i)) {
@@ -7011,6 +7047,62 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   };
   define("gbti-auth", GbtiAuth);
 
+  // client-ui/src/block-commit.mjs
+  function readListDom(el, { rendererAnchors = true } = {}) {
+    const items = [];
+    const depths = [];
+    const md = (html) => inlineHtmlToMd(html, { rendererAnchors }).trim();
+    const walk = (list, depth) => {
+      Array.from(list?.children || []).filter((child) => child.tagName === "LI").forEach((li) => {
+        const own = li.cloneNode(true);
+        Array.from(own.children || []).filter((child) => /^(UL|OL)$/.test(child.tagName)).forEach((child) => child.remove());
+        items.push(md(own.innerHTML));
+        depths.push(depth);
+        Array.from(li.children || []).filter((child) => /^(UL|OL)$/.test(child.tagName)).forEach((child) => walk(child, depth + 1));
+      });
+    };
+    walk(el, 0);
+    return { kind: "list", items, depths };
+  }
+  function indentListSelection(list, selection, { outdent = false } = {}) {
+    if (!list || !selection?.isCollapsed) return false;
+    const caretNode = selection.anchorNode;
+    const caretOffset = selection.anchorOffset;
+    const restoreCaret = () => {
+      if (!caretNode?.isConnected || typeof selection.collapse !== "function") return;
+      const limit = caretNode.nodeType === 3 ? String(caretNode.textContent || "").length : caretNode.childNodes.length;
+      try {
+        selection.collapse(caretNode, Math.min(caretOffset, limit));
+      } catch {
+      }
+    };
+    let node = selection.anchorNode;
+    if (node?.nodeType !== 1) node = node?.parentElement || node?.parentNode;
+    let li = node?.closest?.("li") || null;
+    if (!li || !list.contains(li)) return false;
+    const parentList = li.parentElement;
+    if (!parentList || !/^(UL|OL)$/.test(parentList.tagName)) return false;
+    if (outdent) {
+      const parentLi = parentList.parentElement;
+      const outerList = parentLi?.parentElement;
+      if (parentLi?.tagName !== "LI" || !outerList || !/^(UL|OL)$/.test(outerList.tagName)) return false;
+      outerList.insertBefore(li, parentLi.nextSibling);
+      if (!Array.from(parentList.children).some((child) => child.tagName === "LI")) parentList.remove();
+      restoreCaret();
+      return true;
+    }
+    const previous = li.previousElementSibling;
+    if (!previous || previous.tagName !== "LI") return false;
+    let nested = Array.from(previous.children).find((child) => child.tagName === parentList.tagName);
+    if (!nested) {
+      nested = previous.ownerDocument.createElement(parentList.tagName.toLowerCase());
+      previous.appendChild(nested);
+    }
+    nested.appendChild(li);
+    restoreCaret();
+    return true;
+  }
+
   // client-ui/src/selection-toolbar.mjs
   var STYLE_ID = "gbti-selection-toolbar-css";
   var SELECTION_TOOLBAR_CSS = `
@@ -7030,6 +7122,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   font-weight: 700; font-size: 13px; padding: 0 6px; font-family: inherit;
 }
 .gbti-stb button:hover { background: rgba(255,255,255,.12); color: #fff; }
+.gbti-stb button.is-current {
+  background: var(--stb-accent); color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.28);
+}
 .gbti-lp {
   flex-direction: column; gap: 8px; padding: 10px; min-width: 268px;
   background: var(--stb-pop); border: 1.5px solid var(--stb-line); border-radius: 10px;
@@ -7067,6 +7163,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function linkRel({ nofollow = false, blank = false } = {}) {
     return [nofollow ? "nofollow" : null, blank ? "noopener" : null].filter(Boolean).join(" ");
+  }
+  function currentBlockFormat(el) {
+    const tag = String(el?.tagName || "").toUpperCase();
+    if (tag === "H2" || tag === "H3") return tag.toLowerCase();
+    if (tag === "P") return "p";
+    const classes = String(el?.className || "");
+    const heading = /(?:^|\s)ce-h([23])(?:\s|$)/.exec(classes);
+    if (heading) return `h${heading[1]}`;
+    return /(?:^|\s)ce-p(?:\s|$)/.test(classes) ? "p" : "";
   }
   function planLinkEdit({ url = "", text = "", nofollow = false, blank = false, hasExisting = false, existingText = "", remove = false } = {}) {
     const href = String(url ?? "").trim();
@@ -7173,6 +7278,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       }
       try {
         if (!tb) tb = buildTb();
+        const current = currentBlockFormat(el);
+        tb.querySelectorAll('[data-w="h2"], [data-w="h3"], [data-w="p"]').forEach((button) => {
+          const active = button.dataset.w === current;
+          button.classList.toggle("is-current", active);
+          button.setAttribute("aria-pressed", String(active));
+          const base = button.dataset.w === "h2" ? "Heading 2" : button.dataset.w === "h3" ? "Heading 3" : "Body text";
+          button.title = active ? `Current: ${base}` : base;
+        });
         place(tb, sel.getRangeAt(0).getBoundingClientRect(), true);
       } catch {
         hideTb();
@@ -8075,7 +8188,8 @@ ${String(body ?? "")}`;
           return `<input class="co-lang" data-edit="lang" data-id="${b._id}" value="${esc(b.lang || "")}" placeholder="language (optional)" /><div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || "")}</div>`;
         case "list": {
           const tag = b.ordered ? "ol" : "ul";
-          const items = (Array.isArray(b.items) ? b.items : [""]).map((it) => `<li>${inlineMdToHtml(it)}</li>`).join("") || "<li></li>";
+          const render = (nodes) => nodes.map((node) => `<li>${inlineMdToHtml(node.text)}${node.children.length ? `<${tag}>${render(node.children)}</${tag}>` : ""}</li>`).join("");
+          const items = render(listTree(Array.isArray(b.items) ? b.items : [""], b.depths)) || "<li></li>";
           return `<${tag} class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}">${items}</${tag}>`;
         }
         case "table": {
@@ -8158,8 +8272,11 @@ ${String(body ?? "")}`;
             }
             b.text = inlineHtmlToMd(el.innerHTML).replace(/\n$/, "");
           } else if (f === "code") b.code = el.innerText.replace(/\n$/, "");
-          else if (f === "list") b.items = Array.from(el.querySelectorAll("li")).map((li) => inlineHtmlToMd(li.innerHTML));
-          else if (f === "cell") {
+          else if (f === "list") {
+            const read2 = readListDom(el, { rendererAnchors: false });
+            b.items = read2.items;
+            b.depths = read2.depths;
+          } else if (f === "cell") {
             const r = Number(el.dataset.r);
             const c = Number(el.dataset.c);
             if (Number.isNaN(r) || Number.isNaN(c) || c < 0) return;
@@ -8181,6 +8298,14 @@ ${String(body ?? "")}`;
           el._composing = false;
           on();
         });
+        if (el.dataset.edit === "list") {
+          el.addEventListener("keydown", (e) => {
+            if (e.key !== "Tab") return;
+            const selection = this.root.getSelection ? this.root.getSelection() : document.getSelection();
+            e.preventDefault();
+            if (indentListSelection(el, selection, { outdent: e.shiftKey })) on();
+          });
+        }
         if (el.classList.contains("ce") || el.classList.contains("tc")) {
           el.addEventListener("paste", (e) => {
             const image = firstImageFile(e.clipboardData);

@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { linkRel, planLinkEdit, SELECTION_TOOLBAR_CSS, createSelectionToolbar } from '../client-ui/src/selection-toolbar.mjs';
+import { linkRel, planLinkEdit, currentBlockFormat, SELECTION_TOOLBAR_CSS, createSelectionToolbar } from '../client-ui/src/selection-toolbar.mjs';
 
 test('target=_blank always carries noopener, or the new tab can reach back through window.opener', () => {
   assert.equal(linkRel({ blank: true }), 'noopener');
@@ -59,6 +59,16 @@ test('the popover CSS names its own tokens with fallbacks, so it renders in both
   assert.match(SELECTION_TOOLBAR_CSS, /--s-surface, var\(--paper/);
   assert.match(SELECTION_TOOLBAR_CSS, /--s-line, var\(--line/);
   assert.match(SELECTION_TOOLBAR_CSS, /--s-green, var\(--green-700/);
+});
+
+test('the toolbar identifies the current heading/body level on both editor DOM shapes', () => {
+  assert.equal(currentBlockFormat({ tagName: 'H2' }), 'h2');
+  assert.equal(currentBlockFormat({ tagName: 'h3' }), 'h3');
+  assert.equal(currentBlockFormat({ tagName: 'P' }), 'p');
+  assert.equal(currentBlockFormat({ tagName: 'DIV', className: 'ce ce-h2' }), 'h2');
+  assert.equal(currentBlockFormat({ tagName: 'DIV', className: 'ce ce-p' }), 'p');
+  assert.equal(currentBlockFormat({ tagName: 'OL' }), '');
+  assert.match(SELECTION_TOOLBAR_CSS, /button\.is-current/);
 });
 
 // The no-host stub. createSelectionToolbar resolves its host EAGERLY and, when there is none, returns an inert

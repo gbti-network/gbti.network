@@ -7,7 +7,8 @@
 // divider render as the "Members-only" section. In-house, node-free, CSP-safe, shadow-DOM. Phase 5c layers the slash
 // menu + selection toolbar + drag reorder on top of this engine.
 import { GbtiElement, define, esc } from '../base.mjs';
-import { parseBlocks, serializeBlocks, emptyBlock, CALLOUT_VARIANTS, inlineMdToHtml, inlineHtmlToMd } from '../markdown-blocks.mjs';
+import { parseBlocks, serializeBlocks, emptyBlock, CALLOUT_VARIANTS, inlineMdToHtml, inlineHtmlToMd, listTree } from '../markdown-blocks.mjs';
+import { readListDom, indentListSelection } from '../block-commit.mjs';
 import { createSelectionToolbar } from '../selection-toolbar.mjs'; // sow-235: the toolbar + link manager, shared with the WorkBench Preview
 import { resolveContentAsset } from '../assets.mjs';
 import { MEDIA_INDEX_URL, mediaFor, filterMedia, reusePlan, authorFromItemPath } from '../media-picker.mjs'; // sow-165 Q36: reuse an image from the member's own published items // sow-165: repo-relative body images need the item folder to resolve
@@ -353,7 +354,9 @@ class GbtiDocEditor extends GbtiElement {
           + `<div class="ce ce-code" contenteditable="true" data-edit="code" data-id="${b._id}" data-ph="Code">${esc(b.code || '')}</div>`;
       case 'list': {
         const tag = b.ordered ? 'ol' : 'ul';
-        const items = (Array.isArray(b.items) ? b.items : ['']).map((it) => `<li>${inlineMdToHtml(it)}</li>`).join('') || '<li></li>';
+        const render = (nodes) => nodes.map((node) =>
+          `<li>${inlineMdToHtml(node.text)}${node.children.length ? `<${tag}>${render(node.children)}</${tag}>` : ''}</li>`).join('');
+        const items = render(listTree(Array.isArray(b.items) ? b.items : [''], b.depths)) || '<li></li>';
         return `<${tag} class="ce ce-list" contenteditable="true" data-edit="list" data-id="${b._id}">${items}</${tag}>`;
       }
       case 'table': {
@@ -438,7 +441,11 @@ class GbtiDocEditor extends GbtiElement {
           b.text = inlineHtmlToMd(el.innerHTML).replace(/\n$/, ''); // SOW-062 P6: store the .ce's inline HTML as Markdown
         }
         else if (f === 'code') b.code = el.innerText.replace(/\n$/, ''); // code stays literal
-        else if (f === 'list') b.items = Array.from(el.querySelectorAll('li')).map((li) => inlineHtmlToMd(li.innerHTML));
+        else if (f === 'list') {
+          const read = readListDom(el, { rendererAnchors: false });
+          b.items = read.items;
+          b.depths = read.depths;
+        }
         else if (f === 'cell') { // SOW-169: a table cell -> b.head[c] (r=-1) or b.rows[r][c], in place, no re-render
           const r = Number(el.dataset.r); const c = Number(el.dataset.c);
           if (Number.isNaN(r) || Number.isNaN(c) || c < 0) return; // ignore a tampered index; never grow sparse arrays
@@ -452,6 +459,14 @@ class GbtiDocEditor extends GbtiElement {
       el.addEventListener('input', on);
       el.addEventListener('compositionstart', () => { el._composing = true; });
       el.addEventListener('compositionend', () => { el._composing = false; on(); });
+      if (el.dataset.edit === 'list') {
+        el.addEventListener('keydown', (e) => {
+          if (e.key !== 'Tab') return;
+          const selection = this.root.getSelection ? this.root.getSelection() : document.getSelection();
+          e.preventDefault(); // Tab belongs to list structure here, never focus traversal.
+          if (indentListSelection(el, selection, { outdent: e.shiftKey })) on();
+        });
+      }
       if (el.classList.contains('ce') || el.classList.contains('tc')) {
         // paste as PLAIN TEXT only (never author HTML -> CSP + round-trip safe)
         el.addEventListener('paste', (e) => {

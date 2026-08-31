@@ -47,6 +47,29 @@ const isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
 // video frame and migrate into a misleading ```embed fence.
 const isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
 
+const listDepth = (line) => {
+  const lead = String(line ?? '').match(/^[\t ]*/)?.[0] || '';
+  const spaces = lead.replace(/\t/g, '    ').length;
+  return Math.max(0, Math.floor(spaces / 4));
+};
+
+/** A stable tree for rendering flat list text + depth arrays in either editor. */
+export function listTree(items = [], depths = []) {
+  const roots = [];
+  const lastAt = [];
+  Array.from(items || []).forEach((text, index) => {
+    const requested = Math.max(0, Number(depths?.[index]) || 0);
+    const previous = index ? lastAt.length - 1 : 0;
+    const depth = index ? Math.min(requested, previous + 1) : 0;
+    const node = { text: String(text ?? ''), depth, children: [] };
+    if (depth > 0 && lastAt[depth - 1]) lastAt[depth - 1].children.push(node);
+    else roots.push(node);
+    lastAt.length = depth;
+    lastAt[depth] = node;
+  });
+  return roots;
+}
+
 /** Serialize a block list to Markdown (blocks joined by a blank line). */
 export function serializeBlocks(blocks) {
   return (Array.isArray(blocks) ? blocks : []).map(serializeBlock).join('\n\n');
@@ -68,7 +91,17 @@ function serializeBlock(b) {
     case 'quote': return String(b.text ?? '').split('\n').map((l) => (l ? `> ${l}` : '>')).join('\n');
     case 'list': {
       const items = Array.isArray(b.items) ? b.items : String(b.text ?? '').split('\n').filter((x) => x !== '');
-      return items.map((it, i) => (b.ordered ? `${i + 1}. ` : '- ') + it).join('\n');
+      const tree = listTree(items, b.depths);
+      const lines = [];
+      const write = (nodes, depth) => {
+        nodes.forEach((node, index) => {
+          const marker = b.ordered ? `${index + 1}. ` : '- ';
+          lines.push(`${'    '.repeat(depth)}${marker}${node.text}`);
+          write(node.children, depth + 1);
+        });
+      };
+      write(tree, 0);
+      return lines.join('\n');
     }
     case 'table': {
       const head = Array.isArray(b.head) ? b.head : [];
@@ -134,8 +167,17 @@ export function parseBlocks(md) {
     if (isListItem(line)) {
       const ordered = /^\s*\d+\.\s+/.test(line);
       const items = [];
-      while (i < n && isListItem(lines[i])) { items.push(lines[i].replace(/^\s*([-*]|\d+\.)\s+/, '')); i++; }
-      blocks.push({ type: 'list', ordered, items });
+      const depths = [];
+      while (i < n && isListItem(lines[i])) {
+        const rawDepth = listDepth(lines[i]);
+        const previous = depths.length ? depths[depths.length - 1] : 0;
+        depths.push(depths.length ? Math.min(rawDepth, previous + 1) : 0);
+        items.push(lines[i].replace(/^\s*([-*]|\d+\.)\s+/, ''));
+        i++;
+      }
+      const block = { type: 'list', ordered, items };
+      if (depths.some(Boolean)) block.depths = depths;
+      blocks.push(block);
       continue;
     }
     // SOW-169: a GFM table = a header row with pipes immediately followed by a delimiter row. Body rows continue

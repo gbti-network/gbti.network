@@ -49,6 +49,67 @@ export function isEditableBlockTag(tag) {
   return EDITABLE_BLOCK_TAGS.has(String(tag || '').toUpperCase());
 }
 
+/** Read direct and nested list items without folding child-list HTML into the parent text. */
+export function readListDom(el, { rendererAnchors = true } = {}) {
+  const items = [];
+  const depths = [];
+  const md = (html) => inlineHtmlToMd(html, { rendererAnchors }).trim();
+  const walk = (list, depth) => {
+    Array.from(list?.children || []).filter((child) => child.tagName === 'LI').forEach((li) => {
+      const own = li.cloneNode(true);
+      Array.from(own.children || []).filter((child) => /^(UL|OL)$/.test(child.tagName)).forEach((child) => child.remove());
+      items.push(md(own.innerHTML));
+      depths.push(depth);
+      Array.from(li.children || []).filter((child) => /^(UL|OL)$/.test(child.tagName))
+        .forEach((child) => walk(child, depth + 1));
+    });
+  };
+  walk(el, 0);
+  return { kind: 'list', items, depths };
+}
+
+/**
+ * Browser DOM operation behind Tab / Shift+Tab. Moving the existing LI keeps
+ * the caret and inline markup intact; readListDom then persists the structure.
+ */
+export function indentListSelection(list, selection, { outdent = false } = {}) {
+  if (!list || !selection?.isCollapsed) return false;
+  const caretNode = selection.anchorNode;
+  const caretOffset = selection.anchorOffset;
+  const restoreCaret = () => {
+    if (!caretNode?.isConnected || typeof selection.collapse !== 'function') return;
+    const limit = caretNode.nodeType === 3 ? String(caretNode.textContent || '').length : caretNode.childNodes.length;
+    try { selection.collapse(caretNode, Math.min(caretOffset, limit)); } catch { /* best effort */ }
+  };
+  let node = selection.anchorNode;
+  if (node?.nodeType !== 1) node = node?.parentElement || node?.parentNode;
+  let li = node?.closest?.('li') || null;
+  if (!li || !list.contains(li)) return false;
+  const parentList = li.parentElement;
+  if (!parentList || !/^(UL|OL)$/.test(parentList.tagName)) return false;
+
+  if (outdent) {
+    const parentLi = parentList.parentElement;
+    const outerList = parentLi?.parentElement;
+    if (parentLi?.tagName !== 'LI' || !outerList || !/^(UL|OL)$/.test(outerList.tagName)) return false;
+    outerList.insertBefore(li, parentLi.nextSibling);
+    if (!Array.from(parentList.children).some((child) => child.tagName === 'LI')) parentList.remove();
+    restoreCaret();
+    return true;
+  }
+
+  const previous = li.previousElementSibling;
+  if (!previous || previous.tagName !== 'LI') return false;
+  let nested = Array.from(previous.children).find((child) => child.tagName === parentList.tagName);
+  if (!nested) {
+    nested = previous.ownerDocument.createElement(parentList.tagName.toLowerCase());
+    previous.appendChild(nested);
+  }
+  nested.appendChild(li);
+  restoreCaret();
+  return true;
+}
+
 /**
  * Read the edited block out of the DOM as a plain object. Browser-only and deliberately thin: everything that can
  * be decided without a DOM lives in applyBlockEdit, which is where the tests are.
@@ -61,7 +122,7 @@ export function readBlockDom(el) {
   const md = (html) => inlineHtmlToMd(html, { rendererAnchors: true }).trim();
   const kids = (node, sel) => Array.from(node.querySelectorAll(sel));
 
-  if (tag === 'UL' || tag === 'OL') return { kind: 'list', items: kids(el, 'li').map((li) => md(li.innerHTML)) };
+  if (tag === 'UL' || tag === 'OL') return readListDom(el, { rendererAnchors: true });
   if (tag === 'PRE') {
     // Code stays literal: no inline transform, and the trailing newline the renderer adds is not content.
     const code = el.querySelector('code') || el;
@@ -95,6 +156,7 @@ export function applyBlockEdit(sourceText, read) {
     case 'list': {
       if (!Array.isArray(read.items)) return null;
       b.items = read.items.slice();
+      b.depths = Array.isArray(read.depths) ? read.depths.slice(0, b.items.length) : [];
       delete b.text;            // serializeBlock prefers items, but a stale text field is a trap for the next reader
       break;
     }

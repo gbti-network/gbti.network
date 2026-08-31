@@ -20433,6 +20433,26 @@ function tableAlignments(line) {
 function hardBreak(escaped, raw) {
   return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, "") + "\0BR\0" : escaped;
 }
+var markdownListDepth = (line) => {
+  const lead = String(line ?? "").match(/^[\t ]*/)?.[0] || "";
+  return Math.max(0, Math.floor(lead.replace(/\t/g, "    ").length / 4));
+};
+function renderListRows(rows, type) {
+  const roots = [];
+  const lastAt = [];
+  rows.forEach((row, index) => {
+    const requested = Math.max(0, Number(row.depth) || 0);
+    const previous = index ? lastAt.length - 1 : 0;
+    const depth = index ? Math.min(requested, previous + 1) : 0;
+    const node = { html: row.html, children: [] };
+    if (depth > 0 && lastAt[depth - 1]) lastAt[depth - 1].children.push(node);
+    else roots.push(node);
+    lastAt.length = depth;
+    lastAt[depth] = node;
+  });
+  const render = (nodes) => nodes.map((node) => `<li>${node.html}${node.children.length ? `<${type}>${render(node.children)}</${type}>` : ""}</li>`).join("");
+  return render(roots);
+}
 function renderMarkdown(md) {
   return renderDoc(md, false).html;
 }
@@ -20458,7 +20478,7 @@ function renderDoc(md, ids) {
   const linkKeep = [];
   const flushList = () => {
     if (listType) {
-      emit(`<${listType}>${listBuf.join("")}</${listType}>`, listStart, i - 1);
+      emit(`<${listType}>${renderListRows(listBuf, listType)}</${listType}>`, listStart, i - 1);
       listType = null;
       listBuf = [];
       listStart = null;
@@ -20521,7 +20541,7 @@ function renderDoc(md, ids) {
         listType = "ul";
         listStart = i;
       }
-      listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*[-*]\s+/, ""), linkKeep), fn)}</li>`);
+      listBuf.push({ depth: markdownListDepth(line), html: inline(escapeKeepingLinks(line.replace(/^\s*[-*]\s+/, ""), linkKeep), fn) });
       i++;
       continue;
     }
@@ -20531,7 +20551,7 @@ function renderDoc(md, ids) {
         listType = "ol";
         listStart = i;
       }
-      listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*\d+\.\s+/, ""), linkKeep), fn)}</li>`);
+      listBuf.push({ depth: markdownListDepth(line), html: inline(escapeKeepingLinks(line.replace(/^\s*\d+\.\s+/, ""), linkKeep), fn) });
       i++;
       continue;
     }

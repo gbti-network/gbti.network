@@ -68,6 +68,18 @@ test('an ordered list keeps its numbering and renumbers cleanly', () => {
   );
 });
 
+test('an indented ordered-list item is persisted as a nested Markdown sublist', () => {
+  const src = '1. parent\n2. child\n3. sibling';
+  assert.deepEqual(
+    applyBlockEdit(src, {
+      kind: 'list',
+      items: ['parent', 'child', 'sibling'],
+      depths: [0, 1, 0],
+    }),
+    ['1. parent', '    1. child', '2. sibling'],
+  );
+});
+
 test('editing a table cell preserves the alignment row, which exists ONLY in the source', () => {
   const src = '| Name | Qty |\n| :--- | ---: |\n| a | 1 |';
   const out = applyBlockEdit(src, { kind: 'table', head: ['Name', 'Count'], rows: [['a', '2']] });

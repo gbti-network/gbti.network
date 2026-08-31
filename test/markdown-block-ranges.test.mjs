@@ -57,6 +57,13 @@ test('ranges are the inclusive source line span of each block', () => {
   ]);
 });
 
+test('a nested list remains one editable source block', () => {
+  const md = '1. parent\n    1. child\n2. sibling';
+  const { blocks, html } = renderMarkdownWithBlocks(md);
+  assert.deepEqual(blocks, [{ start: 0, end: 2 }]);
+  assert.match(html, /<ol data-blk="0"><li>parent<ol><li>child<\/li><\/ol><\/li><li>sibling<\/li><\/ol>/);
+});
+
 // A range has to be usable for a splice, which is the entire point of returning it.
 test('a range addresses exactly the source lines that produced the block', () => {
   const md = '# Title\n\nfirst para\n\nsecond para';

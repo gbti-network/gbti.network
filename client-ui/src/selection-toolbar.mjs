@@ -30,6 +30,10 @@ export const SELECTION_TOOLBAR_CSS = `
   font-weight: 700; font-size: 13px; padding: 0 6px; font-family: inherit;
 }
 .gbti-stb button:hover { background: rgba(255,255,255,.12); color: #fff; }
+.gbti-stb button.is-current {
+  background: var(--stb-accent); color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.28);
+}
 .gbti-lp {
   flex-direction: column; gap: 8px; padding: 10px; min-width: 268px;
   background: var(--stb-pop); border: 1.5px solid var(--stb-line); border-radius: 10px;
@@ -71,6 +75,17 @@ function ensureStyles(host) {
 /** The canonical rel for a link, given the two author choices. target=_blank must carry noopener (tab-nabbing). */
 export function linkRel({ nofollow = false, blank = false } = {}) {
   return [nofollow ? 'nofollow' : null, blank ? 'noopener' : null].filter(Boolean).join(' ');
+}
+
+/** The heading/body state shown by the H2/H3/P controls for either host DOM. */
+export function currentBlockFormat(el) {
+  const tag = String(el?.tagName || '').toUpperCase();
+  if (tag === 'H2' || tag === 'H3') return tag.toLowerCase();
+  if (tag === 'P') return 'p';
+  const classes = String(el?.className || '');
+  const heading = /(?:^|\s)ce-h([23])(?:\s|$)/.exec(classes);
+  if (heading) return `h${heading[1]}`;
+  return /(?:^|\s)ce-p(?:\s|$)/.test(classes) ? 'p' : '';
 }
 
 /**
@@ -204,6 +219,14 @@ export function createSelectionToolbar({
     if (!el) { hideTb(); return; }
     try {
       if (!tb) tb = buildTb();
+      const current = currentBlockFormat(el);
+      tb.querySelectorAll('[data-w="h2"], [data-w="h3"], [data-w="p"]').forEach((button) => {
+        const active = button.dataset.w === current;
+        button.classList.toggle('is-current', active);
+        button.setAttribute('aria-pressed', String(active));
+        const base = button.dataset.w === 'h2' ? 'Heading 2' : button.dataset.w === 'h3' ? 'Heading 3' : 'Body text';
+        button.title = active ? `Current: ${base}` : base;
+      });
       place(tb, sel.getRangeAt(0).getBoundingClientRect(), true);
     } catch { hideTb(); }
   }

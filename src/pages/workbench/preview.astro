@@ -640,7 +640,7 @@ const labelOf = CATEGORY_LABELS;
       // writes EVERY store through the same client.saveDraft call, so there is only ever one write path.
       // sow-235: the block reader/committer and the shared selection toolbar. Loaded once here because
       // wireEditing runs synchronously on every re-render and cannot await an import each time.
-      const { readBlockDom, applyBlockEdit, isEditableBlockTag, planBlockDelete, planBlockRetype, planImageInsert, planMemberSplitInsert } = await import('../../../client-ui/src/block-commit.mjs');
+      const { readBlockDom, applyBlockEdit, isEditableBlockTag, indentListSelection, planBlockDelete, planBlockRetype, planImageInsert, planMemberSplitInsert } = await import('../../../client-ui/src/block-commit.mjs');
       const { createSelectionToolbar } = await import('../../../client-ui/src/selection-toolbar.mjs');
       const { transferHasFiles, firstImageFile, processImageFile, blobToBase64, processedImageDataUrl } = await import('../../../client-ui/src/image-intake.mjs');
       const { referencedDraftImages, stagedImageName } = await import('../../lib/staged-images.mjs');
@@ -705,12 +705,12 @@ const labelOf = CATEGORY_LABELS;
       // they fail differently: `committing` closes the async window, and isConnected refuses a node that a
       // re-render has already replaced.
       let committing = false;
-      const commitIn = async (doc: PvDoc, el: HTMLElement) => {
+      const commitIn = async (doc: PvDoc, el: HTMLElement, { preserveDom = false } = {}) => {
         if (committing || !el.isConnected) return;
         committing = true;
-        try { await commitInner(doc, el); } finally { committing = false; }
+        try { await commitInner(doc, el, { preserveDom }); } finally { committing = false; }
       };
-      const commitInner = async (doc: PvDoc, el: HTMLElement) => {
+      const commitInner = async (doc: PvDoc, el: HTMLElement, { preserveDom = false } = {}) => {
         const range = doc.ranges[Number(el.dataset[doc.attr])];
         if (!range) return;
         const lines = doc.get().replace(/\r\n/g, '\n').split('\n');
@@ -722,6 +722,9 @@ const labelOf = CATEGORY_LABELS;
         lines.splice(range.start, range.end - range.start + 1, ...next);
         doc.set(lines.join('\n'));
         markDirty();
+        // Tab only changes indentation on the same list lines. Keeping this DOM preserves the
+        // browser's caret inside the moved LI; the usual blur/render path would replace it.
+        if (preserveDom) { el.dataset.pvSnap = readKey(el); return; }
         if (doc === noteDoc) { renderNoteCard(); wireEditing(); return; }
         await renderFromSource();
         apply();
@@ -962,6 +965,14 @@ const labelOf = CATEGORY_LABELS;
           // empty paragraph was to click away and let the blur commit collapse it, which works but gives no
           // feedback at the moment the author presses the key, so the key reads as broken.
           el.addEventListener('keydown', (ev: KeyboardEvent) => {
+            if (ev.key === 'Tab' && /^(UL|OL)$/.test(el.tagName) && editing) {
+              const sel = document.getSelection();
+              ev.preventDefault(); // list structure owns Tab; never move focus out of the editor
+              if (indentListSelection(el, sel, { outdent: ev.shiftKey })) {
+                void commitIn(doc, el, { preserveDom: true });
+              }
+              return;
+            }
             if (ev.key !== 'Backspace' || !editing) return;
             const sel = document.getSelection();
             if (!sel || !sel.isCollapsed || sel.focusOffset !== 0) return;

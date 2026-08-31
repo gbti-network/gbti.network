@@ -50,6 +50,15 @@ test('code fence preserves language + body; ordered list renumbers', () => {
   assert.equal(serializeBlocks(b), md);
 });
 
+test('nested ordered lists preserve depth and restart numbering inside each sublist', () => {
+  const md = '1. parent\n    1. child one\n    2. child two\n2. sibling';
+  const block = parseBlocks(md)[0];
+  assert.deepEqual(block.items, ['parent', 'child one', 'child two', 'sibling']);
+  assert.deepEqual(block.depths, [0, 1, 1, 0]);
+  assert.equal(serializeBlocks([block]), md);
+  assert.deepEqual(parseBlocks(serializeBlocks([block])), [block]);
+});
+
 test('round-trip is IDEMPOTENT across repeated edit cycles, and a mid-text marker is NOT a divider', () => {
   const md = [
     'Intro.', '', '<!-- members-only -->', '', '## Members', '', 'Secret one.', '',

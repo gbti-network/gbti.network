@@ -149,6 +149,23 @@ test('Preview handles Backspace in an empty block, and routes it through the pur
     'the delete does not use the tested planner, so its line arithmetic is untested browser-only code');
 });
 
+test('Tab and Shift+Tab route list nesting through the shared DOM operation in both editors', () => {
+  assert.match(editor, /e\.key !== 'Tab'/,
+    'the document editor does not intercept Tab inside a list');
+  assert.match(editor, /indentListSelection\(el, selection, \{ outdent: e\.shiftKey \}\)/,
+    'the document editor does not route Tab and Shift+Tab through shared list nesting');
+  assert.match(preview, /ev\.key === 'Tab'[\s\S]{0,500}indentListSelection\(el, sel, \{ outdent: ev\.shiftKey \}\)/,
+    'Preview does not route Tab and Shift+Tab through shared list nesting');
+  assert.match(preview, /commitIn\(doc, el, \{ preserveDom: true \}\)/,
+    'Preview rebuilds the list after Tab and loses the caret instead of preserving the edited DOM');
+});
+
+test('the shared toolbar marks the current H2, H3, or paragraph control', () => {
+  const toolbar = fs.readFileSync(new URL('../client-ui/src/selection-toolbar.mjs', import.meta.url), 'utf8');
+  assert.match(toolbar, /classList\.toggle\('is-current', active\)/);
+  assert.match(toolbar, /setAttribute\('aria-pressed', String\(active\)\)/);
+});
+
 // --- 2026-08-29: the block toolbar sat on top of the text it was meant to sit beside -----------------------
 //
 // Measured in a browser harness before the fix, not estimated: the toolbar was 225px wide, of which the

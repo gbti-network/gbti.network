@@ -225,6 +225,32 @@ function hardBreak(escaped, raw) {
   return / {2,}$/.test(String(raw)) ? String(escaped).replace(/\s+$/, '') + '\u0000BR\u0000' : escaped;
 }
 
+const markdownListDepth = (line) => {
+  const lead = String(line ?? '').match(/^[\t ]*/)?.[0] || '';
+  return Math.max(0, Math.floor(lead.replace(/\t/g, '    ').length / 4));
+};
+
+// Keep Preview structurally equivalent to the Markdown source. Rows stay flat
+// while scanning so their source range remains one block; this tree is only the
+// HTML projection used for display/editing.
+function renderListRows(rows, type) {
+  const roots = [];
+  const lastAt = [];
+  rows.forEach((row, index) => {
+    const requested = Math.max(0, Number(row.depth) || 0);
+    const previous = index ? lastAt.length - 1 : 0;
+    const depth = index ? Math.min(requested, previous + 1) : 0;
+    const node = { html: row.html, children: [] };
+    if (depth > 0 && lastAt[depth - 1]) lastAt[depth - 1].children.push(node);
+    else roots.push(node);
+    lastAt.length = depth;
+    lastAt[depth] = node;
+  });
+  const render = (nodes) => nodes.map((node) =>
+    `<li>${node.html}${node.children.length ? `<${type}>${render(node.children)}</${type}>` : ''}</li>`).join('');
+  return render(roots);
+}
+
 export function renderMarkdown(md) {
   return renderDoc(md, false).html;
 }
@@ -250,7 +276,7 @@ function renderDoc(md, ids) {
   const linkKeep = []; // attributed <a> tags extracted by escapeKeepingLinks, restored in one pass at the end
   const flushList = () => {
     if (listType) {
-      emit(`<${listType}>${listBuf.join('')}</${listType}>`, listStart, i - 1);
+      emit(`<${listType}>${renderListRows(listBuf, listType)}</${listType}>`, listStart, i - 1);
       listType = null;
       listBuf = [];
       listStart = null;
@@ -285,8 +311,8 @@ function renderDoc(md, ids) {
     const esc = escapeKeepingLinks(line, linkKeep);
     let m;
     if ((m = /^(#{1,6})\s+(.*)$/.exec(esc))) { flushList(); emit(`<h${m[1].length}>${inline(m[2], fn)}</h${m[1].length}>`, i, i); i++; continue; }
-    if (/^\s*[-*]\s+/.test(line)) { if (listType !== 'ul') { flushList(); listType = 'ul'; listStart = i; } listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*[-*]\s+/, ''), linkKeep), fn)}</li>`); i++; continue; }
-    if (/^\s*\d+\.\s+/.test(line)) { if (listType !== 'ol') { flushList(); listType = 'ol'; listStart = i; } listBuf.push(`<li>${inline(escapeKeepingLinks(line.replace(/^\s*\d+\.\s+/, ''), linkKeep), fn)}</li>`); i++; continue; }
+    if (/^\s*[-*]\s+/.test(line)) { if (listType !== 'ul') { flushList(); listType = 'ul'; listStart = i; } listBuf.push({ depth: markdownListDepth(line), html: inline(escapeKeepingLinks(line.replace(/^\s*[-*]\s+/, ''), linkKeep), fn) }); i++; continue; }
+    if (/^\s*\d+\.\s+/.test(line)) { if (listType !== 'ol') { flushList(); listType = 'ol'; listStart = i; } listBuf.push({ depth: markdownListDepth(line), html: inline(escapeKeepingLinks(line.replace(/^\s*\d+\.\s+/, ''), linkKeep), fn) }); i++; continue; }
     if (/^\s*>\s?/.test(line)) { flushList(); emit(`<blockquote>${inline(escapeKeepingLinks(line.replace(/^\s*>\s?/, ''), linkKeep), fn)}</blockquote>`, i, i); i++; continue; }
     if (/^\s*(---|\*\*\*)\s*$/.test(line)) { flushList(); emit('<hr/>', i, i); i++; continue; }
     // GFM table: a header row followed by a delimiter row, then body rows until a blank line or a row with

@@ -29,6 +29,11 @@ async function published(md) {
 }
 const anchorOf = (html) => (/<a\b[^>]*>[\s\S]*?<\/a>/.exec(html) ?? [''])[0];
 
+test('reader: nested ordered lists render as nested list elements', () => {
+  const html = renderMarkdown('1. parent\n    1. child one\n    2. child two\n2. sibling');
+  assert.equal(html, '<ol><li>parent<ol><li>child one</li><li>child two</li></ol></li><li>sibling</li></ol>');
+});
+
 test('reader: a callout fence renders a variant box with an escaped, inline-formatted body', () => {
   const html = renderMarkdown('```callout warning\nHeads up, see [docs](https://x.com).\n```');
   assert.match(html, /md-callout md-callout-warning/);
