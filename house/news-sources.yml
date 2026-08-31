@@ -610,3 +610,8 @@ sources:
     url: https://leaddev.com/feed
     description: leaddev.com
     enabled: true
+  - id: tailscale
+    name: Tailscale
+    url: https://tailscale.com/blog/
+    description: tailscale.com
+    enabled: true
