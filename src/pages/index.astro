@@ -17,6 +17,7 @@ import PricingAccordion from '../components/home/PricingAccordion.astro';
 import ExtensionBanner from '../components/home/ExtensionBanner.astro';
 import DigestSubscribe from '../components/mail/DigestSubscribe.astro';
 import PersonalizeModal from '../components/home/PersonalizeModal.astro';
+import ShoptalkCalendarModal from '../components/home/ShoptalkCalendarModal.astro'; // sow-302
 import HomeShareModal from '../components/home/HomeShareModal.astro';
 import { authorItem } from '../lib/avatars';
 import { contentIcon } from '../lib/content-icons';
@@ -150,6 +151,9 @@ const SHOPTALK = {
        modal itself is a fixed <dialog>, inert until the signed-in Personalize button opens it. -->
   <script type="application/json" id="gbti-personalize-data" set:html={JSON.stringify(personalizeData)}></script>
   <PersonalizeModal />
+  {/* sow-302: the add-to-calendar chooser. Inert until the CTA opens it; the CTA keeps its href so a
+      no-JavaScript reader still gets the .ics, which is exactly today's behaviour. */}
+  <ShoptalkCalendarModal />
 
   <!-- sow-192 (Image #11/#12): the COLLAPSED creator composer bar. It opens the four-step Share wizard in a
        modal (HomeShareModal) instead of rendering the wizard inline. Paid-gated (data-home-creator) + hidden
@@ -446,6 +450,20 @@ const SHOPTALK = {
       applyCta(signalPresent());
       document.addEventListener('gbti:identity', function (e) {
         applyCta(activeMember(e.detail));
+      });
+
+      // sow-302: an active member gets the chooser instead of an immediate download. PROGRESSIVE, not a
+      // replacement: the anchor keeps its href, and preventDefault fires ONLY when the dialog exists and
+      // supports showModal. With JavaScript off, or on a browser without <dialog>, the click still downloads
+      // the .ics exactly as it does today. Swapping the anchor for a button would have regressed a working
+      // control to nothing for those readers, and nothing would have reported it.
+      cta.addEventListener('click', function (e) {
+        var dialog = document.querySelector('[data-shoptalk-cal]');
+        if (!dialog || typeof dialog.showModal !== 'function') return;
+        // A visitor's CTA points at /membership/; only intercept the member path.
+        if (cta.getAttribute('href') !== calUrl) return;
+        e.preventDefault();
+        dialog.showModal();
       });
     }
   })();

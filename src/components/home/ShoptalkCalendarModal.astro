@@ -1,0 +1,98 @@
+---
+// sow-302 Phase 2: the Add to calendar chooser. Owner feedback on sow-191, which shipped an .ics that
+// DOWNLOADS: "not a good experience. We need a way for them to add it to their cal from the browser."
+//
+// Three rows (owner decision 2026-09-01): Google, Outlook, and the file. Apple Calendar has no web deep link,
+// so "Apple" and "download" are the same row, and the file is the native path on that platform anyway.
+// Auto-detect was REJECTED: it guesses from the device and gets the common iPhone-plus-Google-Calendar
+// pairing wrong, with no recovery once it has guessed.
+//
+// The links are built HERE, at build time, from the same normalized event the .ics uses. house/shoptalk.yml
+// stays the one source: a second hardcoded time in a URL is the defect this whole design exists to prevent,
+// and test/shoptalk-ics.test.mjs asserts the Google link and the .ics agree on start, end and recurrence.
+//
+// PROGRESSIVE ENHANCEMENT is load-bearing, not a nicety. The CTA is an <a href="/shoptalk.ics"> that works
+// with JavaScript off. This dialog needs showModal(), so the handler in index.astro preventDefault()s only
+// when the dialog is actually available; otherwise the anchor does what it does today. Replacing the anchor
+// with a <button> would have turned a working control into nothing for those readers, silently.
+import { loadShoptalk } from '../../lib/shoptalk';
+import { googleCalendarUrl, outlookCalendarUrl } from '../../lib/shoptalk-core.mjs';
+
+const event = loadShoptalk();
+const google = googleCalendarUrl(event);
+const outlook = outlookCalendarUrl(event);
+---
+
+<dialog class="sc" data-shoptalk-cal aria-labelledby="sc-title">
+  <div class="sc-card">
+    <header class="sc-head">
+      <div>
+        <div class="sc-eyebrow">Add to calendar</div>
+        <h2 class="sc-title" id="sc-title">{event.cardTitle}</h2>
+      </div>
+      <button type="button" class="sc-x" data-sc-close aria-label="Close">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </header>
+
+    <p class="sc-when">{event.cardTitle} runs every Saturday. Pick where you keep your calendar.</p>
+
+    <ul class="sc-list">
+      <li>
+        <a class="sc-row" href={google} target="_blank" rel="noopener">
+          <span class="sc-name">Google Calendar</span>
+          <span class="sc-note">Adds every Saturday.</span>
+        </a>
+      </li>
+      <li>
+        <a class="sc-row" href={outlook} target="_blank" rel="noopener">
+          <span class="sc-name">Outlook</span>
+          {/* sow-302: Outlook's compose deep link has NO recurrence parameter, so it can only create the first
+              occurrence. Saying so HERE is the point: without it the member finds out next Saturday, when
+              nothing appears, and reads it as our bug rather than a limitation of the link. */}
+          <span class="sc-note">Adds the next call only. Outlook cannot take a repeating event from a link.</span>
+        </a>
+      </li>
+      <li>
+        <a class="sc-row" href="/shoptalk.ics">
+          <span class="sc-name">Apple Calendar, or download the file</span>
+          <span class="sc-note">Adds every Saturday. Works with any calendar app.</span>
+        </a>
+      </li>
+    </ul>
+  </div>
+</dialog>
+
+<style>
+  .sc { border: 0; padding: 0; background: transparent; max-width: min(92vw, 26rem); }
+  .sc::backdrop { background: rgb(0 0 0 / 0.5); }
+  .sc-card { background: var(--bg-1, #fff); color: var(--fg, #25232b); border: 1px solid var(--line, #e6e4ea); border-radius: 14px; padding: 20px; }
+  .sc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .sc-eyebrow { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--fg-mute, #6c6976); }
+  .sc-title { margin: 2px 0 0; font-size: 20px; }
+  .sc-x { background: none; border: 0; color: var(--fg-mute, #6c6976); cursor: pointer; padding: 4px; border-radius: 8px; }
+  .sc-x:hover { color: var(--fg, #25232b); }
+  .sc-when { margin: 10px 0 14px; color: var(--fg-mute, #6c6976); font-size: 14px; }
+  .sc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .sc-row { display: block; padding: 12px 14px; border: 1px solid var(--line, #e6e4ea); border-radius: 10px; text-decoration: none; color: inherit; }
+  .sc-row:hover, .sc-row:focus-visible { border-color: var(--accent, #1f9e5f); background: var(--bg-2, #f7f6f9); }
+  .sc-name { display: block; font-weight: 600; }
+  .sc-note { display: block; margin-top: 2px; font-size: 13px; color: var(--fg-mute, #6c6976); }
+</style>
+
+<script is:inline>
+  (function () {
+    var dialog = document.querySelector('[data-shoptalk-cal]');
+    if (!dialog) return;
+    // Close on the X and on a backdrop click, mirroring PersonalizeModal. Escape is native to <dialog>.
+    dialog.addEventListener('click', function (e) {
+      if (e.target === dialog) { dialog.close(); return; }
+      if (e.target.closest && e.target.closest('[data-sc-close]')) dialog.close();
+    });
+    // Focus returns to the CTA on close, so a keyboard user is not dumped at the top of the page.
+    dialog.addEventListener('close', function () {
+      var cta = document.querySelector('[data-shoptalk-cta]');
+      if (cta && typeof cta.focus === 'function') cta.focus();
+    });
+  })();
+</script>
