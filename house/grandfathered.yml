@@ -1,146 +1,116 @@
-# Grandfathered github_ids (ADMIN-owned; see CODEOWNERS). A grandfather grant makes a github_id
-# count as PAID with no Stripe subscription. Permanent by default; set `until` for a time-boxed
-# grant. Precedence: ban > staff > grandfather > Stripe.
-# Complimentary, permanent access for the existing co-op members (predate the paid system). The two
-# superadmins (atwellpub, gbtilabs) are NOT listed: staff already outranks Stripe (ban > staff > grandfather).
-#
-# sow-185: an optional `tier:` field sets the membership TIER a grant confers, so a superadmin (admin+) can
-# comp any account at a specific level by editing this file (superadmin edits auto-merge per SOW-108). Allowed
-# values: `member` (Network Member) or `creator` (Content Creator). A grant with NO `tier` defaults to
-# `member` (owner decision Q15, 2026-08-18, flipped from creator): a tierless comp reads as Network Member, so
-# an entry that should keep Content Creator access MUST carry an explicit `tier: creator`. Free
-# access is the absence of a grant; deplatforming is a ban (house/bans.yml), never a tier here.
-#
-# EVERY entry carries an EXPLICIT tier (owner decision, 2026-08-21). Do not add a bare entry and rely on the
-# default. The point is not behaviour, which is identical either way, it is that a future change to
-# grantTier's default then produces a visible diff per person instead of silently moving everyone on one
-# line. That silent movement happened on 2026-08-18 and ran for two days before anyone noticed.
 grandfathered:
-  - github_id: "132623795"   # github.com/Aliayashi517
+  - github_id: '132623795'
     login: aliayashi517
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "3306507"     # github.com/andrija-naglic
+  - github_id: '3306507'
     login: andrija-naglic
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "6953730"     # github.com/bomsn (Ali Khallad)
+  - github_id: '6953730'
     login: bomsn
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "6268698"     # github.com/daprela (Giulio Daprelà)
+  - github_id: '6268698'
     login: daprela
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "4893879"     # github.com/elsonponte (Elson Ponte)
+  - github_id: '4893879'
     login: elsonponte
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "89241634"    # github.com/Eyesandnose (Ayodeji Adekore)
+  - github_id: '89241634'
     login: eyesandnose
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "90683647"    # github.com/Giles-Beckley
+  - github_id: '90683647'
     login: giles-beckley
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "4948323"     # github.com/leogopal (Leo Gopal)
+  - github_id: '4948323'
     login: leogopal
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "18620454"    # github.com/MattBissett
+  - github_id: '18620454'
     login: mattbissett
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "7998393"     # github.com/nareshdevineni
+  - github_id: '7998393'
     login: nareshdevineni
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "1367750"     # github.com/rafael-minuesa (Rafael Minuesa)
+  - github_id: '1367750'
     login: rafael-minuesa
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "225425"      # github.com/rfilipo (Ricardo Filipo)
+  - github_id: '225425'
     login: rfilipo
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "8797609"     # github.com/shaneedwardtaylor (Shane Taylor)
+  - github_id: '8797609'
     login: shaneedwardtaylor
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "97899242"    # github.com/srikanthkoneru
+  - github_id: '97899242'
     login: srikanthkoneru
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-  - github_id: "7199469"     # github.com/Thivieira (Thiago Vieira)
+  - github_id: '7199469'
     login: thivieira
     reason: complimentary access (grandfathered co-op member)
     until: null
     tier: member
-# - github_id: "..."
-#   login: founder
-#   reason: founding member
-#   until: null   # null = permanent; otherwise an ISO date
-
-  # SOW-119: coupon grants folded in from KV redemptions by reconcile (2026-07-21). Auto-appended.
-  - github_id: "307628108"      # github.com/adbox85
+  - github_id: '307628108'
     login: adbox85
     reason: coupon:CODEABLEYEAR
-    until: "2027-07-21T15:20:31.034Z"
+    until: '2027-07-21T15:20:31.034Z'
     tier: member
-
-  # SOW-119: coupon grants folded in from KV redemptions by reconcile (2026-08-13). Auto-appended.
-  - github_id: "190312419"      # github.com/metacast-entertainment
+  - github_id: '190312419'
     login: metacast-entertainment
     reason: coupon:CODEABLEYEAR
-    until: "2027-08-12T12:56:20.498Z"
+    until: '2027-08-12T12:56:20.498Z'
     tier: member
-
-  # SOW-119: coupon grants folded in from KV redemptions by reconcile (2026-08-14). Auto-appended.
-  - github_id: "10647"          # github.com/pcfreak30
+  - github_id: '10647'
     login: pcfreak30
     reason: coupon:CODEABLEYEAR
-    until: "2027-08-13T22:21:57.611Z"
+    until: '2027-08-13T22:21:57.611Z'
     tier: member
-  - github_id: "316750045"      # github.com/hatest1011
+  - github_id: '316750045'
     login: hatest1011
     reason: coupon:CODEABLEYEAR
-    until: "2027-08-13T22:56:59.378Z"
+    until: '2027-08-13T22:56:59.378Z'
     tier: member
-
-  # SOW-119: coupon grants folded in from KV redemptions by reconcile (2026-08-17). Auto-appended.
-  - github_id: "59509273"       # github.com/sohrab09
+  - github_id: '59509273'
     login: sohrab09
     reason: coupon:HUDSINVITE
-    until: "2027-08-17T04:12:21.157Z"
+    until: '2027-08-17T04:12:21.157Z'
     tier: member
-
-  # SOW-035 / sow-228: non-staff test identity. Exists so a paid-member path is exercised by a paid
-  # member rather than by the superadmin E2E_TOKEN, which resolves staff and returns a clean for a
-  # path nobody has driven. Throwaway account, owner-created 2026-08-25. Revoke by deleting this block.
-  - github_id: "321094256"      # github.com/gbti-test-member
+  - github_id: '321094256'
     login: gbti-test-member
     reason: e2e test account (non-staff paid member)
     until: null
     tier: member
-
-  # SOW-119: coupon grants folded in from KV redemptions by reconcile (2026-08-30). Auto-appended.
-  - github_id: "1852711"        # github.com/mehul0810
+  - github_id: '1852711'
     login: mehul0810
     reason: coupon:CODEABLEYEAR
-    until: "2027-08-30T06:41:36.048Z"
+    until: '2027-08-30T06:41:36.048Z'
     tier: member
+  - github_id: '900000035'
+    login: e2e-sentinel-sow035
+    reason: SOW-035 E2E sentinel (auto-removed; never merged)
+    until: null
+    at: '2026-09-01T13:24:10.095Z'
