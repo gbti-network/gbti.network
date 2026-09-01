@@ -581,6 +581,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     couponUsage() { return workerGet('/membership/admin/coupon-usage'); }, // { ok, usage }
     async addCoupon(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'coupon-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async updateCoupon(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'coupon-update', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    // sow-271: the site-wide presentation toggles (SUPERADMIN). Read returns { settings, toggles }; the write is
+    // the one action in the author route's config table that requires superadmin rather than admin, and
+    // house/site-settings.yml is superadmin-CODEOWNED so the gate refuses anyone else's PR independently.
+    siteSettings() { return workerGet('/membership/admin/site-settings'); }, // { ok, settings, toggles }
+    async setSiteToggle(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'site-setting-set', ...args, enabled: args?.enabled === true }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
 
     // sow-231 Phase 3: ISSUED INVITES. Unlike the coupon config above, these are NOT git-native and open no
     // PR: an invite is per-person state carrying an administration note, so it lives in KV per the storage

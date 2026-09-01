@@ -29,6 +29,7 @@ import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-e
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
 import { normalizeCouponCode, COUPON_CODE_RE } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons)
+import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
 import yaml from 'js-yaml'; // already in the Worker bundle (content-ops)
 
 const GH = 'https://api.github.com';
@@ -129,10 +130,23 @@ function couponUpdateInput(p) {
   return { ok: true, args: { code, patch } };
 }
 
+// sow-271: a site toggle names a KEY from the shared SITE_TOGGLES registry and a boolean. The key is validated
+// against the registry HERE as well as in the core, so an unknown key is a clean 400 rather than a 500 out of the
+// edit function. `enabled` must be a real boolean on the wire: accepting "false" would set the toggle ON.
+function siteToggleInput(p) {
+  const key = typeof p?.key === 'string' ? p.key.trim().toLowerCase() : '';
+  if (!key || !SITE_TOGGLES[key]) {
+    return { ok: false, status: 400, body: { error: 'bad_request', message: `unknown site setting (known: ${Object.keys(SITE_TOGGLES).join(', ')})` } };
+  }
+  if (typeof p?.enabled !== 'boolean') return { ok: false, status: 400, body: { error: 'bad_request', message: 'enabled must be true or false' } };
+  return { ok: true, args: { key, enabled: p.enabled } };
+}
+
 const CONFIG_ACTIONS = new Set([
   'quote-add', 'quote-remove', 'quote-toggle',
   'news-source-add', 'news-source-remove', 'news-source-toggle',
   'coupon-add', 'coupon-update',
+  'site-setting-set',
 ]);
 const CONFIG_OP = {
   'quote-add': { path: 'house/quotes.yml', rank: ROLE_RANK.admin, fn: addQuote, input: quoteInput, slug: (a) => idSlug(a.text) },
@@ -145,6 +159,11 @@ const CONFIG_OP = {
   // is deactivated (active:false), never deleted, so redemption history + the git audit stay intact (no -remove).
   'coupon-add': { path: 'house/coupons.yml', rank: ROLE_RANK.admin, fn: addCouponEdit, input: couponAddInput, slug: (a) => idSlug(a.code) },
   'coupon-update': { path: 'house/coupons.yml', rank: ROLE_RANK.admin, fn: updateCouponEdit, input: couponUpdateInput, slug: (a) => idSlug(a.code) },
+  // sow-271: site-wide presentation toggles. SUPERADMIN, unlike every other row in this table, and pinned to
+  // the two superadmins in CODEOWNERS so the gate rejects anyone else's PR even if this rank were wrong. It
+  // lives in the WORKER table (not extension-relay only, the way content-channels does) specifically so the
+  // WEBSITE admin page can flip it, which is the direction sow-271 is moving the site.
+  'site-setting-set': { path: 'house/site-settings.yml', rank: ROLE_RANK.superadmin, fn: setSiteToggle, input: siteToggleInput, slug: (a) => idSlug(a.key) },
 };
 // The minimum role rank an action requires at the endpoint (the gate is the independent backstop).
 const requiredRank = (action) =>
@@ -227,9 +246,11 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
   const isConfig = CONFIG_ACTIONS.has(action);
   if (!isContent && !isGov && !isConfig) return { status: 400, body: { error: 'bad_request', message: 'unsupported admin action' } };
 
-  // Per-action tier: content moderation is moderator+ (the endpoint floor), member status + config are admin+, role
-  // assignment is superadmin+. Reject an under-privileged caller BEFORE any read/write. The SOW-005 gate re-checks
-  // the branch id's role vs the touched Tier, so this is the endpoint half of the two-authority model.
+  // Per-action tier: content moderation is moderator+ (the endpoint floor), member status is admin+, config is
+  // admin+ EXCEPT the sow-271 site toggles which are superadmin+, and role assignment is superadmin+. The rank
+  // comes from the per-action table rather than the category, so a row can be stricter than its neighbours.
+  // Reject an under-privileged caller BEFORE any read/write. The SOW-005 gate re-checks the branch id's role vs
+  // the touched Tier, so this is the endpoint half of the two-authority model.
   if ((ROLE_RANK[staff.role] ?? 0) < requiredRank(action)) {
     return { status: 403, body: { error: 'forbidden', message: 'a higher role is required for this action' } };
   }
@@ -351,6 +372,30 @@ export async function membershipAdminQuotePool(request, env, deps = {}) {
   if (!load.ok) return { status: load.status, body: load.body };
   const quotes = Array.isArray(load.parsed?.quotes) ? load.parsed.quotes : [];
   return { status: 200, body: { ok: true, quotes } };
+}
+
+// sow-271: the site-settings pool READ. Gated the same way as the other config reads (a GET carries no CSRF and
+// is read-only); the DATA is public anyway, since the same values are baked into every built page. Returns each
+// toggle resolved through readAllToggles -- the same function the build loader uses -- so the manager and the
+// live site can never disagree about what a missing key means.
+export async function membershipAdminSiteSettings(request, env, deps = {}) {
+  const {
+    fetchImpl = globalThis.fetch, authorize = authorizeAdmin, allowCookie = false,
+    upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network',
+  } = deps;
+  const admin = await authorize(request, env, { ...deps, allowCookie });
+  if (!admin.ok) return { status: admin.status, body: admin.body };
+  let instToken;
+  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
+  const load = await loadHouseYaml(fetchImpl, instToken, upstream, 'house/site-settings.yml');
+  if (!load.ok) return { status: load.status, body: load.body };
+  let settings;
+  // A corrupt stored value throws out of readAllToggles. Report it as a 500 with the reason rather than letting
+  // it surface as an opaque failure: the manager showing a wrong switch position is the bad outcome here.
+  try { settings = readAllToggles(load.parsed || {}); }
+  catch (err) { return { status: 500, body: { error: 'bad_config', message: `house/site-settings.yml is invalid: ${err.message}` } }; }
+  const toggles = Object.entries(SITE_TOGGLES).map(([key, spec]) => ({ key, label: spec.label, description: spec.description }));
+  return { status: 200, body: { ok: true, settings, toggles } };
 }
 
 // sow-161 increment 4: the news-source-manager pool READ (admin-gated). The FULL pool from house/news-sources.yml

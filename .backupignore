@@ -1,0 +1,13 @@
+# Regenerable build output and tool scratch. Everything a backup exists for
+# (.data, .product, .git, uncommitted work, .env) is deliberately NOT listed here.
+#
+# dist            146M, rebuilt by `npm run build`
+# .astro          Astro's content cache, and a known source of phantom-entry build failures
+# .wrangler       wrangler's local state cache
+# .playwright-mcp browser captures. Regenerable, and it is the directory that held plaintext
+#                 GitHub tokens on 2026-08-25, so it should not be copied to another machine
+#                 even inside an encrypted archive.
+dist
+.astro
+.wrangler
+.playwright-mcp

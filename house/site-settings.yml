@@ -1,0 +1,15 @@
+# sow-271: site-wide presentation toggles, git-native and portable (a fork carries its own). SUPERADMIN-owned:
+# CODEOWNERS pins this file to the two superadmins, so the tier is enforced by the SOW-005 gate and not only by
+# the admin UI that offers the switch. The Astro build reads it through src/lib/site-settings.ts and bakes the
+# result into the static HTML, so a flip takes effect on the next Pages deploy (about three minutes) with no
+# client-side fetch, no flash, and the same answer for a reader with JavaScript off.
+#
+# Each entry is a plain boolean. true = the surface is shown, false = it is hidden. Keys are declared once in
+# membership/site-settings-edits.mjs (SITE_TOGGLES); an unknown key here fails the build rather than being
+# silently ignored, because a typo'd toggle that reads as "off" is indistinguishable from one that works.
+settings:
+  # The Chrome extension ADVERTISING surfaces only: the header nav item, the homepage Add-to-Chrome banner, the
+  # sign-in modal footnote, and the archived v1 homepage button. This does NOT hide the "Extension required"
+  # explainers that appear after a member clicks a control the extension implements, and it does not take the
+  # /extension/ install page down. Disabled 2026-08-23 at the owner's request (temporary).
+  extension_cta: false

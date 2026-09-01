@@ -27,6 +27,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           <button type="button" role="tab" data-tab="quotes" data-min="admin" aria-selected="false" hidden>Splash quotes</button>
           <button type="button" role="tab" data-tab="news-sources" data-min="admin" aria-selected="false" hidden>News sources</button>
           <button type="button" role="tab" data-tab="coupons" data-min="admin" aria-selected="false" hidden>Coupons</button>
+          <button type="button" role="tab" data-tab="site-settings" data-min="superadmin" aria-selected="false" hidden>Site settings</button>
         </nav>
 
         <div class="adm-card" data-panel="admin">
@@ -46,6 +47,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div class="adm-card" data-panel="coupons" hidden>
           <h2 class="h2">Coupons</h2>
           <gbti-coupon-manager></gbti-coupon-manager>
+        </div>
+        {/* sow-271: SUPERADMIN, one tier above the config managers above it. The tab carries data-min="superadmin"
+            and the module import below is gated the same way, so an admin sees neither the tab nor an upgraded
+            element. The endpoint rank check and the CODEOWNERS pin are the authorities; this is the UI half. */}
+        <div class="adm-card" data-panel="site-settings" hidden>
+          <h2 class="h2">Site settings</h2>
+          <gbti-site-settings-manager></gbti-site-settings-manager>
         </div>
       </div>
     </div>
@@ -86,6 +94,11 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           import('../../client-ui/src/elements/gbti-news-source-manager.mjs'),
           import('../../client-ui/src/elements/gbti-coupon-manager.mjs'),
         ]);
+      }
+      // sow-271: the site toggles are superadmin, so their module is imported one tier higher. An admin never
+      // imports it, so the tag stays inert and the card stays hidden even if the tab were somehow revealed.
+      if (rank >= RANK.superadmin) {
+        await import('../../client-ui/src/elements/gbti-site-settings-manager.mjs');
       }
       setupTabs(rank);
     }

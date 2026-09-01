@@ -7,7 +7,13 @@
 // banner links to the live Chrome Web Store listing. Presentation only. Light-first, [data-theme="dark"]
 // overrides for dark (the header script always stamps an explicit data-theme, so no media query is needed).
 import { EXTENSION } from '../../lib/extension';
+// sow-271: this banner is pure extension ADVERTISING, so the superadmin site setting governs it. The gate lives
+// HERE rather than at the mount in index.astro so any future mount point inherits it automatically -- the failure
+// this protects against is the next promo placement being added without anyone remembering the switch exists.
+import { extensionCtaEnabled } from '../../lib/site-settings';
+const show = extensionCtaEnabled();
 ---
+{show && (
 <a
   class="xbn"
   href={EXTENSION.webStoreUrl}
@@ -32,6 +38,7 @@ import { EXTENSION } from '../../lib/extension';
     Add to Chrome
   </span>
 </a>
+)}
 
 <style>
   /* Light-mode default: a clean white promo card that sits with the other rail/feed cards. */

@@ -10,12 +10,18 @@
 // resolves (swapped in applyHeaderIdentity, mirroring the account-menu swap). Both navs ship in the static
 // HTML to everyone (labels + public hrefs only, nothing gated), so a signed-in member sees a brief flash.
 import { FEED_NAV, SIGNED_IN_NAV } from '../lib/site-nav';
+import { extensionCtaEnabled } from '../lib/site-settings';
 const feedsMenu = FEED_NAV;
 // The signed-out standalone pages (kept out of the signed-in nav per the owner: only the five feed items there).
 // sow-201 (owner decision): Revenue Model comes OUT of the header nav and stays in the footer (Footer.astro).
-const signedOutExtra = [
-  { label: 'Get Extension', href: '/extension/' },
-];
+// sow-271: "Get Extension" is extension ADVERTISING, so it is governed by the superadmin site setting. With the
+// setting off this array is empty and the map below renders nothing -- and because sow-201 already moved Revenue
+// Model to the footer, the signed-out nav is then the Feeds dropdown ALONE. That is intended, not a bug; if the
+// slot should carry something else, add it here.
+const extensionCtaShown = extensionCtaEnabled();
+const signedOutExtra = extensionCtaShown
+  ? [{ label: 'Get Extension', href: '/extension/' }]
+  : [];
 ---
 <header class="site-head" id="top">
   <div class="wrap head-inner">
@@ -63,8 +69,11 @@ const signedOutExtra = [
         <div class="head-menu" data-head-menu role="menu" hidden>
           <a class="hm-item" role="menuitem" data-head-me-profile href="/members/">My profile</a>
           <div class="hm-sep" role="separator"></div>
-          {/* SOW: shown only in the hint-only state (signed up, extension not installed yet) -> nudge the download. */}
-          <a class="hm-item hm-download" role="menuitem" href="/extension/" hidden>Get the extension to continue &rarr;</a>
+          {/* SOW: shown only in the hint-only state (signed up, extension not installed yet) -> nudge the download.
+              sow-271: this is a download NUDGE, so it is extension advertising and the site setting governs it. It
+              also frames the extension as needed "to continue", which is the copy class sow-271 exists to retire.
+              setMenuMode already guards with `if (dl)`, so the element being absent is a supported state. */}
+          {extensionCtaShown && <a class="hm-item hm-download" role="menuitem" href="/extension/" hidden>Get the extension to continue &rarr;</a>}
           {/* sow-158: the signed-in member menu is now SITE-native (no extension relay). Every item is a site link;
               the WorkBench honors #tab= deep-links (Phase 3a/3b). Shown in the 'member' menu mode (a resolved cookie
               OR extension signal). The extension keeps its OWN avatar menu for in-place editing; the public site no

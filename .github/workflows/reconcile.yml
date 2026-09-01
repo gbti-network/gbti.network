@@ -68,7 +68,7 @@ jobs:
           # Day-87 trial reminder: email (Resend) is the PRIMARY channel, the Discord DM is secondary.
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           # Non-secret sender address (must be on the Resend-verified gbti.network domain). Change here if desired.
-          RESEND_FROM: "GBTI Network <noreply@gbti.network>"
+          RESEND_FROM: "GBTI <noreply@gbti.network>"
           # SOW-016: mirror the effective overrides (ban > staff > grandfather) into the Worker's SIGNUP_KV
           # so POST /membership/decrypt + GET /membership/status read a fresh blob. Without these three,
           # scripts/lib/kv-mirror.mjs no-ops silently and the Worker fails closed once the mirror ages past

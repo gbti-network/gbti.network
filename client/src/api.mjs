@@ -72,8 +72,7 @@ import {
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
   getNewsEngagementSettings, setNewsEngagementSettings, getContentEngagementSettings, setContentEngagementSettings, getSyndicationSettings, setSyndicationSettings,
-  getCouponPool, addCoupon, updateCoupon,
-} from './admin-ops.mjs';
+  getCouponPool, addCoupon, updateCoupon, getSiteSettings } from './admin-ops.mjs';
 
 export { CLIENT_VERSION } from './operations.mjs';
 
@@ -203,6 +202,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/content-channel-pool') return run(() => getContentChannelPool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/moderation-flag-pool') return run(() => getModerationFlagPool(ctx)); // SOW-087
   if (method === 'GET' && pathname === '/api/syndication-template-pool') return run(() => getSyndicationTemplatePool(ctx)); // SOW-087
+  if (method === 'GET' && pathname === '/api/site-settings') return run(() => getSiteSettings(ctx)); // sow-271: site-wide presentation toggles
   if (method === 'GET' && pathname === '/api/news-engagement') return run(() => getNewsEngagementSettings(ctx)); // SOW-111
   if (method === 'GET' && pathname === '/api/content-engagement') return run(() => getContentEngagementSettings(ctx)); // SOW-126
   if (method === 'GET' && pathname === '/api/syndication-settings') return run(() => getSyndicationSettings(ctx)); // SOW-088

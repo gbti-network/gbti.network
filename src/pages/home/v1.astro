@@ -10,6 +10,7 @@ import { TRIAL_DAYS_SITE, FIRST_TOUCH_PCT, LAST_TOUCH_PCT, COLLAB_POOL_PCT, INVI
 import TierTable from '../../components/TierTable.astro';
 import { extensionInstallUrl } from '../../lib/extension';
 import ampPublishOnce from '../../assets/amp-publish-once.webp';
+import { extensionCtaEnabled } from '../../lib/site-settings';
 
 // Real content drives the dynamic sections (hero members, activity, what-members-ship).
 const posts = (await getCollection('post')).filter(isPublic).sort(byNewest);
@@ -72,6 +73,7 @@ if (stamps.length) {
   heat = counts.map((n) => (n === 0 ? 0 : Math.min(4, n)));
 }
 
+const extensionCtaShown = extensionCtaEnabled();
 ---
 <!-- The v1 homepage, archived unindexed at /home/v1/ when the feed homepage replaced it (SOW-136). -->
 <BaseLayout noindex={true} title="Publish your work. Build with peers. Share the revenue." description={`A creator network powered by Git. Publish articles, products, and prompts, build with peers, and earn from the members your work brings in: ${FIRST_TOUCH_PCT} for the first touch, ${LAST_TOUCH_PCT} for the last touch, plus a ${INVITE_PCT} invite lane. Start a ${TRIAL_DAYS_SITE}-day limited-access trial, no card required.`}>
@@ -228,7 +230,10 @@ if (stamps.length) {
   </div>
 </section>
 
-<!-- ============ NEW TAB EXTENSION ============ -->
+<!-- sow-271: the whole NEW TAB EXTENSION band is extension ADVERTISING (heading, feature list, CTA and
+     browser mock together), so the superadmin site setting governs the section rather than just its
+     button. Gating the button alone would leave a full-width promo with no way to act on it. -->
+{extensionCtaShown && (
 <section class="band" id="newtab">
   <div class="wrap">
     <div class="newtab-grid">
@@ -291,6 +296,7 @@ if (stamps.length) {
     </div>
   </div>
 </section>
+)}
 
 <!-- ============ WHAT MEMBERS SHIP ============ -->
 <section class="band tint" id="works">

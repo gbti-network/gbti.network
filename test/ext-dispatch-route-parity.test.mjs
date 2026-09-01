@@ -86,6 +86,10 @@ const PRE_AUTH = new Set([
   '/api/taxonomy', '/api/news-source-pool', '/api/quote-pool',
   '/api/content-channel-pool', '/api/moderation-flag-pool', '/api/syndication-template-pool',
   '/api/coupon-pool', '/api/news-engagement', '/api/content-engagement', '/api/syndication-settings',
+  // sow-271: the site-wide presentation toggles READ is public by construction -- the same resolved values are
+  // baked into every built page, so the read discloses nothing a visitor cannot already see in the HTML. The
+  // WRITE ('site-setting-set') is superadmin and stays below the gate, on the /api/admin route.
+  '/api/site-settings',
 ]);
 
 test('pre-auth positioning: the routes above the ext-dispatch identity gate are EXACTLY the declared pre-auth set', () => {

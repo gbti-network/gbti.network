@@ -5,6 +5,8 @@
 // falls back to the control's own href (the /membership/ benefits + registration page). Rendered once per
 // page via BaseLayout.
 import { extensionInstallUrl, extensionIsListed } from '../lib/extension';
+import { extensionCtaEnabled } from '../lib/site-settings';
+const extensionCtaShown = extensionCtaEnabled();
 const benefitsUrl = '/membership/';
 ---
 <dialog id="gbti-signin-dialog" data-signin-dialog class="signin-dialog" data-install={extensionInstallUrl} data-listed={String(extensionIsListed)} aria-labelledby="signin-title">
@@ -26,7 +28,10 @@ const benefitsUrl = '/membership/';
         <a class="btn btn-primary" href="/login/" data-web-signin>Sign in with GitHub</a>
         <a class="btn btn-ghost" href={benefitsUrl}>See membership options</a>
       </div>
-      <p class="body-sm muted mt12" style="font-size:12.5px"><a href={extensionInstallUrl} data-install-link rel={extensionIsListed ? null : 'nofollow'}>Get the extension</a> to edit and publish your work in place.</p>
+      {/* sow-271: an extension advert, governed by the superadmin site setting. The Sign in + See membership
+          options actions above are the real paths and are untouched, so switching this off removes a suggestion
+          rather than a capability. */}
+      {extensionCtaShown && <p class="body-sm muted mt12" style="font-size:12.5px"><a href={extensionInstallUrl} data-install-link rel={extensionIsListed ? null : 'nofollow'}>Get the extension</a> to edit and publish your work in place.</p>}
     </div>
 
     {/* Extension installed. sow-158 Phase 2 residual fix: web sign-in stays the PRIMARY path even here (it sets the
