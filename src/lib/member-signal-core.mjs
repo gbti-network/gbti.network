@@ -41,3 +41,27 @@ export function selectIdentity({ cookieResolved, cookieSignal, extSignal }) {
   if (cookieResolved && cookieSignal) return cookieSignal;
   return extSignal ?? null;
 }
+
+/**
+ * ACTIVE MEMBER: paid, or on the 90-day trial. sow-191.
+ *
+ * Extracted so the definition exists ONCE and is node-testable. It was previously inline in
+ * member-signal.ts's DOM code (the `is-gbti-member-active` class), where `node --test` cannot reach it, and
+ * the Shop Talk calendar CTA needed the same rule. A second hand-written copy of a membership predicate is
+ * how two surfaces quietly start disagreeing about who is a member.
+ *
+ * PRESENTATION ONLY, and this is not a hedge. The signal it reads is attacker-settable page state, so this
+ * decides what a button LOOKS like, never what anyone may access. The Shop Talk .ics is a public file on a
+ * CDN and is readable regardless of what this returns.
+ *
+ * NOTE, deliberately not "fixed" here: `workbench-client-core.mjs:326` MEMBER_READ_TIER also accepts the
+ * string 'trial' alongside 'trialing', and this does not. That divergence is real and predates sow-191;
+ * widening it here would change `is-gbti-member-active` across every surface that uses it, which is well
+ * outside a calendar button. Recorded in sow-191 instead.
+ */
+export const ACTIVE_MEMBERSHIPS = Object.freeze(['paid', 'trialing']);
+
+/** True when the signal describes an active member. Fail-closed: null, undefined and any unknown shape are not. */
+export function isActiveMember(signal) {
+  return !!signal && ACTIVE_MEMBERSHIPS.includes(signal.membership);
+}

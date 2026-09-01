@@ -9,7 +9,7 @@
 // and CODEOWNERS. The inert <gbti-edit-panel> still self-activates only for the true owner via the
 // worker-backed client; this signal only governs the chrome around it.
 
-import { memberSignalFromStatus, selectIdentity } from './member-signal-core.mjs'; // sow-158 Phase 2: pure core
+import { memberSignalFromStatus, selectIdentity, isActiveMember } from './member-signal-core.mjs'; // sow-158 Phase 2: pure core
 
 export interface MemberSignal {
   authenticated: true;
@@ -87,7 +87,8 @@ export function applyMemberSignalClasses(s: MemberSignal | null): void {
   el.classList.toggle('is-gbti-member', !!s);
   el.classList.toggle('is-gbti-paid', s?.membership === 'paid');
   // SOW-050: an ACTIVE member is paid OR on trial (both are "members" for whom the Join CTA is irrelevant).
-  el.classList.toggle('is-gbti-member-active', s?.membership === 'paid' || s?.membership === 'trialing');
+  // sow-191: the ONE definition now lives in member-signal-core.mjs, where node --test can reach it.
+  el.classList.toggle('is-gbti-member-active', isActiveMember(s));
   // sow-185: the resolved paid TIER, for a creator-only gate (the composer bar, Member-vs-Creator UI). A
   // superadmin / staff already resolves to 'creator' server-side, so this hook includes them. Presentation only.
   el.classList.toggle('is-gbti-creator', s?.paidTier === 'creator');

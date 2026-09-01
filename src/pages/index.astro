@@ -428,15 +428,24 @@ const SHOPTALK = {
           cta.removeAttribute('rel');
         }
       }
+      // sow-191: ACTIVE MEMBER (paid or trialing), not merely signed in. Owner decision 2026-08-31: the
+      // Saturday call's calendar is a membership perk, so the free signed-in tier goes to the join page like a
+      // visitor. This must stay identical to ACTIVE_MEMBERSHIPS in src/lib/member-signal-core.mjs and to the
+      // is-gbti-member-active class; a hand-written second copy is how two surfaces start disagreeing about who
+      // is a member. The duplication is unavoidable here because an is:inline script cannot import, so a test
+      // asserts this source keeps the same rule.
+      function activeMember(sig) {
+        return !!sig && (sig.membership === 'paid' || sig.membership === 'trialing');
+      }
       function signalPresent() {
         try {
           var raw = document.documentElement.dataset.gbtiMember;
-          return !!raw && JSON.parse(raw).authenticated === true;
+          return !!raw && activeMember(JSON.parse(raw));
         } catch (e) { return false; }
       }
       applyCta(signalPresent());
       document.addEventListener('gbti:identity', function (e) {
-        applyCta(!!(e.detail && e.detail.authenticated === true));
+        applyCta(activeMember(e.detail));
       });
     }
   })();
