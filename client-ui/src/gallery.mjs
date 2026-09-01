@@ -75,3 +75,36 @@ export function moveGalleryRow(rows, from, to) {
   out.splice(dest, 0, item);
   return out;
 }
+
+/**
+ * sow-268 Phase 3: pick an image filename that does not collide with one already in play this editor session.
+ *
+ * stageImage (client/src/operations-admin.mjs) uses the uploaded filename VERBATIM as `./images/<filename>`: it
+ * VALIDATES the name (rejects path separators and unsupported extensions) but never renames or de-duplicates.
+ * So two picked files both named "image.png" both stage to `./images/image.png`, and a multi-file gallery add
+ * would create two rows pointing at ONE picture while the second stage silently overwrites the first's bytes.
+ * The single-file cover uploader never hit this; a multi-file gallery add will on any repeated name.
+ *
+ * This inserts "-1", "-2", ... before the extension until the name is free. `taken` holds the bare filenames
+ * already used this session: the current rows' basenames plus every name staged earlier in the same batch. The
+ * hyphen suffix (not a space) keeps the resulting `./images/` URL clean, and it survives stageImage's validation
+ * (no path separator, extension preserved).
+ *
+ * @param {string} name  the desired filename, e.g. "shot.png"
+ * @param {Iterable<string>} taken  filenames already used this session
+ * @returns {string} a filename not present in `taken`
+ */
+export function uniqueImageName(name, taken) {
+  const used = taken instanceof Set ? taken : new Set(taken || []);
+  const raw = String(name || '').trim() || 'image';
+  if (!used.has(raw)) return raw;
+  // Split on the LAST dot so a multi-dot name keeps its real extension; a leading-dot name (".keep") has none.
+  const dot = raw.lastIndexOf('.');
+  const base = dot > 0 ? raw.slice(0, dot) : raw;
+  const ext = dot > 0 ? raw.slice(dot) : '';
+  for (let i = 1; i < 10000; i += 1) {
+    const candidate = `${base}-${i}${ext}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  return `${base}-${Date.now()}${ext}`;
+}

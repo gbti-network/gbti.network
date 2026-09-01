@@ -11,7 +11,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { galleryRowsFromValue, galleryValueFromRows } from '../client-ui/src/gallery.mjs';
+import { galleryRowsFromValue, galleryValueFromRows, uniqueImageName } from '../client-ui/src/gallery.mjs';
 import { gatherInput } from '../client-ui/src/form.mjs';
 
 // Ryker's actual committed gallery (bare path strings), the shape all ten existing products use.
@@ -71,4 +71,45 @@ test('the interception shape (hidden json input) round-trips through the real ga
   const hiddenValue = JSON.stringify(galleryValueFromRows(galleryRowsFromValue(RYKER)));
   const input = gatherInput(fields, () => hiddenValue);
   assert.deepEqual(input.gallery, RYKER);
+});
+
+// sow-268 Phase 3: uploading N screenshots at once must not create two rows pointing at one picture. stageImage
+// uses the filename verbatim (./images/<name>), so a repeated name has to be uniquified BEFORE staging. Mutation
+// check: drop the `-i` loop (always return `raw`) and the collision cases go red; split on the FIRST dot instead
+// of the last and the multi-dot extension case goes red.
+test('uniqueImageName: a free name is returned unchanged', () => {
+  assert.equal(uniqueImageName('shot.png', []), 'shot.png');
+  assert.equal(uniqueImageName('shot.png', ['other.png']), 'shot.png');
+});
+
+test('uniqueImageName: one collision gets "-1" before the extension', () => {
+  assert.equal(uniqueImageName('image.png', ['image.png']), 'image-1.png');
+});
+
+test('uniqueImageName: several collisions skip to the first free suffix', () => {
+  assert.equal(uniqueImageName('image.png', ['image.png', 'image-1.png', 'image-2.png']), 'image-3.png');
+});
+
+test('uniqueImageName: accepts a Set as well as an array, and grows a batch correctly', () => {
+  const taken = new Set(['a.webp']);
+  const first = uniqueImageName('a.webp', taken); taken.add(first);
+  const second = uniqueImageName('a.webp', taken); taken.add(second);
+  assert.deepEqual([first, second], ['a-1.webp', 'a-2.webp']);
+});
+
+test('uniqueImageName: a multi-dot name keeps its real (last) extension', () => {
+  assert.equal(uniqueImageName('my.photo.final.jpg', ['my.photo.final.jpg']), 'my.photo.final-1.jpg');
+});
+
+test('uniqueImageName: an extensionless name suffixes at the end', () => {
+  assert.equal(uniqueImageName('screenshot', ['screenshot']), 'screenshot-1');
+});
+
+test('uniqueImageName: a leading-dot name is treated as having no extension', () => {
+  assert.equal(uniqueImageName('.keep', ['.keep']), '.keep-1');
+});
+
+test('uniqueImageName: a blank name falls back to "image"', () => {
+  assert.equal(uniqueImageName('', []), 'image');
+  assert.equal(uniqueImageName('   ', []), 'image');
 });

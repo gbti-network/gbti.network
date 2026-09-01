@@ -2941,6 +2941,19 @@ ${String(body ?? "")}`;
     out.splice(dest, 0, item);
     return out;
   }
+  function uniqueImageName(name, taken) {
+    const used = taken instanceof Set ? taken : new Set(taken || []);
+    const raw = String(name || "").trim() || "image";
+    if (!used.has(raw)) return raw;
+    const dot = raw.lastIndexOf(".");
+    const base = dot > 0 ? raw.slice(0, dot) : raw;
+    const ext = dot > 0 ? raw.slice(dot) : "";
+    for (let i = 1; i < 1e4; i += 1) {
+      const candidate = `${base}-${i}${ext}`;
+      if (!used.has(candidate)) return candidate;
+    }
+    return `${base}-${Date.now()}${ext}`;
+  }
 
   // client-ui/src/elements/gbti-content-editor.mjs
   var _svg = (p) => `<svg viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -3429,7 +3442,7 @@ ${String(body ?? "")}`;
         .dotpill .d { width:7px; height:7px; border-radius:50%; background:var(--s-green); }
         .cover-field .ebtn { font-size:13px; padding:7px 12px; }
         /* SOW-062 P6: reframable cover preview (single 4:3-card / Hero frame + striped placeholder) */
-        .cover { display:flex; flex-direction:column; gap:10px; margin:6px 0 4px; }
+        .cover { display:flex; flex-direction:column; gap:10px; margin:6px 0 4px; position:relative; }
         .framepick { display:inline-flex; gap:2px; padding:2px; background:var(--s-surface-2); border:1.5px solid var(--s-line-2); border-radius:7px; align-self:flex-start; }
         .framepick button { font:inherit; font-size:11.5px; font-weight:600; padding:4px 10px; border:0; background:transparent; color:var(--s-fg-mute); border-radius:5px; cursor:pointer; }
         .framepick button.on { background:var(--s-surface); color:var(--s-fg); box-shadow:0 1px 2px rgba(0,0,0,.1); }
@@ -3473,6 +3486,19 @@ ${String(body ?? "")}`;
         .lr-vis button { font:inherit; font-size:10.5px; font-weight:600; padding:5px 9px; border:0; background:transparent; color:var(--s-fg-soft); border-radius:6px; cursor:pointer; }
         .lr-vis button.on { background:var(--s-fg); color:var(--s-canvas); }
         .addrow { font-size:13px; padding:8px 12px; align-self:flex-start; }
+        /* sow-268 P3 + sow-165: the gallery action row (Upload / Reuse / Add by path) + the reuse picker popup. */
+        .galactions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; position:relative; }
+        .galactions .ebtn { font-size:13px; padding:8px 12px; }
+        .up-st { font-size:12px; color:var(--s-fg-mute); }
+        /* sow-165: the reuse grid, anchored under the button that opened it (the .cover control or .galactions). */
+        .media-pop { position:absolute; z-index:40; top:calc(100% + 6px); left:0; width:min(420px,92vw); max-height:320px; overflow:auto; padding:10px; border:1.5px solid var(--s-line-2); border-radius:10px; background:var(--s-surface); box-shadow:0 12px 30px -12px rgba(0,0,0,.35); }
+        .media-load { padding:14px 6px; font-size:12.5px; color:var(--s-fg-mute); text-align:center; }
+        .media-q { width:100%; box-sizing:border-box; padding:8px 10px; margin-bottom:8px; font:inherit; font-size:13px; border:1.5px solid var(--s-line-2); border-radius:7px; background:var(--s-surface-2); color:var(--s-fg); }
+        .media-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(88px,1fr)); gap:8px; }
+        .media-cell { display:flex; flex-direction:column; gap:4px; padding:6px; border:1.5px solid var(--s-line-2); border-radius:8px; background:var(--s-surface-2); cursor:pointer; font:inherit; text-align:left; }
+        .media-cell:hover { border-color:var(--s-green); }
+        .media-cell img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:5px; background:var(--s-surface-3); display:block; }
+        .media-cell span { font-size:10.5px; color:var(--s-fg-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         /* sow-268: gallery rows. Same visual language as .linkrow, plus a thumbnail and up/down reorder. */
         .galrows { display:flex; flex-direction:column; gap:9px; margin-bottom:8px; }
         .galrow { display:flex; align-items:flex-start; gap:8px; padding:10px; border:1.5px solid var(--s-line-2); border-radius:8px; background:var(--s-surface-2); }
@@ -3673,6 +3699,7 @@ ${String(body ?? "")}`;
       this.$$("[data-cover]").forEach((c) => {
         const file = c.querySelector("[data-cover-file]");
         c.querySelector("[data-cover-pick]")?.addEventListener("click", () => file?.click());
+        c.querySelector("[data-cover-reuse]")?.addEventListener("click", (e) => this._openMediaPicker(e.currentTarget, { cover: c }));
         file?.addEventListener("change", (e) => this.doCoverImage(e.target.files?.[0], c));
         c.querySelector("[data-cover-clear]")?.addEventListener("click", () => this.clearCover(c));
         c.querySelectorAll("[data-frame]").forEach((fb) => fb.addEventListener("click", () => {
@@ -3799,7 +3826,7 @@ ${String(body ?? "")}`;
           ${picker}
           <div class="coverframe${framed ? "" : " card4"}" data-coverframe${frameStyle}>${this._coverFrameInner(url)}</div>
           <input type="file" accept="image/*" hidden data-cover-file />
-          <div class="coverbtns"><button type="button" class="ebtn" data-cover-pick>${has ? "Replace image" : "Choose image"}</button><button type="button" class="ebtn" data-cover-clear${has ? "" : " hidden"}>Remove</button></div>
+          <div class="coverbtns"><button type="button" class="ebtn" data-cover-pick>${has ? "Replace image" : "Choose image"}</button><button type="button" class="ebtn" data-cover-reuse>Reuse</button><button type="button" class="ebtn" data-cover-clear${has ? "" : " hidden"}>Remove</button><span class="up-st" data-cover-st></span></div>
           ${swatchesHtml ? `<div class="swatch-or">or pick a color</div>${swatchesHtml}` : ""}
           <input data-key="${f.key}" data-kind="image" type="hidden" value="${esc(v)}" />
         </div></div>`;
@@ -3930,7 +3957,13 @@ ${String(body ?? "")}`;
       const rowsHtml = rows.map((r, i) => this._galleryRowHtml(r, i)).join("");
       return `<label>Gallery <span class="hint">· screenshots on the product page</span></label>
       <div class="galrows" data-gallery>${rowsHtml}</div>
-      <button class="ebtn addrow" type="button" data-addshot>${PLUS} Add screenshot</button>
+      <div class="galactions">
+        <button class="ebtn" type="button" data-galupload>${IMG} Upload screenshots</button>
+        <button class="ebtn" type="button" data-galreuse>Reuse</button>
+        <button class="ebtn addrow" type="button" data-addshot>${PLUS} Add by path</button>
+        <span class="up-st" data-gal-st></span>
+      </div>
+      <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden data-galfile />
       <input data-key="${f.key}" data-kind="json" type="hidden" value="${esc(JSON.stringify(galleryValueFromRows(rows)))}" />`;
     }
     _galleryRowHtml(r = {}, i) {
@@ -4052,6 +4085,204 @@ ${String(body ?? "")}`;
           row.querySelector(".gr-src")?.focus();
         }
       });
+      const galFile = this.$("[data-galfile]");
+      this.$("[data-galupload]")?.addEventListener("click", () => galFile?.click());
+      galFile?.addEventListener("change", (e) => {
+        const files = e.target.files;
+        e.target.value = "";
+        this.doGalleryImages(files);
+      });
+      this.$("[data-galreuse]")?.addEventListener("click", (e) => this._openMediaPicker(e.currentTarget, { gallery: true }));
+    }
+    // sow-268 Phase 3: append one gallery row per uploaded file. Sequential (await each stage) so the website
+    // host's /membership/draft-image PUTs do not race and one failure does not abort the rest. Each file gets a
+    // SESSION-UNIQUE name (uniqueImageName) because stageImage uses the filename verbatim, so two files both named
+    // image.png would otherwise collide onto one ./images/image.png. The just-staged bytes preview from the local
+    // data URL keyed by the stored path (resolveCover reads _stagedSrc first; a jsDelivr URL 404s until merge).
+    async doGalleryImages(fileList) {
+      const files = Array.from(fileList || []);
+      if (!files.length) return;
+      const wrap = this.$("[data-gallery]");
+      if (!wrap) return;
+      const st = this.$("[data-gal-st]");
+      const taken = this._galleryTakenNames();
+      let added = 0;
+      let failed = 0;
+      for (const file of files) {
+        if (st) st.textContent = `Uploading ${added + failed + 1} of ${files.length}...`;
+        try {
+          const dataUrl = await fileToDataUrl(file);
+          const filename = uniqueImageName(file.name, taken);
+          taken.add(filename);
+          const res = await this.client.stageImage({ filename, dataBase64: dataUrl.split(",")[1] || "", itemPath: this.itemPath, item: this.itemToken });
+          (this._stagedSrc ||= {})[res.path] = dataUrl;
+          this._appendGalleryRow(wrap, res.path);
+          added += 1;
+        } catch (err) {
+          failed += 1;
+          const h = failHint(err);
+          if (st) st.textContent = h.upgrade ? `${h.text} Upgrade at gbti.network/membership.` : h.text;
+        }
+      }
+      this._serializeGallery();
+      if (st && !failed) st.textContent = added ? `Added ${added} screenshot${added === 1 ? "" : "s"}.` : "";
+    }
+    // The bare filenames already in play this session: every current row's basename plus (the caller adds) the
+    // names staged in this batch. uniqueImageName suffixes against this so an upload never overwrites a sibling.
+    _galleryTakenNames() {
+      const wrap = this.$("[data-gallery]");
+      const set = /* @__PURE__ */ new Set();
+      wrap?.querySelectorAll(".gr-src").forEach((inp) => {
+        const base = String(inp.value || "").split("/").pop();
+        if (base) set.add(base);
+      });
+      return set;
+    }
+    // Append a gallery row for a staged/reused path and serialize. Shared by upload + reuse so the row shape and
+    // the thumbnail-from-_stagedSrc path stay in one place.
+    _appendGalleryRow(wrap, src) {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = this._galleryRowHtml({ src }, wrap.children.length);
+      const row = tmp.firstElementChild;
+      if (row) wrap.appendChild(row);
+    }
+    // --- sow-165: reuse an existing image (the member's own published items) into a FIELD or a gallery row ---
+    // Ported from gbti-doc-editor's picker; the only difference is the destination (a frontmatter field or a new
+    // gallery row rather than a body block). The media index is a public build artifact (no token, CORS *), so a
+    // failure here is a missing picker, never a broken editor: every path fail-softs to an empty grid with a reason.
+    async _loadMediaIndex() {
+      if (this._mediaRows) return this._mediaRows;
+      const me = typeof this.author === "string" && this.author || authorFromItemPath(this.itemPath);
+      if (!me) {
+        this._mediaErr = "Reuse is available on your own items.";
+        return this._mediaRows = [];
+      }
+      try {
+        const res = await fetch(MEDIA_INDEX_URL, { cache: "no-cache" });
+        if (!res.ok) throw new Error(String(res.status));
+        this._mediaRows = mediaFor(await res.json(), me);
+        if (!this._mediaRows.length) this._mediaErr = "No images yet. Images appear here once an item using them is published.";
+      } catch {
+        this._mediaRows = [];
+        this._mediaErr = "Could not load your image library.";
+      }
+      return this._mediaRows;
+    }
+    // Open the reuse grid anchored under the button that invoked it. `dest` is { cover: <control> } for a
+    // frontmatter image field, or { gallery: true } for a new gallery row.
+    async _openMediaPicker(btn, dest) {
+      this._closeMediaPicker();
+      const anchor = btn?.closest?.(".cover") || btn?.closest?.(".galactions") || btn?.parentElement;
+      if (!anchor) return;
+      const pop = document.createElement("div");
+      pop.className = "media-pop";
+      pop.innerHTML = '<div class="media-load">Loading your images...</div>';
+      anchor.appendChild(pop);
+      this._mediaPop = pop;
+      const rows = await this._loadMediaIndex();
+      if (this._mediaPop !== pop) return;
+      const draw = (q2) => {
+        const shown = filterMedia(rows, q2);
+        const grid = pop.querySelector(".media-grid");
+        if (!grid) return;
+        grid.innerHTML = shown.length ? shown.map((r, i) => {
+          const plan = reusePlan(r, this.itemPath);
+          return `<button type="button" class="media-cell" data-mi="${i}" title="${esc(r.name)} (from ${esc(r.itemTitle || r.slug || "")})"><img src="${esc(plan?.sourceUrl || "")}" alt="" loading="lazy" /><span>${esc(r.name)}</span></button>`;
+        }).join("") : `<div class="media-load">${esc(rows.length ? "Nothing matches that." : this._mediaErr || "No images.")}</div>`;
+        grid.querySelectorAll("[data-mi]").forEach((cell) => {
+          cell.addEventListener("click", () => {
+            const rec = shown[Number(cell.dataset.mi)];
+            this._closeMediaPicker();
+            this._reuseImage(rec, dest);
+          });
+          cell.querySelector("img")?.addEventListener("error", (e) => {
+            e.target.style.display = "none";
+          });
+        });
+      };
+      pop.innerHTML = '<input class="media-q" type="search" placeholder="Search your images" aria-label="Search your images" /><div class="media-grid"></div>';
+      const q = pop.querySelector(".media-q");
+      q?.addEventListener("input", () => draw(q.value));
+      draw("");
+      q?.focus();
+      this._onMediaEsc = (e) => {
+        if (e.key === "Escape") this._closeMediaPicker();
+      };
+      document.addEventListener("keydown", this._onMediaEsc);
+    }
+    _closeMediaPicker() {
+      this._mediaPop?.remove();
+      this._mediaPop = null;
+      if (this._onMediaEsc) {
+        document.removeEventListener("keydown", this._onMediaEsc);
+        this._onMediaEsc = null;
+      }
+    }
+    // Selecting a row COPIES the file into the item being edited, through the same client.stageImage the upload
+    // path uses, so co-location and the publish flush stay in one place. The copy fetches the source bytes and
+    // re-stages them AS-IS (btoa of the raw arrayBuffer, no canvas round-trip), so a repeated reuse never degrades
+    // the image (sow-290 intake). An image already in THIS item needs no copy: re-staging a byte-identical file
+    // over itself would look like it worked while doing nothing on a name-deduplicating host.
+    async _reuseImage(record, dest) {
+      const plan = reusePlan(record, this.itemPath);
+      if (!plan) return;
+      const st = dest?.cover ? dest.cover.querySelector("[data-cover-st]") : this.$("[data-gal-st]");
+      let path = plan.ref;
+      if (!plan.alreadyHere) {
+        if (!this.client?.stageImage) {
+          if (st) st.textContent = "Reuse is not available in this client";
+          return;
+        }
+        if (st) st.textContent = "Copying...";
+        try {
+          const res = await fetch(plan.sourceUrl);
+          if (!res.ok) throw new Error(String(res.status));
+          const buf = new Uint8Array(await res.arrayBuffer());
+          let bin = "";
+          for (let i = 0; i < buf.length; i += 1) bin += String.fromCharCode(buf[i]);
+          const name = dest?.gallery ? uniqueImageName(plan.name, this._galleryTakenNames()) : plan.name;
+          const out = await this.client.stageImage({ filename: name, dataBase64: btoa(bin), itemPath: this.itemPath, item: this.itemToken });
+          path = out.path;
+        } catch {
+          if (st) st.textContent = "Could not copy that image";
+          return;
+        }
+      }
+      (this._stagedSrc ||= {})[path] = plan.sourceUrl;
+      if (dest?.gallery) {
+        const wrap = this.$("[data-gallery]");
+        if (wrap) {
+          this._appendGalleryRow(wrap, path);
+          this._serializeGallery();
+        }
+        if (st) st.textContent = "Added.";
+      } else if (dest?.cover) {
+        this._setCoverField(dest.cover, path, plan.sourceUrl);
+        if (st) st.textContent = "";
+      }
+    }
+    // Put a reused/staged image path into a frontmatter image control: the hidden field, the reframable preview,
+    // the Remove button + the "Replace image" label, and clear any mutually-exclusive banner swatch. Mirrors the
+    // tail of doCoverImage so reuse and upload leave the control in the same state.
+    _setCoverField(control, path, previewUrl) {
+      if (!control) return;
+      const cf = control.querySelector("[data-coverframe]");
+      if (cf) {
+        cf.innerHTML = '<img data-cimg alt="" />';
+        const img = cf.querySelector("[data-cimg]");
+        if (img) img.src = previewUrl || this.resolveCover(path);
+      }
+      control.querySelector("[data-cover-clear]")?.removeAttribute("hidden");
+      const pick = control.querySelector("[data-cover-pick]");
+      if (pick) pick.textContent = "Replace image";
+      const el = control.querySelector('[data-key][data-kind="image"]');
+      if (el) el.value = path;
+      const swatches = control.querySelector("[data-swatches]");
+      if (swatches) {
+        swatches.querySelectorAll("[data-preset]").forEach((b) => b.classList.remove("on"));
+        const presetInput = swatches.querySelector('[data-key="bannerPreset"]');
+        if (presetInput) presetInput.value = "";
+      }
     }
     _presetBool(key) {
       return !!this.preset?.input?.[key];
