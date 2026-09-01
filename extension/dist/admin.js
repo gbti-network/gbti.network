@@ -20920,8 +20920,15 @@ From the author:
     { key: "activity", href: "newtab.html#type=all", ico: "activity", nm: "Activity", sub: "The latest across the co-op" },
     // News is a curated feed open to the limited trial (not members-only), so it sits with Activity, not Browse.
     { key: "news", href: "newtab.html#type=news", ico: "news", nm: "News", sub: "Curated, limited trial" },
-    { group: "Member Activity" },
-    // No "All" item: Activity (bare newtab.html) IS the all-types river. These narrow to a single member-content type.
+    // sow-204 item 4a: NETWORK, the member-publications river (posts, products and prompts; no shares, no news).
+    // It is the one entry the extension was missing against the website's feed set, and it is what makes a rail
+    // item mean the same thing on both hosts. Its membership is NETWORK_KINDS in client-ui/src/feed-route.mjs,
+    // which must keep agreeing with matchesNarrow('network') in src/lib/home-feed.mjs.
+    { key: "network", href: "newtab.html#type=network", ico: "network", nm: "Network", sub: "Publications across the co-op" },
+    // sow-204 item 4a: the second "Member Activity" heading is GONE. The owner asked to combine the sidebar items
+    // under Feeds and to adopt the website's set exactly, and a rail split across two headings did neither: it
+    // presented the same seven destinations as two unrelated groups. One heading, the website's order.
+    // Activity IS the all-types river (bare newtab.html), so it stands in for the website's "All".
     { key: "articles", href: "newtab.html#type=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
     { key: "products", href: "newtab.html#type=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
     { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },

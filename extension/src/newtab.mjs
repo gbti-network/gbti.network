@@ -153,7 +153,7 @@ function renderFeed(filter = '') {
   // Content + Shares are projected by toCardItem; News (a different source) by newsToItem; both are card items.
   // The per-view source matrix (pure, node-tested): Activity ('all') = member content + Shares, NO news; News
   // ('news') = news BLENDED with member content + Shares; the single-type directories narrow to their type.
-  const { wantNews, wantShares, narrow } = feedSources(TYPE);
+  const { wantNews, wantShares, narrow, kinds } = feedSources(TYPE);
   // A single content-type view renders from its full directory once loaded (the capped river is the fallback
   // until the fetch lands, so the switch is instant and then fills in).
   const directory = narrow ? DIRECTORY[TYPE] : null;
@@ -161,7 +161,11 @@ function renderFeed(filter = '') {
   // SOW-046 G: strip openHref so a news card opens the in-extension expanded reader (card-open) instead of bouncing
   // to the source; the reader still offers an "Open source" link (it rebuilds the UTM link from item.link).
   if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n)); // SOW-060: news is a free-tier (signed-in) perk
-  if (narrow) rows = rows.filter((e) => e.type === TYPE);
+  // sow-204 item 4a: filter by `kinds` rather than by TYPE, because NETWORK admits THREE item types
+  // (posts, products, prompts) and the old single-type equality could not express it. A single-type view
+  // reports kinds:[itsOwnType], so this is the same behaviour for every pre-existing view; `all` and `news`
+  // report kinds:null and are not filtered at all.
+  if (kinds) rows = rows.filter((e) => kinds.includes(e.type));
   // SOW-046 E: the Following view drills into followed MEMBERS' content/shares AND followed NEWS CHANNELS' news
   // (a news item is kept when its source is in the member's followedChannels).
   if (VIEW === 'following') {

@@ -6394,8 +6394,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     { key: "activity", href: "newtab.html#type=all", ico: "activity", nm: "Activity", sub: "The latest across the co-op" },
     // News is a curated feed open to the limited trial (not members-only), so it sits with Activity, not Browse.
     { key: "news", href: "newtab.html#type=news", ico: "news", nm: "News", sub: "Curated, limited trial" },
-    { group: "Member Activity" },
-    // No "All" item: Activity (bare newtab.html) IS the all-types river. These narrow to a single member-content type.
+    // sow-204 item 4a: NETWORK, the member-publications river (posts, products and prompts; no shares, no news).
+    // It is the one entry the extension was missing against the website's feed set, and it is what makes a rail
+    // item mean the same thing on both hosts. Its membership is NETWORK_KINDS in client-ui/src/feed-route.mjs,
+    // which must keep agreeing with matchesNarrow('network') in src/lib/home-feed.mjs.
+    { key: "network", href: "newtab.html#type=network", ico: "network", nm: "Network", sub: "Publications across the co-op" },
+    // sow-204 item 4a: the second "Member Activity" heading is GONE. The owner asked to combine the sidebar items
+    // under Feeds and to adopt the website's set exactly, and a rail split across two headings did neither: it
+    // presented the same seven destinations as two unrelated groups. One heading, the website's order.
+    // Activity IS the all-types river (bare newtab.html), so it stands in for the website's "All".
     { key: "articles", href: "newtab.html#type=post", ico: "article", nm: "Articles", sub: "Posts and tutorials" },
     { key: "products", href: "newtab.html#type=product", ico: "product", nm: "Products", sub: "Plugins and tools" },
     { key: "prompts", href: "newtab.html#type=prompt", ico: "prompt", nm: "Prompts", sub: "Reusable prompts" },
@@ -6912,8 +6919,9 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
 
   // client-ui/src/feed-route.mjs
-  var TYPE_FILTERS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news"]);
-  var RAIL_KEY = { all: "activity", post: "articles", product: "products", prompt: "prompts", share: "shares", news: "news" };
+  var TYPE_FILTERS = /* @__PURE__ */ new Set(["all", "post", "product", "prompt", "share", "news", "network"]);
+  var NETWORK_KINDS = Object.freeze(["post", "product", "prompt"]);
+  var RAIL_KEY = { all: "activity", post: "articles", product: "products", prompt: "prompts", share: "shares", news: "news", network: "network" };
   function parseTypeFromHash(hash) {
     const m = /(?:^|[#&])(?:type|tab)=([a-z]+)/.exec(String(hash || ""));
     return m && TYPE_FILTERS.has(m[1]) ? m[1] : null;
@@ -6925,10 +6933,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return RAIL_KEY[type] || "activity";
   }
   function feedSources(type) {
+    const isNetwork = type === "network";
     return {
       wantNews: type === "news",
       wantShares: type === "all" || type === "news" || type === "share",
-      narrow: !(type === "all" || type === "news")
+      narrow: !(type === "all" || type === "news" || isNetwork),
+      // The item types to keep, or null for "keep everything". A single-type view reports its own type so a
+      // consumer can filter uniformly instead of special-casing network.
+      kinds: isNetwork ? NETWORK_KINDS : type === "all" || type === "news" ? null : [type]
     };
   }
 
@@ -6942,7 +6954,11 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     product: "detailed",
     prompt: "compact",
     share: "detailed",
-    news: "card"
+    news: "card",
+    // sow-204 item 4a: the Network view (member publications: posts, products and prompts) is a blended river
+    // like `all`, not a single-type directory, so it follows the same "Cards is the default" direction rather
+    // than one of the per-type densities.
+    network: "card"
   });
   function viewKey(type) {
     return `gbti-nt-view-${type}`;
@@ -21713,11 +21729,11 @@ From the author:
         return;
       }
     }
-    const { wantNews, wantShares, narrow } = feedSources(TYPE);
+    const { wantNews, wantShares, narrow, kinds } = feedSources(TYPE);
     const directory = narrow ? DIRECTORY[TYPE] : null;
     let rows = mergeAll({ items: directory ?? ENTRIES, shares: wantShares ? SHARES : null, membership: MEMBERSHIP }).map(toCardItem);
     if (wantNews && canSeeNews(MEMBERSHIP) && Array.isArray(NEWS)) rows = rows.concat(NEWS.map(newsToItem).map(({ openHref, ...n }) => n));
-    if (narrow) rows = rows.filter((e) => e.type === TYPE);
+    if (kinds) rows = rows.filter((e) => kinds.includes(e.type));
     if (VIEW === "following") {
       rows = rows.filter((e) => e.type === "news" ? FOLLOWED_CHANNELS && FOLLOWED_CHANNELS.has(String(e.source ?? e.author).toLowerCase()) : FOLLOWING && FOLLOWING.has(String(e.author).toLowerCase()));
     }

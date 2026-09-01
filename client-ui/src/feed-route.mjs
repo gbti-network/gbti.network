@@ -3,11 +3,20 @@
 // browser: a bare `newtab.html` is the All river (TYPE 'all', rail key 'activity'); a `#type=<X>` (or the bell's
 // legacy `#tab=<X>`) narrows to one type and lights the matching Browse rail item.
 
-export const TYPE_FILTERS = new Set(['all', 'post', 'product', 'prompt', 'share', 'news']);
+// sow-204 item 4a: 'network' joins the set so the extension rail carries the SAME feed vocabulary as the
+// website (All, News, Network, Articles, Products, Prompts, Shares). Network is the member-PUBLICATIONS
+// aggregate: posts, products and prompts, with no shares and no news, matching matchesNarrow('network') in
+// src/lib/home-feed.mjs. It is the one entry the extension was missing.
+export const TYPE_FILTERS = new Set(['all', 'post', 'product', 'prompt', 'share', 'news', 'network']);
+
+// sow-204: the item types a NETWORK view admits. Named once here because the website's matchesNarrow and this
+// set must agree; if they drift, the same rail item shows different things on the two hosts, which is the exact
+// outcome adopting the website's set was meant to prevent.
+export const NETWORK_KINDS = Object.freeze(['post', 'product', 'prompt']);
 
 // TYPE -> the rail key to highlight. 'all' maps to 'activity' (Activity IS the All river; there is no separate
 // Browse "All" item). Anything unknown falls back to 'activity' so the rail never ends up with nothing lit.
-const RAIL_KEY = { all: 'activity', post: 'articles', product: 'products', prompt: 'prompts', share: 'shares', news: 'news' };
+const RAIL_KEY = { all: 'activity', post: 'articles', product: 'products', prompt: 'prompts', share: 'shares', news: 'news', network: 'network' };
 
 /** Parse a location.hash (with or without the leading '#') into a known TYPE filter, or null when none.
  *  Accepts both the rail's `type=<X>` shortcut and the activity bell's legacy `tab=<X>` deep-link shape. */
@@ -37,9 +46,17 @@ export function railKeyForType(type) {
  * @returns {{ wantNews: boolean, wantShares: boolean, narrow: boolean }}
  */
 export function feedSources(type) {
+  // sow-204: `narrow` means "render from the single per-type DIRECTORY index" (SOW-031). NETWORK spans three
+  // types, so it has no single directory and must render from the merged river like `all` does, then filter.
+  // That is why network is narrow:false but still filtered: the two flags answer different questions, and
+  // conflating them would make the view either load the wrong index or show everything.
+  const isNetwork = type === 'network';
   return {
     wantNews: type === 'news',
     wantShares: type === 'all' || type === 'news' || type === 'share',
-    narrow: !(type === 'all' || type === 'news'),
+    narrow: !(type === 'all' || type === 'news' || isNetwork),
+    // The item types to keep, or null for "keep everything". A single-type view reports its own type so a
+    // consumer can filter uniformly instead of special-casing network.
+    kinds: isNetwork ? NETWORK_KINDS : (type === 'all' || type === 'news' ? null : [type]),
   };
 }
