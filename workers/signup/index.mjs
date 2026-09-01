@@ -92,7 +92,7 @@ import { listRepoDrafts } from './membership-repo-drafts.mjs'; // sow-194: owner
 import { listSharesFeed } from './membership-shares.mjs'; // sow-158 Part 3: tier-gated community Shares feed
 import { membershipSyncFork } from './membership-sync-fork.mjs'; // SOW-106 Phase A: server-side fork main sync
 import { membershipAuthor, membershipAuthorTargets } from './membership-author.mjs'; // SOW-156 spike: hosted authoring (flagged); sow-183: superadmin reassignment targets
-import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool, membershipAdminSiteSettings } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads; sow-271: site-settings pool
+import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool, membershipAdminSiteSettings, membershipAdminTaxonomy } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads; sow-271: site-settings pool; sow-161 A: taxonomy pool
 import { handleUnsubscribe } from './membership-unsubscribe.mjs'; // SOW-166: one-click digest unsubscribe (RFC 8058)
 import { handleMailClick } from './mail-click-route.mjs'; // sow-273 follow-up: the digest click counter
 import { handleMailOpen } from './mail-open-route.mjs'; // the digest open counter (1x1 pixel)
@@ -1129,7 +1129,10 @@ export default {
       if (pathname === '/membership/admin/ops') {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
         if (method === 'POST') {
-          const r = await membershipAdminOps(request, env);
+          // sow-161 A: allow the WEBSITE cookie session (category-migrate from the categories workspace). A POST
+          // over the cookie path enforces the double-submit CSRF gate in resolveIdentity (see resolveCaller);
+          // the bearer path (extension/npm) is unchanged.
+          const r = await membershipAdminOps(request, env, { allowCookie: true });
           return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }
@@ -1435,6 +1438,15 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
         if (method === 'GET') {
           const r = await membershipAdminSiteSettings(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+      // sow-161 A: the taxonomy pool read for the WEBSITE categories workspace. Admin-gated, read-only.
+      if (pathname === '/membership/admin/taxonomy') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = await membershipAdminTaxonomy(request, env, { allowCookie: true });
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

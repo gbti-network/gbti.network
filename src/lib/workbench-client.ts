@@ -707,6 +707,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
       const r = await workerPost('/membership/admin/author', { action, ...args });
       return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null };
     },
+    // sow-161 A: the categories workspace + tag explorer. taxonomy() reads house/taxonomy.yml { tree }; adminOp()
+    // fires an allow-listed operation (category-migrate) over the cookie session (the Worker enforces CSRF on the
+    // POST). category-batch + tag-edit go through admin() above (the Worker resolves their multi-file writes).
+    taxonomy() { return workerGet('/membership/admin/taxonomy'); }, // { ok, tree }
+    async adminOp(action: string, params: any = null) { return workerPost('/membership/admin/ops', params ? { action, params } : { action }); },
     // sow-161 increment 4: the quotes config manager. Read the full pool (admin-gated) + the three write actions,
     // each normalized to the { noop, prNumber } shape gbti-quote-manager renders.
     quotePool() { return workerGet('/membership/admin/quote-pool'); }, // { ok, quotes }

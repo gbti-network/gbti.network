@@ -6799,6 +6799,14 @@ ${String(body ?? "")}`;
     statusOf(path) {
       return channelStatusFor(path[path.length - 1], this._pool || [], [...this._pending.values()]);
     }
+    // sow-161 A: the Discord channel-assignment sub-feature is GATED to the hosts that provide the channel reads
+    // (extension + npm host). On the website those methods are absent (deferred to the channel-map increment, per
+    // sow-161's split), so the channel card, the tree status dots, the legend and the header clause are hidden
+    // rather than shown as a confusing always-"No channel" empty state. Category tree + label/add + migrate + the
+    // content counts all work without them. A method being present is the signal; an empty result is not.
+    get _channelsOn() {
+      return typeof this.client?.contentChannelPool === "function" && typeof this.client?.discordChannels === "function";
+    }
     render() {
       if (!this.client) {
         this.set(this.css(CSS11) + `<p class="muted">Sign in with the GBTI client to manage categories.</p>`);
@@ -6815,7 +6823,7 @@ ${String(body ?? "")}`;
       const plan = batchPlan(this._pending);
       const header = `
       <div class="chead">
-        <div class="grow"><h2>Categories</h2><span class="muted">The canonical taxonomy, its Discord channels, and the content filed under each. Edits publish together as one house PR.</span></div>
+        <div class="grow"><h2>Categories</h2><span class="muted">The canonical taxonomy${this._channelsOn ? ", its Discord channels," : ""} and the content filed under each. Edits publish together as one house PR.</span></div>
         <span class="pending" ${plan.count ? "" : "hidden"}><span class="cnt">${plan.count}</span> unpublished edit${plan.count === 1 ? "" : "s"}</span>
         <button class="btn soft" id="newtop" type="button">New category</button>
         <button class="btn pr" id="review" type="button" ${plan.count ? "" : "disabled"}>${plan.count ? `Publish ${plan.count} change${plan.count === 1 ? "" : "s"}` : "Nothing to publish"}</button>
@@ -6867,7 +6875,7 @@ ${String(body ?? "")}`;
           <span class="car${kids ? "" : " leaf"}" data-car="${esc(pk)}">▾</span>
           <span class="lab">${esc(this.labelOf(path))}</span>
           <span class="cnt">${this.countOf(path)}</span>
-          <span class="dot ${esc(this.statusOf(path))}"></span>
+          ${this._channelsOn ? `<span class="dot ${esc(this.statusOf(path))}"></span>` : ""}
         </button>`);
           if (kids && !closed) walk(node.children, path);
         }
@@ -6878,7 +6886,7 @@ ${String(body ?? "")}`;
       <div class="tscroll" role="tree">${rows.join("") || `<p class="muted" style="padding:10px">No categories match.</p>`}
         <button class="titem tnew" type="button" id="newtop2">+ New top-level category</button>
       </div>
-      <div class="legend"><span><i style="background:var(--brand)"></i>Synced</span><span><i style="background:var(--amber)"></i>Pending PR</span><span><i style="background:var(--line)"></i>No channel</span></div>
+      ${this._channelsOn ? `<div class="legend"><span><i style="background:var(--brand)"></i>Synced</span><span><i style="background:var(--amber)"></i>Pending PR</span><span><i style="background:var(--line)"></i>No channel</span></div>` : ""}
     </aside>`;
     }
     _detailHtml() {
@@ -6934,6 +6942,7 @@ ${String(body ?? "")}`;
       return `<div class="dgrid">${editor}${dash}</div>`;
     }
     _discordHtml(key) {
+      if (!this._channelsOn) return "";
       const mapped = channelFor(key, this._pool || []);
       const pendingOp = this._pending.get(`channel:${key}`);
       const effective = pendingOp ? pendingOp.kind === "channel-set" ? pendingOp.args.channelId : null : mapped;

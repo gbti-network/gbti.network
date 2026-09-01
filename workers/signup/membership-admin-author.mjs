@@ -21,7 +21,7 @@
 import { authorizeStaff, authorizeAdmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';
 import { rateLimit } from './abuse.mjs';
-import { flipContentStatus } from '../../client/src/content-ops.mjs'; // already in the Worker bundle (membership-shares)
+import { flipContentStatus, retagContent } from '../../client/src/content-ops.mjs'; // already in the Worker bundle (membership-shares); sow-161 A: retag for tag-edit
 import { isCleanPath } from '../../membership/classify-pr.mjs';
 import { adminHostedBranchFor } from '../../membership/hosted-author.mjs';
 import { ban, unban, grandfather, revokeGrandfather, grantRole } from '../../membership/superadmin-actions.mjs'; // sow-161 increments 2-3
@@ -33,6 +33,9 @@ import { addSource, removeSource, setSourceEnabled } from '../../membership/news
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
 import { normalizeCouponCode, COUPON_CODE_RE } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons)
 import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
+import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs'; // sow-161 A: category-batch taxonomy ops
+import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // sow-161 A: category-batch channel ops
+import { rankForPath, maxRankForPaths } from '../../membership/path-rank.mjs'; // sow-161 A: the multi-file max-rank gate (matches CODEOWNERS, unlike classify-pr)
 import yaml from 'js-yaml'; // already in the Worker bundle (content-ops)
 
 const GH = 'https://api.github.com';
@@ -172,9 +175,25 @@ const CONFIG_OP = {
   // WEBSITE admin page can flip it, which is the direction sow-271 is moving the site.
   'site-setting-set': { path: 'house/site-settings.yml', rank: ROLE_RANK.superadmin, fn: setSiteToggle, input: siteToggleInput, slug: (a) => idSlug(a.key) },
 };
-// The minimum role rank an action requires at the endpoint (the gate is the independent backstop).
+// sow-161 A: MULTI-FILE ops. Unlike a single-file CONFIG_OP (one {path, rank} pair), these can touch several
+// files at different tiers in one PR, so a single declared rank cannot express their real requirement. The
+// `rank` here is only the FLOOR (the endpoint pre-check); the true requirement is computed at request time as
+// maxRankForPaths over the RESOLVED file set (see the dispatch), which is why category-batch becomes superadmin
+// the moment it carries a channel op even though its floor is admin. The build fn reads the affected files and
+// applies the shared pure cores, returning { files } or a { response } short-circuit (error or clean no-op).
+const MULTI_ACTIONS = new Set(['tag-edit', 'category-batch']);
+const MULTI_OP = {
+  'tag-edit': { rank: ROLE_RANK.admin, build: buildTagEdit },
+  'category-batch': { rank: ROLE_RANK.admin, build: buildCategoryBatch },
+};
+
+// The minimum role rank an action requires at the endpoint (the gate is the independent backstop). For a
+// multi-file op this is the FLOOR only; the dispatch re-checks the resolved file set against maxRankForPaths.
 const requiredRank = (action) =>
-  GOV_ACTIONS.has(action) ? GOV_OP[action].rank : CONFIG_ACTIONS.has(action) ? CONFIG_OP[action].rank : ROLE_RANK.moderator;
+  GOV_ACTIONS.has(action) ? GOV_OP[action].rank
+    : CONFIG_ACTIONS.has(action) ? CONFIG_OP[action].rank
+    : MULTI_ACTIONS.has(action) ? MULTI_OP[action].rank
+    : ROLE_RANK.moderator;
 
 // Preserve the leading comment block (a run of `#`/blank lines at the top) of a config file across a re-serialize,
 // mirroring client/src/admin-ops.mjs leadingComment. Governance files have none, so this is config-only.
@@ -202,6 +221,94 @@ async function loadHouseYaml(fetchImpl, instToken, upstream, path) {
   if (loaded === undefined || loaded === null) return { ok: true, parsed: {}, raw };
   if (typeof loaded !== 'object' || Array.isArray(loaded)) return { ok: false, status: 502, body: { error: 'parse_failed', message: 'the governance file is malformed' } };
   return { ok: true, parsed: loaded, raw };
+}
+
+// sow-161 A: read a RAW file (a content .md, which is not YAML). 404 -> { ok, raw: null } so a stale path in a
+// batch is skipped, not fatal. Same contents API + App token loadHouseYaml uses.
+async function loadRawFile(fetchImpl, instToken, upstream, path) {
+  const cur = await fetchImpl(`${GH}/repos/${upstream}/contents/${path}?ref=main`, { headers: GH_HEADERS(instToken) });
+  if (cur.status === 404) return { ok: true, raw: null };
+  if (!cur.ok) return { ok: false, status: 502, body: { error: 'read_failed', message: `GitHub returned ${cur.status}` } };
+  return { ok: true, raw: decodeContent((await cur.json().catch(() => ({})))?.content) ?? '' };
+}
+
+// sow-161 A: tag curation (rename / merge / retire a free-form tag across content items). A multi-FILE write:
+// each path is read fresh and retagged with the SHARED pure core (retagContent), and only files that actually
+// carry the tag are rewritten (retagContent no-ops otherwise), so the `paths` list from the client is a hint,
+// never trusted. The path filter (CONTENT_ITEM_RE, the SAME regex the content-moderation route uses) is the
+// first defence, keeping the op to members/house content items; the max-rank gate in the dispatch is the second
+// (a non-content path would resolve to a higher tier and be refused). Mirrors client/src/admin-ops applyTagEdit.
+async function buildTagEdit(payload, { fetchImpl, instToken, upstream }) {
+  const mode = String(payload?.mode || payload?.action || '');
+  if (!['rename', 'merge', 'retire'].includes(mode)) return { response: { status: 400, body: { error: 'bad_request', message: 'mode must be rename, merge, or retire' } } };
+  const src = String(payload?.tag || '').trim().toLowerCase();
+  if (!src) return { response: { status: 400, body: { error: 'bad_request', message: 'a tag is required' } } };
+  const dest = mode === 'retire' ? null : String(payload?.to || '').trim().toLowerCase();
+  if (mode !== 'retire' && !dest) return { response: { status: 400, body: { error: 'bad_request', message: `${mode} needs a destination tag` } } };
+  if (dest && dest === src) return { response: { status: 400, body: { error: 'bad_request', message: 'the destination equals the source' } } };
+  const list = (Array.isArray(payload?.paths) ? payload.paths : []).filter((p) => CONTENT_ITEM_RE.test(String(p)));
+  if (!list.length || list.length > 100) return { response: { status: 400, body: { error: 'bad_request', message: 'between 1 and 100 content paths are required' } } };
+  const files = [];
+  for (const rel of list) {
+    const r = await loadRawFile(fetchImpl, instToken, upstream, rel);
+    if (!r.ok) return { response: { status: r.status, body: r.body } };
+    if (r.raw == null) continue; // the file is gone since the client indexed it; skip, do not fail the batch
+    const out = retagContent(r.raw, { tag: src, to: dest });
+    if (out.changed) files.push({ path: rel, content: out.content });
+  }
+  if (!files.length) return { response: { status: 200, body: { ok: true, noop: true, message: `no item carries the tag "${src}"` } } };
+  const verb = mode === 'retire' ? `Retire tag ${src}` : `${mode === 'merge' ? 'Merge' : 'Rename'} tag ${src} -> ${dest}`;
+  return { files, slug: `tag-${mode}-${idSlug(src)}`, title: `${verb} (${files.length} item${files.length === 1 ? '' : 's'})` };
+}
+
+// sow-161 A: a batch of category-workspace edits as ONE PR. `label`/`add` edit house/taxonomy.yml (admin);
+// `channel-set`/`channel-remove` edit house/content-channels.yml (superadmin-pinned in CODEOWNERS). A key rename
+// / move / merge is NOT accepted here (those are review-gated `category-migrate` dispatches). The security is the
+// max-rank gate: a batch carrying any channel op resolves to superadmin over the file set and an admin is refused.
+// Mirrors client/src/admin-ops applyCategoryBatch, using the shared pure edit cores.
+async function buildCategoryBatch(payload, { fetchImpl, instToken, upstream, githubId }) {
+  const ops = Array.isArray(payload?.ops) ? payload.ops : [];
+  if (!ops.length) return { response: { status: 400, body: { error: 'bad_request', message: 'the batch is empty' } } };
+  for (const o of ops) {
+    if (!['label', 'add', 'channel-set', 'channel-remove'].includes(o?.kind)) {
+      return { response: { status: 400, body: { error: 'bad_request', message: `op kind "${o?.kind}" cannot batch (key rename/move/merge are review-gated migrations)` } } };
+    }
+  }
+  const now = Date.now();
+  const ctx = { actor: { githubId }, now };
+  const files = [];
+  const applyTo = async (path, opsForFile, applyOne, ErrType) => {
+    if (!opsForFile.length) return null;
+    const load = await loadHouseYaml(fetchImpl, instToken, upstream, path);
+    if (!load.ok) return { response: { status: load.status, body: load.body } };
+    let parsed = load.parsed; let changed = false;
+    try {
+      for (const op of opsForFile) {
+        const r = applyOne(parsed, op);
+        if (r.changed) { parsed = r.next; changed = true; }
+      }
+    } catch (e) {
+      if (e instanceof ErrType) return { response: { status: 400, body: { error: 'bad_request', message: e.message } } };
+      throw e;
+    }
+    if (changed) files.push({ path, content: leadingComment(load.raw) + yaml.dump(parsed, { lineWidth: 100, noRefs: true }) });
+    return null;
+  };
+  const taxErr = await applyTo('house/taxonomy.yml', ops.filter((o) => o.kind === 'label' || o.kind === 'add'), (parsed, op) => (
+    op.kind === 'add'
+      ? addCategoryEdit(parsed, { parentPath: op.args?.parentPath ?? [], key: op.args?.key, label: op.args?.label }, ctx)
+      : renameLabelEdit(parsed, { path: op.args?.path, label: op.args?.label }, ctx)
+  ), TaxonomyEditError);
+  if (taxErr) return taxErr;
+  const chErr = await applyTo('house/content-channels.yml', ops.filter((o) => o.kind === 'channel-set' || o.kind === 'channel-remove'), (parsed, op) => (
+    op.kind === 'channel-set'
+      ? setChannelEdit(parsed, { category: op.args?.category, channelId: op.args?.channelId }, ctx)
+      : removeChannelEdit(parsed, { category: op.args?.category }, ctx)
+  ), ContentChannelEditError);
+  if (chErr) return chErr;
+  if (!files.length) return { response: { status: 200, body: { ok: true, noop: true, message: 'every batched edit was already applied' } } };
+  const stamp = String(now).slice(-14);
+  return { files, slug: `category-batch-${stamp}`, title: `Categories: ${files.length} file${files.length === 1 ? '' : 's'} updated` };
 }
 
 /** Standard base64 of a UTF-8 string, chunked. */
@@ -251,7 +358,8 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
   const isContent = CONTENT_ACTIONS.has(action);
   const isGov = GOV_ACTIONS.has(action);
   const isConfig = CONFIG_ACTIONS.has(action);
-  if (!isContent && !isGov && !isConfig) return { status: 400, body: { error: 'bad_request', message: 'unsupported admin action' } };
+  const isMulti = MULTI_ACTIONS.has(action); // sow-161 A
+  if (!isContent && !isGov && !isConfig && !isMulti) return { status: 400, body: { error: 'bad_request', message: 'unsupported admin action' } };
 
   // Per-action tier: content moderation is moderator+ (the endpoint floor), member status + config are admin+, role
   // assignment is superadmin+. Reject an under-privileged caller BEFORE any read/write. The SOW-005 gate re-checks
@@ -265,6 +373,8 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
 
   // Compute the file change + the branch slug SERVER-SIDE, per action category.
   let file, branchSlug;
+  let files = null; // sow-161 A: a MULTI-FILE op sets this instead of `file`; the apply step below handles either
+  let multiTitle = null; // sow-161 A: a multi-file op's own PR title
   let govKv = null; // sow-213 Phase 2b: the KV half of a governance dual-write, applied after the git write lands
   let govRefresh = false; // sow-213 Phase 2b: a role change has no KV half, so it asks the mirror workflow to re-derive from git
   if (isContent) {
@@ -339,7 +449,7 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
       : null;
     file = { path: op.path, content: yaml.dump(result.next, { lineWidth: 100, noRefs: true }) };
     branchSlug = `${action}-${targetId}`;
-  } else {
+  } else if (isConfig) {
     // Config manager (increment 4): the key is a text/id string (validated per action by op.input, NEVER a path),
     // the file is a FIXED constant per action, and its LEADING COMMENT is preserved across the edit. Read
     // fail-closed, apply the pure core, re-serialize with the comment; an already-satisfied action is a clean no-op.
@@ -354,6 +464,22 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     if (!result.changed) return { status: 200, body: { ok: true, noop: true, message: `no change (${action})` } };
     file = { path: op.path, content: leadingComment(load.raw) + yaml.dump(result.next, { lineWidth: 100, noRefs: true }) };
     branchSlug = `${action}-${op.slug(built.args)}`;
+  } else {
+    // sow-161 A: a MULTI-FILE op (tag-edit, category-batch). The build fn reads the affected files + applies the
+    // shared pure cores, returning { files } or a { response } short-circuit (a validation error or a clean
+    // no-op). THE SECURITY GATE: the required rank is the MAX rankForPath over the RESOLVED file set, re-checked
+    // HERE after the files are known -- the requiredRank() floor above cannot see them. So an admin batch that
+    // slips in a superadmin-pinned file (content-channels.yml, say) is refused even though its floor is admin.
+    const op = MULTI_OP[action];
+    const built = await op.build(payload, { fetchImpl, instToken, upstream, githubId });
+    if (built.response) return built.response;
+    const need = maxRankForPaths(built.files.map((f) => f.path), op.rank);
+    if ((ROLE_RANK[staff.role] ?? 0) < need) {
+      return { status: 403, body: { error: 'forbidden', message: 'this change touches a file that requires a higher role' } };
+    }
+    files = built.files;
+    branchSlug = built.slug;
+    multiTitle = built.title;
   }
 
   const branch = adminHostedBranchFor(githubId, branchSlug);
@@ -379,10 +505,14 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     if (!reset.ok) return { status: 502, body: { error: 'git_failed', message: 'could not reset the branch' } };
   }
 
-  const applied = await applyFile(fetchImpl, instToken, upstream, branch, file);
-  if (!applied.ok) return { status: 502, body: { error: 'git_failed', message: `could not write ${file.path}` } };
+  // sow-161 A: apply the single-file `file` or the multi-file `files` set on the fresh branch, one PUT/DELETE each.
+  const toApply = files || [file];
+  for (const f of toApply) {
+    const applied = await applyFile(fetchImpl, instToken, upstream, branch, f);
+    if (!applied.ok) return { status: 502, body: { error: 'git_failed', message: `could not write ${f.path}` } };
+  }
 
-  const title = `Admin: ${action} ${branchSlug.slice(action.length + 1)}`.slice(0, 256);
+  const title = (multiTitle || `Admin: ${action} ${branchSlug.slice(action.length + 1)}`).slice(0, 256);
   const body = `Admin action (${action}) by github_id ${githubId} via the GBTI admin surface (sow-161).`;
   const pr = await fetchImpl(`${GH}/repos/${upstream}/pulls`, {
     method: 'POST', headers: { ...GH_HEADERS(instToken), 'Content-Type': 'application/json' },
@@ -450,6 +580,23 @@ export async function membershipAdminSiteSettings(request, env, deps = {}) {
   catch (err) { return { status: 500, body: { error: 'bad_config', message: `house/site-settings.yml is invalid: ${err.message}` } }; }
   const toggles = Object.entries(SITE_TOGGLES).map(([key, spec]) => ({ key, label: spec.label, description: spec.description }));
   return { status: 200, body: { ok: true, settings, toggles } };
+}
+
+// sow-161 A: the taxonomy READ for the categories workspace on the WEBSITE. house/taxonomy.yml is public build
+// data; this returns the same { tree } shape getTaxonomy returns on the in-process hosts, so the shared element
+// renders identically. Admin-gated + read-only (a GET carries no CSRF); fail-closed on a read/parse error.
+export async function membershipAdminTaxonomy(request, env, deps = {}) {
+  const {
+    fetchImpl = globalThis.fetch, authorize = authorizeAdmin, allowCookie = false,
+    upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network',
+  } = deps;
+  const admin = await authorize(request, env, { ...deps, allowCookie });
+  if (!admin.ok) return { status: admin.status, body: admin.body };
+  let instToken;
+  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
+  const load = await loadHouseYaml(fetchImpl, instToken, upstream, 'house/taxonomy.yml');
+  if (!load.ok) return { status: load.status, body: load.body };
+  return { status: 200, body: { ok: true, tree: load.parsed?.tree || {} } };
 }
 
 // sow-161 increment 4: the quote-manager pool READ. Admin-gated (cookie or bearer); returns the FULL pool from

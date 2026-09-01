@@ -27,6 +27,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           <button type="button" role="tab" data-tab="quotes" data-min="admin" aria-selected="false" hidden>Splash quotes</button>
           <button type="button" role="tab" data-tab="news-sources" data-min="admin" aria-selected="false" hidden>News sources</button>
           <button type="button" role="tab" data-tab="coupons" data-min="admin" aria-selected="false" hidden>Coupons</button>
+          <button type="button" role="tab" data-tab="categories" data-min="admin" aria-selected="false" hidden>Categories</button>
+          <button type="button" role="tab" data-tab="tags" data-min="admin" aria-selected="false" hidden>Tags</button>
           <button type="button" role="tab" data-tab="site-settings" data-min="superadmin" aria-selected="false" hidden>Site settings</button>
         </nav>
 
@@ -47,6 +49,16 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div class="adm-card" data-panel="coupons" hidden>
           <h2 class="h2">Coupons</h2>
           <gbti-coupon-manager></gbti-coupon-manager>
+        </div>
+        {/* sow-161 A: the two managers the owner asked for on the website. They carry their OWN headers (a chead /
+            an explorer header), so no card <h2> here, matching the extension admin. The category->Discord-channel
+            column is gated OFF on the website (contentChannelPool/discordChannels are absent here) until the
+            channel-map increment; category tree + label/add + key-migration + tag rename/merge/retire all work. */}
+        <div class="adm-card" data-panel="categories" hidden>
+          <gbti-categories-workspace></gbti-categories-workspace>
+        </div>
+        <div class="adm-card" data-panel="tags" hidden>
+          <gbti-tag-explorer></gbti-tag-explorer>
         </div>
         {/* sow-271: SUPERADMIN, one tier above the config managers above it. The tab carries data-min="superadmin"
             and the module below is imported only for superadmin, so an admin never upgrades the element. */}
@@ -92,6 +104,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           import('../../client-ui/src/elements/gbti-quote-manager.mjs'),
           import('../../client-ui/src/elements/gbti-news-source-manager.mjs'),
           import('../../client-ui/src/elements/gbti-coupon-manager.mjs'),
+          import('../../client-ui/src/elements/gbti-categories-workspace.mjs'), // sow-161 A
+          import('../../client-ui/src/elements/gbti-tag-explorer.mjs'), // sow-161 A
         ]);
       }
       // sow-271: the site toggles are superadmin, so their module is imported one tier higher. An admin never
