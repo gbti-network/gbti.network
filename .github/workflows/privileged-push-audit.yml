@@ -1,0 +1,53 @@
+# sow-298: announce direct pushes to main that touch a governance path.
+#
+# VISIBILITY, NOT AN ACCESS CONTROL. This runs after the push has landed and cannot refuse anything. It exists
+# because Phase 3 measured `main` and found no required review and no required status check, and because the
+# obvious fix was probed and rejected: a required status check REFUSES direct pushes, and every session here
+# ships by pushing to main. See scripts/notify-privileged-push.mjs for the full reasoning and the measurement.
+#
+# It must never fail. A push that already succeeded must not be turned red by its own audit job.
+
+name: Privileged push audit
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: privileged-push-audit-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth 0 so the before..after diff resolves even across a batch of commits.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # NO npm ci on purpose. The script and its whole import chain (clients/discord.mjs,
+      # membership/path-rank.mjs, membership/overrides-core.mjs) have ZERO external dependencies, verified by
+      # running it with node_modules hidden. Skipping the install keeps this job fast and secret-free.
+      - name: Compute changed files
+        run: |
+          BEFORE='${{ github.event.before }}'
+          ZERO='0000000000000000000000000000000000000000'
+          # A first push, a force push, or a rewritten history leaves `before` absent or unreachable. Fall back
+          # to the tip's own parent rather than diffing against nothing, which would report every file in the
+          # repository as changed and alert on a push that touched none of them.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "$ZERO" ] || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            FILES="$(git diff --name-only '${{ github.sha }}^' '${{ github.sha }}' 2>/dev/null || true)"
+          else
+            FILES="$(git diff --name-only "$BEFORE" '${{ github.sha }}' 2>/dev/null || true)"
+          fi
+          echo "CHANGED_FILES=$(printf '%s' "$FILES" | tr '\n' ' ')" >> "$GITHUB_ENV"
+      - name: Announce governance-path changes
+        run: node scripts/notify-privileged-push.mjs
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
