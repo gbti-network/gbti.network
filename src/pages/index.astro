@@ -27,6 +27,7 @@ import { authorDisplay, authorHref } from '../lib/authors';
 import { loadFeedItems } from '../lib/feed-items';
 import { sortByNewest, rankNewAndPopular, aggregateTags, feedCounts, commitsHeatGrid } from '../lib/home-feed.mjs';
 import { commitsByDate, commitCount } from '../lib/git-history';
+import { loadShoptalk, shoptalkWhen, shoptalkTimeShort } from '../lib/shoptalk';
 import { FIRST_TOUCH_PCT, SIGNUP_BASE } from '../lib/membership';
 
 const { contentItems, shareItems, profiles, avatarIndex } = await loadFeedItems();
@@ -111,19 +112,24 @@ const actStats = [
 
 // Shop Talk: the weekly open call. The calendar CTA is membership-aware (owner directive, 2026-07-21):
 // a visitor goes to the join page; a signed-in member (the SOW-030 extension identity signal,
-// presentation-only) gets the Google Calendar link that adds the recurring event to their own calendar.
-// Provisioning note (SOW-136): confirm the schedule, and optionally replace calendarUrl with the real
-// revolving event's public add link (calendar/event?action=TEMPLATE&tmeid=...) once shared.
+// presentation-only) gets the calendar file.
+//
+// sow-191: the CTA now points at /shoptalk.ics, our own file, instead of a Google
+// calendar.google.com/render?action=TEMPLATE link. The old link created a PRIVATE COPY on the clicker's
+// calendar rather than the real recurring event, and it only worked for Google users, so an Apple or Outlook
+// member got nothing usable. The schedule itself moved to house/shoptalk.yml, so changing the time is a config
+// edit rather than a code change, and both strings below are DERIVED from it.
+//
+// The previous copy read "11:00 AM CST" in two places. That was wrong for roughly eight months of the year:
+// the event is anchored to America/Chicago, which is CDT from March to November, so a member converting from
+// another zone in summer would have arrived an hour early. The label is now derived from the IANA zone.
+const shoptalk = loadShoptalk();
 const SHOPTALK = {
-  name: 'Shop Talk call',
-  when: 'Saturdays · 11:00 AM CST',
-  desc: 'Our weekly open call: demos, feedback, and whatever you are stuck on. Everyone is welcome.',
-  calendarUrl:
-    'https://calendar.google.com/calendar/render?action=TEMPLATE' +
-    '&text=' + encodeURIComponent('GBTI Shop Talk call') +
-    '&details=' + encodeURIComponent('The GBTI Network weekly open call: demos, feedback, and whatever you are stuck on. https://gbti.network/') +
-    '&dates=20260725T110000/20260725T130000&ctz=America/Chicago' +
-    '&recur=' + encodeURIComponent('RRULE:FREQ=WEEKLY;BYDAY=SA'),
+  name: shoptalk.cardTitle,
+  when: shoptalkWhen(),
+  desc: shoptalk.cardDescription,
+  timeShort: shoptalkTimeShort(),
+  calendarUrl: '/shoptalk.ics',
 };
 
 ---
@@ -245,7 +251,7 @@ const SHOPTALK = {
         <a href="/membership/" data-shoptalk-cta data-calendar-url={SHOPTALK.calendarUrl} class="btn btn-white">Add to calendar</a>
         <div class="evt">
           <div class="cal"><span class="m">Sat</span><span class="d" data-shoptalk-day></span></div>
-          <div class="ei"><div class="n">{SHOPTALK.name}</div><div class="t2">Sat · 11:00 AM CST</div></div>
+          <div class="ei"><div class="n">{SHOPTALK.name}</div><div class="t2">{SHOPTALK.timeShort}</div></div>
         </div>
       </div>
 

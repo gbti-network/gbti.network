@@ -389,6 +389,54 @@ export function checkBuildSecrets({ root, distDir = path.join(root, 'dist'), env
     }
   }
 
+  // sow-191: the published Shop Talk calendar must not carry the join URL while house/shoptalk.yml keeps
+  // publish_join_url false.
+  //
+  // WHY THIS NEEDS A GUARD AT ALL, given the unit tests already cover both directions. dist/shoptalk.ics is a
+  // plain file on a CDN: it cannot be gated, membership is never checked before it is served, and anyone who
+  // knows the URL can fetch it. The unit tests prove the WRITER behaves; this proves the SHIPPED ARTIFACT does,
+  // which is the thing an attacker actually reads. The two are not the same claim, and the gap between them is
+  // exactly where a wiring mistake in the .ts adapter would live.
+  //
+  // The rule is symmetric on purpose rather than a blanket ban: publishing the link is a legitimate owner
+  // decision, so the guard reds only on DISAGREEMENT between the config and the artifact, in both directions. A
+  // one-way check (assert the URL is absent) would pass just as happily if the endpoint stopped emitting the
+  // event entirely, which is a vacuous pass of the kind this repo has shipped before.
+  const shoptalkYml = path.join(root, 'house/shoptalk.yml');
+  const shoptalkIcs = path.join(distDir, 'shoptalk.ics');
+  if (fs.existsSync(shoptalkYml) && fs.existsSync(shoptalkIcs)) {
+    const yml = fs.readFileSync(shoptalkYml, 'utf8');
+    const ics = fs.readFileSync(shoptalkIcs, 'utf8');
+    // Only a real assignment counts, not the word appearing in the file's own explanatory comments.
+    const publishes = /^\s*publish_join_url\s*:\s*true\s*$/m.test(yml);
+    const joinMatch = /^\s*join_url\s*:\s*(\S+)\s*$/m.exec(yml);
+    const joinUrl = joinMatch ? joinMatch[1].trim() : '';
+    const emitsUrl = /^URL:/m.test(ics);
+
+    if (!publishes && emitsUrl) {
+      errors.push(
+        'dist/shoptalk.ics emits a URL property while house/shoptalk.yml has publish_join_url false. '
+        + 'That file is public on a CDN and cannot be gated, so the join link would be world-readable.',
+      );
+    }
+    if (!publishes && joinUrl && joinUrl !== 'https://gbti.network/' && ics.includes(joinUrl)) {
+      errors.push(
+        `dist/shoptalk.ics contains the configured join_url while publish_join_url is false. `
+        + `The published calendar must not carry it.`,
+      );
+    }
+    // The other direction, so the guard cannot pass by the event having silently disappeared.
+    if (publishes && !emitsUrl) {
+      errors.push(
+        'house/shoptalk.yml sets publish_join_url true but dist/shoptalk.ics emits no URL property. '
+        + 'Either the endpoint stopped emitting the event or the flag is not reaching it.',
+      );
+    }
+    if (!/BEGIN:VEVENT/.test(ics)) {
+      errors.push('dist/shoptalk.ics carries no VEVENT, so the calendar file is empty and every check above is vacuous.');
+    }
+  }
+
   return { errors, notes };
 }
 

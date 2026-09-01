@@ -1,0 +1,61 @@
+# sow-191: the Shop Talk weekly call, git-native and portable (a fork carries its own schedule).
+#
+# WHY THIS FILE EXISTS. The homepage "Add to calendar" button used to compose a Google Calendar
+# render?action=TEMPLATE link, which creates a PRIVATE COPY on the clicker's own calendar rather than adding
+# them to the real recurring event, and which is Google-only, so an Apple or Outlook member got nothing they
+# could use. The event now lives here and is published as an .ics file at /shoptalk.ics, which every calendar
+# client understands. Changing the call's time or description is an edit to this file, not a code change.
+#
+# ADMIN-OWNED. CODEOWNERS pins all of /house/ to the two superadmins, so this inherits the same review tier as
+# its neighbours without needing an explicit rule.
+#
+# VALIDATED AT BUILD TIME by src/lib/shoptalk.ts. A malformed or missing field fails the build rather than
+# shipping a broken calendar entry, because an .ics that imports as the wrong time is worse than no .ics: the
+# member does not discover the error, they simply arrive an hour late.
+
+shoptalk:
+  # The event name as it appears on a member's own calendar after they import it.
+  title: GBTI Shop Talk call
+
+  # The name as it appears on the homepage card, which is shorter because it sits under a "live" heading.
+  card_title: Shop Talk call
+
+  # Local start time in the timezone below, 24-hour clock, and how long the call runs.
+  start_time: "11:00"
+  duration_minutes: 120
+
+  # An IANA timezone name, never an abbreviation. This matters: America/Chicago is CST in winter and CDT in
+  # summer, so a hardcoded "CST" label is wrong for roughly eight months of the year. The display label is
+  # DERIVED from this, never written by hand.
+  timezone: America/Chicago
+
+  # RFC 5545 recurrence, without the "RRULE:" prefix. Weekly on Saturday.
+  recurrence: FREQ=WEEKLY;BYDAY=SA
+
+  # The first occurrence, as a plain date. The series recurs forward from here forever; this is an anchor, not
+  # an expiry, so a date in the past is correct and expected.
+  starts_on: 2026-07-25
+
+  # Shown on the homepage card.
+  card_description: >-
+    Our weekly open call: demos, feedback, and whatever you are stuck on. Everyone is welcome.
+
+  # Written into the calendar entry itself. Keep it self-contained: a member reading this in their calendar app
+  # six weeks from now has no other context and cannot click back to the page they got it from.
+  calendar_description: >-
+    The GBTI Network weekly open call: demos, feedback, and whatever you are stuck on.
+    Details and the current schedule live at https://gbti.network/
+
+  # Where the call actually happens.
+  #
+  # PUBLISH_JOIN_URL IS FAIL-CLOSED ON PURPOSE, AND THE REASON IS STRUCTURAL RATHER THAN CAUTIOUS.
+  # gbti.network is a STATIC site, so /shoptalk.ics is a plain file on a CDN. It cannot be gated, membership
+  # cannot be checked before it is served, and anyone who knows the URL can fetch it. So while this is false,
+  # join_url is never written into the published file and the calendar entry points members at gbti.network
+  # instead.
+  #
+  # Set it to true ONLY as a deliberate decision that this link may be world-readable. That is a real decision
+  # and not a formality: a Discord invite in a public file is an open door. Flipping it is a one-line change
+  # and needs no rebuild of anything else.
+  join_url: https://gbti.network/
+  publish_join_url: false
