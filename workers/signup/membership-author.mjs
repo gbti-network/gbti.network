@@ -13,7 +13,8 @@
 // fakes: no network, no secrets.
 
 import { githubFetchUser } from './oauth.mjs';
-import { authorizeCreator } from './membership-content.mjs';
+import { authorizeCreator, authorizePaid } from './membership-content.mjs'; // sow-301: paid gates the route, creator gates PUBLISHING
+import { TIER, meetsTier } from '../../membership/tiers.mjs'; // sow-301
 import { authorizeSuperadmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';
 import { rateLimit } from './abuse.mjs';
@@ -37,9 +38,29 @@ async function ghJson(fetchImpl, url, init) {
   return { res, data };
 }
 
+/**
+ * sow-301: is this file set ENTIRELY comments in the caller's own folder?
+ *
+ * Fail-closed by construction: a non-array, an EMPTY set, a malformed entry, or ONE path outside
+ * `members/<folder>/comments/` all return false, which sends the request to the stricter creator gate. The
+ * caller's `folder` is resolved server-side from the members index, never taken from the payload.
+ *
+ * Exported for tests: the escalation case (a `comment-` itemId carrying an article path) is the reason this
+ * is path-based, and it must be assertable without standing up a Worker.
+ */
+export function isCommentOnly(files, folder) {
+  if (!Array.isArray(files) || files.length === 0) return false;
+  if (typeof folder !== 'string' || !folder) return false;
+  const prefix = `members/${folder}/comments/`;
+  return files.every((f) => {
+    const path = typeof f === 'string' ? f : f?.path;
+    return typeof path === 'string' && path.startsWith(prefix) && !path.includes('..');
+  });
+}
+
 export async function membershipAuthor(request, env, deps = {}) {
   const {
-    fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, authorize = authorizeCreator,
+    fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, authorize = authorizePaid,
     authorizeSuper = authorizeSuperadmin, kv = env?.SIGNUP_KV, limiter = rateLimit,
     upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network',
   } = deps;
@@ -48,7 +69,12 @@ export async function membershipAuthor(request, env, deps = {}) {
     return { status: 403, body: { error: 'author_disabled', message: 'hosted authoring is not enabled' } };
   }
 
-  const paid = await authorize(request, env, deps); // fail-closed: only paid members publish (SOW-011)
+  // sow-301: the ROUTE requires effective-paid; PUBLISHING additionally requires Content Creator. The split
+  // exists because commenting rides this same route (workbench-client posts `comment-<id>` here), and gating
+  // both on creator silently blocked every paid Network Member from commenting. The creator rule is applied
+  // BELOW, once the real file paths are known, because those are the only trustworthy signal of what the
+  // request actually writes.
+  const paid = await authorize(request, env, deps); // fail-closed: only paid members reach this route (SOW-011)
   if (!paid.ok) return { status: paid.status, body: paid.body };
 
   // Identity re-check: the branch name carries the github_id the gate trusts, so it is ALWAYS the verified id,
@@ -110,6 +136,17 @@ export async function membershipAuthor(request, env, deps = {}) {
   const itemId = String(payload?.itemId ?? '');
   const check = validateHostedRequest({ files: payload?.files, itemId, folder, allowAnyFolder });
   if (!check.ok) return { status: check.status ?? 400, body: { error: 'bad_request', message: check.error } };
+  // sow-301: PUBLISHING is creator-gated; COMMENTING is not. Decided from the resolved FILE PATHS, never from
+  // `itemId`, which arrives in the request body: gating on a `comment-` prefix would let any paid caller
+  // publish an article by naming it `comment-anything`. validateHostedRequest has already confirmed these
+  // paths sit in the caller's own folder (or that a re-verified superadmin may target another), so by here the
+  // paths are trustworthy. Fail-closed: an empty or MIXED set takes the stricter gate.
+  if (!isCommentOnly(payload?.files, folder)) {
+    if (!meetsTier(paid.tier, TIER.creator)) {
+      return { status: 403, body: { error: 'forbidden', message: 'publishing on gbti.network requires the Content Creator plan; upgrade at https://gbti.network' } };
+    }
+  }
+
   const branch = hostedBranchFor(githubId, itemId);
   if (!branch) return { status: 400, body: { error: 'bad_request', message: 'invalid itemId' } };
 

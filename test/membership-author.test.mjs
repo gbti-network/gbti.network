@@ -5,7 +5,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { membershipAuthor, membershipAuthorTargets } from '../workers/signup/membership-author.mjs';
+import { membershipAuthor, isCommentOnly, membershipAuthorTargets } from '../workers/signup/membership-author.mjs';
 
 const env = {
   GITHUB_APP_ID: '123', GITHUB_APP_INSTALLATION_ID: '999', GITHUB_APP_PRIVATE_KEY: 'PEM',
@@ -16,7 +16,11 @@ const fakeKv = () => {
   return { store: m, async get(k, t) { const v = m.get(k); return (t === 'json' || t?.type === 'json') && typeof v === 'string' ? JSON.parse(v) : v ?? null; }, async put(k, v) { m.set(k, v); }, async delete(k) { m.delete(k); } };
 };
 const signJwt = async () => 'fake.jwt.sig';
-const paidOk = async () => ({ ok: true, githubId: '2002207' });
+// sow-301: every test using this stub PUBLISHES, so it must present as a Content Creator. The route now
+// requires only effective-paid; PUBLISHING additionally requires creator tier, decided from the file paths.
+const paidOk = async () => ({ ok: true, githubId: '2002207', tier: 'creator' });
+// sow-301: a paid NETWORK MEMBER (the 22 grandfathered accounts). Paid, but below creator.
+const memberOk = async () => ({ ok: true, githubId: '2002207', tier: 'member' });
 const userMe = async () => ({ githubLogin: 'atwellpub', githubId: '2002207' });
 const allow = async () => ({ allowed: true, count: 1, limit: 10 });
 const req = (body) => ({ headers: { get: () => 'Bearer tok' }, json: async () => body });
@@ -162,7 +166,7 @@ test('hosted author: non-paid is denied fail-closed (trial gets the SOW-011 memb
 
 test('hosted author: identity mismatch (token user != paid github_id) is unauthorized', async () => {
   const rec = [];
-  const r = await membershipAuthor(req(goodBody), env, { ...deps(rec), authorize: async () => ({ ok: true, githubId: '111' }) });
+  const r = await membershipAuthor(req(goodBody), env, { ...deps(rec), authorize: async () => ({ ok: true, githubId: '111', tier: 'creator' }) });
   assert.equal(r.status, 401);
   assert.equal(rec.length, 0);
 });
@@ -171,7 +175,7 @@ test('hosted author: a member missing from the members-index gets a 409, no git 
   const rec = [];
   const r = await membershipAuthor(req(goodBody), env, {
     ...deps(rec),
-    authorize: async () => ({ ok: true, githubId: '55555' }),
+    authorize: async () => ({ ok: true, githubId: '55555', tier: 'creator' }),
     fetchUser: async () => ({ githubLogin: 'newbie', githubId: '55555' }),
   });
   assert.equal(r.status, 409);
@@ -231,7 +235,7 @@ test('hosted author: a missing index entry fires the enroll dispatch once (rate-
   const dispatch = async (opts) => { dispatched.push(opts); return true; };
   const d = {
     ...deps(rec),
-    authorize: async () => ({ ok: true, githubId: '55555' }),
+    authorize: async () => ({ ok: true, githubId: '55555', tier: 'creator' }),
     fetchUser: async () => ({ githubLogin: 'newbie', githubId: '55555' }),
     dispatch,
   };
@@ -251,7 +255,7 @@ test('hosted author: the enroll rate limiter blocks a repeat nudge (provisioning
   const dispatched = [];
   const d = {
     ...deps(rec),
-    authorize: async () => ({ ok: true, githubId: '55555' }),
+    authorize: async () => ({ ok: true, githubId: '55555', tier: 'creator' }),
     fetchUser: async () => ({ githubLogin: 'newbie', githubId: '55555' }),
     dispatch: async () => { dispatched.push(1); return true; },
     limiter: async ({ prefix }) => (prefix === 'rl:enroll:' ? { allowed: false } : { allowed: true }),
@@ -324,7 +328,7 @@ test('sow-158 Phase 3a: a website (cookie) caller publishes with NO bearer re-ch
   // authorizePaid resolves the cookie session (via:'cookie') and carries the HMAC-verified github_id; the
   // endpoint must skip the fetchUser(bearer) re-check (the cookie holds no token) and still open the hosted PR.
   const rec = [];
-  const paidCookie = async () => ({ ok: true, githubId: '2002207', via: 'cookie' });
+  const paidCookie = async () => ({ ok: true, githubId: '2002207', via: 'cookie', tier: 'creator' }); // sow-301: this test PUBLISHES
   let fetchUserCalled = false;
   const fetchUserSpy = async () => { fetchUserCalled = true; return { githubLogin: 'atwellpub', githubId: '2002207' }; };
   const reqNoBearer = { headers: { get: () => null }, json: async () => goodBody }; // no Authorization header
@@ -366,4 +370,70 @@ test('membershipAuthorTargets: flag off is a hard 403 before any authorization c
 test('membershipAuthorTargets: no token is 401, before the mirror is ever read', async () => {
   const r = await membershipAuthorTargets({ headers: { get: () => null } }, env, { fetchUser: userMe });
   assert.equal(r.status, 401);
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// sow-301: commenting is a MEMBER right; publishing stays creator-gated. Both ride POST /membership/author,
+// so the route decides from the RESOLVED FILE PATHS. Owner ruling 2026-09-01.
+//
+// 22 grandfathered accounts (every entry in house/grandfathered.yml carries `tier: member`) were denied
+// commenting because this route was creator-gated wholesale.
+// ---------------------------------------------------------------------------------------------------------
+
+const commentBody = {
+  itemId: 'comment-abc123',
+  title: 'Comment on post',
+  files: [{ path: 'members/atwellpub/comments/abc123.md', content: '---\nid: abc123\n---\nhi\n' }],
+};
+
+test('sow-301: a paid NETWORK MEMBER may post a comment', async () => {
+  const rec = [];
+  const r = await membershipAuthor(req(commentBody), env, { ...deps(rec), authorize: memberOk });
+  assert.equal(r.status, 200, `a paid member was denied a comment: ${JSON.stringify(r.body)}`);
+});
+
+test('sow-301: the SAME member is still DENIED publishing', () => {
+  // The other direction. Without it, the test above would pass just as happily if the gate were removed.
+  return membershipAuthor(req(goodBody), env, { ...deps([]), authorize: memberOk }).then((r) => {
+    assert.equal(r.status, 403, 'a member-tier caller was allowed to PUBLISH');
+    assert.match(String(r.body?.message ?? ''), /Content Creator/);
+  });
+});
+
+test('sow-301 ESCALATION: a comment- itemId carrying an ARTICLE path does NOT get the looser gate', async () => {
+  // The reason the decision is path-based. itemId arrives in the request body, so if it drove the choice,
+  // any paid caller could publish by naming their item `comment-anything`.
+  const sneaky = { ...goodBody, itemId: 'comment-sneaky' };
+  const r = await membershipAuthor(req(sneaky), env, { ...deps([]), authorize: memberOk });
+  assert.equal(r.status, 403, 'a comment- itemId smuggled an article past the creator gate');
+});
+
+test('sow-301: a MIXED file set takes the stricter gate', () => {
+  const mixed = {
+    itemId: 'comment-mixed',
+    files: [
+      { path: 'members/atwellpub/comments/abc123.md', content: 'x' },
+      { path: 'members/atwellpub/posts/smuggled.md', content: 'y' },
+    ],
+  };
+  return membershipAuthor(req(mixed), env, { ...deps([]), authorize: memberOk }).then((r) => {
+    assert.equal(r.status, 403, 'a mixed set was treated as comment-only');
+  });
+});
+
+test('sow-301: isCommentOnly fails closed on every degenerate input', () => {
+  assert.equal(isCommentOnly([{ path: 'members/bob/comments/a.md' }], 'bob'), true);
+  // Control: the true case above must hold, or every false below is meaningless.
+  assert.equal(isCommentOnly([], 'bob'), false, 'an EMPTY set must not read as comment-only');
+  assert.equal(isCommentOnly(null, 'bob'), false);
+  assert.equal(isCommentOnly(undefined, 'bob'), false);
+  assert.equal(isCommentOnly([{ path: 'members/bob/posts/a.md' }], 'bob'), false);
+  assert.equal(isCommentOnly([{ path: 'members/eve/comments/a.md' }], 'bob'), false, 'another member\'s folder');
+  assert.equal(isCommentOnly([{ path: 'members/bob/comments/../posts/a.md' }], 'bob'), false, 'traversal');
+  assert.equal(isCommentOnly([{ path: 'house/comments/a.md' }], 'bob'), false);
+  assert.equal(isCommentOnly([{ nopath: 1 }], 'bob'), false);
+  assert.equal(isCommentOnly([{ path: 'members/bob/comments/a.md' }], ''), false, 'no resolved folder');
+  assert.equal(isCommentOnly([{ path: 'members/bob/comments/a.md' }], null), false);
+  // A prefix-collision folder must not slip through: members/bobby is not members/bob.
+  assert.equal(isCommentOnly([{ path: 'members/bobby/comments/a.md' }], 'bob'), false, 'prefix collision');
 });

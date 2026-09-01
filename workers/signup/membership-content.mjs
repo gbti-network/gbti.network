@@ -116,15 +116,24 @@ export async function authorizePaid(request, env, deps = {}) {
   if (r.status !== 'paid') {
     return deny(r.status === 'banned' ? 'this account is not permitted' : 'an active paid membership is required');
   }
-  return { ok: true, githubId: r.githubId, login: r.login, source: r.source, status: r.status, via: r.via }; // SOW-061 tier; sow-158 P3a via
+  // sow-301: `tier` is reported so a caller can apply a STRICTER tier rule to part of its work without a
+  // second authorization round-trip. membershipAuthor uses it to keep publishing creator-gated while letting a
+  // paid Network Member post a comment.
+  return { ok: true, githubId: r.githubId, login: r.login, source: r.source, status: r.status, tier: r.tier, via: r.via }; // SOW-061 tier; sow-158 P3a via
 }
 
 /**
  * sow-185: authorize a CONTENT CREATOR caller (the WRITE / publish routes: encrypt, open-pull, hosted author).
- * Effective-paid AND effective TIER >= creator. A grandfathered / staff account resolves to creator via
- * resolveEffectiveTier, so it is admitted; a $5 Network Member is denied with an upgrade message; a non-paid
- * caller gets the paid-required message. This is a defense-in-depth OPEN-time gate; classify-pr is the merge
- * boundary. INERT until the owner maps the $5 price (the legacy $150 -> creator, so today's paid all pass).
+ * Effective-paid AND effective TIER >= creator.
+ *
+ * sow-301 CORRECTION, 2026-09-01. This docstring used to say "A grandfathered / staff account resolves to
+ * creator ... so it is admitted" and "INERT until the owner maps the $5 price". BOTH WENT FALSE and the
+ * comment is why nobody noticed: a STAFF account still resolves to creator, but every one of the 22 entries
+ * in house/grandfathered.yml now carries an explicit `tier: member` after the Q15 stamping pass, so
+ * grandfathered accounts are DENIED here. This gate has not been inert since that stamp landed.
+ *
+ * A $5 Network Member is denied with an upgrade message; a non-paid caller gets the paid-required message.
+ * Defense-in-depth OPEN-time gate; classify-pr is the merge boundary.
  */
 export async function authorizeCreator(request, env, deps = {}) {
   const r = await resolveEffective(request, env, deps);
