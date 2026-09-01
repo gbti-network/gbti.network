@@ -46,3 +46,12 @@ jobs:
           RESEND_FROM: ${{ vars.RESEND_FROM }}
           ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
           KV_REPORT_DAYS: ${{ github.event.inputs.days || '8' }}
+      # sow-298: a SCHEDULED failure has nobody watching it. GitHub emails the account that last touched this
+      # workflow file (gbtilabs, an automation inbox), and the per-commit checks board stays green because a
+      # scheduled run is not attached to a commit. That combination hid a three-day Reconcile outage in August
+      # 2026. This step never fails the job: it is if: failure() and the script always exits zero.
+      - name: "Report failure to #github-events"
+        if: failure()
+        run: node scripts/notify-workflow-failure.mjs
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
