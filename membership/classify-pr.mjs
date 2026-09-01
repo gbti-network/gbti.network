@@ -3,8 +3,10 @@
 // Pure functions over a list of changed paths plus the author's role and owned folder. Fail closed.
 //
 // Path tiers (fail-closed: anything not clearly member/house content is infra = superadmin-tier):
-//   Tier S (superadmin-owned): house/roles.yml, CODEOWNERS, .github/**, and any path outside
-//                              members/** and house/** (root config, src/, scripts/, membership/, ...).
+//   Tier S (superadmin-owned): every path CODEOWNERS pins to the two superadmins (roles.yml,
+//                              content-channels.yml, moderation-flags.yml, site-settings.yml,
+//                              syndication-config.yml, house/applets/**), CODEOWNERS itself, .github/**,
+//                              and any path outside members/** and house/**.
 //   Tier A (admin-owned):      the rest of house/** (bans.yml, grandfathered.yml, referral-config.yml,
 //                              house content, members-index.yml).
 //   Member content:            members/**.
@@ -15,6 +17,12 @@ import { ROLE } from './overrides-core.mjs';
 // sow-185 phase 3a: the tier axis. tiers.mjs has ZERO imports (node-free), so it is safe in this bundled module.
 // The caller (pr-gate) resolves the author's + owner's effective tier; decide() only ranks it with meetsTier.
 import { TIER, meetsTier } from './tiers.mjs';
+// sow-298: the SINGLE source of per-path role rank, mirroring CODEOWNERS. isTierS used to re-derive the tier
+// and got it WRONG for the superadmin-pinned house files, calling them Tier A. That made the PR gate and
+// CODEOWNERS share one blind spot, so the "even a bug at the endpoint cannot merge beyond the caller's real
+// role" property did not hold for exactly the files it was written to protect. path-rank.mjs imports only
+// overrides-core.mjs, so this adds no cycle and keeps the module node-free for the MV3 bundle.
+import { rankForPath } from './path-rank.mjs';
 
 const CONTENT_DIRS = ['posts', 'products', 'prompts', 'comments'];
 const ROLE_RANK = { [ROLE.member]: 0, [ROLE.moderator]: 1, [ROLE.admin]: 2, [ROLE.superadmin]: 3 };
@@ -41,20 +49,25 @@ export function isHousePath(p) {
   return p === 'house' || p.startsWith('house/');
 }
 
-/** Superadmin-owned: roles.yml, CODEOWNERS, .github/**, or anything outside members/ and house/. */
+/**
+ * Superadmin-owned, delegated to rankForPath so this and the admin-write gate cannot disagree (sow-298).
+ * Covers every CODEOWNERS-pinned house file, CODEOWNERS, .github/**, and anything outside members/ and
+ * house/. A non-canonical path fails closed to superadmin there, which is at least as strict as the
+ * unclean-path rejection classifyPaths already applies first.
+ */
 export function isTierS(p) {
-  if (p === 'house/roles.yml') return true;
-  if (p === 'CODEOWNERS') return true;
-  if (p.startsWith('.github/')) return true;
-  if (isMemberPath(p)) return false;
-  if (isHousePath(p)) return false;
-  return true; // root config, src/, scripts/, membership/, workers/, docs: all infra
+  return rankForPath(p) === ROLE_RANK[ROLE.superadmin];
 }
 
-/** Admin-owned: house/** except roles.yml (which is Tier S). */
+/**
+ * Admin-owned: house/** except anything Tier S. Disjoint from isTierS BY CONSTRUCTION rather than by the
+ * order decide() happens to test them in (sow-298): before the pinned set moved to Tier S, a path could
+ * only ever be one or the other, and classifyPaths exports both lists to callers that do not know the
+ * branch order at line 261.
+ */
 export function isTierA(p) {
   if (!isHousePath(p)) return false;
-  if (p === 'house/roles.yml') return false;
+  if (isTierS(p)) return false;
   return true;
 }
 

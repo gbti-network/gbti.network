@@ -20023,8 +20023,11 @@ var TIER_LABEL = Object.freeze({
 var RANK2 = Object.freeze({ [TIER.none]: 0, [TIER.member]: 1, [TIER.creator]: 2 });
 var isTier = (t) => Object.prototype.hasOwnProperty.call(RANK2, t);
 
+// membership/path-rank.mjs
+var ROLE_RANK = Object.freeze({ [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 });
+
 // membership/classify-pr.mjs
-var ROLE_RANK = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
+var ROLE_RANK2 = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
 
 // membership/checkout-prices.mjs
 var BILLING_PERIODS = Object.freeze(["monthly", "annual"]);

@@ -14,7 +14,10 @@ const ADMIN = ROLE_RANK.admin;
 const MEMBER = ROLE_RANK.member;
 
 test('rankForPath: the CODEOWNERS-pinned house files are superadmin', () => {
-  for (const p of ['house/roles.yml', 'house/content-channels.yml', 'house/moderation-flags.yml', 'house/site-settings.yml']) {
+  // house/syndication-config.yml joined this list on 2026-09-01 by owner ruling (sow-298 OQ3). It was in the
+  // admin list below until then, which matched CODEOWNERS but NOT the op-level gate that already refused an
+  // admin. The ruling ratified the enforcement and added the CODEOWNERS pin.
+  for (const p of ['house/roles.yml', 'house/content-channels.yml', 'house/moderation-flags.yml', 'house/site-settings.yml', 'house/syndication-config.yml']) {
     assert.equal(rankForPath(p), SUPERADMIN, p);
   }
   assert.equal(rankForPath('house/applets/hue/index.md'), SUPERADMIN);
@@ -29,7 +32,7 @@ test('rankForPath: anything outside members/ and house/ fails closed to superadm
 });
 
 test('rankForPath: the rest of house/** is admin', () => {
-  for (const p of ['house/taxonomy.yml', 'house/quotes.yml', 'house/news-sources.yml', 'house/coupons.yml', 'house/bans.yml', 'house/grandfathered.yml', 'house/syndication-config.yml', 'house/posts/x/index.md']) {
+  for (const p of ['house/taxonomy.yml', 'house/quotes.yml', 'house/news-sources.yml', 'house/coupons.yml', 'house/bans.yml', 'house/grandfathered.yml', 'house/posts/x/index.md']) {
     assert.equal(rankForPath(p), ADMIN, p);
   }
 });

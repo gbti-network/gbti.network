@@ -25,6 +25,14 @@
 # and an admin could walk around it with a pull request. The endpoint rank check and this pin are the two
 # independent authorities, and the gate is the one that actually merges.
 /house/site-settings.yml     @atwellpub @gbtilabs
+
+# sow-298: the syndication templates are superadmin-tier. Their write ops went in superadmin at the op level
+# (editHouseYaml -> requireRole superadmin) but this pin was never added, so for this one file the endpoint
+# rank was the ONLY real control: the PR gate read it as ordinary /house/ and would not have caught an
+# admin-ranked mistake. Pinned by owner ruling 2026-09-01, which ratifies the enforcement rather than
+# tightening it. membership/path-rank.mjs carries the matching row and a test holds the two in lockstep.
+/house/syndication-config.yml  @atwellpub @gbtilabs
+
 # SOW-022: applets are a SUPERADMIN-only content type (GBTI does not host member code). Explicit so the rule
 # holds even if /house/ is later delegated to an admin team. The collection glob also excludes member folders,
 # and validate-content rejects any members/*/applets/.

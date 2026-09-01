@@ -19,13 +19,16 @@ export const ROLE_RANK = Object.freeze({ [ROLE.member]: 0, [ROLE.moderator]: 1, 
 
 // The house/** files CODEOWNERS pins to the two superadmins EXPLICITLY ("superadmin-tier by intent; the two
 // superadmins own them explicitly even if /house/ is later delegated"). Keep this in lockstep with CODEOWNERS.
-// NOT here on purpose: house/syndication-config.yml, which CODEOWNERS leaves under the blanket /house/ rule
-// (admin); its write ops carry their own superadmin op-base rank separately.
-const SUPERADMIN_HOUSE_FILES = new Set([
+// house/syndication-config.yml joined this set on 2026-09-01 by OWNER RULING (sow-298 open question 3). It
+// was deliberately absent while three controls disagreed about it: superadmin at the op level, absent from
+// CODEOWNERS, and admin per classify-pr. The ruling ratifies what the code already enforced, so nothing here
+// becomes more permissive; it closes the declaration gap that made the op-level rank the only real control.
+export const SUPERADMIN_HOUSE_FILES = new Set([
   'house/roles.yml',
   'house/content-channels.yml',
   'house/moderation-flags.yml',
   'house/site-settings.yml',
+  'house/syndication-config.yml',
 ]);
 
 /** A path is canonical iff it is a clean forward-slash relative path (mirrors classify-pr.isCleanPath). */
