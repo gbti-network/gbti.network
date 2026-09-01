@@ -71,7 +71,7 @@ import {
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
   getNewsEngagementSettings, setNewsEngagementSettings, getContentEngagementSettings, setContentEngagementSettings, getSyndicationSettings, setSyndicationSettings,
-  getCouponPool, addCoupon, updateCoupon,
+  getCouponPool, addCoupon, updateCoupon, getSiteSettings,
 } from './admin-ops.mjs';
 
 export { CLIENT_VERSION } from './operations.mjs';
@@ -216,6 +216,7 @@ export async function handleApi(reqInfo, ctx) {
   if (method === 'GET' && pathname === '/api/syndicate-now') return run(() => getSyndicateNowInfo(ctx)); // SOW-088: manual syndicate readiness
   if (method === 'POST' && pathname === '/api/syndicate-now') return run(() => syndicateNow(ctx, body)); // SOW-088: post one item to one destination now
   if (method === 'POST' && pathname === '/api/admin-ops') return run(() => triggerAdminOp(ctx, body ?? {})); // SOW-038 P3: reconcile/E2E trigger
+  if (method === 'GET' && pathname === '/api/site-settings') return run(() => getSiteSettings(ctx)); // sow-271: site-wide presentation toggles
   if (method === 'GET' && pathname === '/api/coupon-pool') return run(() => getCouponPool(ctx)); // SOW-119: the coupon registry
   if (method === 'GET' && pathname === '/api/coupon-usage') return run(() => getCouponUsageOp(ctx)); // SOW-119: KV usage (Worker-gated)
   // sow-231 Phase 3: issued invites. One path, three verbs, matching the Worker route it forwards to.

@@ -713,6 +713,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     async addQuote(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'quote-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async removeQuote(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'quote-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async setQuoteEnabled(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'quote-toggle', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    // sow-271: the site-wide presentation toggles (superadmin). siteSettings reads house/site-settings.yml resolved;
+    // setSiteToggle lands as an auto-gated house PR. `enabled` is coerced to a real boolean on the wire so a stray
+    // "false" cannot switch a toggle ON (the Worker's siteToggleInput rejects a non-boolean regardless).
+    siteSettings() { return workerGet('/membership/admin/site-settings'); }, // { ok, settings, toggles }
+    async setSiteToggle(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'site-setting-set', ...args, enabled: args?.enabled === true }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     // sow-161 increment 4: the news-source config manager (full pool read + the three write actions).
     newsSourcePool() { return workerGet('/membership/admin/news-source-pool'); }, // { ok, sources }
     async addNewsSource(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-source-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },

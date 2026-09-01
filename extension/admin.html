@@ -82,6 +82,7 @@
         <button class="admin-tab" type="button" data-tab="news">News sources</button>
         <button class="admin-tab" type="button" data-tab="quotes">Quotes</button>
         <button class="admin-tab" type="button" data-tab="coupons">Coupons</button>
+        <button class="admin-tab" type="button" data-tab="site-settings">Site settings</button>
         <button class="admin-tab" type="button" data-tab="syndication">Syndication</button>
       </div>
       <div class="admin-col">
@@ -118,6 +119,13 @@
           <!-- SOW-119: the coupon registry (git-native config) + KV usage + the shareable invite links. -->
           <div class="admin-card-h"><h2>Coupons</h2><p>Free-time signup codes: create and edit coupons, track redemptions, and manage the invite links. Config edits open an auto-merged house PR.</p></div>
           <div class="admin-card-b"><div class="admin-sub"><gbti-coupon-manager></gbti-coupon-manager></div></div>
+        </section>
+        <section class="admin-card" data-panel="site-settings">
+          <!-- sow-271: the site-wide presentation toggles. SUPERADMIN: the Worker route carries ROLE_RANK.superadmin
+               and house/site-settings.yml is superadmin-CODEOWNED, so an admin opening this tab gets a 403 from the
+               endpoint rather than a silent no-op. -->
+          <div class="admin-card-h"><h2>Site settings</h2><p>Site-wide presentation toggles. Superadmin only. Edits open a house PR and go live on the next site deploy.</p></div>
+          <div class="admin-card-b"><div class="admin-sub"><gbti-site-settings-manager></gbti-site-settings-manager></div></div>
         </section>
         <section class="admin-card" data-panel="syndication">
           <!-- SOW-088: the former Syndication (queue) + Channels tabs combined; the workspace nests the

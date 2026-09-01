@@ -21,6 +21,7 @@ import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, Conte
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
 import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setContentEngagement as setContentEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-126
 import { addCouponEdit, updateCouponEdit, CouponEditError } from '../../membership/coupon-edits.mjs'; // SOW-119
+import { setSiteToggle as setSiteToggleEdit, readAllToggles, SITE_TOGGLES, SiteSettingsEditError } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, contentEngagement, CONTENT_ENGAGEMENT_SIGNALS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-125 + SOW-126
 import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
 import { publishFiles } from './publish.mjs';
@@ -423,6 +424,38 @@ export async function getModerationFlagPool(ctx) {
   const parsed = await readYaml(ctx, MODERATION_FLAGS_PATH);
   const lists = parsed.lists && typeof parsed.lists === 'object' && !Array.isArray(parsed.lists) ? parsed.lists : {};
   return { lists };
+}
+
+const SITE_SETTINGS_PATH = 'house/site-settings.yml'; // sow-271, superadmin-CODEOWNED
+
+/**
+ * Read the site-wide presentation toggles for the manager UI (sow-271). Public data; read-only. Returns every
+ * known toggle RESOLVED to a boolean plus its registry metadata, so the UI never has to decide what a missing
+ * key means -- readAllToggles owns that, and the build loader uses the same function.
+ */
+export async function getSiteSettings(ctx) {
+  const parsed = await readYaml(ctx, SITE_SETTINGS_PATH);
+  return {
+    settings: readAllToggles(parsed),
+    toggles: Object.entries(SITE_TOGGLES).map(([key, spec]) => ({ key, label: spec.label, description: spec.description })),
+  };
+}
+
+/**
+ * Flip one site-wide toggle (sow-271). SUPERADMIN, enforced three ways that do not depend on each other:
+ * editHouseYaml calls requireRole(canManageRoles, 'superadmin'), the Worker route carries ROLE_RANK.superadmin,
+ * and house/site-settings.yml is superadmin-CODEOWNED so the SOW-005 gate rejects anyone else's PR outright.
+ */
+export async function setSiteToggle(ctx, { key, enabled } = {}) {
+  const k = String(key || '').trim().toLowerCase();
+  const on = enabled === true || enabled === 'true' || enabled === 1 || enabled === '1';
+  return editHouseYaml(ctx, SITE_SETTINGS_PATH, (parsed) => setSiteToggleEdit(parsed, { key: k, enabled: on }, actionCtx(ctx)), {
+    branch: `gbti/site-setting-${slugOf(k) || 'toggle'}`,
+    message: `Turn site setting ${k} ${on ? 'on' : 'off'}`,
+    title: `Site setting: ${k} ${on ? 'on' : 'off'}`,
+    noopMsg: `site setting already ${on ? 'on' : 'off'}: ${k}`,
+    errType: SiteSettingsEditError,
+  });
 }
 
 /** Read the per-type templates (+ SOW-088 per-channel overrides) for the manager UI. Read-only. */

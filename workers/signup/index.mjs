@@ -92,7 +92,7 @@ import { listRepoDrafts } from './membership-repo-drafts.mjs'; // sow-194: owner
 import { listSharesFeed } from './membership-shares.mjs'; // sow-158 Part 3: tier-gated community Shares feed
 import { membershipSyncFork } from './membership-sync-fork.mjs'; // SOW-106 Phase A: server-side fork main sync
 import { membershipAuthor, membershipAuthorTargets } from './membership-author.mjs'; // SOW-156 spike: hosted authoring (flagged); sow-183: superadmin reassignment targets
-import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads
+import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool, membershipAdminSiteSettings } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads; sow-271: site-settings pool
 import { handleUnsubscribe } from './membership-unsubscribe.mjs'; // SOW-166: one-click digest unsubscribe (RFC 8058)
 import { handleMailClick } from './mail-click-route.mjs'; // sow-273 follow-up: the digest click counter
 import { handleMailOpen } from './mail-open-route.mjs'; // the digest open counter (1x1 pixel)
@@ -1427,6 +1427,15 @@ export default {
           const r = await membershipAdminCouponPool(request, env, { allowCookie: true });
           // corsHeaders(credentials) already sets Vary: 'Origin, Authorization'; don't override it to drop Origin.
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+      // sow-271: the site-settings pool read for the WEBSITE admin page. Admin-gated (cookie-enabled), read-only.
+      if (pathname === '/membership/admin/site-settings') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = await membershipAdminSiteSettings(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }
 

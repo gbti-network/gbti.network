@@ -154,6 +154,8 @@ export function createHttpClient({ baseUrl = '', token, fetch = globalThis.fetch
     inviteCreate: ({ campaign, note, expiresAt }) => request('POST', '/api/invites', { campaign, note, expiresAt }),
     inviteUpdate: ({ code, action, note }) => request('PATCH', '/api/invites', { code, action, note }),
     quotePool: () => request('GET', '/api/quote-pool'), // SOW-063 P3: the splash quote pool { quotes } for the manager
+    siteSettings: () => request('GET', '/api/site-settings'), // sow-271: the site-wide presentation toggles { settings, toggles } for the manager
+    setSiteToggle: ({ key, enabled }) => request('POST', '/api/admin', { action: 'site-setting-set', key, enabled: enabled === true }), // sow-271
     contentChannelPool: () => request('GET', '/api/content-channel-pool'), // SOW-087: the category -> Discord-channel map { channels }
     setContentChannel: ({ category, channelId }) => request('POST', '/api/admin', { action: 'content-channel-set', category, channelId }), // SOW-087
     removeContentChannel: ({ category }) => request('POST', '/api/admin', { action: 'content-channel-remove', category }), // SOW-087

@@ -17486,8 +17486,8 @@ var SHARE_PATH = /^members\/[^/]+\/shares\/[^/]+\.(md|mdx)$/;
 var COMMENT_PATH = /^(members\/[^/]+|house)\/comments\/[^/]+\.(md|mdx)$/;
 var basename = (p) => p.slice(p.lastIndexOf("/") + 1);
 function decodeBase64Utf8(b64) {
-  const clean5 = String(b64 || "").replace(/\s/g, "");
-  const bytes = Uint8Array.from(atob(clean5), (c) => c.charCodeAt(0));
+  const clean6 = String(b64 || "").replace(/\s/g, "");
+  const bytes = Uint8Array.from(atob(clean6), (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }
 function safeRel(relPath) {
@@ -17703,9 +17703,9 @@ function toBase64(text) {
   return btoa(bin);
 }
 function fromBase64(b64) {
-  const clean5 = String(b64 || "").replace(/\s+/g, "");
-  if (typeof Buffer !== "undefined") return Buffer.from(clean5, "base64").toString("utf8");
-  const bin = atob(clean5);
+  const clean6 = String(b64 || "").replace(/\s+/g, "");
+  if (typeof Buffer !== "undefined") return Buffer.from(clean6, "base64").toString("utf8");
+  const bin = atob(clean6);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
   return new TextDecoder().decode(bytes);
@@ -21594,6 +21594,66 @@ function setSyndicationSettings(doc, { enabled, requireApproval, holdMinutes, ch
   return { next: d, changed: true, audit: { ...auditEntry6(ctx, "settings", detail), action: "syndication-settings.set" } };
 }
 
+// membership/site-settings-edits.mjs
+var SiteSettingsEditError = class extends Error {
+};
+var SITE_TOGGLES = {
+  extension_cta: {
+    label: "Chrome extension call to action",
+    // Shown in the manager UI. Says what the switch governs AND what it deliberately does not, because the
+    // distinction is the whole reason this toggle is narrow (see sow-271: adverts are not capability notices).
+    description: 'The header nav item, the homepage Add-to-Chrome banner, the sign-in modal footnote, and the archived v1 homepage button. Does NOT hide the "Extension required" notices that explain a control the extension implements, and does not take the /extension/ install page down.',
+    fallback: true
+  }
+};
+var TOGGLE_KEYS = Object.keys(SITE_TOGGLES);
+var normKey = (k) => String(k || "").trim().toLowerCase();
+function isoOf8(now) {
+  const d = now instanceof Date ? now : new Date(now ?? Date.now());
+  if (Number.isNaN(d.getTime())) throw new SiteSettingsEditError("invalid timestamp");
+  return d.toISOString();
+}
+function auditEntry7(ctx, action, key, detail) {
+  const a = ctx?.actor || null;
+  return {
+    at: isoOf8(ctx?.now),
+    actor: a ? { github_id: a.githubId != null ? String(a.githubId) : a.github_id != null ? String(a.github_id) : null, login: a.login ?? null } : null,
+    action,
+    target: { key },
+    detail: detail ?? null
+  };
+}
+function clean5(doc) {
+  const d = structuredClone(doc && typeof doc === "object" ? doc : {});
+  if (!d.settings || typeof d.settings !== "object" || Array.isArray(d.settings)) d.settings = {};
+  return d;
+}
+function readToggle(doc, key) {
+  const k = normKey(key);
+  const spec = SITE_TOGGLES[k];
+  if (!spec) throw new SiteSettingsEditError(`unknown site setting: ${key}`);
+  const raw = clean5(doc).settings[k];
+  if (raw === void 0 || raw === null) return spec.fallback;
+  if (typeof raw !== "boolean") throw new SiteSettingsEditError(`site setting ${k} must be true or false, got ${typeof raw}`);
+  return raw;
+}
+function readAllToggles(doc) {
+  return Object.fromEntries(TOGGLE_KEYS.map((k) => [k, readToggle(doc, k)]));
+}
+function setSiteToggle(doc, { key, enabled } = {}, ctx = {}) {
+  const d = clean5(doc);
+  const k = normKey(key);
+  if (!SITE_TOGGLES[k]) throw new SiteSettingsEditError(`unknown site setting: ${key || "(none)"}`);
+  if (typeof enabled !== "boolean") throw new SiteSettingsEditError("enabled must be true or false");
+  const current = readToggle(d, k);
+  const alreadyPinned = Object.prototype.hasOwnProperty.call(d.settings, k);
+  if (current === enabled && alreadyPinned) {
+    return { next: d, changed: false, audit: auditEntry7(ctx, "site-setting.set", k, { noop: true, enabled }) };
+  }
+  d.settings[k] = enabled;
+  return { next: d, changed: true, audit: auditEntry7(ctx, "site-setting.set", k, { enabled, was: current }) };
+}
+
 // client/src/admin-ops.mjs
 async function adminPublish(ctx, opts) {
   await syncForkIfCreatingBranch(ctx, opts.repo, opts.branch);
@@ -21626,13 +21686,13 @@ function actionCtx(ctx) {
     now: ctx.now ? ctx.now() : void 0
   };
 }
-function prBody(reason, auditEntry7) {
+function prBody(reason, auditEntry8) {
   const head = reason ? `Reason: ${reason}
 
 ` : "";
-  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry7)} -->`;
+  return `${head}<!-- gbti-audit ${JSON.stringify(auditEntry8)} -->`;
 }
-var noop = (message, auditEntry7) => ({ changed: false, noop: true, message, audit: auditEntry7 });
+var noop = (message, auditEntry8) => ({ changed: false, noop: true, message, audit: auditEntry8 });
 function requireId(githubId) {
   if (githubId === void 0 || githubId === null || String(githubId).trim() === "") {
     throw new OperationError("bad-request", "githubId is required");
@@ -21940,6 +22000,25 @@ async function getModerationFlagPool(ctx) {
   const lists = parsed.lists && typeof parsed.lists === "object" && !Array.isArray(parsed.lists) ? parsed.lists : {};
   return { lists };
 }
+var SITE_SETTINGS_PATH = "house/site-settings.yml";
+async function getSiteSettings(ctx) {
+  const parsed = await readYaml(ctx, SITE_SETTINGS_PATH);
+  return {
+    settings: readAllToggles(parsed),
+    toggles: Object.entries(SITE_TOGGLES).map(([key, spec]) => ({ key, label: spec.label, description: spec.description }))
+  };
+}
+async function setSiteToggle2(ctx, { key, enabled } = {}) {
+  const k = String(key || "").trim().toLowerCase();
+  const on = enabled === true || enabled === "true" || enabled === 1 || enabled === "1";
+  return editHouseYaml(ctx, SITE_SETTINGS_PATH, (parsed) => setSiteToggle(parsed, { key: k, enabled: on }, actionCtx(ctx)), {
+    branch: `gbti/site-setting-${slugOf(k) || "toggle"}`,
+    message: `Turn site setting ${k} ${on ? "on" : "off"}`,
+    title: `Site setting: ${k} ${on ? "on" : "off"}`,
+    noopMsg: `site setting already ${on ? "on" : "off"}: ${k}`,
+    errType: SiteSettingsEditError
+  });
+}
 async function getSyndicationTemplatePool(ctx) {
   const parsed = await readYaml(ctx, SYNDICATION_CONFIG_PATH);
   const cfg = syndicationConfigFromParsed(parsed);
@@ -22205,7 +22284,7 @@ async function setContentEngagementSettings(ctx, { enabled, threshold, tier, sig
 
 // extension/src/ext-dispatch.mjs
 var GOVERNANCE_ACTIONS = /* @__PURE__ */ new Set(["ban", "unban", "grandfather", "ungrandfather", "role"]);
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "content-engagement-set": setContentEngagementSettings, "syndication-settings-set": setSyndicationSettings2 };
+var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "content-engagement-set": setContentEngagementSettings, "syndication-settings-set": setSyndicationSettings2, "site-setting-set": setSiteToggle2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,
@@ -22273,6 +22352,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/moderation-flag-pool") return ok(await getModerationFlagPool(ctx));
     if (pathname === "/api/syndication-template-pool") return ok(await getSyndicationTemplatePool(ctx));
     if (pathname === "/api/coupon-pool") return ok(await getCouponPool(ctx));
+    if (pathname === "/api/site-settings") return ok(await getSiteSettings(ctx));
     if (pathname === "/api/news-engagement") return ok(await getNewsEngagementSettings(ctx));
     if (pathname === "/api/content-engagement") return ok(await getContentEngagementSettings(ctx));
     if (pathname === "/api/syndication-settings") return ok(await getSyndicationSettings(ctx));

@@ -138,6 +138,7 @@ const PRE_AUTH = new Set([
   '/api/taxonomy', '/api/news-source-pool', '/api/quote-pool',
   '/api/content-channel-pool', '/api/moderation-flag-pool', '/api/syndication-template-pool',
   '/api/coupon-pool', '/api/news-engagement', '/api/content-engagement', '/api/syndication-settings',
+  '/api/site-settings', // sow-271: the site-wide presentation toggles (public git-native read)
 ]);
 
 test('pre-auth positioning: the routes above the ext-dispatch identity gate are EXACTLY the declared pre-auth set', () => {
