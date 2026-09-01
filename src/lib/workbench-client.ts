@@ -735,6 +735,26 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     async addCoupon(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'coupon-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async updateCoupon(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'coupon-update', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
 
+    // sow-161 B: the SUPERADMIN channel-map manager (<gbti-channel-map-manager>) on the WEBSITE host. The same
+    // element the extension drives via client.mjs; these methods give it the identical surface over the cookie
+    // session -> the Worker (which applies the change with the App token and opens the auto-gated house PR). Reads
+    // are superadmin-gated GETs; the six writes land as auto-gated PRs against moderation-flags.yml /
+    // syndication-config.yml (both superadmin-pinned), normalized to the { prNumber } shape the manager renders.
+    // The channel -> Discord MAP itself is READ here (contentChannelPool) but EDITED via the categories workspace
+    // (category-batch); this manager only reads it to draw the matrix, so no setContentChannel method is needed.
+    contentChannelPool() { return workerGet('/membership/admin/content-channel-pool'); }, // { channels }
+    moderationFlagPool() { return workerGet('/membership/admin/moderation-flag-pool'); }, // { lists }
+    syndicationTemplatePool() { return workerGet('/membership/admin/syndication-template-pool'); }, // { templates, channelTemplates, ..., types, channels }
+    newsEngagementSettings() { return workerGet('/membership/admin/news-engagement'); }, // { settings, tiers }
+    contentEngagementSettings() { return workerGet('/membership/admin/content-engagement'); }, // { settings, tiers, signals }
+    syndicationSettings() { return workerGet('/membership/admin/syndication-settings'); }, // { settings, channelNames, autoTypes, ... }
+    async addModerationFlagTerm(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'flag-term-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async removeModerationFlagTerm(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'flag-term-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async setSyndicationTemplates(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-templates-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async setNewsEngagement(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-engagement-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async setContentEngagementSettings(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'content-engagement-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async setSyndicationSettings(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-settings-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+
     // sow-231 Phase 3: ISSUED INVITES. Unlike the coupon config above, these are NOT git-native and open no
     // PR: an invite is per-person state carrying an administration note, so it lives in KV per the storage
     // boundary. That is why these go straight to the Worker rather than through the author route.

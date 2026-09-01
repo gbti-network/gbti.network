@@ -92,7 +92,7 @@ import { listRepoDrafts } from './membership-repo-drafts.mjs'; // sow-194: owner
 import { listSharesFeed } from './membership-shares.mjs'; // sow-158 Part 3: tier-gated community Shares feed
 import { membershipSyncFork } from './membership-sync-fork.mjs'; // SOW-106 Phase A: server-side fork main sync
 import { membershipAuthor, membershipAuthorTargets } from './membership-author.mjs'; // SOW-156 spike: hosted authoring (flagged); sow-183: superadmin reassignment targets
-import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool, membershipAdminSiteSettings, membershipAdminTaxonomy } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads; sow-271: site-settings pool; sow-161 A: taxonomy pool
+import { membershipAdminAuthor, membershipAdminQuotePool, membershipAdminNewsSourcePool, membershipAdminCouponPool, membershipAdminSiteSettings, membershipAdminTaxonomy, membershipAdminContentChannelPool, membershipAdminModerationFlagPool, membershipAdminSyndicationTemplatePool, membershipAdminNewsEngagement, membershipAdminContentEngagement, membershipAdminSyndicationSettings } from './membership-admin-author.mjs'; // sow-161: server-side admin mutations + config pool reads; sow-271: site-settings pool; sow-161 A: taxonomy pool; sow-161 B: the channel-map manager pool reads (superadmin)
 import { handleUnsubscribe } from './membership-unsubscribe.mjs'; // SOW-166: one-click digest unsubscribe (RFC 8058)
 import { handleMailClick } from './mail-click-route.mjs'; // sow-273 follow-up: the digest click counter
 import { handleMailOpen } from './mail-open-route.mjs'; // the digest open counter (1x1 pixel)
@@ -1448,6 +1448,29 @@ export default {
         if (method === 'GET') {
           const r = await membershipAdminTaxonomy(request, env, { allowCookie: true });
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+      // sow-161 B: the channel-map manager's SIX pool reads for the WEBSITE Channels workspace. ALL SUPERADMIN
+      // (membershipAdmin* default to authorizeSuperadmin), read-only, cookie-enabled (a GET carries no CSRF). One
+      // route each; the shape mirrors what the extension host gets from admin-ops so the shared element renders
+      // identically. Grouped in a table to keep the six routes uniform (same CORS + no-store + Vary contract).
+      {
+        const CHANNEL_MAP_POOLS = {
+          '/membership/admin/content-channel-pool': membershipAdminContentChannelPool,
+          '/membership/admin/moderation-flag-pool': membershipAdminModerationFlagPool,
+          '/membership/admin/syndication-template-pool': membershipAdminSyndicationTemplatePool,
+          '/membership/admin/news-engagement': membershipAdminNewsEngagement,
+          '/membership/admin/content-engagement': membershipAdminContentEngagement,
+          '/membership/admin/syndication-settings': membershipAdminSyndicationSettings,
+        };
+        const poolFn = CHANNEL_MAP_POOLS[pathname];
+        if (poolFn) {
+          const cors = corsHeaders(request, env, { credentials: true });
+          if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+          if (method === 'GET') {
+            const r = await poolFn(request, env, { allowCookie: true });
+            return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+          }
         }
       }
 

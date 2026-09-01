@@ -18,7 +18,7 @@
 // CSRF: the cookie path enforces the double-submit token inside resolveIdentity (a POST is a non-safe method); the
 // bearer path (extension) needs none. Everything is injectable (fetchImpl, authorize, kv, limiter) for unit tests.
 
-import { authorizeStaff, authorizeAdmin } from './membership-admin.mjs';
+import { authorizeStaff, authorizeAdmin, authorizeSuperadmin } from './membership-admin.mjs';
 import { getInstallationToken } from './github-app.mjs';
 import { rateLimit } from './abuse.mjs';
 import { flipContentStatus, retagContent } from '../../client/src/content-ops.mjs'; // already in the Worker bundle (membership-shares); sow-161 A: retag for tag-edit
@@ -36,6 +36,12 @@ import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/si
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs'; // sow-161 A: category-batch taxonomy ops
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // sow-161 A: category-batch channel ops
 import { rankForPath, maxRankForPaths } from '../../membership/path-rank.mjs'; // sow-161 A: the multi-file max-rank gate (matches CODEOWNERS, unlike classify-pr)
+// sow-161 B (channel-map manager, superadmin): the moderation-flags + syndication config write cores + the read
+// helpers. All three files (moderation-flags.yml, syndication-config.yml) are superadmin-pinned in CODEOWNERS +
+// SUPERADMIN_HOUSE_FILES, so every write row below is superadmin and the drift guard agrees with rankForPath.
+import { addFlagTerm, removeFlagTerm } from '../../membership/moderation-flags-edits.mjs'; // sow-161 B
+import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setContentEngagement as setContentEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES } from '../../membership/syndication-template-edits.mjs'; // sow-161 B
+import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, contentEngagement, CONTENT_ENGAGEMENT_SIGNALS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // sow-161 B: the channel-map pool reads
 import yaml from 'js-yaml'; // already in the Worker bundle (content-ops)
 
 const GH = 'https://api.github.com';
@@ -152,11 +158,62 @@ function siteToggleInput(p) {
   return { ok: true, args: { key, enabled: p.enabled } };
 }
 
+// sow-161 B (channel-map manager, superadmin). Every input below is a THIN shape check: the pure cores
+// (addFlagTerm / setTemplate / setNewsEngagement / setContentEngagement / setSyndicationSettings) validate every
+// value exhaustively and throw ModerationFlagEditError / TemplateEditError, which the config branch catches as a
+// clean 400. So these only reject a value the core would ACCEPT-BUT-MISREAD (a missing required key, a non-array
+// batch), and otherwise pass the payload through unchanged, preserving undefined-vs-explicit (the cores leave an
+// omitted key alone). A flagged word list + syndication templates are superadmin data; the ROUTES are
+// superadmin-gated, and these rows are pinned superadmin so the multi-file gate and CODEOWNERS agree.
+function flagTermInput(p) {
+  const list = typeof p?.list === 'string' ? p.list.trim() : '';
+  const term = typeof p?.term === 'string' ? p.term : '';
+  if (!list) return { ok: false, status: 400, body: { error: 'bad_request', message: 'a flag list name is required' } };
+  if (!term.trim()) return { ok: false, status: 400, body: { error: 'bad_request', message: 'a non-empty term is required' } };
+  return { ok: true, args: { list, term } };
+}
+function newsEngagementInput(p) {
+  // Every field is optional; the core distinguishes undefined (leave alone) from an explicit value and validates
+  // types + ranges. An all-undefined edit is a legitimate no-op (the core returns changed:false).
+  return { ok: true, args: { enabled: p?.enabled, openThreshold: p?.openThreshold, tier: p?.tier, commentAutopost: p?.commentAutopost } };
+}
+function contentEngagementInput(p) {
+  return { ok: true, args: { enabled: p?.enabled, threshold: p?.threshold, tier: p?.tier, signals: p?.signals } };
+}
+function syndicationSettingsInput(p) {
+  return { ok: true, args: { enabled: p?.enabled, requireApproval: p?.requireApproval, holdMinutes: p?.holdMinutes, channels: p?.channels, autoMatrix: p?.autoMatrix, channelHoldMinutes: p?.channelHoldMinutes } };
+}
+const TEMPLATE_BATCH_MAX = 200; // types x channels x {shared,stub} is well under this; the cap only bounds abuse
+function templatesBatchInput(p) {
+  const edits = Array.isArray(p?.edits) ? p.edits : null;
+  if (!edits || !edits.length) return { ok: false, status: 400, body: { error: 'bad_request', message: 'a non-empty edits array is required' } };
+  if (edits.length > TEMPLATE_BATCH_MAX) return { ok: false, status: 400, body: { error: 'bad_request', message: `too many template edits (max ${TEMPLATE_BATCH_MAX})` } };
+  return { ok: true, args: { edits } };
+}
+
+// sow-161 B: the syndication-template BATCH as ONE single-file CONFIG_OP fn. Unlike the other config fns (one
+// edit), this loops setTemplate over the edits array against ONE doc (house/syndication-config.yml), mirroring
+// client/src/admin-ops.mjs setSyndicationTemplates. Any bad edit throws TemplateEditError -> the config branch
+// turns it into a 400, and the whole batch is refused (no partial write, since the file is serialized once after).
+function setTemplatesBatch(parsed, { edits } = {}, ctx = {}) {
+  let doc = parsed;
+  let changed = false;
+  for (const e of (Array.isArray(edits) ? edits : [])) {
+    const r = setTemplateEdit(doc, { type: e?.type, template: e?.template, channel: e?.channel, stub: e?.stub === true }, ctx);
+    doc = r.next;
+    if (r.changed) changed = true;
+  }
+  return { next: doc, changed };
+}
+
 const CONFIG_ACTIONS = new Set([
   'quote-add', 'quote-remove', 'quote-toggle',
   'news-source-add', 'news-source-remove', 'news-source-toggle',
   'coupon-add', 'coupon-update',
   'site-setting-set',
+  // sow-161 B (channel-map manager, superadmin): moderation flag terms + the syndication config surfaces.
+  'flag-term-add', 'flag-term-remove',
+  'syndication-templates-set', 'news-engagement-set', 'content-engagement-set', 'syndication-settings-set',
 ]);
 const CONFIG_OP = {
   'quote-add': { path: 'house/quotes.yml', rank: ROLE_RANK.admin, fn: addQuote, input: quoteInput, slug: (a) => idSlug(a.text) },
@@ -174,6 +231,17 @@ const CONFIG_OP = {
   // lives in the WORKER table (not extension-relay only, the way content-channels does) specifically so the
   // WEBSITE admin page can flip it, which is the direction sow-271 is moving the site.
   'site-setting-set': { path: 'house/site-settings.yml', rank: ROLE_RANK.superadmin, fn: setSiteToggle, input: siteToggleInput, slug: (a) => idSlug(a.key) },
+  // sow-161 B: the channel-map manager's config writes. moderation-flags.yml + syndication-config.yml are both
+  // superadmin-pinned in CODEOWNERS + SUPERADMIN_HOUSE_FILES, so rankForPath returns superadmin for each and the
+  // DRIFT guard (test/path-rank.test.mjs) requires this hardcode to say superadmin too. A fixed per-surface slug
+  // reuses ONE branch per surface (force-reset), matching admin-ops' fixed gbti/syndication-* branches; the flag
+  // rows slug per (list, term) so distinct term edits do not clobber each other's open PR.
+  'flag-term-add': { path: 'house/moderation-flags.yml', rank: ROLE_RANK.superadmin, fn: addFlagTerm, input: flagTermInput, slug: (a) => idSlug(`${a.list}-${a.term}`) },
+  'flag-term-remove': { path: 'house/moderation-flags.yml', rank: ROLE_RANK.superadmin, fn: removeFlagTerm, input: flagTermInput, slug: (a) => idSlug(`${a.list}-${a.term}`) },
+  'syndication-templates-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setTemplatesBatch, input: templatesBatchInput, slug: () => 'syndication-templates' },
+  'news-engagement-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setNewsEngagementEdit, input: newsEngagementInput, slug: () => 'news-engagement' },
+  'content-engagement-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setContentEngagementEdit, input: contentEngagementInput, slug: () => 'content-engagement' },
+  'syndication-settings-set': { path: 'house/syndication-config.yml', rank: ROLE_RANK.superadmin, fn: setSyndicationSettingsEdit, input: syndicationSettingsInput, slug: () => 'syndication-settings' },
 };
 // sow-161 A: MULTI-FILE ops. Unlike a single-file CONFIG_OP (one {path, rank} pair), these can touch several
 // files at different tiers in one PR, so a single declared rank cannot express their real requirement. The
@@ -650,6 +718,82 @@ export async function membershipAdminCouponPool(request, env, deps = {}) {
   if (!load.ok) return { status: load.status, body: load.body };
   const coupons = Array.isArray(load.parsed?.coupons) ? load.parsed.coupons : [];
   return { status: 200, body: { ok: true, coupons } };
+}
+
+// sow-161 B: the channel-map manager's SIX pool READs, on the WEBSITE host. All SUPERADMIN-gated: the manager
+// mounts superadmin-only, every write on this surface is superadmin, and moderation-flags is a moderation
+// blocklist + the syndication config is operational, so read audience must not exceed write audience. Each
+// mirrors the exact body shape client/src/admin-ops.mjs returns to the extension host (getContentChannelPool /
+// getModerationFlagPool / getSyndicationTemplatePool / getNewsEngagementSettings / getContentEngagementSettings /
+// getSyndicationSettings), so the shared <gbti-channel-map-manager> renders identically on either host. Read-only
+// + fail-closed; a GET carries no CSRF. Helper collapses the shared authorize + install-token + load boilerplate.
+async function loadForSuperadminRead(request, env, deps, path) {
+  const {
+    fetchImpl = globalThis.fetch, authorize = authorizeSuperadmin, allowCookie = false,
+    upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network',
+  } = deps;
+  const auth = await authorize(request, env, { ...deps, allowCookie });
+  if (!auth.ok) return { fail: { status: auth.status, body: auth.body } };
+  let instToken;
+  try { instToken = await getInstallationToken(env, deps); } catch { return { fail: { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } } }; }
+  const load = await loadHouseYaml(fetchImpl, instToken, upstream, path);
+  if (!load.ok) return { fail: { status: load.status, body: load.body } };
+  return { parsed: load.parsed || {} };
+}
+
+export async function membershipAdminContentChannelPool(request, env, deps = {}) {
+  const r = await loadForSuperadminRead(request, env, deps, 'house/content-channels.yml');
+  if (r.fail) return r.fail;
+  return { status: 200, body: { channels: Array.isArray(r.parsed.channels) ? r.parsed.channels : [] } };
+}
+
+export async function membershipAdminModerationFlagPool(request, env, deps = {}) {
+  const r = await loadForSuperadminRead(request, env, deps, 'house/moderation-flags.yml');
+  if (r.fail) return r.fail;
+  const lists = r.parsed.lists && typeof r.parsed.lists === 'object' && !Array.isArray(r.parsed.lists) ? r.parsed.lists : {};
+  return { status: 200, body: { lists } };
+}
+
+export async function membershipAdminSyndicationTemplatePool(request, env, deps = {}) {
+  const r = await loadForSuperadminRead(request, env, deps, 'house/syndication-config.yml');
+  if (r.fail) return r.fail;
+  const cfg = syndicationConfigFromParsed(r.parsed);
+  return { status: 200, body: { templates: cfg.templates, channelTemplates: cfg.channel_templates, stubTemplates: cfg.stub_templates, channelTemplatesStub: cfg.channel_templates_stub, types: [...TEMPLATE_TYPES], channels: [...TEMPLATE_CHANNELS] } };
+}
+
+export async function membershipAdminNewsEngagement(request, env, deps = {}) {
+  const r = await loadForSuperadminRead(request, env, deps, 'house/syndication-config.yml');
+  if (r.fail) return r.fail;
+  return { status: 200, body: { settings: { ...newsEngagement(syndicationConfigFromParsed(r.parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS] } };
+}
+
+export async function membershipAdminContentEngagement(request, env, deps = {}) {
+  const r = await loadForSuperadminRead(request, env, deps, 'house/syndication-config.yml');
+  if (r.fail) return r.fail;
+  return { status: 200, body: { settings: { ...contentEngagement(syndicationConfigFromParsed(r.parsed)) }, tiers: [...NEWS_ENGAGEMENT_TIERS], signals: [...CONTENT_ENGAGEMENT_SIGNALS] } };
+}
+
+export async function membershipAdminSyndicationSettings(request, env, deps = {}) {
+  const r = await loadForSuperadminRead(request, env, deps, 'house/syndication-config.yml');
+  if (r.fail) return r.fail;
+  const cfg = syndicationConfigFromParsed(r.parsed);
+  const channels = {};
+  for (const name of SYNDICATION_CHANNEL_NAMES) channels[name] = Boolean(cfg.channels?.[name]);
+  // SOW-125: the per-type-per-channel auto-share matrix, defaulted per cell so the UI derives auto/manual/building
+  // from ONE source (no stale "building" flags). Mirrors admin-ops.getSyndicationSettings exactly.
+  const autoMatrix = {};
+  for (const t of AUTO_TYPES) { autoMatrix[t] = {}; for (const ch of MATRIX_CHANNELS) autoMatrix[t][ch] = cfg.auto_matrix?.[t]?.[ch] ?? 'off'; }
+  return {
+    status: 200,
+    body: {
+      settings: {
+        enabled: cfg.enabled, requireApproval: cfg.require_approval, holdMinutes: cfg.hold_minutes, channels,
+        autoMatrix, channelHoldMinutes: { ...cfg.channel_hold_minutes },
+      },
+      channelNames: [...SYNDICATION_CHANNEL_NAMES],
+      autoTypes: [...AUTO_TYPES], matrixChannels: [...MATRIX_CHANNELS], autoChannels: [...AUTO_CHANNELS], autoModes: [...AUTO_MODES], capability: { ...CHANNEL_CAPABILITY },
+    },
+  };
 }
 
 /** PUT (or DELETE for content:null) one file on the branch; one retry on a 409 sha race. Mirrors membership-author. */

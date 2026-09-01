@@ -30,6 +30,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
           <button type="button" role="tab" data-tab="categories" data-min="admin" aria-selected="false" hidden>Categories</button>
           <button type="button" role="tab" data-tab="tags" data-min="admin" aria-selected="false" hidden>Tags</button>
           <button type="button" role="tab" data-tab="site-settings" data-min="superadmin" aria-selected="false" hidden>Site settings</button>
+          <button type="button" role="tab" data-tab="channels" data-min="superadmin" aria-selected="false" hidden>Channels</button>
         </nav>
 
         <div class="adm-card" data-panel="admin">
@@ -65,6 +66,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         <div class="adm-card" data-panel="site-settings" hidden>
           <h2 class="h2">Site settings</h2>
           <gbti-site-settings-manager></gbti-site-settings-manager>
+        </div>
+        {/* sow-161 B: SUPERADMIN. The shared channel-map manager (channels x auto-share matrix, syndication
+            templates + settings, engagement thresholds, moderation flag lists). The tab carries
+            data-min="superadmin" and the module below is imported only for superadmin, so an admin never upgrades
+            the element; every write lands as an auto-gated PR against superadmin-pinned house files. */}
+        <div class="adm-card" data-panel="channels" hidden>
+          <h2 class="h2">Channels</h2>
+          <gbti-channel-map-manager></gbti-channel-map-manager>
         </div>
       </div>
     </div>
@@ -112,6 +121,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       // imports it, so the tag stays inert and the card stays hidden even if the tab were somehow revealed.
       if (rank >= RANK.superadmin) {
         await import('../../client-ui/src/elements/gbti-site-settings-manager.mjs');
+        await import('../../client-ui/src/elements/gbti-channel-map-manager.mjs'); // sow-161 B: the superadmin Channels workspace
       }
       setupTabs(rank);
     }
