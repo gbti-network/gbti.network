@@ -39,3 +39,6 @@
 /house/applets/          @atwellpub @gbtilabs
 
 # members/<username>/ is author-scoped by the gate + scripts/validate-content.mjs, not by CODEOWNERS.
+
+# sow-298 Phase 3 PROBE. Temporary, opened as a DRAFT and closed without merging. It exists only to
+# observe whether GitHub requires code-owner review on a pinned path. Delete this line with the branch.
