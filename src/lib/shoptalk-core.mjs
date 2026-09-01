@@ -215,3 +215,126 @@ export function buildShoptalkIcs(event, { uid, stamp }) {
   // outright, so a locally-readable .ics can still fail to import for the member.
   return lines.map(foldIcsLine).join('\r\n') + '\r\n';
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// sow-302: provider deep links, so a member can add the call from the browser instead of downloading a file.
+//
+// These live BESIDE buildShoptalkIcs and read the SAME normalized event on purpose. A chooser whose Google
+// link disagrees with the .ics sitting next to it is worse than either alone, and the way that happens is a
+// second hardcoded time in a URL builder. There is one source: house/shoptalk.yml.
+//
+// Pure and node-testable for the same reason the .ics writer is: these failures are silent. A wrong offset
+// or a dropped RRULE produces a plausible link that lands the member at the wrong hour, or as a single
+// occurrence, and they do not report it.
+// ---------------------------------------------------------------------------------------------------------
+
+/** The event's local start/end as `YYYYMMDDTHHMMSS`, shared by every provider that takes a local time. */
+function localRange(event) {
+  const start = `${event.startsOnCompact}T${event.startHour}${event.startMinute}00`;
+  const mins = Number(event.startHour) * 60 + Number(event.startMinute) + event.durationMinutes;
+  if (mins >= 24 * 60) {
+    throw new Error('sow-302: the event runs past midnight; a same-day provider range cannot express that');
+  }
+  const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+  const mm = String(mins % 60).padStart(2, '0');
+  return { start, end: `${event.startsOnCompact}T${hh}${mm}00` };
+}
+
+/** The description a provider link carries, matching the .ics (join URL included only when published). */
+function providerDescription(event) {
+  return event.publishJoinUrl && event.joinUrl
+    ? `${event.calendarDescription}\n\nJoin: ${event.joinUrl}`
+    : event.calendarDescription;
+}
+
+/**
+ * Google Calendar. Opens in the browser and adds the RECURRING series: `recur` carries the same RRULE the
+ * .ics uses, and `ctz` carries the IANA zone so Google resolves DST rather than us pinning an offset.
+ *
+ * NOTE, and it is the honest framing sow-302 corrected: this creates a copy on the member's own calendar.
+ * So does importing the .ics. Neither is attendance on a shared event, and that is not a difference between
+ * them.
+ */
+export function googleCalendarUrl(event) {
+  const { start, end } = localRange(event);
+  const q = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: event.title,
+    details: providerDescription(event),
+    dates: `${start}/${end}`,
+    ctz: event.timezone,
+    recur: `RRULE:${event.recurrence}`,
+  });
+  return `https://calendar.google.com/calendar/render?${q.toString()}`;
+}
+
+/**
+ * Outlook (personal outlook.live.com, or work/school outlook.office.com via `host`).
+ *
+ * A REAL LIMITATION, stated rather than hidden: the Outlook compose deep link has NO recurrence parameter.
+ * It can only create the FIRST occurrence, and the member repeats it by hand. That is a property of
+ * Outlook's URL scheme, not something to fix here, and any chooser UI must SAY SO next to the Outlook row
+ * rather than let the member discover it next Saturday when nothing appears.
+ *
+ * Times are sent as ISO with the zone offset for the event's own start date, because this scheme takes an
+ * absolute instant and has nowhere to put an IANA zone.
+ */
+export function outlookCalendarUrl(event, { host = 'https://outlook.live.com' } = {}) {
+  const iso = (compact) => {
+    const d = `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}`;
+    const t = `${compact.slice(9, 11)}:${compact.slice(11, 13)}:00`;
+    return `${d}T${t}${zoneOffset(event.timezone, compact)}`;
+  };
+  const { start, end } = localRange(event);
+  const q = new URLSearchParams({
+    path: '/calendar/action/compose',
+    rru: 'addevent',
+    subject: event.title,
+    body: providerDescription(event),
+    startdt: iso(start),
+    enddt: iso(end),
+  });
+  return `${host}/calendar/0/deeplink/compose?${q.toString()}`;
+}
+
+/** True when the provider link carries the full recurring series; false when it creates one occurrence only. */
+export function providerCarriesRecurrence(provider) {
+  return provider === 'google' || provider === 'ics';
+}
+
+/**
+ * The UTC offset (`-05:00`) for a zone at a given LOCAL date-time, from the real tzdata via Intl.
+ *
+ * The first version of this hand-rolled DST as `month > 3 && month < 11`. That is WRONG for 1 to 8 March and
+ * 1 to 7 November, because the US transitions fall on the second Sunday in March and the first Sunday in
+ * November, not on month boundaries. It would have produced a link one hour off for anyone whose anchor date
+ * sat in those windows, and it reads as correct all summer, which is when anyone would have checked it.
+ *
+ * Intl consults the actual zone database, so it needs no rules of its own and stays right when they change.
+ * Two formats of the same instant, one in UTC and one in the zone, give the offset as their difference.
+ */
+function zoneOffset(timezone, compact) {
+  const y = Number(compact.slice(0, 4));
+  const mo = Number(compact.slice(4, 6));
+  const d = Number(compact.slice(6, 8));
+  const h = Number(compact.slice(9, 11));
+  const mi = Number(compact.slice(11, 13));
+  // Treat the local wall time as if it were UTC, then ask how far the zone sits from UTC at that instant.
+  // The error from using the wall time rather than the true instant is bounded by the offset itself and
+  // cannot cross a transition for an 11:00 event, which is why this is safe here and would not be for a
+  // 00:30 one. Asserted in the tests at both a standard-time and a daylight-time anchor.
+  const asUtc = Date.UTC(y, mo - 1, d, h, mi);
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(new Date(asUtc)).map((p) => [p.type, p.value]));
+  const local = Date.UTC(
+    Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+    Number(parts.hour) % 24, Number(parts.minute),
+  );
+  const minutes = Math.round((local - asUtc) / 60000);
+  const sign = minutes <= 0 ? '-' : '+';
+  const abs = Math.abs(minutes);
+  return `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+}
