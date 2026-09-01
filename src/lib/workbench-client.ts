@@ -131,7 +131,7 @@ function mapDraftRecord(rec: any) {
  * @param login the signed-in member's GitHub login (the folder username; drives the own-content filter).
  * @param githubId the signed-in member's immutable id (fallback identity; the session cookie is authoritative).
  */
-export function createWorkbenchClient({ signupBase, login, githubId = null }: { signupBase: string; login: string; githubId?: string | null }) {
+export function createWorkbenchClient({ signupBase, login, githubId = null, isSuperadmin = false }: { signupBase: string; login: string; githubId?: string | null; isSuperadmin?: boolean }) {
   const base = String(signupBase || '').replace(/\/$/, '');
   const user = String(login || '');
   // sow-158 image upload: staged image binaries (base64), keyed by their own-folder repo path. stageImage fills
@@ -512,6 +512,39 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     return { items: filterThreadComments(all, { targetType, targetSlug, aliases, limit, canSeeMembers }) };
   }
 
+  // sow-161 B (owner-approved Option A, band seq 35): the SUPERADMIN channel-map surface, THE ROLE GATE.
+  // These methods are attached ONLY when the viewer is a superadmin. That is deliberate and load-bearing: the
+  // shared <gbti-categories-workspace> decides whether to draw its channel column with a CAPABILITY check
+  // (`typeof this.client.contentChannelPool === 'function' && typeof this.client.discordChannels === 'function'`),
+  // which cannot express a role. If these methods were present for an admin, the admin would see the channel
+  // column and every write would 403 at the Worker (writes are superadmin via the category-batch max-rank gate).
+  // Making the CAPABILITY itself superadmin-scoped is what lets the capability check reflect the role: an admin's
+  // client simply does not have the methods, so the column stays off AND the admin cannot call them at all
+  // (defense in depth over the server gate, which is still the real boundary: reads default to authorizeSuperadmin,
+  // writes re-check rank). This object is EMPTY for every non-superadmin caller and for every other host page that
+  // never passes isSuperadmin, so no other surface is affected.
+  const channelMapMethods: Record<string, any> = isSuperadmin ? {
+    // The category -> Discord channel picker source (SOW-100). authorizeAdmin server-side (shared with the
+    // extension), but only a superadmin client exposes it, so the categories channel column is superadmin-only UX.
+    discordChannels() { return workerGet('/membership/discord-channels'); }, // [{ id, name, type, parentId }]
+    // The <gbti-channel-map-manager> surface (six reads + six writes). Reads mirror admin-ops' shapes; writes land
+    // as auto-gated PRs against the superadmin-pinned moderation-flags.yml / syndication-config.yml. contentChannelPool
+    // is read here (the matrix) but the channel -> Discord map is EDITED via the categories workspace (category-batch),
+    // so no setContentChannel method is needed.
+    contentChannelPool() { return workerGet('/membership/admin/content-channel-pool'); }, // { channels }
+    moderationFlagPool() { return workerGet('/membership/admin/moderation-flag-pool'); }, // { lists }
+    syndicationTemplatePool() { return workerGet('/membership/admin/syndication-template-pool'); }, // { templates, channelTemplates, ..., types, channels }
+    newsEngagementSettings() { return workerGet('/membership/admin/news-engagement'); }, // { settings, tiers }
+    contentEngagementSettings() { return workerGet('/membership/admin/content-engagement'); }, // { settings, tiers, signals }
+    syndicationSettings() { return workerGet('/membership/admin/syndication-settings'); }, // { settings, channelNames, autoTypes, ... }
+    async addModerationFlagTerm(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'flag-term-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async removeModerationFlagTerm(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'flag-term-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async setSyndicationTemplates(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-templates-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async setNewsEngagement(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-engagement-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async setContentEngagementSettings(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'content-engagement-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    async setSyndicationSettings(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-settings-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+  } : {};
+
   return {
     // ----- identity + read -----
     async status() {
@@ -735,25 +768,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null }: { 
     async addCoupon(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'coupon-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
     async updateCoupon(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'coupon-update', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
 
-    // sow-161 B: the SUPERADMIN channel-map manager (<gbti-channel-map-manager>) on the WEBSITE host. The same
-    // element the extension drives via client.mjs; these methods give it the identical surface over the cookie
-    // session -> the Worker (which applies the change with the App token and opens the auto-gated house PR). Reads
-    // are superadmin-gated GETs; the six writes land as auto-gated PRs against moderation-flags.yml /
-    // syndication-config.yml (both superadmin-pinned), normalized to the { prNumber } shape the manager renders.
-    // The channel -> Discord MAP itself is READ here (contentChannelPool) but EDITED via the categories workspace
-    // (category-batch); this manager only reads it to draw the matrix, so no setContentChannel method is needed.
-    contentChannelPool() { return workerGet('/membership/admin/content-channel-pool'); }, // { channels }
-    moderationFlagPool() { return workerGet('/membership/admin/moderation-flag-pool'); }, // { lists }
-    syndicationTemplatePool() { return workerGet('/membership/admin/syndication-template-pool'); }, // { templates, channelTemplates, ..., types, channels }
-    newsEngagementSettings() { return workerGet('/membership/admin/news-engagement'); }, // { settings, tiers }
-    contentEngagementSettings() { return workerGet('/membership/admin/content-engagement'); }, // { settings, tiers, signals }
-    syndicationSettings() { return workerGet('/membership/admin/syndication-settings'); }, // { settings, channelNames, autoTypes, ... }
-    async addModerationFlagTerm(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'flag-term-add', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async removeModerationFlagTerm(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'flag-term-remove', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setSyndicationTemplates(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-templates-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setNewsEngagement(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'news-engagement-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setContentEngagementSettings(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'content-engagement-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
-    async setSyndicationSettings(args: any = {}) { const r = await workerPost('/membership/admin/author', { action: 'syndication-settings-set', ...args }); return { ...r, prNumber: r?.number ?? null, prUrl: r?.html_url ?? null }; },
+    // sow-161 B: the SUPERADMIN channel-map surface (six manager reads/writes + discordChannels for the categories
+    // channel column). Attached only when isSuperadmin (see channelMapMethods above): the role gate lives HERE, in
+    // the presence of the methods, so the shared elements' capability checks reflect the role and no admin ever
+    // meets a channel control that would 403. Empty spread for every non-superadmin caller.
+    ...channelMapMethods,
 
     // sow-231 Phase 3: ISSUED INVITES. Unlike the coupon config above, these are NOT git-native and open no
     // PR: an invite is per-person state carrying an administration note, so it lives in KV per the storage

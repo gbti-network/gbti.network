@@ -53,8 +53,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
         </div>
         {/* sow-161 A: the two managers the owner asked for on the website. They carry their OWN headers (a chead /
             an explorer header), so no card <h2> here, matching the extension admin. The category->Discord-channel
-            column is gated OFF on the website (contentChannelPool/discordChannels are absent here) until the
-            channel-map increment; category tree + label/add + key-migration + tag rename/merge/retire all work. */}
+            column shows for a SUPERADMIN only (sow-161 B, Option A): the workbench client exposes
+            contentChannelPool + discordChannels only when isSuperadmin, so an admin sees the category tree +
+            label/add + key-migration + tag rename/merge/retire but not the channel column (which they cannot write). */}
         <div class="adm-card" data-panel="categories" hidden>
           <gbti-categories-workspace></gbti-categories-workspace>
         </div>
@@ -103,7 +104,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       const signupBase = document.documentElement.dataset.signupBase || '';
       const { createWorkbenchClient } = await import('../lib/workbench-client');
       const { setClient } = await import('../../client-ui/src/base.mjs');
-      setClient(createWorkbenchClient({ signupBase, login, githubId }));
+      // sow-161 B: pass isSuperadmin so the workbench client exposes the channel-map surface (discordChannels +
+      // the manager reads/writes) ONLY to a superadmin. This is the role gate for the categories channel column:
+      // the shared element decides to draw the column by a capability check, so the capability must be role-scoped.
+      setClient(createWorkbenchClient({ signupBase, login, githubId, isSuperadmin: rank >= RANK.superadmin }));
       await import('../../client-ui/src/elements/gbti-admin.mjs'); // defines the element; it renders on the setClient fan-out
       // Config managers are admin+ only. Importing the module upgrades the static tag (which then renders on the
       // setClient fan-out); a moderator never imports it, so the tag stays inert and the card stays hidden.

@@ -15,6 +15,7 @@ import {
   membershipAdminContentChannelPool, membershipAdminModerationFlagPool, membershipAdminSyndicationTemplatePool,
   membershipAdminNewsEngagement, membershipAdminContentEngagement, membershipAdminSyndicationSettings,
 } from '../workers/signup/membership-admin-author.mjs';
+import { membershipDiscordChannels } from '../workers/signup/membership-discord-channels.mjs';
 
 const env = {
   GITHUB_APP_ID: '123', GITHUB_APP_INSTALLATION_ID: '999', GITHUB_APP_PRIVATE_KEY: 'PEM',
@@ -204,4 +205,59 @@ test('the syndication pool reads return their documented shapes', async () => {
   const synd = await membershipAdminSyndicationSettings(poolReq, readEnv, readDeps({ authorize: staffSuper }));
   assert.equal(synd.status, 200);
   assert.ok(synd.body.settings && Array.isArray(synd.body.channelNames) && synd.body.settings.autoMatrix);
+});
+
+// ---- THE ROLE GATE (sow-161 B, Option A): the website categories channel column is superadmin-only ----
+// The shared <gbti-categories-workspace> draws its channel column by a CAPABILITY check (are contentChannelPool +
+// discordChannels present on the client?), which cannot express a role. So createWorkbenchClient makes the
+// capability itself superadmin-scoped: the channel-map methods are attached ONLY when isSuperadmin. If a refactor
+// moved them into the unconditional return, an ADMIN would get the column and every write would 403. This SOURCE
+// guard reds exactly that regression (the .ts adapter is the cookie transport and is deliberately not in the node
+// runtime suite, so it is checked as text, the same way the CONFIG_OP drift guard checks the Worker table).
+test('ROLE GATE: the workbench client exposes contentChannelPool + discordChannels ONLY inside the isSuperadmin block', () => {
+  const src = fs.readFileSync(fileURLToPath(new URL('../src/lib/workbench-client.ts', import.meta.url)), 'utf8');
+  const open = src.indexOf('const channelMapMethods');
+  assert.ok(open > -1, 'channelMapMethods moved or was renamed');
+  // The conditional block runs from `const channelMapMethods ... isSuperadmin ? {` to its closing `} : {};`.
+  assert.match(src.slice(open, open + 200), /const channelMapMethods[^\n]*isSuperadmin\s*\?\s*\{/, 'channelMapMethods must be gated by `isSuperadmin ? {`');
+  const blockEnd = src.indexOf('} : {};', open);
+  assert.ok(blockEnd > open, 'the channelMapMethods block must close with `} : {};` (empty for non-superadmins)');
+  const block = src.slice(open, blockEnd);
+  for (const method of ['contentChannelPool', 'discordChannels', 'moderationFlagPool', 'setSyndicationSettings']) {
+    // Present INSIDE the gated block ...
+    assert.ok(block.includes(`${method}(`), `${method} must be defined inside the isSuperadmin block`);
+    // ... and NOWHERE ELSE in the file (so it is never attached unconditionally). Count total definitions.
+    const defs = src.split(`${method}(`).length - 1;
+    assert.equal(defs, 1, `${method} must be defined exactly once, inside the gated block (found ${defs})`);
+  }
+});
+
+test('ROLE GATE: admin.astro passes isSuperadmin to the workbench client (so the gate is actually engaged)', () => {
+  const src = fs.readFileSync(fileURLToPath(new URL('../src/pages/admin.astro', import.meta.url)), 'utf8');
+  assert.match(src, /createWorkbenchClient\(\{[^}]*isSuperadmin:\s*rank\s*>=\s*RANK\.superadmin/, 'admin.astro must pass isSuperadmin: rank >= RANK.superadmin');
+});
+
+// ---- discord-channels cookie enablement (the categories channel column read, superadmin UX via the client) ----
+// The route stays authorizeAdmin server-side (shared with the extension); allowCookie threads the WEBSITE cookie
+// session through. Mimics resolveCaller: a bearer authenticates regardless; a cookie only when allowCookie; else
+// 403. Mutation check: drop `{ allowCookie }` from the authorize call and the cookie case flips from 200 to 403.
+const dcAuthorize = async (request, env, { allowCookie } = {}) => {
+  const bearer = /^Bearer\s/i.test(request.headers.get?.('authorization') || request.headers.get?.('Authorization') || '');
+  if (bearer) return { ok: true };
+  if (allowCookie) return { ok: true };
+  return { ok: false, status: 403, error: 'forbidden' };
+};
+const dcReq = (bearer) => ({ headers: { get: (k) => (bearer && String(k).toLowerCase() === 'authorization' ? 'Bearer tok' : null) } });
+
+test('discord-channels: a BEARER caller is authorized without allowCookie (extension path unchanged)', async () => {
+  const r = await membershipDiscordChannels(dcReq(true), {}, { authorize: dcAuthorize, allowCookie: false });
+  assert.equal(r.status, 200); // no DISCORD env -> { channels: [], reason } AFTER a passing auth
+});
+test('discord-channels: a COOKIE caller is REFUSED without allowCookie', async () => {
+  const r = await membershipDiscordChannels(dcReq(false), {}, { authorize: dcAuthorize, allowCookie: false });
+  assert.equal(r.status, 403);
+});
+test('discord-channels: a COOKIE caller is ALLOWED when the route passes allowCookie (the website path)', async () => {
+  const r = await membershipDiscordChannels(dcReq(false), {}, { authorize: dcAuthorize, allowCookie: true });
+  assert.equal(r.status, 200);
 });

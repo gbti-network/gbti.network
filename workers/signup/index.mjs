@@ -1117,10 +1117,15 @@ export default {
 
       // SOW-100: the guild's channel names (admin-gated, KV-cached) for the categories workspace picker.
       if (pathname === '/membership/discord-channels') {
-        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: MEMBERSHIP_CORS });
+        // sow-161 B: cookie-enabled for the WEBSITE categories channel column (superadmin). Credentialed CORS
+        // (reflected origin + Allow-Credentials), matching the other cookie routes; the extension calls this from
+        // its background service worker under host_permissions, which bypasses CORS, so the switch off the
+        // wildcard MEMBERSHIP_CORS does not affect the bearer path. A GET carries no CSRF.
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
         if (method === 'GET') {
-          const r = await membershipDiscordChannels(request, env);
-          return json(r.body, r.status, { ...MEMBERSHIP_CORS, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+          const r = await membershipDiscordChannels(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }
 

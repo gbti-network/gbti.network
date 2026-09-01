@@ -7,8 +7,10 @@ import { authorizeAdmin } from './membership-admin.mjs';
 const CACHE_KEY = 'discord:channels';
 const TTL_MS = 60 * 60 * 1000;
 
-export async function membershipDiscordChannels(request, env, { authorize = authorizeAdmin, fetchImpl = globalThis.fetch, now = Date.now } = {}) {
-  const auth = await authorize(request, env);
+export async function membershipDiscordChannels(request, env, { authorize = authorizeAdmin, fetchImpl = globalThis.fetch, now = Date.now, allowCookie = false } = {}) {
+  // sow-161 B: allowCookie threads the WEBSITE cookie session through (the categories channel column on
+  // gbti.network). Default false keeps the extension's bearer-only path unchanged; a GET carries no CSRF.
+  const auth = await authorize(request, env, { allowCookie });
   if (!auth.ok) return { status: auth.status ?? 403, body: { error: auth.error ?? 'forbidden' } };
   if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID) {
     return { status: 200, body: { channels: [], reason: 'discord-not-provisioned' } };
