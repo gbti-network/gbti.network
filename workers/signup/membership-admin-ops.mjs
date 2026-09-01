@@ -29,13 +29,26 @@ const OPS = Object.freeze({
 const MIGRATE_ACTIONS = new Set(['move', 'rename', 'remove', 'merge']);
 
 /** POST /membership/admin/ops { action } -> fires the mapped repository_dispatch (admin/superadmin only). */
-export async function membershipAdminOps(request, env, { authorize = authorizeAdmin, fetch = globalThis.fetch, ...deps } = {}) {
-  const auth = await authorize(request, env, deps);
-  if (!auth.ok) return { status: auth.status, body: auth.body };
-
+export async function membershipAdminOps(request, env, { authorize = authorizeAdmin, fetch = globalThis.fetch, allowCookie = false, ...deps } = {}) {
+  // sow-161 A least-privilege: read the action FIRST, only to scope the cookie path. Just ONE of the four ops
+  // (category-migrate, which the website categories workspace needs) accepts a website COOKIE identity; reconcile
+  // (a full --apply, per the note below), e2e and sync-mirror stay BEARER-ONLY even when the route enables
+  // cookies, so needing category-migrate from the website does not make the other three reachable from a browser
+  // session as a side effect. Reading the body before authorize is safe: the CSRF double-submit in resolveIdentity
+  // uses a request header + cookie, never the body (the earlier code proved this by reading the body AFTER auth).
   let body;
   try { body = await request.json(); } catch { body = null; }
   const action = String(body?.action || '').trim();
+  // Authorize BEFORE validating the action (fail-closed: an unauthenticated caller gets 401, not a 400 that would
+  // leak which action names exist, and an invalid action over cookies is refused before anything, so the gate is
+  // not an action-enumeration oracle). A bearer caller reaches all four; a cookie caller only category-migrate.
+  // Letting an unauthenticated caller pick the auth path by naming the action is safe because the cookie path is
+  // DIFFERENT, not WEAKER: it still requires a valid signed session HMAC plus the CSRF double-submit, and the
+  // action is validated against OPS either way. Naming category-migrate buys a different identity requirement,
+  // not a lower bar.
+  const auth = await authorize(request, env, { ...deps, allowCookie: allowCookie && action === 'category-migrate' });
+  if (!auth.ok) return { status: auth.status, body: auth.body };
+
   const eventType = OPS[action];
   if (!eventType) return { status: 400, body: { error: 'bad_request', message: 'unknown operation' } };
 
