@@ -615,3 +615,8 @@ sources:
     url: https://tailscale.com/blog/
     description: tailscale.com
     enabled: true
+  - id: marcelschmitz-com
+    name: MarcelSchmitz.com
+    url: https://marcelschmitz.com/
+    description: marcelschmitz.com
+    enabled: true
