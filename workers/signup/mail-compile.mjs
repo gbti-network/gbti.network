@@ -78,6 +78,27 @@ async function listPriorIssueIds(kv, { currentIssueId, pageBudget = 50 } = {}) {
  *     walk backwards in time, and the empty-section notes would be unreachable until it drained. A floor cannot
  *     cut off a contribution held for days; only a tight per-issue window could, and this is not one.
  *
+ * sow-297, 2026-08-31 (owner ruling): A WEEKLY ISSUE IS ONE WEEK. Everything above still runs and still
+ * matters, but it is no longer the thing that decides what a weekly carries. The owner ruled the weekly covers
+ * the last week only, so a reader is not handed a draining archive under a "since the last issue" heading; the
+ * full back catalogue is the WELCOME issue's job, and every new subscriber gets 90 days of it as their first
+ * email, so widening this one would only duplicate that.
+ *
+ * The week is measured on VISIBILITY. `seen` is the previous issue's recorded `pool`, the urls of every public
+ * due item the artifact carried at THAT compile, so an item is new to this issue exactly when it is not in it.
+ * Cutting `since` to seven days instead would have reintroduced Trap Two whole: publishedAt is stamped when the
+ * PR is opened, so a contribution held for review for eight days sits below a seven-day floor on the very day it
+ * first becomes visible, and would never be mailed at all. A pool diff cannot lose it, because it was not in
+ * last week's pool.
+ *
+ * BOOTSTRAP, and it fires exactly once. Issues frozen before this change carry no `pool`, so the first compile
+ * after it has nothing to diff against. It then falls back to `since = the previous issue's compile time`, which
+ * is the same question answered with the weaker publishedAt proxy: published after the last compile. That is
+ * only wrong for an item published before the last compile and merged after it, it is wrong for one week, and
+ * it is wrong in the direction the owner chose anyway (the standing backlog does not re-enter the weekly; a new
+ * subscriber still meets it in the welcome). From the following week the pool exists and the proxy is never
+ * consulted again.
+ *
  * The floor MUST be coupled to the exclude window or a third trap opens: the floor is time-based and exclude is
  * issue-count-based, so an item can sit ABOVE a fixed epoch floor and OUTSIDE the rolling exclude window at once,
  * and then re-mails on a historyDepth cycle (the product/prompt/share artifacts never turn over, so exclude is the
@@ -91,7 +112,7 @@ async function listPriorIssueIds(kv, { currentIssueId, pageBudget = 50 } = {}) {
 export async function resolveWindow(kv, { nowMs, currentIssueId, bootstrapMs = BOOTSTRAP_MS, historyDepth = 26, pageBudget = 50 } = {}) {
   const priorIds = await listPriorIssueIds(kv, { currentIssueId, pageBudget });
   if (priorIds.length === 0) {
-    return { firstIssue: true, since: Number(nowMs) - bootstrapMs, exclude: null, previousGeneratedAt: null };
+    return { firstIssue: true, since: Number(nowMs) - bootstrapMs, exclude: null, seen: null, previousGeneratedAt: null };
   }
   const depth = Math.max(1, historyDepth);
   const sorted = priorIds.slice().sort();          // chronological ascending (weekly- sorts as dates)
@@ -101,13 +122,22 @@ export async function resolveWindow(kv, { nowMs, currentIssueId, bootstrapMs = B
   const exclude = new Set();
   let oldestInWindowGen = null;
   let previousGen = null;
+  let previousPool = null;
   for (let i = 0; i < windowIds.length; i++) {
     // eslint-disable-next-line no-await-in-loop -- bounded by historyDepth, and this is the weekly compile, not a tick
     const issue = await getIssue(kv, windowIds[i]);
     if (i === 0) oldestInWindowGen = Number(issue?.generatedAt); // windowIds[0] is the OLDEST issue in the window
     // sow-166: and the LAST one is the newest prior weekly, i.e. the start of the current cycle. A subscriber
     // welcomed at or after it was welcomed IN this cycle, so the welcome already stands in for this issue.
-    if (i === windowIds.length - 1) previousGen = Number(issue?.generatedAt);
+    if (i === windowIds.length - 1) {
+      previousGen = Number(issue?.generatedAt);
+      // sow-297: and its POOL, which is this issue's visibility window. An issue frozen before pools existed
+      // has none, and an empty array is treated the same as absent: a pool of zero public items is not a state
+      // the site can be in while it has any published content, so it is a recording failure, and the safe read
+      // of a recording failure is "no visibility filter" (wider) rather than "nothing was visible" (which would
+      // mark the entire catalogue new).
+      previousPool = Array.isArray(issue?.pool) && issue.pool.length ? issue.pool : null;
+    }
     const sections = issue?.sections;
     if (!sections) continue;
     for (const key of MEMBER_SECTION_KEYS) {
@@ -127,13 +157,19 @@ export async function resolveWindow(kv, { nowMs, currentIssueId, bootstrapMs = B
   // later than that issue's compile, hence strictly below this floor, so it can neither escape exclude nor clear
   // the floor. While nothing has aged out (exclude still covers every prior issue) the epoch is correct and does
   // not over-floor recent un-mailed launch content. historyDepth stays the single tunable.
+  const seen = previousPool ? new Set(previousPool) : null;
   let since;
-  if (agedOut && Number.isFinite(oldestInWindowGen)) {
+  if (!seen && Number.isFinite(previousGen) && previousGen > 0) {
+    // sow-297 BOOTSTRAP, first compile after the change only: no pool to diff, so approximate the week with
+    // the publishedAt proxy. Checked BEFORE the aged-out branch on purpose, because that branch widens the
+    // floor and the whole point of this one is that the week stays a week.
+    since = previousGen;
+  } else if (agedOut && Number.isFinite(oldestInWindowGen)) {
     since = oldestInWindowGen;
   } else {
     since = await resolveEpoch(kv, sorted[0], { nowMs, bootstrapMs });
   }
-  return { firstIssue: false, since, exclude, previousGeneratedAt: Number.isFinite(previousGen) ? previousGen : null };
+  return { firstIssue: false, since, exclude, seen, previousGeneratedAt: Number.isFinite(previousGen) ? previousGen : null };
 }
 
 /**
@@ -311,7 +347,8 @@ export async function compileWeeklyIssue(env, {
     // instead of being dropped by a publishedAt window it predates. resolveWindow returns exactly one regime.
     regimeForFilter = regime;
     issue = composeIssue({ issueId, items, news, now }, {
-      perSection, maxNews, since: regime.since, exclude: regime.exclude, firstIssue: regime.firstIssue,
+      perSection, maxNews, since: regime.since, exclude: regime.exclude, seen: regime.seen,
+      firstIssue: regime.firstIssue,
     });
     // ALWAYS-SEND: shouldSend is unconditionally true, but gate on it honestly so a future skip is one edit.
     if (!shouldSend(issue)) return { ok: true, issueId, composed: false, skipped: true, reason: 'nothing to send' };
@@ -352,6 +389,11 @@ export async function compileWeeklyIssue(env, {
     firstIssue: Boolean(issue?.launchNote),
     since: issue?.window?.since ?? null,
     excluded: issue?.window?.excluded ?? null,
+    // sow-297: how many already-visible urls the week was measured against. `null` on a weekly means no pool
+    // was available to diff, which is the bootstrap week once and a recording failure any week after, so the
+    // cron log has to be able to tell the two apart from the outside.
+    seen: issue?.window?.seen ?? null,
+    poolSize: Array.isArray(issue?.pool) ? issue.pool.length : null,
   };
 }
 

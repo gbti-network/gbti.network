@@ -343,7 +343,7 @@ test('WINDOW: news is deliberately NOT windowed, and the issue records the windo
   const news = [{ title: 'opened-all-week', url: 'https://n/1', opens: 40, date: 10 }];
   const issue = composeIssue({ issueId: 'i', items: [], news, now: at(1_000_000) }, { since: 5_000 });
   assert.equal(issue.counts.news, 1, 'ranked by openers, not recency, so an older story still leads');
-  assert.deepEqual(issue.window, { since: 5_000, excluded: null, appliesTo: 'members' });
+  assert.deepEqual(issue.window, { since: 5_000, excluded: null, seen: null, appliesTo: 'members' });
 
   // A compile that forgot the window says so in the stored artifact rather than looking identical to one
   // that meant it. `since: null` in KV is the tell.
@@ -728,4 +728,142 @@ test('NEWS images are never touched by the banner rule', () => {
   const issue = composeIssue({ issueId: 'i', items: [], news, now: at(1_000_000) }, { perSection: 5, maxNews: 5 });
   assert.equal(issue.topNews.length, 1, 'anchor: the news item is actually in the issue');
   assert.equal(issue.topNews[0].thumb, 'https://pub.example/brand/feature/feature-article.png');
+});
+
+// ---------- sow-297 (owner ruling, 2026-08-31): a weekly issue is ONE WEEK, measured on visibility ----------
+
+// The rule the whole change rests on, with both controls in one call. An exclude-only mutant keeps
+// `visible-last-week`; a mutant that filters everything drops `new-this-week` too.
+test('SEEN: an item that was already visible at the previous compile is not new, and one that was not still is', () => {
+  const items = [
+    pub('article', 'visible-last-week', 5_000),
+    pub('article', 'new-this-week', 6_000),
+  ];
+  const seen = new Set(['https://gbti.network/article/visible-last-week']);
+  const issue = composeIssue({ issueId: 'i', items, news: [], now: at(1_000_000) }, { seen });
+
+  assert.deepEqual(issue.sections.article.map((x) => x.title), ['new-this-week']);
+  assert.equal(issue.window.seen, 1, 'and the issue records that a visibility filter ran');
+});
+
+// THE POINT OF THE WHOLE DESIGN, and the one property a publishedAt window cannot have. `held` is OLDER than
+// every other item here and is still new, because newness is about when a reader could first see it. A
+// seven-day floor on the authored date reds this.
+test('SEEN: newness is about VISIBILITY, so an old publishedAt that was never visible is still new', () => {
+  const items = [pub('article', 'held-for-review', 1_000), pub('article', 'published-yesterday', 900_000)];
+  const seen = new Set(['https://gbti.network/article/published-yesterday']);
+  const issue = composeIssue({ issueId: 'i', items, news: [], now: at(1_000_000) }, { seen });
+  assert.deepEqual(issue.sections.article.map((x) => x.title), ['held-for-review']);
+});
+
+// `seen` and `exclude` are separate inputs answering separate questions, so a mutant that reads one for the
+// other has to red somewhere. Each set drops its OWN item and neither drops the other's.
+test('SEEN and EXCLUDE are independent filters, and the window records both counts separately', () => {
+  const items = [pub('article', 'a', 100), pub('article', 'b', 200), pub('article', 'c', 300)];
+  const issue = composeIssue({ issueId: 'i', items, news: [], now: at(1_000_000) }, {
+    seen: new Set(['https://gbti.network/article/a']),
+    exclude: new Set(['https://gbti.network/article/b']),
+  });
+  assert.deepEqual(issue.sections.article.map((x) => x.title), ['c']);
+  assert.deepEqual({ seen: issue.window.seen, excluded: issue.window.excluded }, { seen: 1, excluded: 1 });
+});
+
+// NULL IS NOT AN EMPTY SET, on either input. A compile that ran without a pool has to be visible in the stored
+// artifact as "no visibility filter", because a count of 0 would be indistinguishable from a week in which
+// nothing had ever been published, and the two call for opposite responses.
+test('SEEN: absent, null and unusable all read as no filter at all, and say so in the window', () => {
+  const items = [pub('article', 'a', 100)];
+  for (const bad of [undefined, null, 'a-string', 42, {}]) {
+    const issue = composeIssue({ issueId: 'i', items, news: [], now: at(1_000_000) }, { seen: bad });
+    assert.equal(issue.window.seen, null, `seen: ${String(bad)}`);
+    assert.equal(issue.sections.article.length, 1, `seen: ${String(bad)} must not silently empty the section`);
+  }
+  const empty = composeIssue({ issueId: 'i', items, news: [], now: at(1_000_000) }, { seen: new Set() });
+  assert.equal(empty.window.seen, 0, 'an EMPTY set is a real answer and is recorded as 0, not as null');
+});
+
+// The pool is next week's input, so what it contains is the whole contract. It is taken BEFORE the window:
+// captured after, it would hold only what this issue mailed, and the diff would call the standing catalogue
+// new every week.
+test('POOL: records every public due item, including ones this issue did not mail', () => {
+  const items = [
+    pub('article', 'mailed', 500),
+    pub('article', 'below-the-cap', 400),
+    pub('article', 'filtered-by-seen', 300),
+    pub('article', 'floored-out', 10),
+  ];
+  const issue = composeIssue({ issueId: 'i', items, news: [], now: at(1_000_000) }, {
+    perSection: 1,
+    since: 100,
+    seen: new Set(['https://gbti.network/article/filtered-by-seen']),
+  });
+  assert.deepEqual(issue.sections.article.map((x) => x.title), ['mailed'], 'only one mails, at a cap of 1');
+  assert.deepEqual(issue.pool, [
+    'https://gbti.network/article/below-the-cap',
+    'https://gbti.network/article/filtered-by-seen',
+    'https://gbti.network/article/floored-out',
+    'https://gbti.network/article/mailed',
+  ], 'but all four were VISIBLE, so all four are in the pool and none of them is new next week');
+});
+
+// Two exclusions, and both are load-bearing for the next compile. A member item in the pool would leak a
+// member url into a public artifact AND would mark it seen so it never mails when it goes public. A not-yet-due
+// item in the pool would be marked seen before it was ever mailable, so it would never mail at all.
+test('POOL: excludes member items and not-yet-due items, for two different reasons', () => {
+  const items = [
+    pub('article', 'public-and-due', 500),
+    { ...pub('article', 'members-only', 400), visibility: 'members' },
+    pub('article', 'not-yet-due', 2_000_000),
+  ];
+  const issue = composeIssue({ issueId: 'i', items, news: [], now: at(1_000_000) });
+  assert.deepEqual(issue.pool, ['https://gbti.network/article/public-and-due']);
+});
+
+// A round trip through the seam the orchestrator actually uses: this week's pool is next week's `seen`. If the
+// two ever stop being the same strings, this is where it shows.
+test('POOL round trip: feeding one issue pool back as the next issue seen leaves nothing new', () => {
+  const items = [pub('article', 'a', 100), pub('share', 'b', 200), pub('prompt', 'c', 300)];
+  const first = composeIssue({ issueId: 'i1', items, news: [], now: at(1_000_000) });
+  assert.equal(first.counts.article + first.counts.share + first.counts.prompt, 3);
+  const second = composeIssue({ issueId: 'i2', items, news: [], now: at(2_000_000) }, { seen: new Set(first.pool) });
+  assert.equal(second.counts.article + second.counts.share + second.counts.prompt, 0,
+    'nothing became visible in between, so the second issue carries no member items');
+  const withOneMore = composeIssue({ issueId: 'i3', items: [...items, pub('share', 'd', 400)], news: [], now: at(2_000_000) }, { seen: new Set(first.pool) });
+  assert.deepEqual(withOneMore.sections.share.map((x) => x.title), ['d'], 'and exactly the new one is carried');
+});
+
+// ---------- sow-297: per-kind section caps ----------
+
+// The reason the caps differ at all is arrival rate, not layout: shares land at five to eight a week and the
+// other three at a handful a month, so five is a live ceiling for shares only. Under the weekly window a
+// section that binds its ceiling loses the overflow permanently, so the number has to clear the real rate.
+test('CAPS: shares carry 10 by default and the other kinds carry 5', () => {
+  const many = (kind, n) => Array.from({ length: n }, (_, i) => pub(kind, `${kind}-${i}`, 1_000 + i));
+  const issue = composeIssue({ issueId: 'i', items: [...many('share', 12), ...many('article', 8)], news: [], now: at(1_000_000) });
+  assert.equal(issue.sections.share.length, 10, 'a busy share week is not truncated to five');
+  assert.equal(issue.sections.article.length, 5);
+  assert.equal(issue.counts.share, 10);
+});
+
+// Every caller written before per-kind caps passes a number, and a number must still mean what it always meant.
+test('CAPS: a number still caps all four kinds alike, and 0 still means 0', () => {
+  const many = (kind, n) => Array.from({ length: n }, (_, i) => pub(kind, `${kind}-${i}`, 1_000 + i));
+  const two = composeIssue({ issueId: 'i', items: [...many('share', 12), ...many('article', 8)], news: [], now: at(1_000_000) }, { perSection: 2 });
+  assert.deepEqual([two.sections.share.length, two.sections.article.length], [2, 2]);
+  const none = composeIssue({ issueId: 'i', items: many('share', 12), news: [], now: at(1_000_000) }, { perSection: 0 });
+  assert.equal(none.sections.share.length, 0, 'zero is honoured, not read as unset');
+});
+
+// An object names the kinds it cares about. `default` fills the rest, and a named 0 is honoured, which is why
+// presence is tested rather than truthiness.
+test('CAPS: an object caps per kind, with default filling the rest and a named 0 honoured', () => {
+  const many = (kind, n) => Array.from({ length: n }, (_, i) => pub(kind, `${kind}-${i}`, 1_000 + i));
+  const items = [...many('share', 12), ...many('article', 8), ...many('prompt', 8)];
+  const issue = composeIssue({ issueId: 'i', items, news: [], now: at(1_000_000) }, {
+    perSection: { share: 3, prompt: 0, default: 6 },
+  });
+  assert.deepEqual(
+    { share: issue.sections.share.length, prompt: issue.sections.prompt.length, article: issue.sections.article.length },
+    { share: 3, prompt: 0, article: 6 },
+  );
 });

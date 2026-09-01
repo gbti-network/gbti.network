@@ -53,6 +53,33 @@
 //
 // The frozen issue records both, so which regime produced it is readable rather than inferred.
 //
+// SUPERSEDED IN PART, sow-297, 2026-08-31 (owner ruling). Everything above stays true about `since` and
+// `exclude`, and both are still passed. What changed is that the weekly is no longer "everything unmailed
+// since the newsletter began": the owner ruled it covers ONE WEEK, so a reader opening it sees this week and
+// not a slowly draining archive. The archive is not lost, it is the WELCOME issue's job, which every new
+// subscriber receives as their first email carrying 90 days.
+//
+// The week is measured on VISIBILITY, not on publishedAt, which is the whole reason a third input exists.
+// Cutting the weekly to `since = now - 7d` would have reintroduced exactly the loss the note above describes:
+// publishedAt is stamped when the PR is OPENED, so a contribution held for review for eight days is below a
+// seven-day floor on the day it first becomes visible, and would never be mailed at all. So:
+//
+//   `seen` = every public url that was ALREADY VISIBLE at the previous issue's compile.
+//
+// An item is new to this issue exactly when it is not in that set. That is measured, not inferred: each frozen
+// issue now records `pool`, the urls of every public, due item in the artifact at ITS compile, and next week's
+// compile diffs against it. Nothing can fall through a clock boundary, a missed compile widens the window to
+// cover the gap instead of dropping a week, and the wording the sections already use ("since the last issue")
+// becomes literally what the filter does.
+//
+//   FIRST ISSUE   since = now - 90d,            exclude = null,   seen = null    bounds the launch issue
+//   THEREAFTER    since = the coupled floor,    exclude = mailed, seen = last issue's pool
+//
+// `since` and `exclude` are KEPT alongside it rather than replaced. They are cheap, they are already proven,
+// and they are the backstop for the one case `seen` cannot cover: a pool that failed to record. Narrowing is
+// the safe direction here, since the cost of an over-tight week is one item arriving a week late in the next
+// issue, and the cost of an over-loose one is the back-catalogue drain described above.
+//
 // Item shape IN (the Worker normalizes activity-index entries + public shares to this):
 //   { kind: 'article'|'product'|'prompt'|'share', title, url, author, authorName?, date: number,
 //     visibility: 'public'|'members', ... (any extra fields are dropped by the projection) }
@@ -60,6 +87,18 @@
 //   { title, url, source?, opens?: number, date?: number }
 
 export const SECTION_KINDS = ['article', 'product', 'prompt', 'share'];
+
+// THE PER-SECTION CAPS, AND WHY SHARES GET A BIGGER ONE (owner ruling, sow-297, 2026-08-31). A cap is a
+// ceiling on how much of one week a section can carry, so it has to be read against the ARRIVAL RATE of that
+// section, and the four rates are not alike. Articles, products and prompts land at a handful a month, so a
+// cap of five is never reached and is a pure safety rail. Shares land at five to eight a WEEK, so five is a
+// live ceiling: under the weekly window it would silently drop the overflow every busy week, and a dropped
+// item is dropped for good, because next week it is no longer new.
+//
+// So the cap is per KIND rather than one number. Ten is chosen to sit above the observed weekly rate with
+// room, not as a display preference: the point is that the ceiling stops binding, and a section that binds
+// its ceiling loses content invisibly.
+export const DEFAULT_SECTION_CAPS = Object.freeze({ article: 5, product: 5, prompt: 5, share: 10 });
 
 // THE SECTION CONTRACT (owner ruling, sow-166, 2026-08-21). An issue ALWAYS carries every section. A
 // section with nothing in it is not dropped: it is rendered with a note saying no new member items were
@@ -278,6 +317,49 @@ function newsItem(it) {
 
 const byDateDesc = (a, b) => (b.date - a.date);
 
+/** One cap, normalized. Preserves the pre-per-kind behaviour exactly, including that an unparseable value
+ *  reads as 0 rather than as the default: a caller passing nonsense should get an empty section it notices,
+ *  not a full one it does not. */
+function capNum(v) {
+  return Math.max(0, Math.floor(Number(v)) || 0);
+}
+
+/**
+ * Resolve `perSection` to a cap per kind. Accepts three shapes, and the first two are what every caller
+ * written before per-kind caps existed passes:
+ *   - nothing        -> DEFAULT_SECTION_CAPS (5 everywhere, 10 for shares)
+ *   - a number       -> that number for all four kinds, unchanged from before
+ *   - an object      -> a cap per named kind, with `default` (or the per-kind default) filling the rest
+ * A named kind of 0 is honoured as 0, which is why presence is tested rather than truthiness.
+ */
+function resolveSectionCaps(perSection) {
+  if (perSection == null) return { ...DEFAULT_SECTION_CAPS };
+  if (typeof perSection !== 'object') {
+    const n = capNum(perSection);
+    return { article: n, product: n, prompt: n, share: n };
+  }
+  const has = (k) => Object.prototype.hasOwnProperty.call(perSection, k) && perSection[k] != null;
+  const fallbackFor = (k) => (has('default') ? capNum(perSection.default) : DEFAULT_SECTION_CAPS[k]);
+  const out = {};
+  for (const k of SECTION_KINDS) out[k] = has(k) ? capNum(perSection[k]) : fallbackFor(k);
+  return out;
+}
+
+/**
+ * Normalize a url set option (`exclude`, `seen`). Accepts a Set or any non-string iterable; anything else
+ * (including a bare object, a string, or nothing) means NO set. `null` is kept DISTINCT from an EMPTY set on
+ * purpose: an empty set is a real answer on a first issue, and a caller that forgot to pass one is not, so
+ * the two must not look alike in the frozen issue.
+ */
+function urlSet(value) {
+  if (value == null) return null;
+  if (value instanceof Set) return new Set([...value].map((u) => str(u).trim()).filter(Boolean));
+  if (typeof value?.[Symbol.iterator] === 'function' && typeof value !== 'string') {
+    return new Set([...value].map((u) => str(u).trim()).filter(Boolean));
+  }
+  return null;
+}
+
 /**
  * Compose ONE frozen weekly issue. PURE. Enforces the public-only leak guard, groups the surviving member
  * items into the four sections (each newest-first, capped at `perSection`), and ranks the news by
@@ -302,20 +384,29 @@ const byDateDesc = (a, b) => (b.date - a.date);
  * the pre-newsletter back catalogue; a PER-ISSUE `since` alongside it re-opens the loss `exclude` closes. See
  * the header note, which said the wrong thing first and explains why.
  *
+ * `seen` (sow-297) is the set of public urls that were ALREADY VISIBLE at the previous issue's compile, and it
+ * is what makes the weekly a WEEK rather than the whole unmailed archive. An item is new to this issue exactly
+ * when it is absent from it. Measured rather than inferred: it comes from the previous frozen issue's `pool`.
+ * Absent or null means no visibility filter, which is right for a first issue and for the welcome, and which is
+ * also the safe fallback the day a pool fails to record (the issue is then merely wider, never narrower).
+ *
+ * `perSection` is a cap per KIND: a number caps all four alike, an object caps each by name (with `default`
+ * for the rest), and nothing at all means DEFAULT_SECTION_CAPS. See that constant for why shares differ.
+ *
  * `maxNewsThin` OPTIONALLY lifts the news cap on a week with NO member content, so a news-led issue is a
  * real issue rather than a stub. It applies only when every member section is empty, it can only raise the
  * cap and never lower it, and it defaults to no lift, so an explicit maxNews is always a real ceiling. The
  * compile cron is where to set it; 8 is the suggested value.
  *
- * @returns { issueId, generatedAt, sections, topNews, layout, counts, isEmpty, window, launchNote }
+ * @returns { issueId, generatedAt, sections, topNews, layout, counts, isEmpty, window, pool, launchNote }
  */
 export function composeIssue(
   { issueId, items = [], news = [], now = Date.now } = {},
-  { perSection = 5, maxNews = 5, maxNewsThin, since, exclude, firstIssue = false, launchNote } = {},
+  { perSection, maxNews = 5, maxNewsThin, since, exclude, seen, firstIssue = false, launchNote } = {},
 ) {
   const id = trimOrNull(issueId);
   if (!id) throw new DigestError('issueId is required');
-  const cap = Math.max(0, Math.floor(Number(perSection)) || 0);
+  const caps = resolveSectionCaps(perSection);
   const newsCap = Math.max(0, Math.floor(Number(maxNews)) || 0);
   // The thin-week news cap is OPT IN and defaults to no lift at all. An earlier draft defaulted it to 8 and
   // a caller passing maxNews: 3 got 4 items back: a parameter named "max" that a default can exceed is a
@@ -331,22 +422,18 @@ export function composeIssue(
   // Resolved ONCE, up front, because the projection clamps item dates against it and the returned issue reports
   // it. Reading the injected clock twice could hand the two different values.
   const generatedAt = Number(now());
-  // The already-mailed set. Accepts a Set or any iterable of urls; anything else (including a bare object, a
-  // string, or nothing) means NO exclusion. `null` is kept distinct from an EMPTY set on purpose: an empty set
-  // is a real answer on the first issue, and a caller that forgot to pass one is not, so the two must not look
-  // alike in the frozen issue. Bounding the set is the CALLER's job and it is safe to bound: the artifacts cap
-  // at 40 per type, so a url that has aged out of them can never reappear and never needs remembering.
-  const excluded = (() => {
-    if (exclude == null) return null;
-    if (exclude instanceof Set) return new Set([...exclude].map((u) => str(u).trim()).filter(Boolean));
-    if (typeof exclude?.[Symbol.iterator] === 'function' && typeof exclude !== 'string') {
-      return new Set([...exclude].map((u) => str(u).trim()).filter(Boolean));
-    }
-    return null;
-  })();
+  // The already-mailed set. Bounding it is the CALLER's job and it is safe to bound: the artifacts cap at 40
+  // per type, so a url that has aged out of them can never reappear and never needs remembering.
+  const excluded = urlSet(exclude);
+  // sow-297: the already-VISIBLE set, from the previous issue's recorded pool. Distinct from `excluded`
+  // because they answer different questions and fail differently. `excluded` asks "did we mail this", and its
+  // failure is a duplicate. `seenBefore` asks "was this here last week", and its failure is a stale item under
+  // a "since the last issue" heading. An item can be in one and not the other: a share visible last week that
+  // did not fit the cap is seen and not mailed, and under the weekly window that is a deliberate drop.
+  const seenBefore = urlSet(seen);
 
   // Layer 1: drop every non-public item. Layer 2: project each survivor to public-safe fields only.
-  const publicItems = (Array.isArray(items) ? items : [])
+  const duePublicItems = (Array.isArray(items) ? items : [])
     .filter(isPublicItem)
     .map(publicItem)
     .filter((it) => it.title && it.url) // an item with no title or link is not renderable
@@ -367,11 +454,29 @@ export function composeIssue(
     // mistyped year withholds an item until the typo is fixed, and the corrected date is in the past so it
     // mails normally. The clamp's failure direction was subscribers receiving it four times, which no later
     // fix can take back.
-    .filter((it) => it.date <= generatedAt)
+    .filter((it) => it.date <= generatedAt);
+
+  // sow-297: THE POOL, and it is the input to NEXT week's window rather than to this issue.
+  //
+  // Every public, due item the artifact carried at THIS compile, before any window is applied. Next week's
+  // compile passes it back as `seen`, and the difference between the two pools is exactly what became visible
+  // in between. That is why it is captured HERE and not lower down: taken after the window it would only ever
+  // contain what this issue already mailed, and the diff would call the whole standing catalogue new every
+  // single week.
+  //
+  // It is public-safe by construction, not by promise: it is derived from items that already passed the
+  // public filter and the public-safe projection, and it carries urls and nothing else.
+  const pool = [...new Set(duePublicItems.map((it) => it.url))].sort();
+
+  const publicItems = duePublicItems
     // Windowed AFTER the projection, so it reads the already-normalized numeric `date` rather than whatever
     // shape the caller passed. An undated item has date 0 and therefore never survives a window, which is the
     // right way round: an item with no publication date cannot be shown to be new.
     .filter((it) => sinceMs === null || it.date >= sinceMs)
+    // sow-297: and it was not already visible at the previous compile. This is the WEEK, and it is the only
+    // one of the three filters that measures visibility rather than approximating it. Applied before the
+    // mailed check purely for readability; the two are commutative.
+    .filter((it) => seenBefore === null || !seenBefore.has(it.url))
     // Matched on the projected `url`, which is the same field the caller records when it mails an item, so the
     // two sides cannot drift into comparing different strings. Trimmed on both sides and otherwise EXACT: the
     // urls come from one generator, and normalizing case or trailing slashes here would be inventing a
@@ -383,7 +488,7 @@ export function composeIssue(
     if (Object.prototype.hasOwnProperty.call(sections, it.kind)) sections[it.kind].push(it);
   }
   for (const k of SECTION_KINDS) {
-    sections[k] = sections[k].sort(byDateDesc).slice(0, cap);
+    sections[k] = sections[k].sort(byDateDesc).slice(0, caps[k] ?? 0);
   }
 
   // The member total decides the news cap, so rank first and slice after (slicing to the small cap and then
@@ -418,7 +523,17 @@ export function composeIssue(
     // that is a bug in the caller every time. News is deliberately not windowed: it is ranked by distinct
     // openers rather than recency, and the gather already returns a bounded recent set, so a story that
     // ingested nine days ago and was opened all week is exactly what belongs at the top.
-    window: { since: sinceMs, excluded: excluded === null ? null : excluded.size, appliesTo: 'members' },
+    window: {
+      since: sinceMs,
+      excluded: excluded === null ? null : excluded.size,
+      // sow-297: null means NO visibility filter was applied, which is correct on a first issue and on the
+      // welcome, and is the honest signal that a weekly ran without one (the previous pool was missing) rather
+      // than that nothing had been seen. A count of 0 would be indistinguishable from that, so keep them apart.
+      seen: seenBefore === null ? null : seenBefore.size,
+      appliesTo: 'members',
+    },
+    // sow-297: what was VISIBLE at this compile, for next week's window to diff against. Not rendered.
+    pool,
     // null on every issue but the first, so the template renders the line by its presence and never has to
     // know which issue number it is holding.
     // sow-166: `launchNote` is an explicit override, and `undefined` (not passed) keeps the original behaviour.

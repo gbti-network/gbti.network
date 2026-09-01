@@ -288,7 +288,7 @@ test('resolveWindow (FIRST issue): no prior -> since = now - 90d, exclude null, 
   const nowMs = gen(7, 25);
   assert.deepEqual(
     await resolveWindow(kv, { nowMs, currentIssueId: 'weekly-2026-08-25' }),
-    { firstIssue: true, since: nowMs - BOOTSTRAP, exclude: null, previousGeneratedAt: null },
+    { firstIssue: true, since: nowMs - BOOTSTRAP, exclude: null, seen: null, previousGeneratedAt: null },
   );
 });
 
@@ -298,12 +298,44 @@ test('resolveWindow (THEREAFTER): a prior exists -> since = the newsletter EPOCH
   const kv = makeKV();
   await putIssue(kv, { issueId: 'weekly-2026-08-04', generatedAt: gen(7, 4), window: { since: EPOCH, excluded: null, appliesTo: 'members' }, sections: {
     article: [{ url: '/articles/a1/' }], product: [{ url: '/products/p1/' }], prompt: [], share: [{ url: '/shares/ann/s1/' }],
-  }, topNews: [{ url: 'https://n/news-should-not-be-excluded' }] });
+  // sow-297: the prior issue records what was VISIBLE at its compile, which is a SUPERSET of what it mailed
+  // (the cap and the window both narrow the pool down to the sections). `/articles/unmailed/` is in it and in
+  // no section, which is the case the two sets exist to tell apart.
+  }, topNews: [{ url: 'https://n/news-should-not-be-excluded' }], pool: ['/articles/a1/', '/articles/unmailed/', '/products/p1/', '/shares/ann/s1/'] });
   const w = await resolveWindow(kv, { nowMs: gen(7, 25), currentIssueId: 'weekly-2026-08-25' });
   assert.equal(w.firstIssue, false);
   assert.equal(w.since, EPOCH, 'the floor is the newsletter epoch, not null; null would drain the pre-newsletter back catalogue');
   assert.deepEqual([...w.exclude].sort(), ['/articles/a1/', '/products/p1/', '/shares/ann/s1/'], 'all member sections, unioned');
   assert.ok(!w.exclude.has('https://n/news-should-not-be-excluded'), 'news is NOT excluded (it re-ranks by opens)');
+  // sow-297: and the WEEK, which is the prior pool. Distinct from exclude on both sides, so a mutant that
+  // aliased the two would red here: `unmailed` is seen and not excluded.
+  assert.deepEqual([...w.seen].sort(), ['/articles/a1/', '/articles/unmailed/', '/products/p1/', '/shares/ann/s1/']);
+  assert.ok(w.seen.has('/articles/unmailed/') && !w.exclude.has('/articles/unmailed/'),
+    'an item visible last week but never mailed is SEEN and not EXCLUDED: the two sets are not the same question');
+});
+
+// sow-297: the one-week transition. Every issue frozen before pools existed has none, so the very next compile
+// has nothing to diff. It must NOT fall through to the epoch floor (that is the whole archive) and must NOT
+// treat an empty pool as "nothing was visible" (that would mark the entire catalogue new). It falls back to the
+// publishedAt proxy at the previous compile time, which is the same question asked less precisely.
+test('resolveWindow BOOTSTRAP: a prior issue with no recorded pool -> seen null and the floor tightens to that issue compile time', async () => {
+  const kv = makeKV();
+  await putIssue(kv, { issueId: 'weekly-2026-08-04', generatedAt: gen(7, 4), window: { since: EPOCH }, sections: { article: [{ url: '/articles/a1/' }] } });
+  const w = await resolveWindow(kv, { nowMs: gen(7, 25), currentIssueId: 'weekly-2026-08-25' });
+  assert.equal(w.seen, null, 'no pool to diff against, and null is distinct from an empty set');
+  assert.equal(w.since, gen(7, 4), 'the floor is the previous compile, NOT the epoch: a weekly issue is one week');
+  assert.notEqual(w.since, EPOCH, 'the epoch would re-open the whole back catalogue, which is what this ruling closed');
+});
+
+// An EMPTY recorded pool reads the same as a missing one. A site with published content cannot compile to a
+// zero-item pool, so an empty array is a recording failure, and the safe read of a recording failure is the
+// WIDER window (no visibility filter) rather than the narrower one (everything is new).
+test('resolveWindow BOOTSTRAP: an EMPTY pool is treated as absent, not as "nothing was visible"', async () => {
+  const kv = makeKV();
+  await putIssue(kv, { issueId: 'weekly-2026-08-04', generatedAt: gen(7, 4), window: { since: EPOCH }, sections: { article: [] }, pool: [] });
+  const w = await resolveWindow(kv, { nowMs: gen(7, 25), currentIssueId: 'weekly-2026-08-25' });
+  assert.equal(w.seen, null, 'an empty pool must not become an empty Set, which would filter nothing but claim it did');
+  assert.equal(w.since, gen(7, 4));
 });
 
 test('resolveWindow: a foreign (non weekly-) issue id is not counted as a prior, so we stay in the first-issue regime', async () => {
@@ -316,9 +348,11 @@ test('resolveWindow: a foreign (non weekly-) issue id is not counted as a prior,
 
 test('resolveWindow: once an issue ages OUT of the depth window, exclude is bounded AND the floor advances to the oldest in-window compile time', async () => {
   const kv = makeKV();
-  await putIssue(kv, { issueId: 'weekly-2026-08-04', generatedAt: gen(7, 4), window: { since: EPOCH }, sections: { article: [{ url: '/articles/old/' }] } });
-  await putIssue(kv, { issueId: 'weekly-2026-08-11', generatedAt: gen(7, 11), sections: { article: [{ url: '/articles/mid/' }] } });
-  await putIssue(kv, { issueId: 'weekly-2026-08-18', generatedAt: gen(7, 18), sections: { article: [{ url: '/articles/recent/' }] } });
+  // Pools recorded, so this exercises the STEADY state rather than the sow-297 bootstrap fallback. The floor is
+  // the backstop under the visibility diff, and a backstop only earns its keep if it is tested on its own.
+  await putIssue(kv, { issueId: 'weekly-2026-08-04', generatedAt: gen(7, 4), window: { since: EPOCH }, sections: { article: [{ url: '/articles/old/' }] }, pool: ['/articles/old/'] });
+  await putIssue(kv, { issueId: 'weekly-2026-08-11', generatedAt: gen(7, 11), sections: { article: [{ url: '/articles/mid/' }] }, pool: ['/articles/old/', '/articles/mid/'] });
+  await putIssue(kv, { issueId: 'weekly-2026-08-18', generatedAt: gen(7, 18), sections: { article: [{ url: '/articles/recent/' }] }, pool: ['/articles/old/', '/articles/mid/', '/articles/recent/'] });
   const w = await resolveWindow(kv, { nowMs: gen(7, 25), currentIssueId: 'weekly-2026-08-25', historyDepth: 2 });
   assert.deepEqual([...w.exclude].sort(), ['/articles/mid/', '/articles/recent/'], 'the two newest priors only');
   assert.ok(!w.exclude.has('/articles/old/'), 'the issue beyond the history depth is not read for exclusion');
@@ -327,11 +361,15 @@ test('resolveWindow: once an issue ages OUT of the depth window, exclude is boun
   // so anything an aged-out issue mailed (published no later than 08-04, strictly before 08-11) is floored. Floor
   // and exclude now cover the same span, which is the coupling.
   assert.equal(w.since, gen(7, 11), 'the floor is the oldest in-window compile time, not the (now unsafe) fixed epoch');
+  assert.deepEqual([...w.seen].sort(), ['/articles/mid/', '/articles/old/', '/articles/recent/'],
+    'and the week is the NEWEST prior pool, which is a different bound from the oldest in-window compile time');
 });
 
 test('resolveWindow: a first issue with no recorded window.since falls back to its own date as the epoch', async () => {
   const kv = makeKV();
-  await putIssue(kv, { issueId: 'weekly-2026-08-18', generatedAt: gen(7, 18), sections: { article: [{ url: '/a/' }] } }); // legacy: no window
+  // A pool is recorded so the sow-297 bootstrap branch does not short-circuit this: resolveEpoch is the branch
+  // under test, and it is only reachable once a pool exists.
+  await putIssue(kv, { issueId: 'weekly-2026-08-18', generatedAt: gen(7, 18), sections: { article: [{ url: '/a/' }] }, pool: ['/a/'] }); // legacy: no window
   const w = await resolveWindow(kv, { nowMs: gen(7, 25), currentIssueId: 'weekly-2026-08-25' });
   assert.equal(w.since, Date.UTC(2026, 7, 18, 0, 0, 0), 'parsed from the oldest issue id at midnight UTC, still a real floor');
 });
@@ -359,9 +397,12 @@ test('compileWeeklyIssue THEREAFTER: epoch floor + exclude keeps a held item, dr
   const kv = makeKV();
   seedSubscribers(kv, ['r1']);
   // Issue one (the oldest prior) records the newsletter epoch as its window.since and already mailed one article.
+  // sow-297: the pool holds ONLY the already-mailed url, deliberately. `held` was still under review at that
+  // compile so it was not visible, and `prenews` is left out so the EPOCH floor is the only thing that can drop
+  // it: two mechanisms dropping the same item would make neither assertion discriminating.
   await putIssue(kv, { issueId: 'weekly-2026-08-04', generatedAt: gen(7, 4), window: { since: EPOCH, excluded: null, appliesTo: 'members' }, sections: {
     article: [{ url: '/articles/mailed/', title: 'Already mailed' }], product: [], prompt: [], share: [],
-  } });
+  }, pool: ['/articles/mailed/'] });
   const activity = { entries: [
     { type: 'post', slug: 'mailed',  title: 'Already mailed',      url: '/articles/mailed/',  author: 'ann', publishedAt: Date.UTC(2026, 6, 30), visibility: 'public' }, // after epoch, already mailed
     { type: 'post', slug: 'fresh',   title: 'Fresh this week',     url: '/articles/fresh/',   author: 'ann', publishedAt: Date.UTC(2026, 7, 24), visibility: 'public' }, // new, not mailed
@@ -382,6 +423,13 @@ test('compileWeeklyIssue THEREAFTER: epoch floor + exclude keeps a held item, dr
     'held item kept (Trap Two), already-mailed excluded, pre-newsletter floored out');
   assert.equal(issue.window.since, EPOCH);
   assert.equal(issue.window.excluded, 1);
+  assert.equal(issue.window.seen, 1, 'and the week was measured against the prior pool, not left unset');
+  // sow-297: the closure of Trap Two, stated as its own claim rather than inferred from the list above. `held`
+  // is dated 08-01, four days BEFORE the previous compile, so a seven-day publishedAt window would drop it on
+  // the very day it first became visible. It mails because it was not in the previous pool.
+  assert.ok(issue.sections.article.some((a) => a.title === 'Held contribution'),
+    'an item published before the last compile but first VISIBLE after it is still new');
+  assert.ok(issue.pool.includes('/articles/held/'), 'and this issue records it as visible, so next week it is not new again');
 });
 
 // The SEAM the two prior defects lived in: the time floor and the issue-count exclude window are TWO bounds, and
@@ -418,13 +466,21 @@ test('SEAM (multi-issue): a below-cap item is mailed exactly once, never re-mail
       mailedIn.get(p.url).push(r.issueId);
     }
   }
-  // Every product mailed EXACTLY once across the whole run. Under a fixed epoch floor, products 2-6 (mailed in issue
-  // one, then aged out of the depth-3 exclude window by issue five) are above the epoch and no longer excluded, so
-  // they re-mail: length 2, and this assertion reds. That is the mutant this test exists to catch.
+  // Every product mailed AT MOST once across the whole run. Under a fixed epoch floor, products 2-6 (mailed in
+  // issue one, then aged out of the depth-3 exclude window by issue five) are above the epoch and no longer
+  // excluded, so they re-mail: length 2, and this assertion reds. That is the mutant this test exists to catch.
+  // sow-297 adds a second, independent guard on the same property (an item in last week's pool is not new), so
+  // the floor coupling is now the BACKSTOP; it is exercised on its own in the aged-out resolveWindow test above.
   for (const [url, issues] of mailedIn) {
     assert.equal(issues.length, 1, `${url} was mailed ${issues.length} times (${issues.join(', ')}); expected exactly once`);
   }
-  assert.equal(mailedIn.size, 6, 'and all six below-cap products were actually mailed (not vacuously passing by mailing nothing)');
+  // FIVE, not six, and the missing one is the owner's ruling rather than a defect (sow-297, 2026-08-31). Six
+  // items arrive in one week against a cap of five, so p1 (the oldest) does not fit issue one. Under the weekly
+  // window it is not new the following week either: it was visible, so it is not a thing that happened this
+  // week. The answer to a section that overflows is a bigger cap for that section, which is why shares carry 10
+  // (DEFAULT_SECTION_CAPS), not a queue that walks the archive forward one item at a time.
+  assert.equal(mailedIn.size, 5, 'the five that fit the cap were actually mailed (not vacuously passing by mailing nothing)');
+  assert.ok(!mailedIn.has('/products/p1/'), 'the overflow item is dropped, not carried over: it was visible and is no longer new');
 });
 
 // The joint SEAM between the advancing floor (resolveWindow, this module's orchestration) and the not-yet-due
@@ -440,23 +496,28 @@ test('SEAM (multi-issue): a below-cap item is mailed exactly once, never re-mail
 // and later ones NEVER did, and a "mails once at issue 0" assertion passes cleanly against that wrong world. The
 // property a floor bug destroys is an item having to WAIT its turn, so the load-bearing control is `wait`, which
 // perSection 1 forces onto issue 1. `immediate` guards the opposite failure (the harness dropping everything).
-test('SEAM (future-dated): a not-yet-due item is withheld then mailed once; a wait-its-turn item still drains', async () => {
+test('SEAM (future-dated): a not-yet-due item is withheld then mailed once; a late-arriving item still mails', async () => {
   const kv = makeKV();
   seedSubscribers(kv, ['r1']);
   const DAY = 24 * 3600 * 1000;
   const TUE = (wk) => Date.UTC(2026, 0, 6 + 7 * wk, 13, 0, 0);
-  // perSection 1 so only the single newest due item mails each issue. `immediate` (newest) mails at issue 0;
-  // `wait` (a day older) cannot mail until issue 1, which is the control that actually exercises the floor. `future`
-  // is 100 days ahead: TUE(15) = +105d is the first compile at or after it (TUE(14) = +98d is still before), so it
-  // is due at issue 15. Run well past 15 so a re-mail (the bug) would show as a second entry.
-  const products = [
-    { type: 'product', slug: 'immediate', title: 'Immediate', url: '/products/immediate/', author: 'ann', publishedAt: TUE(0) - DAY, visibility: 'public' },
-    { type: 'product', slug: 'wait', title: 'Waits its turn', url: '/products/wait/', author: 'ann', publishedAt: TUE(0) - 2 * DAY, visibility: 'public' },
-    { type: 'product', slug: 'future', title: 'Future', url: '/products/future/', author: 'ann', publishedAt: TUE(0) + 100 * DAY, visibility: 'public' },
-  ];
-  const activity = { entries: products };
+  // perSection 1 so only the single newest due item mails each issue. `immediate` mails at issue 0 and is the
+  // control against a harness that drops everything. `future` is 100 days ahead: TUE(15) = +105d is the first
+  // compile at or after it (TUE(14) = +98d is still before), so it is due at issue 15. Run well past 15 so a
+  // re-mail (the bug) would show as a second entry.
+  //
+  // sow-297 REPLACED the old `wait` control, and the replacement is the stronger one. `wait` proved an item
+  // could sit out an issue and mail on the next, which is no longer a property: under the weekly window an item
+  // that was visible last week is not new this week, by design. `latecomer` proves the thing that actually
+  // matters and that this design exists to protect. Its publishedAt is THREE DAYS BEFORE the first compile, and
+  // it does not enter the artifact until week 3, so a publishedAt window of any sane width would have floored it
+  // out on the day it first became visible. It mails because it was not in week 2's pool.
+  const immediate = { type: 'product', slug: 'immediate', title: 'Immediate', url: '/products/immediate/', author: 'ann', publishedAt: TUE(0) - DAY, visibility: 'public' };
+  const future = { type: 'product', slug: 'future', title: 'Future', url: '/products/future/', author: 'ann', publishedAt: TUE(0) + 100 * DAY, visibility: 'public' };
+  const latecomer = { type: 'product', slug: 'latecomer', title: 'Held for review', url: '/products/latecomer/', author: 'bob', publishedAt: TUE(0) - 3 * DAY, visibility: 'public' };
   const mailedIn = new Map(); // url -> [week index]
   for (let wk = 0; wk < 22; wk++) {
+    const activity = { entries: wk >= 3 ? [immediate, future, latecomer] : [immediate, future] };
     const d = {
       kv, now: at(TUE(wk)), siteUrl: 'https://x', historyDepth: 3, perSection: 1,
       fetchImpl: fakeFetch({ '/activity-index.json': activity, '/shares-index.json': { entries: [] } }),
@@ -471,10 +532,11 @@ test('SEAM (future-dated): a not-yet-due item is withheld then mailed once; a wa
       mailedIn.get(p.url).push(wk);
     }
   }
-  // The wait-its-turn control is the one that proves the harness models the floor: if the floor were wrongly advanced
-  // (the ramp-up bug), `wait` would be floored out and NEVER mail. It must mail exactly once, at issue 1.
-  assert.deepEqual(mailedIn.get('/products/wait/'), [1], 'the older item waits one issue for its turn, then mails exactly once (not floored out)');
   assert.deepEqual(mailedIn.get('/products/immediate/'), [0], 'the newest item mails at the first issue (harness is not dropping everything)');
+  // The load-bearing control. It arrives in week 3 carrying a date from before week 0, which is exactly the
+  // shape of a contribution held for review. A weekly window measured on publishedAt gives it [] here.
+  assert.deepEqual(mailedIn.get('/products/latecomer/'), [3],
+    'an item that becomes VISIBLE in week 3 mails in week 3, however old its publishedAt is');
   // The future item is WITHHELD every issue until it comes due, then mails exactly once. Under PR 324's clamp it
   // re-mailed at 0, 4, 8, 12 (every historyDepth+1); unbounded, the same. Both fail this, so it is discriminating.
   assert.deepEqual(mailedIn.get('/products/future/'), [15],
