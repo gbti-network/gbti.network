@@ -5,16 +5,29 @@
 // Publish, SOW-121), so a Social Queue task carries the SAME text that would have auto-posted. Pure (no IO).
 import { templateFor } from './syndication-config-core.mjs';
 import { renderTemplate, buildChannelText } from './syndication-format.mjs';
-import { channelLimit } from './syndication-channels.mjs';
+import { channelLimit, rendersMarkdown } from './syndication-channels.mjs';
+import { mdToPlain } from './markdown-plain.mjs';
 
 export function renderChannelText(cfg, item = {}, channel, { textOverride, channelOnly = true } = {}) {
   const limit = channelLimit(channel);
-  if (typeof textOverride === 'string' && textOverride.trim()) return textOverride.slice(0, limit);
+  // sow-300: a destination that does not render markdown gets none. Author-written text reaches these
+  // templates ({short-description}, {author-note-block}), so an author's **bold** would otherwise arrive as
+  // literal asterisks in a live post.
+  //
+  // APPLIED TO THE textOverride BRANCH TOO, and that branch is the one that matters most. The Social Queue's
+  // "Post now" posts the STORED task text as an override, so a task frozen in KV before this shipped would
+  // otherwise post exactly the markdown it was stored with, and fixing only the template branch would miss
+  // every item already queued. mdToPlain is idempotent, so text that was already stripped at render survives
+  // this second pass unchanged.
+  const plain = (t) => (rendersMarkdown(channel) ? String(t || '') : mdToPlain(t));
+  if (typeof textOverride === 'string' && textOverride.trim()) return plain(textOverride).slice(0, limit);
   const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
   const text = cfg
     ? renderTemplate(templateFor(cfg, item.source, channel, { stub: stubish, channelOnly }) || '{title} {url}', item, { limit })
     : buildChannelText(item, { limit });
-  return String(text || '').slice(0, limit);
+  // Stripping runs AFTER renderTemplate's own truncation, so the result can only get shorter than the cap,
+  // never longer. That is the safe direction: a slightly short post beats one the API rejects.
+  return plain(text).slice(0, limit);
 }
 
 // sow-260: Reddit is the one channel whose submission is not a single block of text. Every other manual
@@ -37,7 +50,9 @@ export const REDDIT_BODY_LIMIT = 9500;
  */
 export function renderRedditTitle(cfg, item = {}, { textOverride } = {}) {
   const limit = channelLimit('reddit');
-  const strip = (v) => String(v || '').replace(/\s*\n+\s*/g, ' ').slice(0, limit);
+  // sow-300: mdToPlain first, then the newline strip. A Reddit title is pasted into the composer's title
+  // field, which renders nothing at all, so `**Tailcat**` there is just noise a reader has to look past.
+  const strip = (v) => mdToPlain(v).replace(/\s*\n+\s*/g, ' ').slice(0, limit);
   if (typeof textOverride === 'string' && textOverride.trim()) return strip(textOverride);
   const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
   // The fallback is '{title}' and NOT renderChannelText's generic '{title} {url}'. Reddit carries the link in
@@ -61,6 +76,12 @@ export function renderRedditTitle(cfg, item = {}, { textOverride } = {}) {
  * as "there is no comment to post" rather than posting an empty string.
  */
 export function renderRedditComment(cfg, item = {}) {
+  // sow-300: THIS ONE KEEPS ITS MARKDOWN, deliberately, and it is the only renderer here that does.
+  // `rendersMarkdown('reddit')` is false and the title above IS stripped, so this looks like an oversight
+  // and is not. The comment is delivered by a human pasting it, and the Social Queue's copy button converts
+  // this markdown into the clipboard's text/html flavour, which is what makes the quote arrive as a real
+  // quote block and the bold as real bold. Strip it here and the copy button has nothing left to convert:
+  // the paste degrades to flat text and the feature is gone. See membership/markdown-plain.mjs.
   if (!cfg) return '';
   const stubish = item.membersOnly === true || String(item.visibility || '') === 'members';
   const tpl = templateFor(cfg, 'reddit-comment', 'reddit', { stub: stubish }) || '';

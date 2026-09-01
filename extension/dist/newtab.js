@@ -3250,8 +3250,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var isImageOnly = (l) => /^!\[[^\]]*\]\([^)]*\)\s*$/.test(l);
   var isBareUrl = (l) => /^https?:\/\/\S+$/.test(l.trim());
   var isVideoUrl = (l) => /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(l);
-  function serializeBlocks(blocks) {
-    return (Array.isArray(blocks) ? blocks : []).map(serializeBlock).join("\n\n");
+  function serializeBlocks(blocks2) {
+    return (Array.isArray(blocks2) ? blocks2 : []).map(serializeBlock).join("\n\n");
   }
   function serializeBlock(b) {
     if (!b || typeof b !== "object") return "";
@@ -3303,7 +3303,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   }
   function parseBlocks(md) {
     const lines = String(md ?? "").replace(/\r\n/g, "\n").split("\n");
-    const blocks = [];
+    const blocks2 = [];
     const n = lines.length;
     let i = 0;
     while (i < n) {
@@ -3313,7 +3313,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         continue;
       }
       if (isMarker(line)) {
-        blocks.push({ type: "members" });
+        blocks2.push({ type: "members" });
         i++;
         continue;
       }
@@ -3331,14 +3331,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           i++;
         }
         i++;
-        if (info[0] === "callout") blocks.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
-        else if (info[0] === "embed") blocks.push({ type: "embed", url: code.join("\n").trim() });
-        else blocks.push({ type: "code", lang, code: code.join("\n") });
+        if (info[0] === "callout") blocks2.push({ type: "callout", variant: normalizeVariant(info[1]), text: code.join("\n") });
+        else if (info[0] === "embed") blocks2.push({ type: "embed", url: code.join("\n").trim() });
+        else blocks2.push({ type: "code", lang, code: code.join("\n") });
         continue;
       }
       let m = line.match(/^(#{1,6})\s+(.*)$/);
       if (m) {
-        blocks.push({ type: "heading", level: m[1].length, text: m[2] });
+        blocks2.push({ type: "heading", level: m[1].length, text: m[2] });
         i++;
         continue;
       }
@@ -3348,7 +3348,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           q.push(lines[i].replace(/^>\s?/, ""));
           i++;
         }
-        blocks.push({ type: "quote", text: q.join("\n") });
+        blocks2.push({ type: "quote", text: q.join("\n") });
         continue;
       }
       if (isListItem(line)) {
@@ -3358,7 +3358,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           items.push(lines[i].replace(/^\s*([-*]|\d+\.)\s+/, ""));
           i++;
         }
-        blocks.push({ type: "list", ordered, items });
+        blocks2.push({ type: "list", ordered, items });
         continue;
       }
       if (isTableStart(lines, i)) {
@@ -3374,17 +3374,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           rows.push(row);
           i++;
         }
-        blocks.push({ type: "table", head, aligns, rows });
+        blocks2.push({ type: "table", head, aligns, rows });
         continue;
       }
       m = line.match(/^!\[([^\]]*)\]\(([^)]*)\)\s*$/);
       if (m) {
-        blocks.push({ type: "image", alt: m[1], url: m[2] });
+        blocks2.push({ type: "image", alt: m[1], url: m[2] });
         i++;
         continue;
       }
       if (isBareUrl(line) && isVideoUrl(line)) {
-        blocks.push({ type: "embed", url: line.trim() });
+        blocks2.push({ type: "embed", url: line.trim() });
         i++;
         continue;
       }
@@ -3395,10 +3395,10 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         para.push(l);
         i++;
       }
-      if (para.length) blocks.push({ type: "paragraph", text: para.join("\n") });
+      if (para.length) blocks2.push({ type: "paragraph", text: para.join("\n") });
       else i++;
     }
-    return blocks;
+    return blocks2;
   }
   function emptyBlock(type) {
     switch (type) {
@@ -4818,6 +4818,265 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     return Object.freeze(m);
   }
 
+  // membership/syndication-channels.mjs
+  var CHANNEL_LIMITS = Object.freeze({
+    discord: 2e3,
+    "discord-category": 2e3,
+    // SOW-087: the category-channel Discord post
+    x: 280,
+    linkedin: 3e3,
+    mastodon: 500,
+    bluesky: 300,
+    reddit: 300,
+    // the Reddit post-title cap (SOW-088: the template renders the title)
+    devto: 128,
+    // the dev.to title cap (the article body is not template-limited)
+    hashnode: 250,
+    // SOW-134: the Hashnode title cap (the article body is not template-limited)
+    dailydev: 300
+    // SOW-135: the daily.dev manual-assist note cap (a link + a short line; no secret keys, it is manual)
+  });
+  var CHANNEL_SECRET_KEYS = Object.freeze({
+    discord: ["DISCORD_BOT_TOKEN"],
+    "discord-category": ["DISCORD_BOT_TOKEN"],
+    // SOW-087: the same bot posts the category-channel copy
+    x: ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_SECRET"],
+    linkedin: ["LINKEDIN_ACCESS_TOKEN", "LINKEDIN_ORG_URN"],
+    mastodon: ["MASTODON_BASE_URL", "MASTODON_ACCESS_TOKEN"],
+    bluesky: ["BLUESKY_HANDLE", "BLUESKY_APP_PASSWORD"],
+    // sow-260 (2026-08-26): the three OAuth secrets are GONE. They authenticated an application Reddit
+    // destroyed when it banned the posting account on 2026-08-25, and it cannot be recreated because
+    // self-service app creation closed in November 2025. Reddit is manual-assist now and the manual lane
+    // needs no credential at all, so listing dead keys here would only make a working channel report itself
+    // unconfigured. REDDIT_SUBREDDIT stays: it names the destination and the dormant adapter still reads it.
+    reddit: ["REDDIT_SUBREDDIT"],
+    // SOW-088, narrowed by sow-260
+    devto: ["DEVTO_API_KEY", "DEVTO_ORG_ID"],
+    // SOW-088: full-body crossposts to the GBTI dev.to organization
+    hashnode: ["HASHNODE_TOKEN", "HASHNODE_PUBLICATION_ID"]
+    // SOW-134: PAT + the gbti.hashnode.dev publication id
+  });
+  var CHANNEL_MARKDOWN = Object.freeze({
+    discord: true,
+    // a Discord message, and Discord renders markdown natively
+    "discord-category": true,
+    // the same bot, the same rendering
+    // EVERY OTHER CHANNEL IS FALSE, INCLUDING dev.to AND HASHNODE, and those two are the ones that look wrong.
+    // They are markdown platforms. But this map governs the text renderChannelText produces, and on dev.to and
+    // Hashnode that text is the post TITLE (see the channelOnly note in syndication-config-core.mjs), which is
+    // a plain-text field on both. Their article BODIES never pass through here: they are built by
+    // renderBodyTemplate and keep their markdown untouched. Flip either of these to true and you put
+    // asterisks in an article title.
+    devto: false,
+    hashnode: false,
+    reddit: false,
+    // the manual rail is the rich-text composer, not the markdown editor
+    x: false,
+    bluesky: false,
+    mastodon: false,
+    linkedin: false,
+    dailydev: false
+  });
+  function rendersMarkdown(name) {
+    return CHANNEL_MARKDOWN[name] === true;
+  }
+
+  // membership/markdown-plain.mjs
+  var MASK = "\0";
+  var MASK_RE = new RegExp(`${MASK}(\\d+)${MASK}`, "g");
+  var DEST = "([^()\\s]*(?:\\([^()]*\\)[^()\\s]*)*)";
+  function esc2(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function safeHref(url) {
+    const u = String(url || "").replace(/\u200B/g, "").trim();
+    return /^(https?:\/\/|mailto:)/i.test(u) ? u : "";
+  }
+  function maskRuns(text, store2) {
+    const push = (raw, kind) => {
+      store2.push({ raw, kind });
+      return `${MASK}${store2.length - 1}${MASK}`;
+    };
+    return String(text).replace(/`([^`\n]+)`/g, (_m, code) => push(code, "code")).replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi, (_m, url) => push(url, "url")).replace(/(?:https?:\/\/|mailto:)[^\s<>()[\]]+/gi, (m) => push(m, "url"));
+  }
+  function inline(text, { bold, italic, strike, link }) {
+    return String(text).replace(new RegExp(`!\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, alt, url) => link(alt, url)).replace(new RegExp(`\\[([^\\]]*)\\]\\(${DEST}(?:\\s+"[^"]*")?\\)`, "g"), (_m, label, url) => link(label, url)).replace(/~~(?=\S)([^\n]*?\S)~~/g, (_m, t) => strike(t)).replace(/\*\*(?=\S)([^\n]*?\S)\*\*/g, (_m, t) => bold(t)).replace(/\*(?=\S)([^*\n]*?\S)\*/g, (_m, t) => italic(t));
+  }
+  function blocks(md) {
+    const lines = String(md == null ? "" : md).replace(/\r\n?/g, "\n").split("\n");
+    const isQuote2 = (l) => /^\s*>/.test(l);
+    const isHeading2 = (l) => /^\s{0,3}#{1,6}\s/.test(l);
+    const isUl = (l) => /^\s*[-*+]\s+\S/.test(l);
+    const isOl = (l) => /^\s*\d+[.)]\s+\S/.test(l);
+    const isFence2 = (l) => /^\s*(```+|~~~+)/.test(l);
+    const isHr = (l) => /^\s*([-*_])(\s*\1){2,}\s*$/.test(l);
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+      const l = lines[i];
+      const fence = l.match(/^\s*(```+|~~~+)/);
+      if (fence) {
+        const close = fence[1][0] === "`" ? /^\s*```+\s*$/ : /^\s*~~~+\s*$/;
+        const body = [];
+        i++;
+        while (i < lines.length && !close.test(lines[i])) {
+          body.push(lines[i]);
+          i++;
+        }
+        i++;
+        out.push({ kind: "fence", lines: body });
+        continue;
+      }
+      if (/^\s*$/.test(l)) {
+        out.push({ kind: "blank" });
+        i++;
+        continue;
+      }
+      if (isHr(l)) {
+        out.push({ kind: "hr" });
+        i++;
+        continue;
+      }
+      const heading = l.match(/^\s{0,3}(#{1,6})\s+(.*)$/);
+      if (heading) {
+        out.push({ kind: "heading", level: heading[1].length, text: heading[2].trim() });
+        i++;
+        continue;
+      }
+      if (isQuote2(l)) {
+        const body = [];
+        while (i < lines.length && isQuote2(lines[i])) {
+          body.push(lines[i].replace(/^\s*>\s?/, ""));
+          i++;
+        }
+        out.push({ kind: "quote", lines: body });
+        continue;
+      }
+      if (isUl(l)) {
+        const items = [];
+        while (i < lines.length && isUl(lines[i])) {
+          items.push(lines[i].replace(/^\s*[-*+]\s+/, ""));
+          i++;
+        }
+        out.push({ kind: "ul", items });
+        continue;
+      }
+      if (isOl(l)) {
+        const items = [];
+        while (i < lines.length && isOl(lines[i])) {
+          items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ""));
+          i++;
+        }
+        out.push({ kind: "ol", items });
+        continue;
+      }
+      const para = [];
+      while (i < lines.length && !/^\s*$/.test(lines[i]) && !isQuote2(lines[i]) && !isHeading2(lines[i]) && !isUl(lines[i]) && !isOl(lines[i]) && !isFence2(lines[i]) && !isHr(lines[i])) {
+        para.push(lines[i]);
+        i++;
+      }
+      out.push({ kind: "p", lines: para });
+    }
+    return out;
+  }
+  function mdToPlain(md) {
+    const render = (text) => {
+      const store2 = [];
+      const masked = maskRuns(text, store2);
+      const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
+      const done = inline(masked, {
+        bold: (t) => t,
+        italic: (t) => t,
+        strike: (t) => t,
+        link: (label, url) => {
+          const dest = resolve(url);
+          const l = resolve(String(label || "")).trim();
+          return !l || l === dest ? dest : `${l} (${dest})`;
+        }
+      });
+      return resolve(done);
+    };
+    const parts = [];
+    for (const b of blocks(md)) {
+      if (b.kind === "blank" || b.kind === "hr") {
+        parts.push("");
+        continue;
+      }
+      if (b.kind === "quote") {
+        parts.push(mdToPlain(b.lines.join("\n")));
+        continue;
+      }
+      if (b.kind === "fence") {
+        parts.push(["```", ...b.lines, "```"].join("\n"));
+        continue;
+      }
+      if (b.kind === "heading") {
+        parts.push(render(b.text));
+        continue;
+      }
+      if (b.kind === "ul") {
+        parts.push(b.items.map((it) => `- ${render(it)}`).join("\n"));
+        continue;
+      }
+      if (b.kind === "ol") {
+        parts.push(b.items.map((it, n) => `${n + 1}. ${render(it)}`).join("\n"));
+        continue;
+      }
+      parts.push(b.lines.map(render).join("\n"));
+    }
+    return parts.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+  function mdToHtml(md) {
+    const render = (text) => {
+      const store2 = [];
+      const masked = maskRuns(text, store2);
+      const safe = esc2(masked);
+      const resolve = (s) => String(s).replace(MASK_RE, (_m, i) => store2[Number(i)]?.raw ?? "");
+      const done = inline(safe, {
+        bold: (t) => `<strong>${t}</strong>`,
+        italic: (t) => `<em>${t}</em>`,
+        strike: (t) => `<del>${t}</del>`,
+        link: (label, url) => {
+          const href = safeHref(resolve(url));
+          const inner = String(label || "").trim() || esc2(resolve(url));
+          return href ? `<a href="${esc2(href)}">${inner}</a>` : inner;
+        }
+      });
+      return done.replace(MASK_RE, (_m, i) => {
+        const run = store2[Number(i)];
+        if (!run) return "";
+        return run.kind === "code" ? `<code>${esc2(run.raw)}</code>` : esc2(run.raw);
+      });
+    };
+    const out = [];
+    for (const b of blocks(md)) {
+      if (b.kind === "blank") continue;
+      if (b.kind === "hr") {
+        out.push("<hr>");
+        continue;
+      }
+      if (b.kind === "fence") {
+        out.push(`<pre><code>${esc2(b.lines.join("\n"))}</code></pre>`);
+        continue;
+      }
+      if (b.kind === "heading") {
+        out.push(`<h${b.level}>${render(b.text)}</h${b.level}>`);
+        continue;
+      }
+      if (b.kind === "quote") {
+        out.push(`<blockquote>${mdToHtml(b.lines.join("\n"))}</blockquote>`);
+        continue;
+      }
+      if (b.kind === "ul" || b.kind === "ol") {
+        const tag = b.kind === "ul" ? "ul" : "ol";
+        out.push(`<${tag}>${b.items.map((it) => `<li>${render(it)}</li>`).join("")}</${tag}>`);
+        continue;
+      }
+      out.push(`<p>${b.lines.map(render).join(" ")}</p>`);
+    }
+    return out.join("");
+  }
+
   // client-ui/src/elements/gbti-social-queue.mjs
   var REDDIT_SUB = "GBTI_network";
   var composeUrl = (task) => {
@@ -5067,8 +5326,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       const primary = channelCapability(t.channel) === "auto" ? `<button class="btn assist" data-post="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Post now to ${esc(label)}</button>` : url ? `<button class="btn assist" data-assist="${esc(t.id)}" type="button">${socialIcon(CH_ICON[t.channel] || t.channel, 13)} Assist post to ${esc(label)}</button>` : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
       return `<div class="task${this._rowBusy === t.id ? " busy" : ""}">
       <div class="top"><span class="src">${esc(SRC_LABEL[t.source] || t.source || "")}</span>${this._chip(t.channel, "", true)}<span class="ti">${esc(t.title || t.itemId || "(untitled)")}</span><span class="when">${t.createdAt ? esc(fmtDate(t.createdAt)) : ""}</span></div>
-      <div class="txt">${esc(t.text || "")}</div>
-      ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(t[x.field])}</div>` : ""}
+      <div class="txt">${esc(this._pasteText(t, "text"))}</div>
+      ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(this._pasteText(t, x.field))}</div>` : ""}
       <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${x ? " title" : ""}</button>${x ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">${esc(x.copy)}</button>` : ""}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
     </div>`;
     }
@@ -5094,17 +5353,53 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
       this._msg = x?.field === "commentText" ? 'Opened Reddit with the title and link filled in. Post it, then paste the first comment below, then click "Mark done".' : x ? 'Opened Reddit with the title and link filled in. Paste the body, post it, then click "Mark done".' : 'Opened the composer. Post it, then click "Mark done".';
       this.render();
     }
+    // sow-300: what a member will actually paste, which is what the preview must show. A task is STORED as
+    // markdown (that is what lets the copy below produce real formatting), so rendering the stored string here
+    // put raw asterisks and `> ` in front of the reader, which is the defect that started this.
+    _pasteText(t, field) {
+      const raw = t?.[field] || "";
+      return rendersMarkdown(t?.channel) ? raw : mdToPlain(raw);
+    }
     // sow-260: `field` selects which part of the task to copy. Reddit tasks carry a body as well as a title, so
     // the row offers both; every other channel has only `text` and the default keeps its single Copy button.
+    //
+    // sow-300: TWO CLIPBOARD FLAVOURS, but only for the Reddit first comment.
+    //
+    // Reddit's rich-text composer reads `text/html` on paste and turns it into its own formatting nodes, which
+    // is how the author note arrives as a real quote block with real bold instead of literal `> ` and `**`.
+    // Every other target gets plain text only, and that is deliberate rather than lazy: LinkedIn's composer is
+    // also rich, and handing it HTML turns the item URL into an <a>, which is not the bare URL its link-preview
+    // detector scans for. Losing the article card to gain bold on a channel that has no author markdown left
+    // after the strip is a bad trade. A post TITLE should never carry <strong> either.
+    //
+    // NOTHING IS AWAITED BEFORE THE CLIPBOARD CALL. Transient user activation is what authorizes a write, and
+    // an await ahead of it spends the gesture; mdToHtml is synchronous for exactly this reason. The catch is
+    // not decoration: Firefox ships ClipboardItem with `write` behind a pref, so feature-detection alone would
+    // pass and then throw. Activation survives the rejection, so the plain fallback still lands.
     async _copy(id, field = "text") {
       const t = this._byId(id);
       if (!t) return;
       const what = field === "commentText" ? "first comment" : field === "bodyText" ? "body" : "post text";
+      const raw = t[field] || "";
+      const plain = this._pasteText(t, field);
+      const rich = field === "commentText" && t.channel === "reddit";
       try {
-        await navigator.clipboard?.writeText?.(t[field] || "");
+        if (rich && typeof ClipboardItem === "function" && navigator.clipboard?.write) {
+          await navigator.clipboard.write([new ClipboardItem({
+            "text/html": new Blob([mdToHtml(raw)], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" })
+          })]);
+        } else {
+          await navigator.clipboard.writeText(plain);
+        }
         this._msg = `Copied the ${what}.`;
       } catch {
-        this._msg = "Could not copy automatically; select the text to copy it.";
+        try {
+          await navigator.clipboard?.writeText?.(plain);
+          this._msg = `Copied the ${what}.`;
+        } catch {
+          this._msg = "Could not copy automatically; select the text to copy it.";
+        }
       }
       this.render();
     }
@@ -6351,7 +6646,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   var DAILYDEV_ID = "jlmpjdjjbgclbocgajdjefcidcncaied";
   var DAILYDEV_APP_URL = "https://app.daily.dev/";
   var RANK2 = { member: 0, moderator: 1, admin: 2, superadmin: 3 };
-  var esc2 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  var esc3 = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   var SVG = {
     prompt: '<path d="M5 4h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H9l-4 4V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M9 9.5h6M9 12.5h4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
     article: '<path d="M4.5 14.5h6.6v3.2a1.9 1.9 0 0 1-1.9 1.9H6.4a1.9 1.9 0 0 1-1.9-1.9z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.4 14.6C10.5 9.4 14.4 5.2 20 3.4c.5 5.6-2.4 10.1-7 12.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.8 11.6l3 .4M13.4 8.2l2.7 .4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>',
@@ -6496,14 +6791,14 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   function railHtml(active, nav = "feed") {
     const rail = RAILS[nav] || RAIL_FEED;
     const items = rail.map((r) => {
-      if (r.group) return `<div class="nt-rail-h">${esc2(r.group)}</div>`;
+      if (r.group) return `<div class="nt-rail-h">${esc3(r.group)}</div>`;
       if (r.div) return `<hr class="nt-rail-div" />`;
       const on = r.key === active ? " on" : "";
       const admin = r.adminOnly ? " data-admin-only hidden" : "";
-      const sub = r.sub ? `<span class="sub">${esc2(r.sub)}</span>` : "";
+      const sub = r.sub ? `<span class="sub">${esc3(r.sub)}</span>` : "";
       const ext = r.ext ? ' target="_blank" rel="noopener"' : "";
-      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc2(r.nm)}</span>${sub}</span></a>`;
-      const kids = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc2(c.nm)}</span></span></a>`).join("");
+      const self = `<a class="nav-i${on}" data-key="${r.key}"${admin} href="${r.href}"${ext}><span class="gl" data-ico="${r.ico}"></span><span class="tx"><span class="nm">${esc3(r.nm)}</span>${sub}</span></a>`;
+      const kids = (r.children || []).map((c) => `<a class="nav-i nav-sub${c.key === active ? " on" : ""}" data-key="${c.key}" href="${c.href}"><span class="gl" data-ico="${c.ico}"></span><span class="tx"><span class="nm">${esc3(c.nm)}</span></span></a>`).join("");
       return self + kids;
     }).join("");
     const top = nav === "feed" ? feedControlsHtml() : "";
@@ -6550,7 +6845,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         av.alt = `@${login}`;
       }
       const head = root.querySelector("[data-me-head]");
-      if (head) head.innerHTML = `Signed in as <b>@${esc2(login)}</b>`;
+      if (head) head.innerHTML = `Signed in as <b>@${esc3(login)}</b>`;
       const showAdmin = (RANK2[status.role] ?? 0) >= RANK2.moderator;
       root.querySelectorAll("[data-admin-only]").forEach((el) => {
         el.hidden = !showAdmin;
@@ -7736,12 +8031,12 @@ ${String(body ?? "")}`;
     // loaded document) rather than _render(), which runs on every block-level edit, and patching the element
     // instead of re-rendering so an author who is already typing keeps their caret.
     async _rehydrateStaged() {
-      const blocks = (this._blocks || []).filter((b) => b?.type === "image" && b.url);
-      if (!blocks.length) return;
-      const found = await loadStagedImages(blocks.map((b) => b.url), (name) => this.client?.getStagedImage?.(name, this.item), this._stagedSrc || {});
+      const blocks2 = (this._blocks || []).filter((b) => b?.type === "image" && b.url);
+      if (!blocks2.length) return;
+      const found = await loadStagedImages(blocks2.map((b) => b.url), (name) => this.client?.getStagedImage?.(name, this.item), this._stagedSrc || {});
       if (!Object.keys(found).length) return;
       Object.assign(this._stagedSrc ||= {}, found);
-      for (const b of blocks) {
+      for (const b of blocks2) {
         const src = found[b.url];
         const img = src && this.$(`[data-imgfile="${b._id}"]`)?.closest(".imgframe")?.querySelector("img");
         if (img) img.src = src;
@@ -7809,10 +8104,10 @@ ${String(body ?? "")}`;
       this.emit("block-change");
     }
     _render() {
-      const blocks = this._blocks || [];
-      const hasMembers = blocks.some((b) => b.type === "members");
+      const blocks2 = this._blocks || [];
+      const hasMembers = blocks2.some((b) => b.type === "members");
       let inMem = false;
-      const parts = blocks.map((b) => {
+      const parts = blocks2.map((b) => {
         if (b.type === "members") {
           inMem = true;
           return this._memberDivider(b);
@@ -10657,8 +10952,8 @@ ${String(body ?? "")}`;
         this._slugVal = v;
         const mirror = this.$('[data-key="slug"]');
         if (mirror) mirror.value = v;
-        const inline = this.root?.querySelector(".doc-slug .slug-val");
-        if (inline) inline.textContent = v;
+        const inline2 = this.root?.querySelector(".doc-slug .slug-val");
+        if (inline2) inline2.textContent = v;
         const note = input.closest(".fld")?.querySelector(".urlprev");
         if (note && this.itemPath) {
           note.textContent = v && v !== loaded ? `/${typePath}/${loaded}/ becomes /${typePath}/${v}/ when you publish. The old link redirects, and the discussion, saves, and counts follow.` : "Changing the permalink renames this item when you publish; the old link will redirect.";
@@ -19401,10 +19696,10 @@ ${String(body ?? "")}`;
         const name = s.name || s.id;
         const domain = domainOf(s.url) || s.description || "";
         const count = s.count != null ? `${s.count} items` : "";
-        const inline = [domain, count].filter(Boolean).join(" · ");
+        const inline2 = [domain, count].filter(Boolean).join(" · ");
         const showDesc = s.description && lc5(s.description) !== lc5(domain);
         const card = `<div class="hovercard" role="tooltip"><b class="hc-name">${esc(name)}</b>` + (domain ? `<span class="hc-dom">${esc(domain)}</span>` : "") + (showDesc ? `<p class="hc-desc">${esc(s.description)}</p>` : "") + (count ? `<span class="hc-n">${esc(count)}</span>` : "") + `</div>`;
-        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline ? `<span class="d">${esc(inline)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
+        return `<li class="chan"><div class="ci" tabindex="0"><b>${esc(name)}</b>${inline2 ? `<span class="d">${esc(inline2)}</span>` : ""}${card}</div><button class="fbtn ${on ? "on" : ""}" data-follow="${esc(s.id)}" type="button">${on ? "Following" : "Follow"}</button></li>`;
       }).join("");
       host.innerHTML = `<p class="muted" style="margin:0 0 10px">Follow channels to drill into them from your <b>Following</b> feed.</p><ul class="chans">${rows}</ul>`;
       this.$$("[data-follow]").forEach((b) => b.addEventListener("click", () => this._toggleFollow(b.dataset.follow, b)));
@@ -20061,7 +20356,8 @@ From the author:
       const template = this._effectiveTemplate();
       const authorIsMe = this._me && String(item.author || "").toLowerCase() === this._me;
       const previewMention = dest === "discord" && authorIsMe && this._discordLinked ? "[you will be @mentioned on Discord]" : null;
-      const preview = renderTemplate(template, item, { limit: 2e3, previewMention });
+      const rawPreview = renderTemplate(template, item, { limit: 2e3, previewMention });
+      const preview = rendersMarkdown(dest) ? rawPreview : mdToPlain(rawPreview);
       let channelRow = "";
       if (dest === "discord") {
         const groups = /* @__PURE__ */ new Map();

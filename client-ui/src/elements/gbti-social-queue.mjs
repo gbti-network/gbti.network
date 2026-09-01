@@ -10,6 +10,8 @@ import { GbtiElement, define, esc } from '../base.mjs';
 import { socialIcon } from '../social-icons.mjs';
 import { applyQueueAction, revertQueueAction } from '../social-queue-core.mjs'; // sow-282: optimistic done/delete
 import { channelCapability } from '../../../membership/syndication-config-core.mjs'; // Post now is auto-capability only
+import { rendersMarkdown } from '../../../membership/syndication-channels.mjs'; // sow-300
+import { mdToPlain, mdToHtml } from '../../../membership/markdown-plain.mjs'; // sow-300
 
 // The free web composer for a manual-assist channel (X opens the intent composer, pre-filled).
 // SOW-121/127: the free web composer for a manual-assist channel, pre-filled with the rendered text. X uses
@@ -232,8 +234,8 @@ class GbtiSocialQueue extends GbtiElement {
         : `<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy text</button>`;
     return `<div class="task${this._rowBusy === t.id ? ' busy' : ''}">
       <div class="top"><span class="src">${esc(SRC_LABEL[t.source] || t.source || '')}</span>${this._chip(t.channel, '', true)}<span class="ti">${esc(t.title || t.itemId || '(untitled)')}</span><span class="when">${t.createdAt ? esc(fmtDate(t.createdAt)) : ''}</span></div>
-      <div class="txt">${esc(t.text || '')}</div>
-      ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(t[x.field])}</div>` : ''}
+      <div class="txt">${esc(this._pasteText(t, 'text'))}</div>
+      ${x ? `<div class="txt body"><span class="blabel">${esc(x.label)}</span>${esc(this._pasteText(t, x.field))}</div>` : ''}
       <div class="acts">${primary}<button class="btn copy" data-copy="${esc(t.id)}" type="button">Copy${x ? ' title' : ''}</button>${x ? `<button class="btn copy" data-copybody="${esc(t.id)}" type="button">${esc(x.copy)}</button>` : ''}<button class="btn done" data-done="${esc(t.id)}" type="button">Mark done</button><button class="btn del" data-del="${esc(t.id)}" type="button">Delete</button></div>
     </div>`;
   }
@@ -261,13 +263,52 @@ class GbtiSocialQueue extends GbtiElement {
         : 'Opened the composer. Post it, then click "Mark done".';
     this.render();
   }
+  // sow-300: what a member will actually paste, which is what the preview must show. A task is STORED as
+  // markdown (that is what lets the copy below produce real formatting), so rendering the stored string here
+  // put raw asterisks and `> ` in front of the reader, which is the defect that started this.
+  _pasteText(t, field) {
+    const raw = t?.[field] || '';
+    return rendersMarkdown(t?.channel) ? raw : mdToPlain(raw);
+  }
+
   // sow-260: `field` selects which part of the task to copy. Reddit tasks carry a body as well as a title, so
   // the row offers both; every other channel has only `text` and the default keeps its single Copy button.
+  //
+  // sow-300: TWO CLIPBOARD FLAVOURS, but only for the Reddit first comment.
+  //
+  // Reddit's rich-text composer reads `text/html` on paste and turns it into its own formatting nodes, which
+  // is how the author note arrives as a real quote block with real bold instead of literal `> ` and `**`.
+  // Every other target gets plain text only, and that is deliberate rather than lazy: LinkedIn's composer is
+  // also rich, and handing it HTML turns the item URL into an <a>, which is not the bare URL its link-preview
+  // detector scans for. Losing the article card to gain bold on a channel that has no author markdown left
+  // after the strip is a bad trade. A post TITLE should never carry <strong> either.
+  //
+  // NOTHING IS AWAITED BEFORE THE CLIPBOARD CALL. Transient user activation is what authorizes a write, and
+  // an await ahead of it spends the gesture; mdToHtml is synchronous for exactly this reason. The catch is
+  // not decoration: Firefox ships ClipboardItem with `write` behind a pref, so feature-detection alone would
+  // pass and then throw. Activation survives the rejection, so the plain fallback still lands.
   async _copy(id, field = 'text') {
     const t = this._byId(id); if (!t) return;
     const what = field === 'commentText' ? 'first comment' : field === 'bodyText' ? 'body' : 'post text';
-    try { await navigator.clipboard?.writeText?.(t[field] || ''); this._msg = `Copied the ${what}.`; }
-    catch { this._msg = 'Could not copy automatically; select the text to copy it.'; }
+    const raw = t[field] || '';
+    const plain = this._pasteText(t, field);
+    const rich = field === 'commentText' && t.channel === 'reddit';
+    try {
+      if (rich && typeof ClipboardItem === 'function' && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([mdToHtml(raw)], { type: 'text/html' }),
+          'text/plain': new Blob([plain], { type: 'text/plain' }),
+        })]);
+      } else {
+        await navigator.clipboard.writeText(plain);
+      }
+      this._msg = `Copied the ${what}.`;
+    } catch {
+      // The rich write can be refused (an extension context without the permission, a pref-gated browser).
+      // Falling back to plain text is strictly better than today, because `plain` is stripped either way.
+      try { await navigator.clipboard?.writeText?.(plain); this._msg = `Copied the ${what}.`; }
+      catch { this._msg = 'Could not copy automatically; select the text to copy it.'; }
+    }
     this.render();
   }
   async _action(action, id) {

@@ -11,6 +11,8 @@
 // key or a share's flat topic), data-gbti-image (optional).
 import { GbtiElement, define, esc } from '../base.mjs';
 import { renderTemplate, renderBodyTemplate, recordDestinations } from '../../../membership/syndication-format.mjs';
+import { rendersMarkdown } from '../../../membership/syndication-channels.mjs'; // sow-300
+import { mdToPlain } from '../../../membership/markdown-plain.mjs'; // sow-300
 import { channelForCategoryPath } from '../../../membership/news-channels.mjs';
 
 const DEST_LABEL = { discord: 'Discord', reddit: 'Reddit', devto: 'dev.to', dailydev: 'daily.dev', x: 'X', bluesky: 'Bluesky', linkedin: 'LinkedIn' }; // sow-159: mastodon retired; sow-217: hashnode retired
@@ -311,7 +313,13 @@ class GbtiSyndicateNow extends GbtiElement {
     // preview keeps the real fallback (which honestly signals "not linked").
     const authorIsMe = this._me && String(item.author || '').toLowerCase() === this._me;
     const previewMention = (dest === 'discord' && authorIsMe && this._discordLinked) ? '[you will be @mentioned on Discord]' : null;
-    const preview = renderTemplate(template, item, { limit: 2000, previewMention });
+    // sow-300: the SAME strip the server applies in membership-syndicate-now.mjs. This file already carries a
+    // warning about the two diverging (the preview once said {title} while publish used the stored template,
+    // and a Reddit send ignored what the preview showed). Stripping on one side only would recreate exactly
+    // that. The Reddit body and comment previews below are deliberately NOT stripped: their markdown is kept
+    // on the server too, because the copy button is what converts it.
+    const rawPreview = renderTemplate(template, item, { limit: 2000, previewMention });
+    const preview = rendersMarkdown(dest) ? rawPreview : mdToPlain(rawPreview);
     let channelRow = '';
     if (dest === 'discord') {
       const groups = new Map();

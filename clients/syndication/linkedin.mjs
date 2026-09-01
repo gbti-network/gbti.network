@@ -11,6 +11,7 @@
 
 import { buildChannelText } from '../../membership/syndication-format.mjs';
 import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
+import { mdToPlain } from '../../membership/markdown-plain.mjs'; // sow-300
 
 // The pinned versioned-API month (LinkedIn retires versions after ~1 year; bump deliberately).
 export const LINKEDIN_API_VERSION = '202506';
@@ -21,7 +22,14 @@ export function createLinkedinAdapter({ env = {}, fetchImpl = globalThis.fetch }
     enabled() { return secretsPresent(env, 'linkedin'); },
     async post(item) {
       // SOW-088 manual syndicate: an already-rendered (sanitized) message wins over the built text.
-      const text = (typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : buildChannelText(item, { limit: channelLimit('linkedin') });
+      // sow-300: LinkedIn renders no markdown, and its template is the ONE that carries the author note
+      // ({author-note-block} in house/syndication-config.yml). This adapter is dormant today (capability is
+      // `manual`, so the Social Queue delivers LinkedIn by hand), which is exactly why the strip belongs here
+      // rather than in a comment: the source note next door says manual-assist lasts "until Community
+      // Management API access is granted", and the day that flips to `auto` this line posts live. It also
+      // does NOT go through renderChannelText, so nothing else would catch it.
+      const raw = (typeof item.textOverride === 'string' && item.textOverride.trim()) ? item.textOverride : buildChannelText(item, { limit: channelLimit('linkedin') });
+      const text = mdToPlain(raw);
       const author = String(env.LINKEDIN_ORG_URN || ''); // e.g. "urn:li:organization:12345"
       const body = {
         author,

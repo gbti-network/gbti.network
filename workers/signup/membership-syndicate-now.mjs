@@ -17,7 +17,8 @@ import { authorizeAdmin } from './membership-admin.mjs';
 import { ROLE } from '../../membership/overrides-core.mjs';
 import { buildQueueItem, dedupeKey, canCancel, markCancelled } from '../../membership/syndication-queue.mjs';
 import { renderTemplate } from '../../membership/syndication-format.mjs';
-import { channelLimit, secretsPresent } from '../../membership/syndication-channels.mjs';
+import { channelLimit, secretsPresent, rendersMarkdown } from '../../membership/syndication-channels.mjs';
+import { mdToPlain } from '../../membership/markdown-plain.mjs'; // sow-300
 import { templateFor, TEMPLATE_TYPES, DEFAULT_TEMPLATES, DEFAULT_STUB_TEMPLATES, DEFAULT_CHANNEL_STUB_TEMPLATES, channelCapability } from '../../membership/syndication-config-core.mjs';
 import { buildAdapters } from '../../membership/syndication-adapters.mjs';
 import { buildSocialTask } from '../../membership/social-queue.mjs'; // SOW-121
@@ -170,7 +171,11 @@ export async function handleSyndicateNow(request, env, deps = {}) {
   }
 
   const cfg = await readSyndicationConfig(kv);
-  const text = renderTemplate(template, item, { limit: channelLimit(destination) });
+  // sow-300: this popup renders its own text and does NOT go through renderChannelText, so the strip has to
+  // be repeated here. It was missed on the first pass and it is the rail the owner drives BY HAND, feeding
+  // both the queued manual task below and the adapter's textOverride further down.
+  const rendered = renderTemplate(template, item, { limit: channelLimit(destination) });
+  const text = rendersMarkdown(destination) ? rendered : mdToPlain(rendered);
 
   // SOW-121: a MANUAL-capability destination (x, linkedin) is NEVER posted via an API from here. Enqueue a
   // Social Queue task with the popup's rendered text; a superadmin posts it by hand through the free web
