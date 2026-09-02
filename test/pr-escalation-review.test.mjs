@@ -98,7 +98,8 @@ test('overridesReappearance flags CREATION statuses and passes modify/removed, f
   assert.deepEqual(overridesReappearance([{ path: gf }]), [gf], 'a MISSING status fails closed');
   assert.deepEqual(overridesReappearance([{ path: 'members/x/posts/y/index.md', status: 'added' }]), [], 'a non-guarded path is never a reappearance');
   assert.deepEqual(overridesReappearance(null), [], 'a non-array is empty, never a throw');
-  assert.deepEqual([...OVERRIDES_GIT_FILES].sort(), ['house/bans.yml', 'house/grandfathered.yml']);
+  // sow-291 added house/coupons.yml to the retired set (the coupon registry left the public repo for KV).
+  assert.deepEqual([...OVERRIDES_GIT_FILES].sort(), ['house/bans.yml', 'house/coupons.yml', 'house/grandfathered.yml']);
 });
 
 for (const file of OVERRIDES_GIT_FILES) {

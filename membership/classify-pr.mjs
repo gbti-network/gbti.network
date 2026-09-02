@@ -79,7 +79,11 @@ export function isTierA(p) {
  * its section back to git-owned and the next mirror write rebuilds it from whatever the file contains, which
  * can strip live entitlements on a green run.
  */
-export const OVERRIDES_GIT_FILES = Object.freeze(['house/bans.yml', 'house/grandfathered.yml']);
+// The retired git files that must never REAPPEAR: sow-213 removed the governance overrides, and sow-291 removes
+// the coupon registry (a coupon code is a bearer credential). The name is historical; the set is every file that
+// left the public repository for KV. The same existsSync hazard applies to house/coupons.yml through
+// loadCouponsRaw: a reappearing file flips ownedByGit back to true and the next coupon mirror rebuilds from git.
+export const OVERRIDES_GIT_FILES = Object.freeze(['house/bans.yml', 'house/grandfathered.yml', 'house/coupons.yml']);
 
 // The ONLY diff statuses a guarded file may legitimately carry: `modified` (the git writers, in the window
 // before Step 3 deletes the files) and `removed` (the deletion commit itself). Anything that RESULTS IN THE
