@@ -22,7 +22,10 @@ const paid = { id: 'c', metadata: { github_id: '1' }, subscriptions: { data: [{ 
 // maps the price, which is what production has: [env.production.vars] carries STRIPE_PRICE_ID plus the four
 // tier ids. `paid` and `ENV()` stay unpriced on purpose, so the fail-closed tests keep a genuine empty map.
 const LEGACY_PRICE = 'price_legacy150';
-const CREATOR_ENV = (over = {}, mirror = freshMirror()) => ENV({ STRIPE_PRICE_ID: LEGACY_PRICE, ...over }, mirror);
+// sow-185 (owner ruling 2026-09-02): these fixtures need a CREATOR-tier caller. They used to get one by
+// setting STRIPE_PRICE_ID and leaning on the legacy seed, which now confers MEMBER. Map the same price id
+// to creator EXPLICITLY instead, so the fixture states the tier it depends on rather than inheriting it.
+const CREATOR_ENV = (over = {}, mirror = freshMirror()) => ENV({ STRIPE_PRICE_CREATOR_ANNUAL: LEGACY_PRICE, ...over }, mirror);
 const paidCreator = { id: 'c', metadata: { github_id: '1' }, subscriptions: { data: [{ status: 'active', created: 1, items: { data: [{ price: { id: LEGACY_PRICE } }] } }] } };
 const stripeFor = (byId) => () => ({ findCustomerByGithubId: async (id) => byId(id) });
 const userIs = (githubId) => async () => ({ githubId, githubLogin: 'u' + githubId });
@@ -101,7 +104,7 @@ test('encrypt: 400 when plaintext or assetId is missing', async () => {
 // sow-158 Phase 3b: encrypt is COOKIE-eligible now (a website member posts a members-only comment; the body is
 // encrypted server-side before the git write). Same authorizePaid + double-submit CSRF posture as cookie decrypt.
 const SESSION_SECRET = 'test-session-secret';
-const COOKIE_ENV = (mirror = freshMirror()) => ENV({ SESSION_SECRET, CORS_ALLOWED_ORIGINS: 'https://gbti.network', STRIPE_PRICE_ID: LEGACY_PRICE }, mirror);
+const COOKIE_ENV = (mirror = freshMirror()) => ENV({ SESSION_SECRET, CORS_ALLOWED_ORIGINS: 'https://gbti.network', STRIPE_PRICE_CREATOR_ANNUAL: LEGACY_PRICE }, mirror);
 async function encryptCookieReq({ csrfCookie = 'C', csrfHeader = 'C', origin = 'https://gbti.network', githubId = '1', body = { plaintext: 'members reply', assetId: 'comment:20260101-abc:body' } } = {}) {
   const session = await signSession({ githubId, githubLogin: 'u' + githubId }, SESSION_SECRET);
   const cookies = [`gbti_session=${session}`];
@@ -300,12 +303,18 @@ test('authorizeCreator: with NO price env, a paid member is DENIED rather than g
   assert.equal(r.status, 403);
 });
 
-test('authorizeCreator: with the legacy price mapped, a legacy paid member is still admitted', async () => {
-  // The real no-regression case, and the one that matters for live members: everyone on the original $150
-  // price keeps creator, because buildEnvPriceTierMap seeds STRIPE_PRICE_ID as creator.
+test('authorizeCreator: with the legacy price mapped, a legacy paid member is now DENIED (owner ruling 2026-09-02)', async () => {
+  // BEHAVIOUR CHANGE, and this test's whole PREMISE changed rather than its wording. It previously read "a
+  // legacy paid member is still admitted" and called that "the real no-regression case ... everyone on the
+  // original $150 price keeps creator". The owner ruled on 2026-09-02 (sow-185) that the legacy $150 annual
+  // maps to MEMBER, so a legacy subscriber is no longer a Content Creator and the creator-gated routes
+  // (encrypt, publish) refuse them. That is the ruling's intended consequence, not a regression.
+  //
+  // Measured before the change: ZERO Stripe subscriptions sit on the legacy price, so no live member is
+  // affected. If one ever appears and should keep creator, an explicit priceTiers entry overrides the seed.
   const r = await authorizeCreator(POST('encrypt', 'Bearer g'), ENV({ STRIPE_PRICE_ID: 'price_legacy' }), deps('1', () => paidAt('price_legacy')));
-  assert.equal(r.ok, true);
-  assert.equal(r.tier, 'creator');
+  assert.equal(r.ok, false, 'the legacy price now confers member, and member is below creator');
+  assert.equal(r.status, 403);
 });
 
 test('authorizeCreator: a $5 Network Member (member price) is DENIED with a Content Creator message', async () => {

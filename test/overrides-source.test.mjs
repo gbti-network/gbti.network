@@ -67,7 +67,8 @@ const BANNED_ID = '424242';
 const BANNED_LOGIN = 'banneduser';
 const CREATOR_PRICE = 'price_creator';
 const bannedMirror = fresh({ bans: { bans: [{ github_id: BANNED_ID, reason: 'spam', at: '2026-08-01T00:00:00Z' }] } });
-const PRICE_TIER_MAP = buildPriceTierMap({ legacyCreatorPriceId: CREATOR_PRICE });
+const PRICE_TIER_MAP = buildPriceTierMap({ priceTiers: { [CREATOR_PRICE]: 'creator' } }) // sow-185: this fixture wants a CREATOR price. It used to lean on the legacy seed, which the owner
+  // ruled to MEMBER on 2026-09-02, so it now says creator outright instead of inheriting a default.;
 const paidCreatorStripe = {
   async findCustomerByGithubId() {
     return { subscriptions: { data: [{ status: 'active', items: { data: [{ price: { id: CREATOR_PRICE } }] } }] } };

@@ -83,7 +83,7 @@ export function parsePriceTiers(source) {
 /**
  * Build the effective price -> tier map.
  *
- * `legacyCreatorPriceId` (the existing STRIPE_PRICE_ID, the single $150 annual price) is SEEDED as `creator`
+ * `legacyPriceId` (the existing STRIPE_PRICE_ID, the single $150 annual price) is SEEDED as `member`
  * unless the explicit map already names it. That seeding is what makes this ship inert AND fail closed at the
  * same time, which is worth spelling out because the two usually pull against each other:
  *
@@ -95,10 +95,18 @@ export function parsePriceTiers(source) {
  * An empty result (no explicit map AND no legacy price id) is the only case that cannot fail closed, because
  * there is nothing to compare against; tierForPrice documents how that is handled.
  */
-export function buildPriceTierMap({ priceTiers = null, legacyCreatorPriceId = null } = {}) {
+export function buildPriceTierMap({ priceTiers = null, legacyPriceId = null } = {}) {
   const map = parsePriceTiers(priceTiers);
-  if (typeof legacyCreatorPriceId === 'string' && legacyCreatorPriceId && !map.has(legacyCreatorPriceId)) {
-    map.set(legacyCreatorPriceId, TIER.creator);
+  if (typeof legacyPriceId === 'string' && legacyPriceId && !map.has(legacyPriceId)) {
+    // OWNER RULING 2026-09-02 (sow-185): the legacy $150 annual maps to MEMBER, not creator. It was seeded as
+    // creator until now, and the parameter was named `legacyCreatorPriceId` to say so; the name changed with the
+    // ruling because a name that encodes the old answer is worse than no name.
+    //
+    // MEASURED BEFORE SHIPPING, because the SOW warned this could strip roles from real people: Stripe carries
+    // ZERO subscriptions on the legacy price (one subscription exists in the account at all, canceled, on a
+    // different price). So this changes nobody's access today. An explicit priceTiers entry still wins over the
+    // seed, which is how a single legacy subscriber could be restored to creator by hand.
+    map.set(legacyPriceId, TIER.member);
   }
   return map;
 }

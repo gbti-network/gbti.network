@@ -49,7 +49,8 @@ const NOW = new Date('2026-06-02T00:00:00Z');
 // asserting the gate's real behaviour; they were asserting the bug. Production passes the ids via
 // pr-membership-gate.yml, so a fixture WITH a price and a map is the faithful mirror of the real gate.
 const LEGACY_PRICE = 'price_legacy150';
-const PRICE_MAP = buildPriceTierMap({ legacyCreatorPriceId: LEGACY_PRICE });
+const PRICE_MAP = buildPriceTierMap({ priceTiers: { [LEGACY_PRICE]: 'creator' } }) // sow-185: this fixture wants a CREATOR price. It used to lean on the legacy seed, which the owner
+  // ruled to MEMBER on 2026-09-02, so it now says creator outright instead of inheriting a default.;
 const paidCustomer = { id: 'cus_paid', metadata: { github_id: '100' }, subscriptions: { data: [{ status: 'active', created: 1, items: { data: [{ price: { id: LEGACY_PRICE } }] } }] } };
 const trialCustomer = { id: 'cus_trial', metadata: { github_id: '200', trial_started_at: '2026-05-01T00:00:00Z' }, subscriptions: { data: [] } };
 

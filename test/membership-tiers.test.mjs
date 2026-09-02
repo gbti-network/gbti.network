@@ -83,19 +83,21 @@ test('unparseable input yields an EMPTY map rather than throwing', () => {
 // ---------------------------------------------------------------------------------------------------
 
 test('the legacy price is seeded as creator, which is what makes this ship inert', () => {
-  const map = buildPriceTierMap({ legacyCreatorPriceId: LEGACY });
-  assert.equal(map.get(LEGACY), TIER.creator);
+  const map = buildPriceTierMap({ legacyPriceId: LEGACY });
+  // BEHAVIOUR CHANGE RECORDED (owner ruling 2026-09-02, sow-185): the legacy $150 annual seeds as MEMBER.
+  // It seeded as creator until today. Measured first: zero Stripe subscriptions sit on that price.
+  assert.equal(map.get(LEGACY), TIER.member);
 });
 
 test('seeding the legacy price makes the map non-empty, so a NEW price fails closed', () => {
   // The whole point: an operator who creates the $5 price in Stripe but forgets to map it must NOT have those
   // subscribers silently receive creator rights.
-  const map = buildPriceTierMap({ legacyCreatorPriceId: LEGACY });
+  const map = buildPriceTierMap({ legacyPriceId: LEGACY });
   assert.equal(tierForPrice(FIVE, map), TIER.none);
 });
 
 test('an explicit map entry wins over the legacy seed', () => {
-  const map = buildPriceTierMap({ priceTiers: { [LEGACY]: 'member' }, legacyCreatorPriceId: LEGACY });
+  const map = buildPriceTierMap({ priceTiers: { [LEGACY]: 'member' }, legacyPriceId: LEGACY });
   assert.equal(map.get(LEGACY), TIER.member);
 });
 
@@ -110,7 +112,7 @@ test('an entirely empty map grants NOTHING (fail closed)', () => {
 });
 
 test('with a configured map, an absent or non-string price id fails closed', () => {
-  const map = buildPriceTierMap({ legacyCreatorPriceId: LEGACY });
+  const map = buildPriceTierMap({ legacyPriceId: LEGACY });
   for (const bad of [null, undefined, '', 42, {}]) assert.equal(tierForPrice(bad, map), TIER.none);
 });
 
@@ -144,7 +146,7 @@ test('priceIdOfSubscription returns null rather than throwing on junk', () => {
 });
 
 test('a subscription with no discoverable price fails closed once a map exists', () => {
-  const map = buildPriceTierMap({ legacyCreatorPriceId: LEGACY });
+  const map = buildPriceTierMap({ legacyPriceId: LEGACY });
   assert.equal(tierForSubscription({ status: 'active' }, map), TIER.none);
 });
 
@@ -165,27 +167,30 @@ test('deriveStatus is unchanged BY THE TIER WORK: the existing fixtures still re
   assert.equal(deriveStatusFromCustomer(null, NOW), STATUS.none);
 });
 
-test('a customer on the legacy price resolves to paid + creator', () => {
-  const map = buildPriceTierMap({ legacyCreatorPriceId: LEGACY });
+test('a customer on the legacy price resolves to paid + MEMBER (owner ruling 2026-09-02)', () => {
+  const map = buildPriceTierMap({ legacyPriceId: LEGACY });
   const r = deriveMembershipFromCustomer(customer({ subscriptions: { data: [activeSub(LEGACY)] } }), { priceTierMap: map, now: NOW });
-  assert.deepEqual(r, { status: STATUS.paid, tier: TIER.creator });
+  // BEHAVIOUR CHANGE, owner ruling 2026-09-02 (sow-185): the legacy $150 annual maps to MEMBER, not
+  // creator. Zero Stripe subscriptions sit on that price, measured before the change, so this moves
+  // nobody's access. Recorded here rather than edited green.
+  assert.deepEqual(r, { status: STATUS.paid, tier: TIER.member });
 });
 
 test('a customer on a mapped $5 price resolves to paid + member, NOT creator', () => {
   // This is the bug the whole phase exists to prevent.
-  const map = buildPriceTierMap({ priceTiers: { [FIVE]: 'member' }, legacyCreatorPriceId: LEGACY });
+  const map = buildPriceTierMap({ priceTiers: { [FIVE]: 'member' }, legacyPriceId: LEGACY });
   const r = deriveMembershipFromCustomer(customer({ subscriptions: { data: [activeSub(FIVE)] } }), { priceTierMap: map, now: NOW });
   assert.deepEqual(r, { status: STATUS.paid, tier: TIER.member });
 });
 
 test('a customer on an UNMAPPED price is paid but holds NO tier', () => {
-  const map = buildPriceTierMap({ legacyCreatorPriceId: LEGACY });
+  const map = buildPriceTierMap({ legacyPriceId: LEGACY });
   const r = deriveMembershipFromCustomer(customer({ subscriptions: { data: [activeSub(FIVE)] } }), { priceTierMap: map, now: NOW });
   assert.deepEqual(r, { status: STATUS.paid, tier: TIER.none });
 });
 
 test('a non-paid status forces tier none regardless of what was once bought', () => {
-  const map = buildPriceTierMap({ legacyCreatorPriceId: LEGACY });
+  const map = buildPriceTierMap({ legacyPriceId: LEGACY });
   const lapsed = customer({ subscriptions: { data: [{ status: 'canceled', created: 1, items: { data: [{ price: { id: LEGACY } }] } }] } });
   const r = deriveMembershipFromCustomer(lapsed, { priceTierMap: map, now: NOW });
   assert.equal(r.status, STATUS.cancelled);
@@ -194,7 +199,7 @@ test('a non-paid status forces tier none regardless of what was once bought', ()
 
 test('the tier is read from the SAME subscription that decided the status', () => {
   // An old cancelled creator subscription must not lend its tier to a current member-priced one.
-  const map = buildPriceTierMap({ priceTiers: { [FIVE]: 'member' }, legacyCreatorPriceId: LEGACY });
+  const map = buildPriceTierMap({ priceTiers: { [FIVE]: 'member' }, legacyPriceId: LEGACY });
   const both = customer({ subscriptions: { data: [
     { status: 'canceled', created: 9, items: { data: [{ price: { id: LEGACY } }] } },
     activeSub(FIVE, { created: 1 }),
@@ -204,7 +209,7 @@ test('the tier is read from the SAME subscription that decided the status', () =
 });
 
 test('deriveMembership fails closed on a lookup error and on a missing customer', () => {
-  const map = buildPriceTierMap({ legacyCreatorPriceId: LEGACY });
+  const map = buildPriceTierMap({ legacyPriceId: LEGACY });
   const boom = { findCustomerByGithubId: async () => { throw new Error('stripe down'); } };
   const missing = { findCustomerByGithubId: async () => null };
   return Promise.all([
@@ -214,8 +219,8 @@ test('deriveMembership fails closed on a lookup error and on a missing customer'
 });
 
 test('deriveMembership resolves a real customer through the injected client', () => {
-  const map = buildPriceTierMap({ legacyCreatorPriceId: LEGACY });
+  const map = buildPriceTierMap({ legacyPriceId: LEGACY });
   const client = { findCustomerByGithubId: async () => customer({ subscriptions: { data: [activeSub(LEGACY)] } }) };
   return deriveMembership('1', client, { priceTierMap: map, now: NOW })
-    .then((r) => assert.deepEqual(r, { status: STATUS.paid, tier: TIER.creator }));
+    .then((r) => assert.deepEqual(r, { status: STATUS.paid, tier: TIER.member })); // sow-185: legacy -> member
 });

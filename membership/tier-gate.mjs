@@ -17,7 +17,7 @@ export const PAID_GRANT_TIERS = Object.freeze([TIER.member, TIER.creator]);
 /**
  * Build the priceId -> tier Map that tiers.mjs tierForPrice / deriveMembership consume, from the injected env.
  * Each configured PRICE_ENV[tier][period] var maps its price id to that tier; the legacy STRIPE_PRICE_ID is
- * seeded as creator (via buildPriceTierMap). Reuses checkout-prices PRICE_ENV so the price-env NAMING has one
+ * seeded as MEMBER (via buildPriceTierMap; owner ruling 2026-09-02). Reuses checkout-prices PRICE_ENV so the naming has one
  * source. An empty env yields an empty map, and since 2026-08-11 tierForPrice FAILS CLOSED on that: every
  * price resolves to `none` rather than to creator. An unprovisioned env therefore grants no tier at all,
  * which is the safe direction; it used to grant the highest one.
@@ -31,7 +31,7 @@ export function buildEnvPriceTierMap(env = {}) {
     }
   }
   const legacy = typeof env.STRIPE_PRICE_ID === 'string' && env.STRIPE_PRICE_ID ? env.STRIPE_PRICE_ID : null;
-  return buildPriceTierMap({ priceTiers, legacyCreatorPriceId: legacy });
+  return buildPriceTierMap({ priceTiers, legacyPriceId: legacy });
 }
 
 /**

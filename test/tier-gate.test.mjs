@@ -24,16 +24,19 @@ test('buildEnvPriceTierMap: maps each configured price id to its tier', () => {
   assert.equal(tierForPrice('price_unknown', map), TIER.none);
 });
 
-test('buildEnvPriceTierMap: the legacy STRIPE_PRICE_ID seeds creator', () => {
+test('buildEnvPriceTierMap: the legacy STRIPE_PRICE_ID seeds MEMBER (owner ruling 2026-09-02)', () => {
   const map = buildEnvPriceTierMap({ STRIPE_PRICE_ID: 'price_legacy' });
-  assert.equal(map.get('price_legacy'), TIER.creator);
-  assert.equal(tierForPrice('price_legacy', map), TIER.creator);
+  // BEHAVIOUR CHANGE, owner ruling 2026-09-02 (sow-185): the legacy $150 annual maps to MEMBER, not
+  // creator. Zero Stripe subscriptions sit on that price, measured before the change, so this moves
+  // nobody's access. Recorded here rather than edited green.
+  assert.equal(map.get('price_legacy'), TIER.member);
+  assert.equal(tierForPrice('price_legacy', map), TIER.member);
 });
 
 test('buildEnvPriceTierMap: the legacy id is added alongside the explicit prices, all consistent', () => {
   const map = buildEnvPriceTierMap({ ...FULL_ENV, STRIPE_PRICE_ID: 'price_legacy' });
   assert.equal(map.get('price_ca'), TIER.creator);
-  assert.equal(map.get('price_legacy'), TIER.creator);
+  assert.equal(map.get('price_legacy'), TIER.member); // sow-185 ruling 2026-09-02
   assert.equal(map.get('price_mm'), TIER.member);
 });
 

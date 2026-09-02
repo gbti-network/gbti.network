@@ -157,7 +157,7 @@ test('sow-229: statuses endpoint returns tiers (from the subscription price) and
       return prefix === 'redemption:' ? { keys: [{ name: 'redemption:CODEABLEYEAR:190312419' }], list_complete: true } : { keys: [], list_complete: true };
     },
   };
-  const env = { SIGNUP_KV: kv, STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_PRICE_ID: 'price_creator' }; // seeds price_creator -> creator
+  const env = { SIGNUP_KV: kv, STRIPE_SECRET_KEY: 'sk_test_x', STRIPE_PRICE_CREATOR_ANNUAL: 'price_creator' }; // seeds price_creator -> creator
   const r = await membershipAdminStatuses(req('admin'), env, { fetchUser, makeStripe, now });
   assert.equal(r.status, 200);
   assert.equal(r.body.statuses['2'], 'paid');
