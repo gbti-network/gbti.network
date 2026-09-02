@@ -301,7 +301,8 @@ export async function syncCouponGrants({
       synced: false,
       reason:
         `cannot read ${GRANDFATHERED_PATH} (retired by sow-213 Phase 3b). ` +
-        `${kv.redemptions.length} redemption(s) CANNOT be folded into grants until the fold writes to KV.`,
+        `${kv.redemptions.length} redemption(s) exist; how many still NEED a grant cannot be determined, ` +
+        'because the grants source this compares against is retired and the fold does not read KV yet.',
       redemptions: kv.redemptions.length,
     };
   }
