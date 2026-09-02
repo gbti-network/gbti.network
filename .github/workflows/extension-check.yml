@@ -12,6 +12,17 @@ on:
       - 'extension/**'
       - 'client-ui/**'
       - 'client/src/**'
+      # The bundles INLINE these too, so a change here can alter a committed artifact. Measured from the
+      # esbuild source comments inside the built files rather than guessed: 19 membership/ modules and 2
+      # src/lib/ modules are bundled. Without these globs this job never ran on such a change, so the guard
+      # that exists to catch a stale artifact was blind to exactly the case it is for.
+      # test/extension-drift-paths.test.mjs derives the requirement from the bundles and reds if a newly
+      # bundled source ever lands outside this list.
+      - 'membership/**'
+      - 'src/lib/**'
+      # A DEPENDENCY BUMP can change a bundle with no repo source touched at all: js-yaml is inlined into
+      # extension/mcp. Without the lockfile here, `npm update` leaves a stale committed artifact invisibly.
+      - 'package-lock.json'
       - 'scripts/check-extension.mjs'
   push:
     branches: [main]
@@ -19,6 +30,17 @@ on:
       - 'extension/**'
       - 'client-ui/**'
       - 'client/src/**'
+      # The bundles INLINE these too, so a change here can alter a committed artifact. Measured from the
+      # esbuild source comments inside the built files rather than guessed: 19 membership/ modules and 2
+      # src/lib/ modules are bundled. Without these globs this job never ran on such a change, so the guard
+      # that exists to catch a stale artifact was blind to exactly the case it is for.
+      # test/extension-drift-paths.test.mjs derives the requirement from the bundles and reds if a newly
+      # bundled source ever lands outside this list.
+      - 'membership/**'
+      - 'src/lib/**'
+      # A DEPENDENCY BUMP can change a bundle with no repo source touched at all: js-yaml is inlined into
+      # extension/mcp. Without the lockfile here, `npm update` leaves a stale committed artifact invisibly.
+      - 'package-lock.json'
       - 'scripts/check-extension.mjs'
 
 jobs:
