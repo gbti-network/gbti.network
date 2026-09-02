@@ -19481,6 +19481,20 @@ async function getRosterStatuses({ token, signupBase, fetch: fetch2 = globalThis
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin statuses request failed (${res.status})`);
   return { statuses: data?.statuses ?? {}, tiers: data?.tiers ?? {}, logins: data?.logins ?? {}, pendingGrants: data?.pendingGrants ?? {} };
 }
+async function getOverridesMaps({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/overrides", {
+    method: "GET",
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin overrides request failed (${res.status})`);
+  return { bans: data?.bans ?? { bans: [] }, grandfathered: data?.grandfathered ?? { grandfathered: [] } };
+}
 async function getDiscordChannels({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase10(signupBase) + "/membership/discord-channels", {
@@ -20072,24 +20086,32 @@ function buildRoster({ roles, bans, grandfathered, membersIndex, stripeStatuses,
 // client/src/operations-admin.mjs
 async function getOverridesRoster(ctx) {
   const { rolesParsed, readText } = await requireAdmin(ctx);
-  const [bansParsed, gfParsed, idxParsed] = await Promise.all([
-    readText("house/bans.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {}),
-    readText("house/grandfathered.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {}),
-    readText("house/members-index.yml").then((t) => index_vite_proxy_tmp_default.load(t) || {})
-  ]);
+  const token = ctx.store?.get?.("githubToken");
+  const fetch2 = ctx.fetch ?? globalThis.fetch;
+  if (!token) throw new OperationError("not-authenticated", "sign in first");
+  let bansParsed;
+  let gfParsed;
+  try {
+    const o = await getOverridesMaps({ token, signupBase: SIGNUP_BASE, fetch: fetch2 });
+    bansParsed = o.bans;
+    gfParsed = o.grandfathered;
+  } catch (err) {
+    throw new OperationError(
+      "overrides-unavailable",
+      `could not load ban/grandfather state from the Worker (${err?.message ?? err}). The roster is not rendered rather than shown wrong.`
+    );
+  }
+  const idxParsed = index_vite_proxy_tmp_default.load(await readText("house/members-index.yml")) || {};
   let stripeStatuses = null;
   let stripeLogins = null;
   let stripeTiers = null;
   let pendingGrants = null;
   try {
-    const token = ctx.store?.get?.("githubToken");
-    if (token) {
-      const r = await getRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-      stripeStatuses = r?.statuses ?? null;
-      stripeLogins = r?.logins ?? null;
-      stripeTiers = r?.tiers ?? null;
-      pendingGrants = r?.pendingGrants ?? null;
-    }
+    const r = await getRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch: fetch2 });
+    stripeStatuses = r?.statuses ?? null;
+    stripeLogins = r?.logins ?? null;
+    stripeTiers = r?.tiers ?? null;
+    pendingGrants = r?.pendingGrants ?? null;
   } catch {
     stripeStatuses = null;
     stripeLogins = null;

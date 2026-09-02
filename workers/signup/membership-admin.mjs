@@ -198,3 +198,48 @@ export async function membershipAdminStatuses(request, env, deps = {}) {
   const pendingGrants = await listPendingGrants(env); // sow-229: best-effort; {} on any KV failure
   return { status: 200, body: { ok: true, statuses, tiers, logins, pendingGrants } };
 }
+
+/**
+ * sow-213 R3: GET /membership/admin/overrides — admin-only. Return the effective bans + grandfather grants from
+ * the KV overrides mirror, for the superadmin dashboard roster, because house/bans.yml + house/grandfathered.yml
+ * have left the public repo (person-keyed records a public repo can never erase). This is a SEPARATE endpoint
+ * from /membership/admin/statuses on purpose: statuses is a best-effort Stripe enumeration that may 502, but the
+ * overrides are the AUTHORITATIVE part of the roster and must fail closed/loud, not be coupled to a Stripe outage.
+ *
+ * SHAPE, NARROWED TO WHAT THE VIEW USES (sow-213, evidence-backed by tracing buildRoster):
+ *   - grandfathered: the FULL parsed { grandfathered: [...] }, because the roster renders each grant's `until`
+ *     (expiry countdown), `reason`/coupon code (provenance) and tier.
+ *   - bans: per-member { github_id, login } ONLY. The moderation `reason` is DELIBERATELY stripped and never
+ *     leaves the Worker: the roster renders only the banned flag + the name, so shipping the reason would expose
+ *     more than the view uses. Returned in the parsed { bans: [...] } shape buildRoster's bansFromParsed expects.
+ *
+ * FAIL CLOSED/LOUD: an absent or stale mirror returns 503, so the dashboard shows "overrides unavailable" rather
+ * than a false "nobody banned" that would mislead a moderator. authorizeAdmin already required a fresh mirror for
+ * the caller's role, so this is normally a warm re-read; the staleness re-check is belt-and-braces.
+ */
+export async function membershipAdminOverrides(request, env, deps = {}) {
+  const auth = await authorizeAdmin(request, env, deps);
+  if (!auth.ok) return { status: auth.status, body: auth.body };
+  const now = deps.now ?? new Date();
+
+  let mirror;
+  try { mirror = await env.SIGNUP_KV.get(OVERRIDES_KV_KEY, 'json'); } catch { mirror = null; }
+  if (!mirror || !mirror.generatedAt) return fail(503, 'overrides_unavailable', 'the overrides mirror is absent; cannot render ban/grandfather state');
+  const ageMs = now.getTime() - new Date(mirror.generatedAt).getTime();
+  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > MAX_OVERRIDES_AGE_MS) {
+    return fail(503, 'overrides_stale', `the overrides mirror is stale (age ${Number.isFinite(ageMs) ? Math.round(ageMs / 3600000) + 'h' : 'unknown'}); cannot render ban/grandfather state`);
+  }
+  const isSection = (x) => x != null && typeof x === 'object' && !Array.isArray(x);
+  if (!isSection(mirror.bans) || !isSection(mirror.grandfathered)) {
+    return fail(503, 'overrides_malformed', 'the overrides mirror sections are malformed (bans/grandfathered must be objects)');
+  }
+
+  const banList = Array.isArray(mirror.bans.bans) ? mirror.bans.bans : [];
+  const bans = {
+    bans: banList
+      .map((e) => ({ github_id: String(e?.github_id ?? '').trim(), login: e?.login ?? null })) // reason STRIPPED: never leaves the Worker
+      .filter((e) => e.github_id),
+  };
+  const grandfathered = isSection(mirror.grandfathered) ? mirror.grandfathered : { grandfathered: [] }; // full entries: the roster renders until/reason/tier
+  return { status: 200, body: { ok: true, bans, grandfathered } };
+}

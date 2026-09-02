@@ -56,7 +56,7 @@ import { startOnboarding } from './connect.mjs';
 import { verifyStripeSignature, isDuplicateEvent, markEventSeen, handleStripeEvent } from './webhook.mjs';
 import { membershipStatus } from './membership-status.mjs';
 import { membershipDecrypt, membershipEncrypt } from './membership-content.mjs';
-import { membershipAdminStatuses } from './membership-admin.mjs';
+import { membershipAdminStatuses, membershipAdminOverrides } from './membership-admin.mjs';
 import { membershipAdminOps } from './membership-admin-ops.mjs';
 import { membershipAdminMail } from './membership-admin-mail.mjs';
 import { membershipCouponUsage } from './membership-coupons-admin.mjs'; // SOW-119
@@ -1111,6 +1111,19 @@ export default {
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
         if (method === 'GET') {
           const r = await membershipAdminStatuses(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
+        }
+      }
+
+      // sow-213 R3: admin-only bans + grandfather grants from the KV mirror, for the dashboard roster (the two
+      // house/*.yml files left the public repo). SEPARATE from /statuses so the AUTHORITATIVE overrides fail
+      // closed/loud rather than riding a best-effort Stripe enumeration that can 502. Same cookie-enabled,
+      // fail-closed, never-cached posture as /statuses; the ban moderation reason is stripped server-side.
+      if (pathname === '/membership/admin/overrides') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = await membershipAdminOverrides(request, env, { allowCookie: true });
           return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store', Vary: 'Authorization' });
         }
       }

@@ -2,7 +2,7 @@
 // -> role from the SIGNUP_KV overrides mirror) + the Stripe enumeration. Pure over injected deps; no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { authorizeAdmin, authorizeStaff, authorizeSuperadmin, membershipAdminStatuses } from '../workers/signup/membership-admin.mjs';
+import { authorizeAdmin, authorizeStaff, authorizeSuperadmin, membershipAdminStatuses, membershipAdminOverrides } from '../workers/signup/membership-admin.mjs';
 import { signSession } from '../workers/signup/session.mjs'; // sow-158 Phase 1b: mint a website session cookie
 
 const req = (token) => ({ headers: { get: (k) => (k === 'Authorization' && token ? `Bearer ${token}` : null) } });
@@ -174,6 +174,46 @@ test('sow-229: a KV list failure omits pendingGrants without failing the roster'
   const r = await membershipAdminStatuses(req('admin'), env, { fetchUser, makeStripe, now });
   assert.equal(r.status, 200);
   assert.deepEqual(r.body.pendingGrants, {}); // fail-soft: no pending annotation, roster still renders
+});
+
+// sow-213 R3: GET /membership/admin/overrides returns the ban/grandfather state from the mirror (the two yml
+// files left the public repo), admin-gated, fail-closed/loud, with the ban moderation reason stripped.
+const mirrorWithOverrides = () => freshMirror({
+  bans: { bans: [{ github_id: '8', login: 'baddie', reason: 'spam and abuse' }, { github_id: '', login: 'blank' }] },
+  grandfathered: { grandfathered: [{ github_id: '5', login: 'coop', until: '2027-01-01T00:00:00.000Z', reason: 'coupon:CODEABLEYEAR', tier: 'member' }] },
+});
+
+test('sow-213 R3 membershipAdminOverrides: admin gets grandfathers in FULL and bans as state+login with the reason STRIPPED', async () => {
+  const r = await membershipAdminOverrides(req('admin'), envWith(mirrorWithOverrides()), { fetchUser, now });
+  assert.equal(r.status, 200);
+  // bans: per-member { github_id, login } ONLY, and the blank-id entry is dropped. The reason NEVER leaves the Worker.
+  assert.deepEqual(r.body.bans, { bans: [{ github_id: '8', login: 'baddie' }] });
+  assert.equal('reason' in r.body.bans.bans[0], false, 'the ban moderation reason must not be shipped to the client');
+  assert.ok(!JSON.stringify(r.body.bans).includes('spam and abuse'), 'the reason text does not appear anywhere in the ban payload');
+  // grandfathers: the FULL entry, because the roster renders until (expiry) + reason/coupon (provenance) + tier
+  assert.deepEqual(r.body.grandfathered, { grandfathered: [{ github_id: '5', login: 'coop', until: '2027-01-01T00:00:00.000Z', reason: 'coupon:CODEABLEYEAR', tier: 'member' }] });
+});
+
+test('sow-213 R3 membershipAdminOverrides: a non-admin is forbidden (403) with no override payload', async () => {
+  const r = await membershipAdminOverrides(req('member'), envWith(mirrorWithOverrides()), { fetchUser, now });
+  assert.equal(r.status, 403);
+  assert.equal(typeof r.body.error, 'string'); // the forbidden body is { error, message }; no bans/grandfathered reach a non-admin
+  assert.equal(r.body.bans, undefined);
+});
+
+test('sow-213 R3 membershipAdminOverrides: it NEVER returns a 200 with empty overrides; every unhealthy mirror fails closed', async () => {
+  // A stale or absent mirror 403s at the AUTH gate first (authorizeAdmin needs a fresh mirror for the role) --
+  // also fail-closed, and it means the handler's own stale/absent 503 is belt-and-braces for a between-reads
+  // window rather than the primary guard. The point asserted here: no unhealthy mirror ever yields 200 + empty.
+  assert.equal((await membershipAdminOverrides(req('admin'), envWith(freshMirror({ generatedAt: new Date('2020-01-01').toISOString() })), { fetchUser, now })).status, 403);
+  assert.equal((await membershipAdminOverrides(req('admin'), envWith(null), { fetchUser, now })).status, 403);
+  // The case THIS handler owns: a mirror fresh + valid for AUTH (roles + bans intact, so authorizeAdmin passes)
+  // but with a MALFORMED grandfathered section (an array, not the { grandfathered: [...] } object). authorizeAdmin
+  // does not validate grandfathered, so the handler's own shape check is what denies, with a 503, never a 200.
+  const badGf = freshMirror({ grandfathered: [] });
+  const r503 = await membershipAdminOverrides(req('admin'), envWith(badGf), { fetchUser, now });
+  assert.equal(r503.status, 503);
+  assert.equal(r503.body.error, 'overrides_malformed');
 });
 
 // sow-183: authorizeSuperadmin gates the hosted-authoring endpoint's cross-folder write (house/ or another

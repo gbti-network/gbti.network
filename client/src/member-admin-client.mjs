@@ -26,6 +26,26 @@ export async function getRosterStatuses({ token, signupBase, fetch = globalThis.
   return { statuses: data?.statuses ?? {}, tiers: data?.tiers ?? {}, logins: data?.logins ?? {}, pendingGrants: data?.pendingGrants ?? {} };
 }
 
+/**
+ * sow-213 R3: the effective bans + grandfather grants from the KV overrides mirror (admin-gated at the Worker),
+ * because house/bans.yml + house/grandfathered.yml have left the public repo. THROWS on any failure: these are
+ * the AUTHORITATIVE part of the roster, so getOverridesRoster must fail closed/loud (show "overrides
+ * unavailable") rather than render a false "nobody banned". `grandfathered` is the full parsed object; `bans`
+ * carries per-member github_id + login only (the moderation reason is stripped server-side). Both are in the
+ * parsed-YAML shape buildRoster consumes.
+ */
+export async function getOverridesMaps({ token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/admin/overrides', {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `admin overrides request failed (${res.status})`);
+  return { bans: data?.bans ?? { bans: [] }, grandfathered: data?.grandfathered ?? { grandfathered: [] } };
+}
+
 /** SOW-100: the guild's Discord channels (id, name, type, parentId) for the categories workspace.
  *  Admin-only (the Worker enforces it; KV-cached an hour server-side). */
 export async function getDiscordChannels({ token, signupBase, fetch = globalThis.fetch }) {

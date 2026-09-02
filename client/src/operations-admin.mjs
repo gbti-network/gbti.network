@@ -10,16 +10,31 @@ import { SIGNUP_BASE, authModeFor } from './signup-base.mjs';
 import { isContributionToFolder } from '../../membership/classify-pr.mjs';
 import yaml from 'js-yaml';
 import { buildRoster } from '../../membership/superadmin-roster.mjs';
-import { getRosterStatuses as workerGetRosterStatuses, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, postAdminGovernance } from './member-admin-client.mjs';
+import { getRosterStatuses as workerGetRosterStatuses, getOverridesMaps as workerGetOverridesMaps, getDiscordChannels as workerGetDiscordChannels, triggerAdminOp as workerTriggerAdminOp, getCouponUsage as workerGetCouponUsage, inviteAdminRequest, postAdminGovernance } from './member-admin-client.mjs';
 import { OperationError, requireAdmin, requireIdentity, requireRepo } from './operations-core.mjs';
 
 export async function getOverridesRoster(ctx) {
   const { rolesParsed, readText } = await requireAdmin(ctx);
-  const [bansParsed, gfParsed, idxParsed] = await Promise.all([
-    readText('house/bans.yml').then((t) => yaml.load(t) || {}),
-    readText('house/grandfathered.yml').then((t) => yaml.load(t) || {}),
-    readText('house/members-index.yml').then((t) => yaml.load(t) || {}),
-  ]);
+  const token = ctx.store?.get?.('githubToken');
+  const fetch = ctx.fetch ?? globalThis.fetch;
+  // sow-213 R3: bans + grandfather grants left the public repo for the KV mirror, so the roster reads them from
+  // the admin-gated Worker endpoint, NOT git. These are the AUTHORITATIVE part of the roster, so this FAILS
+  // CLOSED/LOUD, the deliberate opposite of the best-effort Stripe merge below: if the Worker cannot return them
+  // (unreachable, or the mirror is stale/absent) the whole op throws and the dashboard shows the failure, rather
+  // than rendering a false "nobody banned" that would mislead a moderator into un-banning or trusting a member.
+  // members-index.yml stays git-native (it did not move), so it is still read from the repo.
+  if (!token) throw new OperationError('not-authenticated', 'sign in first');
+  let bansParsed;
+  let gfParsed;
+  try {
+    const o = await workerGetOverridesMaps({ token, signupBase: SIGNUP_BASE, fetch });
+    bansParsed = o.bans;
+    gfParsed = o.grandfathered;
+  } catch (err) {
+    throw new OperationError('overrides-unavailable',
+      `could not load ban/grandfather state from the Worker (${err?.message ?? err}). The roster is not rendered rather than shown wrong.`);
+  }
+  const idxParsed = yaml.load(await readText('house/members-index.yml')) || {};
   // Best-effort: merge the live Stripe status + tier (sow-185/sow-229) and any pending KV coupon grant (sow-229)
   // from the admin Worker endpoint. On any failure (the Worker is down, test mode, or the caller is not admin to
   // it) the roster still renders with 'unknown' Stripe status and no tier/pending annotation — the
@@ -29,14 +44,11 @@ export async function getOverridesRoster(ctx) {
   let stripeTiers = null;   // sow-229: the live Stripe tier per member
   let pendingGrants = null; // sow-229: redeemed-but-unfolded coupon grants (KV), a display annotation only
   try {
-    const token = ctx.store?.get?.('githubToken');
-    if (token) {
-      const r = await workerGetRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
-      stripeStatuses = r?.statuses ?? null;
-      stripeLogins = r?.logins ?? null;
-      stripeTiers = r?.tiers ?? null;
-      pendingGrants = r?.pendingGrants ?? null;
-    }
+    const r = await workerGetRosterStatuses({ token, signupBase: SIGNUP_BASE, fetch });
+    stripeStatuses = r?.statuses ?? null;
+    stripeLogins = r?.logins ?? null;
+    stripeTiers = r?.tiers ?? null;
+    pendingGrants = r?.pendingGrants ?? null;
   } catch { stripeStatuses = null; stripeLogins = null; stripeTiers = null; pendingGrants = null; }
   return buildRoster({ roles: rolesParsed, bans: bansParsed, grandfathered: gfParsed, membersIndex: idxParsed, stripeStatuses, stripeLogins, stripeTiers, pendingGrants });
 }

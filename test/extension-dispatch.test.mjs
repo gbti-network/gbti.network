@@ -15,7 +15,9 @@ function ctxFor({ identity = { login: 'alice', githubId: '1', username: 'alice' 
     identity: () => identity,
     store: { get: (k) => ({ githubToken: token })[k] },
     getRepoClient: () => repo ?? null,
-    // No network in unit tests: the SOW-038 roster's best-effort Stripe call fails fast -> 'unknown' tiers.
+    // No network in unit tests: the default fetch THROWS. sow-213 R3: /api/overrides now reads bans + grandfather
+    // grants from the admin Worker endpoint FAIL-LOUD, so a test that hits it must inject a fetch that answers
+    // /membership/admin/overrides; the best-effort Stripe call (/membership/admin/statuses) still fails soft.
     fetch: fetch ?? (async () => { throw new Error('no network in test'); }),
     reader: {
       async readFile(p) { return files[p] ?? null; },
@@ -237,21 +239,27 @@ test('admin: a ban goes to the WORKER, never to the local git writer; a plain me
   assert.equal(calls.length, 1, 'the rejected caller never reached the Worker');
 });
 
-test('overrides (SOW-038 P2): an admin caller gets the roster; a non-admin is forbidden', async () => {
+test('overrides (SOW-038 P2 / sow-213 R3): an admin gets the roster (bans/grandfathers from the Worker); a non-admin is forbidden', async () => {
+  // sow-213 R3: bans + grandfather grants come from the admin-gated Worker endpoint now, not house/*.yml.
+  // members-index.yml stays git-native, so it is still read from the reader.
   const files = {
     'house/roles.yml': 'admins:\n  - github_id: "1"\n',
-    'house/bans.yml': 'bans:\n  - github_id: "9"\n',
-    'house/grandfathered.yml': 'grandfathered:\n  - github_id: "3"\n    until: null\n',
     'house/members-index.yml': 'members:\n  "1": alice\n  "3": founder\n  "9": baddie\n',
   };
-  const r = await dispatch(ctxFor({ files }), { pathname: '/api/overrides' });
+  const overridesFetch = async (url) => {
+    if (String(url).includes('/membership/admin/overrides')) {
+      return { ok: true, status: 200, async json() { return { ok: true, bans: { bans: [{ github_id: '9', login: 'baddie' }] }, grandfathered: { grandfathered: [{ github_id: '3', login: 'founder', until: null }] } }; } };
+    }
+    throw new Error('no network in test'); // /membership/admin/statuses (the best-effort Stripe merge) fails soft
+  };
+  const r = await dispatch(ctxFor({ files, fetch: overridesFetch }), { pathname: '/api/overrides' });
   assert.equal(r.status, 200);
   assert.ok(Array.isArray(r.json.roster));
   assert.equal(r.json.summary.banned, 1);
   assert.ok(r.json.roster.find((m) => m.githubId === '1' && m.role === 'admin'), 'the admin caller is in the roster');
 
-  // A caller NOT listed in roles.yml resolves to 'member' -> forbidden (the route is the real boundary).
-  const member = await dispatch(ctxFor({ files: { 'house/members-index.yml': 'members: {}\n' } }), { pathname: '/api/overrides' });
+  // A caller NOT listed in roles.yml resolves to 'member' -> forbidden at requireAdmin, BEFORE the Worker is called.
+  const member = await dispatch(ctxFor({ files: { 'house/members-index.yml': 'members: {}\n' }, fetch: overridesFetch }), { pathname: '/api/overrides' });
   assert.equal(member.status, 403);
   assert.equal(member.json.error, 'forbidden');
 });
