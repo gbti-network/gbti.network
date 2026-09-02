@@ -82,7 +82,7 @@ test('unparseable input yields an EMPTY map rather than throwing', () => {
 // The map. This is where inert and fail-closed are reconciled.
 // ---------------------------------------------------------------------------------------------------
 
-test('the legacy price is seeded as creator, which is what makes this ship inert', () => {
+test('the legacy price is seeded as MEMBER, and seeding it at all is what makes this ship inert', () => {
   const map = buildPriceTierMap({ legacyPriceId: LEGACY });
   // BEHAVIOUR CHANGE RECORDED (owner ruling 2026-09-02, sow-185): the legacy $150 annual seeds as MEMBER.
   // It seeded as creator until today. Measured first: zero Stripe subscriptions sit on that price.
