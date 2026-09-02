@@ -19855,7 +19855,7 @@ function isCleanPath(p) {
   if (p.includes("\0")) return false;
   return p.split("/").every((seg) => seg !== "" && seg !== "." && seg !== "..");
 }
-var OVERRIDES_GIT_FILES = Object.freeze(["house/bans.yml", "house/grandfathered.yml"]);
+var OVERRIDES_GIT_FILES = Object.freeze(["house/bans.yml", "house/grandfathered.yml", "house/coupons.yml"]);
 function isContributionToFolder(paths, ownerFolder) {
   if (!ownerFolder || !Array.isArray(paths) || paths.length === 0) return false;
   const prefix = `members/${ownerFolder}/`;
