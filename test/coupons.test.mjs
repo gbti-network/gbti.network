@@ -138,7 +138,7 @@ test('couponsFromParsed + couponTier: only a real paid tier survives normalizati
 });
 
 test('toCouponsMirror carries only normalized coupons + generatedAt', () => {
-  const m = toCouponsMirror(POOL, new Date('2026-07-15T00:00:00Z'));
+  const m = toCouponsMirror(POOL, new Date('2026-07-15T00:00:00Z'), null, true); // sow-291 R9: ownedByGit required; this builds from the git POOL
   assert.equal(m.generatedAt, '2026-07-15T00:00:00.000Z');
   assert.equal(m.coupons.length, 5);
   assert.ok(m.coupons.every((c) => /^[A-Z0-9]+$/.test(c.code)));

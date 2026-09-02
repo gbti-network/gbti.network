@@ -92,7 +92,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         // Like the overrides dry run, this reports the GIT-owned shape only: it cannot read KV, so it must not
         // pretend to know what a preserved registry holds, and passing ownership would make it throw on the
         // very state it is reporting.
-        const m = toCouponsMirror(rawCoupons);
+        const m = toCouponsMirror(rawCoupons, new Date(), null, true); // sow-291 R9: ownedByGit is now required; the dry run reports the git-owned shape only (it cannot read KV)
         console.log(`sync-mirror: DRY RUN would write coupons:config (${m.coupons.length} coupon${m.coupons.length === 1 ? '' : 's'}, git-owned=${ownedByGit}).`);
       } else {
         const c = await mirrorCouponsToKv({ raw: rawCoupons, ownedByGit });

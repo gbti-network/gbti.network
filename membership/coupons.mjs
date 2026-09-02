@@ -215,7 +215,15 @@ export function mergeCouponsList(gitCoupons, existingCoupons) {
  * CLOSED. That is the safe direction and it is LOUD (the six-hourly job exits non-zero, so it reds four times a
  * day). The alternative is an erase that disables every coupon on a GREEN run with nobody watching.
  */
-export function toCouponsMirror(raw, now = new Date(), existing = null, ownedByGit = true) {
+export function toCouponsMirror(raw, now = new Date(), existing = null, ownedByGit) {
+  // sow-291 (sow-213 R9 treatment, SowMaster 2026-09-02): ownedByGit is REQUIRED. It used to DEFAULT to `true`,
+  // which is the rebuild-from-git direction; once house/coupons.yml is deleted git carries no coupons, so an
+  // omitted `true` would rebuild coupons:config EMPTY and erase the KV-native registry on a green run. Making it
+  // required keeps the erase direction unreachable by omission: every caller must decide, exactly as
+  // buildOverridesMirror does for the overrides mirror.
+  if (ownedByGit === undefined) {
+    throw new Error('toCouponsMirror: ownedByGit is required; omitting it leaves the rebuild-from-git ERASE direction reachable by default, which after the coupons.yml deletion would erase the KV registry (sow-291, sow-213 R9).');
+  }
   const generatedAt = now.toISOString();
   if (!ownedByGit) {
     // NO ARRAY AT ALL and AN EMPTY ARRAY are different, and only the first is a fault. This aborted on both

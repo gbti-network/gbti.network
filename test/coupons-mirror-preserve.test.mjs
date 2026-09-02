@@ -37,14 +37,14 @@ function checkout(couponsYmlText) {
 test('a KV-native coupon SURVIVES a sync that rebuilds from git', () => {
   // The property the whole phase rests on. Without it, minting a coupon in KV works and then stops within six
   // hours, which is the worst available failure: it looks like success at the moment anyone would check.
-  const before = toCouponsMirror(GIT, AT, { coupons: [...couponsFromParsed(GIT).values(), KV_NATIVE] });
+  const before = toCouponsMirror(GIT, AT, { coupons: [...couponsFromParsed(GIT).values(), KV_NATIVE] }, true);
   const codes = before.coupons.map((c) => c.code).sort();
   assert.deepEqual(codes, ['CODEABLEYEAR', 'MINTEDINKV']);
 
   // And the control, so this is not passing because the merge returns its input untouched: with the SAME
   // existing blob but the entry unmarked, it must be dropped.
   const unmarked = { ...KV_NATIVE, source: undefined };
-  const after = toCouponsMirror(GIT, AT, { coupons: [...couponsFromParsed(GIT).values(), unmarked] });
+  const after = toCouponsMirror(GIT, AT, { coupons: [...couponsFromParsed(GIT).values(), unmarked] }, true);
   assert.deepEqual(after.coupons.map((c) => c.code), ['CODEABLEYEAR'],
     'an UNMARKED existing entry must be dropped, or a removal in git would stop taking effect');
 });
@@ -54,7 +54,7 @@ test('git still wins on a code it carries, so deactivating in git keeps working'
   // entry, deactivating a coupon in git would leave it redeemable, which is a fail-OPEN.
   const staleActive = { code: 'CODEABLEYEAR', freeDays: 365, active: true, tier: 'member', source: 'kv' };
   const gitDeactivated = { coupons: [{ code: 'CODEABLEYEAR', freeDays: 365, active: false, tier: 'member' }] };
-  const m = toCouponsMirror(gitDeactivated, AT, { coupons: [staleActive] });
+  const m = toCouponsMirror(gitDeactivated, AT, { coupons: [staleActive] }, true);
   assert.equal(m.coupons.length, 1);
   assert.equal(m.coupons[0].active, false, 'the git entry must win for a code git carries');
 });
@@ -84,6 +84,17 @@ test('an absent registry with NO ARRAY AT ALL aborts; an EMPTY array is a legiti
   const m = toCouponsMirror({}, AT, { coupons: [] }, false);
   assert.deepEqual(m.coupons, []);
   assert.equal(m.generatedAt, AT.toISOString(), 'and the stamp still refreshes, so the blob does not age out');
+});
+
+test('sow-291 R9: toCouponsMirror REQUIRES ownedByGit, so the erase direction is unreachable by omission', () => {
+  // The default used to be `true` (rebuild from git). Post-deletion git carries no coupons, so an omitted `true`
+  // would rebuild coupons:config EMPTY and erase the KV registry on a green run. Same treatment as
+  // buildOverridesMirror's sow-213 R9: omitting the argument THROWS rather than choosing the erase direction.
+  assert.throws(() => toCouponsMirror(GIT, AT, { coupons: [] }), /ownedByGit is required/);
+  assert.throws(() => toCouponsMirror(GIT, AT), /ownedByGit is required/);
+  // Both explicit directions still work: true rebuilds from git, false preserves the KV blob.
+  assert.ok(Array.isArray(toCouponsMirror(GIT, AT, null, true).coupons), 'explicit true still rebuilds from git');
+  assert.deepEqual(toCouponsMirror({}, AT, { coupons: [] }, false).coupons, [], 'explicit false still preserves');
 });
 
 test('loadCouponsRaw distinguishes ABSENT from UNPARSEABLE, which the old catch collapsed', () => {
