@@ -3,11 +3,12 @@
 // "membership required to publish" notice and to keep a trial member's drafts on their own fork (nothing
 // reaches the canonical repo until they pay). This is advisory UX: the SOW-005 gate stays the authority.
 //
-// The client holds no Stripe key, so it learns the Stripe-derived status from the signup Worker's
-// /membership/status oracle (which verifies the GitHub token -> github_id), then folds in the git-native
-// overrides it can read (roles, grandfather, bans) using the SAME precedence as the gate's effectiveStatus:
-// ban > staff > grandfather > Stripe. The result is computed once at login and cached, so the publish
-// choke point is a trivial synchronous check.
+// The client holds no Stripe key, so it learns its EFFECTIVE membership from the signup Worker's
+// /membership/status oracle (which verifies the GitHub token -> github_id and folds ban > staff > grandfather >
+// Stripe SERVER-SIDE over the KV overrides mirror, returning it as `effectiveStatus`). sow-213 R2: the client no
+// longer reads house/bans.yml + house/grandfathered.yml to re-fold that precedence itself, because those two
+// person-keyed files left the public repo for the mirror. The result is computed once at login and cached, so
+// the publish choke point is a trivial synchronous check.
 
 import yaml from 'js-yaml';
 import { roleOf, rolesFromText, ROLE } from './roles.mjs';
@@ -142,62 +143,63 @@ export function isBlockedFromPublishing(membership) {
  * client fails OPEN to the gate rather than wrongly blocking a paid member when the oracle is unreachable.
  */
 export async function fetchStripeStatus({ token, signupBase, fetch = globalThis.fetch } = {}) {
-  if (!token || !signupBase) return { status: 'unknown', couponUntil: null, paidTier: 'none' };
+  if (!token || !signupBase) return { status: 'unknown', effectiveStatus: 'unknown', couponUntil: null, paidTier: 'none' };
   try {
     const res = await fetch(`${String(signupBase).replace(/\/$/, '')}/membership/status`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return { status: 'unknown', couponUntil: null, paidTier: 'none' };
+    if (!res.ok) return { status: 'unknown', effectiveStatus: 'unknown', couponUntil: null, paidTier: 'none' };
     const data = await res.json();
     // SOW-119 QA: couponUntil is the grant end date the oracle emits ONLY when the paid signal is a coupon
     // grant (never for a real subscription); it drives the extension expiry countdown.
     // sow-185: paidTier (none|member|creator) is the Worker's authoritative, override-aware tier for this
     // caller (resolveEffectiveTier over the KV mirror). The client TRUSTS it and never re-derives the tier
     // itself (that needs the Stripe price map, held server-side); fail closed to 'none' for an older Worker.
-    return { status: data?.status ?? 'unknown', couponUntil: data?.couponUntil ?? null, paidTier: typeof data?.paidTier === 'string' ? data.paidTier : 'none' };
+    // sow-213 R2: effectiveStatus is the Worker's SERVER-SIDE fold of ban > staff > grandfather > Stripe over
+    // the KV overrides mirror (the same value the gate decides on). The client trusts it instead of re-reading
+    // house/bans.yml + house/grandfathered.yml, which have left the public repo. Fail closed to 'unknown' for an
+    // older Worker that omits it, which resolveMembership then treats as the fail-open non-banned/non-paid view.
+    return { status: data?.status ?? 'unknown', effectiveStatus: typeof data?.effectiveStatus === 'string' ? data.effectiveStatus : 'unknown', couponUntil: data?.couponUntil ?? null, paidTier: typeof data?.paidTier === 'string' ? data.paidTier : 'none' };
   } catch {
-    return { status: 'unknown', couponUntil: null, paidTier: 'none' };
-  }
-}
-
-async function readSafe(readFile, p) {
-  if (typeof readFile !== 'function') return null;
-  try {
-    return await readFile(p);
-  } catch {
-    return null;
+    return { status: 'unknown', effectiveStatus: 'unknown', couponUntil: null, paidTier: 'none' };
   }
 }
 
 /**
- * Resolve the effective membership at login: fetch the Stripe status from the Worker, read the git-native
- * overrides via the host's reader (sync for the npm host, async for the extension), and fold them with the
- * gate's precedence. Returns { stripeStatus, membership } for the host to cache in its store. Pure over the
- * injected fetch + readFile, so it is unit-tested with fakes.
+ * Resolve the effective membership at login. Returns { stripeStatus, membership, couponUntil, paidTier } for the
+ * host to cache. Pure over the injected fetch, so it is unit-tested with fakes.
+ *
+ * sow-213 R2: this USED TO fetch the Stripe status from the Worker AND read house/bans.yml + house/
+ * grandfathered.yml (and roles.yml) via the host reader, folding the ban > staff > grandfather > Stripe
+ * precedence locally. Those two person-keyed files left the public repo for the KV mirror (a public repo cannot
+ * satisfy erasure), so the client can no longer read them, and it does not need to: the Worker's
+ * /membership/status already folds that precedence SERVER-SIDE over the mirror and returns it as
+ * `effectiveStatus` on THIS SAME response. So we trust the value the server already sent instead of duplicating
+ * the fold. roles.yml stays git-native but is not read here either, because effectiveStatus already folds staff.
+ *
+ * FAIL-OPEN, AND IT IS SAFE ONLY BECAUSE THE GATE REPEATS THE CHECK. If the Worker is unreachable
+ * fetchStripeStatus returns effectiveStatus 'unknown', so this resolves to a non-banned, non-paid view. That is
+ * a UX courtesy (block publish early, show a lock), NEVER the security boundary: every real action re-checks
+ * server-side, publish through the SOW-005 PR gate and decrypt/encrypt through the Worker's effective-paid gate
+ * on the live mirror. Do NOT "harden" this to fail closed, and do NOT let anything trust this client view for a
+ * decision the gate does not repeat: the moment something does, this stops being defensible.
+ *
+ * `readFile` and `now` are still accepted so the hosts that inject a repo reader do not have to change, but
+ * sow-213 no longer reads any override file or re-derives a date here. Both are candidates for removal once no
+ * client path folds bans/grandfathered locally.
  */
 export async function resolveMembership({ githubId, token, signupBase, readFile, fetch = globalThis.fetch, now = Date.now() } = {}) {
-  const { status: stripeStatus, couponUntil: workerCouponUntil, paidTier: workerPaidTier } = await fetchStripeStatus({ token, signupBase, fetch });
-  const roles = rolesFromText(await readSafe(readFile, 'house/roles.yml'));
-  const banned = bannedIdsFromText(await readSafe(readFile, 'house/bans.yml'));
-  const grandfathers = grandfathersFromText(await readSafe(readFile, 'house/grandfathered.yml'));
-  const membership = effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now });
-  // SOW-119 QA: the coupon-grant end date, for the extension expiry countdown. The ORACLE value is trusted
-  // whenever emitted: the Worker only sends couponUntil when the coupon grant IS the paid source (its
-  // status then reads 'paid' from the fast path, so the client cannot re-derive the distinction). The git
-  // grant this resolver already parsed is the fallback for the folded-in case when the oracle stayed
-  // silent, and it only applies while the grant is what makes the member paid.
-  let couponUntil = membership === 'banned' ? null : (workerCouponUntil ?? null);
-  if (!couponUntil && membership === 'paid' && stripeStatus !== 'paid') {
-    const entry = grandfathers.get(String(githubId));
-    if (entry?.until && String(entry.reason ?? '').startsWith('coupon:')) {
-      const until = new Date(entry.until);
-      if (!Number.isNaN(until.getTime()) && now < until.getTime()) couponUntil = until.toISOString();
-    }
-  }
-  // sow-185: carry the Worker's authoritative paid TIER through for the host status builders + the page
-  // signal. It is presentation state (the real creator gate is authorizeCreator server-side), so it fails
-  // closed to 'none': a ban outranks everything here exactly as it does for couponUntil, and any error
-  // already resolved workerPaidTier to 'none' in fetchStripeStatus.
+  const { status: stripeStatus, effectiveStatus, couponUntil: workerCouponUntil, paidTier: workerPaidTier } = await fetchStripeStatus({ token, signupBase, fetch });
+  // effectiveStatus is the Worker's server-folded value; 'unknown' is its "did not fold / unavailable" sentinel.
+  // Fall back to the Stripe status for it: an older Worker that omits effectiveStatus still sends its Stripe
+  // status, and when the Worker is unreachable BOTH are 'unknown' so this stays 'unknown' (the fail-open view).
+  const membership = (effectiveStatus && effectiveStatus !== 'unknown') ? effectiveStatus : (stripeStatus || 'unknown');
+  // SOW-119 QA: the coupon-grant end date drives the extension expiry countdown, and it is the Worker's to emit
+  // (only when a coupon grant is the paid source). sow-213 removed the local git-grandfather fallback along with
+  // the grant read, so this is purely the oracle value now; a ban suppresses it.
+  const couponUntil = membership === 'banned' ? null : (workerCouponUntil ?? null);
+  // sow-185: the Worker's authoritative paid TIER, carried through; a ban forces it to none (the real creator
+  // gate is authorizeCreator server-side). Any Worker error already resolved workerPaidTier to 'none'.
   const paidTier = membership === 'banned' ? 'none' : (workerPaidTier ?? 'none');
   return { stripeStatus, membership, couponUntil, paidTier };
 }

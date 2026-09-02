@@ -18068,44 +18068,6 @@ var canCurateNews = (role, isCurator) => rank(role) >= RANK.admin || isCurator =
 // client/src/membership.mjs
 var STAFF = /* @__PURE__ */ new Set([ROLE.moderator, ROLE.admin, ROLE.superadmin]);
 var NON_PUBLISHABLE = /* @__PURE__ */ new Set(["trialing", "expired", "cancelled", "none", "banned"]);
-function bannedIdsFromText(text) {
-  if (!text) return /* @__PURE__ */ new Set();
-  try {
-    const parsed = index_vite_proxy_tmp_default.load(text);
-    return new Set((parsed?.bans ?? []).map((e) => String(e?.github_id ?? e)).filter(Boolean));
-  } catch {
-    return /* @__PURE__ */ new Set();
-  }
-}
-function grandfathersFromText(text) {
-  if (!text) return /* @__PURE__ */ new Map();
-  try {
-    const parsed = index_vite_proxy_tmp_default.load(text);
-    const m = /* @__PURE__ */ new Map();
-    for (const e of parsed?.grandfathered ?? []) {
-      const id = String(e?.github_id ?? e);
-      if (id) m.set(id, e);
-    }
-    return m;
-  } catch {
-    return /* @__PURE__ */ new Map();
-  }
-}
-function grandfatherActive(entry, now = Date.now()) {
-  if (!entry) return false;
-  const until = entry.until;
-  if (until === void 0 || until === null || until === "") return true;
-  const t = new Date(until).getTime();
-  if (Number.isNaN(t)) return false;
-  return now < t;
-}
-function effectiveMembership({ githubId, stripeStatus = "unknown", roles = /* @__PURE__ */ new Map(), banned = /* @__PURE__ */ new Set(), grandfathers = /* @__PURE__ */ new Map(), now = Date.now() } = {}) {
-  const id = String(githubId ?? "");
-  if (banned.has(id)) return "banned";
-  if (STAFF.has(roleOf(id, roles))) return "paid";
-  if (grandfatherActive(grandfathers.get(id), now)) return "paid";
-  return stripeStatus || "unknown";
-}
 var STAGE_TIER = /* @__PURE__ */ new Set(["paid", "trialing"]);
 function canStageDrafts(membership) {
   return STAGE_TIER.has(membership);
@@ -18132,40 +18094,22 @@ function isBlockedFromPublishing(membership) {
   return NON_PUBLISHABLE.has(membership);
 }
 async function fetchStripeStatus({ token, signupBase, fetch: fetch2 = globalThis.fetch } = {}) {
-  if (!token || !signupBase) return { status: "unknown", couponUntil: null, paidTier: "none" };
+  if (!token || !signupBase) return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none" };
   try {
     const res = await fetch2(`${String(signupBase).replace(/\/$/, "")}/membership/status`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    if (!res.ok) return { status: "unknown", couponUntil: null, paidTier: "none" };
+    if (!res.ok) return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none" };
     const data = await res.json();
-    return { status: data?.status ?? "unknown", couponUntil: data?.couponUntil ?? null, paidTier: typeof data?.paidTier === "string" ? data.paidTier : "none" };
+    return { status: data?.status ?? "unknown", effectiveStatus: typeof data?.effectiveStatus === "string" ? data.effectiveStatus : "unknown", couponUntil: data?.couponUntil ?? null, paidTier: typeof data?.paidTier === "string" ? data.paidTier : "none" };
   } catch {
-    return { status: "unknown", couponUntil: null, paidTier: "none" };
-  }
-}
-async function readSafe(readFile, p) {
-  if (typeof readFile !== "function") return null;
-  try {
-    return await readFile(p);
-  } catch {
-    return null;
+    return { status: "unknown", effectiveStatus: "unknown", couponUntil: null, paidTier: "none" };
   }
 }
 async function resolveMembership({ githubId, token, signupBase, readFile, fetch: fetch2 = globalThis.fetch, now = Date.now() } = {}) {
-  const { status: stripeStatus, couponUntil: workerCouponUntil, paidTier: workerPaidTier } = await fetchStripeStatus({ token, signupBase, fetch: fetch2 });
-  const roles = rolesFromText(await readSafe(readFile, "house/roles.yml"));
-  const banned = bannedIdsFromText(await readSafe(readFile, "house/bans.yml"));
-  const grandfathers = grandfathersFromText(await readSafe(readFile, "house/grandfathered.yml"));
-  const membership = effectiveMembership({ githubId, stripeStatus, roles, banned, grandfathers, now });
-  let couponUntil = membership === "banned" ? null : workerCouponUntil ?? null;
-  if (!couponUntil && membership === "paid" && stripeStatus !== "paid") {
-    const entry = grandfathers.get(String(githubId));
-    if (entry?.until && String(entry.reason ?? "").startsWith("coupon:")) {
-      const until = new Date(entry.until);
-      if (!Number.isNaN(until.getTime()) && now < until.getTime()) couponUntil = until.toISOString();
-    }
-  }
+  const { status: stripeStatus, effectiveStatus: effectiveStatus2, couponUntil: workerCouponUntil, paidTier: workerPaidTier } = await fetchStripeStatus({ token, signupBase, fetch: fetch2 });
+  const membership = effectiveStatus2 && effectiveStatus2 !== "unknown" ? effectiveStatus2 : stripeStatus || "unknown";
+  const couponUntil = membership === "banned" ? null : workerCouponUntil ?? null;
   const paidTier = membership === "banned" ? "none" : workerPaidTier ?? "none";
   return { stripeStatus, membership, couponUntil, paidTier };
 }
@@ -18400,7 +18344,7 @@ function roleOf2(githubId, roles) {
 function isBanned(githubId, bans) {
   return bans.has(String(githubId));
 }
-function grandfatherActive2(githubId, grandfathers, now = /* @__PURE__ */ new Date()) {
+function grandfatherActive(githubId, grandfathers, now = /* @__PURE__ */ new Date()) {
   const entry = grandfathers.get(String(githubId));
   if (!entry) return false;
   const until = entry.until;
@@ -18413,7 +18357,7 @@ function effectiveStatus(githubId, derived, overrides, now = /* @__PURE__ */ new
   const { bans, grandfathers, roles } = overrides;
   if (isBanned(githubId, bans)) return { status: "banned", source: "ban" };
   if (roles && isPrivilegedRole(roleOf2(githubId, roles))) return { status: "paid", source: "staff" };
-  if (grandfatherActive2(githubId, grandfathers, now)) return { status: "paid", source: "grandfather" };
+  if (grandfatherActive(githubId, grandfathers, now)) return { status: "paid", source: "grandfather" };
   return { status: derived, source: "stripe" };
 }
 
@@ -20093,7 +20037,7 @@ function buildRoster({ roles, bans, grandfathered, membersIndex, stripeStatuses,
       username: idx.get(id) || banMap.get(id)?.login || gf?.login || roleLogins.get(id) || stripeLoginMap[id] || null,
       role: roleOf2(id, roleMap),
       banned: isBanned(id, banMap),
-      grandfathered: grandfatherActive2(id, gfMap, now),
+      grandfathered: grandfatherActive(id, gfMap, now),
       grandfatherUntil: gf?.until ?? null,
       expiresInDays: daysUntil(gf?.until, now),
       // sow-229: derived days to expiry (null = permanent / none), for the expiry treatment
