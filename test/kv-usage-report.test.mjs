@@ -7,7 +7,8 @@
 // that actually goes to Resend. Delete `html` from the call site and they go red.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveConfig, summarize, reportText, reportHtml, buildEmail, main } from '../scripts/kv-usage-report.mjs';
+import { resolveConfig, summarize, reportText, reportHtml, buildEmail, main,
+  capLine, spikeLine, median, pctOfCap, fmt, DAILY_WRITE_CAP, SPIKE_FLOOR } from '../scripts/kv-usage-report.mjs';
 
 const SIGNUP = '49432379e11844ac81b6fdaf22d3937a';
 const NEWS = '64b09b4d03764c979447cc008ffe528c';
@@ -29,6 +30,10 @@ const NOW = Date.parse('2026-08-26T09:00:00Z');
 const RANGE = { geq: '2026-08-18', leq: '2026-08-26', account: 'acct-test', warn: 1000 };
 
 const ENV = {
+  // KV_WRITE_WARN pins the ABSOLUTE override so this fixture's subject stays deterministic: the default rule
+  // is relative now, and a three-row fixture's median is not what this test is about. It also proves the
+  // override still reaches the send path, not merely resolveConfig.
+  KV_WRITE_WARN: '1000',
   CF_ANALYTICS_TOKEN: 'cf-test',
   CF_ACCOUNT_ID: 'acct-test',
   RESEND_API_KEY: 're-test',
@@ -91,7 +96,7 @@ test('summarize: folds per day and per namespace, and write plus delete is what 
   assert.deepEqual(s.nsKeys.map(([ns]) => ns), [SIGNUP, NEWS]);
 });
 
-test('summarize: elevated is at or above the threshold, never above it only', () => {
+test('summarize: an explicit warn is still honoured as an ABSOLUTE override, at or above, never above only', () => {
   assert.deepEqual(summarize(ROWS, { warn: 1000 }).elevated, ['2026-08-25']);
   assert.deepEqual(summarize(ROWS, { warn: 1510 }).elevated, ['2026-08-25']);
   assert.deepEqual(summarize(ROWS, { warn: 1511 }).elevated, []);
@@ -104,9 +109,15 @@ test('reportText: keeps the fixed-width report and the elevated flag', () => {
   const text = reportText(summarize(ROWS, { warn: 1000 }), RANGE);
   assert.match(text, /^GBTI Workers KV usage, 2026-08-18 to 2026-08-26 \(account acct-test\)\./);
   assert.match(text, /date {9}read {6}write {5}delete {4}list {6}WRITE\+DEL/);
-  assert.match(text, /2026-08-25 {3}0 {9}1510 {6}0 {9}9 {9}1510 {7}<- >= 1000/);
+  assert.match(text, /2026-08-25 {3}0 {9}1510 {6}0 {9}9 {9}1510 {7}<- spike/);
   assert.match(text, new RegExp(`  ${SIGNUP} \\(SIGNUP_KV\\) {2}write=2262 {2}delete=0 {2}total=2262`));
-  assert.match(text, /NOTE: 1 day\(s\) at or above 1000 writes: 2026-08-25\./);
+  // BEHAVIOUR CHANGE RECORDED, not an assertion edited green. The note used to read "N day(s) at or above
+  // 1000 writes", and 1000 is the OLD FREE cap, which the script's own comment said. On the paid plan that
+  // alarm fired at 0.1% of the real limit, so it called a day that was never near trouble elevated. It now
+  // names the multiple and the median it is measured against, which is what tells a reader whether to care.
+  assert.match(text, /NOTE: 2026-08-25 ran 1,510 writes, [\d.]+x the \d+-day median of [\d,]+\./);
+  // And the line the report exists for, which it never carried before: usage AS A FRACTION OF THE CAP.
+  assert.match(text, /Peak 1,510 on 2026-08-25 used 0\.15% of the 1,000,000\/day write cap\./);
 });
 
 test('reportHtml: a real layout, both per-day tables, and the namespace names', () => {
@@ -122,7 +133,7 @@ test('reportHtml: a real layout, both per-day tables, and the namespace names', 
   assert.match(html, /Per day, reads and lists/);
   assert.match(html, /SIGNUP_KV \(49432379e11844ac81b6fdaf22d3937a\)/);
   assert.match(html, /NEWS_KV \(64b09b4d03764c979447cc008ffe528c\)/);
-  assert.match(html, /2026-08-25 \(elevated\)/);
+  assert.match(html, /2026-08-25 \(spike\)/);
 
   // THE FIGURES THEMSELVES, and this is the point of the test rather than a flourish on it. Everything asserted
   // above survives the numbers being wrong: a table renders its header row even with no rows at all, and the
@@ -137,18 +148,21 @@ test('reportHtml: a real layout, both per-day tables, and the namespace names', 
 
 test('reportHtml: an elevated range gets the alert band, a calm one gets the note', () => {
   const hot = reportHtml(summarize(ROWS, { warn: 1000 }), RANGE);
-  assert.match(hot, /1 day\(s\) at or above 1000 writes: 2026-08-25\./);
-  assert.ok(!hot.includes('Comfortably inside the free line'), 'the calm note must not run alongside the alert');
+  assert.match(hot, /2026-08-25 ran 1,510 writes, [\d.]+x the \d+-day median/);
+  assert.ok(!hot.includes('No day broke from trend'), 'the calm note must not run alongside the alert');
 
   const calm = reportHtml(summarize(ROWS, { warn: 5000 }), { ...RANGE, warn: 5000 });
-  assert.match(calm, /All days under 5000 writes\. Peak 1510\./);
-  assert.ok(!calm.includes('at or above'), 'no alert when nothing is elevated');
+  assert.match(calm, /No day broke from trend\./);
+  assert.ok(!calm.includes('ran 1,510 writes'), 'no alert when nothing broke from trend');
 });
 
 test('reportHtml: an empty range says so rather than showing an empty table', () => {
   const html = reportHtml(summarize([], { warn: 1000 }), RANGE);
   assert.match(html, /Cloudflare reported no KV operations between 2026-08-18 and 2026-08-26\./);
-  assert.match(html, /All days under 1000 writes\. Peak 0\./);
+  assert.match(html, /No day broke from trend\./);
+  // An empty range must NOT render a bar chart. A zero-row chart is the shape a reader mistakes for a broken
+  // image, and barsHtml returns '' for it rather than an empty frame.
+  assert.ok(!html.includes('table-layout:fixed'), 'no bar chart for an empty range');
 });
 
 test('reportHtml: every interpolated value is escaped', () => {
@@ -162,7 +176,7 @@ test('reportHtml: every interpolated value is escaped', () => {
 
 test('buildEmail: subject names the last day, the count, and any elevated days', () => {
   const hot = buildEmail(summarize(ROWS, { warn: 1000 }), RANGE);
-  assert.equal(hot.subject, 'GBTI KV usage: 0 writes on 2026-08-26 (1 elevated day[s])');
+  assert.equal(hot.subject, 'GBTI KV usage: 0 writes on 2026-08-26 (1 day[s] above trend)');
   const calm = buildEmail(summarize(ROWS, { warn: 5000 }), { ...RANGE, warn: 5000 });
   assert.equal(calm.subject, 'GBTI KV usage: 0 writes on 2026-08-26');
 });
@@ -180,7 +194,7 @@ test('main: the html body reaches sendEmail, alongside the plain-text fallback',
   const msg = net.calls.resend[0];
   assert.equal(msg.from, 'ops@gbti.network');
   assert.equal(msg.to, 'owner@example.com');
-  assert.equal(msg.subject, 'GBTI KV usage: 0 writes on 2026-08-26 (1 elevated day[s])');
+  assert.equal(msg.subject, 'GBTI KV usage: 0 writes on 2026-08-26 (1 day[s] above trend)');
 
   // The html part must be PRESENT and must be the shared ops layout, not the old <pre> dump.
   assert.ok(msg.html, 'the send call dropped the html body');
@@ -257,4 +271,66 @@ test('main: an empty analytics result still reports and still sends', async () =
   assert.equal(net.calls.resend.length, 1);
   assert.match(net.calls.resend[0].html, /Cloudflare reported no KV operations/);
   assert.ok(net.calls.resend[0].text.includes('per DAY'), 'the text fallback is still built');
+});
+
+// ---------- quota, stated rather than implied ----------
+
+test('pctOfCap keeps two places, because the honest answer is a fraction of a percent', () => {
+  // Rounding 0.10% to 0% would delete the one thing this report exists to say.
+  assert.equal(pctOfCap(1042), '0.10%');
+  assert.equal(pctOfCap(DAILY_WRITE_CAP), '100.00%');
+  assert.equal(pctOfCap(0), '0.00%');
+});
+
+test('fmt groups thousands without a locale dependency', () => {
+  assert.equal(fmt(1042), '1,042');
+  assert.equal(fmt(1000000), '1,000,000');
+  assert.equal(fmt(0), '0');
+});
+
+test('capLine names the peak DAY, the count, and the share of the cap', () => {
+  const line = capLine(summarize(ROWS));
+  assert.match(line, /Peak 1,510 on 2026-08-25 used 0\.15% of the 1,000,000\/day write cap\./);
+});
+
+// ---------- the spike rule ----------
+
+test('median, not mean: a spike must not raise the very threshold meant to catch it', () => {
+  // Mean of these is 280; median is 100. A mean-based rule lets a second spike of the same size pass.
+  assert.equal(median([100, 100, 100, 100, 1000]), 100);
+  assert.equal(median([]), 0);
+  assert.equal(median([4, 2]), 3);
+});
+
+test('the spike rule fires on a break from trend, and the SAME data without the break stays quiet', () => {
+  const days = (spec) => spec.flatMap(([d, n]) => [row(d, 'write', SIGNUP, n)]);
+  const flat = [['2026-08-01', 300], ['2026-08-02', 320], ['2026-08-03', 310], ['2026-08-04', 305], ['2026-08-05', 315]];
+
+  // THE CONTROL FIRST: an ordinary week must produce no alarm, or the positive below proves nothing.
+  const calm = summarize(days(flat));
+  assert.deepEqual(calm.elevated, [], 'a flat week must not alarm');
+
+  // The same week with one day broken from trend.
+  const hot = summarize(days([...flat, ['2026-08-06', 3000]]));
+  assert.deepEqual(hot.elevated, ['2026-08-06']);
+  assert.match(spikeLine(hot), /2026-08-06 ran 3,000 writes, [\d.]+x the 6-day median of \d+/);
+});
+
+test('the FLOOR stops a quiet range from manufacturing a spike out of noise', () => {
+  // 2 a day with one day at 20 is 10x the median, which a purely relative rule would call a spike. It is
+  // twenty writes. The floor is what keeps the alarm meaningful at low volume.
+  const rows = [['2026-08-01', 2], ['2026-08-02', 2], ['2026-08-03', 2], ['2026-08-04', 20]]
+    .map(([d, n]) => row(d, 'write', SIGNUP, n));
+  const s = summarize(rows);
+  assert.ok(20 >= 10 * s.median, 'the fixture really is a 10x relative outlier');
+  assert.deepEqual(s.elevated, [], 'twenty writes is not a spike, whatever the ratio says');
+  assert.equal(s.spikeAt, SPIKE_FLOOR, 'the floor is what bound this range, not the ratio');
+});
+
+test('reportHtml draws one bar per day, scaled to the busiest, and carries the cap caption', () => {
+  const html = reportHtml(summarize(ROWS), RANGE);
+  const fills = html.match(/width:\d+%;background-color:#1f9e5f/g) || [];
+  assert.equal(fills.length, 3, 'one bar per day in the range');
+  assert.ok(fills.includes('width:100%;background-color:#1f9e5f'), 'the busiest day is the full-width bar');
+  assert.match(html, /Peak 1,510 on 2026-08-25 used 0\.15% of the 1,000,000\/day write cap\./);
 });

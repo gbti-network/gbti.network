@@ -161,6 +161,60 @@ function tableHtml(section) {
     + `style="width:100%;table-layout:auto;border-collapse:collapse;background-color:${P.cardBg}">${head}${body}</table>`);
 }
 
+/**
+ * A horizontal bar chart, for a series a reader compares by SHAPE rather than by digit. Built from nested
+ * tables with a background-colour fill, which is the only charting technique that survives an email client:
+ * SVG is stripped by Gmail, canvas needs script, and a remote image is blocked by default and would leak a
+ * read receipt besides. Everything here is markup the same clients already render for the table kind.
+ *
+ * `rows` is `[[label, value, display]]`. `value` is the NUMBER, used only for scaling; `display` is what the
+ * reader sees, so the caller keeps its own formatting (thousands separators, units).
+ *
+ * SCALED TO THE LARGEST ROW, not to any external maximum, and that is a deliberate choice rather than a
+ * default: a series sitting at a thousandth of its quota renders as nine invisible slivers if scaled to the
+ * quota, which communicates the headroom and destroys the shape. State the quota in words in the `caption`
+ * and let the bars carry the comparison they are actually good at.
+ */
+function barsHtml(section) {
+  const rows = Array.isArray(section.rows) ? section.rows : [];
+  if (!rows.length) return '';
+  const nums = rows.map((r) => (Number.isFinite(Number(r?.[1])) ? Number(r[1]) : 0));
+  const max = Math.max(...nums, 0);
+
+  const body = rows.map((row, i) => {
+    const label = str(row?.[0]);
+    const display = str(row?.[2] ?? row?.[1] ?? '');
+    // A zero-width cell collapses and the row reads as a rendering fault rather than as a zero, so a real
+    // zero keeps a hairline of bar. The max guard matters too: an all-zero series would divide by zero.
+    const pct = max > 0 ? Math.max(1, Math.round((nums[i] / max) * 100)) : 1;
+    const fill = `<td width="${pct}%" style="width:${pct}%;background-color:${P.accent};font-size:0;line-height:0;`
+      + 'mso-line-height-rule:exactly">&nbsp;</td>';
+    const rest = pct >= 100 ? '' : '<td style="font-size:0;line-height:0;mso-line-height-rule:exactly">&nbsp;</td>';
+    const bar = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" '
+      + `style="width:100%;table-layout:fixed;border-collapse:collapse;height:10px"><tr>${fill}${rest}</tr></table>`;
+    return '<tr>'
+      + `<td align="left" valign="middle" style="padding:5px 10px 5px 0;background-color:${P.cardBg};`
+      + `font-family:${SANS};font-size:12px;color:${P.meta};mso-line-height-rule:exactly;line-height:17px;`
+      + `white-space:nowrap">${escapeHtml(label)}</td>`
+      + `<td valign="middle" style="padding:5px 10px 5px 0;background-color:${P.cardBg}">${bar}</td>`
+      + `<td align="right" valign="middle" style="padding:5px 0;background-color:${P.cardBg};`
+      + `font-family:${SANS};font-size:12px;color:${P.ink};mso-line-height-rule:exactly;line-height:17px;`
+      + `white-space:nowrap">${escapeHtml(display)}</td>`
+      + '</tr>';
+  }).join('');
+
+  const caption = str(section.caption ?? '');
+  const captionHtml = caption
+    ? `<tr><td colspan="3" style="padding:0 0 8px;background-color:${P.cardBg};font-family:${SANS};`
+      + `font-size:12px;color:${P.meta};mso-line-height-rule:exactly;line-height:17px;${WRAP}">`
+      + `${escapeHtml(caption)}</td></tr>`
+    : '';
+
+  return block('<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" '
+    + `style="width:100%;table-layout:auto;border-collapse:collapse;background-color:${P.cardBg}">`
+    + `${captionHtml}${body}</table>`);
+}
+
 function paragraphHtml(section) {
   const text = str(section.text);
   if (!text.trim()) return '';
@@ -203,6 +257,7 @@ function preHtml(section) {
 const KINDS = {
   fields: fieldsHtml,
   table: tableHtml,
+  bars: barsHtml,
   paragraph: paragraphHtml,
   note: noteHtml,
   alert: alertHtml,

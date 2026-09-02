@@ -259,3 +259,44 @@ test('sections render in the order they were given', () => {
   assert.ok(html.indexOf('FIRSTBLOCK') < html.indexOf('SECONDBLOCK'));
   assert.ok(html.indexOf('SECONDBLOCK') < html.indexOf('THIRDBLOCK'));
 });
+
+// ---------- the bars kind (sow-KV usage chart) ----------
+
+test('bars: one row per entry, scaled to the LARGEST row, with the caption above', () => {
+  const { html } = opsEmail({
+    heading: 'x',
+    sections: [{ kind: 'bars', caption: 'peak used 0.10% of the cap', rows: [['a', 1000, '1,000'], ['b', 250, '250'], ['c', 500, '500']] }],
+  });
+  // Scaled to the max, not to a total and not to a fixed axis: 1000 -> 100%, 500 -> 50%, 250 -> 25%.
+  assert.match(html, /width="100%" style="width:100%;background-color:#1f9e5f/);
+  assert.match(html, /width="25%" style="width:25%;background-color:#1f9e5f/);
+  assert.match(html, /width="50%" style="width:50%;background-color:#1f9e5f/);
+  assert.match(html, /peak used 0\.10% of the cap/);
+  // The DISPLAY string is what the reader sees, not the raw number used for scaling.
+  assert.ok(html.includes('>1,000<'), 'the formatted display value must render');
+});
+
+test('bars: a zero row keeps a hairline rather than collapsing, and an all-zero series does not divide by zero', () => {
+  const { html: zero } = opsEmail({ heading: 'x', sections: [{ kind: 'bars', rows: [['a', 10, '10'], ['b', 0, '0']] }] });
+  // A 0%-wide cell collapses and the row reads as a rendering fault, so a real zero keeps 1%.
+  assert.match(zero, /width="1%" style="width:1%;background-color:#1f9e5f/);
+
+  const { html: allZero } = opsEmail({ heading: 'x', sections: [{ kind: 'bars', rows: [['a', 0, '0'], ['b', 0, '0']] }] });
+  assert.ok(!allZero.includes('NaN'), 'an all-zero series must not divide by zero');
+  assert.ok(!allZero.includes('Infinity'), 'an all-zero series must not divide by zero');
+});
+
+test('bars: no rows renders NOTHING, because an empty chart frame reads as a broken image', () => {
+  const { html } = opsEmail({ heading: 'x', sections: [{ kind: 'bars', rows: [] }] });
+  assert.ok(!html.includes('table-layout:fixed'), 'an empty series must not emit a chart');
+});
+
+test('bars: labels and display values are escaped like every other kind', () => {
+  const { html } = opsEmail({
+    heading: 'x',
+    sections: [{ kind: 'bars', caption: '<b>c</b>', rows: [['<script>a</script>', 5, '<i>5</i>']] }],
+  });
+  assert.ok(!html.includes('<script>'), 'a hostile label must not reach the markup');
+  assert.ok(!html.includes('<i>5</i>'), 'a hostile display value must not reach the markup');
+  assert.ok(!html.includes('<b>c</b>'), 'a hostile caption must not reach the markup');
+});
