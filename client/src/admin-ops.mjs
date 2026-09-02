@@ -20,7 +20,9 @@ import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabl
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // SOW-087
 import { addFlagTerm as addFlagTermEdit, removeFlagTerm as removeFlagTermEdit, ModerationFlagEditError } from '../../membership/moderation-flags-edits.mjs'; // SOW-087
 import { setTemplate as setTemplateEdit, setNewsEngagement as setNewsEngagementEdit, setContentEngagement as setContentEngagementEdit, setSyndicationSettings as setSyndicationSettingsEdit, SYNDICATION_CHANNEL_NAMES, TemplateEditError } from '../../membership/syndication-template-edits.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-126
-import { addCouponEdit, updateCouponEdit, CouponEditError } from '../../membership/coupon-edits.mjs'; // SOW-119
+import { SIGNUP_BASE } from './signup-base.mjs'; // sow-291 Phase 2: the coupon pool read proxies the Worker (KV-native)
+import { getCouponPool as workerGetCouponPool } from './member-admin-client.mjs'; // sow-291 Phase 2
+import { requireAdmin } from './operations-core.mjs'; // sow-291 Phase 2: async role resolution for the Worker-proxy read
 import { setSiteToggle as setSiteToggleEdit, readAllToggles, SITE_TOGGLES, SiteSettingsEditError } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { syndicationConfigFromParsed, TEMPLATE_TYPES, TEMPLATE_CHANNELS, newsEngagement, NEWS_ENGAGEMENT_TIERS, contentEngagement, CONTENT_ENGAGEMENT_SIGNALS, AUTO_TYPES, AUTO_CHANNELS, MATRIX_CHANNELS, AUTO_MODES, CHANNEL_CAPABILITY } from '../../membership/syndication-config-core.mjs'; // SOW-087 + SOW-111 + SOW-088 + SOW-125 + SOW-126
 import { retagContent, parseContentFile, flipContentStatus } from './content-ops.mjs';
@@ -279,44 +281,24 @@ export async function setNewsSourceEnabled(ctx, { id, enabled } = {}) {
     { branch: `gbti/news-source-${on ? 'enable' : 'disable'}-${sid}`, message: `${on ? 'Enable' : 'Disable'} news source ${id}`, title: `${on ? 'Enable' : 'Disable'} news source: ${id}`, noopMsg: `news source already ${on ? 'enabled' : 'disabled'}: ${id}` });
 }
 
-// SOW-119: the coupon-pool manager (config half). Each edit applies the pure coupon-edits core to the parsed
-// house/coupons.yml and opens an auto-merged house PR, exactly like the news-source manager. Edits reach the
-// signup Worker at the next coupons:config mirror sync (reconcile or the 6h sync-overrides-mirror tick). The
-// runtime half (usage counts + invite links) is Worker/KV via member-admin-client (operations.mjs).
-const COUPONS_PATH = 'house/coupons.yml';
+// SOW-119 + sow-291 Phase 2: the coupon registry has MOVED OFF the public repository. house/coupons.yml was a
+// tracked file and a coupon code is a bearer credential, so the registry now lives in KV coupons:config. The
+// WRITES (add/update) are served by the signup Worker (api.mjs routes coupon-add/coupon-update to
+// /membership/admin/author, which writes KV marked source:'kv'), so the local git-PR writers are retired here.
+// This READ proxies the Worker's admin coupon-pool route, which reads the RAW blob so a stale mirror sync does
+// not blank the manager. The runtime half (usage counts + invite links) is already Worker/KV via
+// member-admin-client (operations.mjs), and this brings the pool onto the same transport.
 
-/** Read the current coupon pool for the manager UI. Admin-owned config; read-only here. */
+/** Read the current coupon pool (incl. inactive) for the manager UI, from KV via the Worker. Admin-gated. */
 export async function getCouponPool(ctx) {
-  const raw = (await ctx.reader?.readFile?.(COUPONS_PATH)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
-  return { coupons: Array.isArray(parsed.coupons) ? parsed.coupons : [] };
-}
-
-async function editCoupons(ctx, edit, { branch, message, title, noopMsg }) {
-  requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-  const raw = (await ctx.reader?.readFile?.(COUPONS_PATH)) || '';
-  let parsed;
-  try { parsed = yaml.load(raw) || {}; } catch { parsed = {}; }
-  let result;
-  try { result = edit(parsed); }
-  catch (err) { if (err instanceof CouponEditError) throw new OperationError('bad-request', err.message); throw err; }
-  if (!result.changed) return noop(noopMsg, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch, files: [{ path: COUPONS_PATH, content: leadingComment(raw) + dumpYaml(result.next) }], message, title, body: prBody(null, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-
-export async function addCoupon(ctx, { code, freeDays, note, maxRedemptions, expiresAt } = {}) {
-  const c = String(code || '').trim().toUpperCase();
-  return editCoupons(ctx, (parsed) => addCouponEdit(parsed, { code, freeDays, note, maxRedemptions, expiresAt }, actionCtx(ctx)),
-    { branch: `gbti/coupon-add-${c.toLowerCase()}`, message: `Add coupon ${c}`, title: `Add coupon: ${c}`, noopMsg: `coupon already present: ${c}` });
-}
-
-export async function updateCoupon(ctx, { code, patch } = {}) {
-  const c = String(code || '').trim().toUpperCase();
-  return editCoupons(ctx, (parsed) => updateCouponEdit(parsed, { code, patch }, actionCtx(ctx)),
-    { branch: `gbti/coupon-update-${c.toLowerCase()}-${Date.now()}`, message: `Update coupon ${c}`, title: `Update coupon: ${c}`, noopMsg: `coupon already in that state: ${c}` });
+  await requireAdmin(ctx); // async role resolution via the reader (the sync requireRole is unpopulated on a GET ctx)
+  const token = ctx.store?.get?.('githubToken');
+  if (!token) throw new OperationError('not-authenticated', 'sign in first');
+  try {
+    return await workerGetCouponPool({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new OperationError('admin-op-failed', err?.message || 'could not read the coupon pool');
+  }
 }
 
 // SOW-063 Phase 3: the superadmin quote-pool manager. Each edit applies the pure quote-edits core to the parsed

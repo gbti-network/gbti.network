@@ -422,79 +422,122 @@ test('sow-161: a non-kebab source id (trailing/consecutive hyphen) is REJECTED a
 
 // ---- sow-161 increment 4: coupons config manager (house/coupons.yml, admin-tier) ----
 
-const COUPONS_YML = '# SOW-119: the coupon registry (ADMIN-owned).\ncoupons:\n  - code: EXISTING\n    freeDays: 365\n    active: true\n    note: seed\n    maxRedemptions: null\n    expiresAt: null\n';
+// sow-291 Phase 2: coupons are KV-native. house/coupons.yml has left the public repository, so the endpoint reads
+// and writes coupons:config in KV instead of opening a git PR (the same inversion sow-213 made for governance).
+// This fake seeds coupons:config (returned for the key on a 'json' read) and records puts, so a coupon test
+// asserts the KV mutation + NO git PR. A JSON round-trip on read keeps the seed immutable across calls.
+const COUPONS_KEY = 'coupons:config';
+const couponsBlob = (coupons, generatedAt = '2026-08-29T00:00:00.000Z') => ({ generatedAt, coupons });
+const COUPON_SEED = [{ code: 'EXISTING', id: 'EXISTING', freeDays: 365, active: true, note: 'seed', maxRedemptions: null, expiresAt: null }];
+function kvWithCoupons(seed) {
+  const store = new Map();
+  return {
+    store,
+    async get(k, type) {
+      if (k === COUPONS_KEY) return seed == null ? null : (type === 'json' ? JSON.parse(JSON.stringify(seed)) : JSON.stringify(seed));
+      const v = store.get(k);
+      return v === undefined ? null : v;
+    },
+    async put(k, v) { store.set(k, v); },
+  };
+}
+const couponPut = (kv) => { const v = kv.store.get(COUPONS_KEY); return v === undefined ? null : JSON.parse(v); };
 
 test('sow-161: a MODERATOR cannot add a coupon (403, admin-tier), and writes NOTHING', async () => {
   const record = [];
-  const r = await run({ action: 'coupon-add', code: 'NEWCODE', freeDays: 90 }, { fetchImpl: ghFetch(record, { govFile: COUPONS_YML }), authorize: staffMod });
+  const kv = kvWithCoupons(couponsBlob(COUPON_SEED));
+  const r = await run({ action: 'coupon-add', code: 'NEWCODE', freeDays: 90 }, { fetchImpl: ghFetch(record), authorize: staffMod, kv });
   assert.equal(r.status, 403);
   assert.equal(record.length, 0);
+  assert.equal(couponPut(kv), null, 'a denied caller writes nothing to KV');
 });
 
-test('sow-161: an admin coupon-add writes house/coupons.yml preserving the leading comment', async () => {
+test('sow-291 Phase 2: an admin coupon-add writes coupons:config in KV (source:kv), and opens NO git PR', async () => {
   const record = [];
-  const r = await run({ action: 'coupon-add', code: 'newcode', freeDays: 90, note: 'launch promo' }, { fetchImpl: ghFetch(record, { govFile: COUPONS_YML }), authorize: staffAdmin });
+  const kv = kvWithCoupons(couponsBlob(COUPON_SEED));
+  const r = await run({ action: 'coupon-add', code: 'newcode', freeDays: 90, note: 'launch promo' }, { fetchImpl: ghFetch(record), authorize: staffAdmin, kv });
   assert.equal(r.status, 200);
-  assert.equal(r.body.number, 42);
-  const put = record.find((c) => c.method === 'PUT');
-  assert.match(put.url, /house\/coupons\.yml$/);
-  const content = deB64(put.body.content);
-  assert.ok(content.startsWith('# SOW-119: the coupon registry'), 'leading comment preserved');
-  assert.match(content, /NEWCODE/, 'the code is normalized to upper-case by the core');
-  assert.match(record.find((c) => c.method === 'POST' && /git\/refs$/.test(c.url)).body.ref, /^refs\/heads\/hosted-admin\/2\/coupon-add-newcode$/);
+  assert.equal(r.body.kvWritten, true);
+  assert.equal(record.length, 0, 'no branch, no ref, no PR: the coupon write is KV-native');
+  const blob = couponPut(kv);
+  const added = blob.coupons.find((c) => c.code === 'NEWCODE');
+  assert.ok(added, 'the code is normalized to upper-case by the core and written to KV');
+  assert.equal(added.source, 'kv', 'a KV-native coupon is marked so the git mirror cannot clobber it (mergeCouponsList keeps source:kv)');
+  assert.equal(blob.generatedAt, '2026-08-29T00:00:00.000Z', 'the admin write leaves generatedAt to the 6-hourly sync, so it cannot make a dead sync look alive');
 });
 
-test('sow-161: coupon-add of a DUPLICATE code is a 400 from the core (writes nothing)', async () => {
-  const record = [];
-  const r = await run({ action: 'coupon-add', code: 'EXISTING', freeDays: 30 }, { fetchImpl: ghFetch(record, { govFile: COUPONS_YML }), authorize: staffAdmin });
+test('sow-291 Phase 2: coupon-add is REFUSED (503) when the KV registry is absent (no fabricated one-coupon blob)', async () => {
+  // Fail closed: a one-coupon blob written over an unreadable registry would read as the WHOLE registry and make
+  // redemption reject every code missing from it. So an absent registry refuses the write rather than seeding it.
+  const kv = kvWithCoupons(null);
+  const r = await run({ action: 'coupon-add', code: 'NEWCODE', freeDays: 90 }, { fetchImpl: ghFetch([]), authorize: staffAdmin, kv });
+  assert.equal(r.status, 503);
+  assert.equal(couponPut(kv), null, 'nothing is written when the registry cannot be read');
+});
+
+test('sow-291 Phase 2: coupon-add of a DUPLICATE code is a 400 from the core (no KV write)', async () => {
+  const kv = kvWithCoupons(couponsBlob(COUPON_SEED));
+  const r = await run({ action: 'coupon-add', code: 'EXISTING', freeDays: 30 }, { fetchImpl: ghFetch([]), authorize: staffAdmin, kv });
   assert.equal(r.status, 400);
-  assert.equal(record.length, 0, 'a duplicate writes nothing');
+  assert.equal(couponPut(kv), null, 'a duplicate writes nothing');
 });
 
 test('sow-161: an over-long coupon note (>160) is REJECTED at the endpoint (no silent truncation)', async () => {
-  const record = [];
-  const r = await run({ action: 'coupon-add', code: 'NOTELONG', freeDays: 30, note: 'x'.repeat(161) }, { fetchImpl: ghFetch(record, { govFile: COUPONS_YML }), authorize: staffAdmin });
+  const kv = kvWithCoupons(couponsBlob(COUPON_SEED));
+  const r = await run({ action: 'coupon-add', code: 'NOTELONG', freeDays: 30, note: 'x'.repeat(161) }, { fetchImpl: ghFetch([]), authorize: staffAdmin, kv });
   assert.equal(r.status, 400);
-  assert.equal(record.length, 0);
+  assert.equal(couponPut(kv), null);
 });
 
 test('sow-161: a bad coupon code shape is rejected (400) at the endpoint', async () => {
   for (const code of ['ab', 'has space', 'lower-hyphen', 'x'.repeat(33)]) {
-    const record = [];
-    const r = await run({ action: 'coupon-add', code, freeDays: 30 }, { fetchImpl: ghFetch(record, { govFile: COUPONS_YML }), authorize: staffAdmin });
+    const kv = kvWithCoupons(couponsBlob(COUPON_SEED));
+    const r = await run({ action: 'coupon-add', code, freeDays: 30 }, { fetchImpl: ghFetch([]), authorize: staffAdmin, kv });
     assert.equal(r.status, 400, `code "${code}" must be rejected`);
-    assert.equal(record.length, 0);
+    assert.equal(couponPut(kv), null);
   }
 });
 
-test('sow-161: coupon-update deactivates an existing code (writes, comment preserved)', async () => {
+test('sow-291 Phase 2: coupon-update deactivates an existing code in KV (source:kv), and opens NO git PR', async () => {
   const record = [];
-  const r = await run({ action: 'coupon-update', code: 'EXISTING', patch: { active: false } }, { fetchImpl: ghFetch(record, { govFile: COUPONS_YML }), authorize: staffAdmin });
+  const kv = kvWithCoupons(couponsBlob(COUPON_SEED));
+  const r = await run({ action: 'coupon-update', code: 'EXISTING', patch: { active: false } }, { fetchImpl: ghFetch(record), authorize: staffAdmin, kv });
   assert.equal(r.status, 200);
-  const content = deB64(record.find((c) => c.method === 'PUT').body.content);
-  assert.ok(content.startsWith('# SOW-119: the coupon registry'), 'leading comment preserved');
-  assert.match(content, /active: false/);
+  assert.equal(r.body.kvWritten, true);
+  assert.equal(record.length, 0);
+  const updated = couponPut(kv).coupons.find((c) => c.code === 'EXISTING');
+  assert.equal(updated.active, false);
+  assert.equal(updated.source, 'kv', 'the updated entry is marked source:kv');
 });
 
-test('sow-161: coupon-update of an UNKNOWN code is a 400 (writes nothing)', async () => {
-  const record = [];
-  const r = await run({ action: 'coupon-update', code: 'MISSINGCODE', patch: { active: false } }, { fetchImpl: ghFetch(record, { govFile: COUPONS_YML }), authorize: staffAdmin });
+test('sow-161: coupon-update of an UNKNOWN code is a 400 (no KV write)', async () => {
+  const kv = kvWithCoupons(couponsBlob(COUPON_SEED));
+  const r = await run({ action: 'coupon-update', code: 'MISSINGCODE', patch: { active: false } }, { fetchImpl: ghFetch([]), authorize: staffAdmin, kv });
   assert.equal(r.status, 400);
-  assert.equal(record.length, 0);
+  assert.equal(couponPut(kv), null);
 });
 
-test('sow-161: coupon-update with an empty/absent patch is a 400 (writes nothing)', async () => {
-  const record = [];
-  const r = await run({ action: 'coupon-update', code: 'EXISTING' }, { fetchImpl: ghFetch(record, { govFile: COUPONS_YML }), authorize: staffAdmin });
+test('sow-161: coupon-update with an empty/absent patch is a 400 (no KV write)', async () => {
+  const kv = kvWithCoupons(couponsBlob(COUPON_SEED));
+  const r = await run({ action: 'coupon-update', code: 'EXISTING' }, { fetchImpl: ghFetch([]), authorize: staffAdmin, kv });
   assert.equal(r.status, 400, 'no patch object -> rejected');
-  assert.equal(record.length, 0);
+  assert.equal(couponPut(kv), null);
 });
 
-test('sow-161: the coupon pool read is admin-gated and returns the FULL registry (incl inactive)', async () => {
-  const seed = '# c\ncoupons:\n  - code: A\n    active: true\n  - code: B\n    active: false\n';
-  const okr = await membershipAdminCouponPool(req({}), env, { fetchImpl: ghFetch([], { govFile: seed }), authorize: staffAdmin, signJwt });
+test('sow-291 Phase 2: the coupon pool read is admin-gated and returns the FULL registry from KV (incl inactive)', async () => {
+  const kv = kvWithCoupons(couponsBlob([{ code: 'A', active: true }, { code: 'B', active: false }]));
+  const okr = await membershipAdminCouponPool(req({}), env, { authorize: staffAdmin, kv });
   assert.equal(okr.status, 200);
   assert.equal(okr.body.coupons.length, 2);
-  const denied = await membershipAdminCouponPool(req({}), env, { fetchImpl: ghFetch([], { govFile: seed }), authorize: async () => ({ ok: false, status: 403, body: {} }), signJwt });
+  const denied = await membershipAdminCouponPool(req({}), env, { authorize: async () => ({ ok: false, status: 403, body: {} }), kv });
   assert.equal(denied.status, 403);
+});
+
+test('sow-291 Phase 2: the coupon pool read is NOT blanked by a stale registry (an admin must see it to fix it)', async () => {
+  // A blob older than the 48h redemption gate would fail redemption CLOSED, but the manager reads it RAW so the
+  // admin can still see and re-activate coupons precisely when the sync has gone stale.
+  const stale = couponsBlob([{ code: 'A', active: true }], '2000-01-01T00:00:00.000Z');
+  const okr = await membershipAdminCouponPool(req({}), env, { authorize: staffAdmin, kv: kvWithCoupons(stale) });
+  assert.equal(okr.status, 200);
+  assert.equal(okr.body.coupons.length, 1);
 });

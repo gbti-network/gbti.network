@@ -19554,6 +19554,20 @@ async function getCouponUsage({ token, signupBase, fetch: fetch2 = globalThis.fe
   if (!res.ok) throw new AdminClientError(data?.message || data?.error || `coupon usage request failed (${res.status})`);
   return { usage: data?.usage ?? {}, configFresh: data?.configFresh ?? false };
 }
+async function getCouponPool({ token, signupBase, fetch: fetch2 = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError("not signed in");
+  const res = await fetch2(trimBase10(signupBase) + "/membership/admin/coupon-pool", {
+    method: "GET",
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+  }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `coupon pool request failed (${res.status})`);
+  return { coupons: Array.isArray(data?.coupons) ? data.coupons : [] };
+}
 async function inviteAdminRequest({ token, signupBase, method = "GET", body = null, fetch: fetch2 = globalThis.fetch }) {
   if (!token || !signupBase) throw new AdminClientError("not signed in");
   const res = await fetch2(trimBase10(signupBase) + "/membership/admin/invites", {
@@ -21804,16 +21818,15 @@ async function setNewsSourceEnabled(ctx, { id, enabled } = {}) {
     { branch: `gbti/news-source-${on ? "enable" : "disable"}-${sid}`, message: `${on ? "Enable" : "Disable"} news source ${id}`, title: `${on ? "Enable" : "Disable"} news source: ${id}`, noopMsg: `news source already ${on ? "enabled" : "disabled"}: ${id}` }
   );
 }
-var COUPONS_PATH = "house/coupons.yml";
-async function getCouponPool(ctx) {
-  const raw = await ctx.reader?.readFile?.(COUPONS_PATH) || "";
-  let parsed;
+async function getCouponPool2(ctx) {
+  await requireAdmin(ctx);
+  const token = ctx.store?.get?.("githubToken");
+  if (!token) throw new OperationError("not-authenticated", "sign in first");
   try {
-    parsed = index_vite_proxy_tmp_default.load(raw) || {};
-  } catch {
-    parsed = {};
+    return await getCouponPool({ token, signupBase: SIGNUP_BASE, fetch: ctx.fetch ?? globalThis.fetch });
+  } catch (err) {
+    throw new OperationError("admin-op-failed", err?.message || "could not read the coupon pool");
   }
-  return { coupons: Array.isArray(parsed.coupons) ? parsed.coupons : [] };
 }
 var QUOTES_PATH = "house/quotes.yml";
 var quoteSlug = (text) => slugOf(String(text || "").slice(0, 40)) || "quote";
@@ -22233,7 +22246,7 @@ async function dispatch(ctx, { method = "GET", pathname, query = {}, body } = {}
     if (pathname === "/api/content-channel-pool") return ok(await getContentChannelPool(ctx));
     if (pathname === "/api/moderation-flag-pool") return ok(await getModerationFlagPool(ctx));
     if (pathname === "/api/syndication-template-pool") return ok(await getSyndicationTemplatePool(ctx));
-    if (pathname === "/api/coupon-pool") return ok(await getCouponPool(ctx));
+    if (pathname === "/api/coupon-pool") return ok(await getCouponPool2(ctx));
     if (pathname === "/api/site-settings") return ok(await getSiteSettings(ctx));
     if (pathname === "/api/news-engagement") return ok(await getNewsEngagementSettings(ctx));
     if (pathname === "/api/content-engagement") return ok(await getContentEngagementSettings(ctx));

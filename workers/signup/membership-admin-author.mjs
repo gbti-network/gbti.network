@@ -31,7 +31,7 @@ import { fireRepositoryDispatch } from './membership-admin-ops.mjs'; // sow-213 
 import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-edits.mjs'; // sow-161 increment 4
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
 import { addCouponEdit, updateCouponEdit } from '../../membership/coupon-edits.mjs'; // sow-161 increment 4 (coupons)
-import { normalizeCouponCode, COUPON_CODE_RE } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons)
+import { normalizeCouponCode, COUPON_CODE_RE, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs'; // sow-161 increment 4 (coupons); sow-291 Phase 2: coupons:config is KV-native
 import { setSiteToggle, readAllToggles, SITE_TOGGLES } from '../../membership/site-settings-edits.mjs'; // sow-271
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs'; // sow-161 A: category-batch taxonomy ops
 import { setChannel as setChannelEdit, removeChannel as removeChannelEdit, ContentChannelEditError } from '../../membership/content-channels-edits.mjs'; // sow-161 A: category-batch channel ops
@@ -222,10 +222,13 @@ const CONFIG_OP = {
   'news-source-add': { path: 'house/news-sources.yml', rank: ROLE_RANK.admin, fn: addSource, input: sourceAddInput, slug: (a) => idSlug(a.id || a.name) },
   'news-source-remove': { path: 'house/news-sources.yml', rank: ROLE_RANK.admin, fn: removeSource, input: (p) => sourceIdInput(p), slug: (a) => idSlug(a.id) },
   'news-source-toggle': { path: 'house/news-sources.yml', rank: ROLE_RANK.admin, fn: setSourceEnabled, input: (p) => sourceIdInput(p, { enabled: true }), slug: (a) => idSlug(a.id) },
-  // Coupons (house/coupons.yml, admin-owned). Add creates a code; update patches freeDays/active/note/etc. A coupon
-  // is deactivated (active:false), never deleted, so redemption history + the git audit stay intact (no -remove).
-  'coupon-add': { path: 'house/coupons.yml', rank: ROLE_RANK.admin, fn: addCouponEdit, input: couponAddInput, slug: (a) => idSlug(a.code) },
-  'coupon-update': { path: 'house/coupons.yml', rank: ROLE_RANK.admin, fn: updateCouponEdit, input: couponUpdateInput, slug: (a) => idSlug(a.code) },
+  // Coupons (KV-native as of sow-291 Phase 2: house/coupons.yml leaves the public repository because a coupon
+  // code is a bearer credential). `kvKey` diverts the WRITE to coupons:config in the dispatch below; `path` is
+  // kept as the retired git location for the record, and `slug` is unused for a KV op (no branch/PR). Add creates
+  // a code; update patches freeDays/active/note/etc. A coupon is deactivated (active:false), never deleted, so
+  // redemption history stays intact and an issued invite minted against it keeps resolving (sow-231 trap 1).
+  'coupon-add': { path: 'house/coupons.yml', kvKey: COUPONS_MIRROR_KEY, rank: ROLE_RANK.admin, fn: addCouponEdit, input: couponAddInput, slug: (a) => idSlug(a.code) },
+  'coupon-update': { path: 'house/coupons.yml', kvKey: COUPONS_MIRROR_KEY, rank: ROLE_RANK.admin, fn: updateCouponEdit, input: couponUpdateInput, slug: (a) => idSlug(a.code) },
   // sow-271: site-wide presentation toggles. SUPERADMIN, unlike every other row in this table, and pinned to
   // the two superadmins in CODEOWNERS so the gate rejects anyone else's PR even if this rank were wrong. It
   // lives in the WORKER table (not extension-relay only, the way content-channels does) specifically so the
@@ -555,6 +558,38 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     const op = CONFIG_OP[action];
     const built = op.input(payload);
     if (!built.ok) return { status: built.status, body: built.body };
+
+    // sow-291 Phase 2: a KV-BACKED config op (coupons) writes coupons:config STRAIGHT TO KV, marked source:'kv',
+    // and opens NO PR. It reads the live registry, runs the SAME pure edit core against the blob's coupon list,
+    // marks every entry source:'kv' so the git mirror's merge can never clobber it (mergeCouponsList keeps only
+    // source:'kv' natives while house/coupons.yml still exists, and the mirror's !ownedByGit branch preserves the
+    // whole blob verbatim after the file is deleted), then writes the blob back. `generatedAt` is the freshness
+    // signal the 6-hourly sync owns, so it is left UNTOUCHED here: an admin write must never make a dead sync look
+    // alive (the exact rule the governance kvSection branch above follows). Every other config surface is
+    // git-native and falls through to the loadHouseYaml + PR flow below.
+    if (op.kvKey) {
+      let blob;
+      try { blob = await kv.get(op.kvKey, 'json'); }
+      catch (e) { return { status: 503, body: { error: 'unavailable', message: `the coupon registry could not be read (${e?.message || 'unknown'})` } }; }
+      // Fail closed and NEVER fabricate: an absent/malformed registry is refused, not seeded with a one-coupon
+      // blob that would read as the WHOLE registry and make redemption reject every code missing from it (the
+      // same rule readCouponsConfig + the governance branch enforce). A first write depends on the mirror having
+      // populated coupons:config already, which it has (git is still the source until Phase 2's deletion).
+      if (!blob || typeof blob !== 'object' || !Array.isArray(blob.coupons)) {
+        return { status: 503, body: { error: 'unavailable', message: 'the coupon registry is unavailable' } };
+      }
+      let result;
+      try { result = op.fn({ coupons: blob.coupons }, built.args, { actor: { githubId }, now: Date.now() }); }
+      catch (e) { return { status: 400, body: { error: 'bad_request', message: e?.message || 'invalid action' } }; }
+      if (!result.changed) return { status: 200, body: { ok: true, noop: true, message: `no change (${action})` } };
+      // KV_SOURCE ('kv') is exactly the marker mergeCouponsList filters on, so the two agree by construction.
+      const marked = (result.next.coupons || []).map((c) => (c?.source === KV_SOURCE ? c : { ...c, source: KV_SOURCE }));
+      const nextBlob = { ...blob, coupons: marked };
+      try { await kv.put(op.kvKey, JSON.stringify(nextBlob)); }
+      catch (e) { return { status: 502, body: { error: 'write_failed', message: `the coupon registry could not be written (${e?.message || 'unknown'})` } }; }
+      return { status: 200, body: { ok: true, action, target: built.args.code, kvWritten: true } };
+    }
+
     const load = await loadHouseYaml(fetchImpl, instToken, upstream, op.path);
     if (!load.ok) return { status: load.status, body: load.body };
     let result;
@@ -716,21 +751,23 @@ export async function membershipAdminNewsSourcePool(request, env, deps = {}) {
   return { status: 200, body: { ok: true, sources } };
 }
 
-// sow-161 increment 4: the coupon-manager CONFIG pool READ (admin-gated). The FULL registry from house/coupons.yml
-// (incl. inactive coupons, so the manager can re-activate them). Read-only + fail-closed; a GET carries no CSRF.
-// The runtime redemption COUNTS come from the separate /membership/admin/coupon-usage endpoint (KV, not git).
+// sow-161 increment 4 + sow-291 Phase 2: the coupon-manager CONFIG pool READ (admin-gated). The FULL registry
+// now comes from KV coupons:config (house/coupons.yml has left the public repository), incl. inactive coupons so
+// the manager can re-activate them. Read-only + fail-closed; a GET carries no CSRF. The runtime redemption COUNTS
+// come from the separate /membership/admin/coupon-usage endpoint (KV grant records, not this config blob).
 export async function membershipAdminCouponPool(request, env, deps = {}) {
   const {
-    fetchImpl = globalThis.fetch, authorize = authorizeAdmin, allowCookie = false,
-    upstream = env?.UPSTREAM_REPO || 'gbti-network/gbti.network',
+    authorize = authorizeAdmin, allowCookie = false, kv = env?.SIGNUP_KV,
   } = deps;
   const admin = await authorize(request, env, { ...deps, allowCookie });
   if (!admin.ok) return { status: admin.status, body: admin.body };
-  let instToken;
-  try { instToken = await getInstallationToken(env, deps); } catch { return { status: 500, body: { error: 'misconfigured', message: 'the publishing app is not configured' } }; }
-  const load = await loadHouseYaml(fetchImpl, instToken, upstream, 'house/coupons.yml');
-  if (!load.ok) return { status: load.status, body: load.body };
-  const coupons = Array.isArray(load.parsed?.coupons) ? load.parsed.coupons : [];
+  // Read the RAW blob, NOT readCouponsConfig: the manager must show the pool even when the 6-hourly sync has gone
+  // stale (an admin needs to see and fix it precisely then), so the 48h freshness gate must not blank it here.
+  // Fail closed on a KV error; treat an absent/malformed blob as an empty pool (a fresh namespace pre-first-sync).
+  let blob;
+  try { blob = await kv.get(COUPONS_MIRROR_KEY, 'json'); }
+  catch (e) { return { status: 503, body: { error: 'unavailable', message: `the coupon registry could not be read (${e?.message || 'unknown'})` } }; }
+  const coupons = Array.isArray(blob?.coupons) ? blob.coupons : [];
   return { status: 200, body: { ok: true, coupons } };
 }
 

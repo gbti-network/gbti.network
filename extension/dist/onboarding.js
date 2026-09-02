@@ -7876,8 +7876,9 @@ ${String(body ?? "")}`;
   .reds li { font-size:12.5px; color:var(--muted); padding:2px 0; font-family:var(--font-mono, monospace); }
   .muted { color:var(--muted); }
   .warn { color:var(--amber, #a9781c); }
-  /* sow-231 Phase 3: issued invites. A separate panel because it is a different STORE with different rules:
-     coupons are git-native config edited by PR, invites are per-person KV state that goes live at once. */
+  /* sow-231 Phase 3: issued invites. A separate panel because it is a different KV RECORD with different rules:
+     the coupon registry is admin config in coupons:config; an invite is a per-person KV state. Both go live at
+     once now (sow-291 Phase 2 moved the coupon config off git into KV alongside the invite records). */
   .inv-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:26px 0 12px; padding-top:20px; border-top:1px solid var(--line); }
   .inv-head h3 { margin:0; font-family:var(--font-display, inherit); font-size:17px; }
   .mint { display:grid; grid-template-columns: .9fr 1.6fr .8fr auto; gap:8px; margin:0 0 14px; }
@@ -7958,7 +7959,7 @@ ${String(body ?? "")}`;
       </li>`;
       }).join("");
       this.set(this.css(CSS15) + `
-      <div class="head"><h3>Coupons</h3><span class="hint">Free-time signup codes. Config edits land as an audited house PR and go live at the next mirror sync; links resolve immediately.</span></div>
+      <div class="head"><h3>Coupons</h3><span class="hint">Free-time signup codes. Edits save straight to the members store and go live at once; links resolve immediately.</span></div>
       ${this._msg ? `<p class="msg">${esc(this._msg)}</p>` : ""}
       <div class="add">
         <input data-f="code" placeholder="CODE (A-Z 0-9)" maxlength="32" />

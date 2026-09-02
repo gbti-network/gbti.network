@@ -115,6 +115,22 @@ export async function getCouponUsage({ token, signupBase, fetch = globalThis.fet
   return { usage: data?.usage ?? {}, configFresh: data?.configFresh ?? false };
 }
 
+/** sow-291 Phase 2: the coupon POOL (the registry itself, incl. inactive). The registry moved off git into KV
+ *  coupons:config, so the manager reads it through the Worker instead of the local checkout, exactly as coupon
+ *  usage already does. The Worker gates admin and reads the RAW blob (not freshness-gated), so a stale sync does
+ *  not blank the manager. */
+export async function getCouponPool({ token, signupBase, fetch = globalThis.fetch }) {
+  if (!token || !signupBase) throw new AdminClientError('not signed in');
+  const res = await fetch(trimBase(signupBase) + '/membership/admin/coupon-pool', {
+    method: 'GET',
+    headers: { Authorization: 'Bearer ' + token },
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* ignore */ }
+  if (!res.ok) throw new AdminClientError(data?.message || data?.error || `coupon pool request failed (${res.status})`);
+  return { coupons: Array.isArray(data?.coupons) ? data.coupons : [] };
+}
+
 /**
  * sow-231 Phase 3: issued invites, over the bearer token (the extension and npm hosts). The website uses
  * the cookie session against the same routes; the Worker accepts both (`allowCookie`).

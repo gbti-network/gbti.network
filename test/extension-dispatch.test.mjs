@@ -365,11 +365,21 @@ test('SOW-111: the news-engagement settings read is public; the write is superad
   assert.equal(adminOnly.status, 403);
 });
 
-test('SOW-119 QA: /api/coupon-pool is routed (the extension Coupons card was 404ing to "No coupons yet")', async () => {
-  const files = { 'house/coupons.yml': 'coupons:\n  - code: CODEABLEYEAR\n    freeDays: 365\n    active: true\n' };
-  const r = await dispatch(ctxFor({ identity: null, token: null, files }), { pathname: '/api/coupon-pool' });
+test('sow-291 Phase 2: /api/coupon-pool is admin-gated and reads the registry from KV via the Worker', async () => {
+  // The registry left the public repository (a coupon code is a bearer credential), so the pool no longer comes
+  // from an unauthenticated file read: it is an admin-gated Worker call to /membership/admin/coupon-pool (KV).
+  const workerFetch = async (url) => {
+    if (String(url).includes('/membership/admin/coupon-pool')) {
+      return { ok: true, status: 200, json: async () => ({ ok: true, coupons: [{ code: 'CODEABLEYEAR', active: true }] }) };
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  };
+  const r = await dispatch(ctxFor({ files: { 'house/roles.yml': 'admins:\n  - github_id: "1"\n' }, fetch: workerFetch }), { pathname: '/api/coupon-pool' });
   assert.equal(r.status, 200);
   assert.equal(r.json.coupons[0].code, 'CODEABLEYEAR');
+  // A non-admin cannot read the registry now (the local gate answers first; the Worker is the real boundary).
+  const denied = await dispatch(ctxFor({ files: { 'house/roles.yml': 'admins: []\n' }, fetch: workerFetch }), { pathname: '/api/coupon-pool' });
+  assert.notEqual(denied.status, 200);
 });
 
 test('SOW-119 QA: /api/coupon-refresh rewrites the cached couponUntil from the live oracle', async () => {

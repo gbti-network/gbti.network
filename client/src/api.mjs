@@ -71,13 +71,17 @@ import {
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
   getNewsEngagementSettings, setNewsEngagementSettings, getContentEngagementSettings, setContentEngagementSettings, getSyndicationSettings, setSyndicationSettings,
-  getCouponPool, addCoupon, updateCoupon, getSiteSettings,
+  getCouponPool, getSiteSettings, // sow-291 Phase 2: addCoupon/updateCoupon retired (coupon writes -> the Worker via WORKER_CONFIG_ACTIONS)
 } from './admin-ops.mjs';
 
 export { CLIENT_VERSION } from './operations.mjs';
 
 // sow-213 Phase 2b: served by the Worker (see the '/api/admin' route), not by ADMIN_ACTIONS.
 const GOVERNANCE_ACTIONS = new Set(['ban', 'unban', 'grandfather', 'ungrandfather', 'role']);
+// sow-291 Phase 2: coupon writes are KV-native too, so they go to the Worker (the same /membership/admin/author
+// endpoint governanceAdminOp posts to), NOT the local git-PR writers, which are retired. Kept a separate set
+// from GOVERNANCE_ACTIONS because coupons are config, not governance, but they share the transport.
+const WORKER_CONFIG_ACTIONS = new Set(['coupon-add', 'coupon-update']);
 const ADMIN_ACTIONS = {
   // sow-213 Step 3: ban/unban/grandfather/ungrandfather are served by the Worker (the GOVERNANCE_ACTIONS
   // short-circuit above, which runs before this map), so their local writers are retired and no longer listed.
@@ -98,8 +102,7 @@ const ADMIN_ACTIONS = {
   'news-engagement-set': setNewsEngagementSettings, // SOW-111: the news auto-share settings
   'content-engagement-set': setContentEngagementSettings, // SOW-126: the content auto-share (`popular` engine) settings
   'syndication-settings-set': setSyndicationSettings, // SOW-088: pipeline master/approval/hold/channel switches
-  'coupon-add': addCoupon, // SOW-119: the coupon registry (house/coupons.yml)
-  'coupon-update': updateCoupon, // SOW-119
+  // sow-291 Phase 2: coupon-add / coupon-update are in WORKER_CONFIG_ACTIONS above (served by the Worker).
 };
 
 const STATUS_FOR = {
@@ -232,6 +235,9 @@ export async function handleApi(reqInfo, ctx) {
     // cannot write the KV half at all, and it cannot write the private moderation log either. Both hosts must
     // take the same path or the gap simply moves to whichever host was left behind.
     if (GOVERNANCE_ACTIONS.has(body?.action)) return run(() => governanceAdminOp(ctx, body ?? {}));
+    // sow-291 Phase 2: coupon writes are KV-native, so they take the same Worker path (a local git-PR writer
+    // would recreate house/coupons.yml, which is exactly what this move removes).
+    if (WORKER_CONFIG_ACTIONS.has(body?.action)) return run(() => governanceAdminOp(ctx, body ?? {}));
     const fn = ADMIN_ACTIONS[body?.action];
     if (!fn) return { status: 400, json: { error: 'bad-request', message: `unknown admin action: ${body?.action}` } };
     return run(() => fn(ctx, body ?? {}));
