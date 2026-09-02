@@ -30,6 +30,7 @@ const MIGRATED_CONSUMERS = [
   { file: 'scripts/pr-gate.mjs', note: 'the SOW-005 gate, migrated in Phase 1' },
   { file: 'scripts/payout-referrals.mjs', note: 'R11, a money path' },
   { file: 'scripts/mail-enroll.mjs', note: 'R12, the digest population' },
+  { file: 'scripts/reconcile.mjs', note: 'R4, the periodic sync (overlay tolerant while git is present, see reconcileOverlayCatch)' },
 ];
 
 for (const { file, note } of MIGRATED_CONSUMERS) {

@@ -11,7 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { planReconcile, discordRoleTarget, discordCreatorTarget, CREATOR_DISCORD_ROLE, REMINDER_DAY } from '../scripts/lib/reconcile-plan.mjs';
-import { applyPendingCouponGrants } from '../scripts/reconcile.mjs'; // sow-218: same-run coupon grant pre-apply
+import { applyPendingCouponGrants, reconcileOverlayCatch } from '../scripts/reconcile.mjs'; // sow-218: pre-apply; sow-213 R4: overlay fail posture
 import {
   flipStatus,
   parseArgs,
@@ -987,4 +987,24 @@ test('sow-218: a KV failure degrades to the OLD two-run behaviour rather than ab
   const ok = async () => ({ available: true, redemptions: [{ code: 'X', githubId: '1', until: '2027-01-01T00:00:00.000Z' }] });
   assert.equal(await applyPendingCouponGrants({ overrides, listRedemptions: ok, root: '/nonexistent' }), 0);
   assert.equal(overrides.grandfathers.size, 0);
+});
+
+test('sow-213 R4 reconcileOverlayCatch: tolerates a KV overlay failure while git files are present; fails closed once gone', async () => {
+  // The reconcile-specific fail posture, which diverges from the gate's on purpose: reconcile is the mirror's own
+  // write source, so it must not abort on a KV read blip while git (the thing it rewrites the mirror from) is
+  // still present. Once the files are gone, KV is the only source and there is nothing to rewrite from -> throw.
+  const err = new Error('overrides unavailable from KV (stale); refusing to gate [mode=both]');
+
+  // git files PRESENT -> greppable warn, and it MUST NOT rethrow (the daily sync keeps running on git).
+  let warned = null;
+  reconcileOverlayCatch(err, { root: '/x', filesPresent: () => true, log: { warn: (m) => { warned = m; } } });
+  assert.match(warned, /OVERRIDES-OVERLAY-FALLBACK/, 'the fallback line carries the greppable Step-3 gate token');
+  assert.match(warned, /stale/, 'and it names the underlying KV reason');
+
+  // git files GONE -> rethrow the ORIGINAL error unchanged (fail closed; KV is the only source now).
+  assert.throws(
+    () => reconcileOverlayCatch(err, { root: '/x', filesPresent: () => false, log: { warn: () => { throw new Error('warn must not be called when failing closed'); } } }),
+    (e) => e === err,
+    'post-deletion the overlay failure aborts the run rather than silently using an empty override set',
+  );
 });

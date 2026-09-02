@@ -32,6 +32,7 @@ import { buildEnvPriceTierMap, resolveEffectiveTier } from '../membership/tier-g
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
 import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw } from './lib/kv-mirror.mjs';
+import { applyOverridesSource, overrideFilesPresent } from './lib/overrides-source.mjs'; // sow-213 R4: KV overrides overlay for the plan + the git-present reality check behind reconcile's fail posture
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
 import { syncCouponGrants, readGrandfatheredFromDisk, readCouponsFromDisk, listCouponRedemptions, planCouponGrants } from './lib/coupon-grants.mjs'; // SOW-119 (+ sow-218: pre-apply, sow-185: explicit tier)
 import { syncEnrollments } from './lib/enroll-members.mjs'; // SOW-157: hosted-member index enrollment
@@ -623,12 +624,43 @@ export async function applyPendingCouponGrants({ overrides, env = process.env, n
   return grants.length;
 }
 
+/**
+ * sow-213 R4: reconcile's fail posture for the KV overrides overlay, and it DIVERGES from the gate's on purpose.
+ * The gate throws on ANY KV-unavailable ("refusing to gate on an unknown ban list"). Reconcile must not, while
+ * the git files are present, and the reason is a CATEGORY ERROR avoided, not a risk trade: reconcile is the
+ * mirror's own WRITE SOURCE. The mirror write below (loadOverridesRaw -> buildOverridesMirror) rewrites the
+ * mirror FROM git in this same run, so aborting the whole daily reconcile (Discord roles, trial reminders,
+ * held-PR releases) because it cannot READ a mirror it is about to REWRITE FROM GIT is backwards. That argument
+ * stands regardless of whether the transition is brief. Once the git files are GONE, KV is the only source and
+ * there is nothing to rewrite it from, so this fails closed (rethrows). Keyed on reality (overrideFilesPresent),
+ * not a flag. `applyOverridesSource` itself is UNCHANGED; this branch is reconcile's posture, not a weakening of
+ * the shared primitive. Exported for tests.
+ */
+export function reconcileOverlayCatch(err, { root = ROOT, filesPresent = overrideFilesPresent, log = console } = {}) {
+  if (!filesPresent(root)) throw err; // post-deletion: KV is the only source -> fail closed
+  // GREPPABLE, and it is a sow-213 Step-3 GATE INPUT: the reconcile run BEFORE the git files are deleted MUST NOT
+  // contain this line (the exit criterion is "the overlay OBSERVED SUCCEEDING in a real run"). If it fires
+  // nightly during the transition, the KV overlay has been silently broken, and Step 3 would flip this same code
+  // to a hard failure for a reason that has been true for weeks.
+  log.warn(`reconcile: OVERRIDES-OVERLAY-FALLBACK: KV overlay unavailable (${err?.message ?? err}); using git overrides (git is present and this run rewrites the mirror from it).`);
+}
+
 async function main() {
   const { dryRun } = parseArgs(process.argv.slice(2));
   const now = new Date();
   const env = process.env;
 
   const overrides = loadOverrides(ROOT);
+  // sow-213 R4: overlay the KV mirror onto bans/grandfathers so a KV-native ban/grant is reflected in this run's
+  // plan (gatherMembers -> effectiveStatus, Discord role sync, day-87 reminders). See reconcileOverlayCatch for
+  // the reconcile-specific fail posture (tolerate a KV blip while git is present, fail closed once the files are
+  // gone). The mirror-WRITE source below (loadOverridesRaw) stays git; this is the CONSUMER read only.
+  try {
+    await applyOverridesSource({ overrides, repoRoot: ROOT, env });
+    console.log('reconcile: OVERRIDES-OVERLAY-OK: bans/grandfathers reconciled with the KV mirror.');
+  } catch (e) {
+    reconcileOverlayCatch(e, { root: ROOT });
+  }
   const repoIndex = buildRepoIndex(ROOT);
 
   // sow-218: APPLY unfolded coupon grants to this run's overrides, in memory, BEFORE anything reads them.
