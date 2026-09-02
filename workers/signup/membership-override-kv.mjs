@@ -28,46 +28,14 @@
 //   and silently revert.
 
 import { OVERRIDES_KV_KEY } from './membership-content.mjs';
+// sow-213 Step 3: the PURE mutation core (applyKvOverride + its constants) is extracted so the Cloudflare REST
+// writer in scripts/lib/kv-mirror.mjs (writeOverrideToKvRest, for reconcile + the erase-member CLI) reuses the
+// exact same mutation semantics as this Worker-binding writer. Re-exported from here so every existing importer
+// and test keeps resolving these symbols from this path unchanged.
+import { KV_SOURCE, OVERRIDE_SECTIONS, applyKvOverride } from '../../membership/overrides-kv-core.mjs';
 
-export { OVERRIDES_KV_KEY };
+export { OVERRIDES_KV_KEY, KV_SOURCE, OVERRIDE_SECTIONS, applyKvOverride };
 export const MODLOG_PREFIX = 'modlog:';
-export const KV_SOURCE = 'kv';
-
-/** The mirror sections this module may touch. `roles` is deliberately absent: roles.yml stays git-native by
- *  owner ruling as the root of trust for the anti-escalation model, so it has no KV half to write. */
-export const OVERRIDE_SECTIONS = Object.freeze(['bans', 'grandfathered']);
-
-const isSection = (x) => x != null && typeof x === 'object' && !Array.isArray(x);
-const idOf = (e) => (e && e.github_id != null ? String(e.github_id) : null);
-
-/**
- * PURE. Apply one governance entry to the mirror blob and return the new blob.
- * Returns { ok, next, changed, reason }. `ok:false` means the mirror is not in a state this may safely edit,
- * and the caller must NOT write anything.
- */
-export function applyKvOverride(mirror, { section, githubId, entry = null, remove = false } = {}) {
-  if (!OVERRIDE_SECTIONS.includes(section)) return { ok: false, reason: `unknown override section: ${section}` };
-  const id = githubId != null ? String(githubId) : '';
-  if (!id) return { ok: false, reason: 'githubId is required' };
-  // Refuse rather than fabricate. Each of these is a real runtime state once KV is a live writer target.
-  if (!isSection(mirror)) return { ok: false, reason: 'the overrides mirror is absent or not an object' };
-  if (!mirror.generatedAt) return { ok: false, reason: 'the overrides mirror has no generatedAt' };
-  if (!isSection(mirror[section])) return { ok: false, reason: `the overrides mirror has no ${section} section` };
-
-  const list = Array.isArray(mirror[section][section]) ? mirror[section][section] : [];
-  const kept = list.filter((e) => !(idOf(e) === id && e?.source === KV_SOURCE));
-  let nextList;
-  if (remove) {
-    nextList = kept;
-  } else {
-    if (!entry) return { ok: false, reason: 'an entry is required unless removing' };
-    nextList = [...kept, { ...entry, github_id: id, source: KV_SOURCE }];
-  }
-  const changed = JSON.stringify(nextList) !== JSON.stringify(list);
-  // Spread the mirror and the section so generatedAt, roles and any unknown field pass through untouched.
-  const next = { ...mirror, [section]: { ...mirror[section], [section]: nextList } };
-  return { ok: true, next, changed, reason: null };
-}
 
 /**
  * The IO half: read overrides:mirror, apply, write it back. Fails closed and never fabricates.

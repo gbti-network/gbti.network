@@ -71,6 +71,35 @@ export function isTierA(p) {
   return true;
 }
 
+/**
+ * sow-213 Step 3: the two override files that MOVE OFF the public repository. After Step 3 deletes them, no PR
+ * may re-create them. A person-keyed entitlement record in a public, forkable, CDN-cached repo is permanent and
+ * can never satisfy a right-to-erasure request, which is the whole reason for the migration. Recreating a file
+ * is also actively dangerous: gitOwnedSections() decides ownership by existsSync, so a reappearing file flips
+ * its section back to git-owned and the next mirror write rebuilds it from whatever the file contains, which
+ * can strip live entitlements on a green run.
+ */
+export const OVERRIDES_GIT_FILES = Object.freeze(['house/bans.yml', 'house/grandfathered.yml']);
+
+// The ONLY diff statuses a guarded file may legitimately carry: `modified` (the git writers, in the window
+// before Step 3 deletes the files) and `removed` (the deletion commit itself). Anything that RESULTS IN THE
+// FILE EXISTING against a base where it does not, added / renamed-into / copied, is a reappearance and is
+// rejected fail-closed. Keying on creation status, not on merely touching the path, is what lets the writers
+// keep modifying these files in the split-commit window without the guard blocking every legitimate admin
+// action. An unknown or missing status on a guarded path is treated as a violation (fail-closed).
+const OVERRIDES_ALLOWED_FILE_STATUS = new Set(['modified', 'removed']);
+
+/**
+ * PURE. Given the PR's changed files as `[{ path, status }]` (the GitHub files-API shape), return the guarded
+ * override paths this PR RE-CREATES. Empty means no reappearance.
+ */
+export function overridesReappearance(changedFiles = []) {
+  if (!Array.isArray(changedFiles)) return [];
+  return changedFiles
+    .filter((f) => f && OVERRIDES_GIT_FILES.includes(String(f.path)) && !OVERRIDES_ALLOWED_FILE_STATUS.has(String(f.status)))
+    .map((f) => String(f.path));
+}
+
 /** The folder a github_id owns, resolved through the members-index (github_id -> username). */
 export function ownedFolderFor(githubId, membersIndex) {
   return membersIndex.get(String(githubId)) ?? null;
@@ -226,7 +255,7 @@ const pass = (label, autoMerge, reason) => ({ check: 'pass', autoMerge, label, r
  * @param {string}   [a.tier]          the author's effective TIER (tier-gate resolveEffectiveTier), default none
  * @param {string}   [a.ownerTier]     for a contribution: the target folder owner's effective TIER, default none
  */
-export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBot = false, ownerApproved = false, ownerPaid = false, tier = TIER.none, ownerTier = TIER.none, hostedContent = false }) {
+export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBot = false, ownerApproved = false, ownerPaid = false, tier = TIER.none, ownerTier = TIER.none, hostedContent = false, changedFiles = null }) {
   const c = classifyPaths(paths, ownedFolder);
   // isBot is a FLOOR, not an override: it promotes an unprivileged bot to admin, but never DEMOTES a
   // bot that already holds a higher role. So an automation account that is also a superadmin (for
@@ -247,6 +276,21 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
   //    whole PR fail-closed so a traversal cannot masquerade as own-folder content.
   if (c.unclean.length > 0) {
     return fail('rejected-escalation', `non-canonical or unsafe paths: ${c.unclean.join(', ')}`);
+  }
+
+  // 2.5. sow-213 Step 3 REAPPEARANCE GUARD. Once bans.yml and grandfathered.yml are migrated off the public
+  //    repo, no PR may re-create them. This fires for EVERY role, superadmin included, and BEFORE the SOW-108
+  //    superadmin auto-merge short-circuit at rule 5: a re-created override file would otherwise auto-merge with
+  //    no review and put person-keyed entitlement records back on the public chain (and flip the section
+  //    git-owned, so the next mirror write rebuilds it from the file and can strip live grants on a green run).
+  //    Keyed on CREATION status (see overridesReappearance), so the git writers' MODIFY-PRs still pass in the
+  //    window before Step 3 deletes these files, and the deletion commit's own REMOVE is not blocked. Inert
+  //    until the caller supplies changedFiles with statuses (the gate does; the SOW-003 scoping CI does not).
+  if (changedFiles) {
+    const reappeared = overridesReappearance(changedFiles);
+    if (reappeared.length > 0) {
+      return fail('rejected-escalation', `sow-213: these override files were migrated off the public repository and may not be re-created: ${reappeared.join(', ')}`);
+    }
   }
 
   // 3. Members only: a visitor or a lapsed account cannot open a mergeable PR. The gate auto-closes these.

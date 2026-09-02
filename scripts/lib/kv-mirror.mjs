@@ -12,6 +12,9 @@ import yaml from 'js-yaml';
 import { toSyndicationMirror } from '../../membership/syndication-config.mjs';
 import { toTopicsMirror, TOPICS_MIRROR_KEY } from '../../membership/topics-vocab.mjs';
 import { toCouponsMirror, COUPONS_MIRROR_KEY } from '../../membership/coupons.mjs';
+// sow-213 Step 3: the shared pure mutation core, so the REST writer below (for reconcile + the erase-member CLI)
+// mutates overrides:mirror with the exact semantics of the Worker's binding writer.
+import { applyKvOverride, KV_SOURCE } from '../../membership/overrides-kv-core.mjs';
 
 export const OVERRIDES_KV_KEY = 'overrides:mirror';
 export const SYNDICATION_KV_KEY = 'synd:config';
@@ -84,7 +87,18 @@ function sectionFor(ownedByGit, gitSection, existingSection, listKey) {
   if (!isSection(existingSection) || !Array.isArray(existingSection[listKey])) {
     throw new Error(`refusing to write the overrides mirror: house/${listKey === 'bans' ? 'bans' : 'grandfathered'}.yml is absent and KV carries no usable ${listKey} section to preserve`);
   }
-  return existingSection;
+  // sow-213 Step 3 PRESERVE-MARK (the load-bearing corollary). Git no longer owns this section, so KV is now
+  // the sole source of truth for EVERY entry in it, including the entries carried in from git before deletion.
+  // Those arrived UNMARKED (while a file existed, mergeOverridesSection returned the git base verbatim), and
+  // applyKvOverride's REMOVE drops ONLY entries marked source: 'kv'. An unmarked carried entry is therefore
+  // exactly where an unban or an ungrandfather would silently no-op forever, on the existing members who matter
+  // most. Stamp the mark on any entry that lacks it. This branch is unreachable while the files exist
+  // (ownedByGit is true then), so the mark cannot fire until Phase 3 deletes them, which is why marking HERE is
+  // safe where a one-time pre-deletion migration was not: while a file still exists, the next sync filters a
+  // marked entry back out as a duplicate of its git twin and rewrites the unmarked git version, undoing the
+  // migration before it is ever used.
+  const marked = existingSection[listKey].map((e) => (e?.source === KV_SOURCE ? e : { ...e, source: KV_SOURCE }));
+  return { ...existingSection, [listKey]: marked };
 }
 
 export function mergeOverridesSection(gitSection, existingSection, listKey) {
@@ -96,7 +110,7 @@ export function mergeOverridesSection(gitSection, existingSection, listKey) {
   // Preserve every KV-native entry git does not already carry. Anything NOT marked `source: 'kv'` is treated
   // as a stale copy of a git entry and dropped, which is what keeps a REMOVAL in git effective: unbanning
   // someone in git must still unban them, or this fix would trade one silent failure for another.
-  const kvNative = existing.filter((e) => e?.source === 'kv' && idOf(e) && !gitIds.has(idOf(e)));
+  const kvNative = existing.filter((e) => e?.source === KV_SOURCE && idOf(e) && !gitIds.has(idOf(e)));
   if (kvNative.length === 0) return base;
   return { ...base, [listKey]: [...git, ...kvNative] };
 }
@@ -167,6 +181,52 @@ export async function mirrorOverridesToKv({ raw, env = process.env, now = new Da
     throw new Error(`KV mirror write failed: ${res ? res.status : 'no response'} ${String(detail).slice(0, 200)}`);
   }
   return { written: true, key, bytes: body.length };
+}
+
+/**
+ * sow-213 Step 3: the Cloudflare REST half of the shared override mutation, for the writers that run OUTSIDE the
+ * Worker and cannot bind SIGNUP_KV directly (W3, reconcile's coupon-grant fold; W4, the manual erase-member
+ * CLI). It reads the overrides:mirror blob via the KV REST API, applies the PURE applyKvOverride (the SAME
+ * mutation the Worker's writeOverrideToKv uses, so the two paths mark, keep and remove entries identically),
+ * and writes the blob back.
+ *
+ * READ BEFORE WRITE, and REFUSE rather than fabricate, exactly like mirrorOverridesToKv: "we could not read the
+ * current overrides" must never resolve to "overwrite them with a single entry", which would drop every other
+ * ban and grant. A missing mirror (404) is a refusal too, not a create: applyKvOverride never fabricates a
+ * mirror, because a one-entry blob would read as the complete override set and fail OPEN for everyone missing
+ * from it. A creds-less environment is a reported no-op (tests, local dry runs), not a throw. Returns
+ * { written, changed, reason }; a false `written` carrying a reason is for the caller to REPORT, never swallow,
+ * because it silently reopens the window this migration closes.
+ */
+export async function writeOverrideToKvRest({ env = process.env, section, githubId, entry = null, remove = false, fetchImpl = globalThis.fetch, key = OVERRIDES_KV_KEY } = {}) {
+  const accountId = env.CF_ACCOUNT_ID;
+  const namespaceId = env.CF_KV_NAMESPACE_ID;
+  const apiToken = env.CF_API_TOKEN;
+  if (!accountId || !namespaceId || !apiToken) {
+    return { written: false, changed: false, reason: 'CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN not set' };
+  }
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
+  let mirror = null;
+  try {
+    const cur = await fetchImpl(url, { headers: { Authorization: `Bearer ${apiToken}` } });
+    if (cur?.ok) mirror = await cur.json();
+    else return { written: false, changed: false, reason: `could not read the overrides mirror (status ${cur ? cur.status : 'no response'})` };
+  } catch (err) {
+    return { written: false, changed: false, reason: `could not read the overrides mirror (${err?.message || 'unknown'})` };
+  }
+  const applied = applyKvOverride(mirror, { section, githubId, entry, remove });
+  if (!applied.ok) return { written: false, changed: false, reason: applied.reason };
+  if (!applied.changed) return { written: false, changed: false, reason: 'already in that state in KV' };
+  const res = await fetchImpl(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'text/plain' },
+    body: JSON.stringify(applied.next),
+  });
+  if (!res || !res.ok) {
+    const detail = res && res.text ? await res.text().catch(() => '') : '';
+    return { written: false, changed: false, reason: `overrides mirror write failed: ${res ? res.status : 'no response'} ${String(detail).slice(0, 200)}` };
+  }
+  return { written: true, changed: true, reason: null };
 }
 
 /**

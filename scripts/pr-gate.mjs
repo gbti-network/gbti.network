@@ -100,6 +100,8 @@ export function shouldAutoMerge(decision, paths) {
  * @param {object} a
  * @param {string|number} a.author    PR author github_id (pull_request.user.id).
  * @param {string[]}      a.paths     changed file paths (repo-relative, forward slashes).
+ * @param {Array<{path:string,status:string}>|null} [a.changedFiles] changed files WITH diff status, for the
+ *                                    sow-213 reappearance guard. Null (the default) leaves the guard inert.
  * @param {object}        a.overrides { roles, bans, grandfathers, membersIndex } from loadOverrides().
  * @param {object}        a.stripe    a client with findCustomerByGithubId(githubId) (may throw).
  * @param {string|number|null} [a.botId]  the reconcile bot's github_id (treated as admin).
@@ -108,7 +110,7 @@ export function shouldAutoMerge(decision, paths) {
  *                                    Tier S + Tier A hard-fails apply even to a superadmin.
  * @returns {Promise<{check:'pass'|'fail', autoMerge:boolean, label:string, reasons:string[], status:string, role:string, ownedFolder:(string|null)}>}
  */
-export async function evaluatePR({ author, paths, overrides, stripe, botId = null, now = new Date(), resolveOwner = null, priceTierMap = null, hostedContent = false }) {
+export async function evaluatePR({ author, paths, changedFiles = null, overrides, stripe, botId = null, now = new Date(), resolveOwner = null, priceTierMap = null, hostedContent = false }) {
   const { roles, bans, grandfathers, membersIndex } = overrides;
   const authorId = String(author);
 
@@ -139,7 +141,7 @@ export async function evaluatePR({ author, paths, overrides, stripe, botId = nul
     ownerTier = isTier(r?.ownerTier) ? r.ownerTier : TIER.none;
   }
 
-  const d = decide({ paths, role, effective, ownedFolder, isBot, ownerApproved, ownerPaid, tier, ownerTier, hostedContent });
+  const d = decide({ paths, changedFiles, role, effective, ownedFolder, isBot, ownerApproved, ownerPaid, tier, ownerTier, hostedContent });
   return { ...d, status: effective.status, tier, role, ownedFolder, contributionTarget: target };
 }
 
@@ -247,8 +249,12 @@ async function main() {
     // passes the ids, AND tierForPrice no longer has a branch that grants anything on an empty map.
     const priceTierMap = buildEnvPriceTierMap(process.env);
 
-    // METADATA ONLY: changed file paths via the API. We never check out or run PR code.
-    const paths = await gh.listPullFilePaths(number);
+    // METADATA ONLY: changed file paths + their diff status via the API. We never check out or run PR code.
+    // sow-213: the status feeds the gate's reappearance guard (a PR RE-CREATING the migrated override files is
+    // rejected fail-closed, even for a superadmin, before SOW-108 auto-merge); `paths` drives the existing
+    // classification exactly as before.
+    const changedFiles = await gh.listPullFiles(number);
+    const paths = changedFiles.map((f) => f.path);
 
     // Reverse the members-index (github_id -> username) so a contribution target username resolves to
     // the owner's immutable github_id. For a contribution, the owner accepts by submitting an APPROVED
@@ -283,7 +289,7 @@ async function main() {
       return { ownerApproved, ownerPaid: ownerEff.status === 'paid', ownerTier };
     };
 
-    const d = await evaluatePR({ author, paths, overrides, stripe, botId, resolveOwner, priceTierMap, hostedContent });
+    const d = await evaluatePR({ author, paths, changedFiles, overrides, stripe, botId, resolveOwner, priceTierMap, hostedContent });
 
     await gh.setStatus(headSha, {
       state: d.check === 'pass' ? 'success' : 'failure',

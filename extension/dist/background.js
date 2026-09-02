@@ -19986,6 +19986,7 @@ var ROLE_RANK = Object.freeze({ [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.
 
 // membership/classify-pr.mjs
 var ROLE_RANK2 = { [ROLE2.member]: 0, [ROLE2.moderator]: 1, [ROLE2.admin]: 2, [ROLE2.superadmin]: 3 };
+var OVERRIDES_GIT_FILES = Object.freeze(["house/bans.yml", "house/grandfathered.yml"]);
 
 // membership/checkout-prices.mjs
 var BILLING_PERIODS = Object.freeze(["monthly", "annual"]);

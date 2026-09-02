@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import {
   buildOverridesMirror, mirrorOverridesToKv, OVERRIDES_KV_KEY, mirrorSyndicationConfigToKv,
   buildContentChannelsMirror, mirrorContentChannelsToKv, mirrorTopicsToKv, CONTENT_CHANNELS_KV_KEY, TOPICS_KV_KEY,
+  writeOverrideToKvRest,
 } from '../scripts/lib/kv-mirror.mjs';
 
 const raw = { roles: { admins: [{ github_id: '4' }] }, bans: { bans: [{ github_id: '7' }] }, grandfathered: { grandfathered: [] } };
@@ -161,4 +162,63 @@ test('sow-213 R9: mirrorOverridesToKv FAILS CLOSED when ownedByGit is omitted (t
     () => mirrorOverridesToKv({ raw, env: ENV, now: NOW, fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({}) }) }),
     /ownedByGit is required/,
   );
+});
+
+// ---- sow-213 Step 3: writeOverrideToKvRest, the REST single-entry mutation for the OUT-OF-WORKER writers
+// (reconcile's coupon-grant fold, the erase-member CLI). Reuses the pure applyKvOverride, so it marks/keeps/
+// removes exactly as the Worker binding writer does. Read-before-write, refuse rather than fabricate. INERT in
+// this commit (no caller yet); wired to W3/W4 when the git files are deleted. ----
+
+const LIVE_MIRROR = () => ({
+  generatedAt: NOW.toISOString(), roles: {},
+  bans: { bans: [{ github_id: '7', reason: 'spam', source: 'kv' }] },
+  grandfathered: { grandfathered: [{ github_id: '11', tier: 'creator', source: 'kv' }] },
+});
+
+test('writeOverrideToKvRest is a creds-gated no-op (never touches the network) without CF credentials', async () => {
+  const r = await writeOverrideToKvRest({ env: {}, section: 'bans', githubId: '9', entry: { reason: 'x' }, fetchImpl: async () => { throw new Error('should not be called'); } });
+  assert.equal(r.written, false);
+  assert.match(r.reason, /CF_ACCOUNT_ID/);
+});
+
+test('writeOverrideToKvRest ADDS a ban, marking it source: kv, via read-modify-PUT', async () => {
+  const f = kvFake(LIVE_MIRROR());
+  const r = await writeOverrideToKvRest({ env: ENV, section: 'bans', githubId: '9', entry: { reason: 'abuse' }, fetchImpl: f.fetchImpl });
+  assert.equal(r.written, true);
+  assert.equal(r.changed, true);
+  const sent = JSON.parse(f.put().opts.body);
+  const added = sent.bans.bans.find((e) => String(e.github_id) === '9');
+  assert.deepEqual(added, { reason: 'abuse', github_id: '9', source: 'kv' }, 'the new entry carries the source: kv mark, so a later unban can remove it');
+  assert.ok(sent.bans.bans.some((e) => String(e.github_id) === '7'), 'the existing ban is preserved (read-before-write, not overwrite)');
+});
+
+test('writeOverrideToKvRest REMOVES a marked entry', async () => {
+  const f = kvFake(LIVE_MIRROR());
+  const r = await writeOverrideToKvRest({ env: ENV, section: 'grandfathered', githubId: '11', remove: true, fetchImpl: f.fetchImpl });
+  assert.equal(r.written, true);
+  const sent = JSON.parse(f.put().opts.body);
+  assert.equal(sent.grandfathered.grandfathered.length, 0, 'the marked grant was removed');
+});
+
+test('writeOverrideToKvRest REFUSES a 404 (missing mirror) rather than fabricating a one-entry blob that fails OPEN', async () => {
+  const f = kvFake(undefined); // GET -> 404
+  const r = await writeOverrideToKvRest({ env: ENV, section: 'bans', githubId: '9', entry: { reason: 'x' }, fetchImpl: f.fetchImpl });
+  assert.equal(r.written, false);
+  assert.match(r.reason, /could not read the overrides mirror/);
+  assert.equal(f.put(), undefined, 'no PUT was attempted');
+});
+
+test('writeOverrideToKvRest REFUSES a read failure rather than overwriting an unknown override set', async () => {
+  const fetchImpl = async (_u, opts = {}) => (opts.method === 'PUT' ? { ok: true } : { ok: false, status: 500 });
+  const r = await writeOverrideToKvRest({ env: ENV, section: 'bans', githubId: '9', entry: { reason: 'x' }, fetchImpl });
+  assert.equal(r.written, false);
+  assert.match(r.reason, /could not read the overrides mirror/);
+});
+
+test('writeOverrideToKvRest reports a no-op (no PUT) when the entry is already in that state', async () => {
+  const f = kvFake(LIVE_MIRROR());
+  const r = await writeOverrideToKvRest({ env: ENV, section: 'bans', githubId: '404', remove: true, fetchImpl: f.fetchImpl });
+  assert.equal(r.written, false);
+  assert.match(r.reason, /already in that state/);
+  assert.equal(f.put(), undefined, 'nothing to change, so nothing is written');
 });

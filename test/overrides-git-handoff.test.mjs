@@ -15,6 +15,8 @@ import path from 'node:path';
 import {
   gitOwnedSections, buildOverridesMirror, mirrorOverridesToKv, OVERRIDES_KV_KEY,
 } from '../scripts/lib/kv-mirror.mjs';
+// sow-213 Step 3: the pure mutation, to PROVE the preserve-mark is load-bearing (a real removal after the mark).
+import { applyKvOverride } from '../membership/overrides-kv-core.mjs';
 import {
   BACKED_UP_PREFIXES, collectSnapshot, encryptSnapshot, decryptSnapshot, restoreSnapshot, SNAPSHOT_KEY,
 } from '../scripts/lib/kv-backup.mjs';
@@ -75,13 +77,41 @@ test('THE HAZARD, pinned: rebuilding a GIT-OWNED section from an absent file ERA
   assert.deepEqual(blob.grandfathered, {}, 'git-owned + absent file drops every grant');
 });
 
-test('a section git no longer owns is preserved VERBATIM, including unmarked git-sourced entries', () => {
+test('sow-213 Step 3 PRESERVE-MARK: a section git no longer owns is preserved AND every entry is stamped source: kv', () => {
+  // BEHAVIOUR CHANGE recorded, not an assertion edited green. Through Phase 3a this branch returned the
+  // git-sourced entries VERBATIM and UNMARKED, and this test used to pin `source: 'kv'` count == 0. That was
+  // the load-bearing bug: applyKvOverride's REMOVE drops ONLY marked entries, so an unmarked carried entry made
+  // unban a PERMANENT no-op on every existing member. Step 3 stamps the mark at the moment the section flips
+  // not-git-owned (KV is now its sole source of truth), so REMOVE reaches these entries. The mark's real effect
+  // is proven by the removal test immediately below, not by asserting a field.
   const live = LIVE();
   const blob = buildOverridesMirror({ roles: live.roles }, NOW, live, { bans: false, grandfathered: false });
-  assert.deepEqual(blob.bans, live.bans);
-  assert.deepEqual(blob.grandfathered, live.grandfathered);
-  // The entries survive WITHOUT a `source: 'kv'` mark. mergeOverridesSection would have dropped all four.
-  assert.equal(blob.bans.bans.filter((e) => e.source === 'kv').length, 0);
+  assert.deepEqual(
+    blob.bans.bans,
+    [{ github_id: '7', reason: 'spam', source: 'kv' }, { github_id: '9', reason: 'abuse', source: 'kv' }],
+    'every carried ban is preserved with its fields intact AND marked source: kv',
+  );
+  assert.deepEqual(
+    blob.grandfathered.grandfathered,
+    [{ github_id: '11', tier: 'creator', source: 'kv' }, { github_id: '12', until: null, source: 'kv' }],
+    'every carried grant is preserved with its fields intact AND marked source: kv',
+  );
+  assert.equal(blob.bans.bans.filter((e) => e.source === 'kv').length, 2, 'all preserved entries now carry the mark');
+});
+
+test('sow-213 Step 3 PRESERVE-MARK is LOAD-BEARING: after the mark a real removal drops a formerly-git entry that was a no-op before it', () => {
+  // The exit-criterion in miniature, and mutation-sensitive: delete the .map(... source: KV_SOURCE) in
+  // sectionFor and this reds. The mark is NOT cosmetic.
+  const live = LIVE();
+  // BEFORE the mark (the Phase-3a verbatim shape), REMOVE is a permanent no-op on a git-sourced id...
+  const unmarked = { generatedAt: NOW.toISOString(), roles: {}, bans: live.bans, grandfathered: live.grandfathered };
+  const noop = applyKvOverride(unmarked, { section: 'bans', githubId: '7', remove: true });
+  assert.equal(noop.changed, false, 'an UNMARKED git-sourced ban cannot be removed: this is the bug the mark fixes');
+  // ...AFTER the preserve-mark stamps the carried entries, the same unban takes effect.
+  const marked = buildOverridesMirror({ roles: {} }, NOW, live, { bans: false, grandfathered: false });
+  const removed = applyKvOverride(marked, { section: 'bans', githubId: '7', remove: true });
+  assert.equal(removed.changed, true, 'a MARKED entry can be removed, so unban works post-migration');
+  assert.deepEqual(removed.next.bans.bans.map((e) => e.github_id), ['9'], 'only github_id 7 was unbanned');
 });
 
 test('an unowned section with NOTHING usable in KV aborts the write instead of writing empty', () => {
@@ -106,8 +136,12 @@ test('ownership is per section: a handed-off bans list is preserved while grandf
   const live = LIVE();
   const raw = { roles: live.roles, grandfathered: { grandfathered: [{ github_id: '99', tier: 'member' }] } };
   const blob = buildOverridesMirror(raw, NOW, live, { bans: false });
-  assert.deepEqual(blob.bans, live.bans, 'bans came from KV');
-  assert.deepEqual(blob.grandfathered.grandfathered, [{ github_id: '99', tier: 'member' }], 'grandfathered came from git');
+  assert.deepEqual(
+    blob.bans.bans,
+    [{ github_id: '7', reason: 'spam', source: 'kv' }, { github_id: '9', reason: 'abuse', source: 'kv' }],
+    'bans came from KV, and Step 3 marks them source: kv',
+  );
+  assert.deepEqual(blob.grandfathered.grandfathered, [{ github_id: '99', tier: 'member' }], 'grandfathered came from git, unmarked');
 });
 
 test('roles are ALWAYS rebuilt from git, even when both other sections are handed off', () => {
@@ -209,8 +243,10 @@ test('the 6-hourly sync PRESERVES the sections whose files are gone from the che
   assert.equal(r.written, true);
   assert.equal(kv.puts.length, 1);
   const body = JSON.parse(kv.puts[0].body);
-  assert.deepEqual(body.bans, live.bans, 'the deleted bans.yml did not erase the live bans');
-  assert.deepEqual(body.grandfathered, live.grandfathered, 'the deleted grandfathered.yml did not erase the live grants');
+  assert.deepEqual(body.bans.bans.map((e) => e.github_id).sort(), ['7', '9'], 'the deleted bans.yml did not erase the live bans');
+  assert.ok(body.bans.bans.every((e) => e.source === 'kv'), 'and the preserved bans are marked source: kv, so unban still works');
+  assert.deepEqual(body.grandfathered.grandfathered.map((e) => e.github_id).sort(), ['11', '12'], 'the deleted grandfathered.yml did not erase the live grants');
+  assert.ok(body.grandfathered.grandfathered.every((e) => e.source === 'kv'), 'and the preserved grants are marked source: kv, so ungrandfather still works');
   assert.deepEqual(body.roles, { admins: [{ github_id: '4' }] }, 'roles still come from git');
   // The freshness stamp is what keeps six readers from failing closed at the 48h mark once git stops being the
   // source. The job still runs on its cron after Phase 3, so this is the thing that must keep moving.

@@ -72,6 +72,19 @@ export function createGitHubClient({ token, repo, fetch = globalThis.fetch, base
       }
       return paths;
     },
+    /** Changed files WITH their diff status ([{ path, status }]). Same pagination as listPullFilePaths.
+     *  sow-213: the gate's reappearance guard keys on creation status (added / renamed / copied) versus
+     *  modified, so it needs the `status` the path-only reader discards. */
+    async listPullFiles(number) {
+      const files = [];
+      for (let page = 1; ; page++) {
+        const batch = await req('GET', `/repos/${repo}/pulls/${number}/files?per_page=100&page=${page}`);
+        if (!batch?.length) break;
+        for (const f of batch) files.push({ path: f.filename, status: f.status });
+        if (batch.length < 100) break;
+      }
+      return files;
+    },
     /** All reviews on a PR (metadata: user.id, state, commit_id). Paginates. Used to read owner approval. */
     async listReviews(number) {
       const reviews = [];
