@@ -99,3 +99,23 @@ test('resolveLiveKey: prefers the live provisioning key and NAMES the variable i
   assert.deepEqual(resolveLiveKey({ STRIPE_PROVISION_KEY_LIVE: '   ' }), { key: '', from: null },
     'whitespace is not a key');
 });
+
+test('R5 consolidation: one KV allow-set reader, not a second copy in recover-customers', async () => {
+  // sow-213 Step 2: recover-customers used to declare its OWN grandfatheredAllowSet, a second implementation
+  // that existed only because mail-enroll-legacy.mjs was unimportable before R6 guarded its top-level main().
+  // Now recover-customers IMPORTS the reader, so its KV fail-closed contract is defined and tested once, in
+  // mail-enroll-legacy.test.mjs. Against the pre-consolidation code this fails: recover-customers exported a
+  // grandfatheredAllowSet, so the undefined assert would trip. That makes this a real check on the change, not
+  // a vacuous one, and it catches a regression that re-grows the duplicate by re-exporting it here.
+  const rc = await import('../scripts/recover-customers.mjs');
+  assert.equal(rc.grandfatheredAllowSet, undefined,
+    'recover-customers must not export a second grandfatheredAllowSet; it imports the one in mail-enroll-legacy');
+  // LOAD-BEARING, and worth knowing before you debug it: the next import terminates ONLY because R6 guarded
+  // mail-enroll-legacy's top-level main() behind `import.meta.url === pathToFileURL(process.argv[1]).href`.
+  // Remove that guard and importing the module RUNS the enrolment and calls process.exit, so this line does
+  // not fail with a clean assertion, it KILLS the test runner mid-suite. If the suite ever dies here with no
+  // assertion error, that guard is the first place to look.
+  const enrol = await import('../scripts/mail-enroll-legacy.mjs');
+  assert.equal(typeof enrol.grandfatheredAllowSet, 'function',
+    'the single reader lives in mail-enroll-legacy, exported for both callers and its fail-closed tests');
+});

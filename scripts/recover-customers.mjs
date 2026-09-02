@@ -29,14 +29,20 @@
 // contradict.
 //
 // SCOPE IS THE ALLOW-SET, ENFORCED IN CODE. The dump holds ~68 accounts, roughly 50 of whom registered on the
-// old site and were never comped; reaching them was explicitly NOT approved. The allow-set is built from
-// house/grandfathered.yml, exactly as the enrolment script builds it, and nothing outside it can be resolved.
+// old site and were never comped; reaching them was explicitly NOT approved. The allow-set is read from the KV
+// overrides mirror (sow-213 Step 2), exactly as the enrolment script reads it, and nothing outside it can be
+// resolved. The read fails closed: an unavailable, stale or malformed mirror aborts rather than widening scope.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { loadOverridesRaw } from '../membership/overrides.mjs';
+// sow-213 Step 2 (R5): the grandfathered allow-set reads the KV overrides mirror, and this IMPORTS that reader
+// from mail-enroll-legacy.mjs rather than re-declaring it. Before R6 guarded that module's top-level main(),
+// importing it RAN the enrolment and exited the process, which is why this file kept its own copy of the
+// helper. R6 made the module importable, so the two copies collapse into ONE reader with one fail-closed
+// contract and one set of tests (mail-enroll-legacy.test.mjs).
+import { grandfatheredAllowSet } from './mail-enroll-legacy.mjs';
 import { createStripeClient } from '../clients/stripe.mjs';
 import { putKvValue } from './lib/erase-member.mjs';
 import { parseLegacyUsers, matchLegacyAddresses, applySuppliedAddresses } from './lib/legacy-addresses.mjs';
@@ -44,20 +50,6 @@ import { planCustomerCreates, createRecoveredCustomer } from './lib/stripe-backf
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DUMP_DIR = path.join(ROOT, '.data/legacy/db');
-
-// DUPLICATED FROM scripts/mail-enroll-legacy.mjs ON PURPOSE, and it is two functions rather than an import
-// because that module calls main() at the top level: importing it to borrow a helper RUNS THE ENROLMENT and
-// then exits the process. Re-homing them into lib/ is the right cleanup and is deliberately not bundled into
-// an incident fix, where the smallest correct change is worth more than the tidiest one.
-
-/** The grandfathered members, as the allow-set. A ban is not consulted: a banned account is not in this file. */
-export function grandfatheredAllowSet(root = ROOT) {
-  const raw = loadOverridesRaw(root);
-  const list = (raw.grandfathered ?? raw.grandfathers)?.grandfathered ?? [];
-  return list
-    .map((g) => ({ githubId: String(g?.github_id ?? '').trim(), login: String(g?.login ?? '').trim() }))
-    .filter((g) => g.githubId && g.login);
-}
 
 /** The newest .sql in the local dump directory, or null. `.data/` is gitignored, so a worktree needs the env var. */
 export function findDump(dir = DUMP_DIR, env = process.env) {
@@ -111,9 +103,9 @@ async function main() {
   const apply = process.argv.includes('--apply') && !process.argv.includes('--dry-run');
   const env = process.env;
 
-  const members = grandfatheredAllowSet();
+  const members = await grandfatheredAllowSet();
   if (!members.length) {
-    console.error('No grandfathered members found in house/grandfathered.yml. Nothing to do.');
+    console.error('No grandfathered members in the KV overrides mirror. Nothing to do.');
     process.exit(1);
   }
 
