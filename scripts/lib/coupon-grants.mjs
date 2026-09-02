@@ -237,9 +237,27 @@ export function appendGrantEntries(text, grants, now = new Date()) {
 }
 
 /** Read the current grandfathered.yml (text + parsed) from disk. */
+/**
+ * sow-213 Phase 3b: RETURNS NULL WHEN THE FILE IS ABSENT, rather than throwing.
+ *
+ * Phase 3b deleted house/grandfathered.yml, and this bare readFileSync then threw ENOENT out of the durable
+ * fold and failed the whole reconcile run. Everything else in that run had already succeeded, Discord role
+ * sync included, so a broken coupon fold was reporting itself as a total reconcile outage. That is the same
+ * shape as readCouponsFromDisk below, which already documents this exact contract.
+ *
+ * Returning null lets syncCouponGrants report a clear SKIP instead. The fold itself is still broken by 3b and
+ * needs a KV writer, because its write path opens a PR against GRANDFATHERED_PATH, which no longer exists and
+ * which validate-content now refuses to let reappear. That is tracked separately; this function only stops one
+ * broken feature from masquerading as an outage of every other one.
+ */
 export function readGrandfatheredFromDisk(root) {
-  const text = fs.readFileSync(path.join(root, GRANDFATHERED_PATH), 'utf8');
-  return { text, parsed: yaml.load(text) };
+  try {
+    const text = fs.readFileSync(path.join(root, GRANDFATHERED_PATH), 'utf8');
+    return { text, parsed: yaml.load(text) };
+  } catch (err) {
+    if (err?.code === 'ENOENT') return null;
+    throw err; // an unreadable-but-PRESENT file is a real problem and must not be swallowed
+  }
 }
 
 /**
@@ -275,7 +293,18 @@ export async function syncCouponGrants({
   if (!kv.redemptions?.length) return { synced: false, reason: 'no redemptions in KV' };
 
   const current = readGrandfathered ? await readGrandfathered() : null;
-  if (!current?.text) return { synced: false, reason: 'cannot read house/grandfathered.yml' };
+  if (!current?.text) {
+    // LOUD ON PURPOSE. A silent skip here means a member redeems a coupon and never receives the grant, with
+    // nothing anywhere saying so, which is exactly the class of failure this repository keeps being bitten by.
+    // The redemption count is already known at this point, so it goes in the reason.
+    return {
+      synced: false,
+      reason:
+        `cannot read ${GRANDFATHERED_PATH} (retired by sow-213 Phase 3b). ` +
+        `${kv.redemptions.length} redemption(s) CANNOT be folded into grants until the fold writes to KV.`,
+      redemptions: kv.redemptions.length,
+    };
+  }
 
   // sow-185: an unreadable coupon registry is NOT fatal here (see readCouponsFromDisk). It costs the
   // registry step of the tier precedence, not the fold.

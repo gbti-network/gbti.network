@@ -589,7 +589,18 @@ export async function applyPendingCouponGrants({ overrides, env = process.env, n
     // wants the parsed document. Handing it the wrapper would make grandfathersFromParsed find nothing, so
     // EVERY already-folded grant would look new and be re-applied. Harmless in effect, wrong in reasoning,
     // and it would have masked a real regression here later.
-    const { parsed } = readGrandfatheredFromDisk(root);
+    // sow-213 Phase 3b: the file is gone, so this is null now. Destructuring it would throw a TypeError that
+    // the catch below would report as a mysterious pre-apply failure rather than the plain fact that the
+    // grants file is retired. Say the real thing instead.
+    const onDisk = readGrandfatheredFromDisk(root);
+    if (!onDisk) {
+      console.warn(
+        'reconcile: coupon-grant pre-apply SKIPPED: house/grandfathered.yml is retired (sow-213 Phase 3b) ' +
+          'and the fold does not write to KV yet, so no redemption can be pre-applied this run.',
+      );
+      return 0;
+    }
+    const { parsed } = onDisk;
     // sow-185: the SAME couponsParsed the durable fold uses. Both paths run planCouponGrants, and if only
     // one of them saw the registry they could disagree about a member's tier WITHIN A SINGLE RUN: this run
     // would gate on one tier while the PR it opens records the other. One input, one answer.

@@ -2,6 +2,9 @@
 // reminder plan, and the memberEntryFor coupon extraction. No network: injected fetch + github fakes.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import yaml from 'js-yaml';
 
 import {
@@ -9,8 +12,7 @@ import {
   appendGrantEntries,
   removeGrantEntry,
   listCouponRedemptions,
-  syncCouponGrants,
-} from '../scripts/lib/coupon-grants.mjs';
+  syncCouponGrants, readGrandfatheredFromDisk } from '../scripts/lib/coupon-grants.mjs';
 import { planReconcile, COUPON_REMINDER_DAYS } from '../scripts/lib/reconcile-plan.mjs';
 import { couponGrantFor } from '../scripts/reconcile.mjs';
 import { grandfathersFromParsed } from '../membership/overrides-core.mjs';
@@ -267,4 +269,26 @@ test('the planner emits a coupon-expiry reminder only inside the final window', 
   }).filter((a) => a.type === 'coupon-expiry');
   assert.equal(converted.length, 0);
   assert.ok(COUPON_REMINDER_DAYS === 14);
+});
+
+test('sow-213 3b: readGrandfatheredFromDisk returns null for an ABSENT file, and still throws for a broken one', () => {
+  // The regression this pins cost a red reconcile the day 3b landed. The bare readFileSync threw ENOENT out of
+  // the durable fold, which failed the WHOLE run even though everything else had already succeeded, Discord
+  // role sync included. A broken coupon fold was reporting itself as a total reconcile outage.
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'sow213-gf-absent-'));
+  fs.mkdirSync(path.join(empty, 'house'), { recursive: true });
+  assert.equal(readGrandfatheredFromDisk(empty), null, 'an absent grants file must be null, not a throw');
+
+  // The opposite direction, so the null above is not just "this function always returns null".
+  const present = fs.mkdtempSync(path.join(os.tmpdir(), 'sow213-gf-present-'));
+  fs.mkdirSync(path.join(present, 'house'), { recursive: true });
+  fs.writeFileSync(path.join(present, 'house', 'grandfathered.yml'), 'grandfathered:\n  - github_id: 7\n');
+  const got = readGrandfatheredFromDisk(present);
+  assert.ok(got?.text, 'a present file must still be read');
+  assert.deepEqual(got.parsed.grandfathered, [{ github_id: 7 }]);
+
+  // And an unreadable-but-PRESENT path must still throw: swallowing that would hide a real problem.
+  const asDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sow213-gf-dir-'));
+  fs.mkdirSync(path.join(asDir, 'house', 'grandfathered.yml'), { recursive: true });
+  assert.throws(() => readGrandfatheredFromDisk(asDir), 'a present-but-unreadable path must not be swallowed');
 });
