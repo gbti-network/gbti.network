@@ -26,7 +26,7 @@ import { isCleanPath } from '../../membership/classify-pr.mjs';
 import { adminHostedBranchFor } from '../../membership/hosted-author.mjs';
 import { ban, unban, grandfather, revokeGrandfather, grantRole } from '../../membership/superadmin-actions.mjs'; // sow-161 increments 2-3
 import { PAID_GRANT_TIERS } from '../../membership/tier-gate.mjs'; // sow-213: the paid tiers a grandfather grant may name
-import { writeOverrideToKv, appendModerationLog } from './membership-override-kv.mjs'; // sow-213 Phase 2b + 2c
+import { appendModerationLog, KV_SOURCE, OVERRIDES_KV_KEY } from './membership-override-kv.mjs'; // sow-213 Phase 2c + Step 3 (bans/grandfathers are KV-native now, no git half)
 import { fireRepositoryDispatch } from './membership-admin-ops.mjs'; // sow-213 Phase 2b: the post-role-change mirror refresh
 import { addQuote, removeQuote, setQuoteEnabled } from '../../membership/quote-edits.mjs'; // sow-161 increment 4
 import { addSource, removeSource, setSourceEnabled } from '../../membership/news-source-edits.mjs'; // sow-161 increment 4
@@ -63,10 +63,10 @@ const CONTENT_ITEM_RE = /^(?:members\/[a-z0-9][a-z0-9-]*|house)\/(?:posts|produc
 const GITHUB_ID_RE = /^\d{1,20}$/;
 const VALID_ROLES = new Set(['member', 'moderator', 'admin', 'superadmin']);
 const GOV_ACTIONS = new Set(['ban', 'unban', 'grandfather', 'ungrandfather', 'role']);
-// sow-213 Phase 2b: the overrides-mirror section each governance action dual-writes. `role` is null on
-// purpose: house/roles.yml stays git-native by owner ruling as the root of trust, so it has no KV half.
+// sow-213 Step 3: the overrides-mirror section each governance action writes (KV-native now; the git files are
+// deleted). `role` is null on purpose: house/roles.yml stays git-native by owner ruling as the root of trust,
+// so it alone keeps the git-PR flow and has no KV half.
 const GOV_KV_SECTION = { ban: 'bans', unban: 'bans', grandfather: 'grandfathered', ungrandfather: 'grandfathered', role: null };
-const GOV_KV_REMOVES = new Set(['unban', 'ungrandfather']);
 const GOV_OP = {
   ban: { path: 'house/bans.yml', rank: ROLE_RANK.admin, fn: ban, args: (t) => ({ githubId: t.targetId, reason: t.reason }) },
   unban: { path: 'house/bans.yml', rank: ROLE_RANK.admin, fn: unban, args: (t) => ({ githubId: t.targetId }) },
@@ -443,8 +443,7 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
   let file, branchSlug;
   let files = null; // sow-161 A: a MULTI-FILE op sets this instead of `file`; the apply step below handles either
   let multiTitle = null; // sow-161 A: a multi-file op's own PR title
-  let govKv = null; // sow-213 Phase 2b: the KV half of a governance dual-write, applied after the git write lands
-  let govRefresh = false; // sow-213 Phase 2b: a role change has no KV half, so it asks the mirror workflow to re-derive from git
+  let govRefresh = false; // sow-213: a role change has no KV half (roles stay git-native), so it asks the mirror workflow to re-derive from git
   if (isContent) {
     const path = String(payload?.path || '');
     if (!isCleanPath(path) || !CONTENT_ITEM_RE.test(path)) {
@@ -491,30 +490,62 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
       return { status: 400, body: { error: 'bad_request', message: 'an invalid grant tier was requested' } };
     }
     const op = GOV_OP[action];
+    const kvSection = GOV_KV_SECTION[action]; // 'bans' | 'grandfathered' | null (role is git-native)
+
+    // sow-213 Step 3: bans + grandfathers are KV-NATIVE now (house/bans.yml + house/grandfathered.yml are
+    // deleted). Read the mirror, run the SAME pure core against the mirror's section so grandfather's overlay,
+    // `changed`, and the audit are all computed exactly as they were against the git file, write the moderation
+    // log BEFORE enactment, then write the mirror back. No git PR, no branch. `role` (Tier S, house/roles.yml,
+    // the ROOT OF TRUST) stays git-native and falls through to the git flow below.
+    if (kvSection) {
+      let mirror;
+      try { mirror = await kv.get(OVERRIDES_KV_KEY, 'json'); }
+      catch (e) { return { status: 503, body: { error: 'unavailable', message: `the overrides store could not be read (${e?.message || 'unknown'})` } }; }
+      // Fail closed and NEVER fabricate: an absent/malformed mirror is refused, not seeded with a one-entry
+      // blob that would read as the complete override set and fail OPEN for everyone missing from it (the same
+      // rule writeOverrideToKv enforces). generatedAt is the freshness signal and is left untouched here (the
+      // 6-hourly sync owns it), so this write never makes a dead sync look alive.
+      if (!mirror || typeof mirror !== 'object' || !mirror.generatedAt) {
+        return { status: 503, body: { error: 'unavailable', message: 'the overrides store is unavailable' } };
+      }
+      const parsedSection = (mirror[kvSection] && typeof mirror[kvSection] === 'object') ? mirror[kvSection] : { [kvSection]: [] };
+      let result;
+      try { result = op.fn(parsedSection, op.args({ targetId, reason, until, tier }), { actor: { githubId }, now: Date.now() }); }
+      catch (e) { return { status: 400, body: { error: 'bad_request', message: e?.message || 'invalid action' } }; }
+      if (!result.changed) return { status: 200, body: { ok: true, noop: true, message: `no change (${action})` } };
+
+      // sow-213 Phase 2c: THE MODERATION LOG IS WRITTEN BEFORE THE ACTION IS ENACTED, and a failure REFUSES the
+      // action. Owner decision 2026-08-27: no window may exist in which a ban is enacted with no record of who
+      // did it and why. While KV is unreachable no governance action can be taken at all, which is the same
+      // fail-closed posture as every other membership check here. The record is of the ATTEMPT: the KV write
+      // below can still fail, leaving a logged action that did not land, which is the safe way round.
+      const logged = await appendModerationLog({ kv, audit: result.audit });
+      if (!logged.written) {
+        return { status: 503, body: { error: 'unavailable', message: `the action was refused because the moderation log could not be written (${logged.reason})` } };
+      }
+
+      // Every entry is KV-native now; mark any the pure core just added (a brand-new ban/grant) so a later
+      // REMOVE reaches it (applyKvOverride + mergeOverridesSection keep only source:'kv' entries). Preserve
+      // generatedAt and every other section untouched.
+      const marked = (result.next[kvSection] || []).map((e) => (e?.source === KV_SOURCE ? e : { ...e, source: KV_SOURCE }));
+      const nextMirror = { ...mirror, [kvSection]: { ...mirror[kvSection], [kvSection]: marked } };
+      try { await kv.put(OVERRIDES_KV_KEY, JSON.stringify(nextMirror)); }
+      catch (e) { return { status: 502, body: { error: 'write_failed', message: `the overrides store could not be written (${e?.message || 'unknown'})` } }; }
+      return { status: 200, body: { ok: true, action, target: targetId, kvWritten: true } };
+    }
+
+    // role (Tier S, house/roles.yml stays git-native as the root of trust): the git-PR flow, unchanged.
     const load = await loadHouseYaml(fetchImpl, instToken, upstream, op.path);
     if (!load.ok) return { status: load.status, body: load.body };
     let result;
     try { result = op.fn(load.parsed, op.args({ targetId, reason, role: roleVal, until, tier }), { actor: { githubId }, now: Date.now() }); }
     catch (e) { return { status: 400, body: { error: 'bad_request', message: e?.message || 'invalid action' } }; }
     if (!result.changed) return { status: 200, body: { ok: true, noop: true, message: `no change (${action})` } };
-
-    // sow-213 Phase 2c: THE MODERATION LOG IS WRITTEN BEFORE THE ACTION IS ENACTED, and a failure REFUSES the
-    // action. Owner decision 2026-08-27: no window may exist in which a ban is enacted with no record of who
-    // did it and why. Logging afterwards cannot satisfy that, because the action has already landed by then.
-    // The consequence, stated rather than buried: while KV is unreachable, no governance action can be taken
-    // at all. That is the fail-closed direction and it is the same posture as every other membership check
-    // here. The record is of the ATTEMPT: the git write below can still fail, leaving a logged action that did
-    // not land, which is the safe way round.
     const logged = await appendModerationLog({ kv, audit: result.audit });
     if (!logged.written) {
       return { status: 503, body: { error: 'unavailable', message: `the action was refused because the moderation log could not be written (${logged.reason})` } };
     }
-
-    govRefresh = action === 'role';
-    govKv = GOV_KV_SECTION[action]
-      ? { section: GOV_KV_SECTION[action], githubId: targetId, remove: GOV_KV_REMOVES.has(action),
-          entry: (result.next?.[GOV_KV_SECTION[action]] ?? []).find((e) => String(e?.github_id) === targetId) ?? null }
-      : null;
+    govRefresh = true; // a role change refreshes the mirror from git, since roles stay git-native
     file = { path: op.path, content: yaml.dump(result.next, { lineWidth: 100, noRefs: true }) };
     branchSlug = `${action}-${targetId}`;
   } else if (isConfig) {
@@ -587,23 +618,12 @@ export async function membershipAdminAuthor(request, env, deps = {}) {
     body: JSON.stringify({ title, head: branch, base: 'main', body, maintainer_can_modify: false }),
   });
   const prData = await pr.json().catch(() => ({}));
-  const post = { ...(await dualWrite(kv, govKv)), ...(await refreshMirror(env, govRefresh, fetchImpl)) };
+  const post = await refreshMirror(env, govRefresh, fetchImpl); // sow-213: only a role change (git-native) reaches here with a KV concern; it refreshes the mirror from git
   if (pr.status === 422) return { status: 200, body: { ok: true, branch, number: null, html_url: null, already: true, ...post } };
   if (!pr.ok) return { status: 502, body: { error: 'open_pr_failed', message: `GitHub returned ${pr.status}` } };
   return { status: 200, body: { ok: true, branch, number: prData.number, html_url: prData.html_url, ...post } };
 }
 
-/**
- * sow-213 Phase 2b: the KV half of the governance dual-write, run only after the git half has landed.
- *
- * A FAILURE HERE IS REPORTED, NOT THROWN, and it never discards the git write. Git is authoritative through
- * the transition, so a failed KV write degrades to exactly the pre-Phase-2 behaviour: the ban is real, it is
- * in the file, and it reaches KV at the next scheduled mirror sync instead of within the second. Throwing
- * would turn a narrowed window into a refused moderation action, which is strictly worse.
- *
- * It is reported rather than swallowed because a silent false here reopens the window this phase exists to
- * close, and a caller that cannot see the difference cannot tell a dual-write from a git-only write.
- */
 /**
  * sow-213 Phase 2b: a ROLE change has no KV half, deliberately. house/roles.yml is the root of trust for the
  * anti-escalation model, and letting this endpoint write staff status into KV would create an escalation path
@@ -618,12 +638,6 @@ async function refreshMirror(env, wanted, fetchImpl) {
   if (!wanted) return {};
   const r = await fireRepositoryDispatch({ env, eventType: 'sync-mirror', clientPayload: { reason: 'role-change' }, fetchImpl });
   return { mirrorRefreshed: r.fired, mirrorReason: r.reason };
-}
-
-async function dualWrite(kv, plan) {
-  if (!plan) return {}; // a role change has no KV half
-  const r = await writeOverrideToKv({ kv, ...plan });
-  return { kvWritten: r.written, kvReason: r.reason };
 }
 
 // sow-271: the site-settings pool READ. Gated the same way as the other config reads (a GET carries no CSRF and

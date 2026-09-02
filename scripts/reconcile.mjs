@@ -31,7 +31,7 @@ import { loadOverrides, loadOverridesRaw, effectiveStatus, roleOf, ROLE } from '
 import { buildEnvPriceTierMap, resolveEffectiveTier } from '../membership/tier-gate.mjs'; // sow-185: price map + override-aware tier
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { planReconcile } from './lib/reconcile-plan.mjs';
-import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorContentChannelsToKv, mirrorTopicsToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw, readOverridesMirrorRest } from './lib/kv-mirror.mjs';
 import { applyOverridesSource, overrideFilesPresent } from './lib/overrides-source.mjs'; // sow-213 R4: KV overrides overlay for the plan + the git-present reality check behind reconcile's fail posture
 import { syncFavoriteCounts, readCountsFromDisk, readFavoritedByFromDisk, readMembersIndexFromDisk } from './lib/favorite-counts.mjs';
 import { syncCouponGrants, readGrandfatheredFromDisk, readCouponsFromDisk, listCouponRedemptions, planCouponGrants } from './lib/coupon-grants.mjs'; // SOW-119 (+ sow-218: pre-apply, sow-185: explicit tier)
@@ -734,11 +734,23 @@ async function main() {
   // files, not a member action, so a dry run only reports what it would write.
   const rawOverrides = loadOverridesRaw(ROOT);
   if (dryRun) {
-    // sow-213 R9: `ownedByGit` is required now. This dry run WRITES NOTHING and reports the git-owned shape, so
-    // pass EXPLICIT git-owned (never throws, empty once the files are gone); the --apply branch below uses the
-    // reality-derived gitOwnedSections(ROOT).
-    const blob = buildOverridesMirror(rawOverrides, now, null, { bans: true, grandfathered: true });
-    console.log(`reconcile: DRY RUN would mirror overrides to KV (${JSON.stringify(blob).length} bytes, key overrides:mirror).`);
+    // sow-213 Step 3: THE DRY RUN IS HONEST NOW. It uses the REALITY-DERIVED ownership, not a byte count that
+    // misleads once the git files are gone. When git still owns both sections, the byte count is meaningful and
+    // printed. When a section is KV-native (its git file deleted), buildOverridesMirror with no `existing` would
+    // ABORT rather than write an empty section, and a byte count would report 0 entries, which is byte-for-byte
+    // the shape of a catastrophic erase. So no count is printed for a KV-native section: the real --apply write
+    // reads the current KV mirror and PRESERVES those entries, which a dry run cannot read. The direct KV re-read
+    // is the post-deletion safety signal (sow-213 exit criteria), never this.
+    const owned = gitOwnedSections(ROOT); // { bans, grandfathered }; roles is always git-native
+    const kvNative = Object.entries(owned).filter(([, v]) => !v).map(([k]) => k);
+    if (kvNative.length === 0) {
+      const blob = buildOverridesMirror(rawOverrides, now, null, owned);
+      console.log(`reconcile: DRY RUN would mirror overrides to KV (${JSON.stringify(blob).length} bytes, key overrides:mirror; roles + bans + grandfathered all git-owned).`);
+    } else {
+      console.log(
+        `reconcile: DRY RUN would mirror overrides to KV. roles.yml is git-owned and rebuilt; ${kvNative.join(' + ')} ${kvNative.length === 1 ? 'is' : 'are'} KV-native now (git file deleted), so the real --apply write PRESERVES the existing KV entries, which a dry run cannot read. No entry count is reported for them: a 0 here would be byte-for-byte the shape of a total erase.`,
+      );
+    }
   } else {
     try {
       // sow-213 Phase 3: preserve, never rebuild, a section git no longer owns (see kv-mirror.sectionFor).
@@ -815,13 +827,21 @@ async function main() {
   // member gathering has to see them next run (the Worker fast-path covers the gap in the meantime). Dry
   // run reports intent; apply lists KV + opens one auto-merged PR for any missing grant.
   if (dryRun) {
-    console.log('reconcile: DRY RUN would fold coupon redemptions from KV -> house/grandfathered.yml (requires CF creds + a GitHub PR).');
+    console.log('reconcile: DRY RUN would fold coupon redemptions from KV -> the overrides:mirror grants (KV-native, no PR; requires CF creds).');
   } else {
     try {
-      const r = await syncCouponGrants({ env, github, now, readGrandfathered: () => readGrandfatheredFromDisk(ROOT), readCoupons: () => readCouponsFromDisk(ROOT) });
+      // sow-213 Step 3: the grants source AND target are the KV mirror now (house/grandfathered.yml is deleted).
+      const r = await syncCouponGrants({
+        env, now,
+        readGrandfathered: async () => {
+          const m = await readOverridesMirrorRest({ env });
+          return (m.available && m.mirror) ? { parsed: m.mirror.grandfathered ?? { grandfathered: [] } } : null;
+        },
+        readCoupons: () => readCouponsFromDisk(ROOT),
+      });
       console.log(
         r.synced
-          ? `reconcile: folded ${r.additions} coupon redemption(s) into grandfather grants (PR #${r.prNumber})${r.conversions ? `, ${r.conversions} converted from permanent comp (SOW-142)` : ''}.`
+          ? `reconcile: folded ${r.additions} coupon redemption(s) into grandfather grants in KV${r.conversions ? `, ${r.conversions} converted from permanent comp (SOW-142)` : ''}.`
           : `reconcile: coupon-grants sync SKIPPED (${r.reason}).`,
       );
       if (r.skippedBounded?.length) {

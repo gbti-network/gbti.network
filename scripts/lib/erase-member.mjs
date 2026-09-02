@@ -23,7 +23,8 @@ import { scrubOpener as scrubContentOpener } from '../../membership/content-open
 import { scrubCounterpart } from '../../workers/signup/conversion-snapshot-store.mjs'; // SOW-059 P1c
 import { couponGrantKey } from '../../workers/signup/coupons.mjs'; // SOW-119 / sow-212: the one-per-member lock
 import { redemptionKey, redemptionCountKey } from '../../membership/coupons.mjs'; // SOW-119 key builders
-import { removeGrantEntryIfPresent, listCouponRedemptions, GRANDFATHERED_PATH } from './coupon-grants.mjs';
+import { listCouponRedemptions } from './coupon-grants.mjs';
+import { writeOverrideToKvRest } from './kv-mirror.mjs'; // sow-213 Step 3: the grandfather grant is removed from the KV mirror on erasure, not a git file
 import { couponLockKey, COUPON_LOCK_VALUE } from '../../membership/coupon-lock.mjs'; // sow-212: the minimized lock
 import { mailHash, MAIL_SUBSCRIBER_PREFIX } from '../../membership/mail-suppress.mjs'; // SOW-166: the keyed identity behind every mail key
 import { normalizeSubscriber } from '../../membership/mail-subscriber.mjs'; // SOW-166: the record shape the scan matches on
@@ -872,29 +873,46 @@ export async function eraseDiscordRoles({ githubId, stripe = null, discord = nul
 }
 
 /**
- * ONE auto-merged PR that flips every published file in the member's folder to draft, removes their
- * members-index entry, AND removes their house/grandfathered.yml grant. Reversible (a re-subscribe /
- * un-erase can re-publish); git history persists, which is disclosed in the TOS. Reported no-op without a
- * GitHub client or any net change. `files` is the member's content descriptors ([{ path, status }]) from
- * buildRepoIndex; reading happens in the caller so this is testable with a fake github client.
+ * Right-to-erasure for one member's REPOSITORY records. Two decoupled halves:
+ *   - the KV grant removal (sow-213 Step 3): the grandfather grant is person-keyed edge state now
+ *     (house/grandfathered.yml is deleted), so it is removed from the overrides mirror directly. No git, no
+ *     GitHub client needed, so a member with no folder still gets their grant stripped.
+ *   - ONE auto-merged git PR that flips every published file in the member's folder to draft and removes their
+ *     members-index entry. Reversible (a re-subscribe / un-erase can re-publish); git history persists, disclosed
+ *     in the TOS. Reported no-op without a GitHub client or any net git change. `files` is the member's content
+ *     descriptors ([{ path, status }]) from buildRepoIndex; reading happens in the caller so this is testable
+ *     with a fake github client.
  *
- * The GRANDFATHERED removal was added 2026-08-11 (SecurityMaster's adjudication, relayed by SowMaster).
- * house/grandfathered.yml is the "durable record" the SOW-119 coupon fold writes to, it is committed to a
- * PUBLIC repo, and it carries per person the github_id, login, a `reason` describing their commercial
- * relationship, and an `until`. Erasure removed the members-index entry and touched no other house/*.yml,
- * so an erased member stayed published there. It rides in THIS PR because the machinery already exists.
- *
- * A username is required for the content flip but NOT for the two house-file removals, so a member with no
- * folder still gets their records stripped.
+ * The GRANDFATHERED removal was added 2026-08-11 (SecurityMaster's adjudication). Until Step 3 it lived in a
+ * PUBLIC git file carrying the github_id, login, a `reason` describing the commercial relationship, and an
+ * `until`; the storage-boundary ruling moved that person-keyed record off the public chain into KV, and this
+ * erasure follows it there. Fail LOUD on a KV write error: a GDPR erasure that could not remove a grant is
+ * exactly the silent gap this must never have.
  */
-export async function eraseContent({ github = null, githubId, username, files = [], base = 'main', now = new Date() } = {}) {
-  if (!github) return { skipped: true, reason: 'no GitHub client (set GITHUB_BOT_TOKEN + GITHUB_CONTENT_REPO)' };
-
+export async function eraseContent({ github = null, githubId, username, files = [], base = 'main', now = new Date(), env = process.env, fetchImpl = globalThis.fetch, removeGrant = null } = {}) {
   const id = String(githubId);
   const decode = (b) => Buffer.from(b, 'base64').toString('utf8');
   const safeYaml = (text) => { try { return yaml.load(text) || {}; } catch { return null; } };
 
-  // Phase 1 -- DECIDE from the base branch. Cheap reads that determine WHETHER there is anything to change, so
+  // sow-213 Step 3: remove the grandfather grant from the KV mirror, decoupled from the git PR below. Idempotent
+  // (a no-op if the id has no grant: writeOverrideToKvRest reports "already in that state"). Any OTHER failure is
+  // a grantError surfaced loudly. applyKvOverride REMOVE drops only source:'kv' entries, and post-deletion the
+  // preserve-mark marks every entry, so this reaches them.
+  let grantRemoved = false;
+  let grantError = null;
+  const doRemoveGrant = removeGrant || ((args) => writeOverrideToKvRest({ env, fetchImpl, ...args }));
+  const gr = await doRemoveGrant({ section: 'grandfathered', githubId: id, remove: true });
+  if (gr.written) grantRemoved = true;
+  else if (gr.reason && !/already in that state/.test(gr.reason)) grantError = gr.reason;
+
+  if (!github) {
+    // No GitHub client: the git half cannot run, but the KV grant removal above did.
+    if (grantError) return { error: `could not remove the grandfather grant from KV: ${grantError}` };
+    if (grantRemoved) return { grantRemoved, flipped: 0, indexRemoved: false, pr: null };
+    return { skipped: true, reason: 'no GitHub client (set GITHUB_BOT_TOKEN + GITHUB_CONTENT_REPO), and no KV grant to remove' };
+  }
+
+  // Phase 1 -- DECIDE the GIT changes from the base branch (content flips + members-index removal). Cheap reads;
   // the no-op case creates no branch. The shas read here are NOT used to commit (that would be a TOCTOU).
   const toFlip = [];
   for (const f of files) {
@@ -909,14 +927,10 @@ export async function eraseContent({ github = null, githubId, username, files = 
     const parsed = safeYaml(decode(idxBase.content));
     if (parsed?.members && Object.prototype.hasOwnProperty.call(parsed.members, id)) wantIndexRemoval = true;
   }
-  // The grandfather grant (SOW-119 fold target). Decided textually: removeGrantEntryIfPresent is a line
-  // splice, because a yaml.dump round-trip would destroy this file's per-person comments and header.
-  let wantGrantRemoval = false;
-  const grantBase = await github.getContent(GRANDFATHERED_PATH, base);
-  if (grantBase?.content) {
-    wantGrantRemoval = removeGrantEntryIfPresent(decode(grantBase.content), id).removed;
-  }
-  if (toFlip.length === 0 && !wantIndexRemoval && !wantGrantRemoval) {
+  if (toFlip.length === 0 && !wantIndexRemoval) {
+    // No git changes. Return based on the KV grant outcome above.
+    if (grantError) return { error: `could not remove the grandfather grant from KV: ${grantError}` };
+    if (grantRemoved) return { grantRemoved, flipped: 0, indexRemoved: false, pr: null };
     return { skipped: true, reason: 'no published content, members-index entry, or grandfather grant to change' };
   }
 
@@ -954,37 +968,16 @@ export async function eraseContent({ github = null, githubId, username, files = 
     }
   }
 
-  let grantRemoved = false;
-  if (wantGrantRemoval) {
-    const onBranch = await github.getContent(GRANDFATHERED_PATH, branch);
-    if (onBranch?.content) {
-      const { text, removed } = removeGrantEntryIfPresent(decode(onBranch.content), id);
-      if (removed) {
-        // Verify before committing: the result must still parse AND must no longer resolve a grant for this
-        // id. A silent no-op on a splice is how a "removal" ships without removing anything.
-        const reparsed = safeYaml(text);
-        const stillThere = (reparsed?.grandfathered ?? []).some((e) => String(e?.github_id ?? '') === id);
-        if (reparsed === null) return { error: 'grandfathered.yml did not parse after the removal; nothing committed' };
-        if (stillThere) return { error: `grandfathered.yml still resolves a grant for ${id} after the removal; nothing committed` };
-        await github.putContent(GRANDFATHERED_PATH, {
-          message: `erase: remove grandfather grant for github_id ${id}`,
-          content: toBase64(text),
-          branch, sha: onBranch.sha,
-        });
-        grantRemoved = true;
-      }
-    }
-  }
-
-  if (flipped === 0 && !indexRemoved && !grantRemoved) {
-    // The decided changes were applied concurrently between phase 1 and phase 2 (practically never for an
-    // erasure target). Skip rather than open a diff-less PR (GitHub rejects those); the empty branch is inert.
-    return { skipped: true, reason: 'content already drafted / records already removed concurrently' };
+  if (flipped === 0 && !indexRemoved) {
+    // The decided git changes were applied concurrently between phase 1 and phase 2 (practically never for an
+    // erasure target). Skip the diff-less PR (GitHub rejects those); the KV grant removal above still stands.
+    if (grantError) return { error: `could not remove the grandfather grant from KV: ${grantError}` };
+    return { skipped: true, reason: 'content already drafted / records already removed concurrently', grantRemoved };
   }
 
   const removals = [
     indexRemoved ? 'the members-index entry' : null,
-    grantRemoved ? 'the grandfather grant' : null,
+    grantRemoved ? 'the grandfather grant (KV)' : null,
   ].filter(Boolean);
   const pull = await github.createPull({
     title: `erase: draft ${username ?? `github_id ${id}`} content + remove house records`,
@@ -996,6 +989,9 @@ export async function eraseContent({ github = null, githubId, username, files = 
       '(disclosed in the TOS).',
   });
   await github.mergePull(pull.number, { method: 'squash' });
+  // Surface a grant-removal error even alongside a successful content PR: the erasure is not fully done if the
+  // grant could not be removed from KV.
+  if (grantError) return { pr: pull.number, flipped, indexRemoved, grantRemoved, grantError };
   return { pr: pull.number, flipped, indexRemoved, grantRemoved };
 }
 
@@ -1056,7 +1052,7 @@ export async function runErasure({
   // and the records are stranded forever. Pinned by a test in test/erase-member-mail.test.mjs.
   await runStep('mail', () => eraseMailRecords({ githubId, stripe, env, fetchImpl }));
   await runStep('discord', () => eraseDiscordRoles({ githubId, stripe, discord, env }));
-  await runStep('content', () => eraseContent({ github, githubId, username, files, now }));
+  await runStep('content', () => eraseContent({ github, githubId, username, files, now, env, fetchImpl })); // sow-213 Step 3: env/fetchImpl for the KV grant removal
   if (deleteStripe) await runStep('stripe', () => eraseStripeCustomer({ githubId, stripe }));
 
   const record = buildAuditRecord({ githubId, operator, apply: true, steps, now });

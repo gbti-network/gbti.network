@@ -10,7 +10,10 @@ import path from 'node:path';
 
 import { rolesFromParsed, roleOf, canModerate, canBanGrandfather, canManageRoles } from '../client/src/roles.mjs';
 import { createReader, loadRoles } from '../client/src/repo-fs.mjs';
-import { banMember, grandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent } from '../client/src/admin-ops.mjs';
+// sow-213 Step 3: ban/unban/grandfather/ungrandfather are retired from admin-ops (governance is KV-native and
+// routes through the Worker now); their behaviour is covered by test/membership-admin-author.test.mjs +
+// test/governance-routed-to-worker.test.mjs. Only role assignment + content moderation stay local here.
+import { setMemberRole, deplatformContent, removeContent, republishContent } from '../client/src/admin-ops.mjs';
 import { OperationError } from '../client/src/operations.mjs';
 
 // ---- roles ----
@@ -78,60 +81,22 @@ function seedRepo(extra = {}) {
   return dir;
 }
 
-test('banMember: forbidden for a plain member, allowed for admin (PR edits bans.yml)', async () => {
-  const repoPath = seedRepo();
-  await assert.rejects(
-    banMember(adminCtx({ role: 'member', repoPath, repo: fakeRepo() }), { githubId: '999' }),
-    (e) => e instanceof OperationError && e.code === 'forbidden',
-  );
-  const repo = fakeRepo();
-  const out = await banMember(adminCtx({ role: 'admin', repoPath, repo }), { githubId: '999', reason: 'spam' });
-  assert.equal(out.prNumber, 55);
-  assert.equal(out.branch, 'gbti/ban-999');
-  assert.equal(out.changed, true);
-  assert.equal(repo.puts[0].path, 'house/bans.yml');
-  assert.match(repo.puts[0].content, /999/);
-});
-
-// SOW-152: an admin config write now FRESH-BASES its fork branch (POST /membership/sync-fork) BEFORE committing,
+// SOW-152: an admin config write FRESH-BASES its fork branch (POST /membership/sync-fork) BEFORE committing,
 // exactly like the content publish path. Without it, the branch force-resets onto a stale fork main -> add/add
-// conflicts that a superadmin-automerge PR stalls on. A recording fetch proves the sync ran on an admin write.
+// conflicts that a superadmin-automerge PR stalls on. A recording fetch proves the sync ran on a governance
+// write; role assignment (roles.yml, git-native) exercises the SAME adminPublish path the retired ban writer did.
 test('SOW-152: an admin write syncs the fork main before committing (fresh-base)', async () => {
   const repoPath = seedRepo();
   const repo = fakeRepo();
   const fetched = [];
   const fetch = async (url) => { fetched.push(String(url)); return { ok: true, json: async () => ({ synced: true }) }; };
   const ctx = {
-    role: () => 'admin', getRepoClient: () => repo, reader: createReader(repoPath),
+    role: () => 'superadmin', getRepoClient: () => repo, reader: createReader(repoPath),
     store: { get: (k) => ({ repoPath, githubToken: 't' })[k] }, now: () => '2026-06-03T00:00:00Z', fetch,
   };
-  const out = await banMember(ctx, { githubId: '77', reason: 'spam' });
+  const out = await setMemberRole(ctx, { githubId: '77', role: 'moderator' });
   assert.equal(out.changed, true); // the write still succeeds
   assert.ok(fetched.some((u) => u.includes('/membership/sync-fork')), 'the fork main was synced before the commit');
-});
-
-// SOW-038 P4: the governance ops are idempotent (already-in-that-state -> no PR) and fold an identity-minimal
-// audit entry into the PR body (the PR is the audit trail).
-test('banMember: idempotent no-op when already banned (no PR opened)', async () => {
-  const dir = seedRepo();
-  fs.writeFileSync(path.join(dir, 'house', 'bans.yml'), "bans:\n  - github_id: '999'\n    reason: spam\n    at: 'T'\n");
-  const repo = fakeRepo();
-  const out = await banMember(adminCtx({ role: 'admin', repoPath: dir, repo }), { githubId: '999' });
-  assert.equal(out.changed, false);
-  assert.equal(out.noop, true);
-  assert.equal(repo.puts.length, 0, 'no file write / PR for a no-op');
-  assert.equal(repo.pulls.length, 0);
-});
-
-test('banMember: records an identity-minimal audit entry (returned + folded into the PR body)', async () => {
-  const repo = fakeRepo();
-  const ctx = { ...adminCtx({ role: 'admin', repoPath: seedRepo(), repo }), identity: () => ({ githubId: '1', login: 'alice' }) };
-  const out = await banMember(ctx, { githubId: '999', reason: 'spam' });
-  assert.equal(out.audit.action, 'ban');
-  assert.equal(out.audit.actor.login, 'alice');
-  assert.equal(out.audit.target.github_id, '999');
-  // the PR body carries the parseable audit comment
-  assert.match(repo.pulls[0].body, /<!-- gbti-audit .*"action":"ban".*-->/);
 });
 
 test('setMemberRole: unknown role is a bad-request (mapped from the core SuperadminActionError)', async () => {
@@ -139,13 +104,6 @@ test('setMemberRole: unknown role is a bad-request (mapped from the core Superad
     setMemberRole(adminCtx({ role: 'superadmin', repoPath: seedRepo(), repo: fakeRepo() }), { githubId: '5', role: 'wizard' }),
     (e) => e instanceof OperationError && e.code === 'bad-request',
   );
-});
-
-test('grandfatherMember: admin opens a grandfathered.yml PR', async () => {
-  const repo = fakeRepo();
-  const out = await grandfatherMember(adminCtx({ role: 'admin', repoPath: seedRepo(), repo }), { githubId: '7', reason: 'founder' });
-  assert.equal(out.prNumber, 55);
-  assert.equal(repo.puts[0].path, 'house/grandfathered.yml');
 });
 
 test('setMemberRole: requires superadmin; writes roles.yml', async () => {
@@ -194,6 +152,6 @@ test('republishContent: moderator flips a draft member content file to published
 });
 
 test('admin ops fail closed without auth or path traversal', async () => {
-  await assert.rejects(banMember(adminCtx({ role: 'admin', repoPath: seedRepo(), repo: null }), { githubId: '1' }), (e) => e.code === 'not-authenticated');
+  await assert.rejects(setMemberRole(adminCtx({ role: 'superadmin', repoPath: seedRepo(), repo: null }), { githubId: '1', role: 'moderator' }), (e) => e.code === 'not-authenticated');
   await assert.rejects(removeContent(adminCtx({ role: 'admin', repoPath: seedRepo(), repo: fakeRepo() }), { path: '../../etc/passwd' }), (e) => e.code === 'bad-request');
 });

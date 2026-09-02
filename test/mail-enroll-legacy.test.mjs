@@ -20,16 +20,19 @@ const fetchOk = (blob) => async () => ({ ok: true, status: 200, json: async () =
 // IDENTICAL allow-set the git file would have. The length guard makes a STALE base (file absent -> {} -> 0
 // entries) FAIL LOUDLY here rather than passing trivially, which is exactly the trap that invalidated the first
 // attempt (band seq 78).
-test('R6 EQUIVALENCE: reading KV yields the SAME allow-set the git file would (correct-base check)', async () => {
-  const gitPath = fileURLToPath(new URL('../house/grandfathered.yml', import.meta.url));
-  const parsed = yaml.load(fs.readFileSync(gitPath, 'utf8'));
-  const gitEntries = parsed?.grandfathered ?? [];
-  assert.ok(gitEntries.length > 0, 'house/grandfathered.yml must be present with entries; a stale base fails here');
-  const gitAllowSet = gitEntries
-    .map((g) => ({ githubId: String(g?.github_id ?? '').trim(), login: String(g?.login ?? '').trim() }))
-    .filter((g) => g.githubId && g.login);
-  const kvAllowSet = await grandfatheredAllowSet({ env: ENV, fetchImpl: fetchOk(mirror(gitEntries)) });
-  assert.deepEqual(kvAllowSet, gitAllowSet, 'the KV-mirror allow-set must equal the git-file allow-set exactly');
+test('R6: the KV allow-set applies the SAME github_id+login filter the git-era allow-set did', async () => {
+  // BEHAVIOUR CHANGE recorded: this used to read the real house/grandfathered.yml and prove the KV read yields
+  // an IDENTICAL allow-set (a Step-2 transition correct-base check). Step 3 deletes that file, so there is no git
+  // side to compare against any more; the filter equivalence is pinned against a fixture instead. The derivation
+  // (github_id AND login required, trimmed) is unchanged, only its source moved to KV.
+  const entries = [
+    { github_id: '11', login: 'alice' },
+    { github_id: '12', login: 'bob', until: null },
+    { github_id: '13' }, // no login -> dropped
+    { login: 'noid' },   // no id -> dropped
+  ];
+  const kvAllowSet = await grandfatheredAllowSet({ env: ENV, fetchImpl: fetchOk(mirror(entries)) });
+  assert.deepEqual(kvAllowSet, [{ githubId: '11', login: 'alice' }, { githubId: '12', login: 'bob' }], 'the same filter, sourced from KV');
   assert.ok(kvAllowSet.length > 0, 'and it is non-trivially non-empty');
 });
 

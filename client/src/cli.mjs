@@ -11,8 +11,12 @@ import { deviceFlowLogin } from './auth-device.mjs';
 import { GITHUB_CLIENT_ID } from './signup-base.mjs';
 import { cmdLogin, cmdWhoami, cmdNew, cmdPublish, cmdPr } from './cli-commands.mjs';
 import {
-  banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent,
+  setMemberRole, deplatformContent, removeContent,
 } from './admin-ops.mjs';
+// sow-213 Step 3: ban/unban/grandfather/ungrandfather are KV-native now (the git files are deleted), so they
+// route through the Worker (governanceAdminOp), the same path api.mjs + ext-dispatch.mjs already take. The CLI
+// was the one caller still using the retired local writers directly.
+import { governanceAdminOp } from './operations.mjs';
 
 const RESERVED = new Set(['json', 'body', 'body-file']);
 
@@ -112,13 +116,13 @@ async function main() {
     case 'remove':
       return out(await removeContent(ctx, { path: positionals[0] }));
     case 'ban':
-      return out(await banMember(ctx, { githubId: positionals[0], reason: flags.reason }));
+      return out(await governanceAdminOp(ctx, { action: 'ban', githubId: positionals[0], reason: flags.reason }));
     case 'unban':
-      return out(await unbanMember(ctx, { githubId: positionals[0] }));
+      return out(await governanceAdminOp(ctx, { action: 'unban', githubId: positionals[0] }));
     case 'grandfather':
-      return out(await grandfatherMember(ctx, { githubId: positionals[0], reason: flags.reason, until: flags.until || null, login: flags.login }));
+      return out(await governanceAdminOp(ctx, { action: 'grandfather', githubId: positionals[0], reason: flags.reason, until: flags.until || null, login: flags.login }));
     case 'ungrandfather':
-      return out(await ungrandfatherMember(ctx, { githubId: positionals[0] }));
+      return out(await governanceAdminOp(ctx, { action: 'ungrandfather', githubId: positionals[0] }));
     case 'role':
       return out(await setMemberRole(ctx, { githubId: positionals[0], role: positionals[1], login: flags.login }));
 

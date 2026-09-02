@@ -235,42 +235,55 @@ const wrun = (body, fetchImpl, kv) =>
 
 const modlogKeys = (kv) => [...kv.store.keys()].filter((k) => k.startsWith('modlog:'));
 
-test('sow-213 endpoint: a ban DUAL-WRITES, and the KV entry is marked source:kv', async () => {
+test('sow-213 Step 3 endpoint: a ban is KV-native (marked source:kv) and opens NO git PR', async () => {
+  // BEHAVIOUR CHANGE recorded: through Phase 2b a ban wrote house/bans.yml AND dual-wrote KV. Step 3 deletes the
+  // file, so the ban is KV-ONLY: the mirror is the record, no branch, no PR.
   const kv = fakeKv();
-  kv.store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror()));
-  const r = await wrun({ action: 'ban', githubId: '555', reason: 'spam' }, wgh([], 'bans: []\n'), kv);
+  kv.store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror({ bans: { bans: [] } })));
+  const record = [];
+  const r = await wrun({ action: 'ban', githubId: '555', reason: 'spam' }, wgh(record, 'bans: []\n'), kv);
   assert.equal(r.status, 200);
   assert.equal(r.body.kvWritten, true);
+  assert.ok(!record.some((c) => /\/pulls$/.test(c.url) || /\/git\/refs$/.test(c.url)), 'no branch, no PR');
   const after = JSON.parse(kv.store.get(OVERRIDES_KV_KEY));
   assert.equal(after.bans.bans.find((e) => e.github_id === '555').source, KV_SOURCE);
 });
 
-test('sow-213 endpoint: a KV failure does NOT discard the git write; it is REPORTED', async () => {
-  const kv = fakeKv(); // no overrides:mirror present, so the KV half must refuse
+test('sow-213 Step 3 endpoint: a ban with an ABSENT mirror is REFUSED (503), because KV is the only record now', async () => {
+  // BEHAVIOUR CHANGE recorded: Phase 2b degraded a KV failure to a git-only write and REPORTED kvWritten:false.
+  // Step 3 deletes the git half, so KV is the sole record: an absent/unreadable mirror is refused, never
+  // fabricated, and there is no git fallback to fall back to.
+  const kv = fakeKv(); // no overrides:mirror present
   const record = [];
   const r = await wrun({ action: 'ban', githubId: '555', reason: 'spam' }, wgh(record, 'bans: []\n'), kv);
-  assert.equal(r.status, 200, 'the ban still landed in git');
-  assert.equal(r.body.number, 42, 'the PR was still opened');
-  assert.equal(r.body.kvWritten, false);
-  assert.match(r.body.kvReason, /absent|not an object/, 'the caller can tell a dual-write from a git-only write');
+  assert.equal(r.status, 503);
+  assert.equal(record.length, 0, 'nothing was written anywhere');
 });
 
-test('sow-213 endpoint: the moderation log is written BEFORE the action is enacted', async () => {
-  const kv = fakeKv();
-  kv.store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror()));
-  // The PR step fails, so the action does NOT land. If the log were written afterwards there would be none.
-  const r = await wrun({ action: 'ban', githubId: '555', reason: 'spam' }, wgh([], 'bans: []\n', { prFails: true }), kv);
-  assert.equal(r.status, 502, 'the action did not land');
-  assert.equal(modlogKeys(kv).length, 1, 'the attempt was recorded anyway, which is the safe way round');
+test('sow-213 Step 3 endpoint: the moderation log is written BEFORE the KV write (a failed write still leaves the record)', async () => {
+  // The enactment is the mirror PUT now. A KV that lets the modlog put through but fails the mirror put proves
+  // the log lands first: the action does not enact, yet the attempt is on record, which is the safe way round.
+  const store = new Map();
+  store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror({ bans: { bans: [] } })));
+  const kv = {
+    store,
+    async get(key, type) { const raw = store.get(key); if (raw === undefined) return null; return type === 'json' ? JSON.parse(raw) : raw; },
+    async put(key, value) { if (key === OVERRIDES_KV_KEY) throw new Error('mirror write refused'); store.set(key, value); },
+  };
+  const r = await wrun({ action: 'ban', githubId: '555', reason: 'spam' }, wgh([], 'bans: []\n'), kv);
+  assert.equal(r.status, 502, 'the mirror write failed, so the action did not enact');
+  assert.equal(modlogKeys(kv).length, 1, 'the attempt was recorded anyway, before the enactment');
 });
 
-test('sow-213 endpoint: if the moderation log CANNOT be written the action is REFUSED and git is untouched', async () => {
+test('sow-213 Step 3 endpoint: if the moderation log CANNOT be written the action is REFUSED and the mirror is untouched', async () => {
   const kv = fakeKv({ putThrows: true });
+  kv.store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror({ bans: { bans: [] } })));
   const record = [];
   const r = await wrun({ action: 'ban', githubId: '555', reason: 'spam' }, wgh(record, 'bans: []\n'), kv);
   assert.equal(r.status, 503);
   assert.match(r.body.message, /moderation log/);
-  assert.equal(record.length, 0, 'no branch, no file write, no PR: nothing was enacted without a record');
+  assert.equal(record.length, 0, 'no branch, no PR: nothing was enacted without a record');
+  assert.equal(JSON.parse(kv.store.get(OVERRIDES_KV_KEY)).bans.bans.length, 0, 'the mirror bans are untouched');
 });
 
 test('sow-213 endpoint: the log carries the actor, the target and the reason', async () => {
@@ -284,19 +297,18 @@ test('sow-213 endpoint: the log carries the actor, the target and the reason', a
   assert.equal(saved.action, 'ban');
 });
 
-test('sow-213 endpoint: an unban removes the KV-native entry and leaves the git-sourced one', async () => {
+test('sow-213 Step 3 endpoint: an unban removes the target from the mirror (the pure core removes by id)', async () => {
+  // BEHAVIOUR CHANGE recorded: Phase 2b used applyKvOverride, which removed ONLY the source:kv copy and left a
+  // git-sourced duplicate. Step 3 runs the pure `unban` core against the mirror, which removes by id, and
+  // post-deletion the preserve-mark makes every entry source:kv, one per id. So an unban removes the member.
   const kv = fakeKv();
   kv.store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror({ bans: { bans: [
-    { github_id: '900', reason: 'from git', at: FRESH },
-    { github_id: '900', reason: 'from kv', at: FRESH, source: KV_SOURCE },
+    { github_id: '900', reason: 'banned', at: FRESH, source: KV_SOURCE },
   ] } })));
-  const gov = "bans:\n  - github_id: '900'\n    reason: from git\n    at: '2026-08-27T00:00:00.000Z'\n";
-  const r = await wrun({ action: 'unban', githubId: '900' }, wgh([], gov), kv);
+  const r = await wrun({ action: 'unban', githubId: '900' }, wgh([], 'bans: []\n'), kv);
   assert.equal(r.status, 200);
   assert.equal(r.body.kvWritten, true);
-  const bans = JSON.parse(kv.store.get(OVERRIDES_KV_KEY)).bans.bans;
-  assert.equal(bans.length, 1);
-  assert.equal(bans[0].reason, 'from git');
+  assert.equal(JSON.parse(kv.store.get(OVERRIDES_KV_KEY)).bans.bans.length, 0, 'the member is unbanned');
 });
 
 test('sow-213 endpoint CONTROL: a ROLE change has no KV half, so it reports none', async () => {
@@ -333,7 +345,7 @@ test('sow-213: a ROLE change fires the sync-mirror dispatch, because roles have 
   assert.deepEqual(JSON.parse(kv.store.get(OVERRIDES_KV_KEY)).roles, mirror().roles, 'roles in KV were not touched by the Worker');
 });
 
-test('sow-213 CONTROL: a BAN does not fire the dispatch, because it dual-writes the KV half directly', async () => {
+test('sow-213 CONTROL: a BAN does not fire the sync-mirror dispatch, because it writes the KV half directly (no git to re-derive from)', async () => {
   const kv = fakeKv();
   kv.store.set(OVERRIDES_KV_KEY, JSON.stringify(mirror()));
   const record = [];

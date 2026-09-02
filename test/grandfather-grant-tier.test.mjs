@@ -103,6 +103,20 @@ const env = {
   GITHUB_APP_ID: '123', GITHUB_APP_INSTALLATION_ID: '999', GITHUB_APP_PRIVATE_KEY: 'PEM',
   UPSTREAM_REPO: 'gbti-network/gbti.network', MEMBERSHIP_AUTHOR_ENABLED: 'true',
 };
+// sow-213 Step 3: grandfather is KV-native now (house/grandfathered.yml is deleted), so the endpoint reads +
+// writes the overrides mirror. This kv seeds it and records the put; a test asserts the grant in the mirror.
+const OVERRIDES_KEY = 'overrides:mirror';
+const mirrorSeed = (grandfathered = []) => ({ generatedAt: '2026-08-29T00:00:00.000Z', roles: {}, bans: { bans: [] }, grandfathered: { grandfathered } });
+function kvWith(grandfathered = []) {
+  const store = new Map();
+  store.set(OVERRIDES_KEY, JSON.stringify(mirrorSeed(grandfathered)));
+  return {
+    store,
+    async get(k, type) { const raw = store.get(k); if (raw === undefined) return null; return type === 'json' ? JSON.parse(raw) : raw; },
+    async put(k, v) { store.set(k, v); },
+  };
+}
+const writtenGrants = (kv) => JSON.parse(kv.store.get(OVERRIDES_KEY)).grandfathered.grandfathered;
 const fakeKv = () => ({ async get() { return null; }, async put() {} });
 const allow = async () => ({ allowed: true });
 const staffAdmin = async () => ({ ok: true, githubId: '2', role: 'admin' });
@@ -124,16 +138,17 @@ function ghFetch(record, govFile, reads = []) {
     return { ok: false, status: 500, async json() { return {}; } };
   };
 }
-const run = (body, fetchImpl) =>
-  membershipAdminAuthor(req(body), env, { fetchImpl, authorize: staffAdmin, kv: fakeKv(), limiter: allow, signJwt: async () => 'fake.jwt.sig' });
+const run = (body, fetchImpl, kv = fakeKv()) =>
+  membershipAdminAuthor(req(body), env, { fetchImpl, authorize: staffAdmin, kv, limiter: allow, signJwt: async () => 'fake.jwt.sig' });
 
-const writtenYaml = (record) => deB64(record.find((c) => c.method === 'PUT').body.content);
-
-test('sow-213 endpoint: a tier in the payload reaches the YAML that is written', async () => {
+test('sow-213 Step 3 endpoint: a tier in the payload reaches the MIRROR grant that is written (KV-native, no PR)', async () => {
   const record = [];
-  const r = await run({ action: 'grandfather', githubId: '77', tier: 'creator' }, ghFetch(record, 'grandfathered: []\n'));
+  const kv = kvWith();
+  const r = await run({ action: 'grandfather', githubId: '77', tier: 'creator' }, ghFetch(record, 'grandfathered: []\n'), kv);
   assert.equal(r.status, 200);
-  assert.match(writtenYaml(record), /tier: creator/, 'the admin-chosen tier is committed, not dropped at the endpoint');
+  assert.equal(r.body.kvWritten, true);
+  assert.ok(!record.some((c) => /\/pulls$/.test(c.url)), 'no PR');
+  assert.equal(writtenGrants(kv).find((e) => e.github_id === '77').tier, 'creator', 'the admin-chosen tier is committed, not dropped');
 });
 
 test('sow-213 endpoint: an invalid tier is 400, rejected BEFORE the governance file is read', async () => {
@@ -146,11 +161,12 @@ test('sow-213 endpoint: an invalid tier is 400, rejected BEFORE the governance f
   assert.equal(reads.length, 0, 'the endpoint rejects on its own, without spending a GitHub read');
 });
 
-test('sow-213 endpoint: an until in the payload reaches the YAML', async () => {
+test('sow-213 Step 3 endpoint: an until in the payload reaches the MIRROR grant', async () => {
   const record = [];
-  const r = await run({ action: 'grandfather', githubId: '77', until: '2027-01-01' }, ghFetch(record, 'grandfathered: []\n'));
+  const kv = kvWith();
+  const r = await run({ action: 'grandfather', githubId: '77', until: '2027-01-01' }, ghFetch(record, 'grandfathered: []\n'), kv);
   assert.equal(r.status, 200);
-  assert.match(writtenYaml(record), /until: '?2027-01-01'?/);
+  assert.equal(writtenGrants(kv).find((e) => e.github_id === '77').until, '2027-01-01');
 });
 
 test('sow-213 endpoint: a malformed until is 400, rejected BEFORE the governance file is read', async () => {
@@ -161,18 +177,20 @@ test('sow-213 endpoint: a malformed until is 400, rejected BEFORE the governance
   assert.equal(reads.length, 0, 'the endpoint rejects on its own, without spending a GitHub read');
 });
 
-test('sow-213 endpoint CONTROL: no tier in the payload writes no tier field, and a valid request DOES read', async () => {
-  const record = []; const reads = [];
-  const r = await run({ action: 'grandfather', githubId: '77' }, ghFetch(record, 'grandfathered: []\n', reads));
+test('sow-213 Step 3 endpoint CONTROL: no tier in the payload writes no tier field, and a valid request DOES write the mirror', async () => {
+  const record = [];
+  const kv = kvWith();
+  const r = await run({ action: 'grandfather', githubId: '77' }, ghFetch(record, 'grandfathered: []\n'), kv);
   assert.equal(r.status, 200);
-  assert.equal(reads.length, 1, 'the read counter can reach 1, so a 0 above is a real refusal and not a dead instrument');
-  assert.equal(/tier:/.test(writtenYaml(record)), false, 'absent stays absent, so legacy behaviour is unchanged');
+  const grant = writtenGrants(kv).find((e) => e.github_id === '77');
+  assert.ok(grant, 'the mirror WAS written, so the "absent stays absent" below is a real result and not a dead instrument');
+  assert.equal('tier' in grant, false, 'absent stays absent, so legacy behaviour is unchanged');
 });
 
-test('sow-213 endpoint: a re-grant through the endpoint does not wipe a hand-set creator tier', async () => {
+test('sow-213 Step 3 endpoint: a re-grant through the endpoint does not wipe a hand-set creator tier (overlay against the mirror)', async () => {
   const record = [];
-  const existing = "grandfathered:\n  - github_id: '77'\n    login: ada\n    reason: founding co-op member\n    until: null\n    at: '2026-01-01T00:00:00.000Z'\n    tier: creator\n";
-  const r = await run({ action: 'grandfather', githubId: '77', reason: 'renewed' }, ghFetch(record, existing));
+  const kv = kvWith([{ github_id: '77', login: 'ada', reason: 'founding co-op member', until: null, at: '2026-01-01T00:00:00.000Z', tier: 'creator', source: 'kv' }]);
+  const r = await run({ action: 'grandfather', githubId: '77', reason: 'renewed' }, ghFetch(record, 'grandfathered: []\n'), kv);
   assert.equal(r.status, 200);
-  assert.match(writtenYaml(record), /tier: creator/, 'the escape hatch survives a re-grant made through the live endpoint');
+  assert.equal(writtenGrants(kv).find((e) => e.github_id === '77').tier, 'creator', 'the escape hatch survives a re-grant, overlaid onto the existing mirror grant');
 });

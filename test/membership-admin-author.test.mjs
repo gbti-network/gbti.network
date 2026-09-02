@@ -13,6 +13,24 @@ const env = {
   UPSTREAM_REPO: 'gbti-network/gbti.network', MEMBERSHIP_AUTHOR_ENABLED: 'true',
 };
 const fakeKv = () => { const m = new Map(); return { store: m, async get() { return null; }, async put(k, v) { m.set(k, v); } }; };
+// sow-213 Step 3: governance (ban/unban/grandfather/ungrandfather) is KV-native now, so the endpoint reads the
+// overrides mirror from KV instead of a git file. This fake seeds that mirror (returned for OVERRIDES_KEY 'json')
+// and records puts, so a gov test asserts the mirror mutation + NO git PR. A JSON round-trip on read keeps the
+// seed immutable across calls.
+const OVERRIDES_KEY = 'overrides:mirror';
+const mirror = (over = {}) => ({ generatedAt: '2026-08-29T00:00:00.000Z', roles: {}, bans: { bans: [] }, grandfathered: { grandfathered: [] }, ...over });
+function kvWithOverrides(seed) {
+  const store = new Map();
+  return {
+    store,
+    async get(k, type) {
+      if (k === OVERRIDES_KEY) return seed == null ? null : (type === 'json' ? JSON.parse(JSON.stringify(seed)) : JSON.stringify(seed));
+      const v = store.get(k);
+      return v === undefined ? null : v;
+    },
+    async put(k, v) { store.set(k, v); },
+  };
+}
 const signJwt = async () => 'fake.jwt.sig';
 const allow = async () => ({ allowed: true });
 const staffMod = async () => ({ ok: true, githubId: '3', role: 'moderator' }); // a moderator
@@ -133,16 +151,22 @@ test('sow-161: a MODERATOR cannot ban (403 insufficient role) and writes nothing
   assert.equal(record.length, 0, 'a moderator is rejected at the endpoint before any read/write');
 });
 
-test('sow-161: an admin ban writes house/bans.yml with the target id, on a caller-keyed hosted-admin branch', async () => {
+test('sow-213: an admin ban is KV-native: it writes the overrides mirror and opens NO git PR (behaviour change, house/bans.yml is deleted)', async () => {
+  // BEHAVIOUR CHANGE recorded, not edited green: through Phase 2b a ban wrote house/bans.yml on a hosted-admin
+  // branch AND dual-wrote KV. Step 3 deletes the file, so a ban is KV-ONLY: no branch, no PR, the mirror is the
+  // record. Person-keyed entitlement state must not live in the public repo.
   const record = [];
-  const r = await run({ action: 'ban', githubId: '999', reason: 'spam' }, { fetchImpl: ghFetch(record, { govFile: 'bans: []\n' }), authorize: staffAdmin });
+  const kv = kvWithOverrides(mirror());
+  const r = await run({ action: 'ban', githubId: '999', reason: 'spam' }, { fetchImpl: ghFetch(record), kv, authorize: staffAdmin });
   assert.equal(r.status, 200);
-  assert.equal(r.body.number, 42);
-  const createRef = record.find((c) => /\/git\/refs$/.test(c.url));
-  assert.equal(createRef.body.ref, 'refs/heads/hosted-admin/2/ban-999', 'branch = the admin id (2) + ban-<targetId>');
-  const put = record.find((c) => c.method === 'PUT');
-  assert.match(deB64(put.body.content), /github_id: '?999'?/, 'the target id is written into bans.yml');
-  assert.match(put.url, /house\/bans\.yml$/);
+  assert.equal(r.body.kvWritten, true);
+  assert.ok(!record.some((c) => /\/pulls$/.test(c.url)), 'no PR is opened');
+  assert.ok(!record.some((c) => /\/git\/refs$/.test(c.url)), 'no branch is created');
+  const written = JSON.parse(kv.store.get(OVERRIDES_KEY));
+  const banned = written.bans.bans.find((e) => String(e.github_id) === '999');
+  assert.ok(banned, 'the target id is written into the mirror bans section');
+  assert.equal(banned.reason, 'spam');
+  assert.equal(banned.source, 'kv', 'the new ban is marked source: kv, so a later unban can remove it');
 });
 
 test('sow-161: a non-numeric github_id for a membership action is 400', async () => {
@@ -152,47 +176,62 @@ test('sow-161: a non-numeric github_id for a membership action is 400', async ()
   assert.equal(record.length, 0);
 });
 
-test('sow-161: grandfather targets house/grandfathered.yml; ungrandfather removes; unban removes', async () => {
+test('sow-213: grandfather writes the mirror grandfathered section; unban removes from the mirror bans (KV-native, no PR)', async () => {
   const g = [];
-  const rg = await run({ action: 'grandfather', githubId: '77' }, { fetchImpl: ghFetch(g, { govFile: 'grandfathered: []\n' }), authorize: staffAdmin });
+  const gkv = kvWithOverrides(mirror());
+  const rg = await run({ action: 'grandfather', githubId: '77' }, { fetchImpl: ghFetch(g), kv: gkv, authorize: staffAdmin });
   assert.equal(rg.status, 200);
-  assert.match(g.find((c) => c.method === 'PUT').url, /house\/grandfathered\.yml$/);
+  assert.equal(rg.body.kvWritten, true);
+  assert.ok(!g.some((c) => /\/pulls$/.test(c.url)), 'grandfather opens no PR');
+  const grant = JSON.parse(gkv.store.get(OVERRIDES_KEY)).grandfathered.grandfathered.find((e) => String(e.github_id) === '77');
+  assert.ok(grant, 'the grant is written into the mirror');
+  assert.equal(grant.source, 'kv');
 
   const u = [];
-  const ru = await run({ action: 'unban', githubId: '999' }, { fetchImpl: ghFetch(u, { govFile: "bans:\n  - github_id: '999'\n    reason: spam\n    at: '2026-01-01T00:00:00.000Z'\n" }), authorize: staffAdmin });
+  const ukv = kvWithOverrides(mirror({ bans: { bans: [{ github_id: '999', reason: 'spam', at: '2026-01-01T00:00:00.000Z', source: 'kv' }] } }));
+  const ru = await run({ action: 'unban', githubId: '999' }, { fetchImpl: ghFetch(u), kv: ukv, authorize: staffAdmin });
   assert.equal(ru.status, 200);
-  assert.match(u.find((c) => c.method === 'PUT').url, /house\/bans\.yml$/);
+  assert.ok(!u.some((c) => /\/pulls$/.test(c.url)), 'unban opens no PR');
+  assert.equal(JSON.parse(ukv.store.get(OVERRIDES_KEY)).bans.bans.length, 0, 'the unbanned id is removed from the mirror');
 });
 
-test('sow-161: banning an already-banned member is a clean no-op (200, no PR)', async () => {
+test('sow-213: banning an already-banned member is a clean no-op (200, no write, no PR)', async () => {
   const record = [];
-  const r = await run({ action: 'ban', githubId: '999' }, { fetchImpl: ghFetch(record, { govFile: "bans:\n  - github_id: '999'\n    reason: spam\n    at: '2026-01-01T00:00:00.000Z'\n" }), authorize: staffAdmin });
+  const kv = kvWithOverrides(mirror({ bans: { bans: [{ github_id: '999', reason: 'spam', at: '2026-01-01T00:00:00.000Z', source: 'kv' }] } }));
+  const r = await run({ action: 'ban', githubId: '999' }, { fetchImpl: ghFetch(record), kv, authorize: staffAdmin });
   assert.equal(r.status, 200);
   assert.equal(r.body.noop, true);
+  assert.equal(kv.store.get(OVERRIDES_KEY), undefined, 'a no-op writes nothing to the mirror (and never a moderation log)');
   assert.ok(!record.some((c) => /\/pulls$/.test(c.url)), 'a no-op opens no PR');
 });
 
-test('sow-161: a malformed governance file fails CLOSED (502), never silently resetting the bans', async () => {
+test('sow-213: an unavailable overrides mirror fails CLOSED (503), never silently resetting the bans', async () => {
+  // BEHAVIOUR CHANGE: the source of truth is the KV mirror now, not a git file. A malformed mirror (no
+  // generatedAt) is refused, never fabricated into a one-entry blob that would fail OPEN for everyone missing.
   const record = [];
-  const r = await run({ action: 'ban', githubId: '999' }, { fetchImpl: ghFetch(record, { govFile: 'just a string, not a map' }), authorize: staffAdmin });
-  assert.equal(r.status, 502);
-  assert.equal(record.length, 0, 'no write when the file cannot be parsed as a map');
+  const kv = kvWithOverrides({ roles: {} }); // no generatedAt = malformed/unavailable
+  const r = await run({ action: 'ban', githubId: '999' }, { fetchImpl: ghFetch(record), kv, authorize: staffAdmin });
+  assert.equal(r.status, 503);
+  assert.equal(kv.store.get(OVERRIDES_KEY), undefined, 'no write when the mirror is unavailable');
 });
 
-test('sow-161: a governance file that THROWS on parse fails CLOSED (502), never wiping the list (review regression)', async () => {
-  // Genuinely un-parseable YAML makes yaml.load THROW (distinct from a value that parses to a non-map). Both must
-  // 502; the earlier bug conflated a throw with an empty file and would have reset the list on write.
+test('sow-213: a KV read that THROWS fails CLOSED (503), never wiping the bans', async () => {
   const record = [];
-  const r = await run({ action: 'ban', githubId: '999' }, { fetchImpl: ghFetch(record, { govFile: 'bans:\n  - github_id: "999\n    reason: [unterminated' }), authorize: staffAdmin });
-  assert.equal(r.status, 502);
-  assert.equal(record.length, 0, 'a parse throw writes nothing');
+  const kv = { store: new Map(), async get() { throw new Error('kv down'); }, async put(k, v) { this.store.set(k, v); } };
+  const r = await run({ action: 'ban', githubId: '999' }, { fetchImpl: ghFetch(record), kv, authorize: staffAdmin });
+  assert.equal(r.status, 503);
+  assert.equal(kv.store.get(OVERRIDES_KEY), undefined, 'a read throw writes nothing');
 });
 
-test('sow-161: a missing governance file (404) is a legitimate fresh start (the ban still lands)', async () => {
+test('sow-213: an ABSENT mirror is REFUSED (503), NOT a fresh start (behaviour change: never fabricate an override set)', async () => {
+  // BEHAVIOUR CHANGE recorded: with a git file, a 404 was a legitimate fresh start and the ban landed. With the
+  // KV mirror as the sole source, an absent mirror must be refused: fabricating one would seed a blob holding a
+  // single ban that every reader trusts as the COMPLETE override set, failing OPEN for everyone missing from it.
   const record = [];
-  const r = await run({ action: 'ban', githubId: '999' }, { fetchImpl: ghFetch(record, { govFile: null }), authorize: staffAdmin });
-  assert.equal(r.status, 200);
-  assert.match(deB64(record.find((c) => c.method === 'PUT').body.content), /github_id: '?999'?/);
+  const kv = kvWithOverrides(null); // get returns null = no mirror
+  const r = await run({ action: 'ban', githubId: '999' }, { fetchImpl: ghFetch(record), kv, authorize: staffAdmin });
+  assert.equal(r.status, 503);
+  assert.equal(kv.store.get(OVERRIDES_KEY), undefined, 'an absent mirror is not fabricated');
 });
 
 // ---- sow-161 increment 3: role assignment (house/roles.yml = ROOT OF TRUST), SUPERADMIN-tier ----

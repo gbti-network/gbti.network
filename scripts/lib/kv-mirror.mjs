@@ -184,6 +184,30 @@ export async function mirrorOverridesToKv({ raw, env = process.env, now = new Da
 }
 
 /**
+ * sow-213 Step 3: read the overrides:mirror blob via the Cloudflare KV REST API, for the out-of-Worker writers
+ * that must diff against the current grants before writing (W3's coupon fold). Returns
+ * { available, mirror, reason }: `available:false` on missing creds or a read error (fail-closed, the caller
+ * SKIPS loudly rather than fabricating); `mirror:null` with available:true only on a legitimate 404.
+ */
+export async function readOverridesMirrorRest({ env = process.env, fetchImpl = globalThis.fetch, key = OVERRIDES_KV_KEY } = {}) {
+  const accountId = env.CF_ACCOUNT_ID;
+  const namespaceId = env.CF_KV_NAMESPACE_ID;
+  const apiToken = env.CF_API_TOKEN;
+  if (!accountId || !namespaceId || !apiToken) {
+    return { available: false, mirror: null, reason: 'CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN not set' };
+  }
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
+  try {
+    const res = await fetchImpl(url, { headers: { Authorization: `Bearer ${apiToken}` } });
+    if (res?.ok) return { available: true, mirror: await res.json(), reason: null };
+    if (res && res.status === 404) return { available: true, mirror: null, reason: null };
+    return { available: false, mirror: null, reason: `status ${res ? res.status : 'no response'}` };
+  } catch (err) {
+    return { available: false, mirror: null, reason: err?.message || 'unknown' };
+  }
+}
+
+/**
  * sow-213 Step 3: the Cloudflare REST half of the shared override mutation, for the writers that run OUTSIDE the
  * Worker and cannot bind SIGNUP_KV directly (W3, reconcile's coupon-grant fold; W4, the manual erase-member
  * CLI). It reads the overrides:mirror blob via the KV REST API, applies the PURE applyKvOverride (the SAME

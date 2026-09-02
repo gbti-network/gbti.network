@@ -134,8 +134,11 @@ test('--apply deletes the coupon lock, resets Stripe, and removes the house reco
   const fetchImpl = async (url, init = {}) => {
     const key = url.includes('/values/') ? decodeURIComponent(url.split('/values/')[1]) : null;
     if (init.method === 'DELETE') { deleted.push(key); return { ok: true }; }
-    if (init.method === 'PUT') return { ok: true }; // the counter write + the audit record
+    if (init.method === 'PUT') return { ok: true }; // the counter write + the audit record + the KV mirror write
     if (url.includes('/keys?')) return { ok: true, json: async () => ({ result: [{ name: 'redemption:CODEABLEYEAR:9' }], result_info: {} }) };
+    // sow-213 Step 3: the KV grant removal reads the overrides mirror; this member holds a coupon grant, so the
+    // REMOVE drops it and the house-records step reports grant:removed.
+    if (key === 'overrides:mirror') return { ok: true, json: async () => ({ generatedAt: 'x', roles: {}, bans: { bans: [] }, grandfathered: { grandfathered: [{ github_id: '9', reason: 'coupon:CODEABLEYEAR', until: '2027-01-01T00:00:00.000Z', source: 'kv' }] } }) };
     return { ok: true, json: async () => ({ code: 'CODEABLEYEAR', until: '2027-01-01T00:00:00.000Z' }), text: async () => '3' };
   };
   let deletedCustomer = null;
@@ -212,8 +215,11 @@ test('parseArgs defaults to a dry-run and --dry-run beats --apply', () => {
   assert.equal(parseArgs(['--github-id', '9']).withContent, false);
 });
 
-test('planReset names the grandfather grant, which is the step a KV-only reset would miss', () => {
+test('planReset names the grandfather grant removal (sow-213 Step 3: from KV, not grandfathered.yml)', () => {
+  // BEHAVIOUR CHANGE recorded: the grant lived in house/grandfathered.yml; Step 3 deletes that file and the
+  // grant is removed from the KV overrides store instead. The plan must still NAME the grant step, so a reset
+  // that only cleared other KV keys would know it is owed.
   const plan = planReset({ githubId: '9' });
-  assert.match(plan.find((s) => s.step === 'house-records').action, /grandfathered\.yml/);
+  assert.match(plan.find((s) => s.step === 'house-records').action, /grandfather grant/);
   assert.match(plan.find((s) => s.step === 'stripe').action, /trial_started_at/);
 });

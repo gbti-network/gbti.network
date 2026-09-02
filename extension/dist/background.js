@@ -20592,7 +20592,6 @@ function audit({ actor, action, target, detail = null, now } = {}) {
   };
 }
 var cloneList = (list) => Array.isArray(list) ? list.map((e) => structuredClone(e)) : [];
-var reasonOr = (reason, fallback) => reason && String(reason).trim() || fallback;
 var cloneRoles = (r) => ({ superadmins: cloneList(r?.superadmins), admins: cloneList(r?.admins), moderators: cloneList(r?.moderators), ...stripLists(r) });
 function stripLists(r) {
   const o = { ...r || {} };
@@ -20616,51 +20615,6 @@ function grantRole(parsedRoles, { githubId, login, role = ROLE2.member }, ctx = 
     }
   }
   return { next, changed, audit: audit({ ...ctx, action: "role.grant", target: { githubId: id, login }, detail: { role } }) };
-}
-function ban(parsedBans, { githubId, login, reason }, ctx = {}) {
-  const id = reqId(githubId);
-  const list = cloneList(parsedBans?.bans);
-  if (list.some((e) => idOf2(e) === id)) {
-    return { next: { ...parsedBans || {}, bans: list }, changed: false, audit: audit({ ...ctx, action: "ban", target: { githubId: id, login }, detail: { reason: reason ?? null, alreadyBanned: true } }) };
-  }
-  const r = reasonOr(reason, "banned");
-  list.push({ github_id: id, ...login ? { login } : {}, reason: r, at: isoOf(ctx.now) });
-  return { next: { ...parsedBans || {}, bans: list }, changed: true, audit: audit({ ...ctx, action: "ban", target: { githubId: id, login }, detail: { reason: r } }) };
-}
-function unban(parsedBans, { githubId, login }, ctx = {}) {
-  const id = reqId(githubId);
-  const list = cloneList(parsedBans?.bans);
-  const next = list.filter((e) => idOf2(e) !== id);
-  return { next: { ...parsedBans || {}, bans: next }, changed: next.length !== list.length, audit: audit({ ...ctx, action: "unban", target: { githubId: id, login } }) };
-}
-function grandfather(parsedGf, { githubId, login, reason, until, tier } = {}, ctx = {}) {
-  const id = reqId(githubId);
-  if (until !== void 0 && until !== null && until !== "" && Number.isNaN(new Date(until).getTime())) throw new SuperadminActionError("invalid until date");
-  if (tier !== void 0 && !PAID_GRANT_TIERS.includes(tier)) throw new SuperadminActionError(`invalid grant tier: ${tier}`);
-  const list = cloneList(parsedGf?.grandfathered);
-  const i = list.findIndex((e) => idOf2(e) === id);
-  const prev = i >= 0 ? list[i] : null;
-  const entry = { ...prev || {}, github_id: id };
-  if (login) entry.login = login;
-  if (reason !== void 0 || entry.reason === void 0) entry.reason = reasonOr(reason, prev?.reason || "complimentary access");
-  if (until !== void 0 || entry.until === void 0) entry.until = until ?? null;
-  if (tier !== void 0) entry.tier = tier;
-  entry.at = prev?.at || isoOf(ctx.now);
-  let changed;
-  if (i >= 0) {
-    changed = JSON.stringify(list[i]) !== JSON.stringify(entry);
-    list[i] = entry;
-  } else {
-    list.push(entry);
-    changed = true;
-  }
-  return { next: { ...parsedGf || {}, grandfathered: list }, changed, audit: audit({ ...ctx, action: "grandfather", target: { githubId: id, login }, detail: { reason: entry.reason, until: entry.until, tier: entry.tier ?? null } }) };
-}
-function revokeGrandfather(parsedGf, { githubId, login }, ctx = {}) {
-  const id = reqId(githubId);
-  const list = cloneList(parsedGf?.grandfathered);
-  const next = list.filter((e) => idOf2(e) !== id);
-  return { next: { ...parsedGf || {}, grandfathered: next }, changed: next.length !== list.length, audit: audit({ ...ctx, action: "grandfather.revoke", target: { githubId: id, login } }) };
 }
 
 // membership/taxonomy-edits.mjs
@@ -21686,48 +21640,6 @@ function requireMemberContentPath(rel) {
   }
   return rel;
 }
-async function banMember(ctx, { githubId, reason } = {}) {
-  requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  const id = requireId(githubId);
-  const { next, changed, audit: audit2 } = ban(await readYaml(ctx, "house/bans.yml"), { githubId: id, reason }, actionCtx(ctx));
-  if (!changed) return noop(`already banned: ${id}`, audit2);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/ban-${id}`, files: [{ path: "house/bans.yml", content: dumpYaml(next) }], message: `Ban ${id}`, title: `Ban member ${id}`, body: prBody(reason, audit2) });
-  return { ...pr, changed: true, audit: audit2 };
-}
-async function unbanMember(ctx, { githubId } = {}) {
-  requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  const id = requireId(githubId);
-  const { next, changed, audit: audit2 } = unban(await readYaml(ctx, "house/bans.yml"), { githubId: id }, actionCtx(ctx));
-  if (!changed) return noop(`not banned: ${id}`, audit2);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/unban-${id}`, files: [{ path: "house/bans.yml", content: dumpYaml(next) }], message: `Unban ${id}`, title: `Unban member ${id}`, body: prBody(null, audit2) });
-  return { ...pr, changed: true, audit: audit2 };
-}
-async function grandfatherMember(ctx, { githubId, reason, until, tier, login } = {}) {
-  requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  const id = requireId(githubId);
-  let result;
-  try {
-    result = grandfather(await readYaml(ctx, "house/grandfathered.yml"), { githubId: id, login, reason, until, tier }, actionCtx(ctx));
-  } catch (err) {
-    if (err instanceof SuperadminActionError) throw new OperationError("bad-request", err.message);
-    throw err;
-  }
-  if (!result.changed) return noop(`already grandfathered: ${id}`, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/grandfather-${id}`, files: [{ path: "house/grandfathered.yml", content: dumpYaml(result.next) }], message: `Grandfather ${id}`, title: `Grandfather member ${id}`, body: prBody(reason, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-async function ungrandfatherMember(ctx, { githubId } = {}) {
-  requireRole(ctx, canBanGrandfather, "admin");
-  const { repo } = requireRepo2(ctx);
-  const id = requireId(githubId);
-  const { next, changed, audit: audit2 } = revokeGrandfather(await readYaml(ctx, "house/grandfathered.yml"), { githubId: id }, actionCtx(ctx));
-  if (!changed) return noop(`not grandfathered: ${id}`, audit2);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/ungrandfather-${id}`, files: [{ path: "house/grandfathered.yml", content: dumpYaml(next) }], message: `Remove grandfather ${id}`, title: `Remove grandfather for ${id}`, body: prBody(null, audit2) });
-  return { ...pr, changed: true, audit: audit2 };
-}
 async function setMemberRole(ctx, { githubId, role, login } = {}) {
   requireRole(ctx, canManageRoles, "superadmin");
   const { repo } = requireRepo2(ctx);
@@ -22254,7 +22166,7 @@ async function setContentEngagementSettings(ctx, { enabled, threshold, tier, sig
 
 // extension/src/ext-dispatch.mjs
 var GOVERNANCE_ACTIONS = /* @__PURE__ */ new Set(["ban", "unban", "grandfather", "ungrandfather", "role"]);
-var ADMIN_ACTIONS = { ban: banMember, unban: unbanMember, grandfather: grandfatherMember, ungrandfather: ungrandfatherMember, role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "content-engagement-set": setContentEngagementSettings, "syndication-settings-set": setSyndicationSettings2, "site-setting-set": setSiteToggle2 };
+var ADMIN_ACTIONS = { role: setMemberRole, deplatform: deplatformContent, remove: removeContent, republish: republishContent, "category-batch": applyCategoryBatch, "tag-edit": applyTagEdit, "category-add": addContentCategory, "category-rename": renameContentCategoryLabel, "news-source-add": addNewsSource, "news-source-remove": removeNewsSource, "news-source-toggle": setNewsSourceEnabled, "quote-add": addQuote2, "quote-remove": removeQuote2, "quote-toggle": setQuoteEnabled2, "content-channel-set": setContentChannel, "content-channel-remove": removeContentChannel, "flag-term-add": addModerationFlagTerm, "flag-term-remove": removeModerationFlagTerm, "syndication-template-set": setSyndicationTemplate, "syndication-templates-set": setSyndicationTemplates, "news-engagement-set": setNewsEngagementSettings, "content-engagement-set": setContentEngagementSettings, "syndication-settings-set": setSyndicationSettings2, "site-setting-set": setSiteToggle2 };
 var CODE_STATUS = Object.freeze({
   "no-identity": 409,
   "not-authenticated": 401,

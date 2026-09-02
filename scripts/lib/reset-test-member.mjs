@@ -121,7 +121,7 @@ export function planReset({ githubId, withContent = false } = {}) {
     { step: 'conv-snapshot', action: `Delete conv:${id} (the frozen conversion attribution snapshot).` },
     { step: 'activity', action: `Delete activity:${id}, follows:${id}, prefs:${id}, drafts:${id}.` },
     { step: 'stripe', action: 'Delete the TEST-MODE Stripe customer. This is what resets trial_started_at; without it the trial clock stays set.' },
-    { step: 'house-records', action: `One auto-merged PR removing the house/grandfathered.yml grant and the members-index entry${withContent ? ', and drafting their content' : ''}.` },
+    { step: 'house-records', action: `Remove the grandfather grant from the KV overrides store, and one auto-merged PR removing the members-index entry${withContent ? ' and drafting their content' : ''} (sow-213 Step 3: the grant is KV-native now, not a git file).` },
     { step: 'audit', action: `Record the reset to the audit log as kind=${RESET_AUDIT_KIND} (never confused with a real erasure).` },
   ];
 }
@@ -168,7 +168,7 @@ export async function runReset({
   // files stays EMPTY unless --with-content: eraseContent then removes the two house records and flips
   // nothing, which is the reset we want. The content flip is opt-in because it buys no coverage of the
   // signup flow and multiplies what a mistake costs.
-  await runStep('house-records', () => eraseContent({ github, githubId, username: null, files: withContent ? files : [], now }));
+  await runStep('house-records', () => eraseContent({ github, githubId, username: null, files: withContent ? files : [], now, env, fetchImpl })); // sow-213 Step 3: env/fetchImpl for the KV grant removal
 
   const record = buildAuditRecord({ githubId, operator, apply: true, steps, now, kind: RESET_AUDIT_KIND });
   let audit;

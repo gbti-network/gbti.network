@@ -14,6 +14,7 @@ import yaml from 'js-yaml';
 import { grandfathersFromParsed } from '../../membership/overrides-core.mjs';
 import { PAID_GRANT_TIERS } from '../../membership/tier-gate.mjs'; // sow-185: the paid tiers a grant may carry
 import { couponTier } from '../../membership/coupons.mjs'; // sow-185: the tier a coupon confers
+import { writeOverrideToKvRest } from './kv-mirror.mjs'; // sow-213 Step 3: the fold writes grants to the KV mirror, not a git PR
 
 export const GRANDFATHERED_PATH = 'house/grandfathered.yml';
 export const COUPONS_PATH = 'house/coupons.yml';
@@ -281,28 +282,28 @@ export function readCouponsFromDisk(root) {
 export async function syncCouponGrants({
   env = process.env,
   fetchImpl = globalThis.fetch,
-  github = null,
-  base = 'main',
   now = new Date(),
   listRedemptions = listCouponRedemptions,
   readGrandfathered = null,
   readCoupons = null,
+  writeGrant = null,
 } = {}) {
   const kv = await listRedemptions({ env, fetchImpl });
   if (!kv.available) return { synced: false, reason: kv.reason };
   if (!kv.redemptions?.length) return { synced: false, reason: 'no redemptions in KV' };
 
+  // sow-213 Step 3: the grants source is the KV mirror now (house/grandfathered.yml is deleted). readGrandfathered
+  // is injected to return { parsed: { grandfathered: [...] } } read from the mirror. A NULL result (creds missing
+  // or a read error) SKIPS LOUDLY rather than fabricating an empty grants set that would re-grant everyone.
   const current = readGrandfathered ? await readGrandfathered() : null;
-  if (!current?.text) {
+  if (!current?.parsed) {
     // LOUD ON PURPOSE. A silent skip here means a member redeems a coupon and never receives the grant, with
     // nothing anywhere saying so, which is exactly the class of failure this repository keeps being bitten by.
-    // The redemption count is already known at this point, so it goes in the reason.
     return {
       synced: false,
       reason:
-        `cannot read ${GRANDFATHERED_PATH} (retired by sow-213 Phase 3b). ` +
-        `${kv.redemptions.length} redemption(s) exist; how many still NEED a grant cannot be determined, ` +
-        'because the grants source this compares against is retired and the fold does not read KV yet.',
+        'cannot read the grants source (the overrides:mirror in KV). ' +
+        `${kv.redemptions.length} redemption(s) exist; how many still NEED a grant cannot be determined.`,
       redemptions: kv.redemptions.length,
     };
   }
@@ -313,30 +314,31 @@ export async function syncCouponGrants({
 
   const { grants, skippedBounded } = planCouponGrants({ redemptions: kv.redemptions, grandfatheredParsed: current.parsed, couponsParsed, now });
   if (!grants.length) return { synced: false, reason: 'all redemptions already granted', redemptions: kv.redemptions.length, skippedBounded };
-  if (!github) return { synced: false, reason: 'no github client to write the grants PR', additions: grants.length, skippedBounded };
 
-  const nextText = appendGrantEntries(current.text, grants, now);
+  // Write each planned grant straight to the KV mirror (read-before-write per entry, refuse on an absent mirror,
+  // mark source:'kv'). No house PR: person-keyed grant state is deletable edge state now, not public git. All
+  // mirror writers share the `overrides-writers` concurrency group so no two read-modify-writes overlap. The
+  // entry shape matches renderGrantBlock's (login?, reason: coupon:<code>, until, tier?); `github_id` + `source`
+  // are stamped by applyKvOverride.
+  const write = writeGrant || ((args) => writeOverrideToKvRest({ env, fetchImpl, ...args }));
+  let written = 0;
+  const errors = [];
+  for (const g of grants) {
+    const entry = {
+      ...(g.login ? { login: g.login } : {}),
+      reason: `${COUPON_REASON_PREFIX}${g.code}`,
+      until: g.until,
+      ...(g.tier ? { tier: g.tier } : {}),
+    };
+    const r = await write({ section: 'grandfathered', githubId: g.githubId, entry, remove: false });
+    if (r.written) written += 1;
+    else errors.push(`${g.githubId}: ${r.reason}`);
+  }
   const conversions = grants.filter((g) => g.replaces).length;
-  const branch = `gbti/coupon-grants-${now.getTime()}`;
-  const baseRef = await github.getRef(`heads/${base}`);
-  const baseSha = baseRef?.object?.sha;
-  if (!baseSha) throw new Error(`coupon-grants sync: cannot resolve base head sha for ${base}`);
-  await github.createRef(branch, baseSha);
-  const existing = await github.getContent(GRANDFATHERED_PATH, branch);
-  await github.putContent(GRANDFATHERED_PATH, {
-    message: 'reconcile: fold coupon redemptions into grandfather grants (SOW-119)',
-    content: Buffer.from(nextText, 'utf8').toString('base64'),
-    branch,
-    sha: existing?.sha,
-  });
-  const pull = await github.createPull({
-    title: 'reconcile: coupon grants (SOW-119)',
-    head: branch,
-    base,
-    body:
-      `Folds ${grants.length} coupon redemption${grants.length === 1 ? '' : 's'} from KV into until-bounded grandfather grants.` +
-      (conversions ? `\n\n${conversions} of these CONVERT a permanent comp member to the standard free-year deal (redeeming the invite is the conversion; SOW-142, owner-elected 2026-07-22).` : ''),
-  });
-  await github.mergePull(pull.number, { method: 'squash' });
-  return { synced: true, prNumber: pull.number, additions: grants.length, conversions, skippedBounded };
+  if (errors.length) {
+    // Fail LOUD: a member who redeemed a coupon and did not get their grant is exactly the silent failure this
+    // fold exists to prevent, so the reason names every id that did not land.
+    return { synced: written > 0, additions: written, conversions, skippedBounded, errors, reason: `grant write failed for: ${errors.join('; ')}` };
+  }
+  return { synced: true, additions: written, conversions, skippedBounded };
 }

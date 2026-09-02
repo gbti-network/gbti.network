@@ -28,7 +28,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: reconcile
+  # sow-213 Step 3: every workflow that writes the overrides:mirror shares this group (cancel-in-progress: false)
+  # so no two read-modify-writes of the blob overlap now that bans + grandfathers are KV-native. Also covers
+  # sync-overrides-mirror.yml and e2e-smoke.yml (a FULL e2e writes a sentinel grant to KV).
+  group: overrides-writers
   cancel-in-progress: false
 
 jobs:

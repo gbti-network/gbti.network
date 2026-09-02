@@ -16,7 +16,9 @@ import { OperationError } from '../client/src/operations-core.mjs';
 const ROLES_YML = "superadmins:\n  - github_id: '1'\nadmins:\n  - github_id: '2'\nmoderators: []\n";
 
 /** `calls` records every URL the op touches, so "went to the Worker" is asserted rather than assumed. */
-function ctxFor(calls, { response = { ok: true, number: 42, html_url: 'https://x/pull/42', kvWritten: true, kvReason: null }, status = 200 } = {}) {
+// sow-213 Step 3: a successful member-status action is KV-native (no PR): the Worker returns kvWritten:true and
+// no number/html_url. `role` alone still opens a PR; the tests that need it set their own response.
+function ctxFor(calls, { response = { ok: true, kvWritten: true }, status = 200 } = {}) {
   return {
     identity: () => ({ username: 'admin', githubId: '2' }),
     reader: { readFile: async (p) => (p === 'house/roles.yml' ? ROLES_YML : '') },
@@ -39,7 +41,7 @@ test('sow-213: a ban goes to the Worker author endpoint, and touches GitHub dire
   assert.equal(calls[0].body.reason, 'spam');
   assert.equal(/api\.github\.com/.test(calls[0].url), false, 'no direct git write from the local path');
   assert.equal(r.changed, true);
-  assert.equal(r.prNumber, 42);
+  assert.equal(r.prNumber, null, 'sow-213 Step 3: a KV-native ban opens no PR');
 });
 
 test('sow-213: a grandfather grant carries its tier through to the Worker', async () => {
@@ -48,17 +50,19 @@ test('sow-213: a grandfather grant carries its tier through to the Worker', asyn
   assert.equal(calls[0].body.tier, 'creator', 'the phase 2a tier axis survives the reroute');
 });
 
-test('sow-213: kvWritten:false is PASSED THROUGH, so the caller can tell a dual-write from a git-only write', async () => {
-  const calls = [];
-  const r = await governanceAdminOp(ctxFor(calls, { response: { ok: true, number: 7, html_url: 'u', kvWritten: false, kvReason: 'the overrides mirror is absent or not an object' } }),
-    { action: 'ban', githubId: '555' });
-  assert.equal(r.kvWritten, false);
-  assert.match(r.kvReason, /absent/);
-});
-
-test('sow-213 CONTROL: a successful dual-write reports kvWritten true, so the false above is a real signal', async () => {
+test('sow-213 Step 3: the Worker kvWritten:true is relayed on a KV-native success (behaviour change: no git-only state to distinguish)', async () => {
+  // BEHAVIOUR CHANGE recorded, not quietly relaxed: Phase 2b returned kvWritten:false when the KV half failed
+  // but the git half landed, so the caller could tell a dual-write from a git-only write. Step 3 deletes the git
+  // half, so a member-status action is KV-only: on success the Worker reports kvWritten:true, and there is no
+  // git-only state to signal. The client still relays the flag faithfully.
   const r = await governanceAdminOp(ctxFor([]), { action: 'ban', githubId: '555' });
   assert.equal(r.kvWritten, true);
+});
+
+test('sow-213 Step 3 CONTROL: a KV-native governance action opens NO PR, so prNumber is null', async () => {
+  // The counterpart of the retired dual-write signal: with no git half, there is no PR to report.
+  const r = await governanceAdminOp(ctxFor([]), { action: 'ban', githubId: '555' });
+  assert.equal(r.prNumber, null);
 });
 
 test('sow-213: a Worker no-op is relayed as "no change" rather than as a phantom PR', async () => {

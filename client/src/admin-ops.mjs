@@ -13,7 +13,7 @@ import yaml from 'js-yaml';
 
 import { OperationError, syncForkIfCreatingBranch } from './operations.mjs';
 import { canModerate, canBanGrandfather, canManageRoles } from './roles.mjs';
-import { ban, unban, grandfather, revokeGrandfather, grantRole, SuperadminActionError } from '../../membership/superadmin-actions.mjs';
+import { grantRole, SuperadminActionError } from '../../membership/superadmin-actions.mjs'; // sow-213 Step 3: ban/unban/grandfather/revokeGrandfather retired here (governance routes through the Worker now)
 import { addCategory as addCategoryEdit, renameLabel as renameLabelEdit, TaxonomyEditError } from '../../membership/taxonomy-edits.mjs';
 import { addSource as addSourceEdit, removeSource as removeSourceEdit, setSourceEnabled as setSourceEnabledEdit, NewsSourceEditError } from '../../membership/news-source-edits.mjs'; // SOW-056 P2
 import { addQuote as addQuoteEdit, removeQuote as removeQuoteEdit, setQuoteEnabled as setQuoteEnabledEdit, QuoteEditError } from '../../membership/quote-edits.mjs'; // SOW-063 P3
@@ -112,56 +112,15 @@ function requireMemberContentPath(rel) {
   return rel;
 }
 
-// ---- admin: ban / grandfather (house/bans.yml, house/grandfathered.yml) ----
-
-export async function banMember(ctx, { githubId, reason } = {}) {
-  requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-  const id = requireId(githubId);
-  const { next, changed, audit } = ban(await readYaml(ctx, 'house/bans.yml'), { githubId: id, reason }, actionCtx(ctx));
-  if (!changed) return noop(`already banned: ${id}`, audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/ban-${id}`, files: [{ path: 'house/bans.yml', content: dumpYaml(next) }], message: `Ban ${id}`, title: `Ban member ${id}`, body: prBody(reason, audit) });
-  return { ...pr, changed: true, audit };
-}
-
-export async function unbanMember(ctx, { githubId } = {}) {
-  requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-  const id = requireId(githubId);
-  const { next, changed, audit } = unban(await readYaml(ctx, 'house/bans.yml'), { githubId: id }, actionCtx(ctx));
-  if (!changed) return noop(`not banned: ${id}`, audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/unban-${id}`, files: [{ path: 'house/bans.yml', content: dumpYaml(next) }], message: `Unban ${id}`, title: `Unban member ${id}`, body: prBody(null, audit) });
-  return { ...pr, changed: true, audit };
-}
-
-// sow-213: `tier` names the paid tier the grant confers (member | creator); absent leaves an existing tier
-// alone rather than resetting it. `until` deliberately has NO default: defaulting it to null made every
-// re-grant silently permanent, wiping a hand-set expiry. Pass null explicitly to mean permanent.
-export async function grandfatherMember(ctx, { githubId, reason, until, tier, login } = {}) {
-  requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-  const id = requireId(githubId);
-  let result;
-  try {
-    result = grandfather(await readYaml(ctx, 'house/grandfathered.yml'), { githubId: id, login, reason, until, tier }, actionCtx(ctx));
-  } catch (err) {
-    if (err instanceof SuperadminActionError) throw new OperationError('bad-request', err.message);
-    throw err;
-  }
-  if (!result.changed) return noop(`already grandfathered: ${id}`, result.audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/grandfather-${id}`, files: [{ path: 'house/grandfathered.yml', content: dumpYaml(result.next) }], message: `Grandfather ${id}`, title: `Grandfather member ${id}`, body: prBody(reason, result.audit) });
-  return { ...pr, changed: true, audit: result.audit };
-}
-
-export async function ungrandfatherMember(ctx, { githubId } = {}) {
-  requireRole(ctx, canBanGrandfather, 'admin');
-  const { repo } = requireRepo(ctx);
-  const id = requireId(githubId);
-  const { next, changed, audit } = revokeGrandfather(await readYaml(ctx, 'house/grandfathered.yml'), { githubId: id }, actionCtx(ctx));
-  if (!changed) return noop(`not grandfathered: ${id}`, audit);
-  const pr = await adminPublish(ctx, { repo, branch: `gbti/ungrandfather-${id}`, files: [{ path: 'house/grandfathered.yml', content: dumpYaml(next) }], message: `Remove grandfather ${id}`, title: `Remove grandfather for ${id}`, body: prBody(null, audit) });
-  return { ...pr, changed: true, audit };
-}
+// ---- admin: ban / grandfather ----
+//
+// sow-213 Step 3: the local ban / unban / grandfather / ungrandfather writers are RETIRED. house/bans.yml and
+// house/grandfathered.yml no longer exist (person-keyed entitlement state must not live in the public,
+// forkable, CDN-cached repo), and the client holds only a GitHub token, so it cannot write the KV mirror these
+// records now live in. All four member-status actions route through the WORKER instead
+// (client/src/operations-admin.mjs governanceAdminOp -> POST /membership/admin/author), which holds SIGNUP_KV
+// and writes the private moderation log; see the GOVERNANCE_ACTIONS short-circuit in api.mjs / ext-dispatch.mjs
+// and the cli.mjs commands. Only role assignment (house/roles.yml, the root of trust) stays git-native, below.
 
 // ---- superadmin: role management (house/roles.yml) ----
 

@@ -187,28 +187,55 @@ test('listCouponRedemptions is a reported no-op without CF creds and parses keys
   assert.equal(r.redemptions[0].code, 'CODEABLEYEAR');
 });
 
-test('syncCouponGrants opens ONE auto-merged PR with the appended file', async () => {
-  const puts = [];
-  const github = {
-    async getRef() { return { object: { sha: 'basesha' } }; },
-    async createRef() {},
-    async getContent() { return { sha: 'filesha' }; },
-    async putContent(p, body) { puts.push({ p, text: Buffer.from(body.content, 'base64').toString('utf8') }); },
-    async createPull() { return { number: 77 }; },
-    merged: null,
-    async mergePull(n, opts) { this.merged = { n, opts }; },
-  };
+test('sow-213 Step 3: syncCouponGrants writes each new grant to the KV mirror (no PR)', async () => {
+  // BEHAVIOUR CHANGE recorded: the fold used to open ONE auto-merged house PR appending house/grandfathered.yml.
+  // Step 3 deletes that file, so grants are person-keyed edge state now: the fold writes each straight to the
+  // overrides mirror via writeOverrideToKvRest (injected here as writeGrant). The grants SOURCE is also the
+  // mirror (readGrandfathered returns { parsed } read from it).
+  const writes = [];
   const r = await syncCouponGrants({
     env: { CF_ACCOUNT_ID: 'a', CF_KV_NAMESPACE_ID: 'n', CF_API_TOKEN: 't' },
-    github,
     now: NOW,
     listRedemptions: async () => ({ available: true, redemptions: [{ githubId: '222', code: 'CODEABLEYEAR', login: 'newbie', until: '2027-07-15T12:00:00.000Z' }] }),
-    readGrandfathered: () => ({ text: FILE, parsed: yaml.load(FILE) }),
+    readGrandfathered: async () => ({ parsed: yaml.load(FILE) }),
+    writeGrant: async (args) => { writes.push(args); return { written: true, changed: true }; },
   });
   assert.equal(r.synced, true);
-  assert.equal(r.prNumber, 77);
-  assert.equal(github.merged.n, 77);
-  assert.ok(puts[0].text.includes('coupon:CODEABLEYEAR'));
+  assert.equal(r.additions, 1);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].section, 'grandfathered');
+  assert.equal(writes[0].githubId, '222');
+  assert.equal(writes[0].remove, false);
+  assert.equal(writes[0].entry.reason, 'coupon:CODEABLEYEAR');
+  assert.equal(writes[0].entry.until, '2027-07-15T12:00:00.000Z');
+  assert.equal(writes[0].entry.login, 'newbie');
+});
+
+test('sow-213 Step 3: syncCouponGrants SKIPS LOUDLY when the mirror grants source is unavailable (never re-grants everyone)', async () => {
+  const r = await syncCouponGrants({
+    env: { CF_ACCOUNT_ID: 'a', CF_KV_NAMESPACE_ID: 'n', CF_API_TOKEN: 't' },
+    now: NOW,
+    listRedemptions: async () => ({ available: true, redemptions: [{ githubId: '222', code: 'CODEABLEYEAR', until: '2027-07-15T12:00:00.000Z' }] }),
+    readGrandfathered: async () => null, // the mirror could not be read (creds/read error)
+    writeGrant: async () => { throw new Error('must not write when the source is unavailable'); },
+  });
+  assert.equal(r.synced, false);
+  assert.match(r.reason, /cannot read the grants source/);
+  assert.equal(r.redemptions, 1);
+});
+
+test('sow-213 Step 3: a grant that FAILS to write is reported LOUD, naming the id (never a silent skip)', async () => {
+  const r = await syncCouponGrants({
+    env: { CF_ACCOUNT_ID: 'a', CF_KV_NAMESPACE_ID: 'n', CF_API_TOKEN: 't' },
+    now: NOW,
+    listRedemptions: async () => ({ available: true, redemptions: [{ githubId: '222', code: 'CODEABLEYEAR', until: '2027-07-15T12:00:00.000Z' }] }),
+    readGrandfathered: async () => ({ parsed: yaml.load(FILE) }),
+    writeGrant: async () => ({ written: false, reason: 'could not read the overrides mirror (status 500)' }),
+  });
+  assert.equal(r.additions, 0);
+  assert.equal(r.synced, false);
+  assert.match(r.reason, /grant write failed for: 222/);
+  assert.deepEqual(r.errors, ['222: could not read the overrides mirror (status 500)']);
 });
 
 test('syncCouponGrants no-ops when every redemption is already granted', async () => {

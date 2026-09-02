@@ -21,7 +21,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-smoke
+  # sow-213 Step 3: a FULL e2e run grandfathers a sentinel id straight to the overrides:mirror (KV), so it shares
+  # the overrides-writers group with reconcile.yml + sync-overrides-mirror.yml. The nightly smoke is read-only,
+  # but the workflow can write, so it joins the group; cancel-in-progress: false queues rather than cancels.
+  group: overrides-writers
   cancel-in-progress: false
 
 jobs:

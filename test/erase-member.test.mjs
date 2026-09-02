@@ -139,6 +139,15 @@ function fakeGithub({ contents }) {
   };
 }
 
+// sow-213 Step 3: the grandfather grant is removed from the KV mirror now, not a git file, so eraseContent takes
+// an injectable `removeGrant`. NO_GRANT is the "id has no grant" no-op writeOverrideToKvRest returns; a recording
+// remover proves a real erasure calls it with { section: 'grandfathered', remove: true }.
+const NO_GRANT = async () => ({ written: false, reason: 'already in that state in KV' });
+function recordingRemover(result = { written: true, changed: true }) {
+  const calls = [];
+  return { fn: async (args) => { calls.push(args); return result; }, calls };
+}
+
 test('eraseContent flips published files to draft and removes the members-index entry in one merged PR', async () => {
   const post = '---\ntitle: x\nstatus: published\nvisibility: public\n---\nbody\n';
   const index = 'members:\n  "9": alice\n  "10": bob\n';
@@ -152,6 +161,7 @@ test('eraseContent flips published files to draft and removes the members-index 
     github, githubId: '9', username: 'alice',
     files: [{ path: 'members/alice/posts/x/index.md', status: 'published' }],
     now: new Date('2026-06-13T00:00:00Z'),
+    removeGrant: NO_GRANT, // sow-213 Step 3: the grant is KV-native; this member has none
   });
   assert.equal(res.pr, 77);
   assert.equal(res.flipped, 1);
@@ -177,14 +187,14 @@ test('eraseContent is a no-op (no branch, no PR) when there is nothing to change
       [MEMBERS_INDEX_PATH]: { sha: 'si', content: b64('members:\n  "10": bob\n') }, // no entry for 9
     },
   });
-  const res = await eraseContent({ github, githubId: '9', username: 'alice', files: [{ path: 'members/alice/posts/x/index.md' }] });
+  const res = await eraseContent({ github, githubId: '9', username: 'alice', files: [{ path: 'members/alice/posts/x/index.md' }], removeGrant: NO_GRANT });
   assert.equal(res.skipped, true);
   assert.equal(github.seen.branch, null, 'no branch created');
   assert.equal(github.seen.pull, null, 'no PR opened');
 });
 
-test('eraseContent skips without a github client', async () => {
-  assert.match((await eraseContent({ github: null, githubId: '9', username: 'alice' })).reason, /no GitHub client/);
+test('eraseContent skips without a github client (and no KV grant to remove)', async () => {
+  assert.match((await eraseContent({ github: null, githubId: '9', username: 'alice', removeGrant: NO_GRANT })).reason, /no GitHub client/);
 });
 
 // Rewritten 2026-08-11, not deleted: this used to assert that a missing username SKIPPED the whole step.
@@ -206,54 +216,52 @@ const GRANTS_YML = [
   '',
 ].join('\n');
 
-test('eraseContent still strips house records for a member with no folder (no username)', async () => {
-  const github = fakeGithub({
-    contents: { [GRANDFATHERED_PATH]: { sha: 'sg', content: b64(GRANTS_YML) } },
-  });
-  const res = await eraseContent({ github, githubId: '9', username: null, files: [] });
+test('sow-213 Step 3: eraseContent strips the grandfather grant from KV for a member with no folder (no git PR)', async () => {
+  // BEHAVIOUR CHANGE recorded: the grant used to be spliced out of house/grandfathered.yml in a git PR. Step 3
+  // deletes that file, so the grant is removed from the overrides mirror, decoupled from any git branch: a member
+  // with no folder and no content still gets their grant erased, and no PR is opened.
+  const github = fakeGithub({ contents: {} });
+  const rem = recordingRemover();
+  const res = await eraseContent({ github, githubId: '9', username: null, files: [], removeGrant: rem.fn });
   assert.equal(res.skipped, undefined, 'must not skip: there is a grant to remove');
   assert.equal(res.grantRemoved, true);
   assert.equal(res.flipped, 0);
-  const put = github.seen.puts.find((p) => p.path === GRANDFATHERED_PATH);
-  assert.ok(put, 'the grant file was committed');
-  assert.equal(put.branch, github.seen.branch, 'committed on the erase branch, not base');
-  assert.equal(put.sha, 'sg', 'used the blob sha read from the branch (TOCTOU-safe)');
-  assert.doesNotMatch(put.text, /github_id: "9"/, "the erased member's block is gone");
-  assert.match(put.text, /github_id: "10"/, "every other member's block survives");
-  assert.match(put.text, /# github\.com\/bob/, 'per-person comments survive (a line splice, not a yaml re-dump)');
-  assert.match(put.text, /^# Grandfathered github_ids/m, 'the file header survives');
+  assert.equal(res.pr, null, 'no git PR for a KV-only grant removal');
+  assert.equal(github.seen.pull, null, 'no PR opened');
+  assert.deepEqual(rem.calls, [{ section: 'grandfathered', githubId: '9', remove: true }], 'the grant is removed from the mirror by github_id');
 });
 
-test('eraseContent removes the grandfather grant in the SAME PR as the content flip and the index entry', async () => {
+test('sow-213 Step 3: eraseContent flips content + removes the index (git PR) AND removes the grant (KV) in one erasure', async () => {
   const post = '---\ntitle: x\nstatus: published\n---\nbody\n';
   const github = fakeGithub({
     contents: {
       'members/alice/posts/x/index.md': { sha: 's1', content: b64(post) },
       [MEMBERS_INDEX_PATH]: { sha: 'si', content: b64('members:\n  "9": alice\n  "10": bob\n') },
-      [GRANDFATHERED_PATH]: { sha: 'sg', content: b64(GRANTS_YML) },
     },
   });
+  const rem = recordingRemover();
   const res = await eraseContent({
     github, githubId: '9', username: 'alice',
     files: [{ path: 'members/alice/posts/x/index.md', status: 'published' }],
+    removeGrant: rem.fn,
   });
   assert.equal(res.flipped, 1);
   assert.equal(res.indexRemoved, true);
   assert.equal(res.grantRemoved, true);
-  assert.equal(github.seen.pull.head, github.seen.branch, 'all three changes ride one PR');
-  assert.equal(github.seen.puts.filter((p) => p.branch === github.seen.branch).length, 3);
-  assert.match(github.seen.pull.body, /grandfather grant/);
+  assert.equal(github.seen.pull.head, github.seen.branch, 'content + index ride one PR');
+  assert.equal(github.seen.puts.filter((p) => p.branch === github.seen.branch).length, 2, 'only content + index are git puts; the grant is KV');
+  assert.match(github.seen.pull.body, /grandfather grant \(KV\)/);
+  assert.deepEqual(rem.calls, [{ section: 'grandfathered', githubId: '9', remove: true }]);
 });
 
-test('eraseContent refuses to commit a grant removal that does not actually remove the member', async () => {
-  // A splice that leaves the id resolvable means the removal silently did nothing. The step must ERROR
-  // rather than open a PR that claims a removal it did not perform.
-  const twice = GRANTS_YML + '  - github_id: "9"\n    reason: a duplicate block\n    until: null\n';
-  const github = fakeGithub({ contents: { [GRANDFATHERED_PATH]: { sha: 'sg', content: b64(twice) } } });
-  const res = await eraseContent({ github, githubId: '9', username: null, files: [] });
-  assert.match(res.error, /still resolves a grant for 9/);
+test('sow-213 Step 3: a KV grant-removal FAILURE is surfaced LOUD as a grantError, never a silent skip (GDPR)', async () => {
+  // The Phase-2b git splice verified "still resolves after removal" to catch a silent no-op. The KV equivalent:
+  // a write failure (a read/write error, not the idempotent "already in that state") must not pass as done.
+  const github = fakeGithub({ contents: {} });
+  const failing = async () => ({ written: false, reason: 'could not read the overrides mirror (status 500)' });
+  const res = await eraseContent({ github, githubId: '9', username: null, files: [], removeGrant: failing });
+  assert.match(res.error, /could not remove the grandfather grant from KV/);
   assert.equal(github.seen.pull, null, 'no PR opened');
-  assert.equal(github.seen.puts.length, 0, 'nothing committed');
 });
 
 // --- Coupon grant + redemptions (SOW-119 / sow-212) ----------------------------------------------------------
@@ -436,9 +444,14 @@ test('runErasure dry-run returns the plan and changes nothing', async () => {
 
 test('runErasure --apply composes the auto steps, fail-isolates a thrown step, and records the audit', async () => {
   const fetchCalls = [];
-  const fetchImpl = async (url, init) => {
+  const fetchImpl = async (url, init = {}) => {
     fetchCalls.push({ url, method: init.method });
     if (init.method === 'PUT') return { ok: true }; // the audit write
+    // sow-213 Step 3: the KV grant-removal mirror read. This member has no grant, so the REMOVE is an idempotent
+    // no-op ("already in that state") and the content step still resolves to 'skipped' (no github client).
+    if (String(url).includes('overrides%3Amirror') || String(url).includes('overrides:mirror')) {
+      return { ok: true, json: async () => ({ generatedAt: 'T', roles: {}, bans: { bans: [] }, grandfathered: { grandfathered: [] } }) };
+    }
     return { ok: true }; // the KV deletes
   };
   // discord throws -> must become an 'error' outcome, not abort the run

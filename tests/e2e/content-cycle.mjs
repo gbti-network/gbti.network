@@ -23,7 +23,10 @@ const REPO = process.env.GITHUB_CONTENT_REPO || 'gbti-network/gbti.network';
 const TOKEN = process.env.E2E_TOKEN || process.env.GITHUB_BOT_TOKEN || '';
 const HAVE_TOKEN = !!TOKEN && !/^REPLACE/i.test(TOKEN) && TOKEN.length >= 40;
 const RUN_ID = process.env.GITHUB_RUN_ID || String(process.hrtime.bigint());
-const FOLLOW_TARGET = 'rfilipo'; // a real grandfathered member
+// sow-213 Step 3: a SYNTHETIC follow target. The follows store is keyed by username and never validates the
+// target exists, so this names no real member. It used to hardcode a real grandfathered member, which would have
+// become the last public record of a comped membership once house/grandfathered.yml was deleted.
+const FOLLOW_TARGET = 'e2e-follow-sentinel-sow035';
 const ENC_PATH = 'members/atwellpub/_enc/comment-result-describe-my-writing-style-body.enc';
 
 const results = [];

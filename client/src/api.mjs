@@ -66,7 +66,7 @@ import { getSettings, updateSettings, getBilling, getReferral } from './settings
 import { fieldsFor } from './form-fields.mjs';
 import { renderMarkdown } from './markdown.mjs';
 import {
-  banMember, unbanMember, grandfatherMember, ungrandfatherMember, setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit,
+  setMemberRole, deplatformContent, removeContent, republishContent, applyCategoryBatch, applyTagEdit, // sow-213 Step 3: ban/unban/grandfather/ungrandfather retired (governance -> the Worker via GOVERNANCE_ACTIONS)
   getTaxonomy, addContentCategory, renameContentCategoryLabel, getNewsSourcePool, getQuotePool,
   getContentChannelPool, getModerationFlagPool, getSyndicationTemplatePool,
   setContentChannel, removeContentChannel, addModerationFlagTerm, removeModerationFlagTerm, setSyndicationTemplate, setSyndicationTemplates,
@@ -79,10 +79,8 @@ export { CLIENT_VERSION } from './operations.mjs';
 // sow-213 Phase 2b: served by the Worker (see the '/api/admin' route), not by ADMIN_ACTIONS.
 const GOVERNANCE_ACTIONS = new Set(['ban', 'unban', 'grandfather', 'ungrandfather', 'role']);
 const ADMIN_ACTIONS = {
-  ban: banMember,
-  unban: unbanMember,
-  grandfather: grandfatherMember,
-  ungrandfather: ungrandfatherMember,
+  // sow-213 Step 3: ban/unban/grandfather/ungrandfather are served by the Worker (the GOVERNANCE_ACTIONS
+  // short-circuit above, which runs before this map), so their local writers are retired and no longer listed.
   role: setMemberRole,
   deplatform: deplatformContent,
   remove: removeContent,

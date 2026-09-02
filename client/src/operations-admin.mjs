@@ -153,16 +153,13 @@ export async function refreshCouponUntil(ctx) {
 
 
 /**
- * sow-213 Phase 2b: the five governance actions, routed to the Worker so both halves of the record land in one
- * action (git via the PR, KV via overrides:mirror) and the private moderation log is written.
+ * sow-213: the five governance actions, routed to the Worker (the local writer is deliberately NOT used, it
+ * cannot reach KV or write the private moderation log).
  *
- * The local writer is deliberately NOT used for these any more. It cannot reach KV, so a ban issued here used
- * to be invisible to the paid oracle and the PR gate until the next scheduled mirror sync, up to six hours
- * later, with nothing reporting the gap.
- *
- * `kvWritten: false` is passed through rather than hidden. It means the ban IS real and in git and simply has
- * not reached KV yet, which is the pre-transition behaviour; a caller that cannot see it cannot tell a
- * dual-write from a git-only write.
+ * Step 3: bans + grandfathers are KV-NATIVE now (house/bans.yml + house/grandfathered.yml are deleted), so the
+ * four member-status actions open NO PR and return `prNumber: null` + `kvWritten: true` on success. Only `role`
+ * (house/roles.yml, the root of trust) stays git-native and still returns a PR number. `kvWritten` is relayed
+ * faithfully; there is no longer a git-only-write state to distinguish, since KV is the sole record.
  */
 export async function governanceAdminOp(ctx, body = {}) {
   await requireAdmin(ctx);

@@ -26,7 +26,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: sync-overrides-mirror
+  # sow-213 Step 3: shared with reconcile.yml + e2e-smoke.yml so no two overrides:mirror writers overlap.
+  group: overrides-writers
   cancel-in-progress: false
 
 jobs:

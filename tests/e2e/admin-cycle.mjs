@@ -36,10 +36,11 @@ const TOKEN = process.env.E2E_TOKEN || process.env.GITHUB_BOT_TOKEN || '';
 const HAVE_TOKEN = !!TOKEN && !/^REPLACE/i.test(TOKEN) && TOKEN.length >= 40;
 const RUN_ID = process.env.GITHUB_RUN_ID || String(process.hrtime.bigint());
 
-// The two superadmins (the fixed root of trust) and a known grandfathered co-op member, used as live invariants.
+// The two superadmins (the fixed root of trust), used as live invariants. sow-213 Step 3: the grandfathered
+// invariant no longer hardcodes a real member (that would be the last public record of a comped membership once
+// house/grandfathered.yml is deleted); a grandfathered id is derived DYNAMICALLY from the KV store instead.
 const SUPERADMINS = [{ id: '2002207', login: 'atwellpub' }, { id: '125175036', login: 'gbtilabs' }];
-const GRANDFATHERED_KNOWN = { id: '225425', login: 'rfilipo' }; // a real grandfathered member in house/grandfathered.yml
-// A SENTINEL github_id for the governance authoring draft PR: obviously synthetic, never a real GitHub account,
+// A SENTINEL github_id for the governance authoring cycle: obviously synthetic, never a real GitHub account,
 // so even an impossible accidental merge would only grant paid-equivalent to an id nobody holds.
 const SENTINEL = { id: '900000035', login: 'e2e-sentinel-sow035' };
 
@@ -74,99 +75,87 @@ async function adminEndpointChecks() {
   check('admin ops rejects an unknown action (400) before any dispatch', badOp.status === 400, `status=${badOp.status}`);
 }
 
-// --- 2. Live override precedence: the trust core agrees with production governance files ---
+// --- 2. Live override precedence: the trust core agrees with production governance state ---
+// sow-213 Step 3: roles.yml STAYS git-native (the root of trust); bans + grandfathers are KV-native now (the git
+// files are deleted), so they come from the Worker's admin overrides endpoint. If that endpoint is unreachable
+// or unauthorized (no token, or a Worker that predates this deploy), the KV checks SKIP rather than fail: the
+// nightly must never red on a governance store it could not reach.
 async function livePrecedenceChecks() {
-  // Read each override file from production main via the AUTHENTICATED contents API (works whether the repo is
-  // public or private). Fall back to the local checkout, which in CI IS main and locally is the working tree, so
-  // the trust core is always validated against real governance data even without a token or network.
   const gh = HAVE_TOKEN ? createGitHubClient({ token: TOKEN, repo: REPO, fetch: globalThis.fetch }) : null;
-  async function loadOverride(path) {
-    if (gh) { try { const c = await gh.getContent(path, 'main'); if (c?.content) return yaml.load(fromB64(c.content)); } catch { /* fall through to disk */ } }
-    try { return yaml.load(fs.readFileSync(path, 'utf8')); } catch { return null; }
+  async function loadRoles() {
+    if (gh) { try { const c = await gh.getContent('house/roles.yml', 'main'); if (c?.content) return yaml.load(fromB64(c.content)); } catch { /* fall through to disk */ } }
+    try { return yaml.load(fs.readFileSync('house/roles.yml', 'utf8')); } catch { return null; }
   }
-  const [rolesParsed, gfParsed, bansParsed] = await Promise.all([
-    loadOverride('house/roles.yml'), loadOverride('house/grandfathered.yml'), loadOverride('house/bans.yml'),
-  ]);
-  if (!rolesParsed || !gfParsed || !bansParsed) {
-    check('live override files are fetchable + parse', false, `roles=${!!rolesParsed} gf=${!!gfParsed} bans=${!!bansParsed}`);
+  const rolesParsed = await loadRoles();
+  if (!rolesParsed) { check('house/roles.yml is fetchable + parses (the git-native root of trust)', false); return; }
+  check('house/roles.yml is fetchable + parses (the git-native root of trust)', true);
+  const roles = rolesFromParsed(rolesParsed);
+
+  // Superadmins hold the superadmin role in git roles.yml, before any KV read.
+  const rolesOk = SUPERADMINS.every((s) => roleOf(s.id, roles) === ROLE.superadmin);
+  check('both superadmins hold the superadmin role in roles.yml', rolesOk, SUPERADMINS.map((s) => s.login).join(', '));
+
+  if (!HAVE_TOKEN) { skip('bans + grandfathers resolve from the KV overrides store', 'no real token'); return; }
+  const ov = await getJson(WORKER + '/membership/admin/overrides', { headers: authHeaders });
+  if (ov.status !== 200 || !ov.body?.ok) {
+    skip('bans + grandfathers resolve from the KV overrides store', `overrides endpoint status ${ov.status} (Worker may predate this deploy)`);
     return;
   }
-  check('live override files are fetchable + parse', true, 'roles.yml + grandfathered.yml + bans.yml');
 
-  const roles = rolesFromParsed(rolesParsed);
-  const bans = bansFromParsed(bansParsed);
-  const grandfathers = grandfathersFromParsed(gfParsed);
+  const bans = bansFromParsed(ov.body.bans);
+  const grandfathers = grandfathersFromParsed(ov.body.grandfathered);
   const overrides = { roles, bans, grandfathers };
 
-  // The two superadmins resolve as staff/paid even with a 'none' Stripe-derived status (ban > staff > grandfather).
-  const adminsOk = SUPERADMINS.every((s) => {
+  // Both superadmins resolve as staff/paid even with a 'none' Stripe status (ban > staff), and neither is banned.
+  const staffOk = SUPERADMINS.every((s) => {
     const eff = effectiveStatus(s.id, 'none', overrides);
-    return roleOf(s.id, roles) === ROLE.superadmin && eff.status === 'paid' && eff.source === 'staff';
+    return eff.status === 'paid' && eff.source === 'staff' && !bans.has(s.id);
   });
-  check('both superadmins resolve as staff/paid', adminsOk, SUPERADMINS.map((s) => s.login).join(', '));
+  check('both superadmins resolve as staff/paid and neither is banned (KV bans)', staffOk, `${bans.size} bans`);
 
-  // A known grandfathered co-op member resolves as grandfather/paid with no Stripe subscription.
-  const gfEff = effectiveStatus(GRANDFATHERED_KNOWN.id, 'none', overrides);
-  check('a grandfathered co-op member resolves as grandfather/paid', gfEff.status === 'paid' && gfEff.source === 'grandfather', `${GRANDFATHERED_KNOWN.login} -> ${gfEff.source}`);
-
-  // The grandfathered list carries the migrated co-op members (non-empty), and no superadmin is banned.
-  check('grandfathered list is populated (co-op members migrated)', grandfathers.size > 0, `${grandfathers.size} grandfathered`);
-  const noAdminBanned = SUPERADMINS.every((s) => !bans.has(s.id));
-  check('no superadmin is banned (well-formed bans.yml)', noAdminBanned && bans.size >= 0, `${bans.size} bans`);
+  // The grandfathered list carries the migrated co-op members. Pick one DYNAMICALLY (no hardcoded member) and
+  // confirm it resolves as grandfather/paid.
+  check('grandfathered list is populated in KV (co-op members migrated)', grandfathers.size > 0, `${grandfathers.size} grandfathered`);
+  const someGrandfatheredId = [...grandfathers.keys()][0];
+  if (someGrandfatheredId) {
+    const gfEff = effectiveStatus(someGrandfatheredId, 'none', overrides);
+    check('a grandfathered member resolves as grandfather/paid', gfEff.status === 'paid' && gfEff.source === 'grandfather', `id ${someGrandfatheredId} -> ${gfEff.source}`);
+  } else {
+    skip('a grandfathered member resolves as grandfather/paid', 'no grandfathered members in the KV store');
+  }
 }
 
-// --- 3. Governance PR authoring: a DRAFT PR adding a sentinel grandfather entry, confirmed then scrubbed ---
+// --- 3. Governance authoring: grandfather a SENTINEL id through the Worker (KV-native), confirm, then scrub ---
+// sow-213 Step 3: governance is KV-native now (no git PR; the reappearance guard would reject re-creating
+// grandfathered.yml). Grandfather a synthetic SENTINEL through POST /membership/admin/author, confirm it in the
+// KV overrides store, then ungrandfather it. The id is fake, so even if the scrub failed nothing real is granted.
 async function governanceAuthoringCycle() {
-  if (!runnable([FULL])) { skip('governance grandfather draft PR authored (confirm)', 'skipped (E2E_TAGS=smoke is read-only)'); return; }
-  if (!HAVE_TOKEN) { skip('governance grandfather draft PR authored (confirm)', 'no real token'); skip('governance PR + branch scrubbed (zero leaks)', 'no real token'); return; }
-  const gh = createGitHubClient({ token: TOKEN, repo: REPO, fetch: globalThis.fetch });
-  const branch = `e2e/governance-${RUN_ID}`;
-  const path = 'house/grandfathered.yml';
-  const reg = createRegistry();
+  if (!runnable([FULL])) { skip('governance sentinel grandfather via the Worker (KV)', 'skipped (E2E_TAGS=smoke is read-only)'); return; }
+  if (!HAVE_TOKEN) { skip('governance sentinel grandfather via the Worker (KV)', 'no real token'); skip('governance sentinel scrubbed from KV (zero leaks)', 'no real token'); return; }
+  const author = (body) => getJson(WORKER + '/membership/admin/author', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(body) });
+  const inKv = async () => {
+    const ov = await getJson(WORKER + '/membership/admin/overrides', { headers: authHeaders });
+    return ov.status === 200 && (ov.body?.grandfathered?.grandfathered ?? []).some((e) => String(e?.github_id) === SENTINEL.id);
+  };
 
-  let prNumber = null;
-  let carriesSentinel = false;
+  let granted = false;
+  let confirmed = false;
   try {
-    // Read the live file, build the edit with the REAL superadmin-actions core, serialize it back to YAML.
-    const cur = await gh.getContent(path, 'main');
-    if (!cur?.content || !cur?.sha) throw new Error('cannot read house/grandfathered.yml on main');
-    const parsed = yaml.load(fromB64(cur.content)) || {};
-    const { next, changed } = grandfather(parsed, { githubId: SENTINEL.id, login: SENTINEL.login, reason: 'SOW-035 E2E sentinel (auto-removed; never merged)' }, { now: new Date(), actor: { githubId: SUPERADMINS[1].id, login: SUPERADMINS[1].login } });
-    if (!changed) throw new Error('sentinel grandfather produced no change (id already present?)');
-    const newYaml = yaml.dump(next, { lineWidth: 100, noRefs: true });
-
-    const baseRef = await gh.getRef('heads/main');
-    const baseSha = baseRef?.object?.sha;
-    if (!baseSha) throw new Error('cannot resolve main head sha');
-    await gh.createRef(branch, baseSha);
-    reg.register(`branch ${branch}`, async () => { await gh.deleteRef(branch); });
-    // [skip ci]: the branch lives ~2s before the PR closes + the branch deletes, so a push/PR CI run would fail on
-    // the vanished ref. The gate (pull_request_target) is metadata-only + a superadmin PR, so it never auto-merges
-    // a DRAFT anyway. The sentinel id is fake, so an impossible merge grants nothing real.
-    await gh.putContent(path, { message: `e2e: governance sentinel grandfather (${RUN_ID}) [skip ci]`, content: b64(newYaml), branch, sha: cur.sha });
-    const pull = await gh.createPull({ title: `[e2e] governance sentinel ${RUN_ID} (auto-closing)`, head: branch, base: 'main', body: 'SOW-035 Phase 4 automated E2E. DRAFT PR adding a SENTINEL (fake) grandfather id, auto-closed + branch deleted by the harness. Never merges; changes no real access. Safe to ignore.', draft: true });
-    prNumber = pull?.number ?? null;
-    if (prNumber) reg.register(`PR #${prNumber}`, async () => { await gh.closePull(prNumber, { comment: 'e2e: auto-closing governance test PR' }); });
-
-    // Confirm the branch actually carries the sentinel entry (the edit + commit really landed on the head).
-    const onBranch = await gh.getContent(path, branch);
-    carriesSentinel = !!onBranch?.content && fromB64(onBranch.content).includes(SENTINEL.id);
-    check('governance grandfather draft PR authored (confirm)', !!prNumber && carriesSentinel, `PR #${prNumber} adds grandfather ${SENTINEL.id} to ${path}`);
+    const add = await author({ action: 'grandfather', githubId: SENTINEL.id, reason: 'SOW-035 E2E sentinel (auto-removed)' });
+    granted = add.status === 200 && (add.body?.kvWritten === true || add.body?.noop === true);
+    confirmed = await inKv();
+    check('governance sentinel grandfather via the Worker (KV)', granted && confirmed, `granted=${granted} confirmed=${confirmed}`);
   } catch (e) {
-    check('governance grandfather draft PR authored (confirm)', false, e?.message ?? String(e));
+    check('governance sentinel grandfather via the Worker (KV)', false, e?.message ?? String(e));
   }
 
-  const cr = await reg.cleanup(console.log);
-  // The ref delete is eventually consistent: getRef can still 200 for a beat after deleteRef. Poll for the 404
-  // (up to ~5s) so a clean scrub does not flake to branchGone=false on the timing race.
-  let branchGone = false;
-  for (let i = 0; i < 6 && !branchGone; i++) {
-    try { await gh.getRef(`heads/${branch}`); } catch (e) { if (e?.status === 404) { branchGone = true; break; } }
-    if (!branchGone) await new Promise((r) => setTimeout(r, 1000));
-  }
-  let prClosed = !prNumber;
-  if (prNumber) { try { const pr = await gh.getPull(prNumber); prClosed = pr?.state === 'closed'; } catch { prClosed = false; } }
-  check('governance PR + branch scrubbed (zero leaks)', cr.leaked.length === 0 && branchGone && prClosed, `cleaned=${cr.cleaned} leaked=${cr.leaked.length} branchGone=${branchGone} prClosed=${prClosed}`);
+  // Scrub: ungrandfather the sentinel and confirm it is gone from the KV store.
+  let scrubbed = false;
+  try {
+    await author({ action: 'ungrandfather', githubId: SENTINEL.id });
+    scrubbed = !(await inKv());
+  } catch { scrubbed = false; }
+  check('governance sentinel scrubbed from KV (zero leaks)', scrubbed, `sentinel ${SENTINEL.id} removed`);
 }
 
 // --- 4. Reconcile dry run (creds-gated): the planner runs against the live registry without applying ---
