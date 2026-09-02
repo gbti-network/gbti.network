@@ -11,7 +11,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { topicsFromJson } from '../topic-picker-core.mjs'; // SOW-087: the flat topic vocabulary for the category select
-import { optimisticShareItem, shareComposerView } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect
+import { optimisticShareItem, shareComposerView, normalizeTagInput } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
 // sow-192 Phase E: the Note step's Write/Preview toggle renders markdown with the SAME node-free, escape-first,
 // XSS-hardened helpers the block editor uses (no client.preview needed, so the preview is portable to the
 // cookie-adapter hosts that lack it).
@@ -285,10 +285,11 @@ class GbtiShareComposer extends GbtiElement {
           <input class="title" type="text" placeholder="Title (optional)" maxlength="80" />
           <input class="desc" type="text" placeholder="Short description (optional)" maxlength="200" />
           <div class="autoblock">
-            <span class="autolabel">${IC.bolt} Categorised automatically</span>
+            <span class="autolabel">${IC.bolt} Categorised and tagged automatically</span>
             <select class="cat" aria-label="Category">
               <option value="">Category (optional)</option>
             </select>
+            <input class="tags" type="text" aria-label="Tags" placeholder="Tags (optional, comma separated)" maxlength="120" />
           </div>
         </section>
 
@@ -330,6 +331,7 @@ class GbtiShareComposer extends GbtiElement {
       </div>`);
     this._image = null;
     this._suggested = null; // SOW-087: the Worker's category suggestion, applied once topics are loaded
+    this._suggestedTags = []; // sow-303: the Worker's free-form tag suggestion, applied to the tags input
     // One delegated handler for the wizard controls (rail dots, Back/Next, note tabs, audience cards); base
     // `on()` binds a single element, so a group of buttons needs delegation.
     this.$('.card')?.addEventListener('click', (e) => this._onCardClick(e));
@@ -462,8 +464,13 @@ class GbtiShareComposer extends GbtiElement {
   // Pre-select the Worker's suggestion, but NEVER clobber an author's own pick.
   _applySuggested() {
     const sel = this.$('select.cat');
-    if (!sel || !this._suggested || sel.value) return;
-    if ([...sel.options].some((o) => o.value === this._suggested)) sel.value = this._suggested;
+    if (sel && this._suggested && !sel.value
+      && [...sel.options].some((o) => o.value === this._suggested)) sel.value = this._suggested;
+    // sow-303: the same latch for tags. A non-empty field means the author has typed something, so a later OG
+    // refetch leaves it alone, exactly as `sel.value` does for the category above. Both are checked
+    // independently: a member who picked a category but left tags blank still gets tags suggested.
+    const tin = this.$('input.tags');
+    if (tin && !tin.value.trim() && this._suggestedTags?.length) tin.value = this._suggestedTags.join(', ');
   }
 
   // Fetch the link preview server-side (the Worker is SSRF-guarded). Updates ONLY the preview area + soft-prefills
@@ -494,6 +501,9 @@ class GbtiShareComposer extends GbtiElement {
       const d = this.$('input.desc'); if (d && !d.value.trim() && og?.description) d.value = String(og.description).slice(0, 200);
       // SOW-087: soft-prefill the category from the Worker's suggestion (the author can always override).
       this._suggested = og?.suggestedCategory || null;
+      // sow-303: free-form tags from the same preview call. Always an array from the Worker; guarded anyway
+      // so an older Worker that predates the field cannot throw here.
+      this._suggestedTags = Array.isArray(og?.suggestedTags) ? og.suggestedTags : [];
       this._applySuggested();
       this._image = og?.image || null;
       let domain = '';
@@ -515,7 +525,7 @@ class GbtiShareComposer extends GbtiElement {
     this._image = null;
     // A THROW clears the same-URL guard (as it always did) so the next input event can retry on its own; a
     // reached-but-empty page keeps it, since re-asking on every keystroke is what the guard exists to stop.
-    if (state.kind === 'error') { this._lastOgUrl = null; this._suggested = null; }
+    if (state.kind === 'error') { this._lastOgUrl = null; this._suggested = null; this._suggestedTags = []; }
     box.innerHTML = `<span class="ogmsg${state.kind === 'error' ? ' err' : ''}">${esc(state.message)}</span>`
       + (state.retry ? ` <button class="ogclear" type="button" data-ogretry>Try again</button>` : '');
     // The same-URL guard at the top of this method would otherwise strand a failed fetch until the author
@@ -532,6 +542,11 @@ class GbtiShareComposer extends GbtiElement {
     const url = (this.$('input[type=url]')?.value || '').trim();
     const visibility = this._visibility || 'members'; // sow-192 Phase E: the audience card selection
     const category = this.$('select.cat')?.value || ''; // SOW-087: the optional topic category
+    // sow-303: free-form tags, normalized HERE rather than trusted. buildShareFile parses against the share
+    // schema but serializes the pre-parse object, so the schema's tag normalization is computed and thrown
+    // away while its rejection still fires: a tag that is not already house-shaped does not get fixed, it
+    // THROWS and the share fails to publish. Anything that reaches `input` has to arrive correct.
+    const tags = normalizeTagInput(this.$('input.tags')?.value);
     const msg = this.$('.msg');
     if (!body && !url && !title) { this._say(msg, 'Add a title, a note, or a link first.', 'err'); return; }
     // SOW-092: a real progressing state — disable the button and show a ring spinner for the several
@@ -546,14 +561,17 @@ class GbtiShareComposer extends GbtiElement {
       if (shortDescription) input.shortDescription = shortDescription;
       if (url) input.url = url;
       if (category) input.category = category; // SOW-087: routes the share's category Discord post
+      if (tags.length) input.tags = tags; // sow-303: feeds {tags-hashtags} / {hashtags} on syndication
       if (this._image) input.image = this._image; // SOW-057: the featured image (OG-fetched, author-clearable)
       const res = await this.client.postShare({ input, body });
       this._say(msg, submitAck({ prNumber: res?.prNumber, autoMerge: true }), 'ok'); // SOW-072 P2: consistent ack
       for (const sel of ['input.title', 'input.desc', 'textarea', 'input[type=url]']) { const el = this.$(sel); if (el) el.value = ''; }
       const cat = this.$('select.cat'); if (cat) cat.value = '';
+      const tg = this.$('input.tags'); if (tg) tg.value = '';
       const postedImage = this._image;
       this._image = null;
       this._suggested = null;
+      this._suggestedTags = [];
       this._lastOgUrl = null;
       const ogBox = this.$('[data-og]'); if (ogBox) { ogBox.hidden = true; ogBox.innerHTML = ''; }
       // sow-192 Phase E: return the wizard to a clean first step for the next share (the ack stays visible in

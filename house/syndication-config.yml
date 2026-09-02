@@ -91,12 +91,12 @@ syndication:
       post: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       product: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
       prompt: 'New {content-type} by {member-x-handle}: "{title}" {url} {category-hashtag} {tags-hashtags}'
-      share: 'Shared on the GBTI Network: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      share: 'Shared on the GBTI Network: "{title}" {url} {hashtags}'
     bluesky:
       post: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
       product: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
       prompt: 'New {content-type} by {member-bluesky-handle}: "{title}" {category-hashtag} {tags-hashtags}'
-      share: 'Shared on the GBTI Network: "{title}" {url} {category-hashtag} {tags-hashtags}'
+      share: 'Shared on the GBTI Network: "{title}" {url} {hashtags}'
     linkedin:
       post: >-
         New {content-type} by {fullName}:

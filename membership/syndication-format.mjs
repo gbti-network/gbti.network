@@ -129,7 +129,30 @@ export function webComposeUrl(channel, text) {
 }
 
 /** SOW-120 follow-up: a de-duplicated, space-joined hashtag string from a list of labels. Pure. */
-function hashtagList(labels) {
+/**
+ * sow-303: the BRAND hashtag every syndicated share carries (owner ruling, 2026-09-02), and the total cap.
+ *
+ * Lowercase on purpose. toHashtag preserves the casing of a single-word tag (so an acronym stays an acronym),
+ * so 'gbti' renders '#gbti' exactly as the owner wrote it, not '#Gbti'.
+ *
+ * The cap counts the brand tag. Five means four topical hashtags plus #gbti, not five plus one.
+ */
+export const HASHTAG_BRAND = 'gbti';
+export const HASHTAG_MAX = 5;
+
+/**
+ * Render labels as a de-duplicated hashtag run.
+ *
+ * `max` and `brand` are OPT IN and apply to the merged {hashtags} token ONLY. {tags-hashtags} and
+ * {category-hashtag} keep their old unbounded, unbranded behaviour, because a template is free to write both
+ * and a brand tag baked into the shared helper would then appear twice in one post.
+ *
+ * THE BRAND SLOT IS RESERVED RATHER THAN APPENDED. Appending it and then slicing to `max` would drop the
+ * brand tag on exactly the posts that have the most tags, which is the opposite of "always". So the topical
+ * tags are capped at max-1 first and the brand goes on last, which also makes the brand's position stable
+ * (always final) rather than varying with how many tags an item happens to have.
+ */
+function hashtagList(labels, { max = 0, brand = '' } = {}) {
   const seen = new Set();
   const out = [];
   for (const l of Array.isArray(labels) ? labels : []) {
@@ -137,7 +160,32 @@ function hashtagList(labels) {
     const key = h.toLowerCase();
     if (h && !seen.has(key)) { seen.add(key); out.push(h); }
   }
-  return out.join(' ');
+  const brandTag = brand ? toHashtag(brand) : '';
+  if (!brandTag && !(max > 0)) return out.join(' ');
+  const cap = max > 0 ? max : out.length + 1;
+  // Filtered rather than trusted to be absent: an item legitimately tagged `gbti` would otherwise emit it
+  // twice, once from its own tags and once as the brand.
+  const topical = brandTag ? out.filter((h) => h.toLowerCase() !== brandTag.toLowerCase()) : out;
+  const kept = topical.slice(0, brandTag ? Math.max(0, cap - 1) : cap);
+  if (brandTag) kept.push(brandTag);
+  return kept.join(' ');
+}
+
+/**
+ * sow-303: drop WHOLE trailing hashtags until the text fits, before `truncate` gets a chance to slice one in
+ * half. Every template that carries hashtags puts them last, so they are exactly what a length cap eats, and
+ * `truncate` cutting mid-token yields `#Wire…`, which reads as a broken post rather than a shortened one.
+ *
+ * Measured on all 57 real shares, none reaches Bluesky's 300-character cap with a five-hashtag tail (worst
+ * case 265). So this is insurance against an unusually long title meeting unusually long tags, not a fix for
+ * today's content, and it is deliberately conservative: it only ever removes trailing `#token` runs, and if
+ * the text still does not fit once they are gone it hands back to `truncate` unchanged.
+ */
+function dropTrailingHashtagsToFit(text, limit) {
+  let s = String(text || '');
+  if (!Number.isFinite(limit) || s.length <= limit) return s;
+  while (s.length > limit && /\s#[^\s#]+$/.test(s)) s = s.replace(/\s#[^\s#]+$/, '');
+  return s;
 }
 
 /**
@@ -252,7 +300,18 @@ export function renderTemplate(template, item = {}, { limit = 2000, previewMenti
     memberdevtohandle: devtoHandleFrom(item.authorDevto) ? `@${devtoHandleFrom(item.authorDevto)}` : fullName,
     categoryhashtag: toHashtag(item.category),
     tagshashtags: hashtagList(item.tags),
-    hashtags: hashtagList([item.category, ...(Array.isArray(item.tags) ? item.tags : [])]),
+    // sow-303: the merged token is the one that carries the cap and the brand tag. The two split tokens
+    // above stay exactly as they were, so a template using them is unaffected.
+    // THE BRAND TAG IS SHARES ONLY, and that is the owner's scope rather than a technical limit. The ruling
+    // ("up to five and include #gbti always", 2026-09-02) answered a question about SHARE posts. The merged
+    // token is not share-only though: LinkedIn's post, product and prompt templates use it too, so branding
+    // the helper unconditionally would have put #gbti on article syndication nobody asked about. Two existing
+    // tests caught it, both asserting a PROMPT's hashtag tail.
+    // Extending it to every type is deleting the condition on this line.
+    hashtags: hashtagList(
+      [item.category, ...(Array.isArray(item.tags) ? item.tags : [])],
+      { max: HASHTAG_MAX, brand: item.source === 'share' ? HASHTAG_BRAND : '' },
+    ),
   };
   // Hyphenated token names ({member-discord-username}, {content-type}) normalize to the same key, and a
   // token written in ALL CAPS uppercases its value ({CONTENT-TYPE} -> "PROMPT"); a `<@id>` mention is
@@ -285,7 +344,8 @@ export function renderTemplate(template, item = {}, { limit = 2000, previewMenti
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  return truncate(text, limit);
+  // sow-303: shed whole hashtags before truncate can bisect one. A no-op whenever the text already fits.
+  return truncate(dropTrailingHashtagsToFit(text, limit), limit);
 }
 
 /**

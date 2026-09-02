@@ -438,7 +438,13 @@ function validateTagShape() {
   const TAG_RE = /^[a-z0-9][a-z0-9.-]*$/;
   const errors = [];
   for (const rel of raw.split(/[\s,]+/).filter(Boolean)) {
-    if (!/^(members\/[^/]+|house)\/(posts|products|prompts)\/[^/]+\/index\.md$/.test(rel)) continue;
+    // sow-303: SHARES join the check. They were exempt because their path has a different shape (one flat
+    // file, not a folder with an index.md), not because a share's tags were meant to be unpoliced. They are
+    // now generated programmatically from an AI suggestion, so the backstop matters more than it did when
+    // every share tag was hand-typed by the one person who knew the rule.
+    const isContentItem = /^(members\/[^/]+|house)\/(posts|products|prompts)\/[^/]+\/index\.md$/.test(rel);
+    const isShare = /^members\/[^/]+\/shares\/[^/]+\.md$/.test(rel);
+    if (!isContentItem && !isShare) continue;
     let fm;
     try { fm = yaml.load((/^---\n([\s\S]*?)\n---/.exec(fs.readFileSync(path.join(ROOT, rel), 'utf8')) || [])[1] || '') || {}; } catch { continue; }
     for (const t of Array.isArray(fm.tags) ? fm.tags : []) {

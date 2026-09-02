@@ -10470,6 +10470,18 @@ ${String(body ?? "")}`;
   }
 
   // client-ui/src/share-post-core.mjs
+  function normalizeTagInput(raw, { max = 8, minLen = 2, maxLen = 32 } = {}) {
+    const parts = Array.isArray(raw) ? raw : String(raw ?? "").split(/[,\n]/);
+    const out = [];
+    for (const part of parts) {
+      const t = String(part ?? "").trim().toLowerCase().replace(/^#+/, "").replace(/[\s_]+/g, "-").replace(/[^a-z0-9.-]/g, "").replace(/-{2,}/g, "-").replace(/^[-.]+|[-.]+$/g, "");
+      if (t.length < minLen || t.length > maxLen) continue;
+      if (!/^[a-z0-9][a-z0-9.-]*$/.test(t)) continue;
+      if (!out.includes(t)) out.push(t);
+      if (out.length >= max) break;
+    }
+    return out;
+  }
   function authorFromPath(path) {
     const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(String(path || ""));
     return m ? m[1] : null;
@@ -10488,6 +10500,9 @@ ${String(body ?? "")}`;
       url: input.url || "",
       image: input.image || null,
       thumb: input.image || null,
+      // sow-303: carried so the just-posted share renders its own tags during the ~3 minutes before the
+      // canonical version lands. Omitting it made the optimistic item disagree with the file on disk.
+      tags: Array.isArray(input.tags) ? input.tags : [],
       visibility: res?.visibility ?? input.visibility ?? "members",
       body: String(body || ""),
       createdAt,
@@ -10726,10 +10741,11 @@ ${String(body ?? "")}`;
           <input class="title" type="text" placeholder="Title (optional)" maxlength="80" />
           <input class="desc" type="text" placeholder="Short description (optional)" maxlength="200" />
           <div class="autoblock">
-            <span class="autolabel">${IC.bolt} Categorised automatically</span>
+            <span class="autolabel">${IC.bolt} Categorised and tagged automatically</span>
             <select class="cat" aria-label="Category">
               <option value="">Category (optional)</option>
             </select>
+            <input class="tags" type="text" aria-label="Tags" placeholder="Tags (optional, comma separated)" maxlength="120" />
           </div>
         </section>
 
@@ -10771,6 +10787,7 @@ ${String(body ?? "")}`;
       </div>`);
       this._image = null;
       this._suggested = null;
+      this._suggestedTags = [];
       this.$(".card")?.addEventListener("click", (e) => this._onCardClick(e));
       this.on(".post", "click", () => this._post());
       this.on("input[type=url]", "change", () => this._fetchPreview());
@@ -10924,8 +10941,9 @@ ${String(body ?? "")}`;
     // Pre-select the Worker's suggestion, but NEVER clobber an author's own pick.
     _applySuggested() {
       const sel = this.$("select.cat");
-      if (!sel || !this._suggested || sel.value) return;
-      if ([...sel.options].some((o) => o.value === this._suggested)) sel.value = this._suggested;
+      if (sel && this._suggested && !sel.value && [...sel.options].some((o) => o.value === this._suggested)) sel.value = this._suggested;
+      const tin = this.$("input.tags");
+      if (tin && !tin.value.trim() && this._suggestedTags?.length) tin.value = this._suggestedTags.join(", ");
     }
     // Fetch the link preview server-side (the Worker is SSRF-guarded). Updates ONLY the preview area + soft-prefills
     // EMPTY title/desc fields (never clobbering author text), so it does not re-render the composer.
@@ -10961,6 +10979,7 @@ ${String(body ?? "")}`;
         const d = this.$("input.desc");
         if (d && !d.value.trim() && og?.description) d.value = String(og.description).slice(0, 200);
         this._suggested = og?.suggestedCategory || null;
+        this._suggestedTags = Array.isArray(og?.suggestedTags) ? og.suggestedTags : [];
         this._applySuggested();
         this._image = og?.image || null;
         let domain = "";
@@ -10982,6 +11001,7 @@ ${String(body ?? "")}`;
       if (state.kind === "error") {
         this._lastOgUrl = null;
         this._suggested = null;
+        this._suggestedTags = [];
       }
       box.innerHTML = `<span class="ogmsg${state.kind === "error" ? " err" : ""}">${esc(state.message)}</span>` + (state.retry ? ` <button class="ogclear" type="button" data-ogretry>Try again</button>` : "");
       const again = box.querySelector("[data-ogretry]");
@@ -10998,6 +11018,7 @@ ${String(body ?? "")}`;
       const url = (this.$("input[type=url]")?.value || "").trim();
       const visibility = this._visibility || "members";
       const category = this.$("select.cat")?.value || "";
+      const tags = normalizeTagInput(this.$("input.tags")?.value);
       const msg = this.$(".msg");
       if (!body && !url && !title) {
         this._say(msg, "Add a title, a note, or a link first.", "err");
@@ -11016,6 +11037,7 @@ ${String(body ?? "")}`;
         if (shortDescription) input.shortDescription = shortDescription;
         if (url) input.url = url;
         if (category) input.category = category;
+        if (tags.length) input.tags = tags;
         if (this._image) input.image = this._image;
         const res = await this.client.postShare({ input, body });
         this._say(msg, submitAck({ prNumber: res?.prNumber, autoMerge: true }), "ok");
@@ -11025,9 +11047,12 @@ ${String(body ?? "")}`;
         }
         const cat = this.$("select.cat");
         if (cat) cat.value = "";
+        const tg = this.$("input.tags");
+        if (tg) tg.value = "";
         const postedImage = this._image;
         this._image = null;
         this._suggested = null;
+        this._suggestedTags = [];
         this._lastOgUrl = null;
         const ogBox = this.$("[data-og]");
         if (ogBox) {
@@ -18273,7 +18298,9 @@ ${String(body ?? "")}`;
     const body = parts.length === 1 ? parts[0] : parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join("");
     return body ? `#${body}` : "";
   }
-  function hashtagList(labels) {
+  var HASHTAG_BRAND = "gbti";
+  var HASHTAG_MAX = 5;
+  function hashtagList(labels, { max = 0, brand = "" } = {}) {
     const seen = /* @__PURE__ */ new Set();
     const out = [];
     for (const l of Array.isArray(labels) ? labels : []) {
@@ -18284,7 +18311,19 @@ ${String(body ?? "")}`;
         out.push(h);
       }
     }
-    return out.join(" ");
+    const brandTag = brand ? toHashtag(brand) : "";
+    if (!brandTag && !(max > 0)) return out.join(" ");
+    const cap = max > 0 ? max : out.length + 1;
+    const topical = brandTag ? out.filter((h) => h.toLowerCase() !== brandTag.toLowerCase()) : out;
+    const kept = topical.slice(0, brandTag ? Math.max(0, cap - 1) : cap);
+    if (brandTag) kept.push(brandTag);
+    return kept.join(" ");
+  }
+  function dropTrailingHashtagsToFit(text, limit) {
+    let s = String(text || "");
+    if (!Number.isFinite(limit) || s.length <= limit) return s;
+    while (s.length > limit && /\s#[^\s#]+$/.test(s)) s = s.replace(/\s#[^\s#]+$/, "");
+    return s;
   }
   function renderTemplate(template, item = {}, { limit = 2e3, previewMention = null } = {}) {
     const mention = /^<@!?\d+>$/.test(String(item.mention || "")) ? item.mention : null;
@@ -18358,13 +18397,24 @@ From the author:
       memberdevtohandle: devtoHandleFrom(item.authorDevto) ? `@${devtoHandleFrom(item.authorDevto)}` : fullName,
       categoryhashtag: toHashtag(item.category),
       tagshashtags: hashtagList(item.tags),
-      hashtags: hashtagList([item.category, ...Array.isArray(item.tags) ? item.tags : []])
+      // sow-303: the merged token is the one that carries the cap and the brand tag. The two split tokens
+      // above stay exactly as they were, so a template using them is unaffected.
+      // THE BRAND TAG IS SHARES ONLY, and that is the owner's scope rather than a technical limit. The ruling
+      // ("up to five and include #gbti always", 2026-09-02) answered a question about SHARE posts. The merged
+      // token is not share-only though: LinkedIn's post, product and prompt templates use it too, so branding
+      // the helper unconditionally would have put #gbti on article syndication nobody asked about. Two existing
+      // tests caught it, both asserting a PROMPT's hashtag tail.
+      // Extending it to every type is deleting the condition on this line.
+      hashtags: hashtagList(
+        [item.category, ...Array.isArray(item.tags) ? item.tags : []],
+        { max: HASHTAG_MAX, brand: item.source === "share" ? HASHTAG_BRAND : "" }
+      )
     };
     const text = String(template || "").replace(/\{([a-zA-Z-]+)\}/g, (_, name) => {
       const val = vars[name.toLowerCase().replace(/-/g, "")] ?? "";
       return name === name.toUpperCase() && /[A-Z]/.test(name) && !/^<@!?\d+>$/.test(val) ? val.toUpperCase() : val;
     }).replace(/\\n/g, "\n").replace(/(^|\s)(""|''|“”|‘’|\(\)|\[\])(?=\s|$)/g, "$1").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-    return truncate(text, limit);
+    return truncate(dropTrailingHashtagsToFit(text, limit), limit);
   }
   function renderBodyTemplate(template, item = {}, rawBody = "") {
     const body = String(rawBody ?? "");

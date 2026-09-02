@@ -2,6 +2,46 @@
 // optimistic item (the SOW-076 instant-feel model: the member sees their share NOW; the canonical version
 // replaces it on the next feed load after the ~3 minute deploy). Node-free, no DOM, unit-tested.
 
+/**
+ * sow-303: parse a comma-separated tags field into house-shaped tags.
+ *
+ * WHY THE COMPOSER CANNOT JUST HAND ITS RAW STRING ON. buildShareFile (client/src/content-ops.mjs) validates
+ * against the share schema and then serializes the PRE-PARSE object, so tagsSchema's normalization is
+ * computed and discarded while its `.refine` rejection still fires. A tag that is not already house-shaped
+ * is therefore not repaired on the way in: it throws ContentValidationError and the whole share fails to
+ * publish. Everything reaching a share's frontmatter has to arrive correct, which is why this runs at the
+ * composer rather than being left to the schema.
+ *
+ * The transformations MATCH normalizeTag in client/src/schemas.mjs (lowercase, spaces and underscores to
+ * hyphens, collapse repeats, trim), plus a hard drop of characters the shape forbids, which normalizeTag does
+ * not do (it would leave `c++` as `c++`, which then fails the refine). A test asserts the two agree rather
+ * than trusting this paragraph.
+ *
+ * An unrepairable entry is DROPPED, never mangled into something else: a member losing one tag they typed
+ * oddly is a small cost, and a share that refuses to publish is not.
+ */
+export function normalizeTagInput(raw, { max = 8, minLen = 2, maxLen = 32 } = {}) {
+  const parts = Array.isArray(raw) ? raw : String(raw ?? '').split(/[,\n]/);
+  const out = [];
+  for (const part of parts) {
+    const t = String(part ?? '')
+      .trim().toLowerCase()
+      .replace(/^#+/, '')            // a member typing #hashtags means the tag, not the hash
+      .replace(/[\s_]+/g, '-')
+      .replace(/[^a-z0-9.-]/g, '')
+      .replace(/-{2,}/g, '-')
+      .replace(/^[-.]+|[-.]+$/g, '');
+    if (t.length < minLen || t.length > maxLen) continue;
+    // Redundant by construction, exactly as in the worker's normalizeSuggestedTags: the strips above already
+    // guarantee it. Kept as the stated invariant so a future edit to the chain fails here rather than
+    // downstream, where an out-of-shape tag makes the whole share refuse to publish.
+    if (!/^[a-z0-9][a-z0-9.-]*$/.test(t)) continue;
+    if (!out.includes(t)) out.push(t);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
 /** The owning username from a publish result path (members/<user>/shares/<id>.md). Null when unparseable. */
 export function authorFromPath(path) {
   const m = /^members\/([a-z0-9][a-z0-9-]*)\//i.exec(String(path || ''));
@@ -29,6 +69,9 @@ export function optimisticShareItem({ res, input = {}, body = '', now = null } =
     url: input.url || '',
     image: input.image || null,
     thumb: input.image || null,
+    // sow-303: carried so the just-posted share renders its own tags during the ~3 minutes before the
+    // canonical version lands. Omitting it made the optimistic item disagree with the file on disk.
+    tags: Array.isArray(input.tags) ? input.tags : [],
     visibility: res?.visibility ?? input.visibility ?? 'members',
     body: String(body || ''),
     createdAt,

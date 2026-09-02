@@ -16,7 +16,7 @@ import { resolveIdentity } from './identity.mjs'; // sow-158 Phase 1b shared cho
 import { scrapeOgPreview } from '../lib/og-scrape.mjs';
 import { oembedEndpointFor, previewFromOembed, maxresThumbCandidate } from '../lib/oembed-providers.mjs'; // SOW-102: provider fallback
 import { mediumFeedUrlFor, previewFromMediumFeed } from '../lib/medium-preview.mjs'; // Medium RSS fallback (bot-challenged pages)
-import { suggestTopic } from './topic-suggest.mjs';
+import { suggestTopic, suggestTags } from './topic-suggest.mjs';
 
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_BYTES = 60000;
@@ -60,12 +60,13 @@ export function safeFetchTarget(raw) {
 // could not reach it, it is not a web page at all, or it timed out. The route still NEVER throws and still
 // never 500s, so this is additive: `reason: null` is the genuine no-data case and keeps today's behaviour.
 // The composer turns each into its own sentence (ogPreviewState in gbti-share-composer.mjs).
-const EMPTY_PREVIEW = { ok: true, image: null, title: null, description: null, tags: [], suggestedCategory: null, reason: null };
+const EMPTY_PREVIEW = { ok: true, image: null, title: null, description: null, tags: [], suggestedCategory: null, suggestedTags: [], reason: null };
 
 export async function handleOgPreview(request, env, {
   fetchImpl = globalThis.fetch,
   fetchUser = githubFetchUser,
   suggest = suggestTopic, // SOW-087: injectable for tests
+  suggestTagsImpl = suggestTags, // sow-303: injectable for tests, same as `suggest` above
   allowCookie = false, // opt-in the WEBSITE (cookie session) path; the extension/npm bearer path is unchanged
   verifyCookie, // injectable cookie verifier for tests (defaults to the identity resolver's own)
   // sow-211: injectable alongside the other deps so the TIMEOUT branch is testable. Distinguishing a timeout
@@ -173,14 +174,19 @@ export async function handleOgPreview(request, env, {
     }
     // SOW-087: a topic-category suggestion for the composer (fail-open: any error just means no suggestion).
     // SOW-102: with ZERO scraped signal the suggester is SKIPPED (it hallucinated a category from nothing).
+    // sow-303: and a free-form TAG suggestion beside it, so the composer's tags field arrives pre-filled.
+    // The two run CONCURRENTLY: they are independent model calls over the same scraped signal, so awaiting
+    // them in series would add the slower one's latency to a preview a member is watching load.
+    // Each settles on its own (Promise.allSettled, plus each suggester is already internally fail-soft), so a
+    // tag failure can never cost the category, or the reverse.
     let suggestedCategory = null;
+    let suggestedTags = [];
     const hasSignal = Boolean(preview.title || preview.description || (preview.tags && preview.tags.length));
     if (hasSignal) {
-      try {
-        suggestedCategory = await suggest(env, { title: preview.title, description: preview.description, tags: preview.tags });
-      } catch {
-        suggestedCategory = null;
-      }
+      const args = { title: preview.title, description: preview.description, tags: preview.tags };
+      const [cat, tag] = await Promise.allSettled([suggest(env, args), suggestTagsImpl(env, args)]);
+      suggestedCategory = cat.status === 'fulfilled' ? cat.value : null;
+      suggestedTags = tag.status === 'fulfilled' && Array.isArray(tag.value) ? tag.value : [];
     }
     return {
       status: 200,
@@ -191,6 +197,9 @@ export async function handleOgPreview(request, env, {
         description: preview.description || null,
         tags: preview.tags || [],
         suggestedCategory: suggestedCategory || null,
+        // sow-303: free-form tags for the composer's tags field. Always an array, never null, so the client
+        // never has to distinguish "no suggestion" from "not supported".
+        suggestedTags,
         // We reached the page and read it. If it yielded nothing, that IS the genuine no-data case.
         reason: null,
       },
