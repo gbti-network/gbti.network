@@ -5,14 +5,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildOverridesMirror, mirrorOverridesToKv, OVERRIDES_KV_KEY, mirrorSyndicationConfigToKv,
-  buildContentChannelsMirror, mirrorContentChannelsToKv, mirrorTopicsToKv, CONTENT_CHANNELS_KV_KEY, TOPICS_KV_KEY,
-} from '../scripts/lib/kv-mirror.mjs';
+  buildContentChannelsMirror, mirrorContentChannelsToKv, mirrorTopicsToKv, CONTENT_CHANNELS_KV_KEY, TOPICS_KV_KEY, OWNS_BOTH_FROM_GIT } from '../scripts/lib/kv-mirror.mjs';
 
 const raw = { roles: { admins: [{ github_id: '4' }] }, bans: { bans: [{ github_id: '7' }] }, grandfathered: { grandfathered: [] } };
 const NOW = new Date('2026-06-06T00:00:00Z');
 
+// sow-213 Phase 3b: the calls below pass OWNS_BOTH_FROM_GIT explicitly. They used to rely on the DEFAULT,
+// which was git-owned; the default is now fail-closed (owns nothing) so a forgotten argument preserves or
+// aborts instead of erasing every ban and grant. These tests are about blob shape and the KV PUT mechanics,
+// not about the default, so stating the git view explicitly restores their original premise.
 test('buildOverridesMirror carries roles/bans/grandfathered + a generatedAt stamp', () => {
-  const blob = buildOverridesMirror(raw, NOW);
+  const blob = buildOverridesMirror(raw, NOW, null, OWNS_BOTH_FROM_GIT);
   assert.equal(blob.generatedAt, '2026-06-06T00:00:00.000Z');
   assert.deepEqual(blob.roles, raw.roles);
   assert.deepEqual(blob.bans, raw.bans);
@@ -20,7 +23,7 @@ test('buildOverridesMirror carries roles/bans/grandfathered + a generatedAt stam
 });
 
 test('buildOverridesMirror defaults missing files to empty objects', () => {
-  const blob = buildOverridesMirror({}, NOW);
+  const blob = buildOverridesMirror({}, NOW, null, OWNS_BOTH_FROM_GIT);
   assert.deepEqual(blob.roles, {});
   assert.deepEqual(blob.bans, {});
   assert.deepEqual(blob.grandfathered, {});
@@ -49,7 +52,7 @@ function kvFake(current, { putStatus = 200 } = {}) {
 
 test('PUTs the blob to the KV REST API with bearer auth when configured', async () => {
   const f = kvFake(undefined); // 404: the legitimate first write
-  const r = await mirrorOverridesToKv({ raw, env: ENV, now: NOW, fetchImpl: f.fetchImpl });
+  const r = await mirrorOverridesToKv({ raw, ownedByGit: OWNS_BOTH_FROM_GIT, env: ENV, now: NOW, fetchImpl: f.fetchImpl });
   assert.equal(r.written, true);
   const put = f.put();
   assert.match(put.url, /accounts\/acc\/storage\/kv\/namespaces\/ns\/values\/overrides%3Amirror$/);
@@ -66,7 +69,7 @@ test('sow-213: a KV-NATIVE ban SURVIVES the git-sourced sync', async () => {
   // direction, with nothing reporting it.
   const current = { generatedAt: 'x', roles: {}, bans: { bans: [{ github_id: '99', source: 'kv' }] }, grandfathered: { grandfathered: [] } };
   const f = kvFake(current);
-  await mirrorOverridesToKv({ raw, env: ENV, now: NOW, fetchImpl: f.fetchImpl });
+  await mirrorOverridesToKv({ raw, ownedByGit: OWNS_BOTH_FROM_GIT, env: ENV, now: NOW, fetchImpl: f.fetchImpl });
   const sent = JSON.parse(f.put().opts.body);
   const ids = sent.bans.bans.map((e) => String(e.github_id));
   assert.ok(ids.includes('99'), 'the KV-native ban must survive');
@@ -78,7 +81,7 @@ test('sow-213: an UNBAN in git still takes effect (the fix must not trade one si
   // would silently fail to unban them, which is the same class of bug pointing the other way.
   const current = { generatedAt: 'x', roles: {}, bans: { bans: [{ github_id: '12345' }] }, grandfathered: { grandfathered: [] } };
   const f = kvFake(current);
-  await mirrorOverridesToKv({ raw, env: ENV, now: NOW, fetchImpl: f.fetchImpl });
+  await mirrorOverridesToKv({ raw, ownedByGit: OWNS_BOTH_FROM_GIT, env: ENV, now: NOW, fetchImpl: f.fetchImpl });
   const ids = JSON.parse(f.put().opts.body).bans.bans.map((e) => String(e.github_id));
   assert.ok(!ids.includes('12345'), 'an unmarked stale entry is dropped, so a git unban is effective');
 });
@@ -88,7 +91,7 @@ test('sow-213: a READ failure ABORTS the write rather than overwriting an unknow
   // the Worker's 48h window and then fails closed; a blind overwrite looks like success.
   const fetchImpl = async (_u, opts = {}) => (opts.method === 'PUT' ? { ok: true, status: 200 } : { ok: false, status: 500 });
   await assert.rejects(
-    mirrorOverridesToKv({ raw, env: ENV, now: NOW, fetchImpl }),
+    mirrorOverridesToKv({ raw, ownedByGit: OWNS_BOTH_FROM_GIT, env: ENV, now: NOW, fetchImpl }),
     /refusing to overwrite an unknown ban list/,
   );
 });
@@ -96,7 +99,7 @@ test('sow-213: a READ failure ABORTS the write rather than overwriting an unknow
 test('throws on an API error so the reconcile fails the run', async () => {
   // The GET succeeds (404, first write); the PUT is what fails, which is what this test is about.
   const f = kvFake(undefined, { putStatus: 403 });
-  await assert.rejects(mirrorOverridesToKv({ raw, env: ENV, now: NOW, fetchImpl: f.fetchImpl }), /KV mirror write failed: 403/);
+  await assert.rejects(mirrorOverridesToKv({ raw, ownedByGit: OWNS_BOTH_FROM_GIT, env: ENV, now: NOW, fetchImpl: f.fetchImpl }), /KV mirror write failed: 403/);
 });
 
 // SOW-058: the syndication-config mirror (so the drain reads house/syndication-config.yml live).

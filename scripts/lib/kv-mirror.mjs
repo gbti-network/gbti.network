@@ -101,14 +101,31 @@ export function mergeOverridesSection(gitSection, existingSection, listKey) {
   return { ...base, [listKey]: [...git, ...kvNative] };
 }
 
+/**
+ * sow-213 Phase 3b: THE OWNERSHIP DEFAULT IS FAIL-CLOSED, AND IT USED TO BE THE ERASE DIRECTION.
+ *
+ * Until 3b this parameter defaulted to `{ bans: true, grandfathered: true }`, meaning "git owns both", and the
+ * test was `!== false`, so an omitted argument OR a partial object like `{}` also read as git-owned. That was
+ * safe only by accident: both production write callers happened to pass an explicit value. Once bans.yml and
+ * grandfathered.yml are DELETED, "git owns both" means `raw.bans` is `{}` and the whole section is rebuilt
+ * from nothing, so a single forgotten argument would lift every ban and strip every grant on a GREEN run.
+ *
+ * So the default is now owns-nothing and the test is `=== true`. A caller that forgets, or passes a partial
+ * object, gets preserve-or-abort instead of erase. A caller that genuinely holds a git view must say so.
+ */
+const OWNS_NOTHING = Object.freeze({ bans: false, grandfathered: false });
+
+/** The git-owned view, for the REPORT-ONLY callers that compute a byte count from git alone and never write. */
+export const OWNS_BOTH_FROM_GIT = Object.freeze({ bans: true, grandfathered: true });
+
 /** Build the compact mirror blob the Worker reads. Stores the RAW parsed YAML (the Worker rebuilds Maps).
  *  `existing` is the blob currently in KV; pass it so KV-native entries are not clobbered (see above). */
-export function buildOverridesMirror(raw, now = new Date(), existing = null, ownedByGit = { bans: true, grandfathered: true }) {
+export function buildOverridesMirror(raw, now = new Date(), existing = null, ownedByGit = OWNS_NOTHING) {
   return {
     generatedAt: now.toISOString(),
     roles: raw?.roles ?? {}, // roles.yml stays git-native by owner ruling, so this section is always rebuilt
-    bans: sectionFor(ownedByGit?.bans !== false, raw?.bans ?? {}, existing?.bans, 'bans'),
-    grandfathered: sectionFor(ownedByGit?.grandfathered !== false, raw?.grandfathered ?? {}, existing?.grandfathered, 'grandfathered'),
+    bans: sectionFor(ownedByGit?.bans === true, raw?.bans ?? {}, existing?.bans, 'bans'),
+    grandfathered: sectionFor(ownedByGit?.grandfathered === true, raw?.grandfathered ?? {}, existing?.grandfathered, 'grandfathered'),
   };
 }
 
@@ -121,7 +138,7 @@ export async function mirrorOverridesToKv({ raw, env = process.env, now = new Da
   const namespaceId = env.CF_KV_NAMESPACE_ID;
   const apiToken = env.CF_API_TOKEN;
   if (!accountId || !namespaceId || !apiToken) {
-    const noop = JSON.stringify(buildOverridesMirror(raw, now));
+    const noop = JSON.stringify(buildOverridesMirror(raw, now, null, OWNS_BOTH_FROM_GIT));
     return { written: false, key, bytes: noop.length, reason: 'CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN not set' };
   }
   const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;

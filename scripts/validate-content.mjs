@@ -357,6 +357,27 @@ if (has(membersDir)) {
   }
 }
 
+// sow-213 Phase 3b: house/bans.yml and house/grandfathered.yml are RETIRED, on the same reasoning as
+// favorites.yml above and the storage-boundary ruling in CLAUDE.md. Membership state is per-person data, and a
+// person-keyed record in a PUBLIC repository is permanent, forkable and CDN-cached, so "hiding is not
+// deleting" applies to it forever and it cannot satisfy a right-to-erasure request. Both files now live only
+// in the deletable edge store (the `overrides:mirror` blob in SIGNUP_KV), which reconcile writes and the
+// Worker reads.
+//
+// THIS GUARD IS THE THING THAT MAKES THE MIGRATION STICK. Recreating either file does not merely duplicate
+// state, it CHANGES BEHAVIOUR: gitOwnedSections() decides ownership by existsSync, so a reappearing file flips
+// that section back to git-owned and the next mirror write rebuilds it from whatever the file happens to
+// contain. An empty or partial file would then silently strip live entitlements on a green run.
+for (const retired of ['house/bans.yml', 'house/grandfathered.yml']) {
+  if (has(path.join(ROOT, retired))) {
+    errors.push(
+      `${retired}: retired by sow-213. Membership overrides live in the edge store (KV), not git. ` +
+        'Recreating this file flips the section back to git-owned in gitOwnedSections() and the next mirror ' +
+        'write will rebuild it from this file, which can strip live entitlements. Remove it.',
+    );
+  }
+}
+
 // SOW-014: a published product/prompt requires a from-the-author introduction comment (a published
 // comment by the content author targeting it). Enforced ONLY over the files changed in the PR
 // (CHANGED_FILES, set by .github/workflows/content-check.yml), so already-published content is

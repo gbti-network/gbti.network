@@ -90,6 +90,25 @@ function rootWithoutOverrideFiles() {
   return dir;
 }
 
+/**
+ * sow-213 Phase 3b: a root that DOES carry the two override files.
+ *
+ * These tests used to pass `process.cwd()` for this, which worked only because the real repository still had
+ * the files. That is a live-data fixture, and this repository has been bitten by them before: the system under
+ * test could change the very files the test read. Phase 3b deleted them, so the live root now selects KV-only
+ * mode and every git-mode and both-mode assertion silently stopped testing its own subject.
+ *
+ * The git-owned code path is still reachable and still worth covering (a fork may carry the files, and
+ * gitOwnedSections still keys off their presence), so it gets a real fixture rather than being deleted.
+ */
+function rootWithOverrideFiles() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sow213-git-'));
+  fs.mkdirSync(path.join(dir, 'house'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'house', 'bans.yml'), 'bans: []\n');
+  fs.writeFileSync(path.join(dir, 'house', 'grandfathered.yml'), 'grandfathered: []\n');
+  return dir;
+}
+
 test('sow-213 ACCEPTANCE 1 (GATE): a ban that exists ONLY in KV makes the gate DENY a paid creator', async () => {
   const overrides = gateOverrides();
 
@@ -170,7 +189,7 @@ test('sow-213 ACCEPTANCE 2 (GATE): every unhealthy source makes the gate THROW, 
   ];
   for (const [label, kvResult] of unhealthy) {
     // Both post-migration modes must deny: 'kv' (the files are gone) and 'both' (the Phase 1 cross-check).
-    for (const repoRoot of [rootWithoutOverrideFiles(), process.cwd()]) {
+    for (const repoRoot of [rootWithoutOverrideFiles(), rootWithOverrideFiles()]) {
       await assert.rejects(
         () => applyOverridesSource({ overrides: gateOverrides(), repoRoot, env: CREDS, readKv: async () => kvResult, log: () => {} }),
         /overrides unavailable from KV/,
@@ -202,7 +221,7 @@ test("sow-213 'both' mode: a ban present ONLY in KV is ADOPTED, and the gate den
 
   const r = await applyOverridesSource({
     overrides,
-    repoRoot: process.cwd(),
+    repoRoot: rootWithOverrideFiles(),
     env: CREDS,
     readKv: async () => await readOverridesFromKv({ env: CREDS, now: NOW, fetchImpl: okFetch(bannedMirror) }),
     log: () => {},
@@ -240,7 +259,7 @@ test('sow-213: mirror lag must NOT fail the gate, and the git-side record stays 
   overrides.bans = new Map([[BANNED_ID, { github_id: BANNED_ID, reason: 'spam' }]]); // git knows
   const emptyMirror = async () => await readOverridesFromKv({ env: CREDS, now: NOW, fetchImpl: okFetch(fresh()) }); // KV does not
 
-  const r = await applyOverridesSource({ overrides, repoRoot: process.cwd(), env: CREDS, readKv: emptyMirror, log: () => {} });
+  const r = await applyOverridesSource({ overrides, repoRoot: rootWithOverrideFiles(), env: CREDS, readKv: emptyMirror, log: () => {} });
 
   assert.equal(r.mode, 'both');
   assert.deepEqual(r.adopted, [], 'nothing to adopt: git is the one that is ahead');
@@ -260,7 +279,7 @@ test('sow-213: a grandfather grant present only in KV is NOT honoured, because i
 
   const r = await applyOverridesSource({
     overrides,
-    repoRoot: process.cwd(),
+    repoRoot: rootWithOverrideFiles(),
     env: CREDS,
     readKv: async () => await readOverridesFromKv({ env: CREDS, now: NOW, fetchImpl: okFetch(grantedInKvOnly) }),
     log: () => {},
@@ -279,7 +298,7 @@ test('sow-213: the exact reconcile coupon-fold shape resolves cleanly instead of
 
   const r = await applyOverridesSource({
     overrides,
-    repoRoot: process.cwd(),
+    repoRoot: rootWithOverrideFiles(),
     env: CREDS,
     readKv: async () => await readOverridesFromKv({ env: CREDS, now: NOW, fetchImpl: okFetch(fresh()) }),
     log: () => {},
@@ -342,7 +361,7 @@ test('sow-213: BEFORE Phase 3, the same absent credential is a quiet no-op, beca
   const overrides = gateOverrides();
   const { mode } = await applyOverridesSource({
     overrides,
-    repoRoot: process.cwd(), // the house files are still here
+    repoRoot: rootWithOverrideFiles(), // the house files are still here
     env: {},
     readKv: async () => { throw new Error('must not be called'); },
     log: () => {},
@@ -357,7 +376,7 @@ test('sow-213 (GATE): in git mode the KV read is never called and the overrides 
   let called = 0;
   const { mode } = await applyOverridesSource({
     overrides,
-    repoRoot: process.cwd(), // the files are present
+    repoRoot: rootWithOverrideFiles(), // the files are present
     env: {}, // no creds
     readKv: async () => { called += 1; return { available: true, bans: new Map([['1', {}]]), grandfathers: new Map() }; },
     log: () => {},
@@ -418,8 +437,11 @@ test('sow-213: the mode is DERIVED, and losing the git files makes KV mandatory 
 });
 
 test('sow-213: overrideFilesPresent reports on the real checkout', () => {
-  // True today: the files are still in git. When Phase 3 removes them this flips, and the mode flips with it.
-  assert.equal(overrideFilesPresent(process.cwd()), true, 'bans.yml/grandfathered.yml are still in git in Phase 1');
+  // sow-213 Phase 3b HAS NOW REMOVED THEM, and this test predicted exactly that: "When Phase 3 removes them
+  // this flips, and the mode flips with it." It flipped. house/bans.yml and house/grandfathered.yml are gone
+  // from the repository and membership overrides live only in the KV mirror, so the real checkout now reports
+  // false and the source resolves to KV-only mode.
+  assert.equal(overrideFilesPresent(process.cwd()), false, 'Phase 3b deleted both files; the checkout is KV-only');
   assert.equal(overrideFilesPresent('/nonexistent-root'), false);
 });
 
