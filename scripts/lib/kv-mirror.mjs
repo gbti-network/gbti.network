@@ -208,6 +208,33 @@ export async function readOverridesMirrorRest({ env = process.env, fetchImpl = g
 }
 
 /**
+ * sow-291 Phase 2 (deletion pass): read the `coupons:config` blob via the Cloudflare KV REST API, for the
+ * out-of-Worker READERS that must reach the coupon registry once `house/coupons.yml` has left the public repo:
+ * `scripts/invite-links.mjs` (the /invite CLI) and `scripts/build-campaign-manifest.mjs` (the code-free manifest
+ * generator). Same fail-closed contract as `readOverridesMirrorRest`: `available:false` on missing creds or a
+ * read error (the caller reports it, never fabricates), `config:null` with `available:true` only on a legitimate
+ * 404. The caller applies its own freshness policy; this returns the raw blob (a generator/CLI reading the
+ * registry is not the redemption path, so the 48h gate does not belong here).
+ */
+export async function readCouponsConfigRest({ env = process.env, fetchImpl = globalThis.fetch, key = COUPONS_KV_KEY } = {}) {
+  const accountId = env.CF_ACCOUNT_ID;
+  const namespaceId = env.CF_KV_NAMESPACE_ID;
+  const apiToken = env.CF_API_TOKEN;
+  if (!accountId || !namespaceId || !apiToken) {
+    return { available: false, config: null, reason: 'CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN not set' };
+  }
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
+  try {
+    const res = await fetchImpl(url, { headers: { Authorization: `Bearer ${apiToken}` } });
+    if (res?.ok) return { available: true, config: await res.json(), reason: null };
+    if (res && res.status === 404) return { available: true, config: null, reason: null };
+    return { available: false, config: null, reason: `status ${res ? res.status : 'no response'}` };
+  } catch (err) {
+    return { available: false, config: null, reason: err?.message || 'unknown' };
+  }
+}
+
+/**
  * sow-213 Step 3: the Cloudflare REST half of the shared override mutation, for the writers that run OUTSIDE the
  * Worker and cannot bind SIGNUP_KV directly (W3, reconcile's coupon-grant fold; W4, the manual erase-member
  * CLI). It reads the overrides:mirror blob via the KV REST API, applies the PURE applyKvOverride (the SAME

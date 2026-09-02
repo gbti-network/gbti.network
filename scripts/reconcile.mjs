@@ -837,6 +837,12 @@ async function main() {
           const m = await readOverridesMirrorRest({ env });
           return (m.available && m.mirror) ? { parsed: m.mirror.grandfathered ?? { grandfathered: [] } } : null;
         },
+        // sow-291 Phase 2: house/coupons.yml is deleted, so readCouponsFromDisk returns null and the fold loses
+        // the registry-tier FALLBACK only. This is deliberately NOT re-pointed to KV: every current coupon is
+        // tier: member (the DEFAULT_COUPON_TIER), so a null registry folds to exactly the same tier the registry
+        // would have named. It degrades toward the OLD, correct behaviour. A FUTURE creator-tier coupon (none
+        // exist; Phase 4 rotation is cancelled) would need this re-pointed to readCouponsConfigRest, which is
+        // built and used by invite-links + build-campaign-manifest. See the sow-291 LIVE STATUS block.
         readCoupons: () => readCouponsFromDisk(ROOT),
       });
       console.log(

@@ -7,29 +7,25 @@
 // tier. Assembling the URL by hand is how that recurs. Here the code, the tier and the lander are resolved
 // from the registry together, and a mismatch is REPORTED rather than silently rendered.
 //
-// READS origin/main BY DEFAULT, NOT THE WORKING TREE. This repo is worked by several sessions sharing one
-// clone that regularly runs dozens of commits behind, so the working copy of house/coupons.yml is routinely
-// stale. A stale read here hands somebody a link for a coupon that no longer exists, or omits one that does.
-// `--local` opts into the working tree, and the output always says which source it used.
+// READS THE REGISTRY FROM KV (sow-291 Phase 2). house/coupons.yml has left the public repository, because a
+// coupon code is a bearer credential, so the live registry is now `coupons:config` in the members KV store.
+// This CLI reads it via the Cloudflare REST API and NEEDS CF credentials: set CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID
+// / CF_API_TOKEN. The old `--local` / origin-main file reads are retired: there is no git copy to be stale
+// against any more, and a fail-loud missing-creds error replaces the silent-stale hazard the file read carried.
 //
-// Usage:
-//   node scripts/invite-links.mjs              every ACTIVE coupon, from origin/main
+// Usage (CF_* in the environment):
+//   node scripts/invite-links.mjs              every ACTIVE coupon, from KV coupons:config
 //   node scripts/invite-links.mjs --all        include inactive / expired / exhausted, with the reason
-//   node scripts/invite-links.mjs --local      read the working tree instead of origin/main
 //   node scripts/invite-links.mjs --json       machine-readable
-import { execFileSync } from 'node:child_process';
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import yaml from 'js-yaml';
 import { couponsFromParsed } from '../membership/coupons.mjs';
 import { landerFor, LANDER_BY_TIER, LANDER_BY_CAMPAIGN } from '../membership/invites.mjs'; // sow-231 P3: ONE mapping
+import { readCouponsConfigRest } from './lib/kv-mirror.mjs'; // sow-291 Phase 2: the registry is KV-native now
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SITE = process.env.SITE_BASE_URL || 'https://gbti.network';
 
 const args = new Set(process.argv.slice(2));
-const useLocal = args.has('--local');
 const showAll = args.has('--all');
 const asJson = args.has('--json');
 
@@ -38,15 +34,18 @@ const asJson = args.has('--json');
 // because a second copy of this particular mapping drifts silently and the symptom is somebody being sent
 // a page describing a tier they were not given.
 
-function readRegistry() {
-  const rel = 'house/coupons.yml';
-  if (useLocal) {
-    return { source: `working tree (${rel})`, raw: yaml.load(fs.readFileSync(path.join(ROOT, rel), 'utf8')) };
+async function readRegistry() {
+  // sow-291 Phase 2: read coupons:config from KV. Fail LOUDLY on missing creds or an unreadable/absent registry,
+  // never fall back to a stale or empty source: a quiet fallback is exactly how the /linkedin-invite tier
+  // mismatch this script exists to prevent would recur.
+  const r = await readCouponsConfigRest({ env: process.env });
+  if (!r.available) {
+    throw new Error(`could not read the coupon registry from KV (${r.reason}). Set CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN.`);
   }
-  // Fail LOUDLY rather than silently falling back to the working tree: a quiet fallback would reintroduce
-  // exactly the stale read this defaults away from, and the caller would never know which they got.
-  const text = execFileSync('git', ['show', `origin/main:${rel}`], { cwd: ROOT, encoding: 'utf8' });
-  return { source: `origin/main (${rel})`, raw: yaml.load(text) };
+  if (!r.config || !Array.isArray(r.config.coupons)) {
+    throw new Error('the coupon registry (coupons:config) is absent or malformed in KV.');
+  }
+  return { source: 'KV coupons:config', raw: r.config };
 }
 
 /** The lander that describes what `coupon` grants, or null when nothing does. Pure. */
@@ -91,11 +90,11 @@ export function inviteRow(c, now = new Date()) {
 
 // ---- CLI below. Importing this module runs nothing. ----------------------------------------------------
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-if (isCli) main();
+if (isCli) main().catch((e) => { console.error(`invite-links: ${e?.message ?? e}`); process.exit(1); });
 
-function main() {
+async function main() {
 const now = new Date();
-const { source, raw } = readRegistry();
+const { source, raw } = await readRegistry();
 const coupons = [...couponsFromParsed(raw).values()];
 
 const rows = coupons.map((c) => inviteRow(c, now));

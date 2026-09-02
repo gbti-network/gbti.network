@@ -21,10 +21,14 @@ const MAX_NOTE = 160;
  * read, forever, so changing it would move every grant that ever leaned on it. A written value cannot be
  * retroactively re-decided.
  *
- * Member (owner decision, 2026-08-19, flipped from creator). Past campaigns all conferred full
- * complimentary access, and the three CODEABLEYEAR grants carry `tier: creator` as written values, so
- * they are unaffected. The default now names the LOWER tier so a coupon added without the field grants
- * the smaller thing: an admin who means Content Creator says so, rather than an omission deciding it.
+ * Member (owner decision, 2026-08-19, flipped from creator). Every EXISTING coupon grant carries an explicit
+ * `tier` as a written value (the grants live in the KV overrides mirror now, sow-213, and all name
+ * `tier: member`), so a default change never touches them: a written value wins over the default at every
+ * read. The default now names the LOWER tier so a coupon added without the field grants the smaller thing:
+ * an admin who means Content Creator says so, rather than an omission deciding it.
+ * (Corrected 2026-09-02: the prior wording said "the three CODEABLEYEAR grants carry tier: creator", which was
+ * wrong on both counts, there are four and all are tier: member, and it named house/grandfathered.yml, which
+ * sow-213 has since moved to KV.)
  */
 export const DEFAULT_COUPON_TIER = 'member';
 

@@ -122,28 +122,24 @@ test('the manifest is stable, so regenerating it is a no-op diff', () => {
   assert.equal(a, b, 'manifest output must not depend on the registry order');
 });
 
-test('campaign-manifest-drift: the COMMITTED manifest matches the COMMITTED registry', () => {
-  // The guard proper. It is what stops the projection quietly disagreeing with the registry, which is the
-  // failure that turns a projection into a second source of truth.
-  const registry = yaml.load(read('house/coupons.yml'));
-  const committed = read('house/campaigns.yml');
-  assert.equal(committed, renderManifest(registry),
-    'house/campaigns.yml is out of date. Run `node scripts/build-campaign-manifest.mjs` and commit it.');
-
-  // Never let this pass on an empty registry: with zero campaigns the comparison above holds trivially.
-  const { campaigns } = campaignManifest(registry);
-  assert.ok(campaigns.length >= 3, `expected at least three campaigns, found ${campaigns.length}`);
-  for (const c of campaigns) assert.ok(c.id && c.tier, `campaign ${c.id} must name a tier`);
-});
-
-test('no live coupon code appears in the committed manifest', () => {
-  // The direct check on the real files, alongside the fixture-based one above. Today every id EQUALS its
-  // code, so this passes trivially and is worth almost nothing; it becomes the real guard at the rotation,
-  // and it is written now so it is already in place when that happens rather than being remembered then.
-  const registry = yaml.load(read('house/coupons.yml'));
-  const manifest = read('house/campaigns.yml');
-  for (const c of couponsFromParsed(registry).values()) {
-    if (c.code === c.id) continue; // vacuous while unrotated; SKIPPED rather than counted as a pass
-    assert.ok(!manifest.includes(c.code), `house/campaigns.yml leaked the live code for campaign ${c.id}`);
+test('sow-291: the COMMITTED manifest is well-formed and carries NO code (credential-free shape guard)', () => {
+  // RELOCATED from the two committed-registry tests that read house/coupons.yml directly. That file left the
+  // public repository for KV (sow-291 Phase 2 deletion), and this unit suite runs on `pull_request`, which
+  // executes FORK code, so it MUST stay credential-free: adding CF_API_TOKEN to read the KV registry would hand
+  // a KV-write credential to anyone opening a PR (same class as pull_request_target). So the true
+  // manifest-vs-registry drift guard (does the committed projection match the KV registry) moves to a
+  // KV-credentialed runner: `node scripts/build-campaign-manifest.mjs --check` in reconcile.yml, which has the
+  // CF creds. What stays here is the SHAPE guard, which is checkable without the registry and is what the
+  // parity test and the Astro build consume: the manifest is well-formed, every campaign carries EXACTLY
+  // {active,id,lander,tier} and therefore NO `code` (a bearer credential never enters the public manifest), and
+  // every ACTIVE campaign resolves to a real lander (the /linkedin-invite tier-mismatch defect this exists for).
+  const committed = yaml.load(read('house/campaigns.yml'));
+  const campaigns = committed?.campaigns;
+  assert.ok(Array.isArray(campaigns) && campaigns.length >= 3, `expected at least three campaigns, found ${campaigns?.length}`);
+  for (const c of campaigns) {
+    assert.deepEqual(Object.keys(c).sort(), ['active', 'id', 'lander', 'tier'],
+      `campaign ${c.id} must carry EXACTLY {active,id,lander,tier} and no code`);
+    assert.ok(c.id && c.tier, `campaign ${c.id} names an id and a tier`);
+    if (c.active) assert.ok(landerFor({ id: c.id, tier: c.tier }), `active campaign ${c.id} must resolve a real lander`);
   }
 });
