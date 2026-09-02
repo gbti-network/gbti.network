@@ -68,6 +68,14 @@ jobs:
           # need it under that name (E2E_TOKEN alone is not enough). Dry-run only reads + logs; it never writes.
           GITHUB_BOT_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          # sow-213 Step 3: bans + grandfathers now live ONLY in KV (house/bans.yml and house/grandfathered.yml
+          # were deleted), so the reconcile dry-run below can no longer fall back to reading them from the
+          # checkout. Without CF credentials it fails CLOSED ("refusing to gate on an unknown ban list
+          # [mode=kv]", exit 1), which is correct behaviour and exactly what red this step on 2026-09-02. Same
+          # pattern as reconcile.yml: the two ids are non-secret identifiers, only the token is a secret.
+          CF_ACCOUNT_ID: "d42b12e969229c5187ad0f7289536487"
+          CF_KV_NAMESPACE_ID: "49432379e11844ac81b6fdaf22d3937a"
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
 
   # Phase 3: the Playwright extension-UI smoke. Loads the MV3 extension headed (xvfb), seeds a signed-in state,
   # and drives the new tab + the gbti.network content-script bridge. Separate job (it needs deps + a browser).
