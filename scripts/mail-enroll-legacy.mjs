@@ -30,9 +30,9 @@
 // not heard from the network since the WordPress site.
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { loadOverridesRaw } from '../membership/overrides.mjs';
+import { readOverridesFromKv } from './lib/overrides-source.mjs'; // sow-213 Step 2 (R6): the allow-set reads the KV mirror, not house/grandfathered.yml
 import { mailHash, subscriberKey, MAIL_SUBSCRIBER_PREFIX, MAIL_SUPPRESS_PREFIX } from '../membership/mail-suppress.mjs';
 import { buildSubscriber } from '../membership/mail-subscriber.mjs';
 import { listKvByPrefix, putKvValue } from './lib/erase-member.mjs';
@@ -42,11 +42,20 @@ import { parseLegacyUsers, matchLegacyAddresses, applySuppliedAddresses } from '
 const ROOT = path.resolve(fileURLToPath(import.meta.url), '../..');
 const DUMP_DIR = path.join(ROOT, '.data/legacy/db');
 
-/** The grandfathered members, as the allow-set. A ban is not consulted here: a banned account is not in this file. */
-export function grandfatheredAllowSet(root = ROOT) {
-  const raw = loadOverridesRaw(root);
-  const list = (raw.grandfathered ?? raw.grandfathers)?.grandfathered ?? [];
-  return list
+/**
+ * The grandfathered members, as the allow-set, from the KV overrides mirror (sow-213 Step 2 R6: grants live in
+ * KV, not house/grandfathered.yml). A ban is not consulted here: a banned account is not in the grandfathered set.
+ *
+ * FAIL CLOSED. An unavailable, stale (>48h) or malformed mirror THROWS rather than returning an allow-set. An
+ * empty allow-set already fails SAFE in this script (matchLegacyAddresses resolves nobody, so the enrolment
+ * sends to nobody), but a silent empty from a failed read is still the wrong reason to skip everyone, so the
+ * failure is surfaced loudly instead of masquerading as "no grandfathered members". readOverridesFromKv carries
+ * the freshness gate, so a mirror the scheduled sync stopped writing is treated as unavailable, not as truth.
+ */
+export async function grandfatheredAllowSet({ env = process.env, fetchImpl } = {}) {
+  const o = await readOverridesFromKv(fetchImpl ? { env, fetchImpl } : { env });
+  if (!o.available) throw new Error(`legacy allow-set: cannot read the grandfathered set from the KV mirror (${o.reason})`);
+  return [...o.grandfathers.values()]
     .map((g) => ({ githubId: String(g?.github_id ?? '').trim(), login: String(g?.login ?? '').trim() }))
     .filter((g) => g.githubId && g.login);
 }
@@ -72,12 +81,12 @@ async function main() {
   const secret = String(env.MAIL_SUPPRESS_KEY ?? '').trim();
   const unsubProven = String(env.MAIL_ENROLL_UNSUB_PROVEN ?? '').trim();
 
-  const allowed = grandfatheredAllowSet();
+  const allowed = await grandfatheredAllowSet();
   const dump = findDump();
   console.log('');
   console.log(apply ? 'LEGACY ENROLMENT: APPLY' : 'LEGACY ENROLMENT: DRY RUN (nothing is written)');
   console.log('');
-  console.log(`  allow-set (house/grandfathered.yml):  ${allowed.length} members`);
+  console.log(`  allow-set (KV overrides mirror):  ${allowed.length} members`);
   if (!dump) {
     console.error('  dump: NOT FOUND. Looked at MAIL_LEGACY_DUMP, then .data/legacy/db/. Both are local-only.');
     console.error('  Set MAIL_LEGACY_DUMP=/path/to/dump.sql when running from a detached worktree.');
@@ -183,4 +192,9 @@ function printAllowlist(rows) {
   console.log(rows.map((r) => r.hash).join(','));
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+// sow-213 Step 2 (R6): guard the top-level run so the module is IMPORTABLE for tests without executing the
+// enrolment. It used to call main() unconditionally, which is why it had no test and why recover-customers.mjs
+// re-implements a helper rather than importing it. Only run main() when executed directly.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => { console.error(err); process.exit(1); });
+}
