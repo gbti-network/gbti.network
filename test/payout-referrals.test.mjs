@@ -2,7 +2,11 @@
 // itself is in test/snapshot-payout-plan.test.mjs; this covers the gather/dedupe/eligibility seams the shell feeds it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { gatherSnapshots, paidPairsFromTransfers, recipientsFromSnapshots, buildEligible, parseArgs, formatAmount, connectReady } from '../scripts/payout-referrals.mjs';
+import { applyOverridesSource } from '../scripts/lib/overrides-source.mjs';
 
 test('parseArgs: dry-run by default; --apply enacts; --dry-run overrides --apply (fail safe)', () => {
   assert.deepEqual(parseArgs([]), { apply: false, dryRun: true });
@@ -74,4 +78,57 @@ test('buildEligible: banned beats active; grandfather active; lapsed/unknown ina
 
   const eligibleUnbanned = buildEligible({ bannedGithubIds: new Set(), byGithubId, grandfathers, nowMs });
   assert.equal(eligibleUnbanned('active'), true); // now the active sub counts
+});
+
+test('R11: the KV overlay makes a KV-only ban EXCLUDE a member the loader alone would pay (the fail-open contrast)', async () => {
+  // sow-213 R11. This composes the two pieces main() composes: applyOverridesSource (the overlay) feeding the
+  // ban set buildEligible reads. The finding is the CONTRAST: after the git files are deleted, loadOverrides
+  // returns an empty ban set, so a banned member would be paid; the overlay is what pulls the KV ban back in.
+  const nowMs = Date.parse('2026-06-28T00:00:00Z');
+  const sec = (iso) => Math.floor(Date.parse(iso) / 1000);
+  const banned = '999';
+  // An ACTIVE subscription, so eligibility turns ONLY on the ban check (same shape as the fixture above).
+  const byGithubId = new Map([[banned, { subscriptions: { data: [{ status: 'active', start_date: sec('2026-01-01') }] } }]]);
+
+  // Post-deletion shape: loadOverrides reads missing files -> empty maps.
+  const overrides = { roles: new Map(), bans: new Map(), grandfathers: new Map(), membersIndex: new Map() };
+
+  // WITHOUT the overlay, the loader alone: bannedGithubIds is empty, so the banned member is PAID. Asserted so
+  // the fix is measured against a state that really pays them, not against a hypothetical.
+  const loaderOnly = buildEligible({ bannedGithubIds: new Set(overrides.bans.keys()), byGithubId, grandfathers: overrides.grandfathers, nowMs });
+  assert.equal(loaderOnly(banned), true, 'loader alone (empty git bans post-deletion) pays a banned member: the fail-open');
+
+  // WITH the overlay: a repoRoot with no bans.yml/grandfathered.yml -> mode kv; an injected readKv returns the
+  // KV-only ban, so applyOverridesSource replaces overrides.bans with the mirror's and the ban set now has the id.
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'payout-r11-'));
+  try {
+    await applyOverridesSource({
+      overrides,
+      repoRoot,
+      env: {},
+      readKv: async () => ({ available: true, generatedAt: new Date().toISOString(), bans: new Map([[banned, { github_id: banned }]]), grandfathers: new Map() }),
+      log: () => {},
+    });
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+  const withOverlay = buildEligible({ bannedGithubIds: new Set(overrides.bans.keys()), byGithubId, grandfathers: overrides.grandfathers, nowMs });
+  assert.equal(withOverlay(banned), false, 'with the overlay the KV-only ban is enforced and the member is EXCLUDED');
+});
+
+test('R11: git files gone and the mirror UNAVAILABLE -> the overlay THROWS (aborts the payout, fail-closed)', async () => {
+  // The other half of fail-closed. In kv mode an unavailable mirror must not degrade to an empty ban set; it
+  // throws, and payout-referrals has no catch around the call, so the run aborts rather than paying against an
+  // unknown ban list.
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'payout-r11-deny-'));
+  const overrides = { roles: new Map(), bans: new Map(), grandfathers: new Map(), membersIndex: new Map() };
+  try {
+    await assert.rejects(
+      () => applyOverridesSource({ overrides, repoRoot, env: {}, readKv: async () => ({ available: false, reason: 'stale' }), log: () => {} }),
+      /overrides unavailable from KV/,
+      'an unavailable mirror in kv mode must abort, never yield an empty ban set',
+    );
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
 });

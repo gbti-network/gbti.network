@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createStripeClient } from '../clients/stripe.mjs';
 import { loadOverrides } from '../membership/overrides.mjs';
+import { applyOverridesSource } from './lib/overrides-source.mjs'; // sow-213 R11: overlay the KV mirror onto bans/grandfathers (bans leaving the public repo)
 import { loadReferralConfig, isPayoutsActive } from '../membership/referral-config.mjs';
 import { activeIntervalsFromStripe, isActiveAt, COMMISSION_STATE } from '../membership/commissions.mjs';
 import { planSnapshotPayouts, invoiceState, buildEarningsLedger } from './lib/snapshot-payout-plan.mjs';
@@ -153,6 +154,12 @@ async function main() {
 
   const config = loadReferralConfig(ROOT);
   const overrides = loadOverrides(ROOT);
+  // sow-213 R11: overlay the KV mirror onto bans/grandfathers before deriving eligibility, because this is a
+  // MONEY path. loadOverrides supplies roles + members-index and the git half; applyOverridesSource unions a
+  // KV-only ban (fail-closed restrictive) while the git files exist, and once they are deleted becomes the ONLY
+  // source and THROWS (aborts the run) if the mirror is unavailable. Without it, post-deletion the git ban set
+  // is empty, so a banned member passes buildEligible's "NOT banned" check (:87) and gets PAID: a fail-OPEN.
+  await applyOverridesSource({ overrides, repoRoot: ROOT, env });
   const payoutsActive = isPayoutsActive(config);
   const bannedGithubIds = new Set(overrides.bans.keys());
 
