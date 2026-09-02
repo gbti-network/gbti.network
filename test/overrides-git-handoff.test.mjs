@@ -64,13 +64,15 @@ test('gitOwnedSections reports both unowned when house/ carries neither file', (
 // buildOverridesMirror: the preservation rule.
 // ---------------------------------------------------------------------------------------------------------
 
-test('THE HAZARD, pinned: rebuilding from an absent file ERASES the live bans and grants', () => {
-  // {} is exactly what readYaml yields for a deleted file. This is the pre-change code path (the default
-  // ownership), kept as a live control: if it ever stops erasing, the rule below is being measured against
-  // nothing and every assertion in this file becomes vacuous.
-  const blob = buildOverridesMirror({ roles: LIVE().roles }, NOW, LIVE());
-  assert.deepEqual(blob.bans, {}, 'the pre-change writer drops every ban');
-  assert.deepEqual(blob.grandfathered, {}, 'the pre-change writer drops every grant');
+test('THE HAZARD, pinned: rebuilding a GIT-OWNED section from an absent file ERASES the live bans and grants', () => {
+  // {} is exactly what readYaml yields for a deleted file. Applying GIT-OWNED ownership to it (what the write
+  // path does WHILE the files exist) rebuilds the section empty, kept as a live control: if it ever stops
+  // erasing, the preserve rule below is measured against nothing and every assertion in this file goes vacuous.
+  // sow-213 R9: this is now the EXPLICIT git-owned value, because OMITTING ownedByGit throws (the contract test
+  // below) rather than silently taking this erase path.
+  const blob = buildOverridesMirror({ roles: LIVE().roles }, NOW, LIVE(), { bans: true, grandfathered: true });
+  assert.deepEqual(blob.bans, {}, 'git-owned + absent file drops every ban');
+  assert.deepEqual(blob.grandfathered, {}, 'git-owned + absent file drops every grant');
 });
 
 test('a section git no longer owns is preserved VERBATIM, including unmarked git-sourced entries', () => {
@@ -136,12 +138,19 @@ test('a PARTIAL ownership object leaves the section it does not name GIT-OWNED',
   assert.deepEqual(bans.bans.bans, [{ github_id: '99' }], 'an unnamed bans still rebuilds from git');
 });
 
-test('the defaults leave the pre-Phase-3 behaviour byte for byte unchanged', () => {
+test('sow-213 R9: OMITTING ownedByGit THROWS (this WAS the fail-open default, the erase direction by omission)', () => {
+  // BEHAVIOUR CHANGE recorded, not an assertion edited green: buildOverridesMirror USED TO default ownedByGit to
+  // { bans: true, grandfathered: true }, so a caller that forgot the argument silently got the rebuild-from-git
+  // = erase direction. It is now REQUIRED, so omission is a throw, and the erase direction is reachable ONLY by
+  // an EXPLICIT, reviewed git-owned value (the HAZARD control above), never by forgetting an argument. Prefer
+  // impossible to improbable when the failure mode is silent data loss.
   const raw = { roles: { admins: [] }, bans: { bans: [{ github_id: '7' }] }, grandfathered: { grandfathered: [] } };
-  const withDefaults = buildOverridesMirror(raw, NOW, null);
+  assert.throws(() => buildOverridesMirror(raw, NOW, null), /ownedByGit is required/);
+  // The explicit git-owned value still produces the pre-change blob (the migration changed the CONTRACT, not the
+  // git-owned behaviour).
   const explicit = buildOverridesMirror(raw, NOW, null, { bans: true, grandfathered: true });
-  assert.equal(JSON.stringify(withDefaults), JSON.stringify(explicit));
-  assert.deepEqual(withDefaults.bans, raw.bans);
+  assert.deepEqual(explicit.bans, raw.bans);
+  assert.deepEqual(explicit.grandfathered, raw.grandfathered);
 });
 
 // ---------------------------------------------------------------------------------------------------------

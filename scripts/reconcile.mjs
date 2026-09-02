@@ -734,7 +734,10 @@ async function main() {
   // files, not a member action, so a dry run only reports what it would write.
   const rawOverrides = loadOverridesRaw(ROOT);
   if (dryRun) {
-    const blob = buildOverridesMirror(rawOverrides, now);
+    // sow-213 R9: `ownedByGit` is required now. This dry run WRITES NOTHING and reports the git-owned shape, so
+    // pass EXPLICIT git-owned (never throws, empty once the files are gone); the --apply branch below uses the
+    // reality-derived gitOwnedSections(ROOT).
+    const blob = buildOverridesMirror(rawOverrides, now, null, { bans: true, grandfathered: true });
     console.log(`reconcile: DRY RUN would mirror overrides to KV (${JSON.stringify(blob).length} bytes, key overrides:mirror).`);
   } else {
     try {

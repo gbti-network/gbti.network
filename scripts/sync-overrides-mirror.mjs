@@ -33,9 +33,12 @@ export async function syncOverridesMirror({ root, env = process.env, fetchImpl, 
   // Derived from the checkout so the flip needs no flag change; see kv-mirror.sectionFor for why.
   const ownedByGit = gitOwnedSections(root);
   if (dryRun) {
-    // The dry run reports on the git-owned shape only. It cannot read KV, so it must not pretend to know what
-    // a preserved section holds; passing ownership here would make it throw on the very state it is reporting.
-    const blob = buildOverridesMirror(raw, now);
+    // The dry run reports on the git-owned shape only. It cannot read KV, so it must not pretend to know what a
+    // preserved section holds; passing the REALITY-DERIVED `ownedByGit` here would make it throw on the very
+    // state it is reporting (git-not-owned + no `existing` to preserve = abort). sow-213 R9: `ownedByGit` is now
+    // required, so pass EXPLICIT git-owned, which reports the git shape and never throws (empty once the files
+    // are gone). The write path below uses the reality-derived `ownedByGit`.
+    const blob = buildOverridesMirror(raw, now, null, { bans: true, grandfathered: true });
     return { dryRun: true, bytes: JSON.stringify(blob).length, roles: Object.keys(blob.roles ?? {}).length, generatedAt: blob.generatedAt, ownedByGit };
   }
   return mirrorOverridesToKv({ raw, env, now, ownedByGit, ...(fetchImpl ? { fetchImpl } : {}) });

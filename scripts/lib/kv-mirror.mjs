@@ -103,12 +103,24 @@ export function mergeOverridesSection(gitSection, existingSection, listKey) {
 
 /** Build the compact mirror blob the Worker reads. Stores the RAW parsed YAML (the Worker rebuilds Maps).
  *  `existing` is the blob currently in KV; pass it so KV-native entries are not clobbered (see above). */
-export function buildOverridesMirror(raw, now = new Date(), existing = null, ownedByGit = { bans: true, grandfathered: true }) {
+export function buildOverridesMirror(raw, now = new Date(), existing = null, ownedByGit) {
+  // sow-213 R9: `ownedByGit` is REQUIRED, and it used to DEFAULT to `{ bans: true, grandfathered: true }`. That
+  // default IS the rebuild-from-git = ERASE direction, reachable by OMISSION: post-deletion a caller that forgot
+  // the argument would rebuild bans/grandfathered from empty git and drop every KV-native entry, silently and on
+  // a green run. Omission is exactly how silent data loss happens, so the fix makes it IMPOSSIBLE (a throw)
+  // rather than improbable (a safe default that someone must remember). Every writer passes a REALITY-DERIVED
+  // value via `gitOwnedSections(root)`; the no-write byte-count/dry-run paths pass an EXPLICIT
+  // `{ bans: true, grandfathered: true }` to report the git-owned shape (safe: they write nothing, and git-owned
+  // never throws, it just yields empty sections once the files are gone). The per-key `!== false` convention is
+  // kept, so a partial `{ bans: false }` still means grandfathered stays git-owned.
+  if (ownedByGit == null || typeof ownedByGit !== 'object') {
+    throw new Error('buildOverridesMirror: ownedByGit is required (reality-derived via gitOwnedSections(root)); omitting it would rebuild bans/grandfathered from git and, once the files are deleted, erase every KV-native entry');
+  }
   return {
     generatedAt: now.toISOString(),
     roles: raw?.roles ?? {}, // roles.yml stays git-native by owner ruling, so this section is always rebuilt
-    bans: sectionFor(ownedByGit?.bans !== false, raw?.bans ?? {}, existing?.bans, 'bans'),
-    grandfathered: sectionFor(ownedByGit?.grandfathered !== false, raw?.grandfathered ?? {}, existing?.grandfathered, 'grandfathered'),
+    bans: sectionFor(ownedByGit.bans !== false, raw?.bans ?? {}, existing?.bans, 'bans'),
+    grandfathered: sectionFor(ownedByGit.grandfathered !== false, raw?.grandfathered ?? {}, existing?.grandfathered, 'grandfathered'),
   };
 }
 
@@ -121,7 +133,10 @@ export async function mirrorOverridesToKv({ raw, env = process.env, now = new Da
   const namespaceId = env.CF_KV_NAMESPACE_ID;
   const apiToken = env.CF_API_TOKEN;
   if (!accountId || !namespaceId || !apiToken) {
-    const noop = JSON.stringify(buildOverridesMirror(raw, now));
+    // sow-213 R9: byte-count for the no-op report only, this path WRITES NOTHING. Pass explicit git-owned so it
+    // reports the git-owned shape and never throws (a reality-derived value with no `existing` to preserve would
+    // abort); once the files are gone the git shape is honestly empty. The real write below uses `ownedByGit`.
+    const noop = JSON.stringify(buildOverridesMirror(raw, now, null, { bans: true, grandfathered: true }));
     return { written: false, key, bytes: noop.length, reason: 'CF_ACCOUNT_ID / CF_KV_NAMESPACE_ID / CF_API_TOKEN not set' };
   }
   const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${encodeURIComponent(key)}`;
