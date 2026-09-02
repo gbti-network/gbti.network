@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 import { loadOverridesRaw } from '../membership/overrides.mjs';
-import { buildOverridesMirror, OWNS_BOTH_FROM_GIT, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw } from './lib/kv-mirror.mjs';
+import { buildOverridesMirror, mirrorOverridesToKv, mirrorSyndicationConfigToKv, mirrorCouponsToKv, gitOwnedSections, loadCouponsRaw } from './lib/kv-mirror.mjs';
 import { toSyndicationMirror } from '../membership/syndication-config.mjs';
 import { toCouponsMirror } from '../membership/coupons.mjs';
 
@@ -35,7 +35,7 @@ export async function syncOverridesMirror({ root, env = process.env, fetchImpl, 
   if (dryRun) {
     // The dry run reports on the git-owned shape only. It cannot read KV, so it must not pretend to know what
     // a preserved section holds; passing ownership here would make it throw on the very state it is reporting.
-    const blob = buildOverridesMirror(raw, now, null, OWNS_BOTH_FROM_GIT);
+    const blob = buildOverridesMirror(raw, now);
     return { dryRun: true, bytes: JSON.stringify(blob).length, roles: Object.keys(blob.roles ?? {}).length, generatedAt: blob.generatedAt, ownedByGit };
   }
   return mirrorOverridesToKv({ raw, env, now, ownedByGit, ...(fetchImpl ? { fetchImpl } : {}) });

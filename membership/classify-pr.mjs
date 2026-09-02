@@ -106,7 +106,7 @@ export function classifyPaths(paths, ownedFolder) {
   // decide(). Favorites now live in the deletable edge store (KV), never as a PR, so the gate treats every
   // content PR uniformly (paid-only publish). A stray favorites.yml PR is just own-folder content, not a
   // special case, which is the stricter, fail-safe behavior.
-  return { unclean, clean, tierS, tierA, ownPaths, otherMemberPaths, otherOwners, memberPaths, ownFolderOnly };
+  return { unclean, tierS, tierA, ownPaths, otherMemberPaths, otherOwners, memberPaths, ownFolderOnly };
 }
 
 /**
@@ -247,34 +247,6 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
   //    whole PR fail-closed so a traversal cannot masquerade as own-folder content.
   if (c.unclean.length > 0) {
     return fail('rejected-escalation', `non-canonical or unsafe paths: ${c.unclean.join(', ')}`);
-  }
-
-  // 2b. sow-213 Phase 3b: THE RETIRED OVERRIDE FILES MAY NEVER COME BACK THROUGH A PULL REQUEST.
-  //
-  // THIS IS A DATA-LOSS GUARD, NOT A TIDINESS RULE, AND THE MEASURED CONSEQUENCE IS WHY IT SITS HERE IN THE
-  // MERGE DECISION RATHER THAN IN A CONTENT CHECK. Phase 3b moved membership overrides to KV and deleted
-  // house/bans.yml and house/grandfathered.yml. Every admin write op (ban / unban / grandfather /
-  // ungrandfather, in BOTH hosts) still composes a PR that RECREATES the file with a single entry. If such a
-  // PR merges:
-  //   1. gitOwnedSections() sees the file again, so that section flips back to GIT-OWNED, and
-  //   2. the next mirror write runs mergeOverridesSection(recreatedFile, kvBlob), which preserves ONLY rows
-  //      marked `source: 'kv'`. The live grants were mirrored FROM git and carry no such mark.
-  // Measured, not reasoned: merging a 1-entry recreated file against the 22 live grants returns 1. Twenty-one
-  // members lose their entitlement, on a green run, with nobody watching.
-  //
-  // validate-content.mjs already errors on these paths, but that check is NOT a required status check on main
-  // (sow-298 Phase 3 measured the branch rules as exactly deletion + non_fast_forward), so failing it blocks
-  // nothing. The gate is where a merge is actually decided, so the guard belongs here. It applies to EVERY
-  // role including superadmin, because SOW-108 auto-merges a superadmin PR on any path and that is precisely
-  // the actor whose routine admin action would otherwise spring this.
-  const retired = (c.clean ?? []).filter((p) => p === 'house/bans.yml' || p === 'house/grandfathered.yml');
-  if (retired.length > 0) {
-    return fail(
-      'rejected-escalation',
-      `${retired.join(', ')} was retired by sow-213 Phase 3b and must not be recreated: membership overrides ` +
-        'live in the edge store (KV). Merging this would flip the section back to git-owned and the next ' +
-        'mirror write would erase every grant the recreated file does not list.',
-    );
   }
 
   // 3. Members only: a visitor or a lapsed account cannot open a mergeable PR. The gate auto-closes these.

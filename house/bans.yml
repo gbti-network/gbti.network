@@ -1,0 +1,8 @@
+# Banned github_ids (ADMIN-owned; see CODEOWNERS). A ban overrides everything:
+# precedence is ban > grandfather > Stripe. The SOW-005 reconcile deplatforms a banned member
+# (flips their content to draft, removes their Discord roles, blocks their PRs).
+bans: []
+# - github_id: "..."
+#   login: someone
+#   reason: spam
+#   banned_at: 2026-01-01

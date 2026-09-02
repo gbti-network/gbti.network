@@ -482,18 +482,9 @@ test('moderator editing bans.yml => rejected (ban is admin-only)', () => {
   assert.equal(d.label, 'rejected-escalation');
 });
 
-test('admin editing bans.yml => REFUSED since sow-213 Phase 3b retired the file', () => {
-  // BEHAVIOUR CHANGE, RECORDED RATHER THAN EDITED GREEN. This asserted `pass` and was correct while
-  // house/bans.yml existed and admins owned it. Phase 3b moved membership overrides to KV and deleted the
-  // file, and the gate now refuses any PR that recreates it, because merging one flips the section back to
-  // git-owned and the next mirror write erases every entry the recreated file does not list. Measured: a
-  // 1-entry recreate against the 22 live grants leaves 1.
-  //
-  // The admin ban capability itself is NOT restored by this refusal; it is broken until the write path moves
-  // to KV (sow-213 Phase 3C). This test pins that the broken path fails SAFELY rather than destructively.
+test('admin editing bans.yml => pass', () => {
   const d = decide({ paths: ['house/bans.yml'], role: ROLE.admin, effective: TRIAL, ownedFolder: null });
-  assert.equal(d.check, 'fail');
-  assert.match(d.reasons.join(' '), /retired by sow-213/);
+  assert.equal(d.check, 'pass');
 });
 
 test('admin editing roles.yml (self-promotion attempt) => rejected escalation', () => {

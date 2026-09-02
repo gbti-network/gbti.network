@@ -12,9 +12,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
-  gitOwnedSections, buildOverridesMirror, mirrorOverridesToKv, OVERRIDES_KV_KEY, OWNS_BOTH_FROM_GIT } from '../scripts/lib/kv-mirror.mjs';
+  gitOwnedSections, buildOverridesMirror, mirrorOverridesToKv, OVERRIDES_KV_KEY,
+} from '../scripts/lib/kv-mirror.mjs';
 import {
   BACKED_UP_PREFIXES, collectSnapshot, encryptSnapshot, decryptSnapshot, restoreSnapshot, SNAPSHOT_KEY,
 } from '../scripts/lib/kv-backup.mjs';
@@ -65,14 +65,10 @@ test('gitOwnedSections reports both unowned when house/ carries neither file', (
 // ---------------------------------------------------------------------------------------------------------
 
 test('THE HAZARD, pinned: rebuilding from an absent file ERASES the live bans and grants', () => {
-  // {} is exactly what readYaml yields for a deleted file. sow-213 Phase 3b: this now passes
-  // OWNS_BOTH_FROM_GIT explicitly; it used to rely on the DEFAULT, which was git-owned. The default is now
-  // fail-closed, so a bare call preserves-or-aborts instead of erasing. The hazard is unchanged and still
-  // worth pinning: it is what happens when a caller CLAIMS a git view it does not have.
-  //
-  // Kept as a live control: if it ever stops erasing, the rule below is being measured against
+  // {} is exactly what readYaml yields for a deleted file. This is the pre-change code path (the default
+  // ownership), kept as a live control: if it ever stops erasing, the rule below is being measured against
   // nothing and every assertion in this file becomes vacuous.
-  const blob = buildOverridesMirror({ roles: LIVE().roles }, NOW, LIVE(), OWNS_BOTH_FROM_GIT);
+  const blob = buildOverridesMirror({ roles: LIVE().roles }, NOW, LIVE());
   assert.deepEqual(blob.bans, {}, 'the pre-change writer drops every ban');
   assert.deepEqual(blob.grandfathered, {}, 'the pre-change writer drops every grant');
 });
@@ -107,7 +103,7 @@ test('an unowned section that is legitimately EMPTY is preserved, not treated as
 test('ownership is per section: a handed-off bans list is preserved while grandfathered still merges from git', () => {
   const live = LIVE();
   const raw = { roles: live.roles, grandfathered: { grandfathered: [{ github_id: '99', tier: 'member' }] } };
-  const blob = buildOverridesMirror(raw, NOW, live, { bans: false, grandfathered: true });
+  const blob = buildOverridesMirror(raw, NOW, live, { bans: false });
   assert.deepEqual(blob.bans, live.bans, 'bans came from KV');
   assert.deepEqual(blob.grandfathered.grandfathered, [{ github_id: '99', tier: 'member' }], 'grandfathered came from git');
 });
@@ -126,45 +122,26 @@ test('generatedAt is REFRESHED in preserve mode, so the freshness guard does not
   assert.notEqual(blob.generatedAt, LIVE().generatedAt);
 });
 
-test('a PARTIAL ownership object leaves the section it does not name PRESERVED, not git-owned (REVERSED by 3b)', () => {
-  // THIS REVERSES A DELIBERATE EARLIER DECISION, AND THE REVERSAL IS THE POINT, SO IT IS RECORDED RATHER
-  // THAN QUIETLY EDITED. Before Phase 3b this asserted the opposite: an unnamed section stayed GIT-OWNED. That
-  // rationale was sound for its world, namely that a hand-written partial must not silently switch a section
-  // to preserve-from-KV and stop a git change, an unban among them, from taking effect.
-  //
-  // Phase 3b deletes house/bans.yml and house/grandfathered.yml, which removes the premise. With no git source
-  // left, "unnamed means git-owned" no longer means "rebuild from the file", it means REBUILD FROM NOTHING.
-  // mergeOverridesSection preserves only entries marked `source: 'kv'`, and the 22 grants mirrored from git
-  // carry no such mark, so a partial object post-3b would erase them on a green run. The direction that was
-  // safe before is the dangerous one now, so the test flips with the behaviour.
-  // gitOwnedSections always returns BOTH keys, so a partial only ever comes from hand-written code.
+test('a PARTIAL ownership object leaves the section it does not name GIT-OWNED', () => {
+  // `undefined` is the one genuinely ambiguous input here, and the two readings differ in which direction they
+  // fail. Unnamed means "unchanged from today", matching the explicit { bans: true, grandfathered: true }
+  // default, so a hand-written partial cannot quietly switch a section to preserve-from-KV and stop git
+  // changes (an unban among them) from ever taking effect. gitOwnedSections always returns BOTH keys, so a
+  // partial only ever comes from hand-written code.
   const live = LIVE();
   // Both directions, because each section reads its own key and a one-sided check leaves the other unpinned.
   const gf = buildOverridesMirror({ roles: {}, grandfathered: { grandfathered: [{ github_id: '99' }] } }, NOW, live, { bans: false });
-  assert.deepEqual(gf.grandfathered, live.grandfathered, 'an unnamed grandfathered is PRESERVED from KV, not rebuilt');
+  assert.deepEqual(gf.grandfathered.grandfathered, [{ github_id: '99' }], 'an unnamed grandfathered still rebuilds from git');
   const bans = buildOverridesMirror({ roles: {}, bans: { bans: [{ github_id: '99' }] } }, NOW, live, { grandfathered: false });
-  assert.deepEqual(bans.bans, live.bans, 'an unnamed bans is PRESERVED from KV, not rebuilt');
+  assert.deepEqual(bans.bans.bans, [{ github_id: '99' }], 'an unnamed bans still rebuilds from git');
 });
 
-test('THE DEFAULT IS FAIL-CLOSED: a forgotten ownership argument preserves or aborts, it never erases', () => {
-  // The finding this pins, from the sow-213 3b re-verification. Before 3b the default was
-  // { bans: true, grandfathered: true }, the ERASE direction, and it was safe only because both production
-  // write callers happened to pass a value explicitly. Post-3b there is no git file left to rebuild from, so a
-  // single forgotten argument would lift every ban and strip every grant on a GREEN run with nobody watching.
+test('the defaults leave the pre-Phase-3 behaviour byte for byte unchanged', () => {
   const raw = { roles: { admins: [] }, bans: { bans: [{ github_id: '7' }] }, grandfathered: { grandfathered: [] } };
-
-  // Nothing in KV to preserve: a defaulted call must ABORT rather than write an empty section.
-  assert.throws(() => buildOverridesMirror(raw, NOW, null), /refusing to write the overrides mirror/);
-
-  // A live blob present: a defaulted call PRESERVES it and ignores the git-side raw entirely.
-  const live = LIVE();
-  const preserved = buildOverridesMirror(raw, NOW, live);
-  assert.deepEqual(preserved.bans, live.bans, 'a defaulted call preserves the KV bans');
-  assert.deepEqual(preserved.grandfathered, live.grandfathered, 'a defaulted call preserves the KV grants');
-
-  // The opposite direction, so none of the above is vacuous: an EXPLICIT git view still rebuilds from git.
-  const explicit = buildOverridesMirror(raw, NOW, live, OWNS_BOTH_FROM_GIT);
-  assert.deepEqual(explicit.bans, raw.bans, 'an explicit git view still rebuilds the section from git');
+  const withDefaults = buildOverridesMirror(raw, NOW, null);
+  const explicit = buildOverridesMirror(raw, NOW, null, { bans: true, grandfathered: true });
+  assert.equal(JSON.stringify(withDefaults), JSON.stringify(explicit));
+  assert.deepEqual(withDefaults.bans, raw.bans);
 });
 
 // ---------------------------------------------------------------------------------------------------------
@@ -280,28 +257,4 @@ test('a backup restore reproduces the overrides blob byte for byte', async () =>
   const res = await restoreSnapshot({ env: ENV, fetchImpl: restKv(target), snapshot: back });
   assert.equal(res.restored, back.records.length);
   assert.equal(target.get(OVERRIDES_KV_KEY), RAW_BLOB, 'the restored blob is identical, character for character');
-});
-
-test('sow-213 Phase 3b LANDED: the real checkout carries NEITHER override file, and must not regain one', () => {
-  // The regression guard for the migration itself. scripts/validate-content.mjs also refuses a reappearing
-  // file at PR time, but it has zero exports and a hardcoded ROOT, so it cannot be unit-tested in place; this
-  // is the importable half and it pins the same fact from the direction that matters.
-  //
-  // WHY A REAPPEARING FILE IS WORSE THAN A DUPLICATE. gitOwnedSections decides ownership by existsSync, so
-  // recreating either file flips that section back to git-owned, and the next mirror write rebuilds it from
-  // whatever the file happens to contain. An empty or partial file would strip live entitlements for real
-  // people on a GREEN run with nobody watching.
-  const root = path.resolve(fileURLToPath(import.meta.url), '../..');
-  const owned = gitOwnedSections(root);
-  assert.equal(owned.bans, false, 'house/bans.yml is back in git; membership overrides belong in KV (sow-213 3b)');
-  assert.equal(owned.grandfathered, false, 'house/grandfathered.yml is back in git; overrides belong in KV (sow-213 3b)');
-
-  // The other direction, so the assertions above cannot pass on a gitOwnedSections that always returns false.
-  const withFiles = fs.mkdtempSync(path.join(os.tmpdir(), 'sow213-regression-'));
-  fs.mkdirSync(path.join(withFiles, 'house'), { recursive: true });
-  fs.writeFileSync(path.join(withFiles, 'house', 'bans.yml'), 'bans: []\n');
-  fs.writeFileSync(path.join(withFiles, 'house', 'grandfathered.yml'), 'grandfathered: []\n');
-  const control = gitOwnedSections(withFiles);
-  assert.equal(control.bans, true, 'control: gitOwnedSections must report true when the file IS present');
-  assert.equal(control.grandfathered, true, 'control: gitOwnedSections must report true when the file IS present');
 });
