@@ -16,6 +16,11 @@ import {
   IDENTITY_REASON,
 } from '../scripts/lib/mail-enroll.mjs';
 import { normalizeUsername, followingUsernames, followNotify } from '../membership/member-follows.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import { effectiveStatus } from '../membership/overrides-core.mjs';
+import { applyOverridesSource } from '../scripts/lib/overrides-source.mjs';
+// `path` is imported once, lower in this file's second import block.
 
 const NOW = () => 1755_000_000_000;
 
@@ -495,4 +500,57 @@ test('the report names the members whose follows could not be read', () => {
   assert.match(text, /could not be read/);
   assert.match(text, /github_id 2/, 'named, not just counted');
   assert.match(text, /replaced every follow they chose/, 'and the consequence of not skipping is stated');
+});
+
+test('R12: the KV overlay excludes a KV-only banned member from enrolment; the loader alone would enrol them', async () => {
+  // sow-213 R12. mail-enroll.mjs overlays the KV mirror onto `overrides` before the gather. The gather builds
+  // each entry's effective.status via effectiveStatus(overrides), and planMailEnrollment excludes
+  // effective.status === 'banned'. This threads a KV-only ban through that whole chain and shows the CONTRAST:
+  // post-deletion the git ban set is empty, so the loader alone leaves the member enrollable.
+  const banned = '999';
+  const identities = new Map([[banned, { hash: 'h999', reason: IDENTITY_REASON.OK }]]);
+  const overrides = { roles: new Map(), bans: new Map(), grandfathers: new Map(), membersIndex: new Map() };
+
+  // WITHOUT the overlay, the loader alone: a paid member banned only in KV resolves to 'paid' (git bans empty),
+  // so planMailEnrollment ENROLS them: the fail-open (a banned account handed a KV digest subscription).
+  const loaderEntry = { githubId: banned, effective: effectiveStatus(banned, 'paid', overrides) };
+  const loaderPlan = planMailEnrollment({ members: [loaderEntry], identities });
+  assert.equal(loaderPlan.excludedBanned.length, 0, 'loader alone does not see the KV-only ban');
+  assert.deepEqual(loaderPlan.enroll.map((r) => r.githubId), [banned], 'loader alone would enrol the banned member: the fail-open');
+
+  // WITH the overlay in kv mode: an injected readKv returns the KV ban, so applyOverridesSource replaces
+  // overrides.bans and effectiveStatus now resolves the same member to 'banned'.
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mailenroll-r12-'));
+  try {
+    await applyOverridesSource({
+      overrides,
+      repoRoot,
+      env: {},
+      readKv: async () => ({ available: true, generatedAt: new Date().toISOString(), bans: new Map([[banned, { github_id: banned }]]), grandfathers: new Map() }),
+      log: () => {},
+    });
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+  const overlaidEntry = { githubId: banned, effective: effectiveStatus(banned, 'paid', overrides) };
+  const overlaidPlan = planMailEnrollment({ members: [overlaidEntry], identities });
+  assert.deepEqual(overlaidPlan.excludedBanned.map((r) => r.githubId), [banned], 'with the overlay the KV-only ban excludes the member');
+  assert.equal(overlaidPlan.enroll.length, 0, 'and they are NOT enrolled');
+});
+
+test('R12: git files gone and the mirror UNAVAILABLE -> the overlay THROWS (aborts enrolment, fail-closed)', async () => {
+  // The other half of fail-closed: in kv mode an unavailable mirror must not degrade to an empty ban set. It
+  // throws, and mail-enroll has no catch around the call, so the run aborts rather than enrolling against an
+  // unknown ban list.
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mailenroll-r12-deny-'));
+  const overrides = { roles: new Map(), bans: new Map(), grandfathers: new Map(), membersIndex: new Map() };
+  try {
+    await assert.rejects(
+      () => applyOverridesSource({ overrides, repoRoot, env: {}, readKv: async () => ({ available: false, reason: 'stale' }), log: () => {} }),
+      /overrides unavailable from KV/,
+      'an unavailable mirror in kv mode must abort, never enrol against an empty ban set',
+    );
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
 });

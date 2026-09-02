@@ -38,6 +38,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createStripeClient } from '../clients/stripe.mjs';
 import { loadOverrides } from '../membership/overrides.mjs';
+import { applyOverridesSource } from './lib/overrides-source.mjs'; // sow-213 R12: overlay the KV mirror onto bans/grandfathers (bans leaving the public repo)
 import { gatherMembers, gatherOverrideOnlyMembers } from './reconcile.mjs';
 import { buildRepoIndex } from './lib/repo-content.mjs';
 import { mailHash, subscriberKey, MAIL_SUBSCRIBER_PREFIX, MAIL_SUPPRESS_PREFIX } from '../membership/mail-suppress.mjs';
@@ -279,6 +280,14 @@ async function main() {
 
   const stripe = createStripeClient({ apiKey: env.STRIPE_SECRET_KEY, fetch: globalThis.fetch });
   const overrides = loadOverrides(ROOT);
+  // sow-213 R12: overlay the KV mirror onto bans/grandfathers before the gather, so the population reflects a
+  // KV-native ban. gatherMembers -> memberEntryFor -> effectiveStatus reads overrides.bans, and
+  // planMailEnrollment excludes effective.status === 'banned'; gatherOverrideOnlyMembers reads
+  // overrides.grandfathers for the no-Stripe co-op members. Post-deletion the git maps are empty, so without
+  // this a banned member would NOT be excluded and would be enrolled into the digest (a banned account gets
+  // ZERO KV by the tier ruling, and a subscription is KV): a fail-OPEN. In kv mode the overlay THROWS if the
+  // mirror is unavailable, aborting the run rather than enrolling against an unknown ban list.
+  await applyOverridesSource({ overrides, repoRoot: ROOT, env });
   const now = new Date();
   const repoIndex = buildRepoIndex(ROOT);
 
