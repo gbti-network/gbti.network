@@ -103,7 +103,7 @@ export function matchesNarrow(item, narrow) {
     case 'news': return false;
     case 'network': return item?.kind === 'article' || item?.kind === 'project' || item?.kind === 'prompt';
     case 'articles': return item?.kind === 'article';
-    case 'projects': case 'projects': return item?.kind === 'project';
+    case 'projects': return item?.kind === 'project';
     case 'prompts': return item?.kind === 'prompt';
     case 'shares': return item?.kind === 'share';
     default: return false;
