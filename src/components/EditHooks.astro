@@ -1,10 +1,18 @@
 ---
-// EditHooks (SOW-006 v2): emits the INERT in-place editing hook for a content page. This ships in the public
-// static build but does NOTHING for a visitor: <gbti-edit-panel> is an undefined custom element (hidden via
-// the :not(:defined) rule), so it carries only the editing metadata. Only when a member's client (the Chrome
-// extension or the npm host) loads the @gbti/client-ui bundle does the element upgrade, read these
-// data-gbti-* hooks + the page's data-gbti-region="title|body" markers, and offer in-place editing IF the
-// member owns the folder. "The code is there but does nothing without the client."
+// EditHooks (SOW-006 v2): emits the in-place editing hook for a content page. It stays INERT for a visitor:
+// <gbti-edit-panel> is an undefined custom element (hidden via the :not(:defined) rule), so it carries only
+// the editing metadata and no visitor sees a control.
+//
+// sow-271: the WEBSITE now upgrades it too, not only the Chrome extension and the npm host. Before this, the
+// element was rendered on every member-owned article, project and prompt page and defined by nothing on the
+// web, so a member signed in ON THE WEBSITE met a control that could never appear. The script below is the
+// same import-and-wire the site already does for gbti-subscribe, gbti-comment-box, gbti-favorite,
+// gbti-collection and gbti-notification-bell.
+//
+// The element reads these data-gbti-* hooks plus the page's data-gbti-region="title|body" markers and offers
+// editing IF the member owns the folder. Ownership is NOT decided here and NOT decided by the page:
+// canEditInPlace (client-ui/src/inline.mjs:25) compares the content path against the identity the CLIENT
+// returns from the Worker, and the SOW-005 merge gate remains the real boundary behind it.
 //
 // Rendered only for member-owned content (house content is not member-inline-editable). The data exposed
 // (path/type/slug/owner) is already public (the content repo is public), so no new information leaks.
@@ -30,3 +38,32 @@ const path = contentRepoPath(type, owner, slug);
   /* Inert in public: the editing element is undefined until a client loads @gbti/client-ui. */
   gbti-edit-panel:not(:defined) { display: none; }
 </style>
+
+<script>
+  // sow-271: upgrade <gbti-edit-panel> for a signed-in WEBSITE member, mirroring SubscribeButton.astro.
+  // An anonymous visitor resolves to null, nothing is imported, and their page weight is unchanged.
+  import { onMemberSignal, currentIdentity, readMemberSignal } from '../lib/member-signal';
+
+  function readCookie(name: string): string | null {
+    const m = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
+    return m ? decodeURIComponent(m[2]) : null;
+  }
+
+  let upgraded = false;
+  async function upgradeEditPanel(signal: any) {
+    if (upgraded) return;
+    if (!signal || !signal.login) return;                 // signed out / not yet resolved
+    if (!document.querySelector('gbti-edit-panel')) return; // house content renders no hook: import nothing
+    // An extension-only signal carries no web session, so it cannot authenticate the publish call. Leave it
+    // to the extension, which upgrades the same element from its own host.
+    if (!readCookie('gbti_csrf')) return;
+    upgraded = true;
+    const signupBase = document.documentElement.dataset.signupBase || '';
+    const { createWorkbenchClient } = await import('../lib/workbench-client');
+    const { setClient } = await import('../../client-ui/src/base.mjs');
+    setClient(createWorkbenchClient({ signupBase, login: String(signal.login), githubId: signal.githubId != null ? String(signal.githubId) : null }));
+    await import('../../client-ui/src/elements/gbti-edit-panel.mjs');
+  }
+  upgradeEditPanel(currentIdentity(readMemberSignal())); // cookie/extension signal, if already present
+  onMemberSignal(upgradeEditPanel);                      // the hydrated cookie member arrives here
+</script>

@@ -568,7 +568,11 @@ export function createWorkbenchClient({ signupBase, login, githubId = null, isSu
         // sow-185: the Worker's authoritative paid TIER (none|member|creator), fail-closed to 'none' for an
         // older Worker. Presentation-only; the WorkBench editor reads it for any creator-tier affordance.
         paidTier: typeof payload?.paidTier === 'string' ? payload.paidTier : 'none',
-        identity: { login: lg, githubId: gid },
+        // sow-271: `username` is REQUIRED here, not decorative. canEditInPlace (client-ui/src/inline.mjs:25)
+        // reads `identity.username` and returns false without it, so omitting it makes the in-place edit
+        // panel invisible to the folder OWNER as well as to everyone else, with no error anywhere. The
+        // extension host supplies it; the website host did not, which is why the panel never worked here.
+        identity: { login: lg, username: lg, githubId: gid },
         login: lg,
         username: lg,
         githubId: gid,
