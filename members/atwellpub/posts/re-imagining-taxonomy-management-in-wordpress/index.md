@@ -18,7 +18,7 @@ redirectFrom: ["/gbti/re-imagining-taxonomy-management-in-wordpress/"]
 
 One of the things that drives me to build WordPress products is the need to improve this website.  
   
-This was the case with one of the products I recently published, [Radle](https://gbti.network/products/radle/), which is a bridge between Reddit and WordPress that helps readers discuss WordPress articles on a [sub-reddit.](https://www.reddit.com/r/GBTI_network/)
+This was the case with one of the products I recently published, [Radle](https://gbti.network/projects/radle/), which is a bridge between Reddit and WordPress that helps readers discuss WordPress articles on a [sub-reddit.](https://www.reddit.com/r/GBTI_network/)
 
 As a product developer it often isn’t enough to create a tool and keep it proprietary. Publishing _Radle_ was both good practice as well as an opportunity to generate revenue for this [co-op](https://gbti.network/co-op) model I have been creating. I even made a [free version](https://gbti.network/gbti/radle-lite-is-now-on-the-wordpress-plugin-directory/) available on the WordPress plugins directory. This was a lot of fun, and also a lot of work; but it was worth it.  
   
@@ -36,7 +36,7 @@ Let’s take a quick look at what the core WordPress category manager looks like
 
 And what does a developer do when they believe their is a better way? They get to work and build it themselves! I did not find anything out there that made me think I could not do a better job if I put myself to the work.
 
-And that’s exactly what’s been done here, with the [Advanced Taxonomy Manager](https://gbti.network/products/better-taxonomy-manager/), a WordPress plugin that improves the UX of every registered taxonomy in a WordPress website. It began as a network-member tool alongside a category-only free version, and the two have since been merged into one plugin that is now [free for everyone on the WordPress plugin directory](https://wordpress.org/plugins/better-category-manager/).  
+And that’s exactly what’s been done here, with the [Advanced Taxonomy Manager](https://gbti.network/projects/better-taxonomy-manager/), a WordPress plugin that improves the UX of every registered taxonomy in a WordPress website. It began as a network-member tool alongside a category-only free version, and the two have since been merged into one plugin that is now [free for everyone on the WordPress plugin directory](https://wordpress.org/plugins/better-category-manager/).  
   
 Get ready… this screenshot of Advanced Taxonomy Manager is large… _click to expand_:
 
@@ -56,7 +56,7 @@ We’ve even added in OpenAI support for generating category descriptions, if yo
 
 It may not be much, but at the same time its everything we wanted for ourselves and it represents one person’s signature style about what makes a better taxonomy/category management experience.
 
-Anyone can enjoy the [Advanced Taxonomy Manager](https://gbti.network/products/better-taxonomy-manager/) plugin today, free on the WordPress plugin directory:
+Anyone can enjoy the [Advanced Taxonomy Manager](https://gbti.network/projects/better-taxonomy-manager/) plugin today, free on the WordPress plugin directory:
 
 > [Advanced Taxonomy Manager on WordPress.org](https://wordpress.org/plugins/better-category-manager/)
 

@@ -73,7 +73,7 @@ This effort we’ve created and shared with you today is just the bare minimum, 
 
 ## How to Download
 
-The [WordPress Perplexity Plugin](https://gbti.network/products/wordpress-perplexity-plugin/) is available and can be downloaded for free through the [GitHub repository](https://github.com/gbti-network/wordpress-perplexity-plugin).
+The [WordPress Perplexity Plugin](https://gbti.network/projects/wordpress-perplexity-plugin/) is available and can be downloaded for free through the [GitHub repository](https://github.com/gbti-network/wordpress-perplexity-plugin).
 
 Development and maintenance is handled by our members here at the [GBTI Network](https://gbti.network); a private members network and cooperative with a passion for product and content development. We’re always looking for new blood to join our community so check us out!
 
