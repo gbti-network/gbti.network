@@ -62,19 +62,11 @@ const sections = [
         <!-- 1. ONBOARDING -->
         <section class="hb-sec" id="onboarding" data-sec>
           <h2>Onboarding</h2>
-          <div class="blk" data-blk><p>GBTI Network has no website login. Your identity lives in the
-            <a href="/extension/">GBTI browser extension</a>, which is also your reading and publishing
-            workbench. Install it, then click the toolbar icon to open the setup wizard.</p></div>
-          <div class="blk" data-blk><p>Setup is three steps, each backed by durable GitHub state, so you
-            can never lose progress:</p>
-            <ol>
-              <li><strong>Sign in with GitHub.</strong> A device sign-in: visit the URL, enter the code.
-                No password or secret is ever stored in a page.</li>
-              <li><strong>Make your copy.</strong> Fork the public content repository from the GitHub UI.
-                Your fork is where your drafts live.</li>
-              <li><strong>Give access.</strong> Install the GBTI GitHub App scoped to that one forked
-                repository, so the workbench can stage and publish for you.</li>
-            </ol></div>
+          <div class="blk" data-blk><p>Sign in at <a href="/login/">/login/</a> with your GitHub account.
+            Choose Continue with GitHub, approve the authorization, and you are in. No password is stored in
+            the page, nothing is installed, and you do not fork anything.</p></div>
+          <div class="blk" data-blk><p>A free account is enough to read the network and to keep track of
+            what you find. No card is requested and nothing is billed.</p></div>
           <div class="blk" data-blk><p>Access comes in four levels. Signed out, you can browse the public
             site. <strong>Free</strong> (signed in with any GitHub account, no card) adds the reading
             perks: follow the news feed, save favorites, build collections, follow members and topics.
@@ -83,9 +75,13 @@ const sections = [
             publishing your articles, projects, and prompts, your creator profile, syndication, and posting
             to Shares. The <a href="/membership/">membership page</a> has pricing and the complete
             comparison.</p></div>
-          <div class="blk" data-blk><p>After setup, a welcome view walks you through the first two moves:
-            join the Discord (your invite is minted on demand) and discover members to follow. Following
-            gives you a feed of what those members publish.</p></div>
+          <div class="blk" data-blk><p>The <a href="/extension/">browser extension</a> is optional. It
+            carries the same authoring surface as the website, and adds a new tab feed and a reader that keeps
+            you inside the extension while you browse. Add it if you want those. Skip it and the website does
+            everything, including editing and publishing your own work.</p></div>
+          <div class="blk" data-blk><p>Two things are worth doing first. Join the Discord, where your invite
+            is minted on demand, and follow a few members. Following is what builds your feed, because the
+            feed is assembled from what the members you follow publish.</p></div>
         </section>
 
         <!-- 2. SYNDICATION MODEL -->
@@ -139,19 +135,24 @@ const sections = [
         <!-- 4. PUBLISHING & WORKBENCH -->
         <section class="hb-sec" id="publishing" data-sec>
           <h2>Publishing &amp; Workbench</h2>
-          <div class="blk" data-blk><p>You author through either of two surfaces, and both use the same
-            flow. The <strong>extension workbench</strong> gives you a workspace (your articles, prompts,
-            projects, and their pull requests), a browse view, and an in-extension reader. The
-            <strong>npm CMS</strong> (<code>gbti-network</code>) runs a local editor in your browser plus
-            an MCP server, so your AI agents can author through the exact same guarded flow you do.</p></div>
-          <div class="blk" data-blk><p>Under the hood every edit is <strong>fork, branch, pull
-            request</strong> against the public content repository. The membership gate is the only
-            authority on what merges; the tools handle the git motions for you. Your content lives in
-            your own folder (<code>members/&lt;username&gt;/</code>) with posts, projects, prompts, and
-            images, and your pull requests auto-merge only inside that folder.</p></div>
-          <div class="blk" data-blk><p>Until you have a paid membership, drafts stay on your fork; nothing you
-            stage reaches the canonical repository. Publishing is for paid members. The moment you upgrade, the
-            workbench publishes your staged drafts.</p></div>
+          <div class="blk" data-blk><p>Author from the <strong>WorkBench</strong> at
+            <a href="/workbench/">/workbench/</a>. It holds your articles, projects and prompts, their pull
+            requests with live gate status, and the editor. The browser extension carries the same surface if
+            you would rather work there, and both read the same drafts.</p></div>
+          <div class="blk" data-blk><p>You can also edit something already published without leaving it. Open
+            your own article, project or prompt on the site and an edit control appears on the page. It appears
+            for the folder owner only, so nobody else sees it on your work and you do not see it on theirs.</p></div>
+          <div class="blk" data-blk><p>Every change becomes a pull request against the public content
+            repository, and the membership gate is the only authority on what merges. The tools handle the git
+            motions. Your content lives in your own folder (<code>members/&lt;username&gt;/</code>) with posts,
+            projects, prompts and images, and your pull requests auto-merge only inside that folder.</p></div>
+          <div class="blk" data-blk><p>The website never forks the repository and never takes a GitHub token
+            from you. Your drafts are held in your account, and publishing commits to a branch on the canonical
+            repository through GBTI's own GitHub App. The extension works differently, staging on a fork of
+            your own, which is why it asks for access the website does not need.</p></div>
+          <div class="blk" data-blk><p>Publishing is a Content Creator capability. Below that tier you can
+            write and keep drafts, and nothing you stage reaches the public repository until you upgrade. When
+            you do, your staged drafts are there waiting to publish.</p></div>
           <div class="blk" data-blk><p>Paid members can also contribute to one another member's folder.
             That pull request waits until the folder owner approves it with a GitHub review, then merges
             with you credited as a contributor.</p></div>
@@ -225,9 +226,9 @@ const sections = [
             repository.</p></div>
           <div class="blk" data-blk><p>Three gating modes cover the shapes member-only content takes: a
             whole item with no public page, a whole item with a public teaser stub (a locked card with a
-            join prompt), or a public item with one members-only section. The static site ships an inert
-            locked placeholder either way; the extension upgrades it into the decrypted content for
-            members.</p></div>
+            join prompt), or a public item with one members-only section. The page ships a locked placeholder
+            either way, and it unlocks in place once you are signed in as a member. The website does this
+            itself, and so does the extension.</p></div>
           <div class="blk" data-blk><p>Two guarantees hold at build time: gated plaintext never reaches the
             published site bundle (a build guard proves it), and the key rotates on a schedule with the old
             key destroyed, so ciphertext that sits in git history forever becomes unreadable. A
@@ -263,9 +264,10 @@ const sections = [
         <section class="hb-sec" id="profile" data-sec>
           <h2>Editing Member Profile</h2>
           <div class="blk" data-blk><p>Your public profile is one file you own:
-            <code>members/&lt;username&gt;/profile.md</code>. Edit it from the extension account page, or
-            through the CMS and MCP like any other content. It publishes through the same pull request
-            flow, and publishing a profile is a paid-member capability.</p></div>
+            <code>members/&lt;username&gt;/profile.md</code>. Edit it from
+            <a href="/account/">/account/</a> or the <a href="/workbench/">WorkBench</a>, or from the
+            extension if you use it. It publishes through the same pull request flow, and publishing a profile
+            is a Content Creator capability.</p></div>
           <div class="blk" data-blk><p>Fields you control: display name, headline, avatar (defaults to
             your GitHub avatar), location, roles and skills, social links, a for-hire flag, and
             <code>directory: true</code> to opt in to the <a href="/members/">member directory</a>.

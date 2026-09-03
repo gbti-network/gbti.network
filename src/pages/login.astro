@@ -1,5 +1,7 @@
 ---
-// sow-158 Phase 2: the website sign-in surface. A Turnstile-gated "Continue with GitHub" that navigates to the
+// sow-158 Phase 2: the website sign-in surface.
+// sow-271: the copy below no longer sends the reader to the extension for in-place editing. That became
+// false when the website started upgrading <gbti-edit-panel> itself (see src/components/EditHooks.astro). A Turnstile-gated "Continue with GitHub" that navigates to the
 // Worker's /signup/start (idempotent: an existing member is logged in and their trial clock is untouched; a new
 // visitor is signed up into a free no-card trial), carrying a validated return_to so the member lands back where
 // they started. The Worker sets the httpOnly gbti_session cookie on the OAuth callback; the header then hydrates
@@ -17,8 +19,8 @@ import { TURNSTILE_SITE_KEY, SIGNUP_BASE } from '../lib/membership';
         <span class="itile"><svg viewBox="0 0 24 24"><use href="#ico-github"/></svg></span>
         <h1 class="h2 mt16">Sign in to GBTI Network</h1>
         <p class="body-sm muted mt8">
-          Continue with GitHub. New here? You get a free account, no card required. To edit and publish
-          your own content in place, add the <a href="/extension/">browser extension</a> too.
+          Continue with GitHub. New here? You get a free account, no card required. Editing and publishing
+          your own content works here on the site; the <a href="/extension/">browser extension</a> is optional.
         </p>
         <div class="login-cta mt20">
           <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-callback="gbtiTurnstileOk" data-expired-callback="gbtiTurnstileReset" data-error-callback="gbtiTurnstileReset" data-theme="auto"></div>
