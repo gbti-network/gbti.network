@@ -239,6 +239,32 @@ export function isPublicItem(it) {
   return Boolean(it) && it.visibility === 'public';
 }
 
+/**
+ * sow-312: the audiences an issue can be composed for. The members edition exists because sow-293 made member
+ * shares the default, so an email that only ever carries public items gets emptier for exactly the people
+ * paying for the member stream.
+ */
+export const AUDIENCES = Object.freeze(['public', 'members']);
+
+/**
+ * The layer-1 admission test for one audience.
+ *
+ * WIDENING HAPPENS HERE AND NOWHERE ELSE. There is deliberately ONE guard rather than two that can disagree,
+ * which is the same reason mail-compile-core copies `visibility` verbatim instead of deciding anything.
+ *
+ * FAIL CLOSED ON THE AUDIENCE ITSELF: anything that is not exactly 'members' is treated as 'public'. An
+ * unrecognised, absent or misspelt audience must narrow, never widen, because the failure it guards is a
+ * member item reaching a public inbox.
+ *
+ * Layer 2 (`publicItem`) is UNCHANGED for both audiences: it copies title/url/author/date/blurb and no body,
+ * so even an admitted member item carries no gated content. Widening layer 1 does not widen what a member
+ * item can say.
+ */
+export function admitsItem(audience) {
+  if (audience !== 'members') return isPublicItem;
+  return (it) => Boolean(it) && (it.visibility === 'public' || it.visibility === 'members');
+}
+
 /** The public-safe projection of a member item. Copies ONLY public metadata; there is no field that could
  *  carry a body or ciphertext, so this is structurally incapable of leaking member content. */
 function publicItem(it) {
@@ -402,7 +428,7 @@ function urlSet(value) {
  */
 export function composeIssue(
   { issueId, items = [], news = [], now = Date.now } = {},
-  { perSection, maxNews = 5, maxNewsThin, since, exclude, seen, firstIssue = false, launchNote } = {},
+  { perSection, maxNews = 5, maxNewsThin, since, exclude, seen, firstIssue = false, launchNote, audience = 'public' } = {}, // sow-312: audience
 ) {
   const id = trimOrNull(issueId);
   if (!id) throw new DigestError('issueId is required');
@@ -434,7 +460,7 @@ export function composeIssue(
 
   // Layer 1: drop every non-public item. Layer 2: project each survivor to public-safe fields only.
   const duePublicItems = (Array.isArray(items) ? items : [])
-    .filter(isPublicItem)
+    .filter(admitsItem(audience)) // sow-312: 'public' (the default) is isPublicItem verbatim
     .map(publicItem)
     .filter((it) => it.title && it.url) // an item with no title or link is not renderable
     // NOT YET DUE. A publishedAt in the FUTURE is reachable (`isListed` is a visibility check with no date
