@@ -1,7 +1,10 @@
-// SOW-030: the site's consumer of the extension's PAGE-SAFE identity signal. The GBTI extension content script
-// stamps document.documentElement.dataset.gbtiMember (a JSON string) and dispatches a `gbti:identity` event when
-// a member is signed in (identity + membership status only, NEVER the GitHub token). The site uses this to show
-// a signed-in / member experience when the extension is installed + signed in.
+// SOW-030: the site's consumer of the PAGE-SAFE identity signal. document.documentElement.dataset.gbtiMember
+// holds a JSON string and a `gbti:identity` event fires when a member is signed in (identity + membership
+// status only, NEVER the GitHub token). The site uses this to show a signed-in / member experience.
+//
+// sow-271: BOTH routes stamp it now. The extension content script does, and so does hydrateMemberSignal below
+// once it resolves a website cookie session. It used to be extension-only, which meant a website member was
+// read as anonymous by every surface that consulted the attribute rather than onMemberSignal().
 //
 // IMPORTANT: this signal is UNTRUSTED for any security decision. Page JS (including any XSS) can set the
 // attribute, so it drives PRESENTATION ONLY (show an avatar, reveal non-functional edit chrome). Every
@@ -162,6 +165,20 @@ export async function hydrateMemberSignal(base: string = readSignupBase()): Prom
   cookieSignal = signal;
   if (signal) {
     applyMemberSignalClasses(signal);
+    // sow-271 Phase 4: STAMP THE ATTRIBUTE TOO, not only the classes.
+    //
+    // Before this, the cookie path set `is-gbti-*` classes and never touched dataset.gbtiMember, so the
+    // attribute stayed an extension-only channel. FOUR website surfaces read it directly and therefore saw a
+    // fully signed-in website member as anonymous: SubscribeButton.astro:83, PersonalizeModal.astro:101,
+    // index.astro:446 and news/item.astro:229. The news follow dialog is the visible one: it showed a member
+    // the "Extension required" panel while the website could already follow the source through setPrefs.
+    //
+    // Safe by the same reasoning as the header note: this attribute is PRESENTATION ONLY and already treated
+    // as untrusted, because page JS can set it. Stamping it does not grant anything. Every authoritative check
+    // stays server-side. And it cannot fight the precedence selector: the cookie signal already WINS in
+    // selectIdentity, so feeding it back as `extSignal` resolves to the same value.
+    document.documentElement.dataset.gbtiMember = JSON.stringify(signal);
+    document.dispatchEvent(new CustomEvent('gbti:identity', { detail: signal }));
     for (const cb of listeners) cb(currentIdentity(null)); // deliver the winning cookie signal to all consumers
   }
 }

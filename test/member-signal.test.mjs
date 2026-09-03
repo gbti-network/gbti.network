@@ -117,3 +117,41 @@ test('DRIFT GUARD: the homepage inline CTA uses the same rule as ACTIVE_MEMBERSH
   // so an empty or wrong file cannot make the assertions above pass by finding nothing to object to.
   assert.ok(src.includes('data-shoptalk-cta'), 'read a file that is not the homepage; the guard is pointed wrong');
 });
+
+// sow-271 Phase 4: the cookie path must STAMP dataset.gbtiMember, not only set the CSS classes.
+//
+// The defect: hydrateMemberSignal resolved a website cookie session, applied `is-gbti-*` classes, and left
+// the attribute alone, so it stayed an extension-only channel. FOUR website surfaces read the attribute
+// directly rather than going through onMemberSignal, and every one of them classed a fully signed-in
+// website member as anonymous. The visible symptom was the news follow dialog telling a signed-in member
+// "Extension required" to do something the site could already do through client.setPrefs.
+//
+// Asserted against the SOURCE because hydrateMemberSignal needs a document, and this file is the node-side
+// suite for the pure core. The four readers are listed so a future edit can find them from here.
+test('sow-271: the cookie hydration stamps the identity attribute AND dispatches the event', () => {
+  const src = fs.readFileSync(path.join(import.meta.dirname, '../src/lib/member-signal.ts'), 'utf8');
+  const body = src.slice(src.indexOf('export async function hydrateMemberSignal'));
+
+  assert.match(body, /document\.documentElement\.dataset\.gbtiMember\s*=/,
+    'the cookie path must stamp dataset.gbtiMember, or every raw reader of it sees a member as anonymous');
+  assert.match(body, /dispatchEvent\(new CustomEvent\('gbti:identity'/,
+    'and dispatch gbti:identity, so a listener attached after hydration still learns the identity');
+  assert.match(body, /applyMemberSignalClasses\(signal\)/,
+    'the classes must keep being applied; the attribute is in ADDITION, not a replacement');
+});
+
+test('sow-271: the four website surfaces that read the raw attribute still exist to be served', () => {
+  // If one of these moves, the comment in member-signal.ts goes stale and the next reader will not know
+  // why the attribute is stamped. A miss here is a documentation failure, not a behaviour failure, which is
+  // exactly the kind that survives for a year.
+  const readers = [
+    ['../src/components/SubscribeButton.astro', 'follow control'],
+    ['../src/components/home/PersonalizeModal.astro', 'homepage personalize'],
+    ['../src/pages/index.astro', 'homepage feed'],
+    ['../src/pages/news/item.astro', 'news follow dialog'],
+  ];
+  for (const [rel, what] of readers) {
+    const src = fs.readFileSync(path.join(import.meta.dirname, rel), 'utf8');
+    assert.match(src, /dataset\.gbtiMember/, `${what} (${rel}) no longer reads the attribute: update the note in member-signal.ts`);
+  }
+});

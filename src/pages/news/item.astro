@@ -33,19 +33,25 @@ import { SIGNUP_BASE } from '../../lib/membership';
           </p>
           <div class="sm-actions mt24">
             <a href="/membership/" class="btn btn-primary">Become a member</a>
-            <a href="/extension/" class="btn btn-ghost">Already a member? Sign in</a>
+            <button type="button" class="btn btn-ghost" data-signin>Already a member? Sign in</button>
             <button type="button" class="btn btn-ghost" data-follow-close>Maybe later</button>
           </div>
         </div>
+        {/* sow-271: this panel used to say "Extension required" and send the reader to the install page.
+            That was false: the website follows a source itself through client.setPrefs, and the panel only
+            appeared at all because the state check read dataset.gbtiMember, which nothing on the website
+            stamped, so a signed-in member was classed as needing the extension. The signal is fixed in
+            src/lib/member-signal.ts; this panel now covers the one case it is genuinely for, an extension
+            user whose extension is signed out. */}
         <div data-follow-state="extension" hidden>
-          <p class="eyebrow" style="color:var(--green-700)">Extension required</p>
-          <h3 class="h3 mt8">Follow from the GBTI extension</h3>
+          <p class="eyebrow" style="color:var(--green-700)">Sign in to follow</p>
+          <h3 class="h3 mt8">Follow this publication</h3>
           <p class="body mt12" style="color:var(--fg-soft)">
-            Source follows live in the GBTI browser extension, where your news stream is personalized.
-            Install it and sign in to follow this publication.
+            Following a publication personalizes your news stream. Sign in and the follow is saved to your
+            account, on the site or in the extension.
           </p>
           <div class="sm-actions mt24">
-            <a href="/extension/" class="btn btn-primary">Get the extension</a>
+            <button type="button" class="btn btn-primary" data-signin>Sign in</button>
             <button type="button" class="btn btn-ghost" data-follow-close>Maybe later</button>
           </div>
         </div>

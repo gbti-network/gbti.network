@@ -31,11 +31,26 @@ export const CTA_MARKERS = [
   ['the archived v1 homepage extension band', 'id="newtab"'],
 ];
 
-// Surfaces the toggle deliberately does NOT govern. If one of these vanishes, the change went too far: hiding a
-// capability notice leaves the control it explains dead AND silent, which is worse than either state alone.
-export const MUST_SURVIVE = [
-  ['the "Extension required" capability notices', 'Extension required'],
+// sow-271 Phase 3 INVERTED THIS ASSERTION, and the reason matters more than the change.
+//
+// It used to be MUST_SURVIVE: the "Extension required" notices had to appear somewhere in dist, because they
+// explained a control that did nothing on the website, and hiding them would leave that control dead AND
+// silent. That premise was correct when it was written and is now dead. The website follows a news source
+// itself (client.setPrefs), posts comments, and upgrades the in-place edit panel, so a notice saying the
+// extension is REQUIRED is no longer a helpful explanation. It is a false statement.
+//
+// So the guard now asserts the opposite, which is the invariant this SOW actually wants: no built page may
+// tell a reader the extension is required for something the website does. It fails CLOSED. If a genuinely
+// extension-only capability ever appears, whoever adds it will trip this and has to add an explicit
+// exemption with a stated reason, rather than the claim slipping back in as ordinary copy.
+export const MUST_NOT_CLAIM = [
+  ['an "Extension required" capability notice', 'Extension required'],
+  ['copy telling the reader to comment from the extension', 'comments from the GBTI client or browser extension'],
 ];
+
+// Pages that legitimately describe the extension at length. The claim ban does not apply to them: the install
+// page and the brand page exist to talk about it.
+export const CLAIM_EXEMPT_PATHS = ['/extension/', '/brand/'];
 
 /** Walk dist for .html files. Pure over the directory so it is testable against a hand-built temp dist. */
 function htmlFiles(dir, out = []) {
@@ -101,15 +116,19 @@ export function checkExtensionCta({ distDir, ctaEnabled }) {
   }
 
   // The surfaces the toggle must never touch, checked in BOTH positions.
-  for (const [label, marker] of MUST_SURVIVE) {
-    const n = files.filter((f) => fs.readFileSync(f, 'utf8').includes(marker)).length;
-    if (!n) {
+  for (const [label, marker] of MUST_NOT_CLAIM) {
+    const offenders = files
+      .filter((f) => !CLAIM_EXEMPT_PATHS.some((ex) => f.includes(ex.replace(/\//g, path.sep))))
+      .filter((f) => fs.readFileSync(f, 'utf8').includes(marker));
+    if (offenders.length) {
+      const where = offenders.slice(0, 4).map((f) => path.relative(distDir, f)).join(', ');
       errors.push(
-        `${label} render on NO page. The extension-CTA setting must NOT govern these: they explain a control ` +
-        `that currently does nothing, and hiding them leaves that control dead and silent.`,
+        `${label} renders on ${offenders.length} page${offenders.length === 1 ? '' : 's'} (${where}). The ` +
+        `website does this itself now, so the claim is false. Correct the copy, or add an explicit exemption ` +
+        `here saying which capability is genuinely extension-only and why.`,
       );
     } else {
-      notes.push(`${label}: present on ${n} page${n === 1 ? '' : 's'} (correctly untouched by the setting).`);
+      notes.push(`${label}: absent, as it should be (the website does this itself).`);
     }
   }
 

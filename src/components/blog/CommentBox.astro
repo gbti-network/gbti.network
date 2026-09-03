@@ -24,7 +24,11 @@ if (readerPath) attrs['data-gbti-reader-path'] = readerPath;
 <gbti-comment-box {...attrs}>
   {!isEdit && (
     <div class="cbox-fallback">
-      <p class="body-sm muted for-visitor" style="margin:0">Members write comments from the GBTI client or browser extension. <a href="/membership/" class="link">Become a member</a> to join the conversation.</p>
+      {/* sow-271: this used to say comments are written "from the GBTI client or browser extension", which
+          sent a visitor away to do something the site does. The `for-paid` line below is different and stays
+          as it is: it only shows when the element did NOT upgrade, which on the website means an
+          extension-only signal with no web session, so pointing that reader at the extension is correct. */}
+      <p class="body-sm muted for-visitor" style="margin:0">Comments are for members. <a href="/membership/" class="link">Become a member</a> to join the conversation, or <button type="button" class="link" data-signin>sign in</button> if you already are.</p>
       <p class="body-sm muted for-paid" style="margin:0">You are signed in as a member. <button type="button" class="link cbox-open" data-cbox-open>Reply to this discussion from the GBTI extension</button>.</p>
     </div>
   )}
