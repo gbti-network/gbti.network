@@ -81,3 +81,38 @@ test('the gated-content notice no longer tells a member to go to a client to unl
   assert.ok(!LOCKED.includes('open it in the GBTI client to unlock'),
     'the website decrypts member content itself (workbench-client posts to /membership/decrypt)');
 });
+
+// sow-271: the MCP tools are a PUBLISHED INTERFACE. Members' AI agents were written against these names and
+// this enum, so the product -> project rename is a compatibility surface, not just an internal one.
+test('the MCP tools still accept the retired type name, at the schema AND in the handler', () => {
+  const MCP = read('../client/src/mcp-tools.mjs');
+
+  // The enum IS the schema. Drop `product` and an existing agent's call is rejected by validation before any
+  // canonicalization can run, with a schema error rather than a useful message.
+  const m = /const TYPE_ENUM = \{[^}]*enum: \[([^\]]*)\]/.exec(MCP);
+  assert.ok(m, 'TYPE_ENUM is no longer a literal enum: re-check this guard');
+  const values = m[1].split(',').map((s) => s.trim().replace(/^'|'$/g, ''));
+  assert.ok(values.includes('project'), 'TYPE_ENUM must offer the current name');
+  assert.ok(values.includes('product'), 'TYPE_ENUM dropped the retired name: existing agents break on validation');
+
+  // Accepting it is only half. Every handler that forwards a caller-supplied type must canonicalize, because
+  // the SUBDIR maps carry an alias but the TYPES allow-lists in github-reader/repo-fs do not.
+  for (const fn of ['listContent', 'validateContent', 'listDrafts']) {
+    // Anchor on the HANDLER line. Matching any line that mentions the function picks up internal helper
+    // calls too, which made the first version of this assertion fail against correct code.
+    const line = MCP.split('\n').find((l) => l.includes('handler:') && l.includes(`${fn}(ctx,`));
+    assert.ok(line, `handler line for ${fn} not found`);
+    assert.match(line, /canonicalType\(/, `${fn} forwards a raw type: a legacy value reaches an allow-list that rejects it`);
+  }
+  const pub = MCP.split('\n').find((l) => l.includes('authorContent(ctx, {'));
+  assert.match(pub, /canonicalType\(/, 'publish_content forwards args whole, so it must canonicalize the type itself');
+});
+
+test('add_product keeps its NAME (agents call it) while creating a project', () => {
+  const MCP = read('../client/src/mcp-tools.mjs');
+  assert.match(MCP, /name: 'add_product'/, 'renaming the tool breaks every agent already calling it');
+  const from = MCP.indexOf("name: 'add_product'");
+  const end = MCP.indexOf("\n  },", from);           // the close of this tool object, not a guessed width
+  assert.ok(end > from, 'could not find the end of the add_product tool object');
+  assert.match(MCP.slice(from, end), /type: 'project'/, 'add_product must create a project, whatever it is called');
+});

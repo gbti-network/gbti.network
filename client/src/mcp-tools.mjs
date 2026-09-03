@@ -31,11 +31,20 @@ import {
   publishDraft,
 } from './operations.mjs';
 import { startDeviceLogin, confirmDeviceLogin, logout } from './mcp-auth.mjs';
+// sow-271: resolve the retired `product` type name at the MCP BOUNDARY, so nothing downstream has to know it
+// ever existed. Accepting it in TYPE_ENUM alone is not enough: the SUBDIR maps carry an alias but the TYPES
+// allow-lists in github-reader.mjs and repo-fs.mjs do not, so a legacy value would pass the schema and then
+// be rejected deeper with a worse message. One canonicalization here beats an alias in every map.
+import { canonicalType } from '../../membership/content-types.mjs';
 
 const PROTOCOL_VERSION = '2024-11-05';
 
 const obj = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: true });
-const TYPE_ENUM = { type: 'string', enum: ['post', 'project', 'prompt', 'profile'] };
+// sow-271: `product` STAYS in this enum. It is the retired name for `project`, and the enum is the SCHEMA,
+// so a member's AI agent calling list_my_content or publish_content with type:'product' is rejected here
+// before canonicalType can resolve it. The tools are a published interface that agents were written
+// against; removing the value breaks those agents with a validation error, not a helpful message.
+const TYPE_ENUM = { type: 'string', enum: ['post', 'project', 'product', 'prompt', 'profile'] };
 // SOW-106: the REQUIRED author intent. "published" merges to the network (public); "draft" stages on the fork.
 const STATUS_ENUM = { type: 'string', enum: ['draft', 'published'], description: 'REQUIRED: "published" merges and goes live on the network; "draft" stages on your fork for review.' };
 const COMMENT_TARGET = { type: 'string', enum: ['post', 'project', 'prompt', 'share', 'news'] }; // SOW-072
@@ -112,7 +121,7 @@ export const TOOLS = [
     name: 'list_my_content',
     description: "List the member's own content (posts/projects/prompts/profile). Optional `type` filter.",
     inputSchema: obj({ type: TYPE_ENUM, scope: SCOPE_PARAM }),
-    handler: (ctx, args) => listContent(ctx, { type: args?.type, scope: args?.scope }),
+    handler: (ctx, args) => listContent(ctx, { type: canonicalType(args?.type) || undefined, scope: args?.scope }),
   },
   {
     name: 'get_content',
@@ -124,7 +133,7 @@ export const TOOLS = [
     name: 'validate_content',
     description: 'Validate a content object against the schema WITHOUT publishing. Returns { valid, path | error, issues }.',
     inputSchema: obj({ type: TYPE_ENUM, input: { type: 'object' }, body: { type: 'string' } }, ['type', 'input']),
-    handler: (ctx, args) => validateContent(ctx, { type: args?.type, input: args?.input, body: args?.body }),
+    handler: (ctx, args) => validateContent(ctx, { type: canonicalType(args?.type) || undefined, input: args?.input, body: args?.body }),
   },
   {
     name: 'publish_content',
@@ -133,7 +142,9 @@ export const TOOLS = [
       { type: TYPE_ENUM, input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM },
       ['type', 'input', 'status'],
     ),
-    handler: (ctx, args) => authorContent(ctx, args ?? {}),
+    // sow-271: this one forwards `args` WHOLE, so the type has to be canonicalized here rather than relying
+    // on the spread. The per-type shortcuts below pin `type` themselves and need nothing.
+    handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), ...(args?.type ? { type: canonicalType(args.type) } : {}) }),
   },
   // SOW-025: per-type "add content" shortcuts so an agent gets guided tools instead of the generic
   // publish_content. Each pre-sets `type` and forwards to the same gated publish flow (author is forced to the
@@ -146,7 +157,7 @@ export const TOOLS = [
   },
   {
     name: 'add_product',
-    description: 'Author a PRODUCT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
     inputSchema: obj({ input: { type: 'object' }, status: STATUS_ENUM, body: { type: 'string' }, authorNote: { type: 'string' }, message: { type: 'string' }, title: { type: 'string' }, prBody: { type: 'string' }, path: PATH_PARAM, scope: SCOPE_PARAM }, ['input', 'status']),
     handler: (ctx, args) => authorContent(ctx, { ...(args ?? {}), type: 'project' }),
   },
@@ -164,7 +175,7 @@ export const TOOLS = [
     name: 'list_drafts',
     description: 'List your staged drafts (items saved with status:"draft" and not yet published). Optional `type` filter. Each row carries its type, slug, title, whether it still validates against the current schema, and its pull request if one is open.',
     inputSchema: obj({ type: TYPE_ENUM }),
-    handler: (ctx, args) => listDrafts(ctx, { type: args?.type }),
+    handler: (ctx, args) => listDrafts(ctx, { type: canonicalType(args?.type) || undefined }),
   },
   {
     name: 'read_draft',

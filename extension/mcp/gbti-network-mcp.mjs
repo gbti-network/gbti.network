@@ -19820,6 +19820,10 @@ var LEGACY_TYPE_ALIASES = Object.freeze({
   // sow-196, 2026-09-02
 });
 var CONTENT_TYPES = Object.freeze(["post", "project", "prompt", "share", "news"]);
+function canonicalType(type) {
+  const t = typeof type === "string" ? type : "";
+  return Object.prototype.hasOwnProperty.call(LEGACY_TYPE_ALIASES, t) ? LEGACY_TYPE_ALIASES[t] : t;
+}
 
 // client/src/operations-member.mjs
 async function ogPreview2(ctx2, { url: url2 } = {}) {
@@ -20125,7 +20129,7 @@ function logout(ctx2) {
 // client/src/mcp-tools.mjs
 var PROTOCOL_VERSION = "2024-11-05";
 var obj = (properties, required2 = []) => ({ type: "object", properties, required: required2, additionalProperties: true });
-var TYPE_ENUM = { type: "string", enum: ["post", "project", "prompt", "profile"] };
+var TYPE_ENUM = { type: "string", enum: ["post", "project", "product", "prompt", "profile"] };
 var STATUS_ENUM = { type: "string", enum: ["draft", "published"], description: 'REQUIRED: "published" merges and goes live on the network; "draft" stages on your fork for review.' };
 var COMMENT_TARGET = { type: "string", enum: ["post", "project", "prompt", "share", "news"] };
 var PATH_PARAM = { type: "string", description: "The repo path of the EXISTING item you are editing (members/<you>/<type>s/<slug>/index.md). Pass it whenever the item already exists: it preserves publishedAt, carries redirectFrom, and makes a changed slug a rename rather than a duplicate." };
@@ -20176,7 +20180,7 @@ var TOOLS = [
     name: "list_my_content",
     description: "List the member's own content (posts/projects/prompts/profile). Optional `type` filter.",
     inputSchema: obj({ type: TYPE_ENUM, scope: SCOPE_PARAM }),
-    handler: (ctx2, args) => listContent(ctx2, { type: args?.type, scope: args?.scope })
+    handler: (ctx2, args) => listContent(ctx2, { type: canonicalType(args?.type) || void 0, scope: args?.scope })
   },
   {
     name: "get_content",
@@ -20188,7 +20192,7 @@ var TOOLS = [
     name: "validate_content",
     description: "Validate a content object against the schema WITHOUT publishing. Returns { valid, path | error, issues }.",
     inputSchema: obj({ type: TYPE_ENUM, input: { type: "object" }, body: { type: "string" } }, ["type", "input"]),
-    handler: (ctx2, args) => validateContent(ctx2, { type: args?.type, input: args?.input, body: args?.body })
+    handler: (ctx2, args) => validateContent(ctx2, { type: canonicalType(args?.type) || void 0, input: args?.input, body: args?.body })
   },
   {
     name: "publish_content",
@@ -20197,7 +20201,9 @@ var TOOLS = [
       { type: TYPE_ENUM, input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM },
       ["type", "input", "status"]
     ),
-    handler: (ctx2, args) => authorContent(ctx2, args ?? {})
+    // sow-271: this one forwards `args` WHOLE, so the type has to be canonicalized here rather than relying
+    // on the spread. The per-type shortcuts below pin `type` themselves and need nothing.
+    handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, ...args?.type ? { type: canonicalType(args.type) } : {} })
   },
   // SOW-025: per-type "add content" shortcuts so an agent gets guided tools instead of the generic
   // publish_content. Each pre-sets `type` and forwards to the same gated publish flow (author is forced to the
@@ -20210,7 +20216,7 @@ var TOOLS = [
   },
   {
     name: "add_product",
-    description: 'Author a PRODUCT. REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
+    description: 'Author a PROJECT (this tool was named add_product before the type was renamed; the name is kept so existing agents keep working). REQUIRED `status`: "published" publishes it live (a PR that merges), "draft" stages it on your fork for review. input requires: title, slug, shortDescription, icon (repo image path), featuredImage (16:10 repo image path); optional: categories[], tags[], pricing, links[]. The markdown `body` is the project description. author is forced to you. SOW-014: a new project needs a from-the-author intro, so pass `authorNote` (markdown) and it publishes as your public intro comment in the SAME PR. (Attach images via the repo first; an MCP image-upload tool is a follow-on.)',
     inputSchema: obj({ input: { type: "object" }, status: STATUS_ENUM, body: { type: "string" }, authorNote: { type: "string" }, message: { type: "string" }, title: { type: "string" }, prBody: { type: "string" }, path: PATH_PARAM, scope: SCOPE_PARAM }, ["input", "status"]),
     handler: (ctx2, args) => authorContent(ctx2, { ...args ?? {}, type: "project" })
   },
@@ -20228,7 +20234,7 @@ var TOOLS = [
     name: "list_drafts",
     description: 'List your staged drafts (items saved with status:"draft" and not yet published). Optional `type` filter. Each row carries its type, slug, title, whether it still validates against the current schema, and its pull request if one is open.',
     inputSchema: obj({ type: TYPE_ENUM }),
-    handler: (ctx2, args) => listDrafts(ctx2, { type: args?.type })
+    handler: (ctx2, args) => listDrafts(ctx2, { type: canonicalType(args?.type) || void 0 })
   },
   {
     name: "read_draft",
