@@ -62,7 +62,7 @@ const CONTENT_DEST = /^\/(articles|projects|products|prompts)\/[^/]+\/$/;
 const MEMBER_DEST = /^\/members\/[^/]+\/$/;
 const MEMBERS_INDEX = '/members/';
 const MEMBERSHIP = '/membership/';
-const csv = fs.readFileSync(path.join(ROOT, '.data/legacy/redirect-map.csv'), 'utf8').trim().split('\n').slice(1);
+const csv = fs.readFileSync(path.join(ROOT, '.data/legacy/redirect-map.csv'), 'utf8').trim().split(/\r?\n/).slice(1);
 
 const lines = [
   '# Generated from .data/legacy/redirect-map.csv by scripts/gen-redirects.mjs (visibility-aware, SOW-016).',
@@ -101,21 +101,9 @@ const EXTRA = [
   // nothing LinkedIn-specific to preserve at the old path.
   ['/linkedin-invite/', '/member-invite/'],
 
-  ['/projects/js-animate-hue/', '/utilities/js-animate-hue/'],
-  ['/projects/email-signature-generator/', '/utilities/email-signature-generator/'],
+  ['/products/js-animate-hue/', '/utilities/js-animate-hue/'],
+  ['/products/email-signature-generator/', '/utilities/email-signature-generator/'],
 
-  // sow-196 (2026-09-02): the `product` content type became `project`, so /products/ became /projects/.
-  // Per-ITEM 301s are composed from each item's frontmatter redirectFrom by scripts/compose-redirects.mjs;
-  // these are the collection-level routes, which have no frontmatter to carry one. They live here rather
-  // than hand-written into public/_redirects because that file carries a do-not-edit header and the next
-  // run of this generator would drop them.
-  ['/projects/', '/projects/'],
-  ['/feeds/projects/', '/feeds/projects/'],
-  ['/projects-index.json', '/projects-index.json'],
-  // The two applet URLs above keep their /projects/ form; these are their /projects/ twins, needed because
-  // an applet has no detail page under either collection route.
-  ['/projects/js-animate-hue/', '/utilities/js-animate-hue/'],
-  ['/projects/email-signature-generator/', '/utilities/email-signature-generator/'],
 
   // Outbound partner links. The WordPress site cloaked its affiliate links behind /outbound/ and
   // /outsourcing/ paths served by the Redirection plugin. The content migrated and the redirect rules did
@@ -199,6 +187,26 @@ for (const [oldPath, newPath] of EXTRA) { lines.push(`${oldPath} ${newPath} 301`
 // skipped by check-redirects (it carries a `:` placeholder), so it never fails the build guard.
 lines.push('/blog/* /articles/:splat 301');
 n++;
+
+// sow-196 (2026-09-02): the `product` content type became `project`, so /products/ became /projects/.
+// Per-ITEM 301s compose from each item's frontmatter redirectFrom (scripts/compose-redirects.mjs); these
+// are the COLLECTION-level routes, which have no frontmatter to carry one. They are emitted here, after
+// the splat, rather than hand-written into public/_redirects, because that file is regenerated wholesale
+// and anything added to it by hand is silently dropped on the next run.
+lines.push('');
+lines.push('# sow-196 (2026-09-02): the `product` content type became `project`. Per-item /products/<slug>/ 301s are');
+lines.push('# composed from each item\'s frontmatter redirectFrom by scripts/compose-redirects.mjs; these are the');
+lines.push('# collection-level routes, which have no frontmatter to carry them.');
+for (const [from, to] of [
+  ['/products/', '/projects/'],
+  ['/feeds/products/', '/feeds/projects/'],
+  ['/products-index.json', '/projects-index.json'],
+]) { lines.push(`${from} ${to} 301`); n++; }
+lines.push('# The two SOW-022 applet URLs keep their existing /products/ lines above; these are their /projects/ twins.');
+for (const [from, to] of [
+  ['/projects/js-animate-hue/', '/utilities/js-animate-hue/'],
+  ['/projects/email-signature-generator/', '/utilities/email-signature-generator/'],
+]) { lines.push(`${from} ${to} 301`); n++; }
 
 fs.mkdirSync(path.join(ROOT, 'public'), { recursive: true });
 fs.writeFileSync(path.join(ROOT, 'public/_redirects'), lines.join('\n') + '\n');

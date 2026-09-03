@@ -84,9 +84,11 @@ export function aggregateTags(items, n = 9) {
 }
 
 /** The public feed narrows (sow-131 + sow-139 news): route segment -> predicate over a normalized feed item. */
-// sow-196: 'products' is RETAINED beside 'projects' so /feeds/products/ still builds as a real route and
-// 301s from the committed redirect rather than 404-ing. It is a live URL in the digest emails already sent.
-export const FEED_NARROWS = ['all', 'news', 'network', 'articles', 'projects', 'projects', 'prompts', 'shares'];
+// The narrow names. NOTE: nothing reads this constant; the routes are defined by getStaticPaths in
+// src/pages/feeds/[narrow].astro, and that file is the one to change when a narrow is added or removed.
+// The legacy /feeds/products/ is deliberately absent: it is not built, and public/_redirects 301s it to
+// /feeds/projects/ so the URL in already-delivered digest emails keeps working against one canonical page.
+export const FEED_NARROWS = ['all', 'news', 'network', 'articles', 'projects', 'prompts', 'shares'];
 
 /**
  * Does a feed item belong to a narrow? `all` = everything; `network` = the PUBLICATIONS from across

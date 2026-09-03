@@ -197,7 +197,7 @@ const projectShape = ({ image }: { image: any }) => ({
 // sow-196: `products/` stays in the glob alongside `projects/`. It costs one pattern and means an
 // unmigrated fork, or a branch cut before the rename, still builds instead of losing every item silently.
 const project = defineCollection({
-  loader: glob({ base: '.', pattern: ['members/*/projects/**/*.md', 'house/projects/**/*.{md,mdx}', 'members/*/projects/**/*.md', 'house/projects/**/*.{md,mdx}'] }),
+  loader: glob({ base: '.', pattern: ['members/*/projects/**/*.md', 'house/projects/**/*.{md,mdx}', 'members/*/products/**/*.md', 'house/products/**/*.{md,mdx}'] }),
   schema: ({ image }) => z.object(projectShape({ image })),
 });
 
@@ -305,9 +305,9 @@ const comment = defineCollection({
     id: z.string(),
     author: z.string(),
     // sow-196: 'product' is RETAINED alongside 'project'. Every comment left before the 2026-09-02
-    // rename carries targetType: project, and dropping the value here detaches all of them from
+    // rename carries targetType: product, and dropping the value here detaches all of them from
     // their items with no error anywhere. See membership/content-types.mjs.
-    targetType: z.enum(['post', 'project', 'project', 'prompt', 'share', 'news']), // SOW-032: 'share'; SOW-046 D: 'news' discussion
+    targetType: z.enum(['post', 'project', 'product', 'prompt', 'share', 'news']), // SOW-032: 'share'; SOW-046 D: 'news' discussion
     targetSlug: z.string(), // a share comment targets "<author>/<shareId>"; a news comment targets "news-<hash of guid>"
     status: STATUS.default('published'),
     visibility: VISIBILITY.default('members'), // SOW-044: comments are members-only + encrypted by default; only a from-the-author intro (authorNote) on a post/product/prompt may be public
