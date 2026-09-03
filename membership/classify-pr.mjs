@@ -204,6 +204,12 @@ export function contentTypesTouched(paths, ownedFolder) {
       else {
         const dir = rest.split('/')[0];
         if (CONTENT_DIRS.includes(dir)) types.add(dir.replace(/s$/, ''));
+        // sow-293: a share is now CLASSIFIED rather than falling through to TYPE_OTHER. It stays OUT of
+        // CONTENT_DIRS on purpose (it is the member's own activity stream, never a reviewable contribution
+        // dir, which is what isContributionToFolder keys on), so naming it here is the narrow change: it
+        // separates "is this a reviewable contribution" from "what type is this", which that one list used
+        // to answer at once. Only requiredTierFor consumes this, and only its ownFolder form relaxes.
+        else if (dir === 'shares') types.add('share');
         else types.add(TYPE_OTHER); // never silently drop it: an unclassified own-folder path requires creator
       }
     }
@@ -217,9 +223,24 @@ export function contentTypesTouched(paths, ownedFolder) {
  * Fail closed: an empty or mixed set, or any non-comment type, requires creator, the higher tier, so a type we
  * cannot cleanly classify as comments-only never publishes on the member floor.
  */
-export function requiredTierFor(types) {
+export function requiredTierFor(types, { ownFolder = false } = {}) {
   if (!Array.isArray(types) || types.length === 0) return TIER.creator;
-  return types.every((t) => t === 'comment') ? TIER.member : TIER.creator;
+  // sow-293: a SHARE joins comments on the Network Member floor. Sharing opened to every paid member, and
+  // only PUBLIC sharing stays Content Creator, but that distinction lives in the share's frontmatter and this
+  // gate reads changed PATHS only, by design (roles-and-capabilities.md: the gate inspects metadata, never PR
+  // content). It therefore cannot tell the two apart, and the owner ruled on 2026-09-03 that the website
+  // enforces the public rule while the gate admits shares at member tier.
+  //
+  // WHAT THAT COSTS, stated so nobody later reads this as an oversight: a paying member who hand-builds a pull
+  // request instead of using the website can publish ONE public share without holding Content Creator. It is a
+  // rule bent by an authenticated member inside their own folder, not an escalation and not an exposure. The
+  // alternatives were widening the gate to read file contents, or migrating all 58 existing shares into
+  // visibility-named folders; both were weighed and declined.
+  // The share relaxation is OPT-IN (`ownFolder`), so the DEFAULT is byte-for-byte the old rule. The owner
+  // opened sharing on a member's OWN stream; contributing a share into somebody else's folder was not part
+  // of that and keeps the creator floor, which the contribution call site gets by simply not opting in.
+  const onMemberFloor = ownFolder ? (t) => t === 'comment' || t === 'share' : (t) => t === 'comment';
+  return types.every(onMemberFloor) ? TIER.member : TIER.creator;
 }
 
 const fail = (label, reason) => ({ check: 'fail', autoMerge: false, label, reasons: [reason] });
@@ -380,7 +401,7 @@ export function decide({ paths, role = ROLE.member, effective, ownedFolder, isBo
   //    for comments. A trial member's drafts stay on their own fork until they pay (the gate rejects + the
   //    runnable wrapper auto-closes with a nudge), so no trial content ever reaches the canonical repo.
   if (status === 'paid') {
-    const required = requiredTierFor(contentTypesTouched(paths, ownedFolder));
+    const required = requiredTierFor(contentTypesTouched(paths, ownedFolder), { ownFolder: true }); // sow-293
     if (!meetsTier(tier, required)) {
       const need = required === TIER.creator ? 'Content Creator' : 'Network Member';
       return fail('rejected-not-creator', `publishing this content requires the ${need} tier or higher (your tier: ${tier ?? 'none'})`);

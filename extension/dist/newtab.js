@@ -3243,13 +3243,17 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     };
   }
   var SHARE_LOCKED_STATES = /* @__PURE__ */ new Set(["expired", "cancelled", "none", "banned"]);
-  function shareComposerView({ hasClient = false, membership, tier = null } = {}) {
+  function shareComposerView({ hasClient = false, membership } = {}) {
     if (!hasClient) return "no-client";
     if (membership === void 0) return "loading";
     if (SHARE_LOCKED_STATES.has(membership)) return "locked";
     if (membership === "trialing") return "trial";
-    if (tier && tier !== "creator") return "not-creator";
     return "composer";
+  }
+  function canSharePublicly({ membership, tier = null } = {}) {
+    if (SHARE_LOCKED_STATES.has(membership) || membership === "trialing") return false;
+    if (!tier) return true;
+    return tier === "creator";
   }
 
   // client-ui/src/markdown-blocks.mjs
@@ -3715,8 +3719,8 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
           return this._renderLocked();
         case "trial":
           return this._renderTrial();
-        case "not-creator":
-          return this._renderNotCreator();
+        // sow-293: 'not-creator' is gone from this switch. The upgrade nudge did not disappear, it MOVED to
+        // the audience step, where it explains why Public is unavailable. See _applyPublicLock.
         default:
           return this._renderComposer();
       }
@@ -3734,13 +3738,6 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
     // sow-218: a paid member on a tier below Content Creator. Named for what they ARE rather than what they lack,
     // and it states the tier plainly, because "your PR was rejected" after writing a Share is the experience this
     // exists to prevent.
-    _renderNotCreator() {
-      this.set(this.css(CSS) + this._noticeHtml(
-        "Posting Shares is a Content Creator perk",
-        'Your membership covers reading the community stream. Posting Shares, articles, projects and prompts is part of Content Creator membership. <a href="https://gbti.network/membership/">See the membership tiers</a> to upgrade.',
-        "✍️"
-      ));
-    }
     _renderTrial() {
       this.set(this.css(CSS) + this._noticeHtml(
         "Reading only on the free trial",
@@ -3805,11 +3802,15 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
               <span class="at">${IC.lock} Members only</span>
               <span class="ad">Signed-in members of the network, nobody else.</span>
             </button>
-            <button class="audcard" type="button" data-vis="public" aria-pressed="false">
+            <button class="audcard" type="button" data-vis="public" aria-pressed="false" data-public>
               <span class="at">${IC.globe} Public</span>
               <span class="ad">Anyone can read it, and it can be indexed.</span>
             </button>
           </div>
+          <p class="sub" data-public-nudge hidden>
+            Sharing publicly is part of Content Creator membership.
+            <a href="https://gbti.network/creator-application/">Apply to become a Content Creator</a>.
+          </p>
         </section>
 
         <div class="wizfoot">
@@ -3832,6 +3833,7 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         clearTimeout(this._ogTimer);
         this._ogTimer = setTimeout(() => this._fetchPreview(), 400);
       });
+      this._applyPublicLock();
       this._go(1);
       this._loadTopics();
     }
@@ -3911,7 +3913,29 @@ ul.list li { padding: 8px 0; border-bottom: 1px solid var(--line); }
         if (ta) ta.hidden = false;
       }
     }
+    /**
+     * sow-293: Content Creator unlocks the PUBLIC audience. A Network Member gets the composer and posts
+     * members-only, with the upgrade nudge explaining why the second chip is unavailable.
+     *
+     * This is an AFFORDANCE, not the boundary. The Worker reads the share's own `visibility` out of the files
+     * it is about to commit and refuses a public one from a non-creator (isMembersOnlyShare in
+     * workers/signup/membership-author.mjs), so poking the DOM buys nothing. It is here so a member does not
+     * compose a public share and meet the wall at submit.
+     */
+    _applyPublicLock() {
+      const allowed = canSharePublicly({ membership: this._membership, tier: this._tier });
+      const chip = this.$("[data-public]");
+      const nudge2 = this.$("[data-public-nudge]");
+      if (chip) {
+        chip.disabled = !allowed;
+        chip.setAttribute("aria-disabled", allowed ? "false" : "true");
+        chip.classList.toggle("locked", !allowed);
+      }
+      if (nudge2) nudge2.hidden = allowed;
+      if (!allowed && this._visibility === "public") this._selectAudience("members");
+    }
     _selectAudience(vis) {
+      if (vis === "public" && !canSharePublicly({ membership: this._membership, tier: this._tier })) return;
       this._visibility = vis === "public" ? "public" : "members";
       for (const c of this.$$("[data-vis]")) {
         const on = c.dataset.vis === this._visibility;

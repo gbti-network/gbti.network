@@ -58,6 +58,52 @@ export function isCommentOnly(files, folder) {
   });
 }
 
+/**
+ * sow-293: is this file set a MEMBERS-ONLY share in the caller's own folder?
+ *
+ * Sharing opened up to every paid member, but PUBLIC sharing stays Content Creator only, so this is the
+ * second exemption from the creator gate alongside isCommentOnly. It is a stricter check than that one,
+ * because a share's visibility is not in its path: the answer lives in the frontmatter, and this function is
+ * the only place that reads it.
+ *
+ * FAIL-CLOSED IN EVERY DIRECTION, and each clause is a way a public share could otherwise slip through as a
+ * members-only one:
+ *   - a non-array, an EMPTY set, or a malformed entry              -> false
+ *   - ONE path outside `members/<folder>/shares/`                  -> false
+ *   - a `.md` whose content is missing or not a string             -> false (we cannot read it, so we do not vouch)
+ *   - a `.md` without a POSITIVE `visibility: members` frontmatter  -> false (absent is not members-only:
+ *     the schema default for a share is `public`, so silence means public)
+ *   - NO `.md` at all (an `.enc` on its own)                        -> false (nothing to check the visibility of)
+ *
+ * A members-only share is committed as a stub `.md` plus a sibling `.enc` holding the encrypted body
+ * (SOW-016), so a two-file set is the normal case and the `.enc` carries no frontmatter to check.
+ *
+ * THE GATE THIS FEEDS IS THE WEBSITE'S, NOT THE LAST WORD. The PR gate reads changed PATHS only and cannot
+ * see visibility, so it admits any share at Network Member tier (owner ruling 2026-09-03). A paying member
+ * who hand-builds a pull request can therefore publish one public share without holding Content Creator.
+ * That was weighed and accepted: it is a rule being bent by an authenticated member inside their own folder,
+ * not an escalation, and closing it would mean either widening the gate beyond paths or migrating every
+ * existing share into a visibility-named folder.
+ *
+ * Exported for tests: this decides who may publish publicly, so it must be assertable without a Worker.
+ */
+export function isMembersOnlyShare(files, folder) {
+  if (!Array.isArray(files) || files.length === 0) return false;
+  if (typeof folder !== 'string' || !folder) return false;
+  const prefix = `members/${folder}/shares/`;
+  let sawMarkdown = false;
+  const allInFolder = files.every((f) => {
+    const path = typeof f === 'string' ? f : f?.path;
+    if (typeof path !== 'string' || !path.startsWith(prefix) || path.includes('..')) return false;
+    if (!path.endsWith('.md')) return true; // the .enc sibling carries no frontmatter to judge
+    sawMarkdown = true;
+    const content = typeof f === 'string' ? null : f?.content;
+    if (typeof content !== 'string') return false; // unreadable is not a licence to assume members-only
+    return /^visibility:\s*["']?members["']?\s*$/m.test(content);
+  });
+  return allInFolder && sawMarkdown;
+}
+
 export async function membershipAuthor(request, env, deps = {}) {
   const {
     fetchImpl = globalThis.fetch, fetchUser = githubFetchUser, authorize = authorizePaid,
@@ -141,9 +187,16 @@ export async function membershipAuthor(request, env, deps = {}) {
   // publish an article by naming it `comment-anything`. validateHostedRequest has already confirmed these
   // paths sit in the caller's own folder (or that a re-verified superadmin may target another), so by here the
   // paths are trustworthy. Fail-closed: an empty or MIXED set takes the stricter gate.
-  if (!isCommentOnly(payload?.files, folder)) {
+  // sow-293 adds the second exemption: a MEMBERS-ONLY share. Sharing opened to every paid member, but PUBLIC
+  // sharing stays creator-only, and unlike a comment that distinction is not visible in the path, so
+  // isMembersOnlyShare reads the frontmatter of the files the caller sent. Same fail-closed disposition as
+  // isCommentOnly: anything it cannot positively confirm takes the stricter gate.
+  if (!isCommentOnly(payload?.files, folder) && !isMembersOnlyShare(payload?.files, folder)) {
     if (!meetsTier(paid.tier, TIER.creator)) {
-      return { status: 403, body: { error: 'forbidden', message: 'publishing on gbti.network requires the Content Creator plan; upgrade at https://gbti.network' } };
+      const publicShare = String(payload?.itemId ?? '').startsWith('share-');
+      return { status: 403, body: { error: 'forbidden', message: publicShare
+        ? 'sharing publicly on gbti.network requires the Content Creator plan; post it to members only, or upgrade at https://gbti.network'
+        : 'publishing on gbti.network requires the Content Creator plan; upgrade at https://gbti.network' } };
     }
   }
 

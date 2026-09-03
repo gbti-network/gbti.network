@@ -61,6 +61,8 @@ import { membershipAdminOps } from './membership-admin-ops.mjs';
 import { membershipAdminMail } from './membership-admin-mail.mjs';
 import { membershipCouponUsage } from './membership-coupons-admin.mjs'; // SOW-119
 import { membershipInviteCreate, membershipInviteList, membershipInviteUpdate } from './membership-invites-admin.mjs'; // sow-231
+import { creatorApplicationSubmit, creatorApplicationList, creatorApplicationDecide } from './membership-creator-applications.mjs'; // sow-293
+import { sendCreatorApplicationAlert } from './creator-application-alert.mjs'; // sow-293
 import { membershipDiscordChannels } from './membership-discord-channels.mjs'; // SOW-100: channel names for the categories workspace
 import { handleActivity } from './membership-activity.mjs';
 import { handleTouch, SESSION_RE } from './membership-touches.mjs'; // SOW-059 P1b/P1c: touch capture + session binding
@@ -1189,6 +1191,41 @@ export default {
       // invite (KV) says who we handed one to. Same credentialed-CORS + allowCookie treatment as coupon-usage
       // so the WEBSITE coupon manager can issue over the cookie session (the extension's bearer call still
       // works). Person-keyed and note-bearing, so it is admin-gated and NEVER cached.
+      // sow-293: a member APPLIES for the Content Creator plan. Signed-in and not banned is the whole bar
+      // (authorizeMemberCheap): a free member applying to become a creator is the entire point of the route.
+      // Credentialed, because the website intake page calls it with the session cookie (POST -> CSRF gate in
+      // resolveIdentity). Never cached.
+      if (pathname === '/membership/creator-application') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'POST') {
+          const r = await creatorApplicationSubmit(request, env, { allowCookie: true });
+          // FAIL-SOFT, and fired only on a stored application. The record is already in KV, so a notice that
+          // fails costs the owner's awareness of a pending application and never the application itself.
+          // Through waitUntil so it does not delay the response the applicant is waiting on.
+          if (r.status === 200 && r.record) {
+            const alert = sendCreatorApplicationAlert(env, r.record);
+            if (ctx?.waitUntil) ctx.waitUntil(alert); else await alert;
+          }
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+
+      // sow-293: the superadmin applications lane. Listing shows people's prose about themselves and deciding
+      // GRANTS A REAL TIER, so both sit at the superadmin bar rather than the admin one. Never cached.
+      if (pathname === '/membership/admin/creator-applications') {
+        const cors = corsHeaders(request, env, { credentials: true });
+        if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+        if (method === 'GET') {
+          const r = await creatorApplicationList(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+        if (method === 'POST') {
+          const r = await creatorApplicationDecide(request, env, { allowCookie: true });
+          return json(r.body, r.status, { ...cors, 'Cache-Control': 'no-store' });
+        }
+      }
+
       if (pathname === '/membership/admin/invites') {
         const cors = corsHeaders(request, env, { credentials: true });
         if (method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });

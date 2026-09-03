@@ -93,17 +93,37 @@ export function optimisticShareItem({ res, input = {}, body = '', now = null } =
 export const SHARE_LOCKED_STATES = new Set(['expired', 'cancelled', 'none', 'banned']);
 
 /**
- * @returns {'no-client'|'loading'|'locked'|'trial'|'not-creator'|'composer'}
+ * sow-293 INVERTED this gate, by owner ruling of 2026-09-03. It used to withhold the WHOLE composer from a
+ * paid member below Content Creator (the sow-218 `not-creator` splash). Sharing is now open to every paid
+ * member, and the tier gates the VISIBILITY instead: see canSharePublicly below.
+ *
+ * `not-creator` is deliberately still in the union and is still reachable from canSharePublicly's caller,
+ * because the upgrade nudge did not disappear, it MOVED: it now appears against the public option rather
+ * than against the composer.
+ *
+ * @returns {'no-client'|'loading'|'locked'|'trial'|'composer'}
  */
-export function shareComposerView({ hasClient = false, membership, tier = null } = {}) {
+export function shareComposerView({ hasClient = false, membership } = {}) {
   if (!hasClient) return 'no-client';
   if (membership === undefined) return 'loading';
   if (SHARE_LOCKED_STATES.has(membership)) return 'locked';
   if (membership === 'trialing') return 'trial';
-  // FAIL OPEN HERE, ON PURPOSE, and only here. An ABSENT tier shows the composer, matching the existing
-  // `unknown` membership behaviour: a down status oracle must not silently strip posting from a real Content
-  // Creator, and the two server checks remain the authority either way. A tier that IS present and is not
-  // creator is a real answer and gets the upgrade notice.
-  if (tier && tier !== 'creator') return 'not-creator';
   return 'composer';
+}
+
+/**
+ * sow-293: may this member post a PUBLIC share? A members-only share needs nothing beyond the composer.
+ *
+ * FAIL OPEN ON AN ABSENT TIER, ON PURPOSE, carried over verbatim from the gate this replaces. A down status
+ * oracle must not silently strip public posting from a real Content Creator, and the affordance is not the
+ * boundary: the Worker reads the file's own `visibility` before it commits anything (isMembersOnlyShare in
+ * workers/signup/membership-author.mjs), so the worst case here is a member composing a public share and
+ * being refused at submit, which is the same failure the composer already risks when the oracle is down.
+ *
+ * A tier that IS present and is not creator is a real answer, and gets the upgrade nudge.
+ */
+export function canSharePublicly({ membership, tier = null } = {}) {
+  if (SHARE_LOCKED_STATES.has(membership) || membership === 'trialing') return false;
+  if (!tier) return true; // absent tier: see the fail-open note above
+  return tier === 'creator';
 }

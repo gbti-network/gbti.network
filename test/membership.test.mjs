@@ -546,48 +546,80 @@ test('contentTypesTouched reports published types', () => {
   assert.deepEqual(types, ['post', 'profile', 'project']); // .sort() is alphabetical; sow-196 moved product -> project
 });
 
-// sow-218: a SHARE is Content Creator work, and nothing asserted it until now.
+// sow-293 REVERSES the sow-218 rule these tests used to pin, by owner ruling of 2026-09-03. They are
+// rewritten rather than deleted, because the reversal is narrow and the half that did NOT change is now the
+// easier half to break by accident.
 //
-// The rule holds by an indirect route that is easy to break without noticing: `shares` is deliberately absent
-// from CONTENT_DIRS (classify-pr.mjs:19), because a share is the member's own activity stream rather than a
-// reviewable content dir, so contentTypesTouched returns an EMPTY set for a share-only PR and requiredTierFor
-// falls to its fail-closed default of creator. The right answer arrives via a default rather than a decision
-// about shares, so pin it: adding 'shares' to CONTENT_DIRS, or softening that default, must fail here.
-test('sow-218: a Network Member posting an own-folder SHARE => rejected-not-creator', () => {
+// WAS (sow-218): any share required Content Creator.
+// IS  (sow-293): a member's OWN-FOLDER share sits on the Network Member floor, because sharing opened to
+//                every paid member. Only PUBLIC sharing stays Content Creator, and the gate cannot see
+//                visibility (it reads changed PATHS only, by design), so the website enforces that half and
+//                the gate admits own-folder shares at member tier. The accepted cost is recorded on
+//                requiredTierFor: a paying member who hand-builds a PR can publish one public share.
+//
+// The relaxation is OPT-IN (`{ ownFolder: true }`), so contributing a share into SOMEBODY ELSE'S folder still
+// demands creator. That was not part of the ruling and gets the strict default; the test below pins it.
+test('sow-293: a Network Member posting an OWN-FOLDER share => pass (reverses sow-218)', () => {
   const d = decide({ paths: ['members/octocat/shares/2026-08-11-hello.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member });
-  assert.equal(d.check, 'fail');
-  assert.equal(d.label, 'rejected-not-creator');
-  assert.equal(d.autoMerge, false);
+  assert.equal(d.check, 'pass', 'sharing opened to every paid member on 2026-09-03');
+  assert.equal(d.autoMerge, true);
 });
 
-test('sow-218: a Content Creator posting an own-folder SHARE => pass', () => {
+test('sow-293: a Content Creator posting an own-folder SHARE => pass', () => {
   const d = decide({ paths: ['members/octocat/shares/2026-08-11-hello.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.creator });
   assert.equal(d.check, 'pass');
   assert.equal(d.autoMerge, true);
 });
 
-test('sow-218: a share bundled with a comment still requires creator, never the comment tier', () => {
-  // requiredTierFor only relaxes to member when EVERY touched type is a comment. A share contributes no type
-  // at all, so the set is ['comment'] and would relax -- except the empty-share case is exactly why the mixed
-  // path must be checked. Pinned so a future refactor cannot let a share ride in on a comment's lower bar.
+test('sow-293: contributing a share to ANOTHER member\'s folder still requires creator', () => {
+  // The half the ruling did NOT change, and the one a future refactor is most likely to relax by accident,
+  // because it runs through the same requiredTierFor. It gets the strict default by not opting in.
+  const d = decide({ paths: ['members/someone-else/shares/x.md'], role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member });
+  assert.equal(d.check, 'fail', 'a share in someone else\'s stream was never part of the member-floor ruling');
+  assert.equal(d.label, 'rejected-not-creator');
+});
+
+test('sow-293: a share bundled with a comment rides the member floor in the OWN folder', () => {
+  // Both types now sit on the member floor, so the mixed set relaxes. Pinned because the old rule was the
+  // opposite and the bundling case is exactly where a share used to be able to hide.
   const d = decide({
     paths: ['members/octocat/shares/2026-08-11-hello.md', 'members/octocat/comments/c.md'],
     role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member,
   });
-  assert.equal(d.check, 'fail', 'a share must not inherit the comment tier');
-  assert.equal(d.label, 'rejected-not-creator');
+  assert.equal(d.check, 'pass');
+
+  // ...but bundling a share with a POST still demands creator: the post is what raises the floor.
+  const withPost = decide({
+    paths: ['members/octocat/shares/s.md', 'members/octocat/posts/p/index.md'],
+    role: ROLE.member, effective: PAID, ownedFolder: 'octocat', tier: TIER.member,
+  });
+  assert.equal(withPost.check, 'fail', 'a post in the bundle must still raise the floor to creator');
+  assert.equal(withPost.label, 'rejected-not-creator');
 });
 
-test('sow-218: contentTypesTouched REPORTS an unclassified own-folder path instead of dropping it', () => {
-  // The dropping was the bug. A reported TYPE_OTHER is what makes requiredTierFor able to see a share at all.
-  assert.deepEqual(contentTypesTouched(['members/octocat/shares/x.md'], 'octocat'), [TYPE_OTHER]);
+test('sow-293: contentTypesTouched CLASSIFIES a share, and still reports anything else as TYPE_OTHER', () => {
+  // A share reports as 'share' now rather than falling through to TYPE_OTHER. `shares` stays OUT of
+  // CONTENT_DIRS, so isContributionToFolder still does not treat a share as a reviewable contribution: the
+  // two questions that one list used to answer together are now separate.
+  assert.deepEqual(contentTypesTouched(['members/octocat/shares/x.md'], 'octocat'), ['share']);
+  // The fail-closed fallback is untouched for everything else, which is the sow-218 fix this must not undo.
   assert.deepEqual(contentTypesTouched(['members/octocat/favorites.yml'], 'octocat'), [TYPE_OTHER]);
   assert.deepEqual(
     contentTypesTouched(['members/octocat/shares/x.md', 'members/octocat/comments/c.md'], 'octocat').sort(),
-    ['comment', TYPE_OTHER].sort(),
+    ['comment', 'share'],
   );
   // A path outside the owned folder is still not this function's business; other branches handle those.
   assert.deepEqual(contentTypesTouched(['members/someone-else/shares/x.md'], 'octocat'), []);
+});
+
+test('sow-293: the share relaxation is OPT-IN, so the default requiredTierFor is unchanged', () => {
+  // The whole safety of this change rests on the default staying strict, since the contribution call site
+  // gets it by simply not opting in. If this ever flips, a share reaches the member floor everywhere.
+  assert.equal(requiredTierFor(['share']), TIER.creator, 'the DEFAULT must stay strict');
+  assert.equal(requiredTierFor(['share'], { ownFolder: true }), TIER.member);
+  assert.equal(requiredTierFor(['share', 'comment'], { ownFolder: true }), TIER.member);
+  assert.equal(requiredTierFor(['share', 'post'], { ownFolder: true }), TIER.creator, 'a post still raises the floor');
+  assert.equal(requiredTierFor([TYPE_OTHER], { ownFolder: true }), TIER.creator, 'the unclassified fallback must not relax');
 });
 
 test('sow-218: requiredTierFor demands creator as soon as ONE unclassified type is present', () => {

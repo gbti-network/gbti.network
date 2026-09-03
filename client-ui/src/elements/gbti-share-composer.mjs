@@ -1,7 +1,8 @@
 // <gbti-share-composer> (SOW-018): the extension-only authoring surface for member "Shares" (status updates).
 // Shares are NOT a public website experience; this composer lives in the GBTI client/extension. It encodes the
 // access model directly from client.status().membership:
-//   - paid + Content Creator tier -> the full composer (note + optional link + visibility), via client.postShare()
+//   - paid, ANY tier (sow-293) -> the full composer. Content Creator unlocks the PUBLIC audience; a Network
+//     Member posts members-only. The tier gates the VISIBILITY now, not the composer (reverses sow-218).
 //   - paid on a LOWER tier (sow-218) -> an upgrade notice, because a share PR needs creator at the gate
 //   - trialing       -> read-only notice: a trial may READ the community Shares stream but posting is paid
 //   - expired/cancelled/none/banned (Locked) -> a lock splash (renew to rejoin); no composer
@@ -11,7 +12,7 @@
 import { GbtiElement, define, esc } from '../base.mjs';
 import { submitAck, failHint } from '../workspace-core.mjs'; // SOW-072 P2: the one consistent submit acknowledgement
 import { topicsFromJson } from '../topic-picker-core.mjs'; // SOW-087: the flat topic vocabulary for the category select
-import { optimisticShareItem, shareComposerView, normalizeTagInput } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
+import { optimisticShareItem, shareComposerView, canSharePublicly, normalizeTagInput } from '../share-post-core.mjs'; // SOW-092: the reader-ready item for the instant redirect; sow-303: the tags normalizer
 // sow-192 Phase E: the Note step's Write/Preview toggle renders markdown with the SAME node-free, escape-first,
 // XSS-hardened helpers the block editor uses (no client.preview needed, so the preview is portable to the
 // cookie-adapter hosts that lack it).
@@ -219,8 +220,9 @@ class GbtiShareComposer extends GbtiElement {
         return this.set(this.css(CSS) + `<div class="card"><p class="sub">Loading…</p></div>`);
       case 'locked': return this._renderLocked();
       case 'trial': return this._renderTrial();
-      case 'not-creator': return this._renderNotCreator();
-      default: return this._renderComposer(); // paid creator, or an unresolved tier
+      // sow-293: 'not-creator' is gone from this switch. The upgrade nudge did not disappear, it MOVED to
+      // the audience step, where it explains why Public is unavailable. See _applyPublicLock.
+      default: return this._renderComposer(); // any paid member, or an unresolved tier
     }
   }
 
@@ -239,13 +241,6 @@ class GbtiShareComposer extends GbtiElement {
   // sow-218: a paid member on a tier below Content Creator. Named for what they ARE rather than what they lack,
   // and it states the tier plainly, because "your PR was rejected" after writing a Share is the experience this
   // exists to prevent.
-  _renderNotCreator() {
-    this.set(this.css(CSS) + this._noticeHtml(
-      'Posting Shares is a Content Creator perk',
-      'Your membership covers reading the community stream. Posting Shares, articles, projects and prompts is part of Content Creator membership. <a href="https://gbti.network/membership/">See the membership tiers</a> to upgrade.',
-      '✍️',
-    ));
-  }
 
   _renderTrial() {
     this.set(this.css(CSS) + this._noticeHtml(
@@ -313,11 +308,15 @@ class GbtiShareComposer extends GbtiElement {
               <span class="at">${IC.lock} Members only</span>
               <span class="ad">Signed-in members of the network, nobody else.</span>
             </button>
-            <button class="audcard" type="button" data-vis="public" aria-pressed="false">
+            <button class="audcard" type="button" data-vis="public" aria-pressed="false" data-public>
               <span class="at">${IC.globe} Public</span>
               <span class="ad">Anyone can read it, and it can be indexed.</span>
             </button>
           </div>
+          <p class="sub" data-public-nudge hidden>
+            Sharing publicly is part of Content Creator membership.
+            <a href="https://gbti.network/creator-application/">Apply to become a Content Creator</a>.
+          </p>
         </section>
 
         <div class="wizfoot">
@@ -345,6 +344,7 @@ class GbtiShareComposer extends GbtiElement {
       clearTimeout(this._ogTimer);
       this._ogTimer = setTimeout(() => this._fetchPreview(), 400);
     });
+    this._applyPublicLock();
     this._go(1);
     this._loadTopics();
   }
@@ -407,7 +407,34 @@ class GbtiShareComposer extends GbtiElement {
     }
   }
 
+  /**
+   * sow-293: Content Creator unlocks the PUBLIC audience. A Network Member gets the composer and posts
+   * members-only, with the upgrade nudge explaining why the second chip is unavailable.
+   *
+   * This is an AFFORDANCE, not the boundary. The Worker reads the share's own `visibility` out of the files
+   * it is about to commit and refuses a public one from a non-creator (isMembersOnlyShare in
+   * workers/signup/membership-author.mjs), so poking the DOM buys nothing. It is here so a member does not
+   * compose a public share and meet the wall at submit.
+   */
+  _applyPublicLock() {
+    const allowed = canSharePublicly({ membership: this._membership, tier: this._tier });
+    const chip = this.$('[data-public]');
+    const nudge = this.$('[data-public-nudge]');
+    if (chip) {
+      chip.disabled = !allowed;
+      chip.setAttribute('aria-disabled', allowed ? 'false' : 'true');
+      chip.classList.toggle('locked', !allowed);
+    }
+    if (nudge) nudge.hidden = allowed;
+    // If the tier resolved LATE and public was already chosen, fall back rather than leaving a selection the
+    // server will refuse. Silent correction is right here: the nudge above already says why.
+    if (!allowed && this._visibility === 'public') this._selectAudience('members');
+  }
+
   _selectAudience(vis) {
+    // Refuse the upgrade rather than trusting the caller: _onCardClick delegates from a DOM event, and a
+    // disabled attribute is a hint, not an enforcement.
+    if (vis === 'public' && !canSharePublicly({ membership: this._membership, tier: this._tier })) return;
     this._visibility = vis === 'public' ? 'public' : 'members';
     for (const c of this.$$('[data-vis]')) {
       const on = c.dataset.vis === this._visibility;

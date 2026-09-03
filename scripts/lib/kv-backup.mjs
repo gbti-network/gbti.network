@@ -41,7 +41,11 @@ export const BACKUP_PREFIX = 'backup:';
 // DELETES that source, so the justification expires at the instant of that commit and the blob becomes the
 // ONLY copy of every ban and every grandfather grant. THE REASON A CONTROL WAS SAFE CAN EXPIRE WITHOUT THE
 // CONTROL ITSELF CHANGING, which is why this line moved in the same pass rather than in a later cleanup.
-export const BACKED_UP_PREFIXES = ['activity:', 'follows:', 'prefs:', 'conv:', 'coupon-grant:', 'redemption:', 'invite:', 'overrides:'];
+// sow-293: 'application:' is the ONLY copy of a creator application. It is prose a person wrote about
+// themselves, it exists nowhere in git by design (the storage boundary), and losing it loses both the
+// pending review queue and the record of who was already turned down. This list is EXPLICIT, not a
+// wildcard, so a new store is silently outside the backup until its prefix is added here.
+export const BACKED_UP_PREFIXES = ['activity:', 'follows:', 'prefs:', 'conv:', 'coupon-grant:', 'redemption:', 'invite:', 'overrides:', 'application:'];
 export const DEFAULT_RETENTION_SECONDS = 30 * 24 * 60 * 60; // 30 days
 export const SNAPSHOT_KEY = (iso) => `${BACKUP_PREFIX}${iso}`;
 

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { authorFromPath, optimisticShareItem, shareComposerView, SHARE_LOCKED_STATES } from '../client-ui/src/share-post-core.mjs';
+import { authorFromPath, optimisticShareItem, shareComposerView, canSharePublicly, SHARE_LOCKED_STATES } from '../client-ui/src/share-post-core.mjs';
 
 test('authorFromPath parses the owning member from a publish result path', () => {
   assert.equal(authorFromPath('members/atwellpub/shares/20260709120000-hello.md'), 'atwellpub');
@@ -50,19 +50,36 @@ test('shareComposerView: every membership and tier lands on the state the member
   }
   assert.equal(v({ hasClient: true, membership: 'trialing', tier: 'creator' }), 'trial');
 
-  // THE OWNER'S 2026-08-28 RULING, which is the whole reason this test exists. A paid Network Member is a
-  // real, answered tier and gets the upgrade notice rather than a composer whose PR the gate will reject.
-  assert.equal(v({ hasClient: true, membership: 'paid', tier: 'member' }), 'not-creator');
+  // sow-293 REVERSED the owner's 2026-08-28 ruling on 2026-09-03. A paid Network Member used to get an
+  // upgrade splash INSTEAD of the composer; sharing is now open to every paid member and the tier gates the
+  // VISIBILITY instead. The upgrade nudge did not vanish, it moved to the public option (canSharePublicly).
+  assert.equal(v({ hasClient: true, membership: 'paid', tier: 'member' }), 'composer',
+    'sharing opened to every paid member on 2026-09-03; the tier now gates visibility, not the composer');
   assert.equal(v({ hasClient: true, membership: 'paid', tier: 'creator' }), 'composer');
-
-  // FAIL OPEN, and only here. An absent tier means the oracle did not answer, not that the answer was "no",
-  // and the server refuses a non-creator share in two independent places regardless. Stripping posting from a
-  // real Content Creator because a status call failed would be the worse error.
   for (const t of [null, undefined, '']) {
-    assert.equal(v({ hasClient: true, membership: 'paid', tier: t }), 'composer',
-      'an unresolved tier shows the composer; the server is the authority');
+    assert.equal(v({ hasClient: true, membership: 'paid', tier: t }), 'composer');
   }
   assert.equal(v({ hasClient: true, membership: 'unknown', tier: null }), 'composer');
+});
+
+test('sow-293 canSharePublicly: the tier gates PUBLIC sharing, and nothing else', () => {
+  const p = (o) => canSharePublicly(o);
+  assert.equal(p({ membership: 'paid', tier: 'creator' }), true);
+  assert.equal(p({ membership: 'paid', tier: 'member' }), false, 'a Network Member shares to members only');
+
+  // Anyone who cannot reach the composer at all certainly cannot post publicly. Asserted rather than assumed,
+  // because these two functions are read side by side and a reader will expect them to agree.
+  for (const m of ['expired', 'cancelled', 'none', 'banned', 'trialing']) {
+    assert.equal(p({ membership: m, tier: 'creator' }), false, `${m} must not post publicly even holding creator`);
+  }
+
+  // FAIL OPEN ON AN ABSENT TIER, carried over verbatim from the gate this replaces. An absent tier means the
+  // oracle did not answer, not that the answer was no, and stripping public posting from a real Content
+  // Creator because a status call failed is the worse error. The Worker reads the file's own visibility
+  // before committing, so the affordance is not the boundary.
+  for (const t of [null, undefined, '']) {
+    assert.equal(p({ membership: 'paid', tier: t }), true, 'an unresolved tier fails OPEN; the Worker is the authority');
+  }
 });
 
 test('SHARE_LOCKED_STATES is the single definition, and the element no longer keeps its own copy', () => {
