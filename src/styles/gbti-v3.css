@@ -1095,6 +1095,29 @@ a.hp-model:hover, a.hp-kind:hover { filter: brightness(.97); }
 .price-sum-cta { display: flex; align-items: center; gap: 5px; font-family: var(--f-mono); font-size: 11.5px; color: var(--green-700); flex: none; white-space: nowrap; }
 .price-chev { transition: transform .18s ease; }
 .price-acc[open] .price-chev { transform: rotate(180deg); }
+
+/* sow-310: the summary row STACKS on a phone. As a single row it is icon | text | control, and the control
+   is `flex: none` + `nowrap`, so it claims its full intrinsic width first and the sentence takes whatever is
+   left. Measured on the live site at a 390px viewport: the control rendered 145px and the sentence 111px, so
+   the control was WIDER than the sentence it introduces and the copy wrapped to six lines.
+   Wrapping (rather than `flex-direction: column`) keeps the icon beside the first line of text, which is the
+   relationship the icon is there to express, and moves only the control to its own row. That row then gets a
+   44px minimum height and space-between, so the chevron sits at the right edge and reads as a disclosure
+   control rather than a floating label. 560px matches the breakpoint the neighbouring .hp-row rule uses. */
+@media (max-width: 560px) {
+  .price-sum { flex-wrap: wrap; align-items: flex-start; row-gap: 2px; padding: 14px 16px; }
+  .price-sum-i { margin-top: 3px; }
+  .price-sum-t { flex: 1 1 0; }
+  .price-sum-cta {
+    flex: 1 0 100%;
+    justify-content: space-between;
+    min-height: 44px;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line);
+  }
+}
 .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 0 16px 16px; align-items: stretch; }
 .price-card { display: flex; flex-direction: column; border: 1.5px solid var(--line); border-radius: var(--r); padding: 18px; }
 .price-card-hl { border-color: var(--green); background: var(--green-tint); }
