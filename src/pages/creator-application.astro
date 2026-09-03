@@ -1,0 +1,144 @@
+---
+// sow-293: the Content Creator application intake.
+//
+// Content Creator stopped being something you buy and became something you apply for (owner request,
+// 2026-08-29), so this is the front door. It posts to the signup Worker's /membership/creator-application,
+// which stores the application in KV keyed by github_id and emails the owner.
+//
+// SIGN-IN IS REQUIRED, and not as a formality: approval GRANTS A TIER to a github_id, so an anonymous
+// application could never be acted on. The page renders for everyone and swaps to a sign-in prompt when
+// there is no session, rather than redirecting, so a visitor can read what they are applying for first.
+//
+// THREE FIELDS (owner answer, 2026-09-03): why they want to contribute, links to prior writing (optional),
+// and topics they would cover. The two optional ones exist so the owner can judge an application without a
+// follow-up email; they are never a reason to refuse a submission.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SIGNUP_BASE } from '../lib/membership';
+
+const MAX_WHY = 2000;
+const MAX_LINKS = 600;
+const MAX_TOPICS = 600;
+---
+<BaseLayout
+  title="Apply to become a Content Creator"
+  description="Apply for the Content Creator plan on GBTI Network: publish articles, projects and prompts, and share publicly to the network."
+>
+  <section class="band">
+    <div class="wrap ca-wrap">
+      <h1 class="h2">Apply to become a Content Creator</h1>
+      <p class="body-sm muted mt8">
+        Content Creator is granted by application, not by checkout. Tell us what you would write and we will
+        get back to you. There is no payment step.
+      </p>
+
+      <ul class="ca-perks body-sm mt16">
+        <li>Publish articles, projects and prompts under your own profile</li>
+        <li>Share publicly to the network, not only to members</li>
+        <li>No six-hour limit between shares</li>
+      </ul>
+
+      <!-- Signed out: the form is useless without an identity to grant the tier to, so say so plainly. -->
+      <div class="ca-signin" data-ca-signin hidden>
+        <p class="body-sm mt16">
+          <a class="btn" href="/login/?return_to=/creator-application/">Sign in with GitHub to apply</a>
+        </p>
+        <p class="body-sm muted mt8">
+          Applying needs an account, because approval grants the plan to your GitHub identity.
+        </p>
+      </div>
+
+      <form class="ca-form mt16" data-ca-form hidden>
+        <label class="ca-label" for="ca-why">Why do you want to contribute as a writer?</label>
+        <textarea id="ca-why" name="why" rows="7" maxlength={MAX_WHY} required
+          placeholder="What draws you to writing for this network, and what would you bring to it?"></textarea>
+
+        <label class="ca-label mt16" for="ca-links">Links to prior writing <span class="muted">(optional)</span></label>
+        <textarea id="ca-links" name="links" rows="3" maxlength={MAX_LINKS}
+          placeholder="Anything you have published before. One per line."></textarea>
+
+        <label class="ca-label mt16" for="ca-topics">What topics would you cover? <span class="muted">(optional)</span></label>
+        <textarea id="ca-topics" name="topics" rows="3" maxlength={MAX_TOPICS}
+          placeholder="The subjects you would want to write about."></textarea>
+
+        <div class="ca-foot mt16">
+          <button class="btn" type="submit" data-ca-submit>Send application</button>
+          <span class="ca-msg body-sm" role="status" aria-live="polite" data-ca-msg></span>
+        </div>
+      </form>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .ca-wrap { max-width: 720px; }
+  .ca-perks { padding-left: 20px; color: var(--fg-mute); }
+  .ca-perks li { margin: 4px 0; }
+  .ca-label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+  .ca-form textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--bg-card); color: var(--fg); font: inherit; font-size: 14px; resize: vertical;
+  }
+  .ca-form textarea:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+  .ca-foot { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .ca-msg.err { color: var(--danger, #c0392b); }
+  .ca-msg.ok { color: var(--brand); }
+</style>
+
+<script define:vars={{ SIGNUP_BASE }}>
+  // Progressive: the page is readable with no JS; only the submit needs it. The form and the sign-in prompt
+  // are BOTH hidden in markup and exactly one is revealed here, so a JS failure shows neither a dead form nor
+  // a sign-in prompt to somebody already signed in.
+  (function () {
+    const form = document.querySelector('[data-ca-form]');
+    const signin = document.querySelector('[data-ca-signin]');
+    const msg = document.querySelector('[data-ca-msg]');
+    const submit = document.querySelector('[data-ca-submit]');
+    if (!form || !signin) return;
+
+    const cookie = (name) => {
+      const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)'));
+      return m ? decodeURIComponent(m[1]) : null;
+    };
+
+    // A readable gbti_csrf means a website session exists. Same cheap check the admin page and LockedBody use:
+    // no session means no network call at all.
+    const csrf = cookie('gbti_csrf');
+    if (!csrf) { signin.hidden = false; return; }
+    form.hidden = false;
+
+    const say = (text, cls) => { if (msg) { msg.textContent = text; msg.className = 'ca-msg body-sm' + (cls ? ' ' + cls : ''); } };
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const why = form.querySelector('#ca-why').value.trim();
+      if (!why) { say('Tell us why you want to contribute.', 'err'); return; }
+      if (submit) submit.disabled = true;
+      say('Sending…');
+      try {
+        const res = await fetch(SIGNUP_BASE + '/membership/creator-application', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'X-GBTI-CSRF': csrf },
+          body: JSON.stringify({
+            why,
+            links: form.querySelector('#ca-links').value.trim(),
+            topics: form.querySelector('#ca-topics').value.trim(),
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (res.ok) {
+          form.hidden = true;
+          say('Thank you. Your application is in, and we will be in touch.', 'ok');
+          return;
+        }
+        // Report what the server actually said rather than a generic failure: "you were already approved" and
+        // "that answer is too long" need different things from the reader.
+        say((data && data.message) || 'Something went wrong. Please try again.', 'err');
+      } catch {
+        say('Could not reach the network. Please try again.', 'err');
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
+  })();
+</script>

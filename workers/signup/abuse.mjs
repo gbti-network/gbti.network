@@ -46,14 +46,22 @@ export async function verifyTurnstile({ token, secret, remoteIp }, fetchImpl = g
  * @param {object} a
  * @param {object} a.kv               KV namespace: get(key,{type}) and put(key,value,{expirationTtl}).
  * @param {string} a.ip               the connecting IP (CF-Connecting-IP).
+ * @param {string} [a.id]             sow-293: an explicit SUBJECT to key on instead of the IP, for a
+ *                                    per-MEMBER limit. Wins over `ip` when present.
  * @param {number} [a.limit]          max requests per window (default 5).
  * @param {number} [a.windowSeconds]  window length in seconds (default 600 = 10 minutes).
  * @param {string} [a.prefix]         KV key prefix (default 'rl:signup:').
  * @param {number} [a.now]            epoch ms, for tests.
  */
-export async function rateLimit({ kv, ip, limit = 5, windowSeconds = 600, prefix = 'rl:signup:', now = Date.now() }) {
-  if (!kv || !ip) return { allowed: false, count: 0, limit };
-  const key = `${prefix}${ip}`;
+// sow-293: `id` exists because two callers already keyed this on a github_id by passing it AS `ip`
+// (membership-author's rl:author: and rl:enroll:). That works and is not a bug, but a per-member limit
+// written as `ip: githubId` reads as one, and the next person to add a limiter copies whichever line they
+// happen to see. An IP key is wrong for a per-member rule anyway: a shared NAT throttles strangers together
+// and a phone hopping networks defeats it. Existing callers are untouched; `ip` still works exactly as before.
+export async function rateLimit({ kv, ip, id = null, limit = 5, windowSeconds = 600, prefix = 'rl:signup:', now = Date.now() }) {
+  const subject = id ?? ip;
+  if (!kv || !subject) return { allowed: false, count: 0, limit };
+  const key = `${prefix}${subject}`;
   const nowSec = Math.floor(now / 1000);
   let record;
   try {

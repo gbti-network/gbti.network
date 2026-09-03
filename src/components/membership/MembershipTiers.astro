@@ -24,6 +24,10 @@
 // Fail closed: an unknown tier resolves DOWN, never up.
 import { TIER_DISPLAY } from '../../lib/tiers';
 import { SIGNUP_BASE } from '../../lib/membership';
+import { tierCta } from '../../lib/tier-cta.mjs'; // sow-293: one CTA decision, shared by the render and the hydrate
+
+/** The build-time CTA: nobody is signed in when a static page renders, so this is the signed-out branch. */
+const serverCta = (t: { key: string; label: string }) => tierCta({ key: t.key, label: t.label, signedIn: false, myTier: 'none' });
 
 interface Props {
   /** The heading tag for the block title. 'h1' when the plans are the page hero, else 'h2'. */
@@ -100,16 +104,15 @@ function revenueFragments(s: string): { text: string; href?: string }[] {
         )}
 
         <div class="mt-cta-wrap">
-          {isFree(t) ? (
-            <a href="/login/" class="btn btn-primary mt-cta" data-mt-cta data-key={t.key}>Create a free account</a>
-          ) : (
-            <a
-              href={`/login/?return_to=${encodeURIComponent(`/membership/?plan=${t.key}`)}`}
-              class:list={['btn', t.key === 'member' ? 'btn-primary' : 'btn-ghost', 'mt-cta']}
-              data-mt-cta
-              data-key={t.key}
-            >Join as {t.label}</a>
-          )}
+          {/* sow-293: the SAME decision the client rewiring uses (src/lib/tier-cta.mjs), so the rendered
+              button and the hydrated one cannot disagree. At build time nobody is signed in, which is the
+              signed-out branch. Content Creator resolves to the application page, never a checkout. */}
+          <a
+            href={serverCta(t).href ?? '/login/'}
+            class:list={['btn', serverCta(t).primary ? 'btn-primary' : 'btn-ghost', 'mt-cta']}
+            data-mt-cta
+            data-key={t.key}
+          >{serverCta(t).text}</a>
         </div>
       </article>
     ))}
@@ -168,6 +171,7 @@ function revenueFragments(s: string): { text: string; href?: string }[] {
   // publish, comment, or read member content) stays server-side in the Worker + the gate; this script reads the
   // UNTRUSTED member signal purely to choose which CTA to show. Fail closed. Pricing is annual only.
   import { onMemberSignal, readMemberSignal } from '../../lib/member-signal';
+  import { tierCta } from '../../lib/tier-cta.mjs'; // sow-293: the CTA decision, unit-tested
 
   const PERIOD = 'annual';
   const RANK: Record<string, number> = { none: 0, member: 1, creator: 2 };
@@ -200,18 +204,12 @@ function revenueFragments(s: string): { text: string; href?: string }[] {
         cta.classList.remove('btn-ghost');
         (cta as HTMLElement).style.pointerEvents = '';
 
-        if (signedIn && myRank === rank) {
-          setCta(cta, 'Your current plan', null, true);
-        } else if (signedIn && myRank > rank) {
-          setCta(cta, `Included in ${myTier === 'creator' ? 'Content Creator' : 'your plan'}`, null, true);
-        } else if (signedIn) {
-          // A real, same-site checkout hand-off for this tier at the annual price.
-          setCta(cta, myRank > 0 ? `Upgrade to ${label}` : `Join as ${label}`, () => startCheckout(key), false);
-        } else {
-          // Signed out: create a free account, then return here pre-selected to finish checkout.
-          const ret = encodeURIComponent(`/membership/?plan=${key}`);
-          setCta(cta, `Join as ${label}`, `/login/?return_to=${ret}`, false, key === 'member');
-        }
+        // sow-293: the DECISION moved to src/lib/tier-cta.mjs so it can be unit-tested. The rule that made
+        // that worth doing is "Content Creator must never reach checkout" (it is apply-only, and there is no
+        // price to check out against), and a rule living only inside a component script is one no test can
+        // reach. This loop now just renders whatever tierCta returns.
+        const plan = tierCta({ key, label, signedIn, myTier });
+        setCta(cta, plan.text, plan.checkout ? () => startCheckout(key) : plan.href, plan.disabled, plan.primary);
       }
     }
 

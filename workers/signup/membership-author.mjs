@@ -87,6 +87,27 @@ export function isCommentOnly(files, folder) {
  *
  * Exported for tests: this decides who may publish publicly, so it must be assertable without a Worker.
  */
+/**
+ * sow-293: does this file set touch the caller's own shares/ folder at all?
+ *
+ * Deliberately SEPARATE from isMembersOnlyShare, which additionally reads the visibility. The slow mode must
+ * key on "this is a share" and nothing else: if it reused the visibility check, then a future change to what
+ * counts as members-only would silently change who is throttled, in the permissive direction, with nothing
+ * reporting it. Two rules, two predicates.
+ */
+export function isShareSet(files, folder) {
+  if (!Array.isArray(files) || files.length === 0) return false;
+  if (typeof folder !== 'string' || !folder) return false;
+  const prefix = `members/${folder}/shares/`;
+  return files.some((f) => {
+    const path = typeof f === 'string' ? f : f?.path;
+    return typeof path === 'string' && path.startsWith(prefix) && !path.includes('..');
+  });
+}
+
+/** sow-293: the per-member share slow mode. One share per six hours, members only, creators exempt. */
+export const SHARE_SLOW_MODE_SECONDS = 6 * 60 * 60;
+
 export function isMembersOnlyShare(files, folder) {
   if (!Array.isArray(files) || files.length === 0) return false;
   if (typeof folder !== 'string' || !folder) return false;
@@ -197,6 +218,21 @@ export async function membershipAuthor(request, env, deps = {}) {
       return { status: 403, body: { error: 'forbidden', message: publicShare
         ? 'sharing publicly on gbti.network requires the Content Creator plan; post it to members only, or upgrade at https://gbti.network'
         : 'publishing on gbti.network requires the Content Creator plan; upgrade at https://gbti.network' } };
+    }
+  }
+
+  // sow-293: the SLOW MODE. Sharing just opened to every paid member, which is a new spam surface, so a
+  // Network Member posts at most one share per six hours. An approved Content Creator is exempt (owner
+  // answer 4, 2026-08-29): they passed human review, which is what the throttle is a substitute for.
+  //
+  // THE EXEMPTION MUST NOT BECOME THE FAIL-OPEN, and this is the only interesting line here. meetsTier
+  // returns FALSE for an absent or unresolvable tier, so a caller whose tier could not be determined is
+  // THROTTLED rather than waved through. That is the safe direction and it is asserted in the tests, because
+  // the natural refactor (`if (isCreator) skip`) inverts it silently the moment the tier lookup degrades.
+  if (isShareSet(payload?.files, folder) && !meetsTier(paid.tier, TIER.creator)) {
+    const slow = await limiter({ kv, id: githubId, limit: 1, windowSeconds: SHARE_SLOW_MODE_SECONDS, prefix: 'rl:share:' });
+    if (!slow.allowed) {
+      return { status: 429, body: { error: 'slow_mode', message: 'you can post one share every six hours; Content Creators are not limited' } };
     }
   }
 
